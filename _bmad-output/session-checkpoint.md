@@ -1,34 +1,38 @@
 # Session Checkpoint: OSLSR Development
 **Date:** 2026-01-06
-**Status:** Paused for Laptop Restart (Windows Update/Docker Installation)
+**Status:** In Progress (Story 1.3 Complete)
 
 ---
 
 ## 1. Progress Summary
 *   **Monorepo Scaffolded**: `apps/api` (Node/Express) and `apps/web` (React/Vite) are initialized.
-*   **Story 1.2 Complete**:
-    *   **Database Schema**: Defined `users`, `roles`, and `lgas` tables using **Drizzle ORM** and **UUIDv7**.
-    *   **Shared Constants**: Created `@oslsr/types` with 7 Roles and 33 LGAs.
-    *   **RBAC Middleware**: Implemented `authorize` and `requireLgaLock` middleware in the API.
-    *   **Testing**: 8/8 unit tests passed for health checks and RBAC logic.
-    *   **Migrations**: Initial migration file generated (`apps/api/drizzle/0000_...sql`).
-*   **Documentation**: Created `_bmad-output/developer-guides/00-hand-holding-guide.md` to explain the project structure.
+*   **Story 1.2 Complete (RBAC)**: Defined `users`, `roles`, `lgas` with Drizzle ORM, UUIDv7, and RBAC middleware. 8/8 unit tests passed.
+*   **Story 1.3 Complete (Staff Provisioning)**:
+    *   **Features**: Manual Staff Creation, Bulk CSV Import (BullMQ), Invitation Token generation.
+    *   **Testing**: 24/24 tests passed (Unit + Integration).
+    *   **Endpoints**: `POST /staff/manual`, `POST /staff/import`, `GET /staff/import/:jobId`.
+    *   **Infrastructure**: Redis queue and worker implementation for bulk processing.
+*   **Documentation**: Created `_bmad-output/developer-guides/00-hand-holding-guide.md`.
 
 ## 2. Technical Decisions Made
+*   **Docker Config**: Using `docker/docker-compose.dev.yml` for development to expose DB ports (5432, 6379) to the host.
 *   **ESM Resolution**: We are using `.js` extensions in TypeScript imports.
-*   **Drizzle-Kit Strategy**: Pointed `drizzle.config.ts` to the `dist` folder to resolve ESM import conflicts during migration generation.
-*   **Typing**: Added `apps/api/src/types.d.ts` to extend the Express `Request` object with a typed `user`.
+*   **Drizzle-Kit Strategy**: Pointed `drizzle.config.ts` to the `dist` folder to resolve ESM import conflicts.
+*   **Typing**: Added `apps/api/src/types.d.ts` for Express `Request` extension.
 
 ## 3. Current State of the "World"
-*   **Git**: `git init` and `git add .` have been executed. Files are **Staged (A)** and ready for the first commit.
-*   **Environment**: `.env` file created in `apps/api` with default development values.
-*   **Build**: `pnpm build` is passing in `apps/api`.
+*   **Git**: All changes for Story 1.2 and 1.3 are **Committed** (`feat: complete stories 1.2 and 1.3...`).
+*   **Environment**:
+    *   Docker containers (`oslsr_postgres`, `oslsr_redis`) are **UP** (via `docker/docker-compose.dev.yml`).
+    *   Database Schema is **Synced** (`drizzle-kit push` applied).
+    *   `.env` configured in `apps/api`.
+*   **Build/Test**: `pnpm build` passing, `pnpm test` passing (24 tests).
 
-## 4. Immediate Next Steps (Upon Return)
-1.  **Git Commit**: Run `git commit -m "Initial commit: Project scaffold and Story 1.2 implementation"` (Requires you to configure your global name/email first).
-2.  **Start Database**: Once Docker Desktop is running, run `docker compose -f docker/docker-compose.yml up -d postgres redis`.
-3.  **Apply Schema**: Run `npx drizzle-kit push` from `apps/api` to sync the database with our code.
-4.  **Proceed to Story 1.3**: Staff Provisioning & Bulk Import.
+## 4. Immediate Next Steps
+1.  **Proceed to Story 1.4**: Staff Activation & Profile Completion.
+    *   Implement `/auth/activate/:token` endpoint.
+    *   Implement User Profile updates (NIN, Address, Bank Details).
+    *   Add Verhoeff validation for NIN.
 
 ---
-**Safe travels through the restart! I'll be here when you get back.**
+**System is healthy and ready for the next feature.**
