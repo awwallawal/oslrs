@@ -44,7 +44,7 @@ development_status:
   epic-1: in-progress
   1-1-project-initialization-ci-cd-pipeline: done
   1-2-database-schema-access-control-rbac: done
-  1-3-staff-provisioning-bulk-import: review
+  1-3-staff-provisioning-bulk-import: done
   1-4-staff-activation-profile-completion: backlog
   1-5-live-selfie-capture-verification: backlog
   1-6-id-card-generation-public-verification: backlog

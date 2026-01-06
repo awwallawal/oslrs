@@ -2,7 +2,7 @@
 
 **ID:** 1.3
 **Epic:** Epic 1: Foundation, Secure Access & Staff Onboarding
-**Status:** ready-for-dev
+**Status:** completed
 **Priority:** High
 
 ## 1. User Story
