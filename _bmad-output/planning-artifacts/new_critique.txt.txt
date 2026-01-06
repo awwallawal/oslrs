@@ -1,0 +1,51 @@
+Google Analytics and NGINX 
+
+
+PRD Deep Dive & Critique (Loops & Gaps)
+Document Reviewed: 
+prddddd.md
+ (OSLSR V7.0) Verdict: STRONG FOUNDATION yet TECHNICAL RISKS DETECTED.
+
+The PRD is exceptionally detailed but contains Critical Logic Gaps regarding the Marketplace and Risk Areas in Infrastructure that must be addressed before Architecture Design.
+
+🔴 Critical Loopholes (Must Fix/Clarify)
+The "Respondent to User" Disconnect (Story 7.2 vs. Reality)
+
+The Gap: Story 7.2 implies a Respondent (interviewed by an Enumerator in a field) can "access a Marketplace Profile Editor" to enrich their profile.
+The Loophole: How? An offline respondent has no user account, no credentials, and no email verified in the system. They cannot "log in" to edit anything.
+Interpretation Risk: Is the "Enrichment" meant to happen during the interview (Enumerator asks)? Or later? If later, we are missing a massive chunk of logic: "Claiming a Profile" or "Respondent Invitation".
+Recommendation: Clarify if enrichment is Enumerator-driven (during survey) or if we need a "Claim My Profile" flow (which requires collecting a phone number/email verified via OTP during the survey).
+The "Live Selfie" vs. "Passport Photo" Ambiguity
+
+The Conflict: Story 1.2 requires a "Live Selfie". Story 2.4 requires a "Passport Photo" for the ID Card.
+The Loophole: A "Live Selfie" (liveness check) often yields a low-quality, wide-angle image unsuitable for a printed ID card. A "Passport Photo" implies a formal upload.
+Recommendation: Decide: Are we auto-cropping the selfie for the ID card (requiring strict UI guides), or asking for two separate images? (One for security, one for the badge).
+The "Air-Gap" Misnomer (NFR 4.3)
+
+The Issue: The PRD calls the Marketplace "Air-Gapped".
+The Reality: It describes a "Read-Only Replica" database. This is Logical Separation, not an Air-Gap.
+Why it matters: Using the term "Air-Gap" sets impossible security expectations. True air-gapping means physically disconnected.
+Recommendation: Rename to "High-Security Read Replica Isolation".
+🟠 Process & Logic Gaps (Operational Risks)
+Remuneration Logic (Story 6.7)
+
+The Gap: It mentions "Manual Payment Management" and "Recording Payments".
+The Loophole: There is no integration with a payment gateway (e.g., Paystack/Flutterwave).
+Operational Drag: This implies Admins must manually transfer funds via their bank app, then manually "Record" it in the system. This is a high-risk vector for human error (recording a payment that wasn't sent, or vice versa).
+Recommendation: Explicitly label this as "Ledger Only - No Payment Processing" to manage expectations.
+Offline Respondent Consent (FR1/FR2)
+
+The Gap: Enketo/ODK logic.
+The Challenge: Implementing a "Secondary Screen" with "Explicit Consent" logic inside an ODK form is possible but requires careful XLSForm scripting (Group logic with relevant constraints).
+Risk: If the enumerator skips this or the logic fails, we breach data privacy laws by exposing unconsented data.
+🟡 Technical & Infrastructure Gaps
+The "Single VPS" Risk (NFR 2.1)
+
+The Issue: Running ODK Central (Resource Hog), Postgres, Redis, Custom App, and BullMQ all on One VPS.
+Risk: ODK Central performs heavy Java/Check formatting. A bulk upload of surveys could starve the Custom App/Redis of CPU, causing 504 Gateway Timeouts for the Governor's Dashboard.
+Recommendation: Strongly advise a Dual-VPS setup (1 for ODK Central, 1 for App/DB) OR strict CPU pinning/resource limits in Docker.
+Missing "Forgot Password" Flow
+
+The Gap: User Auth (Story 1.2) covers Login and Registration. It does not cover Password Recovery.
+Impact: Admin will be flooded with "I forgot my password" tickets on Day 2.
+Recommendation: Add a standard Reset Password via Email flow to Epic 1.
