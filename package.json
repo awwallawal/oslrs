@@ -8,7 +8,10 @@
     "dev": "pnpm --filter \"*\" dev",
     "build": "pnpm --filter \"*\" build",
     "test": "pnpm --filter \"*\" test",
-    "lint": "pnpm --filter \"*\" lint"
+    "lint": "pnpm --filter \"*\" lint",
+    "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
+    "services:down": "docker compose -f docker/docker-compose.dev.yml down",
+    "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f"
   },
   "engines": {
     "node": ">=20.0.0"
