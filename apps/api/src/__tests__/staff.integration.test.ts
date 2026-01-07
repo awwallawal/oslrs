@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { app } from '../index.js';
+import { app } from '../app.js';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 

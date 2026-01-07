@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import supertest from 'supertest';
-import { app } from '../index.js';
+import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
