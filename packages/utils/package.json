@@ -6,7 +6,14 @@
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0"
   }
 }

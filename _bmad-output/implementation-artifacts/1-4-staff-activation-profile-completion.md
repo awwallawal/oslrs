@@ -88,25 +88,49 @@ So that my identity is verified and my payroll details are captured.
 *   **Security Test:** Re-using an invitation token must return 401/403.
 
 ## 7. Implementation Tasks
-- [ ] **Core Utilities**
-    - [ ] Implement `verhoeffCheck` in `packages/utils/src/validation.ts`
-    - [ ] Add unit tests for `verhoeffCheck`
-- [ ] **Schema & Types**
-    - [ ] Update `users` table schema and generate migration
-    - [ ] Create shared Zod schema in `packages/types/src/validation/profile.ts`
-- [ ] **Backend Implementation**
-    - [ ] Implement `AuthService.activateAccount` (atomic transaction: update user + invalidate token + log audit)
-    - [ ] Create `AuthController` and mount `POST /api/v1/auth/activate/:token`
-- [ ] **Frontend Implementation**
-    - [ ] Create `ActivationPage` with token extraction from URL
-    - [ ] Implement `ActivationForm` using React Hook Form + Zod + shadcn/ui
-    - [ ] Handle success/error states with meaningful feedback
-- [ ] **Testing**
-    - [ ] Integration test for full activation flow
-    - [ ] NIN uniqueness check test
-    - [ ] Token replay attack prevention test
+- [x] **Core Utilities**
+    - [x] Implement `verhoeffCheck` in `packages/utils/src/validation.ts`
+    - [x] Add unit tests for `verhoeffCheck`
+- [x] **Schema & Types**
+    - [x] Update `users` table schema and generate migration
+    - [x] Create shared Zod schema in `packages/types/src/validation/profile.ts`
+- [x] **Backend Implementation**
+    - [x] Implement `AuthService.activateAccount` (atomic transaction: update user + invalidate token + log audit)
+    - [x] Create `AuthController` and mount `POST /api/v1/auth/activate/:token`
+- [x] **Frontend Implementation**
+    - [x] Create `ActivationPage` with token extraction from URL
+    - [x] Implement `ActivationForm` using React Hook Form + Zod + shadcn/ui
+    - [x] Handle success/error states with meaningful feedback
+- [x] **Testing**
+    - [x] Integration test for full activation flow
+    - [x] NIN uniqueness check test
+    - [x] Token replay attack prevention test
 
-## 8. Status Update
+## 8. Dev Agent Record
+### Implementation Notes
+- **Utility:** Implemented Verhoeff algorithm for NIN validation. Covered with unit tests for checksum and generation.
+- **Database:** Added 7 new fields to `users` table for profile completion. Generated migration `0003`.
+- **Backend:** `AuthService.activateAccount` handles password hashing (bcrypt), NIN uniqueness check, and profile updates within a database transaction. Logged `user.activated` event.
+- **Frontend:** Implemented `ActivationPage` and `ActivationForm`. Used `react-hook-form` with `zodResolver` for real-time validation (including NIN checksum).
+- **Security:** Tokens are invalidated after successful activation. Token replay is prevented by `status === 'invited'` check and token nullification.
+
+### File List
+- `packages/utils/src/validation.ts`
+- `packages/utils/src/__tests__/validation.test.ts`
+- `packages/utils/src/crypto.ts`
+- `apps/api/src/db/schema/users.ts`
+- `apps/api/drizzle/0003_violet_prodigy.sql`
+- `packages/types/src/validation/profile.ts`
+- `apps/api/src/services/auth.service.ts`
+- `apps/api/src/controllers/auth.controller.ts`
+- `apps/api/src/routes/auth.routes.ts`
+- `apps/web/src/lib/api-client.ts`
+- `apps/web/src/features/auth/components/ActivationForm.tsx`
+- `apps/web/src/features/auth/pages/ActivationPage.tsx`
+- `apps/web/src/App.tsx`
+- `apps/api/src/__tests__/auth.activation.test.ts`
+
+## 9. Status Update
 *   **Created:** 2026-01-06
 *   **Assigned:** BMad Master
-**Status:** ready-for-dev
+**Status:** review
