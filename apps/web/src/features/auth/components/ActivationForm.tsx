@@ -32,7 +32,11 @@ export function ActivationForm({ token, onSuccess }: ActivationFormProps) {
 
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.message || 'Activation failed');
+        let message = 'Activation failed. Please try again.';
+        if (result.code === 'AUTH_INVALID_TOKEN') message = 'This activation link is invalid or has expired.';
+        if (result.code === 'AUTH_ALREADY_ACTIVATED') message = 'This account has already been activated.';
+        if (result.code === 'PROFILE_NIN_DUPLICATE') message = 'This NIN is already associated with another account.';
+        throw new Error(message);
       }
 
       onSuccess(result.data);

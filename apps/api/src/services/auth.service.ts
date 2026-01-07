@@ -72,9 +72,16 @@ export class AuthService {
     } catch (err: any) {
       if (err instanceof AppError) throw err;
       
-      // Handle unique constraint violations (if NIN check above somehow missed a race condition)
-      if (err.code === '23505' && err.constraint_name === 'users_nin_unique') {
-        throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered.', 409);
+      // Handle unique constraint violations
+      if (err.code === '23505') {
+        if (err.constraint_name === 'users_nin_unique') {
+            throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered.', 409);
+        }
+        if (err.constraint_name === 'users_email_unique') {
+            throw new AppError('EMAIL_EXISTS', 'Email already exists.', 409);
+        }
+        // Fallback for other unique constraints
+        throw new AppError('CONFLICT', 'A conflict occurred with existing data.', 409);
       }
       throw err;
     }

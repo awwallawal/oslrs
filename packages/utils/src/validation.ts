@@ -31,6 +31,8 @@ const inverseTable = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9];
 
 /**
  * Validates a string using the Verhoeff algorithm.
+ * @param input Numeric string (e.g. "12345678901"). Must check length separately.
+ * @returns {boolean} True if checksum is valid
  */
 export function verhoeffCheck(input: string): boolean {
   if (!/^\d+$/.test(input)) {
