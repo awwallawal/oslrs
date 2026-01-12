@@ -1,0 +1,1829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSLSR Design Directions - Interactive Showcase</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F9FAFB;
+            color: #1F2937;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .header h1 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 36px;
+            font-weight: 700;
+            color: #9C1E23;
+            margin-bottom: 16px;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: #6B7280;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .comparison-tools {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .comparison-tools button {
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .comparison-tools button:hover {
+            border-color: #9C1E23;
+            color: #9C1E23;
+        }
+
+        .comparison-tools button.active {
+            background: #9C1E23;
+            border-color: #9C1E23;
+            color: white;
+        }
+
+        .directions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
+            margin-bottom: 48px;
+        }
+
+        .direction-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .direction-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .direction-preview {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            overflow: hidden;
+        }
+
+        .direction-info {
+            padding: 24px;
+        }
+
+        .direction-info h3 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            color: #1F2937;
+            margin-bottom: 8px;
+        }
+
+        .direction-info p {
+            font-size: 14px;
+            color: #6B7280;
+            margin-bottom: 16px;
+        }
+
+        .direction-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            padding: 4px 12px;
+            background: #FDEBED;
+            color: #9C1E23;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Design Direction 1: Clean Minimal */
+        .dir1 {
+            background: linear-gradient(180deg, #FEF6F6 0%, #FFFFFF 100%);
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .dir1 .progress-header {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .dir1 .section-name {
+            font-size: 14px;
+            color: #6B7280;
+            margin-bottom: 8px;
+        }
+
+        .dir1 .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #E5E7EB;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .dir1 .progress-fill {
+            width: 37.5%;
+            height: 100%;
+            background: #9C1E23;
+            border-radius: 2px;
+        }
+
+        .dir1 .section-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dir1 .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #E5E7EB;
+        }
+
+        .dir1 .dot.active {
+            background: #9C1E23;
+        }
+
+        .dir1 .dot.completed {
+            background: #15803D;
+        }
+
+        .dir1 .question-card {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .dir1 .question-label {
+            font-size: 12px;
+            color: #9C1E23;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .dir1 .question-text {
+            font-size: 18px;
+            font-weight: 500;
+            color: #1F2937;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .dir1 input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .dir1 input:focus {
+            outline: none;
+            border-color: #9C1E23;
+        }
+
+        .dir1 .button-group {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            gap: 12px;
+            margin-top: 40px;
+        }
+
+        .dir1 button {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dir1 .btn-secondary {
+            background: white;
+            border: 2px solid #E5E7EB;
+            color: #6B7280;
+        }
+
+        .dir1 .btn-primary {
+            background: #9C1E23;
+            color: white;
+        }
+
+        .dir1 .btn-primary:hover {
+            background: #861A1F;
+        }
+
+        /* Design Direction 2: Card-Based Swipe */
+        .dir2 {
+            background: #FFFFFF;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .dir2 .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            margin-bottom: 24px;
+        }
+
+        .dir2 .logo {
+            font-family: 'Poppins', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #9C1E23;
+        }
+
+        .dir2 .progress-ring {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: conic-gradient(#9C1E23 0% 37.5%, #E5E7EB 37.5% 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1F2937;
+            position: relative;
+        }
+
+        .dir2 .progress-ring::before {
+            content: '';
+            width: 32px;
+            height: 32px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .dir2 .progress-ring span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .dir2 .card-stack {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dir2 .swipe-card {
+            position: absolute;
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            border-radius: 24px;
+            padding: 40px 32px;
+            box-shadow: 0 20px 25px -5px rgba(156, 30, 35, 0.1), 0 10px 10px -5px rgba(156, 30, 35, 0.04);
+            border: 1px solid #FDEBED;
+        }
+
+        .dir2 .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .dir2 .question-number {
+            font-size: 14px;
+            font-weight: 600;
+            color: #9C1E23;
+        }
+
+        .dir2 .sync-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #DCFCE7;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #15803D;
+            font-weight: 500;
+        }
+
+        .dir2 .question-content h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1F2937;
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        .dir2 .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .dir2 .radio-option {
+            padding: 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dir2 .radio-option:hover {
+            border-color: #9C1E23;
+            background: #FEF6F6;
+        }
+
+        .dir2 .radio-option input {
+            margin: 0;
+        }
+
+        .dir2 .swipe-hint {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #E5E7EB;
+            color: #9C1E23;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Design Direction 3: Timeline Stepper */
+        .dir3 {
+            background: #FFFFFF;
+            display: flex;
+            height: 100%;
+        }
+
+        .dir3 .sidebar {
+            width: 200px;
+            background: #1F2937;
+            color: white;
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir3 .sidebar-logo {
+            font-family: 'Poppins', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #9C1E23;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .dir3 .timeline {
+            flex: 1;
+        }
+
+        .dir3 .timeline-item {
+            position: relative;
+            padding-left: 32px;
+            margin-bottom: 32px;
+        }
+
+        .dir3 .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 24px;
+            bottom: -32px;
+            width: 2px;
+            background: #374151;
+        }
+
+        .dir3 .timeline-item:last-child::before {
+            display: none;
+        }
+
+        .dir3 .timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #374151;
+            border: 2px solid #1F2937;
+        }
+
+        .dir3 .timeline-item.completed .timeline-dot {
+            background: #15803D;
+        }
+
+        .dir3 .timeline-item.active .timeline-dot {
+            background: #9C1E23;
+            box-shadow: 0 0 0 4px rgba(156, 30, 35, 0.2);
+        }
+
+        .dir3 .timeline-label {
+            font-size: 12px;
+            color: #9CA3AF;
+            margin-bottom: 4px;
+        }
+
+        .dir3 .timeline-item.active .timeline-label {
+            color: #9C1E23;
+        }
+
+        .dir3 .timeline-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #D1D5DB;
+        }
+
+        .dir3 .timeline-item.active .timeline-title {
+            color: white;
+            font-weight: 600;
+        }
+
+        .dir3 .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .dir3 .breadcrumb {
+            font-size: 14px;
+            color: #6B7280;
+            margin-bottom: 24px;
+        }
+
+        .dir3 .content-card {
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .dir3 .form-field {
+            margin-bottom: 24px;
+        }
+
+        .dir3 .form-field label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .dir3 .form-field input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .dir3 .action-bar {
+            display: flex;
+            gap: 12px;
+        }
+
+        .dir3 .action-bar button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .dir3 .btn-outline {
+            background: white;
+            border: 1px solid #D1D5DB;
+            color: #374151;
+        }
+
+        .dir3 .btn-solid {
+            background: #9C1E23;
+            color: white;
+        }
+
+        /* Design Direction 4: Dashboard Dense */
+        .dir4 {
+            background: #F9FAFB;
+            padding: 16px;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .dir4 .header-bar {
+            background: #9C1E23;
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dir4 .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dir4 .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: white;
+            color: #9C1E23;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .dir4 .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .dir4 .stat-card {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+        }
+
+        .dir4 .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1F2937;
+            margin-bottom: 4px;
+        }
+
+        .dir4 .stat-label {
+            font-size: 12px;
+            color: #6B7280;
+        }
+
+        .dir4 .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #E5E7EB;
+        }
+
+        .dir4 .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #F3F4F6;
+        }
+
+        .dir4 .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1F2937;
+        }
+
+        .dir4 .compact-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .dir4 .field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir4 .field label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .dir4 .field input,
+        .dir4 .field select {
+            padding: 10px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* Design Direction 5: Split Screen Desktop */
+        .dir5 {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            height: 100%;
+            background: #FFFFFF;
+        }
+
+        .dir5 .context-panel {
+            background: linear-gradient(180deg, #9C1E23 0%, #6B1518 100%);
+            color: white;
+            padding: 40px 32px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir5 .panel-header {
+            margin-bottom: 40px;
+        }
+
+        .dir5 .panel-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .dir5 .panel-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .dir5 .section-progress {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .dir5 .progress-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .dir5 .progress-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .dir5 .mini-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .dir5 .mini-fill {
+            width: 37.5%;
+            height: 100%;
+            background: white;
+            border-radius: 3px;
+        }
+
+        .dir5 .section-list {
+            flex: 1;
+        }
+
+        .dir5 .section-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dir5 .section-item.active {
+            background: rgba(255, 255, 255, 0.15);
+            font-weight: 600;
+        }
+
+        .dir5 .form-panel {
+            padding: 60px 80px;
+            overflow-y: auto;
+        }
+
+        .dir5 .question-header {
+            margin-bottom: 40px;
+        }
+
+        .dir5 .question-meta {
+            font-size: 14px;
+            color: #9C1E23;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .dir5 .question-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #1F2937;
+            line-height: 1.3;
+        }
+
+        .dir5 .question-help {
+            font-size: 14px;
+            color: #6B7280;
+            margin-top: 12px;
+        }
+
+        .dir5 .input-large {
+            width: 100%;
+            padding: 20px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 18px;
+            margin-bottom: 32px;
+        }
+
+        .dir5 .nav-buttons {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .dir5 .nav-buttons button {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .dir5 .btn-back {
+            background: #F3F4F6;
+            color: #374151;
+        }
+
+        .dir5 .btn-next {
+            flex: 1;
+            background: #9C1E23;
+            color: white;
+        }
+
+        /* Design Direction 6: Bottom Sheet Mobile */
+        .dir6 {
+            background: linear-gradient(180deg, #9C1E23 0%, #6B1518 60%, #6B1518 100%);
+            height: 100%;
+            position: relative;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir6 .status-bar {
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+
+        .dir6 .progress-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(white 0% 37.5%, rgba(255,255,255,0.2) 37.5% 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            position: relative;
+        }
+
+        .dir6 .progress-circle::before {
+            content: '';
+            width: 100px;
+            height: 100px;
+            background: #9C1E23;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .dir6 .progress-text {
+            position: relative;
+            color: white;
+            text-align: center;
+        }
+
+        .dir6 .progress-number {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .dir6 .progress-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .dir6 .sheet-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            margin: 0 auto 32px;
+        }
+
+        .dir6 .bottom-sheet {
+            background: white;
+            border-radius: 32px 32px 0 0;
+            flex: 1;
+            padding: 32px 24px;
+            position: relative;
+        }
+
+        .dir6 .sheet-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir6 .question-block {
+            flex: 1;
+        }
+
+        .dir6 .question-number-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #FDEBED;
+            color: #9C1E23;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .dir6 .question-text-large {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1F2937;
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        .dir6 .text-input-large {
+            width: 100%;
+            padding: 20px;
+            border: 2px solid #E5E7EB;
+            border-radius: 16px;
+            font-size: 18px;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .dir6 .continue-button {
+            width: 100%;
+            padding: 20px;
+            background: #9C1E23;
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 24px;
+            cursor: pointer;
+        }
+
+        /* Design Direction 7: Gamified Achievement */
+        .dir7 {
+            background: linear-gradient(135deg, #FEF6F6 0%, #FDEBED 100%);
+            padding: 24px;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .dir7 .game-header {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .dir7 .level-badge {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .dir7 .level-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dir7 .level-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #9C1E23 0%, #6B1518 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .dir7 .level-text h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+
+        .dir7 .level-text p {
+            font-size: 12px;
+            color: #6B7280;
+        }
+
+        .dir7 .xp-display {
+            text-align: right;
+        }
+
+        .dir7 .xp-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #9C1E23;
+        }
+
+        .dir7 .xp-label {
+            font-size: 12px;
+            color: #6B7280;
+        }
+
+        .dir7 .xp-bar {
+            height: 12px;
+            background: #E5E7EB;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .dir7 .xp-fill {
+            width: 65%;
+            height: 100%;
+            background: linear-gradient(90deg, #9C1E23 0%, #E85D61 100%);
+            border-radius: 6px;
+        }
+
+        .dir7 .achievements {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .dir7 .achievement-badge {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .dir7 .achievement-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .dir7 .achievement-label {
+            font-size: 10px;
+            color: #6B7280;
+            font-weight: 600;
+        }
+
+        .dir7 .quest-card {
+            background: white;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .dir7 .quest-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .dir7 .quest-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #9C1E23;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .dir7 .reward-badge {
+            background: #DCFCE7;
+            color: #15803D;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .dir7 .quest-question {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1F2937;
+            margin-bottom: 24px;
+        }
+
+        .dir7 .quest-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .dir7 .submit-quest {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(90deg, #9C1E23 0%, #6B1518 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Design Direction 8: Government Official */
+        .dir8 {
+            background: #FFFFFF;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dir8 .gov-header {
+            background: #1F2937;
+            color: white;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dir8 .gov-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dir8 .logo-emblem {
+            width: 40px;
+            height: 40px;
+            background: #9C1E23;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+
+        .dir8 .logo-text {
+            font-family: 'Poppins', sans-serif;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .dir8 .logo-text strong {
+            display: block;
+            font-size: 16px;
+        }
+
+        .dir8 .session-info {
+            font-size: 12px;
+        }
+
+        .dir8 .breadcrumb-bar {
+            background: #F3F4F6;
+            padding: 12px 24px;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .dir8 .form-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px 24px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .dir8 .form-section-header {
+            border-left: 4px solid #9C1E23;
+            padding-left: 16px;
+            margin-bottom: 32px;
+        }
+
+        .dir8 .section-number {
+            font-size: 12px;
+            color: #9C1E23;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .dir8 .section-name {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1F2937;
+        }
+
+        .dir8 .form-grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .dir8 .field-group {
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 20px;
+            background: #FAFAFA;
+        }
+
+        .dir8 .field-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .dir8 .required {
+            color: #9C1E23;
+        }
+
+        .dir8 .field-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            font-size: 16px;
+            background: white;
+        }
+
+        .dir8 .field-hint {
+            font-size: 12px;
+            color: #6B7280;
+            margin-top: 6px;
+        }
+
+        .dir8 .footer-bar {
+            background: #F9FAFB;
+            border-top: 1px solid #E5E7EB;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dir8 .progress-text {
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .dir8 .footer-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .dir8 .footer-actions button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .dir8 .btn-save {
+            background: white;
+            border: 1px solid #D1D5DB;
+            color: #374151;
+        }
+
+        .dir8 .btn-continue {
+            background: #9C1E23;
+            color: white;
+        }
+
+        .evaluation-guide {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin-top: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .evaluation-guide h2 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1F2937;
+            margin-bottom: 24px;
+        }
+
+        .evaluation-criteria {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .criterion {
+            padding: 16px;
+            background: #F9FAFB;
+            border-radius: 12px;
+            border-left: 4px solid #9C1E23;
+        }
+
+        .criterion h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1F2937;
+            margin-bottom: 8px;
+        }
+
+        .criterion p {
+            font-size: 14px;
+            color: #6B7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>OSLSR Design Direction Showcase</h1>
+            <p>Explore 8 distinct visual design directions for the Oyo State Labour & Skills Registry. Each direction represents a complete vision for the survey experience, applying our design foundation in different ways.</p>
+        </div>
+
+        <div class="comparison-tools">
+            <button onclick="showAll()">View All</button>
+            <button onclick="filterByTag('mobile-first')">Mobile-First</button>
+            <button onclick="filterByTag('spacious')">Spacious</button>
+            <button onclick="filterByTag('efficient')">Efficient</button>
+            <button onclick="filterByTag('engaging')">Engaging</button>
+        </div>
+
+        <div class="directions-grid">
+            <!-- Direction 1: Clean Minimal -->
+            <div class="direction-card" data-tags="mobile-first spacious">
+                <div class="direction-preview dir1">
+                    <div class="progress-header">
+                        <div class="section-name">Identity & Demographics</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="section-dots">
+                            <div class="dot completed"></div>
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                    </div>
+
+                    <div class="question-card">
+                        <div class="question-label">Question 3 of 8</div>
+                        <div class="question-text">What is your date of birth?</div>
+                        <input type="date" placeholder="DD/MM/YYYY">
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-secondary">Back</button>
+                        <button class="btn-primary">Continue</button>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>01. Clean Minimal</h3>
+                    <p>Spacious single-column layout with prominent progress indicators. Focuses attention on one question at a time with generous whitespace.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Mobile-First</span>
+                        <span class="tag">Spacious</span>
+                        <span class="tag">Focused</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 2: Card-Based Swipe -->
+            <div class="direction-card" data-tags="mobile-first engaging">
+                <div class="direction-preview dir2">
+                    <div class="top-nav">
+                        <div class="logo">OSLSR</div>
+                        <div class="progress-ring">
+                            <span>38%</span>
+                        </div>
+                    </div>
+
+                    <div class="card-stack">
+                        <div class="swipe-card">
+                            <div class="card-header">
+                                <span class="question-number">Question 3 of 8</span>
+                                <span class="sync-badge">✓ Synced</span>
+                            </div>
+                            <div class="question-content">
+                                <h3>What is your employment status?</h3>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="employment">
+                                        <span>Employed (Full-time)</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="employment">
+                                        <span>Employed (Part-time)</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="employment">
+                                        <span>Self-Employed</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="employment">
+                                        <span>Unemployed</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="swipe-hint">Swipe or tap to continue →</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>02. Card-Based Swipe</h3>
+                    <p>Interactive card stack with swipe gestures. Each question is a distinct card with smooth transitions and sync status indicators.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Mobile-First</span>
+                        <span class="tag">Interactive</span>
+                        <span class="tag">Engaging</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 3: Timeline Stepper -->
+            <div class="direction-card" data-tags="desktop efficient">
+                <div class="direction-preview dir3">
+                    <div class="sidebar">
+                        <div class="sidebar-logo">OSLSR</div>
+                        <div class="timeline">
+                            <div class="timeline-item completed">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-label">Section 1</div>
+                                <div class="timeline-title">Consent</div>
+                            </div>
+                            <div class="timeline-item active">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-label">Section 2</div>
+                                <div class="timeline-title">Identity</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-label">Section 3</div>
+                                <div class="timeline-title">Skills</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-label">Section 4</div>
+                                <div class="timeline-title">Work History</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="main-content">
+                        <div class="breadcrumb">Section 2 of 6 • Question 3 of 8</div>
+                        <div class="content-card">
+                            <div class="form-field">
+                                <label>Full Name <span style="color: #9C1E23;">*</span></label>
+                                <input type="text" placeholder="Enter your full name">
+                            </div>
+                            <div class="form-field">
+                                <label>National Identification Number (NIN)</label>
+                                <input type="text" placeholder="12345678901">
+                            </div>
+                            <div class="form-field">
+                                <label>Phone Number <span style="color: #9C1E23;">*</span></label>
+                                <input type="tel" placeholder="080 1234 5678">
+                            </div>
+                        </div>
+                        <div class="action-bar">
+                            <button class="btn-outline">Save & Exit</button>
+                            <button class="btn-solid">Continue</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>03. Timeline Stepper</h3>
+                    <p>Desktop-optimized with persistent sidebar navigation. Timeline shows all sections at a glance with completion status.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Desktop</span>
+                        <span class="tag">Efficient</span>
+                        <span class="tag">Professional</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 4: Dashboard Dense -->
+            <div class="direction-card" data-tags="desktop efficient">
+                <div class="direction-preview dir4">
+                    <div class="header-bar">
+                        <div class="user-info">
+                            <div class="avatar">EO</div>
+                            <div>
+                                <div style="font-weight: 600;">Enumerator #142</div>
+                                <div style="font-size: 12px; opacity: 0.9;">Ibadan North LGA</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 12px;">🌐 Online • ✓ Synced</div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">17</div>
+                            <div class="stat-label">Completed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">2</div>
+                            <div class="stat-label">In Progress</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">38%</div>
+                            <div class="stat-label">Today's Goal</div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <div class="section-title">Identity & Demographics</div>
+                            <div style="font-size: 12px; color: #6B7280;">Question 3 of 8</div>
+                        </div>
+                        <div class="compact-form">
+                            <div class="field">
+                                <label>Full Name *</label>
+                                <input type="text" placeholder="Enter name">
+                            </div>
+                            <div class="field">
+                                <label>Gender *</label>
+                                <select>
+                                    <option>Select</option>
+                                    <option>Male</option>
+                                    <option>Female</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>Date of Birth *</label>
+                                <input type="date">
+                            </div>
+                            <div class="field">
+                                <label>Phone Number *</label>
+                                <input type="tel" placeholder="080 XXX XXXX">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>04. Dashboard Dense</h3>
+                    <p>Efficient data-entry interface with statistics dashboard. Optimized for experienced enumerators who need to move quickly.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Desktop</span>
+                        <span class="tag">Efficient</span>
+                        <span class="tag">Data-Dense</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 5: Split Screen Desktop -->
+            <div class="direction-card" data-tags="desktop spacious">
+                <div class="direction-preview dir5">
+                    <div class="context-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Survey Progress</div>
+                            <div class="panel-subtitle">Oyo State Labour Registry</div>
+                        </div>
+                        <div class="section-progress">
+                            <div class="progress-label">Current Section</div>
+                            <div class="progress-value">3 of 8</div>
+                            <div class="mini-bar">
+                                <div class="mini-fill"></div>
+                            </div>
+                        </div>
+                        <div class="section-list">
+                            <div class="section-item" style="opacity: 0.5;">✓ Consent</div>
+                            <div class="section-item active">Identity & Demographics</div>
+                            <div class="section-item">Skills & Interests</div>
+                            <div class="section-item">Work History</div>
+                            <div class="section-item">Education</div>
+                            <div class="section-item">Business Details</div>
+                        </div>
+                    </div>
+                    <div class="form-panel">
+                        <div class="question-header">
+                            <div class="question-meta">Question 3 • Identity & Demographics</div>
+                            <div class="question-title">What is your date of birth?</div>
+                            <div class="question-help">This information helps us understand the age distribution of the labour force in Oyo State.</div>
+                        </div>
+                        <input type="date" class="input-large">
+                        <div class="nav-buttons">
+                            <button class="btn-back">← Previous</button>
+                            <button class="btn-next">Continue →</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>05. Split Screen Desktop</h3>
+                    <p>Large-screen optimized with persistent context panel. Progress and navigation always visible alongside the question.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Desktop</span>
+                        <span class="tag">Spacious</span>
+                        <span class="tag">Professional</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 6: Bottom Sheet Mobile -->
+            <div class="direction-card" data-tags="mobile-first engaging">
+                <div class="direction-preview dir6">
+                    <div class="status-bar">
+                        <span>9:41 AM</span>
+                        <span>🌐 Online</span>
+                    </div>
+                    <div class="progress-circle">
+                        <div class="progress-text">
+                            <div class="progress-number">3/8</div>
+                            <div class="progress-label">Questions</div>
+                        </div>
+                    </div>
+                    <div class="sheet-handle"></div>
+                    <div class="bottom-sheet">
+                        <div class="sheet-content">
+                            <div class="question-block">
+                                <span class="question-number-badge">Question 3 of 8</span>
+                                <h2 class="question-text-large">What is your primary occupation?</h2>
+                                <textarea class="text-input-large" placeholder="Describe your primary occupation..."></textarea>
+                            </div>
+                            <button class="continue-button">Continue →</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>06. Bottom Sheet Mobile</h3>
+                    <p>Modern mobile pattern with bottom sheet interactions. Progress visualization occupies the background, questions slide up from bottom.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Mobile-First</span>
+                        <span class="tag">Modern</span>
+                        <span class="tag">Engaging</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 7: Gamified Achievement -->
+            <div class="direction-card" data-tags="mobile-first engaging">
+                <div class="direction-preview dir7">
+                    <div class="game-header">
+                        <div class="level-badge">
+                            <div class="level-info">
+                                <div class="level-icon">⭐</div>
+                                <div class="level-text">
+                                    <h3>Survey Explorer</h3>
+                                    <p>Level 2 • Section 2/6</p>
+                                </div>
+                            </div>
+                            <div class="xp-display">
+                                <div class="xp-number">325</div>
+                                <div class="xp-label">XP</div>
+                            </div>
+                        </div>
+                        <div class="xp-bar">
+                            <div class="xp-fill"></div>
+                        </div>
+                    </div>
+
+                    <div class="achievements">
+                        <div class="achievement-badge">
+                            <div class="achievement-icon">🎯</div>
+                            <div class="achievement-label">Consistent</div>
+                        </div>
+                        <div class="achievement-badge">
+                            <div class="achievement-icon">🔥</div>
+                            <div class="achievement-label">5 Day Streak</div>
+                        </div>
+                        <div class="achievement-badge">
+                            <div class="achievement-icon">💯</div>
+                            <div class="achievement-label">Quality Pro</div>
+                        </div>
+                    </div>
+
+                    <div class="quest-card">
+                        <div class="quest-header">
+                            <div class="quest-title">Current Quest</div>
+                            <div class="reward-badge">+50 XP</div>
+                        </div>
+                        <div class="quest-question">What is your date of birth?</div>
+                        <input type="date" class="quest-input">
+                        <button class="submit-quest">Complete Quest →</button>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>07. Gamified Achievement</h3>
+                    <p>Engaging gamification with XP, levels, and achievement badges. Motivates enumerators through progress and rewards.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Mobile-First</span>
+                        <span class="tag">Gamified</span>
+                        <span class="tag">Motivating</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Direction 8: Government Official -->
+            <div class="direction-card" data-tags="desktop professional">
+                <div class="direction-preview dir8">
+                    <div class="gov-header">
+                        <div class="gov-logo">
+                            <div class="logo-emblem">OY</div>
+                            <div class="logo-text">
+                                <strong>Oyo State</strong>
+                                Labour & Skills Registry
+                            </div>
+                        </div>
+                        <div class="session-info">
+                            Session: ENM-142-2026
+                        </div>
+                    </div>
+                    <div class="breadcrumb-bar">
+                        Home > New Registration > Identity & Demographics > Question 3
+                    </div>
+                    <div class="form-container">
+                        <div class="form-section-header">
+                            <div class="section-number">Section 2 of 6</div>
+                            <div class="section-name">Identity & Demographics</div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field-group">
+                                <label class="field-label">
+                                    Full Legal Name <span class="required">*</span>
+                                </label>
+                                <input type="text" class="field-input" placeholder="As it appears on official documents">
+                                <div class="field-hint">Enter name exactly as shown on NIN or other ID</div>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">
+                                    Date of Birth <span class="required">*</span>
+                                </label>
+                                <input type="date" class="field-input">
+                                <div class="field-hint">Must be 18 years or older to register</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="footer-bar">
+                        <div class="progress-text">Question 3 of 8 • Section 2 of 6</div>
+                        <div class="footer-actions">
+                            <button class="btn-save">Save Draft</button>
+                            <button class="btn-continue">Continue</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-info">
+                    <h3>08. Government Official</h3>
+                    <p>Formal, professional interface suited for official government data collection. Emphasizes trust, authority, and compliance.</p>
+                    <div class="direction-tags">
+                        <span class="tag">Desktop</span>
+                        <span class="tag">Professional</span>
+                        <span class="tag">Formal</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evaluation Guide -->
+        <div class="evaluation-guide">
+            <h2>Design Evaluation Framework</h2>
+            <p style="margin-bottom: 24px; color: #6B7280;">As you explore each design direction, consider these criteria to identify which approach best serves your users and brand goals:</p>
+
+            <div class="evaluation-criteria">
+                <div class="criterion">
+                    <h3>✅ Layout Intuitiveness</h3>
+                    <p>Does the information hierarchy match your priorities? Can users immediately understand what to do next?</p>
+                </div>
+                <div class="criterion">
+                    <h3>✅ Interaction Style</h3>
+                    <p>Which interaction style fits your core experience? Does it match user expectations for survey completion?</p>
+                </div>
+                <div class="criterion">
+                    <h3>✅ Visual Weight</h3>
+                    <p>Which visual density feels right for your brand? Is it spacious and calm, or efficient and data-focused?</p>
+                </div>
+                <div class="criterion">
+                    <h3>✅ Navigation Approach</h3>
+                    <p>Which navigation pattern matches user expectations? Is progress always visible? Can users orient themselves easily?</p>
+                </div>
+                <div class="criterion">
+                    <h3>✅ Component Usage</h3>
+                    <p>How well do the components support your user journeys? Are the right elements emphasized?</p>
+                </div>
+                <div class="criterion">
+                    <h3>✅ Brand Alignment</h3>
+                    <p>Which direction best supports your emotional goals? Does it feel like "Oyo State" with the right balance of authority and approachability?</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAll() {
+            document.querySelectorAll('.direction-card').forEach(card => {
+                card.style.display = 'block';
+            });
+            document.querySelectorAll('.comparison-tools button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function filterByTag(tag) {
+            document.querySelectorAll('.direction-card').forEach(card => {
+                const tags = card.dataset.tags;
+                if (tags.includes(tag)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            document.querySelectorAll('.comparison-tools button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "@oslsr/types",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@oslsr/utils": "workspace:^",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.16"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "oslsr",
+  "version": "1.0.0",
+  "description": "Oyo State Labour & Skills Registry (OSLSR)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter \"*\" dev",
+    "build": "pnpm --filter \"*\" build",
+    "test": "pnpm --filter \"*\" test",
+    "lint": "pnpm --filter \"*\" lint",
+    "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
+    "services:down": "docker compose -f docker/docker-compose.dev.yml down",
+    "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

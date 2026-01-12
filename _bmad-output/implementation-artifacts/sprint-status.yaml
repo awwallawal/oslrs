@@ -1,0 +1,109 @@
+# generated: 2026-01-05
+# project: oslr_cl
+# project_key: oslr_cl
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: "2026-01-05"
+project: "oslr_cl"
+project_key: "oslr_cl"
+tracking_system: "file-system"
+story_location: "_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Foundation, Secure Access & Staff Onboarding
+  epic-1: in-progress
+  1-1-project-initialization-ci-cd-pipeline: done
+  1-2-database-schema-access-control-rbac: done
+  1-3-staff-provisioning-bulk-import: done
+  1-4-staff-activation-profile-completion: done
+  1-5-live-selfie-capture-verification: review
+  1-6-id-card-generation-public-verification: backlog
+  1-7-secure-login-session-management: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Questionnaire Management & ODK Integration
+  epic-2: backlog
+  2-1-xlsform-upload-validation: backlog
+  2-2-odk-central-form-deployment: backlog
+  2-3-automated-odk-app-user-provisioning: backlog
+  2-4-encrypted-odk-token-management: backlog
+  2-5-odk-sync-health-monitoring: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Mobile Data Collection & Ingestion Pipeline
+  epic-3: backlog
+  3-1-seamless-enketo-launch-dashboard: backlog
+  3-2-pwa-service-worker-offline-assets: backlog
+  3-3-offline-queue-sync-status-ui: backlog
+  3-4-idempotent-webhook-ingestion-bullmq: backlog
+  3-5-public-self-registration-survey-access: backlog
+  3-6-keyboard-optimized-data-entry-interface-clerks: backlog
+  3-7-global-nin-uniqueness-enforcement: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Supervisor Oversight & Field Management
+  epic-4: backlog
+  4-1-supervisor-team-dashboard: backlog
+  4-2-in-app-team-messaging: backlog
+  4-3-fraud-engine-configurable-thresholds: backlog
+  4-4-flagged-submission-review-evidence-panel: backlog
+  4-5-bulk-verification-of-mass-events: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Back-Office Audit & Policy Reporting
+  epic-5: backlog
+  5-1-high-level-policy-dashboard: backlog
+  5-2-verification-assessor-audit-queue: backlog
+  5-3-individual-record-pii-view-authorized-roles: backlog
+  5-4-pii-rich-csv-pdf-exports: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: System Integrity, Accountability & Remuneration
+  epic-6: backlog
+  6-1-immutable-append-only-audit-logs: backlog
+  6-2-system-health-performance-monitoring: backlog
+  6-3-automated-off-site-backup-orchestration: backlog
+  6-4-staff-remuneration-bulk-recording: backlog
+  6-5-staff-payment-history-dispute-mechanism: backlog
+  6-6-payment-dispute-resolution-queue: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Public Skills Marketplace & Search Security
+  epic-7: backlog
+  7-1-marketplace-data-extraction-worker: backlog
+  7-2-public-marketplace-search-interface: backlog
+  7-3-anonymous-profile-government-verified-badges: backlog
+  7-4-authenticated-contact-reveal-captcha: backlog
+  7-5-profile-enrichment-via-edit-token: backlog
+  7-6-contact-view-logging-rate-limiting: backlog
+  epic-7-retrospective: optional

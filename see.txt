@@ -1,0 +1,30 @@
+PS C:\Users\hp\Desktop\oslrs-main> pnpm run dev
+
+> oslsr@1.0.0 dev C:\Users\hp\Desktop\oslrs-main
+> pnpm --filter "*" dev
+
+Scope: 6 of 7 workspace projects
+apps/api dev$ tsx watch src/index.ts
+│ node:events:497
+│       throw er; // Unhandled 'error' event
+│       ^                                                                                                                                    
+│ Error: listen EADDRINUSE: address already in use :::3000                                                                                   
+[1 lines collapsed]upListenHandle [as _listen2] (node:net:1940:16)                                                                           
+│     at listenInCluster (node:net:1997:12)                                                                                                  
+│     at Server.listen (node:net:2102:7)                                                                                                     
+│     at Function.listen (C:\Users\hp\Desktop\oslrs-main\node_modules\.pnpm\express@4.22.1\node_modules\express\lib\application.js:635:24)   
+│     at <anonymous> (C:\Users\hp\Desktop\oslrs-main\apps\api\src\index.ts:9:7)                                                              
+[12 lines collapsed]un (node:internal/modules/esm/module_job:343:25)                                                                         
+│ Emitted 'error' event on Server instance at:
+│     at emitErrorNT (node:net:1976:8)
+│     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+│   code: 'EADDRINUSE',
+│   errno: -4091,
+│   syscall: 'listen',
+│   address: '::',
+│   port: 3000
+│ }
+│ Node.js v22.21.1
+│   ➜  Local:   http://localhost:5175/
+│   ➜  Network: use --host to expose
+└─ Running...
