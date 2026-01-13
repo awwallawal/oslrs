@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import supertest from 'supertest';
+import { goldenPath } from '@oslsr/testing/decorators';
 
 // Mock PhotoProcessingService to return a real buffer without hitting S3
 vi.mock('../services/photo-processing.service.js', () => {
@@ -60,27 +61,16 @@ describe('Performance: ID Card Generation', () => {
     );
   });
 
-  it('should generate ID card within 1.2 seconds (Golden Path)', async () => {
-    const start = performance.now();
-    
+  goldenPath('should generate ID card quickly', async () => {
     const res = await request
       .get('/api/v1/users/id-card')
       .set('Authorization', `Bearer ${authToken}`);
       
-    const end = performance.now();
-    const duration = end - start;
-    
     if (res.status !== 200) {
         console.error('Performance Test Failed:', res.status, res.body);
     }
     
     expect(res.status).toBe(200);
     expect(res.header['content-type']).toBe('application/pdf');
-    
-    // Log the duration for visibility
-    console.log(`ID Card Generation took ${duration.toFixed(2)}ms`);
-    
-    // 1200ms threshold
-    expect(duration).toBeLessThan(1200);
-  });
+  }, 1.2); // 1.2s SLA
 });

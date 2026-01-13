@@ -5,18 +5,29 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "test:golden": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "cache": false
+    },
+    "test:security": {
+      "dependsOn": ["test:golden"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "cache": false
+    },
+    "test:contract": {
+      "dependsOn": ["test:security"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "cache": false
+    },
+    "test:ui": {
+      "dependsOn": ["test:contract"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "cache": false
+    },
     "test": {
-      "dependsOn": ["^test"],
-      "outputs": ["coverage/**", "vitest-report.json"],
-      "cache": true
-    },
-    "test:api": {
-      "outputs": ["coverage/**", "vitest-report.json"],
-      "cache": true
-    },
-    "test:web": {
-      "outputs": ["coverage/**", "vitest-report.json"],
-      "cache": true
+      "dependsOn": ["test:golden", "test:security", "test:contract", "test:ui"],
+      "outputs": []
     },
     "lint": {
       "outputs": []

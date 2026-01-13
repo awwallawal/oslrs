@@ -2452,6 +2452,34 @@ trackEvent('Registration Completed', {
 
 ---
 
+### ADR-014: Monorepo Testing & Quality Assurance Strategy
+
+**Decision:** Implement a strictly orchestrated, multi-layer testing pipeline using Vitest and Turbo, enforced via custom decorators.
+
+**Context:**
+- **NFR3 (Reliability):** 99.5% SLA requires "water-tight" regression prevention.
+- **NFR4 (Security):** Critical checks (NIN Uniqueness, Fraud logic) must never be bypassed.
+- **Scale:** Monorepo structure requires intelligent caching to prevent CI slowness.
+
+**The "Ironclad" Pipeline Layers:**
+1.  **Golden Path (Blocking):** Critical business flows (e.g., "User Signup + NIN Verification"). Failure = Immediate Stop.
+2.  **Security (Blocking):** Adversarial tests (Rate limiting, Auth bypass, SQLi attempts).
+3.  **Contract (Blocking):** API Schema validation (OpenAPI vs Implementation).
+4.  **UI/Performance (Non-Blocking):** Visual regression and SLA timing checks.
+
+**Technical Implementation:**
+- **Tooling:** Vitest (Runner) + Turbo (Orchestrator).
+- **Abstractions:** `packages/testing` workspace hosts shared logic.
+- **Decorators:** Custom `@TestTag('GoldenPath')` and `@SLA(seconds)` decorators to enforce categorization in code.
+- **Visualization:** Auto-generated Mermaid.js pipeline diagrams for CI visibility.
+
+**Trade-offs:**
+- ✅ Guarantees critical paths are always tested before deploy.
+- ✅ Turbo caching prevents re-running unchanged tests.
+- ❌ Initial setup complexity (custom reporters/decorators).
+
+---
+
 ## Operational Procedures
 
 _This section defines field operational protocols that complement technical architecture to ensure system success in real-world deployment conditions._

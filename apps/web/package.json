@@ -7,11 +7,16 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "test:golden": "vitest run --test-name-pattern='GoldenPath'",
+    "test:security": "vitest run --test-name-pattern='Security'",
+    "test:contract": "vitest run --test-name-pattern='Contract'",
+    "test:ui": "vitest run --test-name-pattern='UI'",
     "lint": "eslint src",
     "preview": "vite preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",
+    "@oslsr/testing": "workspace:^",
     "@oslsr/types": "workspace:^",
     "@tanstack/react-query": "^5.37.1",
     "@vladmandic/human": "^3.3.6",

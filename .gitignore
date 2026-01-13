@@ -30,3 +30,15 @@ lerna-debug.log*
 docker-data/
 postgres_data/
 redis_data/
+
+# Turbo
+.turbo/
+
+# Test artifacts
+vitest-report.json
+.vitest-live.json
+test-pipeline.html
+reporter*.log
+
+# Temp files
+tmpclaude-*

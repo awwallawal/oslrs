@@ -8,8 +8,12 @@
     "dev": "pnpm --filter \"*\" dev",
     "build": "pnpm exec turbo run build",
     "test": "pnpm exec turbo run test",
+    "test:golden": "pnpm exec turbo run test:golden",
+    "test:security": "pnpm exec turbo run test:security",
+    "test:contract": "pnpm exec turbo run test:contract",
+    "test:ui": "pnpm exec turbo run test:ui",
     "test:web": "pnpm exec turbo run test --filter @oslsr/web",
-    "test:api": "pnpm exec turbo run test --filter @oslsr/api",
+    "test:dashboard": "tsx packages/testing/src/cli.ts",
     "lint": "pnpm exec turbo run lint",
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",
@@ -20,6 +24,8 @@
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {
+    "fast-glob": "^3.3.3",
+    "tsx": "^4.10.5",
     "turbo": "^1.13.0"
   }
 }

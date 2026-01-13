@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { LiveReporter } from './packages/testing/src/reporter'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+console.log('[Vitest Base] Loading config with LiveReporter...'); // Debug
 
 export const baseConfig = defineConfig({
   test: {
@@ -14,7 +17,7 @@ export const baseConfig = defineConfig({
     mockReset: true,
     isolate: true,
     pool: 'threads',
-    reporters: ['default', 'json'],
+    reporters: ['default', 'json', new LiveReporter({ outputDir: __dirname })],
     outputFile: 'vitest-report.json',
   },
 })
