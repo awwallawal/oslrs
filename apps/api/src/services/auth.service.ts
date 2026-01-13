@@ -24,6 +24,15 @@ export class AuthService {
         throw new AppError('AUTH_ALREADY_ACTIVATED', 'This account has already been activated.', 400);
     }
 
+    // Check expiry (24 hours)
+    if (user.invitedAt) {
+      const expiryDate = new Date(user.invitedAt);
+      expiryDate.setHours(expiryDate.getHours() + 24);
+      if (new Date() > expiryDate) {
+        throw new AppError('AUTH_TOKEN_EXPIRED', 'Invitation token has expired.', 401);
+      }
+    }
+
     // 2. Hash password
     const passwordHash = await hashPassword(data.password);
 
