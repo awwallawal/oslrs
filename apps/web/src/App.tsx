@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ActivationPage from './features/auth/pages/ActivationPage';
 import ProfileCompletionPage from './features/onboarding/pages/ProfileCompletionPage';
+import VerificationPage from './features/onboarding/pages/VerificationPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         } />
         <Route path="/activate/:token" element={<ActivationPage />} />
         <Route path="/profile-completion" element={<ProfileCompletionPage />} />
+        <Route path="/verify-staff/:id" element={<VerificationPage />} />
       </Routes>
     </BrowserRouter>
   );

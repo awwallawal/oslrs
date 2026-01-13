@@ -8,6 +8,8 @@
     "dev": "pnpm --filter \"*\" dev",
     "build": "pnpm --filter \"*\" build",
     "test": "pnpm --filter \"*\" test",
+    "test:web": "pnpm --filter @oslsr/web test",
+    "test:api": "pnpm --filter @oslsr/api test",
     "lint": "pnpm --filter \"*\" lint",
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",

@@ -5,7 +5,15 @@ import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 
 // Mock StaffService
-vi.mock('../services/staff.service.js');
+vi.mock('../services/staff.service.js', () => {
+    return {
+        StaffService: {
+            createManual: vi.fn(),
+            validateCsv: vi.fn(),
+            processImportRow: vi.fn()
+        }
+    };
+});
 
 // Mock Queue
 vi.mock('../queues/import.queue.js', () => ({
@@ -26,6 +34,14 @@ const validUuid = '018e5f2a-1234-7890-abcd-1234567890ab';
 describe('Staff API Integration', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(importQueue.add).mockResolvedValue({ id: 'job-123' } as any);
+        vi.mocked(importQueue.getJob).mockResolvedValue({
+            id: 'job-123', 
+            getState: async () => 'completed',
+            progress: 100,
+            returnvalue: { succeeded: 10 },
+            failedReason: null
+        } as any);
     });
 
     describe('POST /api/v1/staff/manual', () => {

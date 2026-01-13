@@ -11,14 +11,16 @@ const request = supertest(app);
 
 // Mock PhotoProcessingService
 vi.mock('../services/photo-processing.service.js', () => {
-  const MockPhotoProcessingService = vi.fn();
-  MockPhotoProcessingService.prototype.processLiveSelfie = vi.fn().mockResolvedValue({
-    originalUrl: 'https://s3/original.jpg',
-    idCardUrl: 'https://s3/cropped.jpg',
-    livenessScore: 0.95
-  });
   return {
-    PhotoProcessingService: MockPhotoProcessingService
+    PhotoProcessingService: class {
+      async processLiveSelfie() {
+        return {
+          originalUrl: 'https://s3/original.jpg',
+          idCardUrl: 'https://s3/cropped.jpg',
+          livenessScore: 0.95
+        };
+      }
+    }
   };
 });
 

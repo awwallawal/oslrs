@@ -9,7 +9,7 @@ import { AppError } from '@oslsr/utils';
 dotenv.config();
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.NODE_ENV === 'test' ? 'silent' : (process.env.LOG_LEVEL || 'info'),
   transport: process.env.NODE_ENV === 'development' ? {
     target: 'pino-pretty',
     options: { colorize: true }

@@ -30,20 +30,31 @@ vi.mock('@aws-sdk/s3-request-presigner', () => {
   };
 });
 
+const sharpMocks = vi.hoisted(() => ({
+  metadata: vi.fn(),
+  stats: vi.fn(),
+  extract: vi.fn(),
+  resize: vi.fn(),
+  jpeg: vi.fn(),
+  toBuffer: vi.fn(),
+}));
+
 // Mock sharp
-vi.mock('sharp', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('sharp')>();
-  const mockSharpInstance = {
-    metadata: vi.fn(),
-    stats: vi.fn(),
-    extract: vi.fn().mockReturnThis(),
-    resize: vi.fn().mockReturnThis(),
-    jpeg: vi.fn().mockReturnThis(),
-    toBuffer: vi.fn(),
-  };
-  
+vi.mock('sharp', async () => {
   return {
-    default: vi.fn(() => mockSharpInstance),
+    default: vi.fn(() => {
+        const instance = {
+            metadata: sharpMocks.metadata,
+            stats: sharpMocks.stats,
+            toBuffer: sharpMocks.toBuffer,
+            
+            // wrappers to support chaining
+            extract: (...args: any[]) => { sharpMocks.extract(...args); return instance; },
+            resize: (...args: any[]) => { sharpMocks.resize(...args); return instance; },
+            jpeg: (...args: any[]) => { sharpMocks.jpeg(...args); return instance; },
+        };
+        return instance;
+    }),
   };
 });
 
@@ -80,11 +91,9 @@ describe('PhotoProcessingService', () => {
 
   describe('processLiveSelfie', () => {
     it('should throw error if image format is invalid', async () => {
-      // Setup sharp mock to return empty metadata (simulating invalid image)
-      const sharp = await import('sharp');
-      const mockSharp = sharp.default(mockImageBuffer);
-      (mockSharp.metadata as any).mockResolvedValue({});
-      (mockSharp.stats as any).mockResolvedValue({ channels: [{ stdev: 0 }] });
+      // Setup sharp mock
+      sharpMocks.metadata.mockResolvedValue({});
+      sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 0 }] });
 
       await expect(service.processLiveSelfie(mockImageBuffer))
         .rejects
@@ -93,13 +102,11 @@ describe('PhotoProcessingService', () => {
 
     it('should process valid image and return keys (not URLs directly as they are signed)', async () => {
       // Setup sharp mock for valid metadata
-      const sharp = await import('sharp');
-      const mockSharp = sharp.default(mockImageBuffer);
-      (mockSharp.metadata as any).mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
-      (mockSharp.stats as any).mockResolvedValue({ channels: [{ stdev: 50 }] }); // Valid sharpness
+      sharpMocks.metadata.mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
+      sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 50 }] }); // Valid sharpness
       
       // Setup sharp mock for processing
-      (mockSharp.toBuffer as any).mockResolvedValue(Buffer.from('processed-image'));
+      sharpMocks.toBuffer.mockResolvedValue(Buffer.from('processed-image'));
 
       // Setup S3 mock
       mocks.send.mockResolvedValue({});
@@ -113,10 +120,8 @@ describe('PhotoProcessingService', () => {
     });
 
     it('should throw error if image resolution is too low', async () => {
-      const sharp = await import('sharp');
-      const mockSharp = sharp.default(mockImageBuffer);
-      (mockSharp.metadata as any).mockResolvedValue({ width: 200, height: 200, format: 'jpeg' });
-      (mockSharp.stats as any).mockResolvedValue({ channels: [{ stdev: 50 }] });
+      sharpMocks.metadata.mockResolvedValue({ width: 200, height: 200, format: 'jpeg' });
+      sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 50 }] });
 
       await expect(service.processLiveSelfie(mockImageBuffer))
         .rejects
@@ -125,10 +130,8 @@ describe('PhotoProcessingService', () => {
 
     it('should throw error if image size exceeds limit', async () => {
       const largeBuffer = Buffer.alloc(6 * 1024 * 1024); // 6MB
-      const sharp = await import('sharp');
-      const mockSharp = sharp.default(largeBuffer);
-      (mockSharp.metadata as any).mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
-      (mockSharp.stats as any).mockResolvedValue({ channels: [{ stdev: 50 }] });
+      sharpMocks.metadata.mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
+      sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 50 }] });
 
       await expect(service.processLiveSelfie(largeBuffer))
         .rejects
@@ -136,10 +139,8 @@ describe('PhotoProcessingService', () => {
     });
 
     it('should throw error if image is too blurry', async () => {
-        const sharp = await import('sharp');
-        const mockSharp = sharp.default(mockImageBuffer);
-        (mockSharp.metadata as any).mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
-        (mockSharp.stats as any).mockResolvedValue({ channels: [{ stdev: 10 }] }); // Low sharpness
+        sharpMocks.metadata.mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
+        sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 10 }] }); // Low sharpness
   
         await expect(service.processLiveSelfie(mockImageBuffer))
           .rejects

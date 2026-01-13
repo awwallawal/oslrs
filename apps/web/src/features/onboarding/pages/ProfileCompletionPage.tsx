@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LiveSelfieCapture from '../components/LiveSelfieCapture';
+import IDCardDownload from '../components/IDCardDownload';
 
 const ProfileCompletionPage: React.FC = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<'intro' | 'selfie' | 'success'>('intro');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +91,18 @@ const ProfileCompletionPage: React.FC = () => {
                     <img src={result.idCardUrl} alt="ID Card" className="w-full rounded" />
                 </div>
             </div>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded">Continue</button>
+
+            <div className="mt-8 pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Your ID Card is Ready</h3>
+                <IDCardDownload />
+            </div>
+
+            <button 
+                onClick={() => navigate('/dashboard')}
+                className="px-4 py-2 bg-blue-600 text-white rounded mt-4"
+            >
+                Continue to Dashboard
+            </button>
         </div>
       )}
     </div>

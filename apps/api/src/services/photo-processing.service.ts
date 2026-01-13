@@ -102,6 +102,26 @@ export class PhotoProcessingService {
     await this.s3Client.send(command);
   }
 
+  // Helper to get buffer from S3 (used for PDF generation)
+  async getPhotoBuffer(key: string): Promise<Buffer> {
+      try {
+        const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+        });
+        const response = await this.s3Client.send(command);
+        
+        if (!response.Body) {
+             throw new AppError('IMAGE_NOT_FOUND', 'Image not found in storage', 404);
+        }
+        
+        return Buffer.from(await response.Body.transformToByteArray());
+      } catch (err: any) {
+         if (err instanceof AppError) throw err;
+         throw new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500, { error: err.message });
+      }
+  }
+
   // Helper to generate signed URLs (used when reading, not writing usually, but useful for immediate display)
   async getSignedUrl(key: string): Promise<string> {
       const command = new GetObjectCommand({

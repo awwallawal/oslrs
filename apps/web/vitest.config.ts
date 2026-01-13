@@ -5,14 +5,8 @@ export default mergeConfig(
   baseConfig,
   defineConfig({
     test: {
-      environment: 'node',
-      env: {
-        NODE_ENV: 'test',
-      },
-      exclude: [
-        '**/node_modules/**',
-        '**/dist/**',
-      ],
+      include: ['src/**/*.test.tsx', 'src/**/*.test.ts'],
+      environment: 'jsdom',
     },
   })
 )

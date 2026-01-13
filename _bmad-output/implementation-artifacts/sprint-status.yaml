@@ -46,8 +46,8 @@ development_status:
   1-2-database-schema-access-control-rbac: done
   1-3-staff-provisioning-bulk-import: done
   1-4-staff-activation-profile-completion: done
-  1-5-live-selfie-capture-verification: review
-  1-6-id-card-generation-public-verification: backlog
+  1-5-live-selfie-capture-verification: done
+  1-6-id-card-generation-public-verification: done
   1-7-secure-login-session-management: backlog
   epic-1-retrospective: optional
 
