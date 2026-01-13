@@ -6,11 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter \"*\" dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "test:web": "turbo run test --filter @oslsr/web",
-    "test:api": "turbo run test --filter @oslsr/api",
-    "lint": "turbo run lint",
+    "build": "pnpm exec turbo run build",
+    "test": "pnpm exec turbo run test",
+    "test:web": "pnpm exec turbo run test --filter @oslsr/web",
+    "test:api": "pnpm exec turbo run test --filter @oslsr/api",
+    "lint": "pnpm exec turbo run lint",
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",
     "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f"
@@ -20,6 +20,6 @@
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {
-    "turbo": "^2.7.4"
+    "turbo": "^1.13.0"
   }
 }
