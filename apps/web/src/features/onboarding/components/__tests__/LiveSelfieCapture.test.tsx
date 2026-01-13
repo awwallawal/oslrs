@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 expect.extend(matchers);
@@ -64,7 +64,9 @@ describe('LiveSelfieCapture', () => {
 
   it('should disable capture button when no face detected', async () => {
     mockDetect.mockResolvedValue({ face: [] }); // 0 faces
-    render(<LiveSelfieCapture onCapture={() => {}} />);
+    await act(async () => {
+        render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
     
     // Wait for button to be disabled (it starts disabled due to loading, then stays disabled due to 0 faces)
     const button = await screen.findByRole('button', { name: /capture/i });
@@ -79,7 +81,9 @@ describe('LiveSelfieCapture', () => {
 
   it('should enable capture button when one face detected', async () => {
     mockDetect.mockResolvedValue({ face: [{ box: [0, 0, 100, 100], score: 0.99 }] }); // 1 face
-    render(<LiveSelfieCapture onCapture={() => {}} />);
+    await act(async () => {
+        render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
     
     const button = await screen.findByRole('button', { name: /capture/i });
     // Wait for model loading to finish and face to be detected

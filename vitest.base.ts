@@ -14,5 +14,7 @@ export const baseConfig = defineConfig({
     mockReset: true,
     isolate: true,
     pool: 'threads',
+    reporters: ['default', 'json'],
+    outputFile: 'vitest-report.json',
   },
 })

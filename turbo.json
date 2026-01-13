@@ -7,13 +7,16 @@
     },
     "test": {
       "dependsOn": ["^test"],
-      "outputs": []
+      "outputs": ["coverage/**", "vitest-report.json"],
+      "cache": true
     },
     "test:api": {
-      "outputs": []
+      "outputs": ["coverage/**", "vitest-report.json"],
+      "cache": true
     },
     "test:web": {
-      "outputs": []
+      "outputs": ["coverage/**", "vitest-report.json"],
+      "cache": true
     },
     "lint": {
       "outputs": []
