@@ -37,8 +37,8 @@ export class LiveReporter implements Reporter {
   private collectTasks(tasks: Task[]) {
     for (const task of tasks) {
       if (task.type === 'test') {
-        const meta = task.meta || {};
-        const category = meta.category as string || 'unknown';
+        const meta = (task.meta || {}) as Record<string, unknown>;
+        const category = (meta.category as string) || 'unknown';
         const blocking = meta.blocking !== false;
         
         this.results.set(task.name, {

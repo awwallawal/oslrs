@@ -23,10 +23,11 @@ export function taggedTest(
 
   return vitestTest(fullName, async (context) => {
     const start = performance.now();
-    
+
     try {
       // Attach metadata to the test context for reporters
-      context.task.meta = {
+      // Use type assertion since Vitest's meta is extensible at runtime
+      (context.task as any).meta = {
         ...(context.task.meta || {}),
         category,
         sla,

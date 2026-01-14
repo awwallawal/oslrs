@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ErrorBoundary } from '../../../components/ErrorBoundary';
+import { SkeletonCard } from '../../../components/skeletons';
 import LiveSelfieCapture from '../components/LiveSelfieCapture';
 import IDCardDownload from '../components/IDCardDownload';
 
@@ -53,10 +55,10 @@ const ProfileCompletionPage: React.FC = () => {
       
       {step === 'intro' && (
         <div className="space-y-4">
-          <p>Please take a live selfie for your ID card.</p>
-          <button 
+          <p className="text-neutral-700">Please take a live selfie for your ID card.</p>
+          <button
             onClick={() => setStep('selfie')}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
           >
             Start Verification
           </button>
@@ -69,11 +71,18 @@ const ProfileCompletionPage: React.FC = () => {
           
           {isUploading ? (
             <div className="text-center py-12">
-              <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p>Uploading and verifying...</p>
+              <SkeletonCard lines={2} className="max-w-sm mx-auto mb-4" />
+              <p className="text-neutral-600">Uploading and verifying...</p>
             </div>
           ) : (
-            <LiveSelfieCapture onCapture={handleSelfieCapture} />
+            <ErrorBoundary
+              fallbackProps={{
+                title: 'Camera Error',
+                description: 'Unable to access the camera. Please check permissions and try again.',
+              }}
+            >
+              <LiveSelfieCapture onCapture={handleSelfieCapture} />
+            </ErrorBoundary>
           )}
         </div>
       )}
@@ -94,12 +103,20 @@ const ProfileCompletionPage: React.FC = () => {
 
             <div className="mt-8 pt-6 border-t border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Your ID Card is Ready</h3>
-                <IDCardDownload />
+                <ErrorBoundary
+                  fallbackProps={{
+                    title: 'Download Error',
+                    description: 'Unable to prepare the ID card download. Please try again.',
+                    showHomeLink: false,
+                  }}
+                >
+                  <IDCardDownload />
+                </ErrorBoundary>
             </div>
 
-            <button 
+            <button
                 onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 bg-blue-600 text-white rounded mt-4"
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded mt-4 transition-colors"
             >
                 Continue to Dashboard
             </button>

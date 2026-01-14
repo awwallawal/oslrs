@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, date, integer } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 import { roles } from './roles.js';
 import { lgas } from './lgas.js';
@@ -26,6 +26,19 @@ export const users = pgTable('users', {
   status: text('status', { enum: ['invited', 'active', 'verified', 'suspended', 'deactivated'] }).notNull().default('invited'),
   invitationToken: text('invitation_token').unique(),
   invitedAt: timestamp('invited_at', { withTimezone: true }),
+
+  // Session management columns (Story 1.7)
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  currentSessionId: uuid('current_session_id'), // For single-session enforcement
+
+  // Password reset columns (Story 1.7)
+  passwordResetToken: text('password_reset_token').unique(),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+
+  // Login attempt tracking (Story 1.7) - Can use Redis for high-traffic, DB for persistence
+  failedLoginAttempts: integer('failed_login_attempts').default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

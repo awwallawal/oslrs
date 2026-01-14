@@ -36,6 +36,13 @@
       "when": 1767852248231,
       "tag": "0004_wise_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1768365399263,
+      "tag": "0005_auth_columns",
+      "breakpoints": true
     }
   ]
 }

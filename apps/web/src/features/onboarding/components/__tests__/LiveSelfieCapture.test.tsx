@@ -12,6 +12,19 @@ const { mockDetect } = vi.hoisted(() => {
   return { mockDetect: vi.fn() };
 });
 
+// Mock sonner toast
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+    loading: vi.fn(),
+    dismiss: vi.fn(),
+    promise: vi.fn(),
+  },
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -52,13 +65,17 @@ describe('LiveSelfieCapture', () => {
     mockDetect.mockResolvedValue({ face: [{ box: [0, 0, 100, 100], score: 0.99 }] });
   });
 
-  it('should render camera feed', () => {
-    render(<LiveSelfieCapture onCapture={() => {}} />);
+  it('should render camera feed', async () => {
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
     expect(screen.getByTestId('webcam-mock')).toBeDefined();
   });
 
   it('should show capture button', async () => {
-    render(<LiveSelfieCapture onCapture={() => {}} />);
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
     expect(await screen.findByRole('button', { name: /capture/i })).toBeDefined();
   });
 

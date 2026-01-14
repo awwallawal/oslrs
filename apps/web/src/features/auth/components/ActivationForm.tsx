@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { activationSchema, type ActivationPayload } from '@oslsr/types';
 import { useState } from 'react';
+import { PasswordRequirements } from './PasswordRequirements';
 
 interface ActivationFormProps {
   token: string;
@@ -15,10 +16,14 @@ export function ActivationForm({ token, onSuccess }: ActivationFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<ActivationPayload>({
     resolver: zodResolver(activationSchema),
   });
+
+  // Watch password for real-time requirements feedback
+  const password = watch('password', '');
 
   const onSubmit = async (data: ActivationPayload) => {
     setIsSubmitting(true);
@@ -55,12 +60,13 @@ export function ActivationForm({ token, onSuccess }: ActivationFormProps) {
 
       <div className="space-y-2">
         <label className="block font-medium">New Password</label>
-        <input 
-          type="password" 
-          {...register('password')} 
+        <input
+          type="password"
+          {...register('password')}
           className="w-full p-2 border rounded"
         />
         {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
+        <PasswordRequirements password={password} showAlways={true} className="mt-2" />
       </div>
 
       <div className="space-y-2">

@@ -2,7 +2,7 @@
 
 **ID:** 1.7
 **Epic:** Epic 1: Foundation, Secure Access & Staff Onboarding
-**Status:** ready-for-dev
+**Status:** review
 **Priority:** High
 
 ## 1. User Story
@@ -362,13 +362,35 @@ So that I can access my designated features and my identity is verified for all 
 ## 8. Dev Agent Record
 
 ### Agent Model Used
-<!-- To be filled during implementation -->
+- Claude Opus 4.5 (claude-opus-4-5-20251101)
 
-### Debug Log References
-<!-- To be filled during implementation -->
+### Implementation Date
+- 2026-01-14
 
 ### Completion Notes List
-<!-- To be filled during implementation -->
+**Completed Tasks:**
+1. Database Schema Updates - Added `lastLoginAt`, `currentSessionId`, `passwordResetToken`, `passwordResetExpiresAt`, `failedLoginAttempts`, `lockedUntil` columns to users table
+2. Backend Services - Created TokenService, SessionService, AuthService (extended), PasswordResetService, EmailService
+3. Backend Middleware - Enhanced auth middleware, created captcha, login-rate-limit, password-reset-rate-limit, sensitive-action middleware
+4. Backend Routes & Controllers - Updated auth.controller.ts with staffLogin, publicLogin, logout, refresh, forgotPassword, validateResetToken, resetPassword, reAuth, me endpoints
+5. Frontend Auth Context & Hooks - Created AuthContext, useLogin, useForgotPassword, useResetPassword, useReAuth hooks
+6. Frontend Login Page - Created LoginForm, LoginPage, StaffLoginPage, HCaptcha components
+7. Frontend Password Reset Pages - Created ForgotPasswordPage, ResetPasswordPage
+8. Frontend Re-Authentication - Created ReAuthModal component
+9. Frontend Integration - Updated App.tsx with auth routes and ProtectedRoute/PublicOnlyRoute components
+10. Testing - Created auth.login.test.ts and auth.password-reset.test.ts integration tests
+
+**Pre-deployment Requirements:**
+- Run database migration: `pnpm drizzle-kit push` or `pnpm drizzle-kit generate && pnpm drizzle-kit migrate`
+- Configure environment variables: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HCAPTCHA_SECRET`, `VITE_HCAPTCHA_SITE_KEY`
+- Ensure Redis is running for session/token management
+
+**Known Issues:**
+- express-rate-limit shows IPv6 validation warnings (functional but needs ipKeyGenerator helper)
+- Tests require DB migration to pass (new columns not yet in database)
+
+### Debug Log References
+- No significant issues encountered during implementation
 
 ### File List
 **Backend Services:**

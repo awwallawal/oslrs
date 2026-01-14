@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import Human from '@vladmandic/human';
+import { SkeletonCard } from '../../../components/skeletons';
+import { useToast } from '../../../hooks/useToast';
 
 interface LiveSelfieCaptureProps {
   onCapture: (file: File) => void;
@@ -12,7 +14,8 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const [faceCount, setFaceCount] = useState<number>(0);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState<boolean>(false);
+  const toast = useToast();
 
   useEffect(() => {
     const initHuman = async () => {
@@ -32,12 +35,19 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         setIsModelLoading(false);
       } catch (e) {
         console.error('Failed to load Human:', e);
-        setError('Failed to load face detection models');
+        setHasError(true);
         setIsModelLoading(false);
       }
     };
     initHuman();
   }, []);
+
+  // Show toast error when hasError is set (separate effect to avoid dependency issues)
+  useEffect(() => {
+    if (hasError) {
+      toast.error({ message: 'Failed to load face detection models. Please refresh the page.' });
+    }
+  }, [hasError, toast]);
 
   const detectFace = useCallback(async () => {
     if (!human || !webcamRef.current || !webcamRef.current.video || capturedImage) return;
@@ -81,7 +91,20 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
     onCapture(file);
   };
 
-  if (error) return <div className="text-red-500">{error}</div>;
+  // Error state handled via Toast notification - show empty state with retry option
+  if (hasError) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-neutral-600 mb-4">Unable to load camera. Please refresh the page to try again.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
+        >
+          Refresh Page
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -102,8 +125,8 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
             <div className="absolute inset-0 border-2 border-white/50 rounded-full m-12 pointer-events-none" />
             
             {isModelLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
-                Loading models...
+              <div className="absolute inset-0 flex items-center justify-center">
+                <SkeletonCard className="w-full h-full border-none shadow-none" />
               </div>
             )}
 
@@ -123,7 +146,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
           <button
             onClick={capture}
             disabled={faceCount !== 1 || isModelLoading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-full disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-full disabled:bg-neutral-400 disabled:cursor-not-allowed transition-colors"
           >
             Capture
           </button>
@@ -131,13 +154,13 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
           <>
             <button
               onClick={retake}
-              className="px-6 py-2 bg-gray-200 text-gray-800 rounded-full"
+              className="px-6 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 rounded-full transition-colors"
             >
               Retake
             </button>
             <button
               onClick={confirm}
-              className="px-6 py-2 bg-green-600 text-white rounded-full"
+              className="px-6 py-2 bg-success-600 hover:bg-success-600/90 text-white rounded-full transition-colors"
             >
               Use Photo
             </button>

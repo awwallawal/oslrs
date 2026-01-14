@@ -4,6 +4,25 @@ import { app } from '../app.js';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 
+// Mock auth middleware to bypass JWT validation for unit tests
+vi.mock('../middleware/auth.js', () => ({
+    authenticate: vi.fn((req: any, res: any, next: any) => {
+        // Check if Authorization header is present (simulates auth check)
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
+        }
+        // Set mock user for authorized requests
+        req.user = {
+            id: '018e5f2a-1234-7890-abcd-1234567890ab',
+            email: 'admin@example.com',
+            role: 'super_admin',
+            lgaId: null,
+        };
+        next();
+    }),
+}));
+
 // Mock StaffService
 vi.mock('../services/staff.service.js', () => {
     return {
@@ -20,7 +39,7 @@ vi.mock('../queues/import.queue.js', () => ({
     importQueue: {
         add: vi.fn().mockResolvedValue({ id: 'job-123' }),
         getJob: vi.fn().mockResolvedValue({
-            id: 'job-123', 
+            id: 'job-123',
             getState: async () => 'completed',
             progress: 100,
             returnvalue: { succeeded: 10 },

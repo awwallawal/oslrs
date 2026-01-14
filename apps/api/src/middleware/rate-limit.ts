@@ -1,6 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { AppError } from '@oslsr/utils';
 
 const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');

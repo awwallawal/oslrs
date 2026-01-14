@@ -12,7 +12,12 @@
     "test:security": "vitest run --test-name-pattern='Security'",
     "test:contract": "vitest run --test-name-pattern='Contract'",
     "test:ui": "vitest run --test-name-pattern='UI'",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "db:generate": "tsc && drizzle-kit generate",
+    "db:migrate": "tsc && drizzle-kit migrate",
+    "db:push": "tsc && drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "tsc && drizzle-kit check"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",
@@ -21,6 +26,7 @@
     "@oslsr/types": "workspace:^",
     "@oslsr/utils": "workspace:^",
     "bullmq": "^5.7.10",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^6.1.0",
     "dotenv": "^16.4.5",
@@ -42,6 +48,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
     "@types/express-rate-limit": "^6.0.2",

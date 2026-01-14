@@ -129,6 +129,7 @@ export class PhotoProcessingService {
           Key: key,
       });
       // URL expires in 1 hour
+      // @ts-expect-error - S3Client type mismatch with @aws-sdk/s3-request-presigner
       return await getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
   }
 }

@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import pino from 'pino';
 import dotenv from 'dotenv';
 import routes from './routes/index.js';
@@ -19,7 +20,11 @@ export const logger = pino({
 export const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  credentials: true, // Allow cookies to be sent with requests
+}));
+app.use(cookieParser());
 app.use(express.json());
 
 // Health check endpoint

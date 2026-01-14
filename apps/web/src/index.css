@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Shimmer animation for skeleton loading states (GPU-accelerated) */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-neutral-200, #e5e7eb) 0%,
+    var(--color-neutral-100, #f3f4f6) 50%,
+    var(--color-neutral-200, #e5e7eb) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 @theme {
   --color-primary-900: #6B1518;
   --color-primary-700: #861A1F;

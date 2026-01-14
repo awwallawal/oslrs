@@ -1,12 +1,12 @@
 ---
 project_name: 'oslr_cl'
 user_name: 'Awwal'
-date: '2026-01-03'
-sections_completed: ['technology_stack', 'critical_rules', 'project_structure', 'anti_patterns', 'workflow', 'user_notes']
+date: '2026-01-13'
+sections_completed: ['technology_stack', 'critical_rules', 'project_structure', 'anti_patterns', 'workflow', 'user_notes', 'ui_patterns']
 architecture_source: '_bmad-output/planning-artifacts/architecture.md'
 adrs_count: 11
-pattern_categories: 7
-patterns_documented: 10
+pattern_categories: 10
+patterns_documented: 13
 conflict_prevention_rules: 10
 status: 'complete'
 ---
@@ -269,6 +269,25 @@ app.use((err, req, res, next) => {
 
 **CRITICAL: Use skeleton screens to preserve layout and reduce perceived loading time**
 
+**Skeleton Component Library (apps/web/src/components/skeletons/):**
+```typescript
+import {
+  SkeletonText,    // Configurable width text lines
+  SkeletonCard,    // Card-shaped placeholder with optional header
+  SkeletonAvatar,  // Circular image placeholder (sm/md/lg/xl)
+  SkeletonTable,   // Table rows with configurable columns
+  SkeletonForm     // Form fields placeholder
+} from '@/components/skeletons';
+
+// Usage examples:
+<SkeletonText width="75%" />                           // Text line
+<SkeletonText lines={3} />                             // Multiple lines
+<SkeletonCard showHeader />                            // Card with header
+<SkeletonAvatar size="lg" />                           // Large avatar
+<SkeletonTable rows={5} columns={4} />                 // 5x4 table
+<SkeletonForm fields={['text', 'textarea', 'text']} /> // Form fields
+```
+
 **✅ CORRECT Pattern:**
 ```typescript
 function EnumeratorDashboard() {
@@ -280,8 +299,8 @@ function EnumeratorDashboard() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-32 w-full" />  {/* Stats card skeleton */}
-        <Skeleton className="h-64 w-full" />  {/* Chart skeleton */}
+        <SkeletonCard showHeader />           {/* Stats card skeleton */}
+        <SkeletonTable rows={5} columns={4} /> {/* Data table skeleton */}
       </div>
     );
   }
@@ -296,7 +315,194 @@ function EnumeratorDashboard() {
 if (isLoading) return <Spinner />;  // WRONG! No layout preservation
 ```
 
+**Accessibility Requirements:**
+- All skeletons have `aria-busy="true"` and `aria-label="Loading"`
+- Shimmer animation uses CSS transforms (GPU-accelerated)
+- Minimum 200ms display to prevent flash
+
 **Why:** Data entry clerks process hundreds of records/day. Skeleton screens preserve layout, reduce Cumulative Layout Shift (CLS), and meet NFR1.2 (2.5s LCP target).
+
+---
+
+### 4a. Error Boundaries (Graceful Crash Handling)
+
+**CRITICAL: Wrap components to prevent cascading failures**
+
+**Error Boundary Component (apps/web/src/components/ErrorBoundary.tsx):**
+```typescript
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Page-level protection (in App.tsx routes)
+<ErrorBoundary
+  fallbackProps={{
+    title: 'Page Error',
+    description: 'This page encountered an error.'
+  }}
+>
+  <DashboardPage />
+</ErrorBoundary>
+
+// Feature-level protection (complex components)
+<ErrorBoundary
+  fallbackProps={{
+    title: 'Camera Error',
+    description: 'Unable to access the camera.',
+    showHomeLink: false  // Hide "Go Home" for feature-level
+  }}
+  onError={(error, errorInfo) => {
+    logger.error({ event: 'component.crash', error: error.message });
+  }}
+>
+  <LiveSelfieCapture onCapture={handleCapture} />
+</ErrorBoundary>
+```
+
+**ErrorFallback Props:**
+- `title`: User-friendly error title (required)
+- `description`: Explanation message (required)
+- `showTryAgain`: Show "Try Again" button (default: true)
+- `showHomeLink`: Show "Go Home" link (default: true)
+- `onRetry`: Custom retry handler (optional)
+
+**Reset Behavior:**
+```typescript
+// Reset on navigation (using resetKey)
+<ErrorBoundary resetKey={location.pathname}>
+  <Routes>...</Routes>
+</ErrorBoundary>
+
+// Manual reset via callback
+<ErrorBoundary onReset={() => queryClient.invalidateQueries()}>
+  <DataComponent />
+</ErrorBoundary>
+```
+
+**Which Components to Wrap:**
+- ✅ Page-level routes (App.tsx)
+- ✅ Complex features: `LiveSelfieCapture`, `IDCardDownload`
+- ✅ Third-party integrations (maps, charts, cameras)
+- ❌ Simple UI components (buttons, inputs)
+- ❌ Static content components
+
+---
+
+### 4b. Toast Notifications (User Feedback)
+
+**CRITICAL: Use toast for action feedback, NOT for validation errors**
+
+**Toast Hook (apps/web/src/hooks/useToast.ts):**
+```typescript
+import { useToast } from '@/hooks/useToast';
+
+function SaveButton() {
+  const { success, error, warning, info, loading, dismiss } = useToast();
+
+  const handleSave = async () => {
+    try {
+      await saveData();
+      success('Changes saved successfully');  // Auto-dismiss: 3s
+    } catch (err) {
+      error('Failed to save changes');        // Auto-dismiss: 5s
+    }
+  };
+}
+```
+
+**Toast Timing Configuration:**
+- Success: 3 seconds auto-dismiss
+- Error: 5 seconds auto-dismiss
+- Warning/Info: 4 seconds auto-dismiss
+- Maximum visible toasts: 3 (older dismissed automatically)
+
+**When to Use Toasts:**
+- ✅ Mutation success/failure feedback
+- ✅ Background operation completion
+- ✅ System notifications
+- ❌ Form validation errors (use inline errors)
+- ❌ Confirmation dialogs (use modals)
+
+**Toast with useOptimisticMutation (Automatic):**
+```typescript
+const mutation = useOptimisticMutation({
+  mutationFn: updateProfile,
+  successMessage: 'Profile updated',     // Auto-shows success toast
+  errorMessage: 'Failed to update',      // Auto-shows error toast
+});
+```
+
+---
+
+### 4c. Optimistic UI (useOptimisticMutation Hook)
+
+**CRITICAL: Use the wrapper hook for consistent optimistic updates**
+
+**useOptimisticMutation Hook (apps/web/src/hooks/useOptimisticMutation.ts):**
+```typescript
+import { useOptimisticMutation } from '@/hooks/useOptimisticMutation';
+
+function DeleteButton({ itemId, onDeleted }) {
+  const mutation = useOptimisticMutation({
+    mutationFn: () => deleteItem(itemId),
+
+    // Optimistic update (runs immediately before API call)
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['items'] });
+      const previousItems = queryClient.getQueryData(['items']);
+      queryClient.setQueryData(['items'], (old) =>
+        old.filter(item => item.id !== itemId)
+      );
+      return { previousItems };  // Context for rollback
+    },
+
+    // Rollback on error
+    onError: (error, variables, context) => {
+      queryClient.setQueryData(['items'], context.previousItems);
+    },
+
+    // Toast messages (optional - defaults provided)
+    successMessage: 'Item deleted',
+    errorMessage: 'Failed to delete item',
+
+    // Callbacks
+    onSuccess: () => onDeleted(),
+  });
+
+  return (
+    <Button
+      onClick={() => mutation.mutate()}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? 'Deleting...' : 'Delete'}
+    </Button>
+  );
+}
+```
+
+**Disabling Toasts:**
+```typescript
+// Disable success toast (for silent operations)
+useOptimisticMutation({
+  mutationFn: syncData,
+  successMessage: false,  // No success toast
+});
+
+// Custom error message function
+useOptimisticMutation({
+  mutationFn: uploadFile,
+  errorMessage: (error) => `Upload failed: ${error.message}`,
+});
+```
+
+**Button Loading Pattern:**
+```typescript
+<Button
+  disabled={mutation.isPending}
+  className={mutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
+>
+  {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  {mutation.isPending ? 'Saving...' : 'Save'}
+</Button>
+```
 
 ---
 
@@ -846,6 +1052,6 @@ docker compose -f docker/docker-compose.dev.yml up
 
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-03
+**Last Updated:** 2026-01-13
 
-**Version:** 1.0.0
+**Version:** 1.1.0 (Added UI Patterns: Skeleton Components, Error Boundaries, Toast Notifications, useOptimisticMutation)
