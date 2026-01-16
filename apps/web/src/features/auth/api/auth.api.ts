@@ -11,6 +11,35 @@ import type {
   AuthUser,
 } from '@oslsr/types';
 
+// Registration types
+export interface PublicRegistrationRequest {
+  fullName: string;
+  email: string;
+  phone: string;
+  nin: string;
+  password: string;
+  confirmPassword: string;
+  captchaToken: string;
+}
+
+export interface PublicRegistrationResponse {
+  message: string;
+}
+
+export interface VerifyEmailResponse {
+  message: string;
+  success: boolean;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
+  captchaToken: string;
+}
+
+export interface ResendVerificationResponse {
+  message: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
@@ -181,4 +210,33 @@ export async function getCurrentUser(accessToken: string): Promise<{
     },
     accessToken
   );
+}
+
+/**
+ * Public user registration
+ */
+export async function publicRegister(request: PublicRegistrationRequest): Promise<PublicRegistrationResponse> {
+  return authFetch<PublicRegistrationResponse>('/auth/public/register', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+/**
+ * Verify email address using token
+ */
+export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
+  return authFetch<VerifyEmailResponse>(`/auth/verify-email/${token}`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Resend verification email
+ */
+export async function resendVerificationEmail(request: ResendVerificationRequest): Promise<ResendVerificationResponse> {
+  return authFetch<ResendVerificationResponse>('/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
 }

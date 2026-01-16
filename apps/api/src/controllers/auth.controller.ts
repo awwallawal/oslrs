@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { PasswordResetService } from '../services/password-reset.service.js';
+import { RegistrationService } from '../services/registration.service.js';
 import { EmailService } from '../services/email.service.js';
 import { setReAuthValid } from '../middleware/sensitive-action.js';
 import {
@@ -9,6 +10,9 @@ import {
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
   reAuthRequestSchema,
+  publicRegistrationRequestSchema,
+  verifyEmailRequestSchema,
+  resendVerificationRequestSchema,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -343,6 +347,94 @@ export class AuthController {
           role: req.user.role,
           lgaId: req.user.lgaId,
           rememberMe: req.user.rememberMe,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/public/register
+   * Public user self-registration
+   */
+  static async publicRegister(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = publicRegistrationRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid registration data', 400, { errors: validation.error.errors });
+      }
+
+      const { fullName, email, phone, nin, password } = validation.data;
+      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+      const userAgent = req.get('user-agent') || 'unknown';
+
+      const result = await RegistrationService.registerPublicUser({
+        fullName,
+        email,
+        phone,
+        nin,
+        password,
+        ipAddress,
+        userAgent,
+      });
+
+      res.status(201).json({
+        data: {
+          message: result.message,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/auth/verify-email/:token
+   * Verify email address using token from email link
+   */
+  static async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { token } = req.params;
+
+      if (!token || token.length !== 64) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid verification token', 400);
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+      const userAgent = req.get('user-agent') || 'unknown';
+
+      const result = await RegistrationService.verifyEmail(token, ipAddress, userAgent);
+
+      res.status(200).json({
+        data: {
+          message: result.message,
+          success: result.success,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/resend-verification
+   * Resend verification email
+   */
+  static async resendVerification(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = resendVerificationRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
+      }
+
+      const { email } = validation.data;
+
+      const result = await RegistrationService.resendVerificationEmail(email);
+
+      res.status(200).json({
+        data: {
+          message: result.message,
         },
       });
     } catch (err) {

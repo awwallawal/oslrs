@@ -177,6 +177,9 @@ importers:
       '@oslsr/types':
         specifier: workspace:^
         version: link:../../packages/types
+      '@oslsr/utils':
+        specifier: workspace:^
+        version: link:../../packages/utils
       '@tanstack/react-query':
         specifier: ^5.37.1
         version: 5.90.16(react@18.3.1)

@@ -228,15 +228,26 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
 
       {/* Login Type Toggle */}
       {!isStaff ? (
-        <p className="mt-6 text-center text-sm text-neutral-600">
-          Staff member?{' '}
-          <Link
-            to="/staff/login"
-            className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
-          >
-            Login here
-          </Link>
-        </p>
+        <>
+          <p className="mt-6 text-center text-sm text-neutral-600">
+            Don't have an account?{' '}
+            <Link
+              to="/register"
+              className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
+            >
+              Create account
+            </Link>
+          </p>
+          <p className="mt-3 text-center text-sm text-neutral-600">
+            Staff member?{' '}
+            <Link
+              to="/staff/login"
+              className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
+            >
+              Login here
+            </Link>
+          </p>
+        </>
       ) : (
         <p className="mt-6 text-center text-sm text-neutral-600">
           <Link

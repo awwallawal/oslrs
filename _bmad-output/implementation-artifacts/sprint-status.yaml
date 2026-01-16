@@ -50,7 +50,7 @@ development_status:
   1-5-live-selfie-capture-verification: done
   1-6-id-card-generation-public-verification: done
   1-7-secure-login-session-management: review
-  1-8-public-user-self-registration: ready-for-dev
+  1-8-public-user-self-registration: done
   1-9-global-ui-patterns: done
   1-10-test-infrastructure-dashboard: ready-for-dev
   epic-1-retrospective: optional

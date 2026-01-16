@@ -3,3 +3,4 @@ export * from './auth.js';
 export * from './validation/staff.js';
 export * from './validation/profile.js';
 export * from './validation/auth.js';
+export * from './validation/registration.js';

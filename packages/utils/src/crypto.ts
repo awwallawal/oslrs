@@ -30,3 +30,12 @@ export const hashPassword = async (password: string): Promise<string> => {
 export const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return bcrypt.compare(password, hash);
 };
+
+/**
+ * Generates a secure random verification token (32 bytes = 64 hex characters).
+ * Used for email verification tokens with 24-hour expiry.
+ * @returns {string} 64-character hex string
+ */
+export const generateVerificationToken = (): string => {
+  return randomBytes(32).toString('hex');
+};

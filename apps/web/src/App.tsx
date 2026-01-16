@@ -14,6 +14,9 @@ const ForgotPasswordPage = lazy(() => import('./features/auth/pages/ForgotPasswo
 const ResetPasswordPage = lazy(() => import('./features/auth/pages/ResetPasswordPage'));
 const ProfileCompletionPage = lazy(() => import('./features/onboarding/pages/ProfileCompletionPage'));
 const VerificationPage = lazy(() => import('./features/onboarding/pages/VerificationPage'));
+const RegistrationPage = lazy(() => import('./features/auth/pages/RegistrationPage'));
+const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage'));
+const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVerificationPage'));
 
 /**
  * Page loading fallback - shows skeleton during route transitions
@@ -113,6 +116,30 @@ function App() {
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
                     <ResetPasswordPage />
+                  </PublicOnlyRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <PublicOnlyRoute redirectTo="/dashboard">
+                    <RegistrationPage />
+                  </PublicOnlyRoute>
+                }
+              />
+              <Route
+                path="/verify-email/:token"
+                element={
+                  <PublicOnlyRoute redirectTo="/dashboard">
+                    <VerifyEmailPage />
+                  </PublicOnlyRoute>
+                }
+              />
+              <Route
+                path="/resend-verification"
+                element={
+                  <PublicOnlyRoute redirectTo="/dashboard">
+                    <ResendVerificationPage />
                   </PublicOnlyRoute>
                 }
               />

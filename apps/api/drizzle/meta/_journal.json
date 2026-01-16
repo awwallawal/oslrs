@@ -43,6 +43,13 @@
       "when": 1768365399263,
       "tag": "0005_auth_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1768557911579,
+      "tag": "0006_aromatic_power_man",
+      "breakpoints": true
     }
   ]
 }

@@ -23,9 +23,13 @@ export const users = pgTable('users', {
   liveSelfieVerifiedAt: timestamp('live_selfie_verified_at', { withTimezone: true }),
   roleId: uuid('role_id').notNull().references(() => roles.id),
   lgaId: uuid('lga_id').references(() => lgas.id), // Nullable for state-wide roles
-  status: text('status', { enum: ['invited', 'active', 'verified', 'suspended', 'deactivated'] }).notNull().default('invited'),
+  status: text('status', { enum: ['invited', 'active', 'verified', 'suspended', 'deactivated', 'pending_verification'] }).notNull().default('invited'),
   invitationToken: text('invitation_token').unique(),
   invitedAt: timestamp('invited_at', { withTimezone: true }),
+
+  // Email verification columns (Story 1.8)
+  emailVerificationToken: text('email_verification_token').unique(),
+  emailVerificationExpiresAt: timestamp('email_verification_expires_at', { withTimezone: true }),
 
   // Session management columns (Story 1.7)
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),

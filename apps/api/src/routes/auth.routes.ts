@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
+import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit } from '../middleware/registration-rate-limit.js';
 
 const router = Router();
 
@@ -22,6 +23,26 @@ router.post('/public/login',
   loginRateLimit,
   verifyCaptcha,
   AuthController.publicLogin
+);
+
+// Public user registration - rate limited + CAPTCHA protected (Story 1.8)
+router.post('/public/register',
+  registrationRateLimit,
+  verifyCaptcha,
+  AuthController.publicRegister
+);
+
+// Email verification - rate limited (Story 1.8)
+router.get('/verify-email/:token',
+  verifyEmailRateLimit,
+  AuthController.verifyEmail
+);
+
+// Resend verification email - rate limited + CAPTCHA protected (Story 1.8)
+router.post('/resend-verification',
+  resendVerificationRateLimit,
+  verifyCaptcha,
+  AuthController.resendVerification
 );
 
 // Logout - requires authentication

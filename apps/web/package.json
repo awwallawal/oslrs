@@ -19,6 +19,7 @@
     "@hookform/resolvers": "^3.4.2",
     "@oslsr/testing": "workspace:^",
     "@oslsr/types": "workspace:^",
+    "@oslsr/utils": "workspace:^",
     "@tanstack/react-query": "^5.37.1",
     "@vladmandic/human": "^3.3.6",
     "class-variance-authority": "^0.7.1",
