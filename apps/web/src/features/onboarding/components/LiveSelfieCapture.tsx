@@ -3,6 +3,7 @@ import Webcam from 'react-webcam';
 import Human from '@vladmandic/human';
 import { SkeletonCard } from '../../../components/skeletons';
 import { useToast } from '../../../hooks/useToast';
+import { useDelayedLoading } from '../../../hooks/useDelayedLoading';
 
 interface LiveSelfieCaptureProps {
   onCapture: (file: File) => void;
@@ -12,10 +13,13 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const webcamRef = useRef<Webcam>(null);
   const [human, setHuman] = useState<Human | null>(null);
   const [faceCount, setFaceCount] = useState<number>(0);
-  const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
+  const [isModelLoadingRaw, setIsModelLoadingRaw] = useState<boolean>(true);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [hasError, setHasError] = useState<boolean>(false);
   const toast = useToast();
+
+  // Use delayed loading to prevent skeleton flash (AC1: 200ms minimum display)
+  const isModelLoading = useDelayedLoading(isModelLoadingRaw);
 
   useEffect(() => {
     const initHuman = async () => {
@@ -32,11 +36,11 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         await humanInstance.load();
         await humanInstance.warmup();
         setHuman(humanInstance);
-        setIsModelLoading(false);
+        setIsModelLoadingRaw(false);
       } catch (e) {
         console.error('Failed to load Human:', e);
         setHasError(true);
-        setIsModelLoading(false);
+        setIsModelLoadingRaw(false);
       }
     };
     initHuman();
