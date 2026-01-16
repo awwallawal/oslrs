@@ -22,9 +22,9 @@ vi.mock('../../api/auth.api', () => ({
 
 import * as authApi from '../../api/auth.api';
 
-const mockAuthApi = authApi as {
+const mockAuthApi = authApi as unknown as {
   verifyEmail: ReturnType<typeof vi.fn>;
-  AuthApiError: typeof Error;
+  AuthApiError: new (message: string, code: string) => Error & { code: string };
 };
 
 // Generate a valid 64-character token for testing

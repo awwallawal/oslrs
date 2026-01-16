@@ -23,10 +23,10 @@ vi.mock('../../api/auth.api', () => ({
 
 import * as authApi from '../../api/auth.api';
 
-const mockAuthApi = authApi as {
+const mockAuthApi = authApi as unknown as {
   validateResetToken: ReturnType<typeof vi.fn>;
   resetPassword: ReturnType<typeof vi.fn>;
-  AuthApiError: typeof Error;
+  AuthApiError: new (message: string, code: string) => Error & { code: string };
 };
 
 function renderWithRouter(token = 'test-token') {

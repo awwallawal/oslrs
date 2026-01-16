@@ -28,14 +28,14 @@ vi.mock('../../api/auth.api', () => ({
   },
 }));
 
-const mockAuthApi = authApi as {
+const mockAuthApi = authApi as unknown as {
   staffLogin: ReturnType<typeof vi.fn>;
   publicLogin: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
   refreshToken: ReturnType<typeof vi.fn>;
   getCurrentUser: ReturnType<typeof vi.fn>;
   reAuthenticate: ReturnType<typeof vi.fn>;
-  AuthApiError: typeof Error;
+  AuthApiError: new (message: string, code: string, details?: Record<string, unknown>) => Error & { code: string; details?: Record<string, unknown> };
 };
 
 // Test wrapper component

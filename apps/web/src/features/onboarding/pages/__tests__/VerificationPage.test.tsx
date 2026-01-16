@@ -10,7 +10,7 @@ import { renderWithRouter } from '../../../../test/utils/renderWithRouter';
 
 expect.extend(matchers);
 
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 afterEach(() => {
   cleanup();
@@ -30,7 +30,7 @@ describe('VerificationPage', () => {
             }
         };
 
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             json: async () => mockData
         });
@@ -56,7 +56,7 @@ describe('VerificationPage', () => {
     });
 
     it('should handle invalid staff', async () => {
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: false,
             status: 404,
             json: async () => ({ message: 'Not found' })

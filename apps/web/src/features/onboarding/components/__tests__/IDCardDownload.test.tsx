@@ -10,7 +10,7 @@ import { mockDownload } from '../../../../test/mocks/download';
 expect.extend(matchers);
 
 // Mock global fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 // Mock localStorage
 const localStorageMock = (function() {
@@ -51,7 +51,7 @@ describe('IDCardDownload', () => {
         
         localStorageMock.setItem('token', 'fake-token');
         const mockBlob = new Blob(['%PDF-MOCK'], { type: 'application/pdf' });
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             blob: async () => mockBlob,
             headers: {
@@ -69,7 +69,7 @@ describe('IDCardDownload', () => {
         expect(screen.getByText(/generating/i)).toBeInTheDocument();
 
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/users/id-card'), expect.anything());
+            expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/users/id-card'), expect.anything());
         });
 
         await waitFor(() => {
@@ -85,7 +85,7 @@ describe('IDCardDownload', () => {
 
     it('should handle error', async () => {
         localStorageMock.setItem('token', 'fake-token');
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: false,
             status: 500,
             json: async () => ({ message: 'Server failed' })
@@ -99,7 +99,7 @@ describe('IDCardDownload', () => {
         fireEvent.click(button);
 
         await waitFor(() => {
-             expect(global.fetch).toHaveBeenCalled();
+             expect(globalThis.fetch).toHaveBeenCalled();
         });
 
         await waitFor(() => {

@@ -42,9 +42,9 @@ vi.mock('@oslsr/utils', () => ({
 
 import * as authApi from '../../api/auth.api';
 
-const mockAuthApi = authApi as {
+const mockAuthApi = authApi as unknown as {
   publicRegister: ReturnType<typeof vi.fn>;
-  AuthApiError: typeof Error;
+  AuthApiError: new (message: string, code: string) => Error & { code: string };
 };
 
 function renderWithRouter(ui: React.ReactElement) {

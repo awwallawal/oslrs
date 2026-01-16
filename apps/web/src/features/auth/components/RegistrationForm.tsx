@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { HCaptcha } from './HCaptcha';
 import { PasswordRequirements } from './PasswordRequirements';
 import { publicRegister, AuthApiError } from '../api/auth.api';
-import { verhoeffCheck } from '@oslsr/utils';
+import { verhoeffCheck } from '@oslsr/utils/src/validation';
 
 // Registration form validation schema
 const registrationSchema = z.object({
