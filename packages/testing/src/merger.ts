@@ -4,6 +4,7 @@ import glob from 'fast-glob';
 
 export interface TestResult {
   name: string;
+  fullName?: string; // Full path including suite hierarchy
   category: string;
   status: 'passed' | 'failed' | 'skipped' | 'running';
   duration?: number;
@@ -89,10 +90,13 @@ export async function mergeTestResults(
     return timeA - timeB;
   });
 
-  // Deduplicate by name (latest wins)
+  // Deduplicate by file:fullName (latest wins) to handle same-named tests across files and suites
   const uniqueResults = new Map<string, TestResult>();
   for (const result of allResults) {
-    uniqueResults.set(result.name, result);
+    // Use fullName if available (includes suite hierarchy), fallback to name
+    const testIdentifier = result.fullName || result.name;
+    const uniqueKey = `${result.file || ''}:${testIdentifier}`;
+    uniqueResults.set(uniqueKey, result);
   }
 
   const finalResults = Array.from(uniqueResults.values());

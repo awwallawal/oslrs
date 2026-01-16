@@ -4,6 +4,7 @@ import type { Reporter, File, Task } from 'vitest';
 
 export interface TestResult {
   name: string;
+  fullName?: string; // Full path including suite hierarchy (e.g., "Suite > Nested > test name")
   category: string;
   status: 'passed' | 'failed' | 'skipped' | 'running';
   duration?: number;
@@ -101,7 +102,7 @@ export class LiveReporter implements Reporter {
         tasks = fileAny.children;
       }
 
-      this.collectTasks(tasks);
+      this.collectTasks(tasks, []);
     }
 
     // Log collection result
@@ -117,7 +118,7 @@ export class LiveReporter implements Reporter {
     this.save();
   }
 
-  private collectTasks(tasks: Task[] | undefined) {
+  private collectTasks(tasks: Task[] | undefined, suitePath: string[]) {
     // Handle undefined or non-iterable tasks (v4 compatibility)
     if (!tasks || !Array.isArray(tasks)) {
       return;
@@ -138,8 +139,13 @@ export class LiveReporter implements Reporter {
         if (state === 'pass' || state === 'passed') status = 'passed';
         else if (state === 'fail' || state === 'failed') status = 'failed';
 
-        this.results.set(task.name, {
+        // Build full test path including suite hierarchy to handle same-named tests
+        const fullPath = [...suitePath, task.name].join(' > ');
+        // Use file:fullPath as unique key to avoid all collisions
+        const uniqueKey = `${this.currentFilePath}:${fullPath}`;
+        this.results.set(uniqueKey, {
           name: task.name,
+          fullName: fullPath,
           category,
           blocking,
           status,
@@ -152,9 +158,9 @@ export class LiveReporter implements Reporter {
           package: pkg,
         });
       } else if (task.type === 'suite') {
-        // Recursively process suite tasks
+        // Recursively process suite tasks with updated path
         const suiteTasks = (task as any).tasks;
-        this.collectTasks(suiteTasks);
+        this.collectTasks(suiteTasks, [...suitePath, task.name]);
       }
     }
   }
