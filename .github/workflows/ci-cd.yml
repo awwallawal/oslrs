@@ -16,20 +16,71 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-node-version: 20
+          node-version: 20
           cache: 'pnpm'
-      
+
       - name: Install dependencies
         run: pnpm install
-      
+
       - name: Lint
         run: pnpm lint
-      
+
       - name: Build
         run: pnpm build
-      
+
       - name: Test
         run: pnpm test
+
+      - name: Generate Test Dashboard
+        if: always()
+        run: pnpm test:dashboard
+
+      - name: Upload Test Dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-dashboard
+          path: |
+            test-pipeline.html
+            .vitest-live.json
+          retention-days: 30
+
+      - name: Generate Test Summary
+        if: always()
+        run: |
+          if [ -f ".vitest-live.json" ]; then
+            echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Extract test counts using Node.js
+            node -e "
+              const data = require('./.vitest-live.json');
+              const tests = data.tests || [];
+              const total = tests.length;
+              const passed = tests.filter(t => t.status === 'passed').length;
+              const failed = tests.filter(t => t.status === 'failed').length;
+              const skipped = tests.filter(t => t.status === 'skipped').length;
+
+              console.log('| Status | Count |');
+              console.log('|--------|-------|');
+              console.log('| Total | ' + total + ' |');
+              console.log('| ✅ Passed | ' + passed + ' |');
+              console.log('| ❌ Failed | ' + failed + ' |');
+              console.log('| ⏭️ Skipped | ' + skipped + ' |');
+
+              if (failed > 0) {
+                console.log('');
+                console.log('### Failed Tests');
+                console.log('');
+                tests.filter(t => t.status === 'failed').forEach(t => {
+                  console.log('- **' + t.name + '**');
+                  if (t.error) console.log('  - Error: \`' + t.error.substring(0, 100) + '\`');
+                });
+              }
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
+          fi
 
   deploy:
     needs: build-and-test

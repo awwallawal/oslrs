@@ -2,7 +2,7 @@
 
 **ID:** 1.10
 **Epic:** Epic 1: Foundation, Secure Access & Staff Onboarding
-**Status:** ready-for-dev
+**Status:** review
 **Priority:** Low (Engineering Visibility)
 
 ## 1. User Story
@@ -164,108 +164,121 @@ So that I have clear visibility into test coverage, pass/fail status, and can qu
 
 ## 7. Implementation Tasks
 
-- [ ] **LiveReporter Enhancement**
-  - [ ] Modify `LiveReporter` to generate unique filename with process ID
-  - [ ] Add timestamp to filename for ordering (`.vitest-live-${timestamp}-${pid}.json`)
-  - [ ] Ensure atomic file writes (temp file + rename)
-  - [ ] Add error handling (log warning, don't crash tests)
-  - [ ] Write test metadata: name, status, duration, tags, file, line
+- [x] **LiveReporter Enhancement**
+  - [x] Modify `LiveReporter` to generate unique filename with process ID
+  - [x] Add timestamp to filename for ordering (`.vitest-live-${timestamp}-${pid}.json`)
+  - [x] Ensure atomic file writes (temp file + rename)
+  - [x] Add error handling (log warning, don't crash tests)
+  - [x] Write test metadata: name, status, duration, tags, file, line
 
-- [ ] **Result Merger**
-  - [ ] Create `merger.ts` in `packages/testing/src/dashboard/`
-  - [ ] Implement glob pattern to find all `.vitest-live-*.json` files
-  - [ ] Parse and merge results into single array
-  - [ ] Handle duplicate test IDs (keep latest by timestamp)
-  - [ ] Handle malformed JSON files gracefully (skip + log warning)
+- [x] **Result Merger**
+  - [x] Create `merger.ts` in `packages/testing/src/`
+  - [x] Implement glob pattern to find all `.vitest-live-*.json` files
+  - [x] Parse and merge results into single array
+  - [x] Handle duplicate test IDs (keep latest by timestamp)
+  - [x] Handle malformed JSON files gracefully (skip + log warning)
 
-- [ ] **Dashboard Generator Enhancement**
-  - [ ] Update `generator.ts` to use merger before generating HTML
-  - [ ] Add stage grouping (Golden Path, Security, Contract, UI)
-  - [ ] Add package grouping (api, web, utils, types)
-  - [ ] Add tag filtering capability
-  - [ ] Add performance metrics section (slowest tests, averages)
-  - [ ] Add error details section (stack trace, file/line)
+- [x] **Dashboard Generator Enhancement**
+  - [x] Update `dashboard.ts` to use merger before generating HTML
+  - [x] Add stage grouping (Golden Path, Security, Contract, UI)
+  - [x] Add package grouping (api, web, utils, types)
+  - [x] Add tag filtering capability
+  - [x] Add performance metrics section (slowest tests, averages)
+  - [x] Add error details section (stack trace, file/line)
 
-- [ ] **Dashboard Template**
-  - [ ] Update HTML template with improved layout
-  - [ ] Add CSS for stage/package grouping
-  - [ ] Add JavaScript for tag filtering
-  - [ ] Add expandable error details
-  - [ ] Ensure responsive design for different screen sizes
+- [x] **Dashboard Template**
+  - [x] Update HTML template with improved layout
+  - [x] Add CSS for stage/package grouping
+  - [x] Add JavaScript for tag filtering
+  - [x] Add expandable error details
+  - [x] Ensure responsive design for different screen sizes
 
-- [ ] **Cleanup Logic**
-  - [ ] Add cleanup function to delete temporary `.vitest-live-*.json` files
-  - [ ] Call cleanup after successful dashboard generation
-  - [ ] Add `--no-cleanup` flag for debugging
+- [x] **Cleanup Logic**
+  - [x] Add cleanup function to delete temporary `.vitest-live-*.json` files
+  - [x] Call cleanup after successful dashboard generation
+  - [x] Add `--no-cleanup` flag for debugging
 
-- [ ] **CLI Enhancement**
-  - [ ] Update dashboard CLI command
-  - [ ] Add `--open` flag to open in browser
-  - [ ] Add `--output` flag for custom output path
-  - [ ] Add `--no-cleanup` flag for debugging
+- [x] **CLI Enhancement**
+  - [x] Update dashboard CLI command
+  - [x] Add `--open` flag to open in browser
+  - [x] Add `--output` flag for custom output path
+  - [x] Add `--no-cleanup` flag for debugging
 
-- [ ] **Turbo Integration**
-  - [ ] Add `test:dashboard` script to root `package.json`
-  - [ ] Ensure dashboard generation runs after all test stages
-  - [ ] Configure as Turbo task with correct dependencies
+- [x] **Turbo Integration**
+  - [x] Add `test:dashboard` script to root `package.json` (already exists)
+  - [x] Ensure dashboard generation runs after all test stages
+  - [x] Configure as Turbo task with correct dependencies
 
-- [ ] **CI/CD Integration**
-  - [ ] Update GitHub Actions workflow to generate dashboard
-  - [ ] Upload `test-pipeline.html` as build artifact
-  - [ ] Add test summary to GitHub Actions job summary
+- [x] **CI/CD Integration**
+  - [x] Update GitHub Actions workflow to generate dashboard
+  - [x] Upload `test-pipeline.html` as build artifact
+  - [x] Add test summary to GitHub Actions job summary
 
-- [ ] **Documentation**
-  - [ ] Update README with dashboard usage instructions
-  - [ ] Document test tagging conventions
-  - [ ] Document CLI options
+- [x] **Documentation**
+  - [x] Update README with dashboard usage instructions
+  - [x] Document test tagging conventions
+  - [x] Document CLI options
 
-- [ ] **Testing**
-  - [ ] Write unit tests for `LiveReporter`
-  - [ ] Write unit tests for merger
-  - [ ] Write unit tests for generator
-  - [ ] Verify full pipeline locally
-  - [ ] Verify CI pipeline generates correct artifact
+- [x] **Testing**
+  - [x] Write unit tests for `LiveReporter`
+  - [x] Write unit tests for merger
+  - [x] Write unit tests for generator
+  - [x] Verify full pipeline locally
+  - [ ] Verify CI pipeline generates correct artifact (requires CI run)
 
 ## 8. Dev Agent Record
 
 ### Agent Model Used
-<!-- To be filled during implementation -->
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
-<!-- To be filled during implementation -->
+- Test suite output: 64 tests passing across 4 test files
+- reporter.test.ts: 20 tests
+- merger.test.ts: 14 tests
+- generator.test.ts: 19 tests
+- cleanup.test.ts: 11 tests
 
 ### Completion Notes List
-<!-- To be filled during implementation -->
+1. **LiveReporter Enhanced**: Implemented unique filename generation using `${timestamp}-${pid}` pattern, atomic writes via temp file + rename, comprehensive metadata capture (name, status, duration, tags, file, package, stackTrace), and graceful error handling that logs warnings without crashing tests.
+
+2. **Result Merger Created**: New `merger.ts` module uses fast-glob to find all `.vitest-live-*.json` files, merges results with timestamp-based deduplication (latest wins), and handles malformed/empty files gracefully with warnings.
+
+3. **Dashboard Generator Rewritten**: Complete rewrite of `dashboard.ts` to include summary cards, stage grouping (GoldenPath, Security, Contract, UI), package grouping (api, web, utils), tag filtering with JavaScript interactivity, performance metrics (total duration, slowest tests top 10, average per package), error details with expandable stack traces, and responsive design with viewport meta tag.
+
+4. **Cleanup Logic Added**: New `cleanup.ts` module deletes temporary `.vitest-live-*.json` files after dashboard generation, with `--no-cleanup` flag support for debugging.
+
+5. **CLI Enhanced**: Updated `cli.ts` with argument parsing for `--output`, `--open`, `--no-cleanup`, and `--help` flags. Cross-platform browser opening support (Windows, macOS, Linux).
+
+6. **Turbo Integration**: Added `test:dashboard` task to `turbo.json` with dependency on `test` task, ensuring dashboard runs after all test stages complete.
+
+7. **CI/CD Integration**: Updated `.github/workflows/ci-cd.yml` to generate dashboard after tests (always, even on failure), upload as artifact with 30-day retention, and generate GitHub Actions job summary with test counts.
+
+8. **Documentation**: Created comprehensive `packages/testing/README.md` with usage instructions, CLI options, test tagging conventions, file structure, and troubleshooting guide.
 
 ### File List
-**Reporter:**
-- `packages/testing/src/reporters/LiveReporter.ts`
-- `packages/testing/src/reporters/index.ts`
-- `packages/testing/src/reporters/__tests__/LiveReporter.test.ts`
+**New Files:**
+- `packages/testing/src/merger.ts` - Result file merger module
+- `packages/testing/src/cleanup.ts` - Temporary file cleanup module
+- `packages/testing/src/__tests__/reporter.test.ts` - LiveReporter unit tests (20 tests)
+- `packages/testing/src/__tests__/merger.test.ts` - Merger unit tests (14 tests)
+- `packages/testing/src/__tests__/generator.test.ts` - Generator unit tests (19 tests)
+- `packages/testing/src/__tests__/cleanup.test.ts` - Cleanup unit tests (11 tests)
+- `packages/testing/vitest.config.ts` - Vitest configuration for testing package
+- `packages/testing/README.md` - Package documentation
 
-**Dashboard:**
-- `packages/testing/src/dashboard/merger.ts`
-- `packages/testing/src/dashboard/generator.ts`
-- `packages/testing/src/dashboard/template.html`
-- `packages/testing/src/dashboard/cleanup.ts`
-- `packages/testing/src/dashboard/__tests__/merger.test.ts`
-- `packages/testing/src/dashboard/__tests__/generator.test.ts`
+**Modified Files:**
+- `packages/testing/src/reporter.ts` - Enhanced LiveReporter with PID filenames, atomic writes, metadata
+- `packages/testing/src/dashboard.ts` - Complete rewrite with new features
+- `packages/testing/src/cli.ts` - Enhanced CLI with flags
+- `packages/testing/src/index.ts` - Added exports for merger, cleanup
+- `packages/testing/package.json` - Added test scripts, exports, dependencies
+- `turbo.json` - Added test:dashboard task
+- `.github/workflows/ci-cd.yml` - Added dashboard generation and artifact upload
 
-**CLI:**
-- `packages/testing/src/cli/dashboard.ts`
-
-**Configuration:**
-- `vitest.base.ts` (modify)
-- `turbo.json` (modify)
-- `package.json` (add scripts)
-
-**CI/CD:**
-- `.github/workflows/ci-cd.yml` (modify)
-
-**Output:**
-- `.vitest-live-*.json` (temporary)
-- `.vitest-live.json` (consolidated)
-- `test-pipeline.html` (dashboard)
+**Output Files (Generated):**
+- `.vitest-live-*.json` - Temporary per-process result files
+- `.vitest-live.json` - Consolidated results (final)
+- `test-pipeline.html` - Generated dashboard
 
 ## 9. References
 

@@ -11,15 +11,21 @@
     ".": "./src/index.ts",
     "./decorators": "./src/decorators.ts",
     "./reporter": "./src/reporter.ts",
-    "./dashboard": "./src/dashboard.ts"
+    "./dashboard": "./src/dashboard.ts",
+    "./merger": "./src/merger.ts",
+    "./cleanup": "./src/cleanup.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "fast-glob": "^3.3.3",
     "vitest": "^2.1.0"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "typescript": "^5.6.3"
   }
 }

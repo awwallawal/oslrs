@@ -52,7 +52,7 @@ development_status:
   1-7-secure-login-session-management: review
   1-8-public-user-self-registration: done
   1-9-global-ui-patterns: done
-  1-10-test-infrastructure-dashboard: ready-for-dev
+  1-10-test-infrastructure-dashboard: review
   epic-1-retrospective: optional
 
   # Epic 2: Questionnaire Management & ODK Integration

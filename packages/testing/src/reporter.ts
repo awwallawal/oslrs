@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
-import type { Reporter, Vitest, File, Task } from 'vitest';
+import type { Reporter, File, Task } from 'vitest';
 
 export interface TestResult {
   name: string;
@@ -9,62 +8,231 @@ export interface TestResult {
   status: 'passed' | 'failed' | 'skipped' | 'running';
   duration?: number;
   error?: string;
+  stackTrace?: string;
   blocking: boolean;
   timestamp: string;
+  tags: string[];
+  file?: string;
+  line?: number;
+  package?: string;
 }
 
 export class LiveReporter implements Reporter {
   private results: Map<string, TestResult> = new Map();
   private outputPath: string;
+  private currentFilePath: string = '';
 
   constructor(options: { outputDir?: string } = {}) {
     const baseDir = options.outputDir || process.cwd();
-    const runId = crypto.randomBytes(4).toString('hex');
     const timestamp = Date.now();
-    this.outputPath = path.resolve(baseDir, `.vitest-live-${timestamp}-${runId}.json`);
-    fs.appendFileSync(path.resolve(baseDir, 'reporter-trace.log'), `[${new Date().toISOString()}] Initialized run ${runId} writing to ${this.outputPath}\n`);
+    const pid = process.pid;
+    this.outputPath = path.resolve(baseDir, `.vitest-live-${timestamp}-${pid}.json`);
+
+    // Log initialization (non-critical, don't crash if fails)
+    try {
+      fs.appendFileSync(
+        path.resolve(baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] Initialized PID ${pid} writing to ${this.outputPath}\n`
+      );
+    } catch {
+      // Silently ignore trace log failures
+    }
   }
 
+  /**
+   * Get the output path for the test results file.
+   * Useful for debugging and testing.
+   */
+  getOutputPath(): string {
+    return this.outputPath;
+  }
+
+  /**
+   * Called when all tests finish (Vitest v2.x)
+   */
   onFinished(files?: File[]) {
-    if (!files) return;
+    this.processFiles(files);
+  }
+
+  /**
+   * Called when test run ends (Vitest v4.x)
+   * This is the v4 equivalent of onFinished
+   */
+  onTestRunEnd(files?: File[]) {
+    this.processFiles(files);
+  }
+
+  /**
+   * Process test files and save results
+   * Handles both Vitest v2 and v4 file structures
+   */
+  private processFiles(files?: File[] | unknown) {
+    // Log to trace file for debugging
+    const baseDir = path.dirname(this.outputPath);
+    try {
+      const fileCount = Array.isArray(files) ? files.length : 0;
+      fs.appendFileSync(
+        path.resolve(baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] Processing ${fileCount} files, PID ${process.pid}\n`
+      );
+    } catch {
+      // Ignore trace errors
+    }
+
+    if (!files || !Array.isArray(files)) {
+      return;
+    }
 
     for (const file of files) {
-      this.collectTasks(file.tasks);
+      const fileAny = file as any;
+
+      // Handle both v2 (filepath) and v4 (moduleId) structures
+      this.currentFilePath = fileAny.filepath || fileAny.moduleId || fileAny.name || '';
+
+      // Get tasks - v2 uses file.tasks, v4 uses file.task.tasks
+      let tasks: any[] | undefined;
+      if (Array.isArray(fileAny.tasks)) {
+        // Vitest v2 structure
+        tasks = fileAny.tasks;
+      } else if (Array.isArray(fileAny.task?.tasks)) {
+        // Vitest v4 structure: file.task.tasks
+        tasks = fileAny.task.tasks;
+      } else if (Array.isArray(fileAny.children)) {
+        tasks = fileAny.children;
+      }
+
+      this.collectTasks(tasks);
     }
+
+    // Log collection result
+    try {
+      fs.appendFileSync(
+        path.resolve(baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] Collected ${this.results.size} results, saving to ${this.outputPath}\n`
+      );
+    } catch {
+      // Ignore trace errors
+    }
+
     this.save();
   }
 
-  private collectTasks(tasks: Task[]) {
+  private collectTasks(tasks: Task[] | undefined) {
+    // Handle undefined or non-iterable tasks (v4 compatibility)
+    if (!tasks || !Array.isArray(tasks)) {
+      return;
+    }
+
     for (const task of tasks) {
       if (task.type === 'test') {
         const meta = (task.meta || {}) as Record<string, unknown>;
         const category = (meta.category as string) || 'unknown';
         const blocking = meta.blocking !== false;
-        
+        const tags = this.extractTags(meta, category);
+        const pkg = this.detectPackage(this.currentFilePath);
+
+        // Handle both v2 and v4 result structures
+        const result = task.result;
+        const state = result?.state;
+        let status: 'passed' | 'failed' | 'skipped' = 'skipped';
+        if (state === 'pass' || state === 'passed') status = 'passed';
+        else if (state === 'fail' || state === 'failed') status = 'failed';
+
         this.results.set(task.name, {
           name: task.name,
           category,
           blocking,
-          status: task.result?.state === 'pass' ? 'passed' : task.result?.state === 'fail' ? 'failed' : 'skipped',
-          duration: task.result?.duration,
-          error: task.result?.errors?.[0]?.message,
+          status,
+          duration: result?.duration,
+          error: result?.errors?.[0]?.message,
+          stackTrace: result?.errors?.[0]?.stack,
           timestamp: new Date().toISOString(),
+          tags,
+          file: this.currentFilePath,
+          package: pkg,
         });
       } else if (task.type === 'suite') {
-        this.collectTasks(task.tasks);
+        // Recursively process suite tasks
+        const suiteTasks = (task as any).tasks;
+        this.collectTasks(suiteTasks);
       }
     }
   }
 
+  /**
+   * Extract tags from test metadata and category.
+   */
+  private extractTags(meta: Record<string, unknown>, category: string): string[] {
+    const tags: string[] = [];
+
+    // Add category as a tag
+    if (category && category !== 'unknown') {
+      tags.push(category);
+    }
+
+    // Add any explicit tags from metadata
+    if (Array.isArray(meta.tags)) {
+      tags.push(...(meta.tags as string[]));
+    }
+
+    // Add blocking/optional tag
+    if (meta.blocking === false) {
+      tags.push('optional');
+    }
+
+    return [...new Set(tags)]; // Deduplicate
+  }
+
+  /**
+   * Detect package name from file path.
+   * Supports apps/api, apps/web, packages/* patterns.
+   */
+  private detectPackage(filepath: string): string | undefined {
+    if (!filepath) return undefined;
+
+    // Normalize path separators
+    const normalized = filepath.replace(/\\/g, '/');
+
+    // Match apps/{name}/ pattern
+    const appsMatch = normalized.match(/apps\/([^/]+)\//);
+    if (appsMatch) {
+      return appsMatch[1];
+    }
+
+    // Match packages/{name}/ pattern
+    const packagesMatch = normalized.match(/packages\/([^/]+)\//);
+    if (packagesMatch) {
+      return packagesMatch[1];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Save results using atomic write pattern (temp file + rename).
+   * This prevents partial writes if the process crashes.
+   */
   private save() {
     const data = Array.from(this.results.values());
-    if (data.length > 0) {
+    if (data.length === 0) return;
+
+    const tempPath = this.outputPath + '.tmp';
+
+    try {
+      // Write to temp file first
+      fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
+
+      // Atomically rename to final path
+      fs.renameSync(tempPath, this.outputPath);
+    } catch (err) {
+      // Log warning but don't crash tests
+      console.warn(`[LiveReporter] Failed to write test results: ${(err as Error).message}`);
+
+      // Clean up temp file if it exists
       try {
-        fs.writeFileSync(this.outputPath, JSON.stringify(data, null, 2));
-      } catch (err) {
-        // Fallback to local dir if root is not writable
-        const fallbackPath = path.resolve(process.cwd(), path.basename(this.outputPath));
-        fs.writeFileSync(fallbackPath, JSON.stringify(data, null, 2));
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
       }
     }
   }

@@ -7,27 +7,32 @@
     },
     "test:golden": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
       "cache": false
     },
     "test:security": {
       "dependsOn": ["test:golden"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
       "cache": false
     },
     "test:contract": {
       "dependsOn": ["test:security"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
       "cache": false
     },
     "test:ui": {
       "dependsOn": ["test:contract"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live.json"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
       "cache": false
     },
     "test": {
       "dependsOn": ["test:golden", "test:security", "test:contract", "test:ui"],
       "outputs": []
+    },
+    "test:dashboard": {
+      "dependsOn": ["test"],
+      "outputs": ["test-pipeline.html", ".vitest-live.json"],
+      "cache": false
     },
     "lint": {
       "outputs": []
