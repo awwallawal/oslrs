@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter \"*\" dev",
+    "clean:ports": "npx kill-port 3000 5173 5174 5175 5176 5177 5178 5179 5180 5181 || true",
+    "dev": "pnpm run clean:ports && pnpm --filter \"*\" dev",
+    "dev:skip-clean": "pnpm --filter \"*\" dev",
     "build": "pnpm exec turbo run build",
     "test": "pnpm exec turbo run test",
     "test:golden": "pnpm exec turbo run test:golden",
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "fast-glob": "^3.3.3",
+    "kill-port": "^2.0.1",
     "tsx": "^4.10.5",
     "turbo": "^1.13.0",
     "typescript": "^5.6.3",
