@@ -134,7 +134,7 @@ export class LiveReporter implements Reporter {
 
         // Handle both v2 and v4 result structures
         const result = task.result;
-        const state = result?.state;
+        const state = result?.state as string | undefined;
         let status: 'passed' | 'failed' | 'skipped' = 'skipped';
         if (state === 'pass' || state === 'passed') status = 'passed';
         else if (state === 'fail' || state === 'failed') status = 'failed';

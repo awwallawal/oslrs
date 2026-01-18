@@ -31,7 +31,7 @@ const mockAuthApi = authApi as unknown as {
 
 function renderWithRouter(token = 'test-token') {
   return render(
-    <MemoryRouter initialEntries={[`/reset-password/${token}`]}>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={[`/reset-password/${token}`]}>
       <Routes>
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/login" element={<div>Login Page</div>} />

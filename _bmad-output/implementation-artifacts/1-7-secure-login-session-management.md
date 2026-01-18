@@ -2,7 +2,7 @@
 
 **ID:** 1.7
 **Epic:** Epic 1: Foundation, Secure Access & Staff Onboarding
-**Status:** review
+**Status:** done
 **Priority:** High
 
 ## 1. User Story
@@ -398,9 +398,14 @@ So that I can access my designated features and my identity is verified for all 
   - `ResetPasswordPage.test.tsx` - Tests for token validation, password reset flow
   - `LoginPage.test.tsx` - Tests for page rendering and navigation
 - **M1 Task Checkboxes:** Updated all task checkboxes to reflect actual completion status
-- **M2 Strict Rate Limit:** Note: `strictLoginRateLimit` middleware is defined but not wired (5 attempts/15min is sufficient for MVP)
+- **M2 Strict Rate Limit:** ~~Note: `strictLoginRateLimit` middleware is defined but not wired~~ **FIXED** in second review
 - **M3 Rate Limit Testing:** Rate limiters use `skip: shouldSkipRateLimit()` in test mode; production rate limiting verified manually
 - **L1 File Paths:** Corrected file paths in story documentation (e.g., `HCaptcha.tsx` not `CaptchaWidget.tsx`)
+
+### Code Review Fixes Applied (2026-01-18)
+- **L1 Audit IP Address:** Fixed hardcoded 'system' IP in audit logs - now passes real client IP from controller to `AuthService.activateAccount()`
+- **L2 Strict Rate Limit Wired:** `strictLoginRateLimit` (10 attempts/hour) now wired to `/staff/login` and `/public/login` routes for layered protection
+- **L3 React Router v7 Flags:** Added `v7_startTransition` and `v7_relativeSplatPath` future flags to BrowserRouter and MemoryRouter in App.tsx and test files
 
 ### Debug Log References
 - No significant issues encountered during implementation

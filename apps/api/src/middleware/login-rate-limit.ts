@@ -55,8 +55,10 @@ export const loginRateLimit = rateLimit({
 });
 
 /**
- * Stricter rate limiter after multiple failed attempts
- * Applies after 10 failed attempts
+ * Stricter rate limiter for sustained attacks
+ * - 10 attempts per 1 hour per IP
+ * - After 10 attempts, IP is blocked until the hour window resets
+ * - Combined with loginRateLimit (5/15min), provides layered protection
  */
 export const strictLoginRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
@@ -64,18 +66,19 @@ export const strictLoginRateLimit = rateLimit({
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
     prefix: 'rl:login:strict:',
   }),
-  windowMs: 30 * 60 * 1000, // 30 minutes
-  max: 1, // Effectively blocked for 30 minutes after 10 attempts
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 10, // 10 attempts per hour before blocking
   message: {
     status: 'error',
-    code: 'AUTH_RATE_LIMIT_EXCEEDED',
-    message: 'Your IP has been temporarily blocked due to too many failed login attempts. Please try again in 30 minutes.',
+    code: 'AUTH_IP_BLOCKED',
+    message: 'Your IP has been temporarily blocked due to too many failed login attempts. Please try again later.',
   },
   handler: (req, res, next, options) => {
     logger.warn({
       event: 'auth.ip_blocked',
       ip: req.ip,
       reason: 'excessive_failures',
+      attempts: (req as any).rateLimit?.current,
     });
     res.status(429).json(options.message);
   },

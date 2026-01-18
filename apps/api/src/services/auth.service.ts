@@ -20,8 +20,15 @@ export class AuthService {
    * Activates a staff account using an invitation token.
    * @param token Secure invitation token
    * @param data Profile data and password
+   * @param ipAddress Client IP address for audit logging
+   * @param userAgent Client user agent for audit logging
    */
-  static async activateAccount(token: string, data: ActivationPayload): Promise<any> {
+  static async activateAccount(
+    token: string,
+    data: ActivationPayload,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<any> {
     // 1. Find user by token
     const user = await db.query.users.findFirst({
       where: eq(users.invitationToken, token)
@@ -83,8 +90,8 @@ export class AuthService {
           targetResource: 'users',
           targetId: user.id,
           details: { activatedAt: new Date().toISOString() },
-          ipAddress: 'system', // TODO: Pass from controller
-          userAgent: 'system'
+          ipAddress: ipAddress || 'unknown',
+          userAgent: userAgent || 'unknown'
         });
 
         return updatedUser;

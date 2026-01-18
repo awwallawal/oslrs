@@ -2,7 +2,7 @@
 
 **ID:** 1.10
 **Epic:** Epic 1: Foundation, Secure Access & Staff Onboarding
-**Status:** review
+**Status:** done
 **Priority:** Low (Engineering Visibility)
 
 ## 1. User Story
@@ -254,6 +254,10 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 7. **CI/CD Integration**: Updated `.github/workflows/ci-cd.yml` to generate dashboard after tests (always, even on failure), upload as artifact with 30-day retention, and generate GitHub Actions job summary with test counts.
 
 8. **Documentation**: Created comprehensive `packages/testing/README.md` with usage instructions, CLI options, test tagging conventions, file structure, and troubleshooting guide.
+
+### Code Review Fixes Applied (2026-01-18)
+- **TS1 Duplicate Export Fix:** Updated `packages/testing/src/index.ts` to use explicit named exports instead of `export *` to resolve duplicate `TestResult` export conflict between reporter.ts and merger.ts
+- **TS2 Type Comparison Fix:** Added explicit `as string` cast to `result?.state` in `reporter.ts` to handle both Vitest v2 and v4 state type differences
 
 ### File List
 **New Files:**

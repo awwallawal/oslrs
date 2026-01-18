@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
-import { loginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
+import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
 import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit } from '../middleware/registration-rate-limit.js';
 
@@ -12,7 +12,10 @@ const router = Router();
 router.post('/activate/:token', AuthController.activate);
 
 // Staff login - rate limited + CAPTCHA protected
+// Layer 1: strictLoginRateLimit (10/hour) - blocks sustained attacks
+// Layer 2: loginRateLimit (5/15min) - blocks burst attacks
 router.post('/staff/login',
+  strictLoginRateLimit,
   loginRateLimit,
   verifyCaptcha,
   AuthController.staffLogin
@@ -20,6 +23,7 @@ router.post('/staff/login',
 
 // Public user login - rate limited + CAPTCHA protected
 router.post('/public/login',
+  strictLoginRateLimit,
   loginRateLimit,
   verifyCaptcha,
   AuthController.publicLogin

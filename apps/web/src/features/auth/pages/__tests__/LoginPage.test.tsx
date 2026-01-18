@@ -42,7 +42,7 @@ vi.mock('../../components/HCaptcha', () => ({
 
 function renderWithProviders(ui: React.ReactElement) {
   return render(
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         {ui}
       </AuthProvider>

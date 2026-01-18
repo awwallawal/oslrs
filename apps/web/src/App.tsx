@@ -76,7 +76,7 @@ function App() {
         description: 'Something went wrong. Please refresh the page or contact support.',
       }}
     >
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Suspense fallback={<PageLoadingFallback />}>
             <Routes>

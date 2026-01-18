@@ -38,7 +38,15 @@ export class AuthController {
         throw new AppError('VALIDATION_ERROR', 'Invalid profile data', 400, { errors: validation.error.errors });
       }
 
-      const user = await AuthService.activateAccount(token, validation.data);
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.get('user-agent');
+
+      const user = await AuthService.activateAccount(
+        token,
+        validation.data,
+        ipAddress,
+        userAgent
+      );
 
       res.status(200).json({
         data: {

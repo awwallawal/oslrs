@@ -42,17 +42,17 @@ story_location: "_bmad-output/implementation-artifacts"
 development_status:
   # Epic 1: Foundation, Secure Access & Staff Onboarding
   # Updated: 2026-01-13 - Added stories 1.8, 1.9, 1.10 from validation audit
-  epic-1: in-progress
+  epic-1: done
   1-1-project-initialization-ci-cd-pipeline: done
   1-2-database-schema-access-control-rbac: done
   1-3-staff-provisioning-bulk-import: done
   1-4-staff-activation-profile-completion: done
   1-5-live-selfie-capture-verification: done
   1-6-id-card-generation-public-verification: done
-  1-7-secure-login-session-management: review
+  1-7-secure-login-session-management: done
   1-8-public-user-self-registration: done
   1-9-global-ui-patterns: done
-  1-10-test-infrastructure-dashboard: review
+  1-10-test-infrastructure-dashboard: done
   epic-1-retrospective: optional
 
   # Epic 2: Questionnaire Management & ODK Integration

@@ -33,7 +33,7 @@ const validToken = 'a'.repeat(64);
 // Custom render that sets up the route properly with MemoryRouter
 function renderPage(token: string) {
   return render(
-    <MemoryRouter initialEntries={[`/verify-email/${token}`]}>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={[`/verify-email/${token}`]}>
       <Routes>
         <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
       </Routes>
