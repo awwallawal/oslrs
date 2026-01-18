@@ -47,6 +47,8 @@
     "autoprefixer": "^10.4.19",
     "jsdom": "^27.4.0",
     "postcss": "^8.4.38",
+    "potrace": "^2.1.8",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0-alpha.14",
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
