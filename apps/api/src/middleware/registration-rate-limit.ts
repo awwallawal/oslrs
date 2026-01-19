@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { Redis } from 'ioredis';
 import pino from 'pino';
@@ -66,10 +66,10 @@ export const resendVerificationRateLimit = rateLimit({
   }),
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 3, // 3 resend attempts per hour per email
-  keyGenerator: (req) => {
+  keyGenerator: (req, res) => {
     // Rate limit by email address (normalized) or fall back to IP
     const email = req.body?.email?.toLowerCase?.()?.trim?.();
-    return email || req.ip || 'unknown';
+    return email || ipKeyGenerator(req, res);
   },
   message: {
     status: 'error',
