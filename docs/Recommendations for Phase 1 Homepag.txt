@@ -1,0 +1,977 @@
+  Recommendations for Phase 1 Homepage
+
+  1. Build the shell now - Hero, Audience Cards, How It Works, Trust Indicators, Footer are all static content that can be      
+  implemented immediately.
+  2. Marketplace Preview - Create a placeholder section with "Coming Soon" messaging or mock data. The actual search
+  functionality depends on Epic 7.
+  3. Smart Routing - The dashboard redirect logic should check user role and route accordingly:
+  /dashboard → checks role → /dashboard/{role}/home
+  4. What's Missing from homepage_structure.md:
+    - No mention of the staff onboarding entry point (/onboarding/activate)
+    - The PRD's FR3 mentions "Staff Login and Public Login must use distinct authentication endpoints" but homepage_structure.md
+   shows a unified /login - this is fine if the login page handles both flows internally.
+  5. Story 1-10 (Test Infrastructure Dashboard) is still ready-for-dev - you may want to complete Epic 1 before adding new      
+  features, but the Homepage is largely independent.
+
+  My Recommendation
+
+  Building the Homepage now is a good idea. It provides:
+  - Visual context for how the pieces fit together
+  - A real entry point for testing the auth flows locally
+  - Foundation for future epic integrations
+
+  I'd suggest creating a new story (perhaps 1-11-homepage-shell) or treating it as a quick technical spike since it's mostly    
+  static content with routing integration. The RBAC-protected dashboard shells can be minimal placeholders that display the     
+  user's role and a "Coming Soon" message until their respective epics are implemented.
+
+  Would you like me to proceed with implementing the Homepage shell?
+
+✻ Worked for 3m 50s
+
+❯ You know the homepage is public facing and it has to be well designed to sell the project of collecting data from the           public and educating them about the Government's intention for gathering the data. What are your thoughts on the first,       
+  second and third level pages the static website needs to have(navigation menu and so on and so forth). Thoughts (make it      
+  better).                                                                                                                      
+                                                                                                                                ● You raise an excellent point. This isn't just a web app - it's a public trust initiative. The Oyo State government is asking
+  citizens to share sensitive personal data. The website must educate, reassure, and convert skeptics into participants.
+                                                                                                                                  Information Architecture Analysis
+                                                                                                                                
+  The Trust Problem
+
+  Nigerian citizens have legitimate concerns about:
+  - Data misuse by government agencies
+  - Identity theft if data is breached
+  - No clear benefit to them personally
+  - Past failed government digitization projects
+
+  The website must address these head-on.
+
+  ---
+  Proposed Site Structure
+
+  Level 1: Primary Navigation (Always Visible)
+  ┌───────────────┬─────────────────────────────────────┬────────────────────────────────────────────┐
+  │     Page      │               Purpose               │                Key Content                 │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Home          │ First impression, value proposition │ Hero, benefits, social proof               │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ About         │ Build institutional trust           │ Government backing, objectives, leadership │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ For Workers   │ Speak to job seekers                │ Benefits, how to register, success stories │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ For Employers │ Speak to businesses                 │ How to find talent, verification badges    │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Marketplace   │ The product itself                  │ Search, browse skills (Epic 7)             │
+  ├───────────────┼─────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Help Centre   │ Reduce friction                     │ FAQ, guides, contact                       │
+  └───────────────┴─────────────────────────────────────┴────────────────────────────────────────────┘
+  CTA Buttons (persistent): Register Now | Sign In
+
+  ---
+  Level 2: Secondary Pages (Footer + Contextual Links)
+  ┌───────────────────────────┬──────────────────────────────────────────────────────────┐
+  │           Page            │                         Purpose                          │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ How It Works              │ Step-by-step process with visuals                        │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Privacy & Data Protection │ Detailed privacy policy, NDPR compliance, data retention │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Your Rights               │ What citizens can request (access, deletion, correction) │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Security Measures         │ Technical safeguards explained in plain language         │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ News & Updates            │ Government announcements, milestones                     │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Partners                  │ Organizations endorsing/using the registry               │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Verify a Worker           │ Public verification tool (Story 1-6)                     │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Terms of Service          │ Legal terms                                              │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────┤
+  │ Contact Us                │ Email, phone, physical address                           │
+  └───────────────────────────┴──────────────────────────────────────────────────────────┘
+  ---
+  Level 3: Functional Pages (Auth/Onboarding Flow)
+  ┌──────────────────────┬────────────────────────┐
+  │         Page         │         Access         │
+  ├──────────────────────┼────────────────────────┤
+  │ /login               │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /register            │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /verify-email        │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /forgot-password     │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /reset-password      │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /resend-verification │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /verify-staff/:id    │ Public                 │
+  ├──────────────────────┼────────────────────────┤
+  │ /onboarding/*        │ Protected (staff)      │
+  ├──────────────────────┼────────────────────────┤
+  │ /dashboard/*         │ Protected (role-based) │
+  └──────────────────────┴────────────────────────┘
+  ---
+  Detailed Page Breakdown
+
+  Home Page
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  [Logo]  About  For Workers  For Employers  Marketplace │
+  │                                    [Register] [Sign In] │
+  ├─────────────────────────────────────────────────────────┤
+  │                                                         │
+  │   HERO: "Your Skills. Verified. Visible."               │
+  │   Subhead: Join Oyo State's official skills registry    │
+  │   [Register as Worker]  [Find Skilled Workers]          │
+  │                                                         │
+  ├─────────────────────────────────────────────────────────┤
+  │   WHY REGISTER?                                         │
+  │   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
+  │   │Get Found│ │Verified │ │Free ID  │ │Govt Jobs│      │
+  │   │by Empl. │ │Badge    │ │Card     │ │Access   │      │
+  │   └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
+  ├─────────────────────────────────────────────────────────┤
+  │   HOW IT WORKS                                          │
+  │   1. Register → 2. Verify NIN → 3. Add Skills →        │
+  │   4. Get Verified → 5. Appear in Marketplace            │
+  ├─────────────────────────────────────────────────────────┤
+  │   TRUST INDICATORS                                      │
+  │   "An initiative of Oyo State Government"               │
+  │   [Governor's seal] [Ministry logo] [NDPR Compliant]    │
+  ├─────────────────────────────────────────────────────────┤
+  │   MARKETPLACE PREVIEW (or "Coming Soon")                │
+  │   "50,000+ verified workers across 200+ skill types"    │
+  │   [Browse Marketplace →]                                │
+  ├─────────────────────────────────────────────────────────┤
+  │   TESTIMONIALS / SUCCESS STORIES                        │
+  │   "I found 3 verified electricians within my LGA..."    │
+  ├─────────────────────────────────────────────────────────┤
+  │   FOOTER                                                │
+  │   About | Privacy | Your Rights | Security | Terms      │
+  │   Contact | News | Partners | Verify a Worker           │
+  │   © 2026 Oyo State Government                          │
+  └─────────────────────────────────────────────────────────┘
+
+  ---
+  About Page (Critical for Trust)
+
+  /about
+  ├── Our Mission
+  │   └── Why Oyo State is building this registry
+  ├── Government Backing
+  │   └── Ministry of Labour, Governor's office endorsement
+  ├── The Problem We're Solving
+  │   └── Skills gap, informal economy visibility
+  ├── How Your Data Helps
+  │   └── Policy planning, targeted programs, job matching
+  ├── Leadership
+  │   └── Commissioner, Project Director (humanize it)
+  ├── Timeline & Milestones
+  │   └── Launch date, registered users, LGAs covered
+  └── [CTA: Register Now]
+
+  ---
+  For Workers Page
+
+  /for-workers
+  ├── Hero: "Get Discovered by Employers"
+  ├── Benefits
+  │   ├── Free government-verified ID card
+  │   ├── Appear in searchable marketplace
+  │   ├── Priority access to government programs
+  │   └── Verified badge builds trust with clients
+  ├── Who Should Register?
+  │   ├── Artisans (plumbers, electricians, mechanics)
+  │   ├── Skilled workers (tailors, hairdressers)
+  │   ├── Professionals (drivers, security guards)
+  │   └── Day laborers seeking consistent work
+  ├── How to Register (visual steps)
+  ├── What You'll Need
+  │   ├── Valid NIN
+  │   ├── Phone number
+  │   ├── Email address
+  │   └── Recent photo (for ID card)
+  ├── FAQ for Workers
+  └── [CTA: Start Registration]
+
+  ---
+  For Employers Page
+
+  /for-employers
+  ├── Hero: "Find Verified Skilled Workers"
+  ├── Benefits
+  │   ├── Government-verified identities
+  │   ├── Search by skill, LGA, availability
+  │   ├── Reduce hiring risk
+  │   └── Support local workforce
+  ├── How It Works
+  │   ├── Search marketplace (free)
+  │   ├── View anonymized profiles
+  │   ├── Request contact (CAPTCHA protected)
+  │   └── Hire with confidence
+  ├── Verification Explained
+  │   └── What "Verified" badge means
+  ├── FAQ for Employers
+  └── [CTA: Browse Marketplace]
+
+  ---
+  Privacy & Data Protection Page (Non-Negotiable)
+
+  /privacy
+  ├── Plain Language Summary (TL;DR box at top)
+  ├── What Data We Collect
+  │   ├── Personal info (name, NIN, contact)
+  │   ├── Skills and work history
+  │   └── Photo for ID card
+  ├── How We Use Your Data
+  │   ├── Verification
+  │   ├── Marketplace visibility (anonymized)
+  │   ├── Government program eligibility
+  │   └── Aggregate policy statistics
+  ├── What We DON'T Do
+  │   ├── ❌ Sell data to third parties
+  │   ├── ❌ Share with unauthorized agencies
+  │   └── ❌ Use for surveillance
+  ├── Data Protection Measures
+  │   ├── Encryption at rest and in transit
+  │   ├── Role-based access control
+  │   ├── Audit logging
+  │   └── Regular security assessments
+  ├── Your Rights (NDPR)
+  │   ├── Right to access your data
+  │   ├── Right to correction
+  │   ├── Right to deletion
+  │   └── How to make a request
+  ├── Data Retention
+  │   └── How long we keep data
+  ├── Contact DPO
+  │   └── Data Protection Officer contact
+  └── Last Updated: [date]
+
+  ---
+  Help Centre Page
+
+  /help
+  ├── Search bar
+  ├── Getting Started
+  │   ├── How do I register?
+  │   ├── What is NIN and where do I get it?
+  │   ├── I didn't receive my verification email
+  │   └── How do I complete my profile?
+  ├── Account & Security
+  │   ├── How do I reset my password?
+  │   ├── How do I update my information?
+  │   └── How do I delete my account?
+  ├── Marketplace
+  │   ├── How do employers find me?
+  │   ├── What information is visible publicly?
+  │   └── How do I hide my profile?
+  ├── ID Cards
+  │   ├── How do I download my ID card?
+  │   ├── How do employers verify my ID?
+  │   └── My ID card has wrong information
+  ├── For Staff
+  │   ├── Staff login issues
+  │   └── Contact IT support
+  └── Contact Us
+      ├── Email: support@oslsr.oyo.gov.ng
+      ├── Phone: +234 xxx xxx xxxx
+      └── Office: [Physical address]
+
+  ---
+  Navigation Structure Summary
+
+  Header (Primary Nav)
+
+  [Logo] | About | For Workers | For Employers | Marketplace | Help | [Register] [Sign In]
+
+  Footer (Secondary Nav)
+
+  ABOUT               FOR YOU             LEGAL              CONNECT
+  ├── Our Mission     ├── For Workers     ├── Privacy        ├── Contact
+  ├── Leadership      ├── For Employers   ├── Your Rights    ├── News
+  ├── Partners        ├── Help Centre     ├── Security       ├── Social Media
+  └── Careers         └── Verify Worker   └── Terms          └── Office Location
+
+  © 2026 Oyo State Ministry of Labour | NDPR Compliant
+
+  ---
+  Implementation Phases
+  ┌──────────────────┬────────────────────────────────────────────────────────────────┬─────────────────────────┐
+  │      Phase       │                             Pages                              │       Depends On        │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────┤
+  │ Phase 1 (Now)    │ Home, About, For Workers, For Employers, Privacy, Help, Footer │ Nothing - static        │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────┤
+  │ Phase 2 (Epic 7) │ Marketplace, Search                                            │ Epic 7 stories          │
+  ├──────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────┤
+  │ Phase 3 (Polish) │ News/Blog, Success Stories                                     │ Content from operations │
+  └──────────────────┴────────────────────────────────────────────────────────────────┴─────────────────────────┘
+  ---
+  My Recommendation
+
+  Create a new story 1-11-public-website-shell or better yet, a small Epic 1.5 that includes:
+
+  1. 1-11: Static pages (Home, About, For Workers, For Employers)
+  2. 1-12: Trust pages (Privacy, Your Rights, Security)
+  3. 1-13: Help Centre with FAQ accordion
+  4. 1-14: Responsive header/footer with navigation
+  5. 1-15: Mobile menu and responsive polish
+
+  This gives the project a professional public face while Epic 2-6 build out the backend features.
+
+  What are your thoughts? Should I draft a formal story or epic document for this?
+
+✻ Cogitated for 1m 20s                        
+
+❯ Seems you are mixing up so many things. For example the issue of id card is for the supervisors and enumerators for their       field activities and not for everybody that registers on the website. The navbar in the Homepage_structure says              
+  About|Participate|Marketplace|Insights|Support is the correct posture for the homepage unlike yours that says [Logo] |        
+  About | For Workers | For Employers | Marketplace | Help | [Register] [Sign In]. I would prefer Logo| About| Participate|     
+  Marketplace| Insights(This would be populated with insigths from the data collected from the field)| Support| Register        
+  and/or Sign In. I like so many things you gave in your last response and I would like to incorporate part of it. For          
+  example the help center can be merged with the support and a lot of things. We may have to really merge so many things        
+  from this response of your and the Homepage_structure. Thoughts (make it better)                                              
+                                                                                                                                
+● You're right - I apologize for the confusion. Let me correct my understanding and align with the actual homepage_structure.md   navigation.
+                                                                                                                                  Corrections
+                                                                                                                                
+  1. ID Cards - Only for staff (supervisors/enumerators) doing field work, not public registrants
+  2. Navigation - Should follow the existing structure, not my invented one
+  3. Approach - Merge my content ideas INTO the existing structure, not replace it
+
+  ---
+  Revised Site Architecture
+
+  Primary Navigation
+
+  [Logo] | About | Participate | Marketplace | Insights | Support | [Register / Sign In]
+
+  ---
+  Page Mapping: What Goes Where
+
+  About
+
+  The institutional trust-building section.
+  ┌─────────────────────┬───────────────────────────────────────────────────────┐
+  │      Sub-page       │                        Content                        │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about              │ Landing - mission statement, government backing       │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about/initiative   │ Why Oyo State is doing this, the problem being solved │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about/how-it-works │ Visual step-by-step of the registry process           │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about/leadership   │ Commissioner, Project Director, Ministry info         │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about/partners     │ Organizations endorsing/collaborating                 │
+  ├─────────────────────┼───────────────────────────────────────────────────────┤
+  │ /about/privacy      │ Data protection, NDPR compliance, your rights         │
+  └─────────────────────┴───────────────────────────────────────────────────────┘
+  ---
+  Participate
+
+  How different audiences engage with the registry.
+  ┌─────────────────────────┬───────────────────────────────────────────────────────┐
+  │        Sub-page         │                        Content                        │
+  ├─────────────────────────┼───────────────────────────────────────────────────────┤
+  │ /participate            │ Landing - "Join the Registry" with audience paths     │
+  ├─────────────────────────┼───────────────────────────────────────────────────────┤
+  │ /participate/workers    │ Benefits for workers, what you need, registration CTA │
+  ├─────────────────────────┼───────────────────────────────────────────────────────┤
+  │ /participate/employers  │ How to find and verify workers, marketplace access    │
+  ├─────────────────────────┼───────────────────────────────────────────────────────┤
+  │ /participate/government │ For other agencies wanting to use the data            │
+  └─────────────────────────┴───────────────────────────────────────────────────────┘
+  This replaces my separate "For Workers" and "For Employers" top-level pages - they become sub-pages under a unified
+  "Participate" section.
+
+  ---
+  Marketplace
+
+  The public skills search (Epic 7 dependency).
+  ┌──────────────────────────┬───────────────────────────────────────────────┐
+  │         Sub-page         │                    Content                    │
+  ├──────────────────────────┼───────────────────────────────────────────────┤
+  │ /marketplace             │ Search interface, browse by skill/LGA         │
+  ├──────────────────────────┼───────────────────────────────────────────────┤
+  │ /marketplace/profile/:id │ Anonymized worker profile with verified badge │
+  └──────────────────────────┴───────────────────────────────────────────────┘
+  Phase 1: Placeholder with "Coming Soon" and registration CTA
+  Phase 2: Full functionality after Epic 7
+
+  ---
+  Insights
+
+  Aggregate data and statistics from field collection - this is powerful for transparency.
+  ┌──────────────────────┬───────────────────────────────────────────┐
+  │       Sub-page       │                  Content                  │
+  ├──────────────────────┼───────────────────────────────────────────┤
+  │ /insights            │ Dashboard with key metrics                │
+  ├──────────────────────┼───────────────────────────────────────────┤
+  │ /insights/skills-map │ Geographic distribution of skills by LGA  │
+  ├──────────────────────┼───────────────────────────────────────────┤
+  │ /insights/trends     │ Registration growth, top skills in demand │
+  ├──────────────────────┼───────────────────────────────────────────┤
+  │ /insights/reports    │ Downloadable aggregate reports (PDF)      │
+  └──────────────────────┴───────────────────────────────────────────┘
+  Example metrics to display:
+  - Total registered workers by LGA
+  - Top 10 skill categories
+  - Registration trends over time
+  - Employer search activity (anonymized)
+  - Verification completion rates
+
+  This builds trust by showing the data is being used for legitimate policy purposes.
+
+  ---
+  Support
+
+  Help center merged with contact and resources.
+  ┌────────────────────────┬──────────────────────────────────────┐
+  │        Sub-page        │               Content                │
+  ├────────────────────────┼──────────────────────────────────────┤
+  │ /support               │ Landing - search bar, common topics  │
+  ├────────────────────────┼──────────────────────────────────────┤
+  │ /support/faq           │ Accordion FAQ organized by topic     │
+  ├────────────────────────┼──────────────────────────────────────┤
+  │ /support/guides        │ How-to guides with screenshots       │
+  ├────────────────────────┼──────────────────────────────────────┤
+  │ /support/contact       │ Email, phone, office address, form   │
+  ├────────────────────────┼──────────────────────────────────────┤
+  │ /support/verify-worker │ Public verification tool (Story 1-6) │
+  └────────────────────────┴──────────────────────────────────────┘
+  ---
+  Auth/Functional Pages (Not in main nav)
+  ┌──────────────────────┬───────────────────────────────────┐
+  │        Route         │              Purpose              │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /register            │ Public user self-registration     │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /login               │ Unified login                     │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /verify-email        │ Email verification                │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /forgot-password     │ Password reset request            │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /reset-password      │ Password reset form               │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /resend-verification │ Resend verification email         │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /onboarding/*        │ Staff activation (protected)      │
+  ├──────────────────────┼───────────────────────────────────┤
+  │ /dashboard/*         │ Role-based dashboards (protected) │
+  └──────────────────────┴───────────────────────────────────┘
+  ---
+  Revised Homepage Structure
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │ [Logo]  About  Participate  Marketplace  Insights  Support  │
+  │                                         [Register] [Sign In]│
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  HERO                                                       │
+  │  "Oyo State Labour & Skills Registry"                       │
+  │  Building a verified workforce for a stronger economy       │
+  │                                                             │
+  │  [Register Now]              [Find Skilled Workers]         │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  WHY PARTICIPATE?                                           │
+  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+  │  │ For Workers  │  │ For Employers│  │ For Oyo State│      │
+  │  │ Get verified │  │ Find trusted │  │ Data-driven  │      │
+  │  │ Get discovered│ │ local talent │  │ policy making│      │
+  │  │ [Learn More] │  │ [Learn More] │  │ [See Insights]│     │
+  │  └──────────────┘  └──────────────┘  └──────────────┘      │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  HOW IT WORKS                                               │
+  │  ① Register with NIN → ② Verify Email → ③ Add Skills →     │
+  │  ④ Get Verified → ⑤ Appear in Marketplace                   │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  LIVE INSIGHTS (pulls from /insights API)                   │
+  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
+  │  │ 52,340  │ │   33    │ │  180+   │ │  1,200  │          │
+  │  │Registered│ │  LGAs   │ │ Skills  │ │Employers│          │
+  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
+  │                              [View Full Insights →]         │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  MARKETPLACE PREVIEW                                        │
+  │  "Find verified workers in your area"                       │
+  │  [Search box: "What skill are you looking for?"]           │
+  │  Popular: Electrician | Plumber | Tailor | Driver          │
+  │                              [Browse Marketplace →]         │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  TRUST & TRANSPARENCY                                       │
+  │  [Oyo State Seal] [Ministry of Labour] [NDPR Compliant]    │
+  │  "Your data is protected under Nigeria's Data Protection   │
+  │   Regulation. Learn about our privacy practices."          │
+  │                              [Read Privacy Policy →]        │
+  │                                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │  FOOTER                                                     │
+  │                                                             │
+  │  ABOUT           PARTICIPATE      INSIGHTS       SUPPORT    │
+  │  ├─ Initiative   ├─ For Workers   ├─ Dashboard   ├─ FAQ     │
+  │  ├─ How It Works ├─ For Employers ├─ Skills Map  ├─ Guides  │
+  │  ├─ Leadership   └─ For Govt      ├─ Trends      ├─ Contact │
+  │  ├─ Partners                      └─ Reports     └─ Verify  │
+  │  └─ Privacy                                        Worker   │
+  │                                                             │
+  │  © 2026 Oyo State Ministry of Labour                       │
+  │  [Twitter] [Facebook] [Instagram]                          │
+  │                                                             │
+  └─────────────────────────────────────────────────────────────┘
+
+  ---
+  Summary: Merged Structure
+  Nav Item: About
+  Level 1: /about
+  Level 2: /about/initiative, /about/how-it-works, /about/leadership, /about/partners, /about/privacy
+  Level 3: -
+  ────────────────────────────────────────
+  Nav Item: Participate
+  Level 1: /participate
+  Level 2: /participate/workers, /participate/employers, /participate/government
+  Level 3: -
+  ────────────────────────────────────────
+  Nav Item: Marketplace
+  Level 1: /marketplace
+  Level 2: /marketplace/profile/:id
+  Level 3: -
+  ────────────────────────────────────────
+  Nav Item: Insights
+  Level 1: /insights
+  Level 2: /insights/skills-map, /insights/trends, /insights/reports
+  Level 3: -
+  ────────────────────────────────────────
+  Nav Item: Support
+  Level 1: /support
+  Level 2: /support/faq, /support/guides, /support/contact, /support/verify-worker
+  Level 3: -
+  ---
+  What Can Be Built Now vs Later
+  ┌────────────────────────────────┬─────────┬─────────────────────┐
+  │              Page              │  Phase  │     Dependency      │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Homepage shell                 │ Now     │ None                │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ About (all sub-pages)          │ Now     │ Static content      │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Participate (all sub-pages)    │ Now     │ Static content      │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Support (FAQ, Guides, Contact) │ Now     │ Static content      │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Support/Verify Worker          │ Now     │ Story 1-6 ✅        │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Marketplace                    │ Phase 2 │ Epic 7              │
+  ├────────────────────────────────┼─────────┼─────────────────────┤
+  │ Insights                       │ Phase 2 │ Aggregate data APIs │
+  └────────────────────────────────┴─────────┴─────────────────────┘
+  ---
+  Should I update the homepage_structure.md file to reflect this merged structure, or would you prefer to create a new story    
+  document for the public website implementation?
+
+✻ Worked for 1m 1s                            
+
+❯ Question is how do I easiy add pages to the static side after this initial development.                                       
+                                                                                           
+● Great question. This is about content architecture - making the static site maintainable by non-developers (or developers     
+  without deep React knowledge) after initial build.
+                                                                                                                                  Options
+  ┌────────────────────┬───────────────────────────────┬───────────────────────┬───────────────┐                                
+  │      Approach      │        Who Adds Pages         │     Effort to Add     │ Initial Setup │
+  ├────────────────────┼───────────────────────────────┼───────────────────────┼───────────────┤
+  │ 1. MDX/Markdown    │ Anyone who can write markdown │ Create .mdx file      │ Medium        │
+  ├────────────────────┼───────────────────────────────┼───────────────────────┼───────────────┤
+  │ 2. Headless CMS    │ Content editors via GUI       │ Click buttons         │ High          │
+  ├────────────────────┼───────────────────────────────┼───────────────────────┼───────────────┤
+  │ 3. Config-driven   │ Edit JSON/YAML                │ Add config entry      │ Low           │
+  ├────────────────────┼───────────────────────────────┼───────────────────────┼───────────────┤
+  │ 4. Component-based │ Developers only               │ Write React component │ Low           │
+  └────────────────────┴───────────────────────────────┴───────────────────────┴───────────────┘
+  ---
+  My Recommendation: MDX + Config Hybrid
+
+  This gives you:
+  - Markdown simplicity - Content writers edit .mdx files
+  - React power - Embed components when needed
+  - Config-driven navigation - Add a page to nav by editing one file
+  - No external dependencies - No CMS to host/maintain
+
+  ---
+  How It Would Work
+
+  Folder Structure
+
+  apps/web/src/
+  ├── content/                    # All static page content lives here
+  │   ├── about/
+  │   │   ├── index.mdx          # /about
+  │   │   ├── initiative.mdx     # /about/initiative
+  │   │   ├── how-it-works.mdx   # /about/how-it-works
+  │   │   ├── leadership.mdx     # /about/leadership
+  │   │   └── privacy.mdx        # /about/privacy
+  │   ├── participate/
+  │   │   ├── index.mdx          # /participate
+  │   │   ├── workers.mdx        # /participate/workers
+  │   │   └── employers.mdx      # /participate/employers
+  │   ├── support/
+  │   │   ├── index.mdx          # /support
+  │   │   ├── faq.mdx            # /support/faq
+  │   │   └── contact.mdx        # /support/contact
+  │   └── insights/
+  │       └── index.mdx          # /insights (shell, data comes from API)
+  │
+  ├── config/
+  │   └── navigation.ts          # Single source of truth for nav
+  │
+  ├── components/
+  │   └── content/
+  │       ├── MDXLayout.tsx      # Wrapper for all MDX pages
+  │       ├── ContentPage.tsx    # Generic page renderer
+  │       └── mdx-components.tsx # Custom components available in MDX
+  │
+  └── routes/
+      └── static-routes.tsx      # Auto-generates routes from content/
+
+  ---
+  Adding a New Page (After Initial Setup)
+
+  Step 1: Create the MDX file
+
+  // apps/web/src/content/about/new-page.mdx
+
+  ---
+  title: "New Page Title"
+  description: "SEO description"
+  ---
+
+  # Welcome to the New Page
+
+  This is regular markdown content.
+
+  You can use **bold**, *italic*, and [links](https://example.com).
+
+  ## Section with Custom Component
+
+  <CallToAction
+    title="Register Now"
+    href="/register"
+    variant="primary"
+  />
+
+  ## FAQ Section
+
+  <Accordion>
+    <AccordionItem title="Question 1?">
+      Answer to question 1.
+    </AccordionItem>
+    <AccordionItem title="Question 2?">
+      Answer to question 2.
+    </AccordionItem>
+  </Accordion>
+
+  Step 2: Add to navigation (if needed)
+
+  // apps/web/src/config/navigation.ts
+
+  export const navigation = {
+    main: [
+      {
+        label: 'About',
+        href: '/about',
+        children: [
+          { label: 'The Initiative', href: '/about/initiative' },
+          { label: 'How It Works', href: '/about/how-it-works' },
+          { label: 'Leadership', href: '/about/leadership' },
+          { label: 'New Page', href: '/about/new-page' },  // ← Add this line
+          { label: 'Privacy', href: '/about/privacy' },
+        ],
+      },
+      // ... rest of nav
+    ],
+    footer: {
+      // ... footer links
+    },
+  };
+
+  That's it. No React knowledge needed for content. No rebuild for nav changes (config is imported).
+
+  ---
+  The MDX Layout Component
+
+  // apps/web/src/components/content/MDXLayout.tsx
+
+  import { ReactNode } from 'react';
+  import { Header } from '../layout/Header';
+  import { Footer } from '../layout/Footer';
+  import { Breadcrumbs } from '../ui/Breadcrumbs';
+
+  interface MDXLayoutProps {
+    children: ReactNode;
+    frontmatter: {
+      title: string;
+      description?: string;
+    };
+  }
+
+  export function MDXLayout({ children, frontmatter }: MDXLayoutProps) {
+    return (
+      <>
+        <Header />
+        <main className="max-w-4xl mx-auto px-4 py-12">
+          <Breadcrumbs />
+          <article className="prose prose-lg">
+            <h1>{frontmatter.title}</h1>
+            {children}
+          </article>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
+  ---
+  Custom MDX Components (Available in All Pages)
+
+  // apps/web/src/components/content/mdx-components.tsx
+
+  import { CallToAction } from '../ui/CallToAction';
+  import { Accordion, AccordionItem } from '../ui/Accordion';
+  import { Alert } from '../ui/Alert';
+  import { StatsGrid } from '../ui/StatsGrid';
+  import { ImageWithCaption } from '../ui/ImageWithCaption';
+
+  // These components are automatically available in all MDX files
+  export const mdxComponents = {
+    // Custom components
+    CallToAction,
+    Accordion,
+    AccordionItem,
+    Alert,
+    StatsGrid,
+    ImageWithCaption,
+
+    // Override default HTML elements
+    a: (props) => <a {...props} className="text-primary-600 hover:underline" />,
+    h2: (props) => <h2 {...props} className="text-2xl font-bold mt-8 mb-4" />,
+    // ... etc
+  };
+
+  ---
+  Auto-Route Generation
+
+  // apps/web/src/routes/static-routes.tsx
+
+  // Vite's glob import - automatically finds all MDX files
+  const contentModules = import.meta.glob('../content/**/*.mdx', { eager: true });
+
+  export function generateStaticRoutes() {
+    return Object.entries(contentModules).map(([path, module]) => {
+      // Convert file path to route path
+      // ../content/about/initiative.mdx → /about/initiative
+      const routePath = path
+        .replace('../content', '')
+        .replace('/index.mdx', '')
+        .replace('.mdx', '') || '/';
+
+      return {
+        path: routePath,
+        element: (
+          <MDXLayout frontmatter={module.frontmatter}>
+            <module.default />
+          </MDXLayout>
+        ),
+      };
+    });
+  }
+
+  ---
+  Dependencies Needed
+
+  pnpm add @mdx-js/rollup @mdx-js/react
+  pnpm add -D @types/mdx
+
+  // vite.config.ts
+  import mdx from '@mdx-js/rollup';
+
+  export default defineConfig({
+    plugins: [
+      mdx({
+        providerImportSource: '@mdx-js/react',
+      }),
+      react(),
+    ],
+  });
+
+  ---
+  Quick Comparison
+  ┌──────────────────────────┬─────────────────────────────────────────┬───────────────────────────────────────┐
+  │           Task           │              MDX Approach               │           Traditional React           │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Add new page             │ Create .mdx file + 1 line in nav config │ Create component + route + nav update │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Edit content             │ Edit markdown                           │ Edit JSX                              │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Add section              │ Write markdown                          │ Write JSX                             │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Embed interactive widget │ <ComponentName /> in MDX                │ Same                                  │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Who can do it            │ Content writers                         │ Developers                            │
+  ├──────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────┤
+  │ Time to add page         │ 2 minutes                               │ 10-15 minutes                         │
+  └──────────────────────────┴─────────────────────────────────────────┴───────────────────────────────────────┘
+  ---
+  Alternative: If You Want a CMS Later
+
+  The MDX approach doesn't lock you in. You can migrate to a headless CMS later by:
+
+  1. Export MDX content to CMS
+  2. Replace file reads with API calls
+  3. Keep the same components
+
+  But for a government project where you control the content and have developers available, MDX is simpler and has no external  
+  dependencies to maintain.
+
+  ---
+  Would you like me to include this MDX content architecture in the homepage implementation story?
+
+✻ Crunched for 1m 6s                             
+
+❯ My problem is the respone you gave where you gave a deep analysis of level 1,2 and 3 contains so many gems that you have        abstracted away in while merging the Homepage. We need a seperate session to align the homepage structure once and for       
+  all.                                                                                                                          
+                                                                                                                                ● You're right. I gave detailed content for pages like:
+
+  - Privacy & Data Protection (with NDPR compliance, Your Rights, What We Don't Do)                                               - Help Centre (organized by topic with specific questions)
+  - About (with Leadership, Timeline, Problem We're Solving)                                                                    
+  - For Workers / For Employers (detailed benefit breakdowns)
+
+  Then I flattened it all into a navigation table and lost the substance.
+
+  What I recommend:
+
+  1. Create a dedicated planning artifact - docs/public-website-ia.md (Information Architecture) that captures:
+    - Every page with its full content outline
+    - The navigation structure
+    - The MDX content architecture
+    - What's Phase 1 vs Phase 2
+  2. Work through it section by section - Align your vision with the gems from my analysis and the existing
+  homepage_structure.md
+  3. Output a single source of truth - That document becomes the spec for implementation
+
+  Would you like to start that session now? We can go page by page:
+
+  1. Homepage (hero, sections, CTAs)
+  2. About section (all sub-pages)
+  3. Participate section (all sub-pages)
+  4. Marketplace (placeholder vs full)
+  5. Insights (what data to show)
+  6. Support (merged help center)
+  7. Legal/Trust pages (privacy, terms, security)
+  8. Navigation + Footer structure
+  9. MDX component library needed
+
+  Or would you prefer to schedule this as a separate focused session with fresh context?
+
+❯ Because if you continue building without understanding how it all ties together it would just be a futile exercise and a        considerable loss of computing power                                                                                         
+                                                                                                                                
+● Exactly. Building UI without aligned content architecture is just pixel-pushing that gets thrown away.                          
+  The current state:                                                                                                              - homepage_structure.md has a navigation structure
+  - My analysis has detailed page content outlines                                                                              
+  - Your vision has corrections (ID cards are staff-only, nav should be About|Participate|Marketplace|Insights|Support)
+  - None of these are reconciled into one authoritative spec
+
+  Before any code is written, we need:
+
+  1. Complete page inventory with content outlines
+  2. Navigation hierarchy (header + footer + mobile)
+  3. User journeys mapped (public visitor → registered user → verified worker)
+  4. Component inventory (what reusable pieces each page needs)
+  5. Phase breakdown (what's static now vs API-dependent later)
+
+  This is essentially a UX/Content Architecture exercise, not a dev task.
+
+  How would you like to proceed?
+
+  Option A: Start the alignment session now - go through each section systematically and produce docs/public-website-ia.md      
+
+  Option B: Use the BMAD UX Designer workflow (/create-ux-design) to facilitate this properly with structured outputs
+
+  Option C: You prepare your thoughts first, then we align in a fresh session
+
+  Your call.
+
+❯ can you find the ux specification document we did something earlier                                                                                                                                  
+● Search(pattern: "**/*ux*")                                                                                                    
+  ⎿  Found 34 files (ctrl+o to expand)
+                                                                                                                                
+● Search(pattern: "**/*UX*")
+  ⎿  Found 0 files                                                                                                              
+  
+● Search(pattern: "_bmad-output/**/*.md")                                                                                       
+  ⎿  Found 31 files (ctrl+o to expand)
+                                                                                                                                ● Found it. There's a UX specification document at _bmad-output/planning-artifacts/ux-design-specification.md. Let me read it.                                                                                                                                  ● Read(_bmad-output\planning-artifacts\ux-design-specification.md)                                                                ⎿  Error: File content (62340 tokens) exceeds maximum allowed tokens (25000). Please use offset and limit parameters to read 
+     specific portions of the file, or use the GrepTool to search for specific content.                                           
+● The file is large. Let me read it in sections.                                                                                  
+● Read(_bmad-output\planning-artifacts\ux-design-specification.md)                                                                ⎿  Read 500 lines
+                                                                                                                                
+● This is a comprehensive UX specification document. Let me see the table of contents and key sections.
+                                                                                                                                ● Search(pattern: "^## ", path: "_bmad-output\planning-artifacts\ux-design-specification.md", output_mode: "content")             ⎿  Found 16 lines (ctrl+o to expand)                                                                                          
+                                                                                                                                
+● Let me check if there's homepage or navigation structure in this document.
+                                                                                                                                ● Search(pattern: "(homepage|navigation|nav|menu|footer|About\|Participate|Level 1|Level 2|public.*page)", path:                        "_bmad-output\planning-artifacts\ux-design-specification.md", output_mode: "content", head_limit: 50)                   
+  ⎿  Found 50 lines (ctrl+o to expand)                                                                                          
+  
+● Search(pattern: "(information architecture|site.*map|page.*structure|public.*website|/about|/participate|/support|/insights)",
+         path: "_bmad-output\planning-artifacts\ux-design-specification.md", output_mode: "content")                            
+  ⎿  Found 2 lines (ctrl+o to expand)                                                                                           
+                                                                                                                                
+● Let me also read the current homepage_structure.md to see what's already defined.                                             
+                                                                                                                                ● Read(docs\homepage_structure.md)                                                                                                ⎿  Read 95 lines                                                                                                              
+                                                                                                                                
+● Now I see the full picture.                  
+                                                                                                                                  What Exists                                                                                                                     Document: docs/homepage_structure.md                                                                                          
+  What It Covers: Navigation schema (About|Participate|Marketplace|Insights|Support), homepage wireframe sections, React Router     routes
+  What's Missing: Detailed content outlines for each page
+  ────────────────────────────────────────
+  Document: _bmad-output/planning-artifacts/ux-design-specification.md
+  What It Covers: Design system (colors, typography, spacing), user flows, component strategy, accessibility, 8 personas        
+  What's Missing: Public website page-by-page IA
+  What's Missing
+
+  Neither document contains the detailed page content outlines I provided in my earlier analysis:
+
+  - Privacy & Data Protection - What We Collect, What We Don't Do, Your Rights under NDPR, Data Retention
+  - About sub-pages - Initiative, How It Works, Leadership, Partners
+  - Participate sub-pages - For Workers (benefits, what you need), For Employers (how to find talent)
+  - Support - FAQ organized by topic, Guides, Contact, Verify Worker
+  - Insights - What aggregate data to show (skills map, trends, reports)
+
+  These are the "gems" that got flattened when I summarized.
+
+  The Gap
+
+  homepage_structure.md     →  "Here are the nav items and sections"
+  ux-design-specification.md →  "Here's how it looks and feels"
+  [MISSING DOCUMENT]        →  "Here's what each page actually SAYS"
+
+  Recommendation
+
+  Create docs/public-website-ia.md (Information Architecture) that:
+
+  1. Inherits navigation from homepage_structure.md
+  2. Inherits design system from ux-design-specification.md
+  3. Adds detailed content outlines for every page
+  4. Specifies Phase 1 vs Phase 2 content
+  5. Becomes the single source of truth for the public website build
