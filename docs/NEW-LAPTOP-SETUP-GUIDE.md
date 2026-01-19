@@ -484,6 +484,8 @@ code .
 | `Permission denied` on Windows | Run terminal as Administrator |
 | `node: command not found` | Reinstall Node.js, restart terminal |
 | Git clone fails | Check SSH key is added to GitHub |
+| `DATABASE_URL is not set` during db:push | Ensure `.env` file exists in project root (not in `apps/api/`). See [Database Issues](#database-issues) below. |
+| TypeScript error in `registration-rate-limit.ts` | This was fixed in the codebase. If you see this error, pull the latest changes from the repository. |
 
 ### Port Cleanup
 
@@ -493,6 +495,19 @@ If you have zombie processes holding ports:
 # Clean all common dev ports
 pnpm clean:ports
 ```
+
+### Database Issues
+
+#### "DATABASE_URL is not set in environment variables"
+
+This error can occur when running `pnpm --filter @oslsr/api db:push` or `pnpm dev` if the `.env` file cannot be found.
+
+**Checklist:**
+1. Ensure `.env` file exists in the **project root** (not in `apps/api/`)
+2. Verify it contains `DATABASE_URL=postgres://user:password@localhost:5432/app_db`
+3. Ensure Docker containers are running: `docker ps` should show `oslsr_postgres`
+
+**Note:** All API source files are configured to load `.env` from the monorepo root using explicit path resolution (e.g., `path.resolve(__dirname, '../../../.env')`). This is required because in a monorepo, the working directory varies depending on how commands are run.
 
 ### Reset Everything
 

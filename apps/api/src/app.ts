@@ -4,10 +4,15 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import pino from 'pino';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import routes from './routes/index.js';
 import { AppError } from '@oslsr/utils';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 export const logger = pino({
   level: process.env.NODE_ENV === 'test' ? 'silent' : (process.env.LOG_LEVEL || 'info'),
