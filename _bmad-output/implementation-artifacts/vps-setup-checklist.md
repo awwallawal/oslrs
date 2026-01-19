@@ -198,7 +198,70 @@ docker compose version
 - [ ] Docker Compose installed
 - [ ] Deploy user can run docker commands
 
-### 3.4 Install Node.js (for build tools)
+### 3.4 Install Portainer (Container Management UI)
+
+> **PRD Requirement (NFR7):** "System must include Portainer for visual management"
+
+Portainer provides a web-based GUI for managing Docker containers, making it easier to deploy, monitor, and troubleshoot the OSLSR stack.
+
+```bash
+# Create Portainer data volume
+docker volume create portainer_data
+
+# Deploy Portainer CE (Community Edition)
+docker run -d \
+  -p 8000:8000 \
+  -p 9443:9443 \
+  --name portainer \
+  --restart=always \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v portainer_data:/data \
+  portainer/portainer-ce:latest
+
+# Verify Portainer is running
+docker ps | grep portainer
+```
+
+- [ ] Portainer data volume created
+- [ ] Portainer container deployed
+- [ ] Portainer running on port 9443
+
+**Initial Portainer Setup:**
+
+1. Access Portainer at `https://<YOUR_VPS_IP>:9443`
+2. Create admin account with strong password (min 12 characters)
+3. Select "Get Started" → Local Docker environment
+
+- [ ] Admin account created with strong password
+- [ ] Local Docker environment connected
+
+**Enable Two-Factor Authentication (2FA):**
+
+1. Click your username (top-right) → "My Account"
+2. Scroll to "Security" section
+3. Click "Enable 2FA"
+4. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
+5. Enter verification code to confirm
+
+- [ ] 2FA enabled for admin account
+
+**Firewall Configuration for Portainer:**
+
+```bash
+# Allow Portainer HTTPS port (restrict to your IP for security)
+ufw allow from <YOUR_IP_ADDRESS> to any port 9443
+
+# Or allow from anywhere (less secure, use with caution)
+# ufw allow 9443/tcp
+```
+
+- [ ] Firewall configured for Portainer access
+
+**Portainer Access URL:** `https://<YOUR_VPS_IP>:9443`
+
+---
+
+### 3.5 Install Node.js (for build tools)
 
 ```bash
 # Install Node.js 20 LTS via NodeSource
@@ -323,19 +386,28 @@ vim .env
 
 ### 5.3 Database Setup
 
+**Start Database Containers:**
+
 ```bash
-# Start PostgreSQL and Redis via Docker Compose
+# Via Command Line
 docker compose -f docker/docker-compose.yml up -d postgres redis
 
 # Verify containers running
 docker ps
+```
 
+Or use **Portainer**:
+1. Navigate to **Containers**
+2. Verify `postgres` and `redis` containers are running
+3. Check logs for any startup errors
+
+```bash
 # Run database migrations
 pnpm --filter @oslsr/api db:push
 ```
 
-- [ ] PostgreSQL container running
-- [ ] Redis container running
+- [ ] PostgreSQL container running (verify in Portainer)
+- [ ] Redis container running (verify in Portainer)
 - [ ] Database migrations applied
 
 ### 5.4 Build Application
@@ -354,6 +426,23 @@ ls -la apps/web/dist/
 
 ### 5.5 Start Application
 
+**Option A: Via Portainer (Recommended)**
+
+1. Open Portainer at `https://<YOUR_VPS_IP>:9443`
+2. Navigate to **Stacks** → **Add Stack**
+3. Name: `oslsr`
+4. Build method: **Upload** or **Repository**
+   - Upload: Upload your `docker/docker-compose.yml` file
+   - Repository: Point to your Git repo and specify compose file path
+5. Add environment variables (from `.env` file)
+6. Click **Deploy the stack**
+
+- [ ] Stack created in Portainer
+- [ ] Environment variables configured in Portainer
+- [ ] Stack deployed successfully
+
+**Option B: Via Command Line**
+
 ```bash
 # Start full stack via Docker Compose
 docker compose -f docker/docker-compose.yml up -d
@@ -363,8 +452,14 @@ pnpm --filter @oslsr/api start &
 pnpm --filter @oslsr/web preview &
 ```
 
-- [ ] API service running
-- [ ] Web service running
+**Verify in Portainer:**
+
+1. Navigate to **Containers** in Portainer
+2. Verify all containers show green "running" status
+3. Check container logs for any errors (click container → Logs)
+
+- [ ] API service running (visible in Portainer)
+- [ ] Web service running (visible in Portainer)
 - [ ] Health check endpoint responding (`/api/health`)
 
 ---
@@ -634,10 +729,30 @@ ODK_ADMIN_PASSWORD=<admin-password>
 |-------|----------|
 | SSH connection refused | Check firewall: `ufw status` |
 | Docker permission denied | Run `newgrp docker` or re-login |
-| NGINX 502 Bad Gateway | Check if app is running: `docker ps` |
+| NGINX 502 Bad Gateway | Check if app is running: `docker ps` or Portainer |
 | SSL certificate error | Verify domain DNS, re-run certbot |
 | Database connection failed | Check DATABASE_URL, verify postgres is running |
 | Emails not sending | Verify SES credentials, check sandbox mode |
+| Portainer not accessible | Check firewall allows port 9443, verify container running |
+| Portainer login failed | Reset admin password (see below) |
+
+### Portainer Management
+
+```bash
+# Check Portainer container status
+docker ps | grep portainer
+
+# View Portainer logs
+docker logs portainer
+
+# Restart Portainer
+docker restart portainer
+
+# Reset Portainer admin password (if locked out)
+docker stop portainer
+docker run --rm -v portainer_data:/data portainer/helper-reset-password
+docker start portainer
+```
 
 ### Useful Commands
 
@@ -695,4 +810,274 @@ redis-cli ping
 ---
 
 *Document created: 2026-01-18*
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*
+*Updated by: BMad Master - Added Portainer installation (Phase 3.4) per PRD NFR7 requirement*
+
+---
+
+# Appendices
+
+## Appendix A: Understanding SSH Keys
+
+### What is SSH?
+
+**SSH (Secure Shell)** is a cryptographic network protocol for securely connecting to and controlling remote servers. It creates an encrypted tunnel between your local computer and the VPS.
+
+### Why SSH Keys Instead of Passwords?
+
+| Method | Security | Convenience | Risk |
+|--------|----------|-------------|------|
+| **Password** | Low | Type every time | Bots try millions of passwords (brute force) |
+| **SSH Key** | Very High | Automatic auth | Only YOUR computer can connect |
+
+SSH keys use asymmetric cryptography with 256+ bits of randomness, making them virtually impossible to crack.
+
+### How SSH Keys Work
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│  YOUR COMPUTER  │                    │    YOUR VPS     │
+│                 │                    │                 │
+│  🔑 Private Key │ ──── Encrypted ───>│  🔓 Public Key  │
+│  (id_ed25519)   │      Challenge     │  (authorized_   │
+│  NEVER SHARE    │<──── Response ─────│   keys file)    │
+│                 │                    │  Safe to share  │
+└─────────────────┘                    └─────────────────┘
+        │                                      │
+        └──────────── MATCH? ──────────────────┘
+                         │
+                    ✅ Access Granted
+```
+
+**The Key Pair:**
+- **Private Key** (`id_ed25519`) - Stays on YOUR computer. Never share this with anyone.
+- **Public Key** (`id_ed25519.pub`) - Goes on the server. Safe to share publicly.
+
+### Generating SSH Keys on Windows
+
+#### Option A: PowerShell (Windows 10/11)
+
+```powershell
+# Generate the key pair
+ssh-keygen -t ed25519 -C "your-identifier"
+
+# When prompted for file location, press Enter for default
+# When prompted for passphrase, enter one (recommended) or press Enter for none
+
+# View your public key (copy this to Hetzner)
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+```
+
+#### Option B: Git Bash
+
+```bash
+# Generate the key pair
+ssh-keygen -t ed25519 -C "your-identifier"
+
+# View your public key
+cat ~/.ssh/id_ed25519.pub
+```
+
+### Your Public Key Format
+
+Your public key will look like this (one line):
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx your-identifier
+```
+
+**Copy this entire line** when adding to Hetzner during VPS creation.
+
+### SSH Key Security Best Practices
+
+| Practice | Reason |
+|----------|--------|
+| Use a passphrase | Extra layer of security if private key is stolen |
+| Never share private key | Anyone with it can access your servers |
+| Use Ed25519 algorithm | Modern, secure, and fast |
+| One key per device | Easier to revoke if a device is compromised |
+
+---
+
+## Appendix B: Understanding Portainer
+
+### What is Portainer?
+
+**Portainer** is a web-based graphical user interface (GUI) for managing Docker containers. Instead of typing commands in a terminal, you can manage your entire application stack through a visual dashboard in your browser.
+
+### Why Use Portainer? (PRD Requirement NFR7)
+
+The OSLSR PRD specifically requires Portainer for **"Ease of Operations"**:
+
+> "NFR7: System must include Portainer for visual management and use GitHub Actions for automated deployment."
+
+### Command Line vs Portainer
+
+**Without Portainer (CLI Only):**
+```bash
+# SSH into server first
+ssh deploy@your-server
+
+# See running containers
+docker ps
+
+# View logs (must know container name)
+docker logs oslsr-api --tail 100
+
+# Restart a service
+docker restart oslsr-api
+
+# Check resource usage
+docker stats
+```
+
+**With Portainer (Visual Dashboard):**
+1. Open browser: `https://your-server:9443`
+2. See all containers with color-coded status
+3. Click "Logs" button to view logs
+4. Click "Restart" button to restart
+5. View CPU/memory graphs in real-time
+
+### Portainer Dashboard Features
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  PORTAINER DASHBOARD                              [Admin ▼]     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  CONTAINERS (4 running)                                         │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ 🟢 oslsr-api     Running   CPU: 2.3%   MEM: 156MB          │ │
+│  │    [Logs] [Console] [Inspect] [Stats] [Restart] [Stop]     │ │
+│  ├────────────────────────────────────────────────────────────┤ │
+│  │ 🟢 oslsr-web     Running   CPU: 0.5%   MEM: 89MB           │ │
+│  │    [Logs] [Console] [Inspect] [Stats] [Restart] [Stop]     │ │
+│  ├────────────────────────────────────────────────────────────┤ │
+│  │ 🟢 postgres      Running   CPU: 1.1%   MEM: 234MB          │ │
+│  │    [Logs] [Console] [Inspect] [Stats] [Restart] [Stop]     │ │
+│  ├────────────────────────────────────────────────────────────┤ │
+│  │ 🟢 redis         Running   CPU: 0.2%   MEM: 12MB           │ │
+│  │    [Logs] [Console] [Inspect] [Stats] [Restart] [Stop]     │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  STACKS                    IMAGES              VOLUMES          │
+│  [oslsr] Running           4 images            5 volumes        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Portainer Capabilities
+
+| Feature | Description | Benefit |
+|---------|-------------|---------|
+| **Container List** | Visual list of all running services | See health at a glance |
+| **One-Click Actions** | Start, stop, restart with buttons | No command memorization |
+| **Live Logs** | Stream logs in browser | Debug without SSH |
+| **Resource Graphs** | CPU, memory, network charts | Identify performance issues |
+| **Stack Management** | Deploy entire app from compose file | Simplified deployments |
+| **Environment Variables** | Edit config in UI | No file editing on server |
+| **Image Management** | Pull, remove Docker images | Easy updates |
+| **Volume Management** | View and manage data volumes | Data persistence visibility |
+
+### Portainer in OSLSR Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         YOUR VPS                                 │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │                 PORTAINER (Port 9443)                      │  │
+│  │            Visual Management Dashboard                     │  │
+│  │     Access: https://<your-vps-ip>:9443                     │  │
+│  │     Security: Admin password + 2FA enabled                 │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│              │              │              │              │      │
+│              ▼              ▼              ▼              ▼      │
+│       ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐ │
+│       │OSLSR-API │   │OSLSR-WEB │   │ POSTGRES │   │  REDIS   │ │
+│       │Port 4000 │   │Port 3000 │   │Port 5432 │   │Port 6379 │ │
+│       └──────────┘   └──────────┘   └──────────┘   └──────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │                  NGINX (Ports 80/443)                      │  │
+│  │              Public-facing reverse proxy                   │  │
+│  │          Handles SSL termination & routing                 │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │                                   │
+└──────────────────────────────│───────────────────────────────────┘
+                               ▼
+                     🌐 Internet (Users)
+```
+
+### Portainer Security Configuration
+
+Per PRD requirements, Portainer must be secured:
+
+| Security Measure | Implementation |
+|------------------|----------------|
+| **Strong Password** | Minimum 12 characters, mixed case, numbers, symbols |
+| **2FA Enabled** | TOTP via authenticator app (Google Authenticator, Authy) |
+| **Firewall Restriction** | Only allow access from admin IP addresses |
+| **HTTPS Only** | Portainer runs on port 9443 with TLS |
+
+### When to Use Portainer vs CLI
+
+| Scenario | Recommended Tool |
+|----------|------------------|
+| Quick status check | Portainer |
+| View logs | Portainer |
+| Restart a service | Portainer |
+| Deploy/update stack | Portainer |
+| Complex debugging | CLI (SSH) |
+| Automated scripts | CLI |
+| Initial server setup | CLI |
+
+### Portainer Quick Reference
+
+**Access URL:** `https://<YOUR_VPS_IP>:9443`
+
+**Common Tasks:**
+- View all containers: Home → Containers
+- Check logs: Containers → Select container → Logs
+- Restart service: Containers → Select container → Restart button
+- Deploy stack: Stacks → Add Stack → Upload compose file
+- View resources: Containers → Select container → Stats
+
+---
+
+## Appendix C: Pre-Setup Checklist
+
+Before starting Phase 1, ensure you have:
+
+### Accounts to Create
+
+- [ ] **Hetzner** - [hetzner.com](https://www.hetzner.com) - VPS hosting
+- [ ] **AWS** - [aws.amazon.com](https://aws.amazon.com) - S3 storage + SES email
+- [ ] **hCaptcha** - [hcaptcha.com](https://www.hcaptcha.com) - Bot protection
+- [ ] **Domain Registrar** - Purchase staging domain
+
+### Local Setup
+
+- [ ] **SSH Key Generated** - See Appendix A for instructions
+- [ ] **Public Key Copied** - Ready to paste into Hetzner
+- [ ] **Git Access** - Can clone the OSLSR repository
+
+### Decisions Made
+
+- [ ] **VPS Size** - CX21 (4GB) or CX31 (8GB recommended)
+- [ ] **Domain Name** - e.g., `oslsr-staging.com`
+- [ ] **S3 Provider** - AWS S3 or DigitalOcean Spaces
+
+### Estimated Costs
+
+| Service | Monthly Cost |
+|---------|--------------|
+| Hetzner VPS (CX31) | ~€8 |
+| Domain | ~$1 (annual ~$10) |
+| AWS S3 | ~$1-5 (usage-based) |
+| AWS SES | ~$0.10 per 1000 emails |
+| hCaptcha | Free |
+| **Total** | **~$15-20/month** |
+
+---
+
+*End of Appendices*
