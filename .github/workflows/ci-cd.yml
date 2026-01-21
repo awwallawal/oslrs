@@ -88,14 +88,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Deploy to Hetzner VPS
+
+      - name: Deploy to DigitalOcean VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /app/oslsr
+            cd ~/oslrs
             git pull origin main
-            docker-compose -f docker/docker-compose.yml up -d --build
+
+            # Install dependencies if package.json changed
+            pnpm install --frozen-lockfile
+
+            # Build frontend
+            pnpm --filter @oslsr/web build
+
+            # Deploy frontend to NGINX
+            sudo cp -r apps/web/dist/* /var/www/oslsr/
+
+            # Restart API
+            pm2 restart oslsr-api
