@@ -15,7 +15,7 @@
 5. [DigitalOcean Setup Progress](#5-digitalocean-setup-progress)
 6. [Commands Reference](#6-commands-reference)
 7. [Cost Summary](#7-cost-summary)
-8. [Pitfalls & Solutions](#8-pitfalls--solutions) (7 pitfalls documented)
+8. [Pitfalls & Solutions](#8-pitfalls--solutions) (8 pitfalls documented)
 9. [Next Steps](#9-next-steps)
 10. [ODK Central Container Architecture](#odk-central-container-architecture)
 11. [OSLSR App Architecture](#oslsr-app-architecture-droplet-1)
@@ -547,6 +547,29 @@ pm2 save
 
 ---
 
+### Pitfall 8: Leading Spaces in .env Variables
+
+**Problem:** Environment variables not being read despite appearing correct in the file.
+
+**Symptom:**
+```bash
+cat .env | grep HCAPTCHA
+ HCAPTCHA_SECRET=...     # ← Leading space!
+ VITE_HCAPTCHA_SITE_KEY=...  # ← Leading space!
+```
+
+**Root Cause:** When pasting into nano, leading spaces can accidentally be added. These spaces make the variable name ` HCAPTCHA_SECRET` (with space) instead of `HCAPTCHA_SECRET`.
+
+**Solution:** Use `sed` to remove leading spaces:
+```bash
+sed -i 's/^ HCAPTCHA_SECRET/HCAPTCHA_SECRET/' .env
+sed -i 's/^ VITE_HCAPTCHA_SITE_KEY/VITE_HCAPTCHA_SITE_KEY/' .env
+```
+
+**Prevention:** After editing .env, always verify with `cat .env | grep VARNAME` and check there's no space before the variable name.
+
+---
+
 ## 9. Next Steps
 
 ### Completed Sessions
@@ -926,29 +949,21 @@ Items intentionally postponed for later implementation. Track these to ensure no
 
 ---
 
-### 3. hCaptcha Production Keys
+### ~~3. hCaptcha Production Keys~~ ✅ COMPLETED
 
 | Field | Value |
 |-------|-------|
-| **Deferred On** | 2026-01-21 |
-| **Reason** | Test keys work for development/staging |
-| **Trigger to Implement** | Before going live to real users |
-| **Estimated Cost** | Free |
-| **Complexity** | Very Low |
+| **Completed On** | 2026-01-21 |
+| **Status** | Production keys configured and verified |
 
-**Current Status:** Using hCaptcha test keys (always pass)
-```env
-HCAPTCHA_SECRET=0x0000000000000000000000000000000000000000
-VITE_HCAPTCHA_SITE_KEY=10000000-ffff-ffff-ffff-000000000001
-```
-
-**Implementation Steps (When Ready):**
-1. Create account at https://www.hcaptcha.com/
-2. Add site: oyotradeministry.com.ng
-3. Get production site key and secret key
-4. Update `.env` on VPS
-5. Rebuild frontend: `pnpm --filter @oslsr/web build`
-6. Copy to web dir: `sudo cp -r apps/web/dist/* /var/www/oslsr/`
+**Implementation Completed:**
+1. ✅ Created account at https://www.hcaptcha.com/
+2. ✅ Added site: oyotradeministry.com.ng
+3. ✅ Got production site key and secret key
+4. ✅ Updated `.env` on VPS (watch for leading spaces - see Pitfall 8)
+5. ✅ Rebuilt frontend: `pnpm --filter @oslsr/web build`
+6. ✅ Copied to web dir: `sudo cp -r apps/web/dist/* /var/www/oslsr/`
+7. ✅ Verified hCaptcha shows real challenges (not "testing only" message)
 
 ---
 
