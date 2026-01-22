@@ -24,7 +24,8 @@
 14. [Performance Notes](#performance-notes)
 15. [Environment Variables](#environment-variables-env-on-vps)
 16. [GitHub Actions CI/CD](#github-actions-cicd)
-17. [Deferred Items](#deferred-items) (4 items)
+17. [ESLint 9 Configuration](#eslint-9-configuration)
+18. [Deferred Items](#deferred-items) (3 items)
 
 ---
 
@@ -591,14 +592,13 @@ sed -i 's/^ VITE_HCAPTCHA_SITE_KEY/VITE_HCAPTCHA_SITE_KEY/' .env
 6. ~~Enable NGINX gzip compression~~ ✅
 7. ~~Configure hCaptcha production keys~~ ✅
 8. ~~Set up GitHub Actions CI/CD~~ ✅
+9. ~~Configure ESLint 9 flat config~~ ✅
 
 **OSLSR App Live:** https://oyotradeministry.com.ng/
 
 ### Next Session
 1. Set up DigitalOcean Spaces for media storage (when testing selfie uploads)
 2. Configure email service (when testing registration emails)
-3. Fix ESLint 9 configuration (CI lint warnings)
-4. Fix test failures in CI environment
 
 ### Documentation Updates Needed
 - Update Architecture.md (change Hetzner to DigitalOcean)
@@ -909,6 +909,7 @@ Automated deployment pipeline that triggers on every push to `main` branch.
 | Step | Status | Description |
 |------|--------|-------------|
 | Install | ✅ | `pnpm install` |
+| Lint | ✅ | `pnpm lint` (0 errors, warnings only) |
 | Build | ✅ | `pnpm build` |
 | Setup Database | ✅ | `pnpm --filter @oslsr/api db:push` |
 | Test | ✅ | All 260 tests passing |
@@ -935,8 +936,66 @@ pm2 restart oslsr-api
 
 ### Resolved Issues
 
-1. **~~ESLint 9 Configuration~~** - Removed lint from CI (ESLint was never properly configured). Can add proper linting in future.
+1. **~~ESLint 9 Configuration~~** - Properly configured ESLint 9 flat config for both API and Web apps with:
+   - Vitest globals (`describe`, `it`, `expect`, `vi`, etc.) for test files
+   - Separate config blocks for source and test files
+   - TypeScript-ESLint rules with sensible defaults
+   - React hooks rules for frontend
+   - Warnings (not errors) for `any` types and unused vars to avoid blocking CI
 2. **~~Test Failures in CI~~** - Fixed by adding PostgreSQL/Redis service containers and database migration step.
+
+---
+
+## ESLint 9 Configuration
+
+### Overview
+
+ESLint 9 uses a new "flat config" format (`eslint.config.js`) instead of the legacy `.eslintrc.*` files.
+
+**Config Files:**
+- `apps/api/eslint.config.js` - API (Node.js/Express)
+- `apps/web/eslint.config.js` - Frontend (React/Vite)
+
+### Key Features
+
+1. **Separate Test File Configuration** - Test files have relaxed rules and Vitest globals defined
+2. **TypeScript Integration** - Uses `typescript-eslint` for type-aware linting
+3. **Warnings vs Errors** - `any` types and unused vars are warnings to avoid blocking CI
+
+### Test File Globals (Vitest)
+
+```javascript
+// Added to languageOptions.globals for test files
+{
+  describe: 'readonly',
+  it: 'readonly',
+  expect: 'readonly',
+  beforeAll: 'readonly',
+  afterAll: 'readonly',
+  beforeEach: 'readonly',
+  afterEach: 'readonly',
+  vi: 'readonly',
+}
+```
+
+### Common Fixes Applied
+
+| Issue | Fix |
+|-------|-----|
+| Unused Vitest imports (`it`, `beforeEach`) | Removed from imports (use globals) or actually removed if not used |
+| `Function` type usage | Changed to typed callbacks like `(chunk: Buffer) => void` |
+| `@ts-ignore` comments | Removed (components now exist) or changed to `@ts-expect-error` |
+| Unused variables in tests | Removed variables or used `_` prefix |
+
+### Current Warnings (Expected)
+
+The following warnings are expected and acceptable (set to warn, not error):
+- `@typescript-eslint/no-explicit-any` - 36 API warnings, 32 web warnings
+- `@typescript-eslint/no-unused-vars` - A few unused imports/variables
+- `react-hooks/exhaustive-deps` - Some intentional dependency omissions
+- `no-console` - Console logging in error boundaries and debugging
+
+These will be cleaned up incrementally. The important thing is **0 errors**.
 
 ---
 
@@ -1036,5 +1095,5 @@ Items intentionally postponed for later implementation. Track these to ensure no
 ---
 
 *Document created: 2026-01-20*
-*Last updated: 2026-01-21 (CI/CD setup completed, all phases done)*
+*Last updated: 2026-01-22 (ESLint 9 configuration completed, CI fully green)*
 *Created by: BMad Master for Awwal's VPS setup session*
