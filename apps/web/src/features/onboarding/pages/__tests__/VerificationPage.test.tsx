@@ -4,7 +4,6 @@ import { screen, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
 import { Route, Routes } from 'react-router-dom';
-// @ts-ignore
 import VerificationPage from '../VerificationPage';
 import { renderWithRouter } from '../../../../test/utils/renderWithRouter';
 

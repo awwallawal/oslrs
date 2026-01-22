@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, expect, beforeAll, vi } from 'vitest';
 import supertest from 'supertest';
 import { goldenPath } from '@oslsr/testing/decorators';
 
@@ -17,7 +17,7 @@ vi.mock('../services/photo-processing.service.js', () => {
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
-import { generateInvitationToken, verhoeffGenerate } from '@oslsr/utils';
+import { verhoeffGenerate } from '@oslsr/utils';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 
@@ -25,7 +25,6 @@ const request = supertest(app);
 
 describe('Performance: ID Card Generation', () => {
   let authToken: string;
-  let userId: string;
 
   beforeAll(async () => {
     // Setup Role and LGA
@@ -49,8 +48,6 @@ describe('Performance: ID Card Generation', () => {
       staffId: 'OS/2026/PERF',
       liveSelfieIdCardUrl: 'mock/path.jpg', // Required for ID card generation
     }).returning();
-    
-    userId = user.id;
     
     // Ensure consistent secret
     // process.env.JWT_SECRET = 'test-secret'; // Assuming fallback works or environment is consistent

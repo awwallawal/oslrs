@@ -9,6 +9,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**'],
     plugins: {
       react,
       'react-hooks': reactHooks,
@@ -42,6 +43,39 @@ export default tseslint.config(
 
       // General rules
       'no-console': 'warn',
+    },
+  },
+  // Test files - with Vitest globals
+  {
+    files: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
+    plugins: {
+      react,
+      'react-hooks': reactHooks,
+    },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        // Vitest globals
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        vi: 'readonly',
+      },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off', // Allow unused in tests
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any in tests
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'off', // Relax in tests
     },
   },
   {

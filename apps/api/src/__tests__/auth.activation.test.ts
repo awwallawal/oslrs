@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';

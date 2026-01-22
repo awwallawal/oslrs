@@ -4,14 +4,11 @@ import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
-import { hashPassword, generateInvitationToken } from '@oslsr/utils';
+import { hashPassword } from '@oslsr/utils';
 
 const request = supertest(app);
 
 describe('Auth Login Integration', () => {
-  let testUserId: string;
-  let testUserEmail: string;
-  let testUserPassword: string;
   let staffUserId: string;
   let staffUserEmail: string;
   let staffUserPassword: string;
@@ -62,11 +59,6 @@ describe('Auth Login Integration', () => {
       passwordHash: hashedPublicPassword,
     }).returning();
     publicUserId = publicUser.id;
-
-    // For general tests
-    testUserEmail = staffUserEmail;
-    testUserPassword = staffUserPassword;
-    testUserId = staffUserId;
   });
 
   afterAll(async () => {

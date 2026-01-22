@@ -3,7 +3,6 @@ import * as matchers from '@testing-library/jest-dom/matchers';
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import React from 'react';
-// @ts-ignore - component doesn't exist yet
 import IDCardDownload from '../IDCardDownload';
 import { mockDownload } from '../../../../test/mocks/download';
 

@@ -7,6 +7,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/**/__tests__/**'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -22,6 +23,28 @@ export default tseslint.config(
       // General rules
       'no-console': 'off', // Allow console in backend
       'no-async-promise-executor': 'warn', // Downgrade to warning
+    },
+  },
+  // Test files - with Vitest globals
+  {
+    files: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        // Vitest globals
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        vi: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off', // Allow unused in tests (setup variables)
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any in tests
     },
   },
   {

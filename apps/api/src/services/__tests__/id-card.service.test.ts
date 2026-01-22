@@ -34,8 +34,8 @@ vi.mock('qrcode', () => {
 vi.mock('pdfkit', () => {
   return {
     default: class PDFDocument {
-      _dataCallback: Function | null = null;
-      _endCallback: Function | null = null;
+      _dataCallback: ((chunk: Buffer) => void) | null = null;
+      _endCallback: (() => void) | null = null;
 
       constructor(options: any) {
         // Can assert options here if needed
@@ -54,7 +54,7 @@ vi.mock('pdfkit', () => {
       translate(...args: any[]) { mocks.translate(...args); return this; }
       pipe(...args: any[]) { mocks.pipe(...args); return this; }
       
-      on(event: string, callback: Function) {
+      on(event: string, callback: (...args: unknown[]) => void) {
           mocks.on(event, callback); 
           if (event === 'data') {
              this._dataCallback = callback;
