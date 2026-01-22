@@ -7,7 +7,7 @@ export default function ActivationPage() {
   const navigate = useNavigate();
   const [activated, setActivated] = useState(false);
 
-  const handleSuccess = (user: any) => {
+  const handleSuccess = () => {
     setActivated(true);
     // Optional: Auto-redirect after delay, but provide manual link
     setTimeout(() => {

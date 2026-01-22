@@ -32,8 +32,8 @@ const VerificationPage: React.FC = () => {
 
         const result = await response.json();
         setData(result.data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Verification failed');
       } finally {
         setLoading(false);
       }

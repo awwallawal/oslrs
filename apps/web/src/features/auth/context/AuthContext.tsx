@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import type { AuthUser, LoginRequest } from '@oslsr/types';
+import type { AuthUser, LoginRequest, UserRole } from '@oslsr/types';
 import * as authApi from '../api/auth.api';
 import { AuthApiError } from '../api/auth.api';
 
@@ -135,7 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Get access token from storage (available for future use)
+  // Get access token from storage (reserved for future session restoration)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _getStoredToken = useCallback(() => {
     try {
       return sessionStorage.getItem(ACCESS_TOKEN_KEY);
@@ -196,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'TOKEN_REFRESH', payload: response.accessToken });
           saveToken(response.accessToken);
           scheduleTokenRefresh(response.expiresIn);
-        } catch (error) {
+        } catch {
           // Token refresh failed, log out
           dispatch({ type: 'AUTH_LOGOUT' });
           clearToken();
@@ -367,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id: userInfo.id,
               email: userInfo.email,
               fullName: '', // Not returned from /me endpoint
-              role: userInfo.role as any,
+              role: userInfo.role as UserRole,
               status: 'active',
             },
             accessToken: response.accessToken,
@@ -395,12 +396,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Cleanup on unmount
   useEffect(() => {
+    // Capture ref values for cleanup (React hooks exhaustive-deps rule)
+    const refreshTimeout = refreshTimeoutRef.current;
+    const activityTimeout = activityTimeoutRef.current;
     return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
       }
-      if (activityTimeoutRef.current) {
-        clearTimeout(activityTimeoutRef.current);
+      if (activityTimeout) {
+        clearTimeout(activityTimeout);
       }
     };
   }, []);

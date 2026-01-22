@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useReAuth } from '../hooks/useReAuth';
 
@@ -75,12 +75,12 @@ export function ReAuthModal({
   }, [isOpen]);
 
   // Handle close
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (isLoading) return;
     reset();
     onClose?.();
     close();
-  };
+  }, [isLoading, reset, onClose, close]);
 
   // Handle submit
   const handleSubmit = async (e: React.FormEvent) => {

@@ -10,7 +10,8 @@ export default function StaffLoginPage() {
   const location = useLocation();
 
   // Get redirect destination from state (set by ProtectedRoute)
-  const from = (location.state as any)?.from || '/admin';
+  const state = location.state as { from?: string } | null;
+  const from = state?.from || '/admin';
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col">

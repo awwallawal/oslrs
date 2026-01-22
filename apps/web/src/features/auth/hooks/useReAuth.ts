@@ -31,7 +31,7 @@ export function useReAuth(): UseReAuthReturn {
   const open = useCallback((action: string) => {
     setIsOpen(true);
     setPendingAction(action);
-    setPassword('');
+    setPasswordState(''); // Use state setter directly for stability
     setError(null);
   }, []);
 
@@ -70,7 +70,7 @@ export function useReAuth(): UseReAuthReturn {
         setPasswordState('');
         return false;
       }
-    } catch (err) {
+    } catch {
       setError('Re-authentication failed. Please try again.');
       setPasswordState('');
       return false;
@@ -112,20 +112,21 @@ export function useReAuth(): UseReAuthReturn {
  * Higher-order function to wrap API calls that might require re-authentication
  * Returns a function that will trigger re-auth flow if needed
  */
-export function withReAuth<T extends (...args: any[]) => Promise<any>>(
-  fn: T,
+export function withReAuth<TArgs extends unknown[], TReturn>(
+  fn: (...args: TArgs) => Promise<TReturn>,
   actionDescription: string,
   onReAuthRequired: (action: string) => void
-): T {
-  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+): (...args: TArgs) => Promise<TReturn> {
+  return async (...args: TArgs): Promise<TReturn> => {
     try {
       return await fn(...args);
-    } catch (error: any) {
-      if (error.code === 'AUTH_REAUTH_REQUIRED') {
+    } catch (error: unknown) {
+      const err = error as { code?: string };
+      if (err.code === 'AUTH_REAUTH_REQUIRED') {
         onReAuthRequired(actionDescription);
         throw error;
       }
       throw error;
     }
-  }) as T;
+  };
 }

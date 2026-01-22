@@ -38,6 +38,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         setHuman(humanInstance);
         setIsModelLoadingRaw(false);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error('Failed to load Human:', e);
         setHasError(true);
         setIsModelLoadingRaw(false);
@@ -60,6 +61,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
       const result = await human.detect(webcamRef.current.video);
       setFaceCount(result.face.length);
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error('Detection error:', e);
     }
   }, [human, capturedImage]);

@@ -50,9 +50,11 @@ const IDCardDownload: React.FC = () => {
             a.remove();
             window.URL.revokeObjectURL(url);
 
-        } catch (err: any) {
-            console.error(err);
-            setError(err.message || 'Failed to download ID Card. Please try again.');
+        } catch (err: unknown) {
+            // eslint-disable-next-line no-console
+            console.error('ID card download error:', err);
+            const message = err instanceof Error ? err.message : 'Failed to download ID Card. Please try again.';
+            setError(message);
         } finally {
             setIsLoading(false);
         }

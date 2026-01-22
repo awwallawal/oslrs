@@ -15,7 +15,8 @@ export default function LoginPage({ type = 'public' }: LoginPageProps) {
   const location = useLocation();
 
   // Get redirect destination from state (set by ProtectedRoute)
-  const from = (location.state as any)?.from || '/dashboard';
+  const state = location.state as { from?: string } | null;
+  const from = state?.from || '/dashboard';
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col">

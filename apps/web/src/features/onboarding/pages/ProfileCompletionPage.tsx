@@ -42,8 +42,8 @@ const ProfileCompletionPage: React.FC = () => {
         idCardUrl: data.data.liveSelfieIdCardUrl
       });
       setStep('success');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setIsUploading(false);
     }
