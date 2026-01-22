@@ -92,8 +92,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * Note: Does NOT catch errors in event handlers (expected React behavior)
    */
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error with component stack trace
+    // Log error with component stack trace (intentional for debugging)
+    // eslint-disable-next-line no-console
     console.error('[ErrorBoundary] Caught error:', error);
+    // eslint-disable-next-line no-console
     console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
 
     // Call optional error handler

@@ -6,6 +6,7 @@ import { PasswordRequirements } from './PasswordRequirements';
 
 interface ActivationFormProps {
   token: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSuccess: (data: any) => void;
 }
 
@@ -45,8 +46,8 @@ export function ActivationForm({ token, onSuccess }: ActivationFormProps) {
       }
 
       onSuccess(result.data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsSubmitting(false);
     }

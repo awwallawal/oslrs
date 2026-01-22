@@ -117,7 +117,7 @@ export class StaffService {
                 throw new AppError('PHONE_EXISTS', 'Phone number already exists', 409);
             }
         }
-        throw err;
+        throw err instanceof Error ? err : new Error(String(err));
     }
   }
 

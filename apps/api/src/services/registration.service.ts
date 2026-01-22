@@ -208,7 +208,7 @@ export class RegistrationService {
       logger.error({
         event: 'auth.registration_failed',
         reason: 'unknown',
-        error: err.message,
+        error: err instanceof Error ? err.message : 'Unknown error',
       });
       throw new AppError(
         'INTERNAL_ERROR',

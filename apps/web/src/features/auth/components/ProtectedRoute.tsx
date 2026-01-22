@@ -117,6 +117,7 @@ export function PublicOnlyRoute({
   // Redirect to home/dashboard if already authenticated
   if (isAuthenticated) {
     // Check if there's a stored destination
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const from = (location.state as any)?.from || redirectTo;
     return <Navigate to={from} replace />;
   }

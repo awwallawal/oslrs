@@ -108,7 +108,7 @@ export function ReAuthModal({
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, isLoading]);
+  }, [isOpen, isLoading, handleClose]);
 
   if (!isOpen) return null;
 

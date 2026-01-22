@@ -112,7 +112,7 @@ export class AuthService {
         // Fallback for other unique constraints
         throw new AppError('CONFLICT', 'A conflict occurred with existing data.', 409);
       }
-      throw err;
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 

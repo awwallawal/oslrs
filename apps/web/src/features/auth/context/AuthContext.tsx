@@ -135,8 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Get access token from storage
-  const getStoredToken = useCallback(() => {
+  // Get access token from storage (available for future use)
+  const _getStoredToken = useCallback(() => {
     try {
       return sessionStorage.getItem(ACCESS_TOKEN_KEY);
     } catch {

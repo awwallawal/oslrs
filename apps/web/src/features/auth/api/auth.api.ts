@@ -8,7 +8,6 @@ import type {
   ResetPasswordResponse,
   ReAuthRequest,
   ReAuthResponse,
-  AuthUser,
 } from '@oslsr/types';
 
 // Registration types
