@@ -25,10 +25,12 @@ export const captchaTokenSchema = z.string()
   .min(1, 'CAPTCHA verification required');
 
 // Login request schema
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
 export const loginRequestSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Password is required'),
-  captchaToken: captchaTokenSchema,
+  captchaToken: captchaTokenSchema.optional(),
   rememberMe: z.boolean().optional().default(false),
 });
 
@@ -49,9 +51,11 @@ export const publicLoginRequestSchema = loginRequestSchema.extend({
 export type PublicLoginRequestInput = z.infer<typeof publicLoginRequestSchema>;
 
 // Forgot password request schema
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
 export const forgotPasswordRequestSchema = z.object({
   email: emailSchema,
-  captchaToken: captchaTokenSchema,
+  captchaToken: captchaTokenSchema.optional(),
 });
 
 export type ForgotPasswordRequestInput = z.infer<typeof forgotPasswordRequestSchema>;

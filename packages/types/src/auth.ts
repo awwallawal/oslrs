@@ -13,10 +13,12 @@ export interface JwtPayload {
 }
 
 // Login request types
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation before schema validation
 export interface LoginRequest {
   email: string;
   password: string;
-  captchaToken: string;
+  captchaToken?: string;
   rememberMe?: boolean;
 }
 
@@ -60,9 +62,11 @@ export interface LogoutRequest {
 }
 
 // Password reset
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation before schema validation
 export interface ForgotPasswordRequest {
   email: string;
-  captchaToken: string;
+  captchaToken?: string;
 }
 
 export interface ForgotPasswordResponse {

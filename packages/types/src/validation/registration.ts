@@ -28,6 +28,8 @@ export const fullNameSchema = z.string()
   .transform((name) => name.trim());
 
 // Public user registration request schema
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
 export const publicRegistrationRequestSchema = z.object({
   fullName: fullNameSchema,
   email: emailSchema,
@@ -35,7 +37,7 @@ export const publicRegistrationRequestSchema = z.object({
   nin: ninSchema,
   password: passwordSchema,
   confirmPassword: z.string(),
-  captchaToken: captchaTokenSchema,
+  captchaToken: captchaTokenSchema.optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match',
   path: ['confirmPassword'],
@@ -52,9 +54,11 @@ export const verifyEmailRequestSchema = z.object({
 export type VerifyEmailRequestInput = z.infer<typeof verifyEmailRequestSchema>;
 
 // Resend verification email request schema
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
 export const resendVerificationRequestSchema = z.object({
   email: emailSchema,
-  captchaToken: captchaTokenSchema,
+  captchaToken: captchaTokenSchema.optional(),
 });
 
 export type ResendVerificationRequestInput = z.infer<typeof resendVerificationRequestSchema>;

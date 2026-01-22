@@ -104,7 +104,7 @@ describe('PhotoProcessingService', () => {
       // Setup sharp mock for valid metadata
       sharpMocks.metadata.mockResolvedValue({ width: 1280, height: 720, format: 'jpeg' });
       sharpMocks.stats.mockResolvedValue({ channels: [{ stdev: 50 }] }); // Valid sharpness
-      
+
       // Setup sharp mock for processing
       sharpMocks.toBuffer.mockResolvedValue(Buffer.from('processed-image'));
 
@@ -113,10 +113,13 @@ describe('PhotoProcessingService', () => {
 
       const result = await service.processLiveSelfie(mockImageBuffer);
 
+      // Service returns S3 keys (not signed URLs) - keys are stored in DB
+      // Signed URLs are generated on-demand when serving the image
       expect(result).toHaveProperty('originalUrl');
       expect(result).toHaveProperty('idCardUrl');
-      expect(mocks.send).toHaveBeenCalledTimes(2); // Original + Cropped
-      expect(mocks.getSignedUrl).toHaveBeenCalledTimes(2); // Signed URL generation
+      expect(result.originalUrl).toMatch(/^staff-photos\/original\//);
+      expect(result.idCardUrl).toMatch(/^staff-photos\/id-card\//);
+      expect(mocks.send).toHaveBeenCalledTimes(2); // Original + Cropped uploads
     });
 
     it('should throw error if image resolution is too low', async () => {
