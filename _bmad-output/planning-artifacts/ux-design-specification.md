@@ -13,8 +13,8 @@ completionDate: 2026-01-04
 # UX Design Specification oslr_cl
 
 **Author:** Awwal
-**Date:** 2026-01-03 (Updated: 2026-01-05)
-**Version:** 2.0 - ADR-013 Integration
+**Date:** 2026-01-03 (Updated: 2026-01-22)
+**Version:** 2.1 - Epic 1 Retrospective Decisions
 
 ## Change Log
 
@@ -22,6 +22,7 @@ completionDate: 2026-01-04
 |------|---------|---------|--------|
 | 2026-01-03 | 1.0 | Initial UX design specification completed | Awwal |
 | 2026-01-05 | 2.0 | **ADR-013 Integration:** Added Analytics & Privacy section (Plausible self-hosted analytics), Rate Limiting UX Patterns (NGINX edge protection), Performance Optimization (static asset caching, skeleton screens), Security & CSP Compliance (Content Security Policy guidelines, NDPA compliance checklist) | Awwal |
+| 2026-01-22 | 2.1 | **Epic 1 Retrospective Decisions:** Added Google OAuth as primary public registration (ADR-015), Hybrid Email Verification UX (Magic Link + OTP in same email), AuthLayout pattern for login/register pages (ADR-016 - minimal navigation with "← Back to Homepage"), Updated Journey 2 flow diagram with OAuth and email verification steps | Awwal |
 
 ---
 
@@ -559,10 +560,12 @@ Neutral-50:   #F9FAFB  ← Off-white (page background)
 - Size: 80px height (emphasize government authority)
 - Treatment: Full color with subtle drop shadow for depth
 
-**Authentication Pages (Login, Registration):**
-- Position: Centered at top of card
-- Size: 60px height
-- Treatment: Full color with "Government of Oyo State" wordmark
+**Authentication Pages (Login, Registration) - AuthLayout (ADR-016):**
+- **Layout:** Minimal chrome - "← Back to Homepage" link only (no full header/footer)
+- **Logo:** Centered at top of auth card, 60px height
+- **Treatment:** Full color with "Government of Oyo State" wordmark
+- **Purpose:** Focused, distraction-free authentication experience
+- **Future Enhancement:** Full header/footer integration planned for later iteration
 
 **PWA App Icon (Mobile Home Screen):**
 - File: `oyo-state-crest.png` 512x512px
@@ -2422,15 +2425,38 @@ graph TD
 
 **Entry Point:** Public Homepage → "Register Now" button
 
+**Registration Methods (ADR-015):**
+1. **Google OAuth (Primary, Recommended):** "Continue with Google" button - single click, pre-verified email, no password needed
+2. **Email Registration (Fallback):** Traditional email + password with Hybrid Email Verification
+
+**AuthLayout Pattern (ADR-016):**
+- Minimal navigation: "← Back to Homepage" link only
+- Centered card layout on neutral background
+- No full header/footer (focused, distraction-free experience)
+
 **Flow Diagram:**
 
 ```mermaid
 graph TD
     A[Public Homepage] --> B[Tap Register Now]
 
-    B --> C[Registration Screen<br/>Welcome Message]
+    B --> C[Registration Screen<br/>← Back to Homepage link<br/>AuthLayout]
 
-    C --> D[Enter NIN Field<br/>Monospace Font JetBrains Mono]
+    C --> D1{Registration Method}
+    D1 -->|Continue with Google| D2[Google OAuth Flow]
+    D1 -->|Register with Email| D3[Email + Password Form]
+
+    D2 --> D4[Google Auth Success<br/>Email Pre-verified]
+    D4 --> E1[Complete Profile<br/>Enter NIN]
+
+    D3 --> D5[Enter Email + Password]
+    D5 --> D6[Send Verification Email<br/>Magic Link + OTP in same email]
+    D6 --> D7{Verify Email}
+    D7 -->|Click Magic Link| D8[Email Verified]
+    D7 -->|Enter 6-digit OTP| D8
+    D8 --> E1
+
+    E1 --> D[Enter NIN Field<br/>Monospace Font JetBrains Mono]
 
     D --> E{NIN Validation}
     E -->|Invalid Format| F[Red Error: NIN must be 11 digits]
@@ -2480,16 +2506,25 @@ graph TD
 
 **Key Interactions:**
 
-1. **Entry:** Public user taps "Register Now" from homepage
-2. **NIN Validation:** Real-time validation with specific error messaging
+1. **Entry:** Public user taps "Register Now" from homepage → Lands on AuthLayout (minimal navigation)
+2. **Registration Method Selection:**
+   - **Google OAuth (Primary):** Large "Continue with Google" button at top (recommended, reduces friction)
+   - **Email Fallback:** "Or register with email" link below for users without Google accounts
+3. **Google OAuth Flow:** Single click → Google popup → Returns with verified email → Profile completion
+4. **Email Registration Flow:**
+   - Enter email + password
+   - Receive single email containing BOTH Magic Link AND 6-digit OTP code
+   - User chooses whichever verification method works (link or code)
+   - 15-minute expiry for both options
+5. **NIN Validation:** Real-time validation with specific error messaging
    - Format check: Exactly 11 digits
    - Duplicate check: Already registered → Sign in instead
    - Monospace font (JetBrains Mono) for numeric clarity
-3. **Two-Stage Consent:** Progressive disclosure (FR2 requirement)
+6. **Two-Stage Consent:** Progressive disclosure (FR2 requirement)
    - Stage 1: Anonymous marketplace opt-in (Profession, LGA, Experience only)
    - Stage 2: Only shown if Stage 1 = Yes, asks for Name + Phone reveal
-4. **Survey Experience:** Same bottom sheet mobile pattern as enumerator journey
-5. **Civic Framing:** Success message emphasizes contribution to state development
+7. **Survey Experience:** Same bottom sheet mobile pattern as enumerator journey
+8. **Civic Framing:** Success message emphasizes contribution to state development
 
 **Error Recovery:**
 

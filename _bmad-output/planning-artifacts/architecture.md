@@ -2480,6 +2480,381 @@ trackEvent('Registration Completed', {
 
 ---
 
+### ADR-015: Public User Registration & Email Verification Strategy
+
+**Decision:** Implement Google OAuth as primary registration method for public users, with email registration fallback using Hybrid Email Verification (Magic Link + OTP in same email).
+
+**Context:**
+- Public users need low-friction registration to maximize adoption
+- Email verification is required but should not create unnecessary barriers
+- Google OAuth provides pre-verified email addresses at no cost
+- Traditional Magic Link OR OTP approaches each have edge-case failures
+
+**Google OAuth (Primary Registration):**
+- **"Continue with Google" button** prominently displayed on registration page
+- **Benefits:**
+  - Zero friction - single click
+  - Pre-verified email (Google handles email verification)
+  - No password to remember
+  - Faster form completion
+- **Implementation:** Standard OAuth 2.0 flow with Google Identity Services
+- **Data Captured:** Email, name, profile picture (optional)
+- **NIN Still Required:** After Google auth, user completes profile with NIN for identity verification
+
+**Email Registration (Fallback):**
+- For users without Google accounts or who prefer email
+- Uses Hybrid Email Verification pattern
+
+**Hybrid Email Verification Pattern:**
+```
+Single Email Contains BOTH:
+┌─────────────────────────────────────────────────────────┐
+│  Subject: Verify your OSLSR account                     │
+│                                                         │
+│  Click to verify (recommended):                         │
+│  [VERIFY EMAIL] ← Magic Link (primary)                  │
+│                                                         │
+│  Or enter this code on the verification page:           │
+│  ┌───────────────────┐                                  │
+│  │     847592        │ ← 6-digit OTP (fallback)         │
+│  └───────────────────┘                                  │
+│                                                         │
+│  Both options expire in 15 minutes.                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Why Hybrid Approach:**
+| Method | When It Fails | Hybrid Solves |
+|--------|--------------|---------------|
+| Magic Link Only | Corporate email filters block links, user on different device | User enters code instead |
+| OTP Only | Users mistype codes, requires manual entry | User clicks link instead |
+| Both in Same Email | No additional cost | User chooses whichever works |
+
+**Implementation:**
+```typescript
+// apps/api/src/services/email-verification.service.ts
+export async function sendVerificationEmail(user: User) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Store both (same record, shared expiry)
+  await db.insert(verificationTokens).values({
+    userId: user.id,
+    token,
+    otp,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+    type: 'email_verification'
+  });
+
+  // Send single email with both options
+  await emailService.send({
+    to: user.email,
+    template: 'hybrid-verification',
+    data: {
+      magicLink: `${process.env.APP_URL}/verify-email?token=${token}`,
+      otpCode: otp,
+      userName: user.firstName
+    }
+  });
+}
+```
+
+**Security Considerations:**
+- Both token and OTP are single-use (using one invalidates the other)
+- 15-minute expiry prevents token harvesting
+- Rate limited: 3 verification emails per hour per email address
+- Invalid attempts logged for fraud detection
+
+**Trade-offs:**
+- ✅ Maximum user convenience (choice of verification method)
+- ✅ No additional email cost (single email)
+- ✅ Covers all edge cases (corporate filters, different devices)
+- ✅ Google OAuth eliminates verification step entirely for majority of users
+- ❌ Slightly more complex email template
+- ❌ Need to track both token and OTP in database
+
+**Affects:** Story 1.8 (Public User Self-Registration), Story 3.6 (Public Homepage & Self-Registration)
+
+---
+
+### ADR-016: Layout Architecture (PublicLayout vs DashboardLayout)
+
+**Decision:** Implement two distinct layout systems: PublicLayout for static website pages and DashboardLayout for authenticated role-based interfaces.
+
+**Context:**
+- Static website (homepage, about, registration) needs public-facing design with marketing focus
+- Authenticated dashboards need role-specific navigation, data-dense layouts
+- Users should experience clear visual transition when entering "the app"
+- Auth pages (login, register, forgot-password) need minimal navigation
+
+**Layout Separation:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        PUBLIC LAYOUT                                 │
+│  (Homepage, About, Public Marketplace Landing, Auth Pages)           │
+├─────────────────────────────────────────────────────────────────────┤
+│  Header: Logo + "Staff Login" + "Public Register" + "Marketplace"    │
+│  ─────────────────────────────────────────────────────────────────── │
+│                                                                      │
+│  [PAGE CONTENT - Marketing focused]                                  │
+│                                                                      │
+│  ─────────────────────────────────────────────────────────────────── │
+│  Footer: About | Contact | Privacy Policy | NDPA Compliance          │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                       DASHBOARD LAYOUT                               │
+│  (All authenticated views - Enumerator, Supervisor, Admin, etc.)    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Header: Logo + Role Badge + Notifications + Profile Menu + Logout   │
+│  ┌──────────┬───────────────────────────────────────────────────────│
+│  │ Sidebar  │                                                        │
+│  │ ──────── │  [DASHBOARD CONTENT - Data focused]                    │
+│  │ Dashboard│                                                        │
+│  │ Surveys  │                                                        │
+│  │ Team     │                                                        │
+│  │ Reports  │                                                        │
+│  │ Settings │                                                        │
+│  └──────────┴───────────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        AUTH PAGES LAYOUT                             │
+│  (Login, Register, Forgot Password, Email Verification)             │
+├─────────────────────────────────────────────────────────────────────┤
+│  [← Back to Homepage]  (Simple link, no full header)                │
+│  ─────────────────────────────────────────────────────────────────── │
+│                                                                      │
+│              ┌─────────────────────────┐                             │
+│              │     AUTH CARD           │                             │
+│              │     (Login Form)        │                             │
+│              └─────────────────────────┘                             │
+│                                                                      │
+│  ─────────────────────────────────────────────────────────────────── │
+│  (No footer - minimal chrome)                                        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+```typescript
+// apps/web/src/layouts/PublicLayout.tsx
+export function PublicLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <PublicHeader />
+      <main className="flex-1">{children}</main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// apps/web/src/layouts/DashboardLayout.tsx
+export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return (
+    <div className="min-h-screen flex">
+      <DashboardSidebar role={user.role} />
+      <div className="flex-1 flex flex-col">
+        <DashboardHeader user={user} />
+        <main className="flex-1 p-6">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+// apps/web/src/layouts/AuthLayout.tsx
+export function AuthLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50">
+      <Link to="/" className="mb-8 text-primary-600 hover:underline">
+        ← Back to Homepage
+      </Link>
+      <div className="w-full max-w-md">{children}</div>
+    </div>
+  );
+}
+```
+
+**Route Organization:**
+```typescript
+// apps/web/src/routes.tsx
+const routes = [
+  // Public routes - use PublicLayout
+  { path: '/', element: <PublicLayout><HomePage /></PublicLayout> },
+  { path: '/about', element: <PublicLayout><AboutPage /></PublicLayout> },
+  { path: '/marketplace', element: <PublicLayout><MarketplaceLanding /></PublicLayout> },
+
+  // Auth routes - use AuthLayout (minimal)
+  { path: '/login', element: <AuthLayout><LoginPage /></AuthLayout> },
+  { path: '/register', element: <AuthLayout><RegisterPage /></AuthLayout> },
+  { path: '/forgot-password', element: <AuthLayout><ForgotPasswordPage /></AuthLayout> },
+  { path: '/verify-email', element: <AuthLayout><VerifyEmailPage /></AuthLayout> },
+
+  // Dashboard routes - use DashboardLayout (requires auth)
+  { path: '/dashboard/*', element: <AuthGuard><DashboardLayout><DashboardRoutes /></DashboardLayout></AuthGuard> },
+];
+```
+
+**Key Principles:**
+1. **Clear Visual Separation:** Users know when they're on public website vs inside the app
+2. **Role-Specific Navigation:** Dashboard sidebar shows only relevant menu items per role
+3. **Auth Pages Focused:** Login/Register pages have minimal distraction (no full header/footer)
+4. **Future Enhancement:** Full header/footer on auth pages can be added in future iteration
+
+**Trade-offs:**
+- ✅ Clear user experience separation between public website and application
+- ✅ Role-specific dashboards feel like dedicated tools
+- ✅ Auth pages are focused and distraction-free
+- ✅ Easier to maintain separate design systems
+- ❌ Users don't see website navigation while in dashboard
+- ❌ May need "Return to Website" link in dashboard
+
+**Affects:** All frontend pages, Story 1.9 (Global UI Patterns), Story 3.6 (Public Homepage)
+
+---
+
+### ADR-017: Database Seeding Strategy (Hybrid Approach)
+
+**Decision:** Implement a hybrid database seeding approach with environment-aware scripts for development vs production.
+
+**Context:**
+- Development needs quick, repeatable test data with hardcoded credentials
+- Staging/Production needs secure Super Admin creation from environment variables
+- Seed data should be removable without affecting real data
+- CI/CD needs deterministic seed for integration tests
+
+**Seeding Commands:**
+
+```bash
+# Development (local) - includes test users with known passwords
+pnpm db:seed:dev
+
+# Staging/Production - Super Admin from environment variables only
+pnpm db:seed --admin-from-env
+
+# Reset database (drops all data, re-runs migrations + seed)
+pnpm db:reset
+
+# Remove only seeded data (keeps real data)
+pnpm db:seed:clean
+```
+
+**Implementation:**
+
+**1. Seed Data Identification (is_seeded flag):**
+```typescript
+// apps/api/src/db/schema/users.ts
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
+  email: text('email').unique().notNull(),
+  // ... other fields
+  isSeeded: boolean('is_seeded').default(false),  // Identifies seed data
+  createdAt: timestamp('created_at').defaultNow(),
+});
+```
+
+**2. Development Seed Script:**
+```typescript
+// apps/api/src/db/seeds/dev.seed.ts
+export async function seedDevelopment() {
+  console.log('🌱 Seeding development database...');
+
+  // 33 LGAs (always needed)
+  await seedLGAs();
+
+  // Test Super Admin (hardcoded for dev convenience)
+  await db.insert(users).values({
+    email: 'admin@dev.local',
+    passwordHash: await hashPassword('admin123'),  // Known password for dev
+    role: 'super_admin',
+    isSeeded: true,
+    firstName: 'Dev',
+    lastName: 'Admin'
+  });
+
+  // Test Enumerator (for field testing)
+  await db.insert(users).values({
+    email: 'enumerator@dev.local',
+    passwordHash: await hashPassword('enum123'),
+    role: 'enumerator',
+    assignedLgaId: 'ibadan-north',
+    isSeeded: true,
+    firstName: 'Test',
+    lastName: 'Enumerator'
+  });
+
+  // Add more test users as needed...
+  console.log('✅ Development seed complete');
+}
+```
+
+**3. Production Seed Script:**
+```typescript
+// apps/api/src/db/seeds/prod.seed.ts
+export async function seedProduction() {
+  console.log('🌱 Seeding production database...');
+
+  // 33 LGAs (always needed, not marked as seeded)
+  await seedLGAs();
+
+  // Super Admin from environment variables only
+  const adminEmail = process.env.SUPER_ADMIN_EMAIL;
+  const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error('SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD required for production seed');
+  }
+
+  await db.insert(users).values({
+    email: adminEmail,
+    passwordHash: await hashPassword(adminPassword),
+    role: 'super_admin',
+    isSeeded: false,  // Real account, not seed data
+    firstName: 'System',
+    lastName: 'Administrator'
+  });
+
+  console.log('✅ Production seed complete');
+}
+```
+
+**4. Seed Cleanup Script:**
+```typescript
+// apps/api/src/db/seeds/clean.seed.ts
+export async function cleanSeededData() {
+  console.log('🧹 Removing seeded data...');
+
+  // Delete all records marked as seeded
+  await db.delete(users).where(eq(users.isSeeded, true));
+  await db.delete(submissions).where(eq(submissions.isSeeded, true));
+  // ... other tables
+
+  console.log('✅ Seeded data removed (real data preserved)');
+}
+```
+
+**Seed Data Removal Options:**
+
+| Method | Use Case | Command |
+|--------|----------|---------|
+| `is_seeded` flag cleanup | Remove test data, keep real | `pnpm db:seed:clean` |
+| Full database reset | Fresh start (dev/staging) | `pnpm db:reset` |
+| Manual SQL | Surgical removal | `DELETE FROM users WHERE is_seeded = true` |
+| Timestamp-based | Remove data before date | `DELETE FROM users WHERE created_at < 'YYYY-MM-DD'` |
+
+**Trade-offs:**
+- ✅ Development is fast (known passwords, no env setup needed)
+- ✅ Production is secure (credentials from environment)
+- ✅ Seed data is identifiable and removable
+- ✅ CI can use deterministic seed for tests
+- ❌ Additional `is_seeded` column in tables
+- ❌ Must remember to set `isSeeded: true` for test data
+
+**Affects:** Story 1.2 (Database Schema), Developer workflow, CI/CD pipeline
+
+---
+
 ## Operational Procedures
 
 _This section defines field operational protocols that complement technical architecture to ensure system success in real-world deployment conditions._

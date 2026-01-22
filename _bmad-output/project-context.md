@@ -995,6 +995,115 @@ services/
 5. Communication Patterns (Pino logging, BullMQ jobs, TanStack Query keys, Redis cache)
 6. Process Patterns (Skeleton screens, AppError, optimistic updates, exponential backoff)
 7. Security Patterns (JWT + Redis blacklist, Zod validation, rate limiting)
+8. Database Seeding (Hybrid dev/prod approach) - ADR-017
+9. Layout Architecture (PublicLayout vs DashboardLayout) - ADR-016
+10. Email Verification (Hybrid Magic Link + OTP) - ADR-015
+
+---
+
+## Database Seeding Patterns (ADR-017)
+
+**CRITICAL: Seed scripts have separate dev and prod modes**
+
+**Commands:**
+```bash
+pnpm db:seed:dev        # Development - includes test users with known passwords
+pnpm db:seed --admin-from-env  # Staging/Production - Super Admin from env vars only
+pnpm db:reset           # Full reset - drops all data, re-runs migrations + seed
+pnpm db:seed:clean      # Removes only seeded data (preserves real data)
+```
+
+**Seed Data Identification:**
+- All seed data MUST have `is_seeded: true` flag
+- This enables surgical removal without affecting real production data
+
+**Development Seed Credentials (Local Only):**
+```
+admin@dev.local / admin123     - Super Admin
+enumerator@dev.local / enum123 - Test Enumerator
+supervisor@dev.local / super123 - Test Supervisor
+```
+
+**Production Requirements:**
+```bash
+# Required environment variables for production seed
+SUPER_ADMIN_EMAIL=admin@oyotradeministry.com.ng
+SUPER_ADMIN_PASSWORD=<secure-password>
+```
+
+---
+
+## Layout Architecture (ADR-016)
+
+**THREE LAYOUT TYPES - Do not mix:**
+
+### 1. PublicLayout
+**Used for:** Homepage, About, Marketplace Landing (unauthenticated public pages)
+```typescript
+<PublicLayout>
+  <HomePage />
+</PublicLayout>
+```
+- Full header with Logo + "Staff Login" + "Public Register" + "Marketplace"
+- Full footer with About | Contact | Privacy | NDPA Compliance
+
+### 2. DashboardLayout
+**Used for:** All authenticated role-based dashboards
+```typescript
+<DashboardLayout>
+  <EnumeratorDashboard />
+</DashboardLayout>
+```
+- Header with Logo + Role Badge + Notifications + Profile + Logout
+- Sidebar with role-specific navigation
+- NO public website header/footer (separate experience)
+
+### 3. AuthLayout
+**Used for:** Login, Register, Forgot Password, Email Verification
+```typescript
+<AuthLayout>
+  <LoginPage />
+</AuthLayout>
+```
+- Minimal chrome: "← Back to Homepage" link only
+- Centered card layout
+- No header/footer (focused experience)
+
+**ROUTING PATTERN:**
+```typescript
+// Public routes
+{ path: '/', element: <PublicLayout><HomePage /></PublicLayout> },
+
+// Auth routes
+{ path: '/login', element: <AuthLayout><LoginPage /></AuthLayout> },
+
+// Dashboard routes (requires auth)
+{ path: '/dashboard/*', element: <AuthGuard><DashboardLayout><Routes /></DashboardLayout></AuthGuard> },
+```
+
+---
+
+## Email Verification Pattern (ADR-015)
+
+**Hybrid Approach: Magic Link + OTP in Same Email**
+
+When a user registers via email (not Google OAuth), send ONE email containing BOTH:
+1. **Magic Link** (primary) - one-click verification
+2. **6-digit OTP** (fallback) - for when links don't work
+
+```typescript
+// Single email, user chooses whichever works
+await emailService.send({
+  template: 'hybrid-verification',
+  data: {
+    magicLink: `${APP_URL}/verify-email?token=${token}`,
+    otpCode: '847592',
+    expiresIn: '15 minutes'
+  }
+});
+```
+
+**Google OAuth users skip email verification** (Google already verified the email).
 
 ---
 
@@ -1052,6 +1161,6 @@ docker compose -f docker/docker-compose.dev.yml up
 
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-13
+**Last Updated:** 2026-01-22
 
-**Version:** 1.1.0 (Added UI Patterns: Skeleton Components, Error Boundaries, Toast Notifications, useOptimisticMutation)
+**Version:** 1.2.0 (Added Epic 1 Retrospective Decisions: Database Seeding Patterns ADR-017, Layout Architecture ADR-016, Email Verification Hybrid ADR-015, Google OAuth for public registration)

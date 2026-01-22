@@ -1,4 +1,4 @@
-# Oyo State Labour & Skills Registry (OSLSR) - Product Requirements Document (PRD) - V7.5
+# Oyo State Labour & Skills Registry (OSLSR) - Product Requirements Document (PRD) - V7.6
 
 **Harmonization Date:** 2026-01-04
 **Orchestrator:** Sarah (PO)
@@ -78,6 +78,7 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
 | 2026-01-02   | 7.3     | **Adversarial Review & Battle-Hardening:** Fixed 25 critical issues identified in comprehensive review: Resolved BVN contradiction, added NIN uniqueness enforcement, clarified paper collection policy, defined consent workflow technical specs, added ODK deployment details, enhanced fraud detection configurability, added marketplace authentication, improved error handling, expanded backup strategy, defined role permissions, added session timeouts, enhanced bot protection, and clarified all ambiguous specifications. Incorporated supporting docs (homepage_structure.md, questionnaire_schema.md). | Claude (Reviewer) + Awwal (PO) |
 | 2026-01-02   | 7.4     | **Role Clarification & Scalability Enhancement:** Clarified Field Staff vs Back-Office distinction (Assessors & Officials are both back-office with full PII READ access). Changed 200 staff limit from hard cap to flexible soft planning capacity with unlimited technical scalability. Government Officials now have full READ access to individual PII for oversight ("trust but verify") but remain READ-ONLY. Updated RBAC model with clear permission boundaries. Confirmed sequential workflow (PRD→Architecture→UX). | Awwal (PO) |
 | 2026-01-04   | 7.5     | **Critique Resolution & Technical Clarity:** Fixed "Air-Gapped" misnomer to "Logically Isolated Read Replica". Clarified Live Selfie serves dual purposes (identity verification + ID card portrait) with liveness detection and auto-crop specifications. Added comprehensive Data Routing Matrix explaining what data resides in ODK Central vs Custom App databases, data flow rules, and architectural rationale for two-database strategy. | Awwal (PO) |
+| 2026-01-22   | 7.6     | **Epic 1 Retrospective Decisions:** Added Google OAuth as primary public registration method (ADR-015) with email fallback using Hybrid Email Verification (Magic Link + OTP in same email). Defined Layout Architecture (ADR-016) separating PublicLayout (static pages) from DashboardLayout (authenticated dashboards). Added database seeding patterns (Hybrid approach for dev/prod). Staff activation via email link serves as implicit email verification. | Awwal (PO) |
 
 ## Requirements
 
@@ -522,6 +523,20 @@ so that I can easily find relevant information and create an account to particip
 3.  The homepage features a prominent "Register" button for public users.
 4.  Public users can complete a self-registration process to create an account.
 5.  Self-registered public users are assigned a specific "Public User" role.
+6.  **Google OAuth (Primary):** Public registration offers "Continue with Google" as the primary option for reduced friction and pre-verified email addresses (Google already verifies email ownership during OAuth).
+7.  **Email Registration (Fallback):** Users without Google accounts can register via email with Hybrid Email Verification.
+
+**Hybrid Email Verification (ADR-015):**
+*   When users register via email (not Google OAuth), they receive a single email containing BOTH:
+    *   **Magic Link:** One-click verification link (primary method, mobile-friendly)
+    *   **6-digit OTP Code:** Fallback for when links don't work (corporate email filters, copy-paste from different device)
+*   **Rationale:** No extra cost (same email, same API call). Covers all edge cases. User chooses whichever method works best for them.
+*   **Expiry:** Both link and code expire after 15 minutes.
+*   **Security:** Both methods are single-use. Using one invalidates the other.
+
+**Layout Architecture (ADR-016):**
+*   **PublicLayout:** Static website pages (homepage, about, registration, login) use a simplified header with "← Back to Homepage" navigation. Full header/footer integration planned for future iteration.
+*   **DashboardLayout:** All authenticated role-based dashboards use a separate layout with role-specific navigation, sidebar, and footer. Users do NOT see the static website header/footer while in the dashboard.
 
 #### Story 3.7 Public User Questionnaire Submission
 As a **Public User**,
