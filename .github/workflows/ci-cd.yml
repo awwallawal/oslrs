@@ -56,8 +56,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      # Lint step removed - ESLint not properly configured yet
-      # TODO: Add proper ESLint 9 config in future session
+      - name: Lint
+        run: pnpm lint
 
       - name: Build
         run: pnpm build
