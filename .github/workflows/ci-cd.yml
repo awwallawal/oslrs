@@ -62,6 +62,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Setup Database
+        run: pnpm --filter @oslsr/api db:push
+
       - name: Test
         run: pnpm test
 
