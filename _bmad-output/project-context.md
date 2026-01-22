@@ -1107,6 +1107,101 @@ await emailService.send({
 
 ---
 
+## Rate Limit Configuration Reference
+
+**All rate limits are skipped in test mode** (`NODE_ENV=test` or `VITEST=true`)
+
+### Authentication Rate Limits
+
+| Endpoint | Limiter | Window | Max | Purpose |
+|----------|---------|--------|-----|---------|
+| POST `/auth/staff/login` | `strictLoginRateLimit` | 1 hour | 10 | Blocks sustained brute-force |
+| POST `/auth/staff/login` | `loginRateLimit` | 15 min | 5 | Blocks burst attacks |
+| POST `/auth/public/login` | `strictLoginRateLimit` | 1 hour | 10 | Same as staff |
+| POST `/auth/public/login` | `loginRateLimit` | 15 min | 5 | Same as staff |
+| POST `/auth/refresh` | `refreshRateLimit` | 1 min | 10 | Prevents token abuse |
+
+### Registration Rate Limits
+
+| Endpoint | Limiter | Window | Max | Purpose |
+|----------|---------|--------|-----|---------|
+| POST `/auth/register` | `registrationRateLimit` | 15 min | 5 | Prevents mass registration |
+| POST `/auth/verify-email` | `verifyEmailRateLimit` | 15 min | 10 | Prevents verification abuse |
+| POST `/auth/resend-verification` | `resendVerificationRateLimit` | 1 hour | 3 | Prevents email spam |
+
+### Password Reset Rate Limits
+
+| Endpoint | Limiter | Window | Max | Purpose |
+|----------|---------|--------|-----|---------|
+| POST `/auth/forgot-password` | `passwordResetRateLimit` | 1 hour | 10 | Prevents email enumeration |
+| POST `/auth/reset-password` | `passwordResetCompletionRateLimit` | 15 min | 5 | Prevents token brute-force |
+| POST `/auth/validate-reset-token` | `passwordResetCompletionRateLimit` | 15 min | 5 | Same as reset |
+
+### Public API Rate Limits
+
+| Endpoint | Limiter | Window | Max | Purpose |
+|----------|---------|--------|-----|---------|
+| GET `/users/verify/:id` | `publicVerificationRateLimit` | 1 min | 30 | Public ID card verification |
+
+### Rate Limit Response Format
+
+```json
+{
+  "status": "error",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Too many requests, please try again later"
+}
+```
+
+**HTTP Status:** 429 Too Many Requests
+
+**Headers:**
+- `Retry-After`: Seconds until rate limit resets
+- `X-RateLimit-Limit`: Maximum requests allowed
+- `X-RateLimit-Remaining`: Requests remaining in window
+- `X-RateLimit-Reset`: Unix timestamp when window resets
+
+---
+
+## ESM Import Conventions (Critical for Backend)
+
+**CRITICAL: TypeScript ESM modules require `.js` extensions in relative imports**
+
+The API package uses ES Modules (`"type": "module"` in package.json). When TypeScript compiles, it does NOT rewrite import paths. This means you MUST include `.js` extensions in import statements even though the source files are `.ts`.
+
+**✅ CORRECT: Include .js extension**
+```typescript
+// In apps/api/src/db/seeds/index.ts
+import { db, pool } from '../index.js';       // Resolves to ../index.ts at compile time
+import { roles, lgas } from '../schema/index.js';
+import { hashPassword } from '@oslsr/utils';  // Workspace imports work without extension
+```
+
+**❌ WRONG: Missing .js extension (will fail at runtime)**
+```typescript
+// This FAILS with: Cannot find module '../index'
+import { db, pool } from '../index';
+import { roles, lgas } from '../schema/index';
+```
+
+**Why This Pattern:**
+1. TypeScript with `"moduleResolution": "NodeNext"` or `"Node16"` requires explicit extensions
+2. Node.js ESM loader does NOT auto-resolve extensions like CommonJS did
+3. Workspace package imports (`@oslsr/utils`) resolve via pnpm workspace protocol
+4. Third-party imports (`drizzle-orm`, `pino`) resolve via node_modules
+
+**Where This Applies:**
+- All files in `apps/api/src/` (relative imports between local files)
+- Does NOT apply to: `@oslsr/*` workspace imports, `npm` packages
+
+**Quick Fix Pattern:**
+```bash
+# If you see "Cannot find module" errors, check for missing .js extensions
+# Add .js to relative imports that are failing
+```
+
+---
+
 ## Development Workflow
 
 **Package Manager:** pnpm (NOT npm, NOT yarn)

@@ -174,23 +174,30 @@
 
 | # | Action | Owner | Timeline | Status |
 |---|--------|-------|----------|--------|
-| 1 | Create rate limit configuration reference table | Charlie | Before Epic 2 | Pending |
-| 2 | Document ESM import conventions (`.js` extensions) in project-context.md | Elena | Before Epic 2 | Pending |
-| 3 | Team documentation review (PRD, Architecture, UX, homepage_structure, questionnaire_schema, public-website-ia) | All | Before infrastructure | Pending |
+| 1 | Create rate limit configuration reference table | Charlie | Before Epic 2 | ✅ Done (2026-01-22) |
+| 2 | Document ESM import conventions (`.js` extensions) in project-context.md | Elena | Before Epic 2 | ✅ Done (2026-01-22) |
+| 3 | Team documentation review (PRD, Architecture, UX, homepage_structure, questionnaire_schema, public-website-ia) | All | Before Epic 2 | ✅ Done (2026-01-22) |
 
 ### Documentation Alignment
 
 | # | Action | Owner | Timeline | Status |
 |---|--------|-------|----------|--------|
-| 4 | Update `epics.md` to include stories 1.8, 1.9, 1.10 | Elena | Before Epic 2 | Pending |
-| 5 | Review PRD story breakdown for alignment with epics.md | Alice | Low priority | Pending |
+| 4 | Update `epics.md` to include stories 1.8, 1.9, 1.10 | Elena | Before Epic 2 | ✅ Done (2026-01-22) |
+| 5 | Review PRD story breakdown for alignment with epics.md | Alice | Low priority | ✅ Reviewed (2026-01-22) |
+
+**Note on #5:** PRD has coarser granularity (4 stories) vs epics.md (10 stories). This is intentional - PRD is "planning view", epics.md is "implementation view". All functionality is covered. No changes needed.
 
 ### Preparation Tasks
 
 | # | Action | Owner | Timeline | Status |
 |---|--------|-------|----------|--------|
-| 6 | Create database seed scripts (`pnpm db:seed`) | Charlie | Before staging deploy | Pending |
-| 7 | Add seed profiles (minimal/full) | Elena | Nice-to-have | Pending |
+| 6 | Create database seed scripts (`pnpm db:seed`) | Charlie | Before staging deploy | ✅ Done (2026-01-22) |
+| 7 | Add seed profiles (minimal/full) | Elena | Nice-to-have | ✅ Addressed (2026-01-22) |
+
+**Note on #7:** Seed profiles are implicitly supported:
+- **Minimal** (default): `pnpm db:seed` - roles and LGAs only
+- **Full Dev**: `pnpm db:seed:dev` - roles, LGAs, and 7 test users
+- **Production**: `pnpm db:seed --admin-from-env` - roles, LGAs, and admin from env
 
 ### Infrastructure (Critical Path for Epic 2)
 
@@ -204,8 +211,8 @@
 | 13 | Provision email service | Awwal + Charlie | ⏳ Deferred | Until registration flow testing needed |
 | 14 | Configure hCaptcha keys | Awwal | ✅ Done | Production keys verified working |
 | 15 | Fill all `.env` production values | Awwal + Charlie | ✅ Done | Except S3/email (deferred) |
-| 16 | Create demo accounts for agency | Dana | ❌ Pending | Needs seed script first |
-| 17 | Schedule agency walkthrough | Alice + Awwal | ❌ Pending | Blocked by demo accounts |
+| 16 | Create demo accounts for agency | Dana | ✅ Done | 7 test accounts via `pnpm db:seed:dev` (2026-01-22) |
+| 17 | Schedule agency walkthrough | Alice + Awwal | ✅ Done | Scheduled by Awwal (2026-01-22) |
 
 ### Pending Verification
 
@@ -478,16 +485,16 @@ Total Monthly Cost: ~$29-34/mo (including optional backups)
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| 1 | Rate limit config reference | ❌ Pending | Low priority |
-| 2 | ESM import conventions doc | ❌ Pending | Low priority |
-| 3 | Team documentation review | ❌ Pending | Before Epic 2 kickoff |
-| 4 | Update epics.md | ❌ Pending | Low priority |
-| 5 | PRD alignment review | ❌ Pending | Low priority |
-| 6 | Create seed scripts | ❌ Pending | **CRITICAL** |
-| 7 | Seed profiles | ❌ Pending | Nice-to-have |
+| 1 | Rate limit config reference | ✅ Done | Added to project-context.md (2026-01-22) |
+| 2 | ESM import conventions doc | ✅ Done | Added to project-context.md (2026-01-22) |
+| 3 | Team documentation review | ✅ Done | All 6 docs reviewed and approved (2026-01-22) |
+| 4 | Update epics.md | ✅ Done | Stories 1.8, 1.9, 1.10 added (2026-01-22) |
+| 5 | PRD alignment review | ✅ Reviewed | PRD=planning view, epics.md=implementation view (2026-01-22) |
+| 6 | Create seed scripts | ✅ Done | Implemented ADR-017 patterns (2026-01-22) |
+| 7 | Seed profiles | ✅ Addressed | Implicit support via existing flags (2026-01-22) |
 | 8-15 | Infrastructure tasks | ✅ Done | See above |
-| 16 | Demo accounts | ❌ Pending | **CRITICAL** - needs seed script |
-| 17 | Agency walkthrough | ❌ Pending | **CRITICAL** - needs demo accounts |
+| 16 | Demo accounts | ✅ Done | 7 accounts via seed script (2026-01-22) |
+| 17 | Agency walkthrough | ✅ Done | Scheduled by Awwal (2026-01-22) |
 | 18 | CI artifact upload | ✅ Done | Working with 260 tests |
 
 ### New Action Items (From Infrastructure Work)
@@ -604,10 +611,16 @@ The following architectural decisions were made during the Epic 1 retrospective 
 **Next Steps:**
 1. ~~Complete infrastructure preparation tasks~~ ✅ Done (2026-01-22)
 2. ~~Document architectural decisions~~ ✅ Done (2026-01-22 - ADR-015, ADR-016, ADR-017)
-3. Create seed script and demo accounts (uses ADR-017 patterns)
-4. Review this retrospective as a team
-5. Begin Epic 2: Questionnaire Management & ODK Integration
-6. Schedule agency walkthrough when demo accounts ready
+3. ~~Create seed script and demo accounts~~ ✅ Done (2026-01-22 - ADR-017 patterns)
+4. ~~Rate limit config reference~~ ✅ Done (2026-01-22 - Added to project-context.md)
+5. ~~ESM import conventions doc~~ ✅ Done (2026-01-22 - Added to project-context.md)
+6. ~~Update epics.md with stories 1.8-1.10~~ ✅ Done (2026-01-22)
+7. ~~Seed profiles~~ ✅ Addressed (implicit support via existing flags)
+8. ~~PRD alignment review~~ ✅ Reviewed (different granularity is intentional)
+9. ~~Team documentation review~~ ✅ Done (All 6 docs reviewed and approved 2026-01-22)
+10. **ALL ACTION ITEMS COMPLETE** - Ready for Epic 2
+11. ~~Schedule agency walkthrough~~ ✅ Done (Awwal scheduled 2026-01-22)
+12. Begin Epic 2: Questionnaire Management & ODK Integration
 
 ---
 

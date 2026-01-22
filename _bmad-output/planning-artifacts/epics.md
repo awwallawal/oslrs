@@ -266,6 +266,50 @@ So that I can access my designated features safely.
 **And** rate limiting must block IPs after 5 failed login attempts in 15 minutes
 **And** logging out must add the token JTI to the Redis blacklist.
 
+### Story 1.8: Public User Self-Registration
+
+As a Public User,
+I want to register on the public website using my NIN and email,
+So that I can access the system and submit my own survey data.
+
+**Acceptance Criteria:**
+
+**Given** the public registration page
+**When** I provide my NIN, Email, and Password
+**Then** the system should validate the NIN using the Verhoeff checksum algorithm
+**And** enforce global NIN uniqueness via database constraints
+**And** send a hybrid verification email containing BOTH a magic link AND a 6-digit OTP code
+**And** rate limit registration attempts to 5 per 15 minutes per IP.
+
+### Story 1.9: Global UI Patterns
+
+As a Developer,
+I want standardized UI patterns implemented across the application,
+So that users have a consistent and polished experience.
+
+**Acceptance Criteria:**
+
+**Given** the design system requirements
+**When** I implement loading states, error handling, and mutations
+**Then** all data-loading states must use Skeleton screens (not spinners)
+**And** all critical components must be wrapped in Error Boundaries with graceful fallback UI
+**And** all mutations must use the `useOptimisticMutation` hook with automatic toast notifications
+**And** toast notifications must follow the timing configuration (success: 3s, error: 5s, warning/info: 4s).
+
+### Story 1.10: Test Infrastructure & Dashboard
+
+As a Developer,
+I want a visual test dashboard and comprehensive test infrastructure,
+So that I can monitor test health and catch regressions early.
+
+**Acceptance Criteria:**
+
+**Given** the monorepo test setup
+**When** I run `pnpm test:dashboard --open`
+**Then** I should see a visual dashboard showing test results grouped by stage and package
+**And** GitHub Actions CI must run all tests and fail on any test failure
+**And** test results must be uploaded as artifacts for debugging.
+
 ---
 
 ## Epic 2: Questionnaire Management & ODK Integration
