@@ -9,6 +9,40 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-jwt-secret-for-ci
+      REFRESH_TOKEN_SECRET: test-refresh-token-secret-for-ci
+      PUBLIC_APP_URL: http://localhost:5173
+
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
@@ -22,16 +56,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Lint
-        run: pnpm lint
-        continue-on-error: true  # Allow pipeline to continue if lint fails
+      # Lint step removed - ESLint not properly configured yet
+      # TODO: Add proper ESLint 9 config in future session
 
       - name: Build
         run: pnpm build
 
       - name: Test
         run: pnpm test
-        continue-on-error: true  # Allow pipeline to continue if tests fail
 
       - name: Generate Test Dashboard
         if: always()
