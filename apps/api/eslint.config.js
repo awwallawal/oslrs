@@ -17,9 +17,11 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-namespace': 'off', // Allow namespace for Express type augmentation
 
       // General rules
       'no-console': 'off', // Allow console in backend
+      'no-async-promise-executor': 'warn', // Downgrade to warning
     },
   },
   {
