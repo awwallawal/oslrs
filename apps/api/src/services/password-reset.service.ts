@@ -225,7 +225,7 @@ export class PasswordResetService {
    */
   static async resetPassword(token: string, newPassword: string): Promise<void> {
     // Validate token first
-    const { userId, email } = await this.validateToken(token);
+    const { userId } = await this.validateToken(token);
 
     // Hash the new password
     const passwordHash = await hashPassword(newPassword);

@@ -13,16 +13,16 @@ export class StaffService {
    * @throws AppError if validation fails
    */
   static async validateCsv(content: string | Buffer): Promise<StaffImportRow[]> {
-    let records: any[];
+    let records: unknown[];
     try {
       records = parse(content, {
         columns: true,
         skip_empty_lines: true,
         trim: true,
         relax_quotes: true
-      });
-    } catch (err: any) {
-      throw new AppError('CSV_PARSE_ERROR', `Failed to parse CSV: ${err.message}`, 400);
+      }) as unknown[];
+    } catch (err: unknown) {
+      throw new AppError('CSV_PARSE_ERROR', `Failed to parse CSV: ${err instanceof Error ? err.message : 'Unknown error'}`, 400);
     }
 
     if (!records || records.length === 0) {
@@ -55,6 +55,7 @@ export class StaffService {
    * @param data validated staff data
    * @param actorId ID of the admin performing the action
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static async createManual(data: CreateStaffDto, actorId: string): Promise<any> {
     const validation = createStaffSchema.safeParse(data);
     if (!validation.success) {
@@ -105,13 +106,14 @@ export class StaffService {
             
             return newUser;
         });
-    } catch (err: any) {
+    } catch (err: unknown) {
         // Handle unique constraint violations
-        if (err.code === '23505') { // Postgres unique violation
-            if (err.constraint_name === 'users_email_unique') {
+        const dbError = err as { code?: string; constraint_name?: string };
+        if (dbError.code === '23505') { // Postgres unique violation
+            if (dbError.constraint_name === 'users_email_unique') {
                 throw new AppError('EMAIL_EXISTS', 'Email already exists', 409);
             }
-            if (err.constraint_name === 'users_phone_unique') {
+            if (dbError.constraint_name === 'users_phone_unique') {
                 throw new AppError('PHONE_EXISTS', 'Phone number already exists', 409);
             }
         }
@@ -122,6 +124,7 @@ export class StaffService {
   /**
    * Processes a single import row (lookup IDs, create user)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static async processImportRow(row: StaffImportRow, actorId: string): Promise<any> {
       // Lookup Role
       // TODO: Cache roles for performance in bulk

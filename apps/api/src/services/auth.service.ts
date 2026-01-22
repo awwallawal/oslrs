@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users, auditLogs, roles } from '../db/schema/index.js';
+import { users, auditLogs } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
 import type { ActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
@@ -28,6 +28,7 @@ export class AuthService {
     data: ActivationPayload,
     ipAddress?: string,
     userAgent?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     // 1. Find user by token
     const user = await db.query.users.findFirst({
@@ -96,15 +97,16 @@ export class AuthService {
 
         return updatedUser;
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof AppError) throw err;
-      
+
       // Handle unique constraint violations
-      if (err.code === '23505') {
-        if (err.constraint_name === 'users_nin_unique') {
+      const dbError = err as { code?: string; constraint_name?: string };
+      if (dbError.code === '23505') {
+        if (dbError.constraint_name === 'users_nin_unique') {
             throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered.', 409);
         }
-        if (err.constraint_name === 'users_email_unique') {
+        if (dbError.constraint_name === 'users_email_unique') {
             throw new AppError('EMAIL_EXISTS', 'Email already exists.', 409);
         }
         // Fallback for other unique constraints
@@ -361,6 +363,7 @@ export class AuthService {
    * Creates login session and tokens (shared between staff and public login)
    */
   private static async createLoginSession(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     user: any,
     rememberMe: boolean,
     ipAddress?: string,

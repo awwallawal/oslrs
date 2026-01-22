@@ -96,11 +96,11 @@ export class EmailService {
         success: true,
         messageId: `prod-${Date.now()}`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({
         event: 'email.password_reset.failed',
         to: email,
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       return {
@@ -229,11 +229,11 @@ Government of Oyo State
         success: true,
         messageId: `prod-${Date.now()}`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({
         event: 'email.verification.failed',
         to: email,
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       return {
@@ -360,11 +360,11 @@ Government of Oyo State
         success: true,
         messageId: `prod-${Date.now()}`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({
         event: 'email.duplicate_registration_attempt.failed',
         to: email,
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       return {

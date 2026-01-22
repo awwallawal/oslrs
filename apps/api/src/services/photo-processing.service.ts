@@ -35,7 +35,7 @@ export class PhotoProcessingService {
       const image = sharp(imageBuffer);
       metadata = await image.metadata();
       stats = await image.stats(); // Used for basic sharpness heuristic
-    } catch (err) {
+    } catch {
       throw new AppError('VALIDATION_ERROR', 'Invalid image format', 400);
     }
 
@@ -59,9 +59,6 @@ export class PhotoProcessingService {
     // 3. Upload original to S3 (Private)
     const originalKey = `staff-photos/original/${uuidv7()}.jpg`;
     await this.uploadToS3(imageBuffer, originalKey);
-    // Note: In a real app, you'd store the KEY, not the signed URL (which expires).
-    // For this return, we generate a short-lived URL.
-    const originalUrl = await this.getSignedUrl(originalKey);
 
     // 4. Auto-crop for ID card (3:4 aspect ratio)
     // Note: In a real implementation with face detection, we'd use bounding box coordinates here.
@@ -76,7 +73,6 @@ export class PhotoProcessingService {
 
     const idCardKey = `staff-photos/id-card/${uuidv7()}.jpg`;
     await this.uploadToS3(idCardBuffer, idCardKey);
-    const idCardUrl = await this.getSignedUrl(idCardKey);
 
     // 5. Return URLs and calculated score
     // In production, livenessScore comes from Rekognition. 
@@ -116,9 +112,9 @@ export class PhotoProcessingService {
         }
         
         return Buffer.from(await response.Body.transformToByteArray());
-      } catch (err: any) {
+      } catch (err: unknown) {
          if (err instanceof AppError) throw err;
-         throw new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500, { error: err.message });
+         throw new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500, { error: err instanceof Error ? err.message : 'Unknown error' });
       }
   }
 

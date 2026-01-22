@@ -43,6 +43,7 @@ export const registrationRateLimit = rateLimit({
     logger.warn({
       event: 'registration.rate_limit_exceeded',
       ip: req.ip,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
     res.status(429).json(options.message);
@@ -66,7 +67,7 @@ export const resendVerificationRateLimit = rateLimit({
   }),
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 3, // 3 resend attempts per hour per email
-  keyGenerator: (req, res) => {
+  keyGenerator: (req, _res) => {
     // Rate limit by email address (normalized) or fall back to IP
     // Note: We intentionally use email as primary key with IP fallback.
     // The keyGeneratorIpFallback validation is disabled because email is

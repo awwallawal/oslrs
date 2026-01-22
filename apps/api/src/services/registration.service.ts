@@ -1,6 +1,6 @@
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { AppError, hashPassword, generateVerificationToken } from '@oslsr/utils';
 import { UserRole } from '@oslsr/types';
 import { EmailService } from './email.service.js';
@@ -172,10 +172,11 @@ export class RegistrationService {
         userId: result.id,
         message: 'Registration successful! Please check your email to verify your account.',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle unique constraint violations at database level (race condition)
-      if (err.code === '23505') {
-        if (err.constraint_name === 'users_nin_unique') {
+      const dbError = err as { code?: string; constraint_name?: string };
+      if (dbError.code === '23505') {
+        if (dbError.constraint_name === 'users_nin_unique') {
           logger.warn({
             event: 'auth.registration_failed',
             reason: 'nin_duplicate_race',
@@ -186,7 +187,7 @@ export class RegistrationService {
             409
           );
         }
-        if (err.constraint_name === 'users_email_unique') {
+        if (dbError.constraint_name === 'users_email_unique') {
           logger.warn({
             event: 'auth.registration_failed',
             reason: 'email_duplicate_race',

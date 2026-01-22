@@ -14,7 +14,18 @@ export class IDCardService {
   constructor() {}
 
   async generateIDCard(data: IDCardData): Promise<Buffer> {
-    return new Promise(async (resolve, reject) => {
+    // Generate QR code first (async operation)
+    const qrCodeBuffer = await QRCode.toBuffer(data.verificationUrl, {
+      width: 100,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+
+    // Now create PDF synchronously
+    return new Promise((resolve, reject) => {
       try {
         // CR80 size: 3.375" x 2.125"
         // PDFKit uses points (1/72 inch)
@@ -24,7 +35,7 @@ export class IDCardService {
         const cardHeight = 153;
 
         const doc = new PDFDocument({
-            size: [cardWidth, cardHeight], 
+            size: [cardWidth, cardHeight],
             margin: 0,
             autoFirstPage: true
         });
@@ -41,7 +52,7 @@ export class IDCardService {
         });
 
         // --- FRONT SIDE ---
-        
+
         // Background
         doc.rect(0, 0, cardWidth, cardHeight).fill('#ffffff');
 
@@ -50,7 +61,7 @@ export class IDCardService {
         doc.rect(0, 0, cardWidth, 25).fill('#006400');
         doc.fillColor('#ffffff').fontSize(10).text('OYO STATE GOVERNMENT', 0, 8, { align: 'center', width: cardWidth });
         doc.restore();
-        
+
         // Photo (Left side)
         // Position: x=10, y=35
         // Size: 60x80 pt (approx 0.8" x 1.1")
@@ -72,21 +83,11 @@ export class IDCardService {
 
         // --- BACK SIDE ---
         doc.addPage();
-        
+
         doc.rect(0, 0, cardWidth, cardHeight).fill('#ffffff');
-        
+
         doc.fillColor('#000000').fontSize(10).font('Helvetica-Bold').text('SCAN TO VERIFY', 0, 20, { align: 'center', width: cardWidth });
-        
-        // Generate QR Code
-        const qrCodeBuffer = await QRCode.toBuffer(data.verificationUrl, {
-            width: 100,
-            margin: 1,
-            color: {
-                dark: '#000000',
-                light: '#ffffff'
-            }
-        });
-        
+
         // Center QR Code
         const qrSize = 80;
         doc.image(qrCodeBuffer, (cardWidth - qrSize) / 2, 35, { width: qrSize, height: qrSize });
@@ -96,8 +97,8 @@ export class IDCardService {
         doc.text('If found, please return to the nearest Local Government office.', 10, 130, { align: 'center', width: cardWidth - 20 });
 
         doc.end();
-      } catch (err: any) {
-        reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500, { error: err.message }));
+      } catch (err: unknown) {
+        reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500, { error: err instanceof Error ? err.message : 'Unknown error' }));
       }
     });
   }

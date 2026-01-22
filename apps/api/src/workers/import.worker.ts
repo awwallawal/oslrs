@@ -24,7 +24,7 @@ export const importWorker = new Worker(
       processed: 0,
       succeeded: 0,
       failed: 0,
-      errors: [] as any[],
+      errors: [] as Array<{ row: number; error: string; data: unknown }>,
     };
 
     await job.updateProgress(0);
@@ -33,11 +33,11 @@ export const importWorker = new Worker(
       try {
         await StaffService.processImportRow(row, actorId);
         results.succeeded++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         results.failed++;
         results.errors.push({
           row: index + 1,
-          error: err.message,
+          error: err instanceof Error ? err.message : 'Unknown error',
           data: row,
         });
       }

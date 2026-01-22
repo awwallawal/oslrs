@@ -47,7 +47,6 @@ app.get('/', (req, res) => {
 app.use('/api/v1', routes);
 
 // Error Handler
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error & { code?: string; statusCode?: number; details?: unknown }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof AppError) {
     logger.warn({ event: 'api.error', code: err.code, path: req.path });

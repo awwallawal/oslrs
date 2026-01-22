@@ -3,7 +3,6 @@ import { Redis } from 'ioredis';
 import { uuidv7 } from 'uuidv7';
 import { AppError } from '@oslsr/utils';
 import type { JwtPayload, AuthUser } from '@oslsr/types';
-import { UserRole } from '@oslsr/types';
 
 // Token expiry constants (in seconds)
 const ACCESS_TOKEN_EXPIRY = 15 * 60;           // 15 minutes
