@@ -1094,6 +1094,197 @@ Items intentionally postponed for later implementation. Track these to ensure no
 
 ---
 
+## Session 3: Tech Debt Cleanup (2026-01-22)
+
+### Overview
+
+Final cleanup session before Epic 2. Resolved all remaining CI issues and ESLint warnings to ensure a clean codebase.
+
+**Commits Made:**
+- `770dd42` - fix(tests): correct CAPTCHA validation behavior and test expectations
+- `5f47ee8` - fix(web): resolve all 24 ESLint warnings
+
+---
+
+### Issue 1: CAPTCHA Test Failures
+
+**Problem:** Two tests failing with wrong error code:
+- `should reject missing CAPTCHA token` (auth.login.test.ts)
+- `should reject missing CAPTCHA` (auth.password-reset.test.ts)
+
+Tests expected `AUTH_CAPTCHA_FAILED` but got `VALIDATION_ERROR`.
+
+**Root Cause:**
+1. `.env` has `SKIP_CAPTCHA=true` for local development
+2. When SKIP_CAPTCHA is enabled, the verifyCaptcha middleware passes through without checking
+3. Then schema validation fails (captchaToken was required) → `VALIDATION_ERROR`
+4. Tests expected the middleware to reject with `AUTH_CAPTCHA_FAILED`
+
+**Solution (Two-Part Fix):**
+
+1. **Make captchaToken optional in schemas** - Let middleware handle CAPTCHA validation:
+```typescript
+// packages/types/src/validation/auth.ts
+export const loginRequestSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, 'Password is required'),
+  captchaToken: captchaTokenSchema.optional(), // Changed from required
+  rememberMe: z.boolean().optional().default(false),
+});
+```
+
+2. **Set SKIP_CAPTCHA=false in test environment**:
+```typescript
+// apps/api/vitest.config.ts
+env: {
+  NODE_ENV: 'test',
+  SKIP_CAPTCHA: 'false', // Enable CAPTCHA validation in tests
+},
+```
+
+**Files Changed:**
+- `packages/types/src/validation/auth.ts`
+- `packages/types/src/validation/registration.ts`
+- `packages/types/src/auth.ts`
+- `apps/api/vitest.config.ts`
+
+---
+
+### Issue 2: Photo Processing Test Failure
+
+**Problem:** Test expected `getSignedUrl` to be called 2 times but got 0 times.
+
+**Root Cause:** During earlier ESLint cleanup, unused `getSignedUrl` calls were removed from `photo-processing.service.ts`. The service returns S3 keys (stored in DB), not signed URLs (generated on-demand when serving).
+
+**Solution:** Updated test to not expect signed URL generation:
+```typescript
+// Service returns S3 keys (not signed URLs) - keys are stored in DB
+expect(result.originalUrl).toMatch(/^staff-photos\/original\//);
+expect(result.idCardUrl).toMatch(/^staff-photos\/id-card\//);
+expect(mocks.send).toHaveBeenCalledTimes(2); // Original + Cropped uploads
+// Removed: expect(mocks.getSignedUrl).toHaveBeenCalledTimes(2);
+```
+
+---
+
+### Issue 3: 24 ESLint Warnings in Web App
+
+**Problem:** 24 ESLint warnings across multiple files (all non-blocking but noisy).
+
+**Categories Fixed:**
+
+| Category | Count | Fix Applied |
+|----------|-------|-------------|
+| `@typescript-eslint/no-explicit-any` | 11 | Proper types (UserRole, ApiError class, generics) |
+| `@typescript-eslint/no-unused-vars` | 5 | Remove unused or prefix with `_` |
+| `react-hooks/exhaustive-deps` | 3 | Add deps or wrap in useCallback |
+| `no-console` | 3 | eslint-disable for intentional debug logs |
+
+**Files Changed:**
+
+| File | Issues Fixed |
+|------|-------------|
+| `AuthContext.tsx` | UserRole import, unused vars, ref cleanup pattern |
+| `useReAuth.ts` | Missing deps, unused `err`, proper generics for withReAuth |
+| `ReAuthModal.tsx` | Wrapped handleClose in useCallback |
+| `LoginPage.tsx` | Proper `location.state` typing |
+| `StaffLoginPage.tsx` | Proper `location.state` typing |
+| `ActivationPage.tsx` | Removed unused `user` parameter |
+| `IDCardDownload.tsx` | `catch (err: unknown)` with proper handling |
+| `LiveSelfieCapture.tsx` | eslint-disable for debug console.error |
+| `ProfileCompletionPage.tsx` | `catch (err: unknown)` with proper handling |
+| `VerificationPage.tsx` | `catch (err: unknown)` with proper handling |
+| `api-client.ts` | Created `ApiError` class (no more `as any`) |
+| `useOptimisticMutation.ts` | Removed unused `MutationOptions` import |
+
+**Key Pattern - Error Handling:**
+```typescript
+// Before (ESLint warning)
+} catch (err: any) {
+  setError(err.message);
+}
+
+// After (proper TypeScript)
+} catch (err: unknown) {
+  setError(err instanceof Error ? err.message : 'Something went wrong');
+}
+```
+
+**Key Pattern - ApiError Class:**
+```typescript
+// apps/web/src/lib/api-client.ts
+export class ApiError extends Error {
+  code?: string;
+  status: number;
+  details?: unknown;
+
+  constructor(message: string, status: number, code?: string, details?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+```
+
+---
+
+### CI/CD Architecture Clarification
+
+**Confirmed:** Full CI/CD pipeline is configured with auto-deployment.
+
+**Pipeline Flow:**
+```
+Push to main
+    ↓
+GitHub Actions: build-and-test job
+    ↓
+✅ Pass: deploy job runs
+    ↓
+SSH to VPS (using secrets)
+    ↓
+git pull → pnpm install → build → deploy → pm2 restart
+```
+
+**GitHub Secrets Configured:**
+- `VPS_HOST` - DigitalOcean droplet IP
+- `VPS_USERNAME` - `root`
+- `SSH_PRIVATE_KEY` - Private key for SSH access
+
+**Result:** No manual SSH required for code deployments. Changes auto-deploy when CI passes.
+
+---
+
+### Final CI Status
+
+| Metric | Value |
+|--------|-------|
+| ESLint Errors | 0 |
+| ESLint Warnings | 0 |
+| API Tests | 79 passing |
+| Web Tests | 181 passing |
+| Total Tests | 260 passing |
+| Build Status | ✅ Successful |
+| Deploy Status | ✅ Auto-deployed |
+
+---
+
+### Codebase Health Summary (Pre-Epic 2)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| TypeScript | ✅ Clean | All files compile without errors |
+| ESLint (API) | ✅ Clean | 0 errors, 0 warnings |
+| ESLint (Web) | ✅ Clean | 0 errors, 0 warnings |
+| Tests | ✅ Passing | 260/260 tests pass |
+| CI Pipeline | ✅ Green | Build + Test + Deploy working |
+| Staging | ✅ Live | https://oyotradeministry.com.ng |
+
+**Ready for Epic 2: Questionnaire Management & ODK Integration**
+
+---
+
 *Document created: 2026-01-20*
-*Last updated: 2026-01-22 (ESLint 9 configuration completed, CI fully green)*
+*Last updated: 2026-01-22 (Session 3: Tech debt cleanup complete, CI fully green)*
 *Created by: BMad Master for Awwal's VPS setup session*

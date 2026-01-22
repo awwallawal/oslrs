@@ -624,6 +624,116 @@ The following architectural decisions were made during the Epic 1 retrospective 
 
 ---
 
-*Original: 2026-01-18 | Updated: 2026-01-22 (Added Architectural Decisions section)*
+# ADDENDUM: Tech Debt Cleanup Session (2026-01-22)
+
+**Date:** 2026-01-22 (Evening)
+**Session:** Final Tech Debt Cleanup Before Epic 2
+**Participants:** Awwal Lawal + Claude (Opus 4.5)
+**Reference Document:** `docs/SESSION-NOTES-2026-01-20-VPS-SETUP.md` (Session 3)
+
+---
+
+## Session Summary
+
+Final cleanup session to achieve zero ESLint warnings and fix remaining CI test failures before starting Epic 2.
+
+### Work Completed
+
+| Task | Status | Commit |
+|------|--------|--------|
+| Fix CAPTCHA test failures | ✅ Done | `770dd42` |
+| Fix photo-processing test | ✅ Done | `770dd42` |
+| Fix all 24 web ESLint warnings | ✅ Done | `5f47ee8` |
+| Verify full build (API + Web) | ✅ Done | N/A |
+| Confirm CI/CD auto-deployment | ✅ Confirmed | N/A |
+
+### CI Failures Fixed
+
+#### 1. CAPTCHA Test Behavior
+
+**Problem:** Tests expected `AUTH_CAPTCHA_FAILED` but got `VALIDATION_ERROR`.
+
+**Root Cause:** `SKIP_CAPTCHA=true` in `.env` bypassed middleware, then schema validation failed.
+
+**Fix:**
+- Made `captchaToken` optional in schemas (middleware handles validation)
+- Set `SKIP_CAPTCHA=false` in `vitest.config.ts` for tests
+
+**Files Changed:**
+- `packages/types/src/validation/auth.ts`
+- `packages/types/src/validation/registration.ts`
+- `packages/types/src/auth.ts`
+- `apps/api/vitest.config.ts`
+
+#### 2. Photo Processing Test
+
+**Problem:** Test expected `getSignedUrl` calls but got 0.
+
+**Root Cause:** Service returns S3 keys (stored in DB), not signed URLs.
+
+**Fix:** Updated test expectations to match actual behavior.
+
+### ESLint Warnings Resolved (24 total)
+
+| Category | Count | Resolution |
+|----------|-------|------------|
+| `@typescript-eslint/no-explicit-any` | 11 | Proper types (UserRole, ApiError class, generics) |
+| `@typescript-eslint/no-unused-vars` | 5 | Removed or prefixed with `_` |
+| `react-hooks/exhaustive-deps` | 3 | Added deps or useCallback wrapper |
+| `no-console` | 3 | eslint-disable for intentional debug logs |
+
+**Key Improvements:**
+- Created `ApiError` class in `api-client.ts` (replaces `as any`)
+- Proper error handling pattern: `catch (err: unknown)` with `instanceof Error` check
+- Proper `location.state` typing in router components
+- `handleClose` wrapped in `useCallback` for stable deps
+
+### CI/CD Clarification
+
+**Confirmed:** Full CI/CD pipeline with auto-deployment is already configured.
+
+| Secret | Purpose |
+|--------|---------|
+| `VPS_HOST` | DigitalOcean droplet IP |
+| `VPS_USERNAME` | `root` |
+| `SSH_PRIVATE_KEY` | SSH access key |
+
+**Flow:** Push to `main` → CI passes → Auto-deploy to VPS (no manual SSH needed)
+
+---
+
+## Final Codebase Status
+
+| Metric | Value |
+|--------|-------|
+| ESLint Errors | 0 |
+| ESLint Warnings | 0 |
+| API Tests | 79 passing |
+| Web Tests | 181 passing |
+| Total Tests | 260 passing |
+| Build | ✅ Successful |
+| CI Pipeline | ✅ Green |
+| Staging | ✅ Live |
+
+---
+
+## Epic 2 Readiness: CONFIRMED
+
+All prerequisites met:
+- ✅ Infrastructure deployed (2 droplets live)
+- ✅ ODK Central accessible
+- ✅ Auth system working
+- ✅ CI/CD pipeline green
+- ✅ Zero ESLint warnings
+- ✅ All 260 tests passing
+- ✅ Auto-deployment working
+- ⏳ Email service (deferred - not blocking)
+- ⏳ Object storage (deferred - not blocking)
+
+**Epic 1 is COMPLETE. Ready to begin Epic 2: Questionnaire Management & ODK Integration.**
+
+---
+
+*Original: 2026-01-18 | Updated: 2026-01-22 (Tech Debt Cleanup Session)*
 *Facilitator: Bob (Scrum Master)*
 *Retrospective Workflow: bmad:bmm:workflows:retrospective*
