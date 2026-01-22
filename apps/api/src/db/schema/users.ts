@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, date, integer, boolean } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 import { roles } from './roles.js';
 import { lgas } from './lgas.js';
@@ -42,6 +42,9 @@ export const users = pgTable('users', {
   // Login attempt tracking (Story 1.7) - Can use Redis for high-traffic, DB for persistence
   failedLoginAttempts: integer('failed_login_attempts').default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
+
+  // Seed data identification (ADR-017)
+  isSeeded: boolean('is_seeded').default(false).notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
