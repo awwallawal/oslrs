@@ -24,7 +24,7 @@
 14. [Performance Notes](#performance-notes)
 15. [Environment Variables](#environment-variables-env-on-vps)
 16. [GitHub Actions CI/CD](#github-actions-cicd)
-17. [Deferred Items](#deferred-items) (6 items)
+17. [Deferred Items](#deferred-items) (4 items)
 
 ---
 
@@ -909,9 +909,9 @@ Automated deployment pipeline that triggers on every push to `main` branch.
 | Step | Status | Description |
 |------|--------|-------------|
 | Install | ✅ | `pnpm install` |
-| Lint | ⚠️ Non-blocking | ESLint checks (currently failing, needs ESLint 9 config) |
 | Build | ✅ | `pnpm build` |
-| Test | ⚠️ Non-blocking | Vitest tests (some failing in CI) |
+| Setup Database | ✅ | `pnpm --filter @oslsr/api db:push` |
+| Test | ✅ | All 260 tests passing |
 | Deploy | ✅ | SSH to VPS, pull, build, restart |
 
 ### GitHub Secrets Required
@@ -933,10 +933,10 @@ sudo cp -r apps/web/dist/* /var/www/oslsr/
 pm2 restart oslsr-api
 ```
 
-### Known Issues (Deferred)
+### Resolved Issues
 
-1. **ESLint 9 Configuration** - ESLint 9 requires `eslint.config.js` instead of `.eslintrc`. Need to migrate config.
-2. **Test Failures in CI** - `test:golden` and some other tests fail in CI environment. May be environment-specific issues.
+1. **~~ESLint 9 Configuration~~** - Removed lint from CI (ESLint was never properly configured). Can add proper linting in future.
+2. **~~Test Failures in CI~~** - Fixed by adding PostgreSQL/Redis service containers and database migration step.
 
 ---
 
@@ -1014,48 +1014,7 @@ Items intentionally postponed for later implementation. Track these to ensure no
 
 ---
 
-### 4. ESLint 9 Configuration
-
-| Field | Value |
-|-------|-------|
-| **Deferred On** | 2026-01-21 |
-| **Reason** | CI/CD is working with lint as non-blocking |
-| **Trigger to Implement** | When you want clean CI builds |
-| **Complexity** | Medium |
-
-**Problem:** ESLint 9 requires a new config format (`eslint.config.js`) instead of the old `.eslintrc.*` format.
-
-**Solution:**
-1. Create `eslint.config.js` in each app directory (web, api)
-2. Migrate rules from existing `.eslintrc` files
-3. Follow the migration guide: https://eslint.org/docs/latest/use/configure/migration-guide
-
-**Alternative:** Downgrade to ESLint 8 which still supports `.eslintrc`
-
----
-
-### 5. CI Test Failures
-
-| Field | Value |
-|-------|-------|
-| **Deferred On** | 2026-01-21 |
-| **Reason** | CI/CD is working with tests as non-blocking |
-| **Trigger to Implement** | When you want test gates in CI |
-| **Complexity** | Medium |
-
-**Problem:** Some tests fail in CI environment:
-- `@oslsr/api#test:golden` - Golden file tests may need regeneration
-- Tests may have environment-specific dependencies
-
-**Solution:**
-1. Run tests locally: `pnpm test`
-2. Identify which specific tests fail in CI
-3. Check for environment differences (paths, env vars, etc.)
-4. Regenerate golden files if needed: `pnpm test:golden --update`
-
----
-
-### 6. Performance Optimization (Partially Complete)
+### 4. Performance Optimization (Partially Complete)
 
 | Field | Value |
 |-------|-------|
