@@ -64,7 +64,7 @@ describe('User ID Card & Verification', () => {
     roleId = role?.id || (await db.query.roles.findFirst({ where: eq(roles.name, 'TEST_STAFF') }))!.id;
 
     // Setup LGA
-    const [lga] = await db.insert(lgas).values({ name: 'Test LGA' }).onConflictDoNothing().returning();
+    const [lga] = await db.insert(lgas).values({ name: 'Test LGA', code: 'test_lga' }).onConflictDoNothing().returning();
     lgaId = lga?.id || (await db.query.lgas.findFirst({ where: eq(lgas.name, 'Test LGA') }))!.id;
 
     // Setup User

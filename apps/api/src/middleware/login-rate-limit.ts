@@ -44,6 +44,7 @@ export const loginRateLimit = rateLimit({
       event: 'auth.rate_limit_exceeded',
       ip: req.ip,
       path: req.path,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
     res.status(429).json(options.message);
@@ -78,6 +79,7 @@ export const strictLoginRateLimit = rateLimit({
       event: 'auth.ip_blocked',
       ip: req.ip,
       reason: 'excessive_failures',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
     res.status(429).json(options.message);

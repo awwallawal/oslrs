@@ -17,6 +17,7 @@ export class UserController {
       }
 
       // Check if user is authenticated (middleware should have set req.user)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (req as any).user?.userId;
       if (!userId) {
         throw new AppError('AUTH_REQUIRED', 'User not authenticated', 401);
@@ -55,6 +56,7 @@ export class UserController {
 
   static async downloadIDCard(req: Request, res: Response, next: NextFunction) {
     try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const userId = (req as any).user?.userId;
         if (!userId) {
             throw new AppError('AUTH_REQUIRED', 'User not authenticated', 401);

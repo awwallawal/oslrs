@@ -5,6 +5,41 @@ All notable changes to the OSLSR project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-01-22
+
+### Added
+
+#### Database Seeding System (ADR-017)
+- Implemented hybrid dev/prod seeding strategy
+- Added `pnpm db:seed:dev` for development with 7 test users
+- Added `pnpm db:seed --admin-from-env` for production
+- Added `pnpm db:seed:clean` for selective data removal
+- Added `is_seeded` flag to users, roles, and lgas tables for cleanup
+- Seeded 33 Oyo State LGAs and 7 user roles
+
+#### Infrastructure Deployment
+- Deployed to DigitalOcean (2 droplets architecture)
+- OSLSR App: https://oyotradeministry.com.ng
+- ODK Central: https://odkcentral.oyotradeministry.com.ng
+- Configured NGINX, SSL (Let's Encrypt), PostgreSQL, Redis
+- Set up GitHub Actions CI/CD with 260+ tests passing
+
+#### ESLint 9 Flat Configuration
+- Added ESLint 9 flat config for web and api packages
+- Configured Vitest globals support
+- Zero lint errors in CI
+
+#### Documentation Updates
+- Added rate limit configuration reference to project-context.md
+- Documented ESM import conventions (.js extension requirements)
+- Updated epics.md with Stories 1.8, 1.9, 1.10
+- Completed Epic 1 retrospective with all action items
+
+### Milestone
+- **Epic 1: Foundation, Secure Access & Staff Onboarding** - COMPLETE (10/10 stories)
+
+---
+
 ## [Unreleased]
 
 ### Fixed

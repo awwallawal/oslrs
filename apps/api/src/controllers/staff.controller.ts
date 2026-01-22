@@ -6,6 +6,7 @@ import { AppError } from '@oslsr/utils';
 export class StaffController {
   static async createManual(req: Request, res: Response, next: NextFunction) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actorId = (req as any).user?.id;
       if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
 
@@ -21,6 +22,7 @@ export class StaffController {
 
   static async importCsv(req: Request, res: Response, next: NextFunction) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const actorId = (req as any).user?.id;
       if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
 

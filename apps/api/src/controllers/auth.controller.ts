@@ -11,7 +11,6 @@ import {
   resetPasswordRequestSchema,
   reAuthRequestSchema,
   publicRegistrationRequestSchema,
-  verifyEmailRequestSchema,
   resendVerificationRequestSchema,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';

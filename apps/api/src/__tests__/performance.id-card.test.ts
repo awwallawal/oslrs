@@ -31,7 +31,7 @@ describe('Performance: ID Card Generation', () => {
     const [role] = await db.insert(roles).values({ name: 'PERF_USER', description: 'Perf' }).onConflictDoNothing().returning();
     const roleId = role?.id || (await db.query.roles.findFirst({ where: eq(roles.name, 'PERF_USER') }))!.id;
     
-    const [lga] = await db.insert(lgas).values({ name: 'Perf LGA' }).onConflictDoNothing().returning();
+    const [lga] = await db.insert(lgas).values({ name: 'Perf LGA', code: 'perf_lga' }).onConflictDoNothing().returning();
     const lgaId = lga?.id || (await db.query.lgas.findFirst({ where: eq(lgas.name, 'Perf LGA') }))!.id;
 
     const email = `perf-${Date.now()}@example.com`;
