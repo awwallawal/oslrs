@@ -1,0 +1,9 @@
+export { HeroSection } from './HeroSection';
+export { WhatIsSection } from './WhatIsSection';
+export { ParticipantsSection } from './ParticipantsSection';
+export { HowItWorksSection } from './HowItWorksSection';
+export { RequirementsSection } from './RequirementsSection';
+export { CoverageSection } from './CoverageSection';
+export { MarketplacePreviewSection } from './MarketplacePreviewSection';
+export { TrustSection } from './TrustSection';
+export { FinalCtaSection } from './FinalCtaSection';

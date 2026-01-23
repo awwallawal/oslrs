@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
@@ -19,6 +19,9 @@ const RegistrationPage = lazy(() => import('./features/auth/pages/RegistrationPa
 const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage'));
 const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVerificationPage'));
 
+// Lazy load HomePage for code splitting
+const HomePage = lazy(() => import('./features/home'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -31,38 +34,6 @@ function PageLoadingFallback() {
  */
 function AuthLoadingFallback() {
   return <PageSkeleton variant="form" showHeader={false} showFooter={false} />;
-}
-
-/**
- * Home page content - renders within PublicLayout
- */
-function HomePageContent() {
-  return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="text-center max-w-3xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-brand font-semibold text-neutral-900 mb-6">
-          Welcome to <span className="text-primary-600">OSLSR</span>
-        </h1>
-        <p className="text-lg text-neutral-600 mb-8">
-          Oyo State Labour & Skills Registry - Connecting skilled workers with opportunities across Oyo State.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            to="/register"
-            className="px-8 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            Register Now
-          </Link>
-          <Link
-            to="/about"
-            className="px-8 py-3 border border-neutral-300 text-neutral-700 font-medium rounded-lg hover:bg-neutral-100 transition-colors"
-          >
-            Learn More
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -122,7 +93,7 @@ function App() {
                 index
                 element={
                   <Suspense fallback={<PageLoadingFallback />}>
-                    <HomePageContent />
+                    <HomePage />
                   </Suspense>
                 }
               />
