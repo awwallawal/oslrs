@@ -30,6 +30,11 @@ const LeadershipPage = lazy(() => import('./features/about/pages/LeadershipPage'
 const PartnersPage = lazy(() => import('./features/about/pages/PartnersPage'));
 const PrivacyPage = lazy(() => import('./features/about/pages/PrivacyPage'));
 
+// Lazy load Participate pages for code splitting
+const ParticipateLandingPage = lazy(() => import('./features/participate/pages/ParticipateLandingPage'));
+const WorkersPage = lazy(() => import('./features/participate/pages/WorkersPage'));
+const EmployersPage = lazy(() => import('./features/participate/pages/EmployersPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -164,7 +169,7 @@ function App() {
                   index
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="Participate" />
+                      <ParticipateLandingPage />
                     </Suspense>
                   }
                 />
@@ -172,7 +177,7 @@ function App() {
                   path="workers"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="For Workers" />
+                      <WorkersPage />
                     </Suspense>
                   }
                 />
@@ -180,7 +185,7 @@ function App() {
                   path="employers"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="For Employers" />
+                      <EmployersPage />
                     </Suspense>
                   }
                 />

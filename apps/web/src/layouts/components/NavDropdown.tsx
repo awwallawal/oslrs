@@ -23,6 +23,7 @@ const aboutItems = [
 ];
 
 const participateItems = [
+  { href: '/participate', label: 'Get Started', description: 'Choose your path - worker or employer' },
   { href: '/participate/workers', label: 'For Workers', description: 'Register your skills and find opportunities' },
   { href: '/participate/employers', label: 'For Employers', description: 'Access the skilled workforce database' },
 ];
