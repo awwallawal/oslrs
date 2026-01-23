@@ -14,7 +14,8 @@ import { cn } from '../../lib/utils';
  * Navigation items structure per public-website-ia.md
  */
 const aboutItems = [
-  { href: '/about', label: 'The Initiative', description: 'Learn about OSLSR mission and goals' },
+  { href: '/about', label: 'About OSLSR', description: 'Overview of the initiative' },
+  { href: '/about/initiative', label: 'The Initiative', description: 'Why we are building this registry' },
   { href: '/about/how-it-works', label: 'How It Works', description: 'Understand the registration process' },
   { href: '/about/leadership', label: 'Leadership', description: 'Meet the ministry leadership team' },
   { href: '/about/partners', label: 'Partners', description: 'Our collaborating organizations' },

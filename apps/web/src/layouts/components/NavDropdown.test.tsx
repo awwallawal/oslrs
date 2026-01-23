@@ -55,7 +55,7 @@ describe('NavDropdown', () => {
 
   it('exports aboutItems with correct structure', () => {
     expect(aboutItems).toBeInstanceOf(Array);
-    expect(aboutItems.length).toBe(5);
+    expect(aboutItems.length).toBe(6);
     aboutItems.forEach((item) => {
       expect(item).toHaveProperty('href');
       expect(item).toHaveProperty('label');
@@ -76,6 +76,7 @@ describe('NavDropdown', () => {
   it('aboutItems contains expected navigation paths', () => {
     const hrefs = aboutItems.map((item) => item.href);
     expect(hrefs).toContain('/about');
+    expect(hrefs).toContain('/about/initiative');
     expect(hrefs).toContain('/about/how-it-works');
     expect(hrefs).toContain('/about/leadership');
     expect(hrefs).toContain('/about/partners');

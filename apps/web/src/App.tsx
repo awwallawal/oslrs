@@ -22,6 +22,14 @@ const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVe
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
 
+// Lazy load About pages for code splitting
+const AboutLandingPage = lazy(() => import('./features/about/pages/AboutLandingPage'));
+const InitiativePage = lazy(() => import('./features/about/pages/InitiativePage'));
+const HowItWorksPage = lazy(() => import('./features/about/pages/HowItWorksPage'));
+const LeadershipPage = lazy(() => import('./features/about/pages/LeadershipPage'));
+const PartnersPage = lazy(() => import('./features/about/pages/PartnersPage'));
+const PrivacyPage = lazy(() => import('./features/about/pages/PrivacyPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -104,7 +112,15 @@ function App() {
                   index
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="About The Initiative" />
+                      <AboutLandingPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="initiative"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <InitiativePage />
                     </Suspense>
                   }
                 />
@@ -112,7 +128,7 @@ function App() {
                   path="how-it-works"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="How It Works" />
+                      <HowItWorksPage />
                     </Suspense>
                   }
                 />
@@ -120,7 +136,7 @@ function App() {
                   path="leadership"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="Leadership" />
+                      <LeadershipPage />
                     </Suspense>
                   }
                 />
@@ -128,7 +144,7 @@ function App() {
                   path="partners"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="Partners" />
+                      <PartnersPage />
                     </Suspense>
                   }
                 />
@@ -136,7 +152,7 @@ function App() {
                   path="privacy"
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
-                      <PlaceholderPage title="Privacy Policy" />
+                      <PrivacyPage />
                     </Suspense>
                   }
                 />
