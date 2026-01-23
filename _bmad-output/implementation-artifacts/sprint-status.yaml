@@ -1,4 +1,4 @@
-# generated: 2026-01-05
+# generated: 2026-01-22
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: "2026-01-05"
+generated: "2026-01-22"
 project: "oslr_cl"
 project_key: "oslr_cl"
 tracking_system: "file-system"
@@ -54,6 +54,18 @@ development_status:
   1-9-global-ui-patterns: done
   1-10-test-infrastructure-dashboard: done
   epic-1-retrospective: done  # Completed 2026-01-18
+
+  # Epic 1.5: Public Website Foundation (Phase 1 Static)
+  # Added: 2026-01-22 - Per Epic 1 retrospective decision to build static frontend before Epic 2
+  # Source: docs/public-website-ia.md, ux-design-specification.md, ADR-016
+  epic-1.5: in-progress
+  1.5-1-design-system-foundation-layout-architecture: done
+  1.5-2-homepage-implementation: backlog
+  1.5-3-about-section-5-pages: backlog
+  1.5-4-participate-section-3-pages: backlog
+  1.5-5-support-section-5-pages: backlog
+  1.5-6-legal-pages-footer-links: backlog
+  epic-1.5-retrospective: optional
 
   # Epic 2: Questionnaire Management & ODK Integration
   epic-2: backlog

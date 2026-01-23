@@ -1,10 +1,11 @@
-import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
-import { SkeletonForm } from './components/skeletons';
+import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
+import { PublicLayout, AuthLayout } from './layouts';
 
 // Lazy load page components for code splitting and loading indicators
 const ActivationPage = lazy(() => import('./features/auth/pages/ActivationPage'));
@@ -19,28 +20,62 @@ const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage
 const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVerificationPage'));
 
 /**
- * Page loading fallback - shows skeleton during route transitions
- * Implements AC11: "subtle loading indicator should appear during page transitions"
+ * Page loading fallback - shows full page skeleton during route transitions
  */
 function PageLoadingFallback() {
+  return <PageSkeleton variant="default" />;
+}
+
+/**
+ * Auth page loading fallback - shows form skeleton for auth pages
+ */
+function AuthLoadingFallback() {
+  return <PageSkeleton variant="form" showHeader={false} showFooter={false} />;
+}
+
+/**
+ * Home page content - renders within PublicLayout
+ */
+function HomePageContent() {
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        <SkeletonForm fields={3} />
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="text-center max-w-3xl mx-auto">
+        <h1 className="text-4xl sm:text-5xl font-brand font-semibold text-neutral-900 mb-6">
+          Welcome to <span className="text-primary-600">OSLSR</span>
+        </h1>
+        <p className="text-lg text-neutral-600 mb-8">
+          Oyo State Labour & Skills Registry - Connecting skilled workers with opportunities across Oyo State.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Link
+            to="/register"
+            className="px-8 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Register Now
+          </Link>
+          <Link
+            to="/about"
+            className="px-8 py-3 border border-neutral-300 text-neutral-700 font-medium rounded-lg hover:bg-neutral-100 transition-colors"
+          >
+            Learn More
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
 
 /**
- * Home page - placeholder for authenticated home/dashboard
+ * Placeholder page component for routes not yet implemented
  */
-function HomePage() {
+function PlaceholderPage({ title }: { title: string }) {
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-h1 text-primary-600 font-brand mb-4">OSLSR</h1>
-        <p className="text-body text-neutral-700">Oyo State Labour & Skills Registry</p>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-3xl font-brand font-semibold text-neutral-900 mb-4">{title}</h1>
+        <p className="text-neutral-600">
+          This page is coming soon. Check back later for updates.
+        </p>
       </div>
     </div>
   );
@@ -78,113 +113,270 @@ function App() {
     >
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
-          <Suspense fallback={<PageLoadingFallback />}>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/activate/:token" element={<ActivationPage />} />
-              <Route path="/verify-staff/:id" element={<VerificationPage />} />
-              <Route path="/unauthorized" element={<UnauthorizedPage />} />
-
-              {/* Auth Routes - Public Only (redirect if authenticated) */}
+          <Routes>
+            {/* ============================================
+             * PUBLIC ROUTES - Wrapped in PublicLayout
+             * ============================================ */}
+            <Route element={<PublicLayout />}>
               <Route
-                path="/login"
+                index
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <HomePageContent />
+                  </Suspense>
+                }
+              />
+
+              {/* About Section */}
+              <Route path="about">
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="About The Initiative" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="how-it-works"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="How It Works" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="leadership"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="Leadership" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="partners"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="Partners" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="privacy"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="Privacy Policy" />
+                    </Suspense>
+                  }
+                />
+              </Route>
+
+              {/* Participate Section */}
+              <Route path="participate">
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="Participate" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="workers"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="For Workers" />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="employers"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <PlaceholderPage title="For Employers" />
+                    </Suspense>
+                  }
+                />
+              </Route>
+
+              {/* Support Page */}
+              <Route
+                path="support"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PlaceholderPage title="Support" />
+                  </Suspense>
+                }
+              />
+
+              {/* Terms Page */}
+              <Route
+                path="terms"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PlaceholderPage title="Terms of Service" />
+                  </Suspense>
+                }
+              />
+
+              {/* Marketplace (placeholder for Epic 7) */}
+              <Route
+                path="marketplace"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PlaceholderPage title="Skills Marketplace" />
+                  </Suspense>
+                }
+              />
+
+              {/* Public Staff Verification */}
+              <Route
+                path="verify-staff/:id"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <VerificationPage />
+                  </Suspense>
+                }
+              />
+            </Route>
+
+            {/* ============================================
+             * AUTH ROUTES - Wrapped in AuthLayout
+             * ============================================ */}
+            <Route element={<AuthLayout />}>
+              <Route
+                path="login"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <LoginPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <LoginPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/staff/login"
+                path="staff/login"
                 element={
                   <PublicOnlyRoute redirectTo="/admin">
-                    <StaffLoginPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <StaffLoginPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/forgot-password"
+                path="register"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <ForgotPasswordPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <RegistrationPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/reset-password/:token"
+                path="forgot-password"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <ResetPasswordPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <ForgotPasswordPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/register"
+                path="reset-password/:token"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <RegistrationPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <ResetPasswordPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/verify-email/:token"
+                path="verify-email/:token"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <VerifyEmailPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <VerifyEmailPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
               <Route
-                path="/resend-verification"
+                path="resend-verification"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
-                    <ResendVerificationPage />
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <ResendVerificationPage />
+                    </Suspense>
                   </PublicOnlyRoute>
                 }
               />
+            </Route>
 
-              {/* Protected Routes - Require Authentication */}
-              <Route
-                path="/profile-completion"
-                element={
-                  <ProtectedRoute redirectTo="/login">
+            {/* ============================================
+             * SPECIAL ROUTES - No layout wrapper
+             * ============================================ */}
+            {/* Staff Activation (uses own minimal layout) */}
+            <Route
+              path="activate/:token"
+              element={
+                <Suspense fallback={<AuthLoadingFallback />}>
+                  <ActivationPage />
+                </Suspense>
+              }
+            />
+
+            {/* Unauthorized Page */}
+            <Route path="unauthorized" element={<UnauthorizedPage />} />
+
+            {/* ============================================
+             * PROTECTED ROUTES - Require Authentication
+             * (Dashboard layout to be implemented in future epic)
+             * ============================================ */}
+            <Route
+              path="profile-completion"
+              element={
+                <ProtectedRoute redirectTo="/login">
+                  <Suspense fallback={<PageLoadingFallback />}>
                     <ProfileCompletionPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute redirectTo="/login">
-                    <div className="min-h-screen bg-neutral-50 p-6">
-                      <h1 className="text-2xl font-semibold text-neutral-900">Dashboard</h1>
-                      <p className="text-neutral-600 mt-2">Welcome to your dashboard.</p>
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute redirectTo="/login">
+                  <div className="min-h-screen bg-neutral-50 p-6">
+                    <h1 className="text-2xl font-semibold text-neutral-900">Dashboard</h1>
+                    <p className="text-neutral-600 mt-2">Welcome to your dashboard.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
 
-              {/* Admin Routes - Require Staff Role */}
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute
-                    redirectTo="/staff/login"
-                    allowedRoles={['admin', 'super_admin', 'supervisor', 'enumerator']}
-                  >
-                    <div className="min-h-screen bg-neutral-50 p-6">
-                      <h1 className="text-2xl font-semibold text-neutral-900">Admin Portal</h1>
-                      <p className="text-neutral-600 mt-2">Welcome to the admin portal.</p>
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
+            {/* Admin Routes - Require Staff Role */}
+            <Route
+              path="admin"
+              element={
+                <ProtectedRoute
+                  redirectTo="/staff/login"
+                  allowedRoles={['admin', 'super_admin', 'supervisor', 'enumerator']}
+                >
+                  <div className="min-h-screen bg-neutral-50 p-6">
+                    <h1 className="text-2xl font-semibold text-neutral-900">Admin Portal</h1>
+                    <p className="text-neutral-600 mt-2">Welcome to the admin portal.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
 
-              {/* Catch-all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
 
           {/* Global Re-Authentication Modal */}
           <ReAuthModal />

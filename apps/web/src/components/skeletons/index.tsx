@@ -32,3 +32,6 @@ export type { SkeletonTableProps } from './SkeletonTable';
 
 export { SkeletonForm } from './SkeletonForm';
 export type { SkeletonFormProps } from './SkeletonForm';
+
+export { PageSkeleton } from './PageSkeleton';
+export type { PageSkeletonProps } from './PageSkeleton';
