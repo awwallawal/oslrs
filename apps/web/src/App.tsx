@@ -35,6 +35,13 @@ const ParticipateLandingPage = lazy(() => import('./features/participate/pages/P
 const WorkersPage = lazy(() => import('./features/participate/pages/WorkersPage'));
 const EmployersPage = lazy(() => import('./features/participate/pages/EmployersPage'));
 
+// Lazy load Support pages for code splitting
+const SupportLandingPage = lazy(() => import('./features/support/pages/SupportLandingPage'));
+const FAQPage = lazy(() => import('./features/support/pages/FAQPage'));
+const GuidesPage = lazy(() => import('./features/support/pages/GuidesPage'));
+const ContactPage = lazy(() => import('./features/support/pages/ContactPage'));
+const VerifyWorkerPage = lazy(() => import('./features/support/pages/VerifyWorkerPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -191,15 +198,49 @@ function App() {
                 />
               </Route>
 
-              {/* Support Page */}
-              <Route
-                path="support"
-                element={
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <PlaceholderPage title="Support" />
-                  </Suspense>
-                }
-              />
+              {/* Support Section */}
+              <Route path="support">
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <SupportLandingPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="faq"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <FAQPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="guides"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <GuidesPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="contact"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <ContactPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="verify-worker"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <VerifyWorkerPage />
+                    </Suspense>
+                  }
+                />
+              </Route>
 
               {/* Terms Page */}
               <Route
