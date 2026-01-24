@@ -37,12 +37,19 @@ describe('Footer', () => {
     expect(screen.getByRole('link', { name: /^marketplace$/i })).toBeInTheDocument();
   });
 
-  it('renders About section', () => {
+  it('renders About section with legal links per Story 1.5-6 AC5', () => {
     renderWithRouter(<Footer />);
     expect(screen.getByRole('heading', { name: /^about$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /terms of service/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /privacy policy/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /contact us/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /terms of service/i })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute('href', '/about/privacy');
+    expect(screen.getByRole('link', { name: /contact us/i })).toHaveAttribute('href', '/support/contact');
+  });
+
+  it('renders Staff Login link in footer per Story 1.5-6 AC5', () => {
+    renderWithRouter(<Footer />);
+    const staffLoginLink = screen.getByRole('link', { name: /staff login/i });
+    expect(staffLoginLink).toBeInTheDocument();
+    expect(staffLoginLink).toHaveAttribute('href', '/staff/login');
   });
 
   it('renders Contact section', () => {

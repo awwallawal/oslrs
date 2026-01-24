@@ -13,20 +13,23 @@ const quickLinks = [
 
 /**
  * About column items (legal & policy links)
+ * Per Story 1.5-6 AC5
  */
 const aboutLinks = [
   { href: '/terms', label: 'Terms of Service' },
   { href: '/about/privacy', label: 'Privacy Policy' },
   { href: '/support/contact', label: 'Contact Us' },
+  { href: '/staff/login', label: 'Staff Login' },
 ];
 
 /**
  * Footer - Global footer for public pages.
  *
- * Features per AC2:
+ * Features per Story 1.5-6 AC5:
  * - 3-column layout (Quick Links, Legal, Contact)
  * - Oyo State branding
- * - Copyright notice
+ * - Staff Login link (moved from header for security)
+ * - Copyright notice with current year
  */
 function Footer() {
   const currentYear = new Date().getFullYear();

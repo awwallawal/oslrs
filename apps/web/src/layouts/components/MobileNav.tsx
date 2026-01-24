@@ -9,15 +9,16 @@ import {
   SheetTrigger,
   SheetClose,
 } from '../../components/ui/sheet';
-import { aboutItems, participateItems } from './NavDropdown';
+import { aboutItems, participateItems, supportItems } from './NavDropdown';
 
 /**
  * MobileNav - Mobile slide-in navigation drawer.
  *
- * Features per AC4:
+ * Features per Story 1.5-6 AC6:
  * - Animates from right (300ms ease-out via Sheet component)
- * - Shows all navigation items vertically
- * - Includes "Register Now" and "Staff Login" CTAs
+ * - About, Participate, Support expandable sections
+ * - Contact as navigation item
+ * - Staff Login NOT in mobile navigation (moved to Footer)
  * - Closes on outside click or escape key (Sheet behavior via Radix Dialog)
  * - Traps focus within drawer when open (Sheet behavior via Radix Dialog)
  */
@@ -25,6 +26,7 @@ function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [participateExpanded, setParticipateExpanded] = useState(false);
+  const [supportExpanded, setSupportExpanded] = useState(false);
   const location = useLocation();
 
   // Close menu on route change
@@ -32,6 +34,7 @@ function MobileNav() {
     setIsOpen(false);
     setAboutExpanded(false);
     setParticipateExpanded(false);
+    setSupportExpanded(false);
   }, [location.pathname]);
 
   return (
@@ -134,16 +137,37 @@ function MobileNav() {
               )}
             </div>
 
-            {/* Support Link */}
+            {/* Support Section - per AC6 */}
             <div className="px-4">
-              <SheetClose asChild>
-                <Link
-                  to="/support"
-                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
-                >
-                  Support
-                </Link>
-              </SheetClose>
+              <button
+                onClick={() => setSupportExpanded(!supportExpanded)}
+                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                aria-expanded={supportExpanded}
+                aria-controls="support-submenu"
+              >
+                <span>Support</span>
+                {supportExpanded ? (
+                  <ChevronUp className="h-5 w-5" />
+                ) : (
+                  <ChevronDown className="h-5 w-5" />
+                )}
+              </button>
+              {supportExpanded && (
+                <ul id="support-submenu" className="pl-4 space-y-1">
+                  {supportItems.map((item) => (
+                    <li key={item.href}>
+                      <SheetClose asChild>
+                        <Link
+                          to={item.href}
+                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                          {item.label}
+                        </Link>
+                      </SheetClose>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Marketplace Link */}
@@ -157,24 +181,28 @@ function MobileNav() {
                 </Link>
               </SheetClose>
             </div>
+
+            {/* Contact Link - per AC6 */}
+            <div className="px-4">
+              <SheetClose asChild>
+                <Link
+                  to="/support/contact"
+                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                >
+                  Contact
+                </Link>
+              </SheetClose>
+            </div>
           </div>
 
-          {/* CTAs at bottom */}
-          <div className="p-4 border-t border-neutral-200 space-y-3">
+          {/* CTA at bottom - Staff Login removed per AC6 */}
+          <div className="p-4 border-t border-neutral-200">
             <SheetClose asChild>
               <Link
                 to="/register"
                 className="block w-full py-3 px-4 text-center bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
               >
                 Register Now
-              </Link>
-            </SheetClose>
-            <SheetClose asChild>
-              <Link
-                to="/staff/login"
-                className="block w-full py-3 px-4 text-center border border-neutral-300 text-neutral-700 font-medium rounded-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
-              >
-                Staff Login
               </Link>
             </SheetClose>
           </div>

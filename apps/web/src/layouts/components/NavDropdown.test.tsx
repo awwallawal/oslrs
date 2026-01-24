@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
-import { NavDropdown, aboutItems, participateItems } from './NavDropdown';
+import { NavDropdown, aboutItems, participateItems, supportItems } from './NavDropdown';
 
 expect.extend(matchers);
 
@@ -33,11 +33,10 @@ describe('NavDropdown', () => {
     expect(screen.getByRole('button', { name: /participate/i })).toBeInTheDocument();
   });
 
-  it('renders Support link with correct href', () => {
+  it('renders Support dropdown trigger (per Story 1.5-6 AC2)', () => {
     renderWithRouter(<NavDropdown />);
-    const supportLink = screen.getByRole('link', { name: /support/i });
-    expect(supportLink).toBeInTheDocument();
-    expect(supportLink).toHaveAttribute('href', '/support');
+    // Support is now a dropdown, not a link
+    expect(screen.getByRole('button', { name: /support/i })).toBeInTheDocument();
   });
 
   it('renders Marketplace link with correct href', () => {
@@ -45,6 +44,13 @@ describe('NavDropdown', () => {
     const marketplaceLink = screen.getByRole('link', { name: /marketplace/i });
     expect(marketplaceLink).toBeInTheDocument();
     expect(marketplaceLink).toHaveAttribute('href', '/marketplace');
+  });
+
+  it('renders Contact link with correct href (per Story 1.5-6 AC3)', () => {
+    renderWithRouter(<NavDropdown />);
+    const contactLink = screen.getByRole('link', { name: /contact/i });
+    expect(contactLink).toBeInTheDocument();
+    expect(contactLink).toHaveAttribute('href', '/support/contact');
   });
 
   it('is hidden on mobile (md:flex)', () => {
@@ -73,6 +79,16 @@ describe('NavDropdown', () => {
     });
   });
 
+  it('exports supportItems with correct structure (per Story 1.5-6 AC2)', () => {
+    expect(supportItems).toBeInstanceOf(Array);
+    expect(supportItems.length).toBe(4);
+    supportItems.forEach((item) => {
+      expect(item).toHaveProperty('href');
+      expect(item).toHaveProperty('label');
+      expect(item).toHaveProperty('description');
+    });
+  });
+
   it('aboutItems contains expected navigation paths', () => {
     const hrefs = aboutItems.map((item) => item.href);
     expect(hrefs).toContain('/about');
@@ -90,22 +106,32 @@ describe('NavDropdown', () => {
     expect(hrefs).toContain('/participate/employers');
   });
 
+  it('supportItems contains expected navigation paths (per Story 1.5-6 AC2)', () => {
+    const hrefs = supportItems.map((item) => item.href);
+    expect(hrefs).toContain('/support');
+    expect(hrefs).toContain('/support/faq');
+    expect(hrefs).toContain('/support/guides');
+    expect(hrefs).toContain('/support/verify-worker');
+  });
+
   it('dropdown triggers have accessible styling', () => {
     renderWithRouter(<NavDropdown />);
     const aboutTrigger = screen.getByRole('button', { name: /about/i });
     const participateTrigger = screen.getByRole('button', { name: /participate/i });
+    const supportTrigger = screen.getByRole('button', { name: /support/i });
 
-    // Both should have hover states for primary color
+    // All should have hover states for primary color
     expect(aboutTrigger).toHaveClass('hover:text-primary-600');
     expect(participateTrigger).toHaveClass('hover:text-primary-600');
+    expect(supportTrigger).toHaveClass('hover:text-primary-600');
   });
 
-  it('Support and Marketplace links have accessible styling', () => {
+  it('Marketplace and Contact links have accessible styling', () => {
     renderWithRouter(<NavDropdown />);
-    const supportLink = screen.getByRole('link', { name: /support/i });
     const marketplaceLink = screen.getByRole('link', { name: /marketplace/i });
+    const contactLink = screen.getByRole('link', { name: /contact/i });
 
-    expect(supportLink).toHaveClass('hover:text-primary-600');
     expect(marketplaceLink).toHaveClass('hover:text-primary-600');
+    expect(contactLink).toHaveClass('hover:text-primary-600');
   });
 });

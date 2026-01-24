@@ -42,6 +42,9 @@ const GuidesPage = lazy(() => import('./features/support/pages/GuidesPage'));
 const ContactPage = lazy(() => import('./features/support/pages/ContactPage'));
 const VerifyWorkerPage = lazy(() => import('./features/support/pages/VerifyWorkerPage'));
 
+// Lazy load Legal pages for code splitting
+const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -242,12 +245,12 @@ function App() {
                 />
               </Route>
 
-              {/* Terms Page */}
+              {/* Terms Page - Story 1.5-6 AC1 */}
               <Route
                 path="terms"
                 element={
                   <Suspense fallback={<PageLoadingFallback />}>
-                    <PlaceholderPage title="Terms of Service" />
+                    <TermsPage />
                   </Suspense>
                 }
               />

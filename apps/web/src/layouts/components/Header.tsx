@@ -5,11 +5,11 @@ import { MobileNav } from './MobileNav';
 /**
  * Header - Global header for public pages.
  *
- * Features per AC2:
+ * Features per AC2 and Story 1.5-6:
  * - Oyo State logo (40px height) linking to /
- * - Primary navigation: About (dropdown), Participate (dropdown), Support, Marketplace
+ * - Primary navigation: About (dropdown), Participate (dropdown), Support (dropdown), Marketplace, Contact
  * - Mobile hamburger menu (md: breakpoint, < 768px) with slide-in drawer
- * - CTAs: Register (primary), Staff Login (ghost)
+ * - CTA: Register (primary only - Staff Login moved to Footer per AC4)
  */
 function Header() {
   return (
@@ -32,19 +32,13 @@ function Header() {
           {/* Desktop Navigation */}
           <NavDropdown />
 
-          {/* Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Desktop CTA - Staff Login moved to Footer per Story 1.5-6 AC4 */}
+          <div className="hidden md:flex items-center">
             <Link
               to="/register"
               className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
             >
               Register
-            </Link>
-            <Link
-              to="/staff/login"
-              className="px-4 py-2 border border-neutral-300 text-neutral-700 text-sm font-medium rounded-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
-            >
-              Staff Login
             </Link>
           </div>
 

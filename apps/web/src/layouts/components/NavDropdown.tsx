@@ -29,10 +29,27 @@ const participateItems = [
 ];
 
 /**
+ * Support items per Story 1.5-6 AC2
+ */
+const supportItems = [
+  { href: '/support', label: 'Support Center', description: 'Find answers and resources' },
+  { href: '/support/faq', label: 'FAQ', description: 'Frequently asked questions' },
+  { href: '/support/guides', label: 'Guides', description: 'Step-by-step instructions' },
+  { href: '/support/verify-worker', label: 'Verify Worker', description: 'Check worker registration status' },
+];
+
+/**
  * NavDropdown - Desktop navigation with accessible dropdowns.
  *
  * Uses shadcn NavigationMenu for accessible dropdowns with
  * keyboard navigation support (Arrow keys, Enter, Escape).
+ *
+ * Per Story 1.5-6:
+ * - About dropdown (existing)
+ * - Participate dropdown (existing)
+ * - Support dropdown (AC2)
+ * - Marketplace link (existing)
+ * - Contact link (AC3)
  */
 function NavDropdown() {
   return (
@@ -98,16 +115,34 @@ function NavDropdown() {
           </NavigationMenuContent>
         </NavigationMenuItem>
 
-        {/* Support Link */}
+        {/* Support Dropdown - per AC2 */}
         <NavigationMenuItem>
-          <NavigationMenuLink asChild>
-            <Link
-              to="/support"
-              className={cn(navigationMenuTriggerStyle(), 'text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent')}
-            >
-              Support
-            </Link>
-          </NavigationMenuLink>
+          <NavigationMenuTrigger className="text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent">
+            Support
+          </NavigationMenuTrigger>
+          <NavigationMenuContent>
+            <ul className="grid w-[400px] gap-3 p-4">
+              {supportItems.map((item) => (
+                <li key={item.href}>
+                  <NavigationMenuLink asChild>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
+                        'hover:bg-neutral-100 hover:text-primary-600 focus:bg-neutral-100 focus:text-primary-600',
+                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
+                      )}
+                    >
+                      <div className="text-sm font-medium leading-none">{item.label}</div>
+                      <p className="line-clamp-2 text-sm leading-snug text-neutral-500">
+                        {item.description}
+                      </p>
+                    </Link>
+                  </NavigationMenuLink>
+                </li>
+              ))}
+            </ul>
+          </NavigationMenuContent>
         </NavigationMenuItem>
 
         {/* Marketplace Link */}
@@ -121,9 +156,21 @@ function NavDropdown() {
             </Link>
           </NavigationMenuLink>
         </NavigationMenuItem>
+
+        {/* Contact Link - per AC3 */}
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
+              to="/support/contact"
+              className={cn(navigationMenuTriggerStyle(), 'text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent')}
+            >
+              Contact
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>
   );
 }
 
-export { NavDropdown, aboutItems, participateItems };
+export { NavDropdown, aboutItems, participateItems, supportItems };

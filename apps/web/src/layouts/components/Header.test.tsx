@@ -33,11 +33,10 @@ describe('Header', () => {
     expect(registerLink).toHaveAttribute('href', '/register');
   });
 
-  it('renders Staff Login CTA button', () => {
+  it('does NOT render Staff Login in header (per Story 1.5-6 AC4 - moved to Footer)', () => {
     renderWithRouter(<Header />);
-    const staffLoginLink = screen.getByRole('link', { name: /staff login/i });
-    expect(staffLoginLink).toBeInTheDocument();
-    expect(staffLoginLink).toHaveAttribute('href', '/staff/login');
+    const staffLoginLink = screen.queryByRole('link', { name: /staff login/i });
+    expect(staffLoginLink).not.toBeInTheDocument();
   });
 
   it('renders mobile navigation trigger', () => {
@@ -52,10 +51,19 @@ describe('Header', () => {
     expect(header).toHaveClass('sticky', 'top-0');
   });
 
-  it('renders navigation menu items', () => {
+  it('renders navigation menu items including Support dropdown', () => {
     renderWithRouter(<Header />);
     // Check for navigation buttons/links
     expect(screen.getByRole('button', { name: /about/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /participate/i })).toBeInTheDocument();
+    // Support is now a dropdown per Story 1.5-6 AC2
+    expect(screen.getByRole('button', { name: /support/i })).toBeInTheDocument();
+  });
+
+  it('renders Contact as top-level navigation item (per Story 1.5-6 AC3)', () => {
+    renderWithRouter(<Header />);
+    const contactLink = screen.getByRole('link', { name: /^contact$/i });
+    expect(contactLink).toBeInTheDocument();
+    expect(contactLink).toHaveAttribute('href', '/support/contact');
   });
 });
