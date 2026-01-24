@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { SkeletonCard } from '../../../components/skeletons';
-import LiveSelfieCapture from '../components/LiveSelfieCapture';
 import IDCardDownload from '../components/IDCardDownload';
+
+// Lazy load LiveSelfieCapture to split @vladmandic/human (~1.2MB) into separate chunk
+// Only loads when user clicks "Start Verification"
+const LiveSelfieCapture = lazy(() => import('../components/LiveSelfieCapture'));
 
 const ProfileCompletionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -81,7 +84,16 @@ const ProfileCompletionPage: React.FC = () => {
                 description: 'Unable to access the camera. Please check permissions and try again.',
               }}
             >
-              <LiveSelfieCapture onCapture={handleSelfieCapture} />
+              <Suspense
+                fallback={
+                  <div className="text-center py-12">
+                    <SkeletonCard lines={3} className="max-w-sm mx-auto mb-4" />
+                    <p className="text-neutral-600">Loading camera module...</p>
+                  </div>
+                }
+              >
+                <LiveSelfieCapture onCapture={handleSelfieCapture} />
+              </Suspense>
             </ErrorBoundary>
           )}
         </div>

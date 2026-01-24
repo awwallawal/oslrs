@@ -53,6 +53,7 @@ development_status:
   1-8-public-user-self-registration: done
   1-9-global-ui-patterns: done
   1-10-test-infrastructure-dashboard: done
+  1-11-email-invitation-system: backlog  # Added 2026-01-24: Deferred from Story 1.3, email service config needed
   epic-1-retrospective: done  # Completed 2026-01-18
 
   # Epic 1.5: Public Website Foundation (Phase 1 Static)
