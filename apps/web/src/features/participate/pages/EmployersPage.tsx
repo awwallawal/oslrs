@@ -129,7 +129,7 @@ function EmployersPage() {
             </p>
             <Link
               to="/marketplace"
-              className="inline-block px-8 py-4 bg-success-600 text-white font-semibold rounded-lg hover:bg-success-700 focus:outline-none focus:ring-2 focus:ring-success-500 focus:ring-offset-2 transition-colors text-lg"
+              className="inline-block px-8 py-4 bg-success-600 text-white font-semibold rounded-lg hover:bg-success-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-success-500 focus-visible:ring-offset-2 transition-colors text-lg"
             >
               Browse Marketplace
             </Link>
@@ -324,7 +324,7 @@ function EmployersPage() {
             </p>
             <Link
               to="/register"
-              className="inline-block px-8 py-4 bg-white text-success-600 font-semibold rounded-lg hover:bg-success-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-success-600 transition-colors"
+              className="inline-block px-8 py-4 bg-white text-success-600 font-semibold rounded-lg hover:bg-success-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-success-600 transition-colors"
             >
               Create Employer Account
             </Link>

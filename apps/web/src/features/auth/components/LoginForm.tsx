@@ -105,11 +105,11 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
               ${errors.email
-                ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2
+              focus:outline-none focus-visible:ring-2
             `}
             placeholder="you@example.com"
           />
@@ -137,11 +137,11 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
               className={`
                 w-full px-4 py-3 pr-12 rounded-lg border transition-colors
                 ${errors.password
-                  ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                  : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                  ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                  : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
                 }
                 disabled:bg-neutral-100 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2
+                focus:outline-none focus-visible:ring-2
               `}
               placeholder="Enter your password"
             />
@@ -172,7 +172,7 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
               checked={formData.rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
               disabled={isLoading || isRateLimited}
-              className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
+              className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus-visible:ring-primary-500 disabled:cursor-not-allowed"
             />
             <span className="text-sm text-neutral-700">Remember me</span>
           </label>

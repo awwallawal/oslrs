@@ -44,7 +44,7 @@ function VerificationCodeInput() {
             if (error) setError('');
           }}
           placeholder="e.g., OSLSR-ABCD-1234"
-          className="w-full px-4 py-3 rounded-lg border border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+          className="w-full px-4 py-3 rounded-lg border border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus:border-primary-500 transition-colors"
           aria-describedby={error ? 'verification-error' : 'verification-help'}
         />
         {error ? (
@@ -59,7 +59,7 @@ function VerificationCodeInput() {
       </div>
       <button
         type="submit"
-        className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+        className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors"
       >
         Verify
         <ArrowRight className="w-4 h-4" />

@@ -27,7 +27,7 @@ function CategoryTabs({ categories, activeCategory, onCategoryChange }: Category
           aria-controls={`faq-panel-${category.toLowerCase().replace(/\s+/g, '-')}`}
           className={cn(
             'px-4 py-2 rounded-full text-sm font-medium transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
             activeCategory === category
               ? 'bg-primary-600 text-white'
               : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'

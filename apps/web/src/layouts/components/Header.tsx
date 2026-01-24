@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { NavDropdown } from './NavDropdown';
 import { MobileNav } from './MobileNav';
+import { SmartCta } from './SmartCta';
 
 /**
  * Header - Global header for public pages.
@@ -32,14 +33,9 @@ function Header() {
           {/* Desktop Navigation */}
           <NavDropdown />
 
-          {/* Desktop CTA - Staff Login moved to Footer per Story 1.5-6 AC4 */}
+          {/* Desktop CTA - Auth-aware per Story 1.5-8 AC5 */}
           <div className="hidden md:flex items-center">
-            <Link
-              to="/register"
-              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
-            >
-              Register
-            </Link>
+            <SmartCta />
           </div>
 
           {/* Mobile Navigation */}

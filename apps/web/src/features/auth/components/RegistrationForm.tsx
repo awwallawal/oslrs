@@ -201,11 +201,11 @@ export function RegistrationForm() {
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
               ${errors.fullName
-                ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2
+              focus:outline-none focus-visible:ring-2
             `}
             placeholder="Enter your full name"
           />
@@ -228,11 +228,11 @@ export function RegistrationForm() {
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
               ${errors.email
-                ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2
+              focus:outline-none focus-visible:ring-2
             `}
             placeholder="you@example.com"
           />
@@ -255,11 +255,11 @@ export function RegistrationForm() {
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
               ${errors.phone
-                ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2
+              focus:outline-none focus-visible:ring-2
             `}
             placeholder="08012345678 or +2348012345678"
           />
@@ -283,11 +283,11 @@ export function RegistrationForm() {
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
               ${errors.nin
-                ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2
+              focus:outline-none focus-visible:ring-2
             `}
             placeholder="11-digit NIN"
           />
@@ -311,11 +311,11 @@ export function RegistrationForm() {
               className={`
                 w-full px-4 py-3 pr-12 rounded-lg border transition-colors
                 ${errors.password
-                  ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                  : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                  ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                  : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
                 }
                 disabled:bg-neutral-100 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2
+                focus:outline-none focus-visible:ring-2
               `}
               placeholder="Create a secure password"
             />
@@ -350,11 +350,11 @@ export function RegistrationForm() {
               className={`
                 w-full px-4 py-3 pr-12 rounded-lg border transition-colors
                 ${errors.confirmPassword
-                  ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                  : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                  ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                  : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
                 }
                 disabled:bg-neutral-100 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2
+                focus:outline-none focus-visible:ring-2
               `}
               placeholder="Confirm your password"
             />

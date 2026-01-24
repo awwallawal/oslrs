@@ -91,6 +91,6 @@ describe('AuthLayout', () => {
     renderWithRouter(<AuthLayout />);
     const backLink = screen.getByRole('link', { name: /back to homepage/i });
     expect(backLink.className).toContain('focus:outline-none');
-    expect(backLink.className).toContain('focus:ring-2');
+    expect(backLink.className).toContain('focus-visible:ring-2');
   });
 });

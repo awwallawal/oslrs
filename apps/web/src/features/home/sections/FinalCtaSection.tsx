@@ -24,7 +24,7 @@ function FinalCtaSection() {
         {/* Primary CTA */}
         <Link
           to="/register"
-          className="inline-block px-10 py-4 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-neutral-900 transition-colors text-lg mb-6"
+          className="inline-block px-10 py-4 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900 transition-colors text-lg mb-6"
         >
           Register Now
         </Link>

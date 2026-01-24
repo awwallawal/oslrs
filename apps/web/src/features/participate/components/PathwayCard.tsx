@@ -79,7 +79,7 @@ function PathwayCard({
       {/* CTA */}
       <Link
         to={ctaHref}
-        className={`inline-flex items-center justify-center gap-2 px-6 py-3 ${styles.ctaBg} text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors`}
+        className={`inline-flex items-center justify-center gap-2 px-6 py-3 ${styles.ctaBg} text-white font-semibold rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transition-colors`}
       >
         {ctaText}
         <ArrowRight className="w-5 h-5" />

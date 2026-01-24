@@ -9,7 +9,8 @@ import {
   SheetTrigger,
   SheetClose,
 } from '../../components/ui/sheet';
-import { aboutItems, participateItems, supportItems } from './NavDropdown';
+import { aboutItems, participateItems, supportItems, insightsItems } from './NavDropdown';
+import { SmartCta } from './SmartCta';
 
 /**
  * MobileNav - Mobile slide-in navigation drawer.
@@ -27,6 +28,7 @@ function MobileNav() {
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [participateExpanded, setParticipateExpanded] = useState(false);
   const [supportExpanded, setSupportExpanded] = useState(false);
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
   const location = useLocation();
 
   // Close menu on route change
@@ -35,13 +37,14 @@ function MobileNav() {
     setAboutExpanded(false);
     setParticipateExpanded(false);
     setSupportExpanded(false);
+    setInsightsExpanded(false);
   }, [location.pathname]);
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <button
-          className="md:hidden p-2 text-neutral-700 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+          className="md:hidden p-2 text-neutral-700 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
           aria-label="Open navigation menu"
         >
           <Menu className="h-6 w-6" />
@@ -60,7 +63,7 @@ function MobileNav() {
             </SheetTitle>
             <SheetClose asChild>
               <button
-                className="p-2 text-neutral-500 hover:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-md"
+                className="p-2 text-neutral-500 hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-md"
                 aria-label="Close navigation menu"
               >
                 <X className="h-5 w-5" />
@@ -75,7 +78,7 @@ function MobileNav() {
             <div className="px-4">
               <button
                 onClick={() => setAboutExpanded(!aboutExpanded)}
-                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
                 aria-expanded={aboutExpanded}
                 aria-controls="about-submenu"
               >
@@ -93,7 +96,7 @@ function MobileNav() {
                       <SheetClose asChild>
                         <Link
                           to={item.href}
-                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                         >
                           {item.label}
                         </Link>
@@ -108,7 +111,7 @@ function MobileNav() {
             <div className="px-4">
               <button
                 onClick={() => setParticipateExpanded(!participateExpanded)}
-                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
                 aria-expanded={participateExpanded}
                 aria-controls="participate-submenu"
               >
@@ -126,7 +129,7 @@ function MobileNav() {
                       <SheetClose asChild>
                         <Link
                           to={item.href}
-                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                         >
                           {item.label}
                         </Link>
@@ -141,7 +144,7 @@ function MobileNav() {
             <div className="px-4">
               <button
                 onClick={() => setSupportExpanded(!supportExpanded)}
-                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
                 aria-expanded={supportExpanded}
                 aria-controls="support-submenu"
               >
@@ -159,7 +162,7 @@ function MobileNav() {
                       <SheetClose asChild>
                         <Link
                           to={item.href}
-                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                         >
                           {item.label}
                         </Link>
@@ -175,11 +178,50 @@ function MobileNav() {
               <SheetClose asChild>
                 <Link
                   to="/marketplace"
-                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
                 >
                   Marketplace
                 </Link>
               </SheetClose>
+            </div>
+
+            {/* Insights Section - per Story 1.5-8 AC6/AC7 */}
+            <div className="px-4">
+              <button
+                onClick={() => setInsightsExpanded(!insightsExpanded)}
+                className="flex items-center justify-between w-full py-3 text-left text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
+                aria-expanded={insightsExpanded}
+                aria-controls="insights-submenu"
+              >
+                <span className="flex items-center gap-2">
+                  Insights
+                  <span className="text-xs bg-neutral-100 text-neutral-500 px-1.5 py-0.5 rounded">
+                    Coming Soon
+                  </span>
+                </span>
+                {insightsExpanded ? (
+                  <ChevronUp className="h-5 w-5" />
+                ) : (
+                  <ChevronDown className="h-5 w-5" />
+                )}
+              </button>
+              {insightsExpanded && (
+                <ul id="insights-submenu" className="pl-4 space-y-1">
+                  {insightsItems.map((item) => (
+                    <li key={item.label}>
+                      <div
+                        className="block py-2 px-3 text-sm text-neutral-400 cursor-default rounded-md"
+                        aria-disabled="true"
+                      >
+                        <span className="flex items-center gap-2">
+                          {item.label}
+                          <span className="text-xs text-neutral-400">Coming Soon</span>
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Contact Link - per AC6 */}
@@ -187,7 +229,7 @@ function MobileNav() {
               <SheetClose asChild>
                 <Link
                   to="/support/contact"
-                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+                  className="block py-3 text-neutral-700 hover:text-primary-600 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md"
                 >
                   Contact
                 </Link>
@@ -195,16 +237,9 @@ function MobileNav() {
             </div>
           </div>
 
-          {/* CTA at bottom - Staff Login removed per AC6 */}
+          {/* CTA at bottom - Auth-aware per Story 1.5-8 AC5 */}
           <div className="p-4 border-t border-neutral-200">
-            <SheetClose asChild>
-              <Link
-                to="/register"
-                className="block w-full py-3 px-4 text-center bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
-              >
-                Register Now
-              </Link>
-            </SheetClose>
+            <SmartCta className="block w-full py-3 text-center" />
           </div>
         </nav>
       </SheetContent>

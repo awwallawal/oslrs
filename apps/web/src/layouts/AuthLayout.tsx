@@ -28,7 +28,7 @@ function AuthLayout() {
         <div className="p-4 sm:p-6">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-neutral-600 hover:text-primary-600 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md px-2 py-1 -ml-2"
+            className="inline-flex items-center gap-2 text-neutral-600 hover:text-primary-600 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md px-2 py-1 -ml-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Homepage

@@ -28,13 +28,13 @@ function HeroSection() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               to="/register"
-              className="px-8 py-4 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors text-lg"
+              className="px-8 py-4 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors text-lg"
             >
               Register Your Skills
             </Link>
             <Link
               to="/about/how-it-works"
-              className="px-8 py-4 border-2 border-neutral-300 text-neutral-700 font-semibold rounded-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors text-lg"
+              className="px-8 py-4 border-2 border-neutral-300 text-neutral-700 font-semibold rounded-lg hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors text-lg"
             >
               Learn How It Works
             </Link>

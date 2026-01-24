@@ -134,11 +134,11 @@ export default function ForgotPasswordPage() {
                 className={`
                   w-full px-4 py-3 rounded-lg border transition-colors
                   ${errors.email
-                    ? 'border-error-600 focus:ring-error-600 focus:border-error-600'
-                    : 'border-neutral-300 focus:ring-primary-500 focus:border-primary-500'
+                    ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
+                    : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
                   }
                   disabled:bg-neutral-100 disabled:cursor-not-allowed
-                  focus:outline-none focus:ring-2
+                  focus:outline-none focus-visible:ring-2
                 `}
                 placeholder="you@example.com"
               />

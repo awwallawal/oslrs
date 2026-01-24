@@ -39,6 +39,15 @@ const supportItems = [
 ];
 
 /**
+ * Insights items per Story 1.5-8 AC6 - Coming Soon placeholder
+ */
+const insightsItems = [
+  { label: 'Skills Map', description: 'Geographic distribution of skills', comingSoon: true },
+  { label: 'Trends', description: 'Labour market trends and patterns', comingSoon: true },
+  { label: 'Reports', description: 'Detailed statistical reports', comingSoon: true },
+];
+
+/**
  * NavDropdown - Desktop navigation with accessible dropdowns.
  *
  * Uses shadcn NavigationMenu for accessible dropdowns with
@@ -70,7 +79,7 @@ function NavDropdown() {
                       className={cn(
                         'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
                         'hover:bg-neutral-100 hover:text-primary-600 focus:bg-neutral-100 focus:text-primary-600',
-                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
                       )}
                     >
                       <div className="text-sm font-medium leading-none">{item.label}</div>
@@ -100,37 +109,7 @@ function NavDropdown() {
                       className={cn(
                         'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
                         'hover:bg-neutral-100 hover:text-primary-600 focus:bg-neutral-100 focus:text-primary-600',
-                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
-                      )}
-                    >
-                      <div className="text-sm font-medium leading-none">{item.label}</div>
-                      <p className="line-clamp-2 text-sm leading-snug text-neutral-500">
-                        {item.description}
-                      </p>
-                    </Link>
-                  </NavigationMenuLink>
-                </li>
-              ))}
-            </ul>
-          </NavigationMenuContent>
-        </NavigationMenuItem>
-
-        {/* Support Dropdown - per AC2 */}
-        <NavigationMenuItem>
-          <NavigationMenuTrigger className="text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent">
-            Support
-          </NavigationMenuTrigger>
-          <NavigationMenuContent>
-            <ul className="grid w-[400px] gap-3 p-4">
-              {supportItems.map((item) => (
-                <li key={item.href}>
-                  <NavigationMenuLink asChild>
-                    <Link
-                      to={item.href}
-                      className={cn(
-                        'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
-                        'hover:bg-neutral-100 hover:text-primary-600 focus:bg-neutral-100 focus:text-primary-600',
-                        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
                       )}
                     >
                       <div className="text-sm font-medium leading-none">{item.label}</div>
@@ -157,6 +136,68 @@ function NavDropdown() {
           </NavigationMenuLink>
         </NavigationMenuItem>
 
+        {/* Insights Dropdown - per Story 1.5-8 AC6: MUST be between Marketplace and Support */}
+        <NavigationMenuItem>
+          <NavigationMenuTrigger className="text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent">
+            Insights
+          </NavigationMenuTrigger>
+          <NavigationMenuContent>
+            <ul className="grid w-[350px] gap-3 p-4">
+              {insightsItems.map((item) => (
+                <li key={item.label}>
+                  <div
+                    className={cn(
+                      'block select-none space-y-1 rounded-md p-3 leading-none',
+                      'text-neutral-400 cursor-default'
+                    )}
+                    aria-disabled="true"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium leading-none">{item.label}</span>
+                      <span className="text-xs bg-neutral-100 text-neutral-500 px-1.5 py-0.5 rounded">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <p className="line-clamp-2 text-sm leading-snug text-neutral-400">
+                      {item.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </NavigationMenuContent>
+        </NavigationMenuItem>
+
+        {/* Support Dropdown - per AC6: MUST be after Insights */}
+        <NavigationMenuItem>
+          <NavigationMenuTrigger className="text-neutral-700 hover:text-primary-600 bg-transparent hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent">
+            Support
+          </NavigationMenuTrigger>
+          <NavigationMenuContent>
+            <ul className="grid w-[400px] gap-3 p-4">
+              {supportItems.map((item) => (
+                <li key={item.href}>
+                  <NavigationMenuLink asChild>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
+                        'hover:bg-neutral-100 hover:text-primary-600 focus:bg-neutral-100 focus:text-primary-600',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2'
+                      )}
+                    >
+                      <div className="text-sm font-medium leading-none">{item.label}</div>
+                      <p className="line-clamp-2 text-sm leading-snug text-neutral-500">
+                        {item.description}
+                      </p>
+                    </Link>
+                  </NavigationMenuLink>
+                </li>
+              ))}
+            </ul>
+          </NavigationMenuContent>
+        </NavigationMenuItem>
+
         {/* Contact Link - per AC3 */}
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
@@ -173,4 +214,4 @@ function NavDropdown() {
   );
 }
 
-export { NavDropdown, aboutItems, participateItems, supportItems };
+export { NavDropdown, aboutItems, participateItems, supportItems, insightsItems };

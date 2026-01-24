@@ -13,6 +13,11 @@ vi.mock('./MobileNav', () => ({
   MobileNav: () => <button data-testid="mobile-nav">Mobile Menu</button>,
 }));
 
+// Mock the SmartCta component to simplify testing (per Story 1.5-8 AC5)
+vi.mock('./SmartCta', () => ({
+  SmartCta: () => <a href="/register" data-testid="smart-cta">Register</a>,
+}));
+
 // Wrapper with Router context
 function renderWithRouter(ui: React.ReactElement) {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
@@ -26,11 +31,10 @@ describe('Header', () => {
     expect(logoLink).toHaveAttribute('href', '/');
   });
 
-  it('renders Register CTA button', () => {
+  it('renders SmartCta component (per Story 1.5-8 AC5)', () => {
     renderWithRouter(<Header />);
-    const registerLink = screen.getByRole('link', { name: /^register$/i });
-    expect(registerLink).toBeInTheDocument();
-    expect(registerLink).toHaveAttribute('href', '/register');
+    const smartCta = screen.getByTestId('smart-cta');
+    expect(smartCta).toBeInTheDocument();
   });
 
   it('does NOT render Staff Login in header (per Story 1.5-6 AC4 - moved to Footer)', () => {
@@ -58,6 +62,11 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: /participate/i })).toBeInTheDocument();
     // Support is now a dropdown per Story 1.5-6 AC2
     expect(screen.getByRole('button', { name: /support/i })).toBeInTheDocument();
+  });
+
+  it('renders Insights dropdown trigger (per Story 1.5-8 AC6)', () => {
+    renderWithRouter(<Header />);
+    expect(screen.getByRole('button', { name: /insights/i })).toBeInTheDocument();
   });
 
   it('renders Contact as top-level navigation item (per Story 1.5-6 AC3)', () => {

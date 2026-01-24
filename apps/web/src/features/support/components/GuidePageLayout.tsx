@@ -40,7 +40,7 @@ function GuidePageLayout({
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link
             to="/support/guides"
-            className="inline-flex items-center text-sm text-neutral-600 hover:text-primary-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded"
+            className="inline-flex items-center text-sm text-neutral-600 hover:text-primary-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
             Back to Guides
@@ -94,7 +94,7 @@ function GuidePageLayout({
             <div className="mt-12 pt-6 border-t border-neutral-200">
               <Link
                 to="/support/guides"
-                className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded"
+                className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded"
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Back to All Guides

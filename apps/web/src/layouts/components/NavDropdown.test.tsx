@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
-import { NavDropdown, aboutItems, participateItems, supportItems } from './NavDropdown';
+import { NavDropdown, aboutItems, participateItems, supportItems, insightsItems } from './NavDropdown';
 
 expect.extend(matchers);
 
@@ -133,5 +133,47 @@ describe('NavDropdown', () => {
 
     expect(marketplaceLink).toHaveClass('hover:text-primary-600');
     expect(contactLink).toHaveClass('hover:text-primary-600');
+  });
+
+  describe('AC6: Insights Navigation Placeholder', () => {
+    it('renders Insights dropdown trigger', () => {
+      renderWithRouter(<NavDropdown />);
+      expect(screen.getByRole('button', { name: /insights/i })).toBeInTheDocument();
+    });
+
+    it('navigation order is correct: Insights MUST be between Marketplace and Support (per AC6)', () => {
+      renderWithRouter(<NavDropdown />);
+      const nav = screen.getByRole('navigation', { hidden: true });
+      const items = nav.querySelectorAll('[data-radix-collection-item]');
+
+      // Extract text content from navigation items
+      const itemTexts = Array.from(items).map(item => item.textContent?.trim());
+
+      // Find indices
+      const marketplaceIndex = itemTexts.findIndex(text => text === 'Marketplace');
+      const insightsIndex = itemTexts.findIndex(text => text === 'Insights');
+      const supportIndex = itemTexts.findIndex(text => text === 'Support');
+
+      // Insights MUST be between Marketplace and Support
+      expect(marketplaceIndex).toBeLessThan(insightsIndex);
+      expect(insightsIndex).toBeLessThan(supportIndex);
+    });
+
+    it('exports insightsItems with Coming Soon items', () => {
+      expect(insightsItems).toBeInstanceOf(Array);
+      expect(insightsItems.length).toBe(3);
+      insightsItems.forEach((item) => {
+        expect(item).toHaveProperty('label');
+        expect(item).toHaveProperty('description');
+        expect(item).toHaveProperty('comingSoon', true);
+      });
+    });
+
+    it('insightsItems contains expected items', () => {
+      const labels = insightsItems.map((item) => item.label);
+      expect(labels).toContain('Skills Map');
+      expect(labels).toContain('Trends');
+      expect(labels).toContain('Reports');
+    });
   });
 });

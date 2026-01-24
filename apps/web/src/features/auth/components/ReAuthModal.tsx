@@ -174,7 +174,7 @@ export function ReAuthModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
-                  className="w-full px-4 py-3 pr-12 rounded-lg border border-neutral-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 disabled:cursor-not-allowed transition-colors focus:outline-none"
+                  className="w-full px-4 py-3 pr-12 rounded-lg border border-neutral-300 focus-visible:ring-2 focus-visible:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 disabled:cursor-not-allowed transition-colors focus:outline-none"
                   placeholder="Enter your password"
                 />
                 <button
