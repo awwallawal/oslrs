@@ -58,14 +58,14 @@ development_status:
   # Epic 1.5: Public Website Foundation (Phase 1 Static)
   # Added: 2026-01-22 - Per Epic 1 retrospective decision to build static frontend before Epic 2
   # Source: docs/public-website-ia.md, ux-design-specification.md, ADR-016
-  epic-1.5: in-progress
+  epic-1.5: done  # Completed 2026-01-24: All 7 stories done
   1.5-1-design-system-foundation-layout-architecture: done
   1.5-2-homepage-implementation: done
   1.5-3-about-section-6-pages: done  # Code review passed 2026-01-23
   1.5-4-participate-section-3-pages: done  # Completed 2026-01-23
   1.5-5-support-section-5-pages: done  # Completed 2026-01-23
   1.5-6-legal-pages-navigation-cleanup: done  # Completed 2026-01-24: Terms + Nav/Footer cleanup
-  1.5-7-guide-detail-pages: backlog  # NEW: 7 full guide detail pages
+  1.5-7-guide-detail-pages: done  # Completed 2026-01-24: 7 guide detail pages with shared components
   epic-1.5-retrospective: optional
 
   # Epic 2: Questionnaire Management & ODK Integration
@@ -79,6 +79,7 @@ development_status:
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   epic-3: backlog
+  3-0-google-oauth-enhanced-public-registration: backlog  # ADR-015: Blocks Story 3.5
   3-1-seamless-enketo-launch-dashboard: backlog
   3-2-pwa-service-worker-offline-assets: backlog
   3-3-offline-queue-sync-status-ui: backlog

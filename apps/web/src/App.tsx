@@ -42,6 +42,15 @@ const GuidesPage = lazy(() => import('./features/support/pages/GuidesPage'));
 const ContactPage = lazy(() => import('./features/support/pages/ContactPage'));
 const VerifyWorkerPage = lazy(() => import('./features/support/pages/VerifyWorkerPage'));
 
+// Lazy load Guide detail pages for code splitting - Story 1.5.7
+const GuideRegisterPage = lazy(() => import('./features/support/pages/guides/GuideRegisterPage'));
+const GuideSurveyPage = lazy(() => import('./features/support/pages/guides/GuideSurveyPage'));
+const GuideMarketplaceOptInPage = lazy(() => import('./features/support/pages/guides/GuideMarketplaceOptInPage'));
+const GuideGetNinPage = lazy(() => import('./features/support/pages/guides/GuideGetNinPage'));
+const GuideSearchMarketplacePage = lazy(() => import('./features/support/pages/guides/GuideSearchMarketplacePage'));
+const GuideEmployerAccountPage = lazy(() => import('./features/support/pages/guides/GuideEmployerAccountPage'));
+const GuideVerifyWorkerPage = lazy(() => import('./features/support/pages/guides/GuideVerifyWorkerPage'));
+
 // Lazy load Legal pages for code splitting
 const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
 
@@ -219,14 +228,73 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route
-                  path="guides"
-                  element={
-                    <Suspense fallback={<PageLoadingFallback />}>
-                      <GuidesPage />
-                    </Suspense>
-                  }
-                />
+                {/* Guides Section - Story 1.5.7 AC9 */}
+                <Route path="guides">
+                  <Route
+                    index
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuidesPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="register"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideRegisterPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="survey"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideSurveyPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="marketplace-opt-in"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideMarketplaceOptInPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="get-nin"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideGetNinPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="search-marketplace"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideSearchMarketplacePage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="employer-account"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideEmployerAccountPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="verify-worker"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <GuideVerifyWorkerPage />
+                      </Suspense>
+                    }
+                  />
+                </Route>
                 <Route
                   path="contact"
                   element={

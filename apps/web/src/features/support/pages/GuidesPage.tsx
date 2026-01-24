@@ -11,57 +11,56 @@ import {
 import { GuideCard } from '../components';
 
 /**
- * Worker guides
+ * Worker guides - Updated per Story 1.5.7 AC8
  */
 const workerGuides = [
   {
     title: 'How to Register',
     description: 'Step-by-step instructions for creating your OSLSR account and getting verified.',
     icon: Smartphone,
-    href: '/participate/workers',
+    href: '/support/guides/register',
   },
   {
     title: 'How to Complete the Survey',
     description: 'Learn what information is needed and how to fill out the skills survey.',
     icon: ClipboardList,
-    href: '/participate/workers#survey',
+    href: '/support/guides/survey',
   },
   {
     title: 'How to Opt Into the Marketplace',
     description: 'Control your visibility and connect with employers in Oyo State.',
     icon: Eye,
-    href: '/participate/workers#marketplace',
+    href: '/support/guides/marketplace-opt-in',
   },
   {
     title: 'How to Get a NIN',
     description: 'Find your nearest NIMC enrollment center and get your National ID Number.',
     icon: CreditCard,
-    href: 'https://nimc.gov.ng/enrollment-centers/',
-    external: true,
+    href: '/support/guides/get-nin',
   },
 ];
 
 /**
- * Employer guides
+ * Employer guides - Updated per Story 1.5.7 AC8
  */
 const employerGuides = [
   {
     title: 'How to Search the Marketplace',
     description: 'Find verified skilled workers by profession, location, or experience level.',
     icon: Search,
-    href: '/participate/employers',
+    href: '/support/guides/search-marketplace',
   },
   {
     title: 'How to Create an Employer Account',
     description: 'Register as an employer to access contact details and connect with workers.',
     icon: UserPlus,
-    href: '/register',
+    href: '/support/guides/employer-account',
   },
   {
     title: 'How to Verify a Worker',
     description: 'Check if a worker is registered and verified using their verification code.',
     icon: BadgeCheck,
-    href: '/support/verify-worker',
+    href: '/support/guides/verify-worker',
   },
 ];
 
@@ -69,6 +68,7 @@ const employerGuides = [
  * GuidesPage - Step-by-step guides for workers and employers.
  *
  * Content from docs/public-website-ia.md Section 5.3.
+ * Updated per Story 1.5.7 to link to guide detail pages.
  */
 function GuidesPage() {
   return (
@@ -103,7 +103,6 @@ function GuidesPage() {
                   description={guide.description}
                   icon={guide.icon}
                   href={guide.href}
-                  external={'external' in guide ? guide.external : false}
                 />
               ))}
             </div>

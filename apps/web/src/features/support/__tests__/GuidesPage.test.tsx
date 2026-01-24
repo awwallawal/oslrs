@@ -42,22 +42,28 @@ describe('GuidesPage', () => {
     expect(screen.getByText('How to Verify a Worker')).toBeInTheDocument();
   });
 
-  it('renders worker guide links with correct hrefs', () => {
+  // Story 1.5.7 AC8 - Updated links to guide detail pages
+  it('renders worker guide links with correct hrefs (Story 1.5.7 AC8)', () => {
     renderWithRouter(<GuidesPage />);
-    expect(screen.getByRole('link', { name: /How to Register/i })).toHaveAttribute('href', '/participate/workers');
+    expect(screen.getByRole('link', { name: /How to Register/i })).toHaveAttribute('href', '/support/guides/register');
+    expect(screen.getByRole('link', { name: /How to Complete the Survey/i })).toHaveAttribute('href', '/support/guides/survey');
+    expect(screen.getByRole('link', { name: /How to Opt Into the Marketplace/i })).toHaveAttribute('href', '/support/guides/marketplace-opt-in');
+    expect(screen.getByRole('link', { name: /How to Get a NIN/i })).toHaveAttribute('href', '/support/guides/get-nin');
   });
 
-  it('renders employer guide links with correct hrefs', () => {
+  it('renders employer guide links with correct hrefs (Story 1.5.7 AC8)', () => {
     renderWithRouter(<GuidesPage />);
-    expect(screen.getByRole('link', { name: /How to Verify a Worker/i })).toHaveAttribute('href', '/support/verify-worker');
-    expect(screen.getByRole('link', { name: /How to Create an Employer Account/i })).toHaveAttribute('href', '/register');
+    expect(screen.getByRole('link', { name: /How to Search the Marketplace/i })).toHaveAttribute('href', '/support/guides/search-marketplace');
+    expect(screen.getByRole('link', { name: /How to Create an Employer Account/i })).toHaveAttribute('href', '/support/guides/employer-account');
+    expect(screen.getByRole('link', { name: /How to Verify a Worker/i })).toHaveAttribute('href', '/support/guides/verify-worker');
   });
 
-  it('renders NIN guide as external link to NIMC', () => {
+  it('How to Get a NIN is now an internal link (Story 1.5.7 AC8)', () => {
     renderWithRouter(<GuidesPage />);
-    const nimcLink = screen.getByRole('link', { name: /How to Get a NIN/i });
-    expect(nimcLink).toHaveAttribute('href', 'https://nimc.gov.ng/enrollment-centers/');
-    expect(nimcLink).toHaveAttribute('target', '_blank');
+    const ninLink = screen.getByRole('link', { name: /How to Get a NIN/i });
+    // Should be internal link, not external
+    expect(ninLink).toHaveAttribute('href', '/support/guides/get-nin');
+    expect(ninLink).not.toHaveAttribute('target', '_blank');
   });
 
   it('renders Need More Help CTA with FAQ and Contact links', () => {
