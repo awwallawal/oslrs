@@ -13,7 +13,9 @@
     "./reporter": "./src/reporter.ts",
     "./dashboard": "./src/dashboard.ts",
     "./merger": "./src/merger.ts",
-    "./cleanup": "./src/cleanup.ts"
+    "./cleanup": "./src/cleanup.ts",
+    "./helpers": "./src/helpers/index.ts",
+    "./helpers/nin": "./src/helpers/nin.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -21,6 +23,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@oslsr/utils": "workspace:*",
     "fast-glob": "^3.3.3",
     "vitest": "^2.1.0"
   },

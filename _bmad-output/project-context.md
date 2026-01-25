@@ -1254,8 +1254,128 @@ docker compose -f docker/docker-compose.dev.yml up
 
 ---
 
+---
+
+## NIN Validation Pattern (Modulus 11 Algorithm)
+
+**CRITICAL: Nigerian NINs use Modulus 11, NOT Verhoeff**
+
+The PRD originally specified Verhoeff checksum, but testing with real government-issued NINs revealed Nigerian NINs use **Modulus 11** with weights 10, 9, 8, 7, 6, 5, 4, 3, 2, 1.
+
+**Validation Function:**
+```typescript
+import { modulus11Check } from '@oslsr/utils/src/validation';
+
+// Validate a NIN
+const isValid = modulus11Check('61961438053'); // true
+```
+
+**Test Helper (ALWAYS use for NIN generation in tests):**
+```typescript
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
+
+// ~9% of random seeds produce invalid check digit 10
+// This helper retries automatically
+const nin = generateValidNin();
+```
+
+**Why This Matters:**
+- ~9% of random 10-digit base numbers produce check digit 10 (invalid for single digit)
+- Direct `modulus11Generate(randomSeed)` will throw errors ~9% of the time
+- ALWAYS use the `generateValidNin()` helper in tests
+
+**Known Valid NINs (for test fixtures):**
+```typescript
+import { KNOWN_VALID_NINS } from '@oslsr/testing/helpers/nin';
+// ['61961438053', '21647846180']
+```
+
+**Algorithm Reference:** See `docs/SESSION-NOTES-2026-01-25-STORY-1-11-COMPLETION.md`
+
+---
+
+## Epic Validation Checkpoints (Operationalized Lessons)
+
+**CRITICAL: Every epic must include these validation gates**
+
+### 1. Spec Validation Checkpoint (Story 3)
+After 3 stories, validate that implementation assumptions match real-world data:
+- Test with REAL production data samples (not synthetic)
+- Verify external API integrations with actual responses
+- Confirm algorithm implementations against authoritative sources
+
+**Example (NIN validation):**
+```markdown
+## Spec Validation Checkpoint
+- [ ] Tested NIN validation with 5+ real government-issued NINs
+- [ ] Confirmed checksum algorithm matches NIMC specification
+- [ ] Validated phone number formats with real Nigerian numbers
+```
+
+### 2. Spec Compliance Review (50% Stories)
+After 50% of stories complete, compare implementation against spec:
+- Run gap analysis against PRD requirements
+- Verify IA document compliance (navigation, footer, content)
+- Check for missed acceptance criteria
+
+**Checklist:**
+```markdown
+## Spec Compliance Review
+- [ ] All PRD functional requirements mapped to stories
+- [ ] IA document navigation structure implemented
+- [ ] No undocumented features added (scope creep check)
+- [ ] All acceptance criteria testable
+```
+
+### 3. Security Review (Before Story Completion)
+For stories tagged `[SECURITY]`, require adversarial code review:
+- Timing attack analysis
+- Input validation review
+- Authentication/authorization audit
+- Rate limiting verification
+
+**Security Stories in Epics:**
+- Story 1-11: Email Invitation System `[SECURITY]`
+- Story 2-4: Encrypted ODK Token Management `[SECURITY]`
+
+---
+
+## Adversarial Code Review Checklist
+
+**Use this checklist for all `[SECURITY]` tagged stories:**
+
+### Authentication & Authorization
+- [ ] All endpoints have proper authentication middleware
+- [ ] Authorization checks use role-based access control
+- [ ] No privilege escalation paths exist
+- [ ] Session tokens properly invalidated on logout
+
+### Cryptographic Operations
+- [ ] Use `crypto.timingSafeEqual()` for secret comparison (NOT `===`)
+- [ ] Tokens use cryptographically secure random generation
+- [ ] Passwords hashed with bcrypt (10-12 rounds)
+- [ ] No secrets in logs or error messages
+
+### Input Validation
+- [ ] All inputs validated with Zod schemas
+- [ ] SQL injection prevented (parameterized queries)
+- [ ] XSS prevented (output encoding)
+- [ ] File uploads validated (type, size, content)
+
+### Rate Limiting
+- [ ] Brute-force protection on auth endpoints
+- [ ] API rate limits match documented thresholds
+- [ ] Rate limit bypass not possible via headers
+
+### Error Handling
+- [ ] Errors don't leak sensitive information
+- [ ] Stack traces not exposed in production
+- [ ] Generic errors for auth failures (no user enumeration)
+
+---
+
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-22
+**Last Updated:** 2026-01-25
 
-**Version:** 1.2.0 (Added Epic 1 Retrospective Decisions: Database Seeding Patterns ADR-017, Layout Architecture ADR-016, Email Verification Hybrid ADR-015, Google OAuth for public registration)
+**Version:** 1.3.0 (Added: NIN Validation Pattern with Modulus 11, Epic Validation Checkpoints, Adversarial Code Review Checklist - from Epic 1/1.5/Story 1-11 Combined Retrospective)

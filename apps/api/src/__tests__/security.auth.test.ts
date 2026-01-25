@@ -4,25 +4,8 @@ import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { generateInvitationToken } from '@oslsr/utils';
-import { modulus11Generate } from '@oslsr/utils/src/validation';
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { eq } from 'drizzle-orm';
-
-/**
- * Generate a valid NIN with retry logic.
- * ~9% of random seeds produce check digit 10 which is invalid for Modulus 11.
- */
-function generateValidNin(): string {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const seed = (Math.floor(Math.random() * 1000000000) + attempt).toString().padStart(10, '0');
-    try {
-      return modulus11Generate(seed);
-    } catch {
-      // Retry with next seed
-    }
-  }
-  // Fallback to a known valid NIN (verified against real government NINs)
-  return '61961438053';
-}
 
 const request = supertest(app);
 

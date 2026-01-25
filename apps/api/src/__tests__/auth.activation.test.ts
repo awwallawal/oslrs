@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { generateInvitationToken } from '@oslsr/utils';
-import { modulus11Generate } from '@oslsr/utils/src/validation';
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
 
 const request = supertest(app);
 
@@ -26,8 +26,7 @@ describe('Auth Activation Integration', () => {
       const [role] = await db.select().from(roles).limit(1);
       
       testUserToken = generateInvitationToken();
-      const seed = Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-      validNin = modulus11Generate(seed);
+      validNin = generateValidNin();
       testUserEmail = `activate-${Date.now()}@example.com`;
 
       const [user] = await db.insert(users).values({
@@ -77,7 +76,7 @@ describe('Auth Activation Integration', () => {
       .post('/api/v1/auth/activate/invalid-token')
       .send({
           password: 'password123',
-          nin: modulus11Generate('1111111111'),
+          nin: generateValidNin(),
           dateOfBirth: '1990-01-01',
           homeAddress: '123 Test St',
           bankName: 'Test Bank',
@@ -97,7 +96,7 @@ describe('Auth Activation Integration', () => {
         .post(`/api/v1/auth/activate/${testUserToken}`)
         .send({
             password: 'password123',
-            nin: modulus11Generate('2222222222'),
+            nin: generateValidNin(),
             dateOfBirth: '1990-01-01',
             homeAddress: '123 Test St',
             bankName: 'Test Bank',
