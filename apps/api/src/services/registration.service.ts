@@ -1,7 +1,9 @@
+import { Redis } from 'ioredis';
+import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { AppError, hashPassword, generateVerificationToken } from '@oslsr/utils';
+import { AppError, hashPassword, generateVerificationToken, generateOtpCode } from '@oslsr/utils';
 import { UserRole } from '@oslsr/types';
 import { EmailService } from './email.service.js';
 import pino from 'pino';
@@ -10,6 +12,15 @@ const logger = pino({ name: 'registration-service' });
 
 // Token expiry constants
 const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
+const OTP_EXPIRY_MINUTES = 10;
+const OTP_EXPIRY_SECONDS = OTP_EXPIRY_MINUTES * 60;
+
+// Redis key patterns for OTP (ADR-015)
+const OTP_KEY_PREFIX = 'verification_otp:';
+
+// Redis client (singleton)
+const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const getRedisClient = () => redisClient;
 
 interface RegisterPublicUserData {
   fullName: string;
@@ -154,12 +165,29 @@ export class RegistrationService {
         userId: result.id,
       });
 
+      // Generate OTP for hybrid verification (ADR-015)
+      const otpCode = generateOtpCode();
+
+      // Store OTP in Redis with 10-minute TTL
+      const redis = getRedisClient();
+      await redis.setex(
+        `${OTP_KEY_PREFIX}${normalizedEmail}`,
+        OTP_EXPIRY_SECONDS,
+        JSON.stringify({
+          otp: otpCode,
+          userId: result.id,
+          createdAt: new Date().toISOString(),
+        })
+      );
+
       // Send verification email (non-blocking)
       EmailService.sendVerificationEmail({
         email: normalizedEmail,
         fullName: fullName.trim(),
         verificationUrl: EmailService.generateVerificationUrl(verificationToken),
-        expiresInHours: VERIFICATION_TOKEN_EXPIRY_HOURS,
+        otpCode,
+        magicLinkExpiresInHours: VERIFICATION_TOKEN_EXPIRY_HOURS,
+        otpExpiresInMinutes: OTP_EXPIRY_MINUTES,
       }).catch((err) => {
         logger.error({
           event: 'auth.verification_email_failed',
@@ -273,15 +301,20 @@ export class RegistrationService {
         action: 'auth.email_verification_success',
         targetResource: 'users',
         targetId: user.id,
-        details: { verifiedAt: new Date().toISOString() },
+        details: { verifiedAt: new Date().toISOString(), method: 'magic_link' },
         ipAddress,
         userAgent,
       });
     });
 
+    // Mutual invalidation: Delete OTP from Redis (ADR-015)
+    const redis = getRedisClient();
+    await redis.del(`${OTP_KEY_PREFIX}${user.email}`);
+
     logger.info({
       event: 'auth.email_verification_success',
       userId: user.id,
+      method: 'magic_link',
     });
 
     return {
@@ -346,12 +379,29 @@ export class RegistrationService {
       })
       .where(eq(users.id, user.id));
 
-    // Send verification email
+    // Generate new OTP for hybrid verification (ADR-015)
+    const otpCode = generateOtpCode();
+
+    // Store new OTP in Redis (overwrites any existing)
+    const redis = getRedisClient();
+    await redis.setex(
+      `${OTP_KEY_PREFIX}${normalizedEmail}`,
+      OTP_EXPIRY_SECONDS,
+      JSON.stringify({
+        otp: otpCode,
+        userId: user.id,
+        createdAt: new Date().toISOString(),
+      })
+    );
+
+    // Send verification email with both magic link and OTP
     await EmailService.sendVerificationEmail({
       email: normalizedEmail,
       fullName: user.fullName,
       verificationUrl: EmailService.generateVerificationUrl(verificationToken),
-      expiresInHours: VERIFICATION_TOKEN_EXPIRY_HOURS,
+      otpCode,
+      magicLinkExpiresInHours: VERIFICATION_TOKEN_EXPIRY_HOURS,
+      otpExpiresInMinutes: OTP_EXPIRY_MINUTES,
     });
 
     logger.info({
@@ -362,6 +412,132 @@ export class RegistrationService {
     return {
       success: true,
       message: 'If this email is registered and unverified, a verification email will be sent.',
+    };
+  }
+
+  /**
+   * Verifies a user's email address using OTP (ADR-015 fallback)
+   * Mutually invalidates the magic link token
+   */
+  static async verifyOtp(
+    email: string,
+    otp: string,
+    ipAddress = 'unknown',
+    userAgent = 'unknown'
+  ): Promise<VerifyEmailResult> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    logger.info({
+      event: 'auth.otp_verification_started',
+    });
+
+    // Check OTP in Redis
+    const redis = getRedisClient();
+    const otpDataRaw = await redis.get(`${OTP_KEY_PREFIX}${normalizedEmail}`);
+
+    if (!otpDataRaw) {
+      logger.warn({
+        event: 'auth.otp_verification_failed',
+        reason: 'otp_not_found_or_expired',
+      });
+      throw new AppError(
+        'VERIFICATION_OTP_INVALID',
+        'Invalid or expired verification code. Please request a new one.',
+        400
+      );
+    }
+
+    const otpData = JSON.parse(otpDataRaw) as { otp: string; userId: string; createdAt: string };
+
+    // Verify OTP matches using constant-time comparison to prevent timing attacks
+    const otpBuffer = Buffer.from(otp.padEnd(6, '0'));
+    const storedOtpBuffer = Buffer.from(otpData.otp.padEnd(6, '0'));
+    const otpMatches = otpBuffer.length === storedOtpBuffer.length &&
+                       timingSafeEqual(otpBuffer, storedOtpBuffer);
+
+    if (!otpMatches) {
+      logger.warn({
+        event: 'auth.otp_verification_failed',
+        reason: 'otp_mismatch',
+        userId: otpData.userId,
+      });
+      throw new AppError(
+        'VERIFICATION_OTP_INVALID',
+        'Invalid verification code. Please check and try again.',
+        400
+      );
+    }
+
+    // Find user by ID from OTP data
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, otpData.userId),
+    });
+
+    if (!user) {
+      // This shouldn't happen, but handle it gracefully
+      logger.error({
+        event: 'auth.otp_verification_failed',
+        reason: 'user_not_found',
+        userId: otpData.userId,
+      });
+      throw new AppError(
+        'VERIFICATION_FAILED',
+        'Verification failed. Please try again.',
+        400
+      );
+    }
+
+    // Check if already verified
+    if (user.status !== 'pending_verification') {
+      logger.info({
+        event: 'auth.otp_verification_skipped',
+        reason: 'already_verified',
+        userId: user.id,
+      });
+
+      // Delete OTP anyway
+      await redis.del(`${OTP_KEY_PREFIX}${normalizedEmail}`);
+
+      return {
+        success: true,
+        message: 'Email already verified. You can log in.',
+      };
+    }
+
+    // Activate user and invalidate magic link token
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({
+          status: 'active',
+          emailVerificationToken: null,
+          emailVerificationExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      await tx.insert(auditLogs).values({
+        actorId: user.id,
+        action: 'auth.email_verification_success',
+        targetResource: 'users',
+        targetId: user.id,
+        details: { verifiedAt: new Date().toISOString(), method: 'otp' },
+        ipAddress,
+        userAgent,
+      });
+    });
+
+    // Delete OTP from Redis (mutual invalidation complete)
+    await redis.del(`${OTP_KEY_PREFIX}${normalizedEmail}`);
+
+    logger.info({
+      event: 'auth.email_verification_success',
+      userId: user.id,
+      method: 'otp',
+    });
+
+    return {
+      success: true,
+      message: 'Email verified successfully! You can now log in.',
     };
   }
 }
