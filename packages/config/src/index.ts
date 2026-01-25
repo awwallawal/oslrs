@@ -1,1 +1,3 @@
-// Initial source file for @oslsr/config
+// @oslsr/config - Shared configuration constants
+
+export * from './email.js';

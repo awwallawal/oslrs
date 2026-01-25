@@ -35,9 +35,9 @@ vi.mock('../../components/HCaptcha', () => ({
   ),
 }));
 
-// Mock the verhoeff validation to avoid issues with the crypto module
+// Mock the modulus11 validation to avoid issues with the crypto module
 vi.mock('@oslsr/utils', () => ({
-  verhoeffCheck: vi.fn().mockReturnValue(true),
+  modulus11Check: vi.fn().mockReturnValue(true),
 }));
 
 import * as authApi from '../../api/auth.api';

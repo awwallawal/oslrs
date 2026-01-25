@@ -12,6 +12,7 @@ import {
   reAuthRequestSchema,
   publicRegistrationRequestSchema,
   resendVerificationRequestSchema,
+  verifyOtpRequestSchema,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -442,6 +443,34 @@ export class AuthController {
       res.status(200).json({
         data: {
           message: result.message,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/verify-otp
+   * Verify email address using 6-digit OTP (ADR-015 fallback)
+   */
+  static async verifyOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = verifyOtpRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
+      }
+
+      const { email, otp } = validation.data;
+      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+      const userAgent = req.get('user-agent') || 'unknown';
+
+      const result = await RegistrationService.verifyOtp(email, otp, ipAddress, userAgent);
+
+      res.status(200).json({
+        data: {
+          message: result.message,
+          success: result.success,
         },
       });
     } catch (err) {

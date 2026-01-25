@@ -1,4 +1,4 @@
-# Oyo State Labour & Skills Registry (OSLSR) - Product Requirements Document (PRD) - V7.6
+# Oyo State Labour & Skills Registry (OSLSR) - Product Requirements Document (PRD) - V7.8
 
 **Harmonization Date:** 2026-01-04
 **Orchestrator:** Sarah (PO)
@@ -79,6 +79,8 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
 | 2026-01-02   | 7.4     | **Role Clarification & Scalability Enhancement:** Clarified Field Staff vs Back-Office distinction (Assessors & Officials are both back-office with full PII READ access). Changed 200 staff limit from hard cap to flexible soft planning capacity with unlimited technical scalability. Government Officials now have full READ access to individual PII for oversight ("trust but verify") but remain READ-ONLY. Updated RBAC model with clear permission boundaries. Confirmed sequential workflow (PRD→Architecture→UX). | Awwal (PO) |
 | 2026-01-04   | 7.5     | **Critique Resolution & Technical Clarity:** Fixed "Air-Gapped" misnomer to "Logically Isolated Read Replica". Clarified Live Selfie serves dual purposes (identity verification + ID card portrait) with liveness detection and auto-crop specifications. Added comprehensive Data Routing Matrix explaining what data resides in ODK Central vs Custom App databases, data flow rules, and architectural rationale for two-database strategy. | Awwal (PO) |
 | 2026-01-22   | 7.6     | **Epic 1 Retrospective Decisions:** Added Google OAuth as primary public registration method (ADR-015) with email fallback using Hybrid Email Verification (Magic Link + OTP in same email). Defined Layout Architecture (ADR-016) separating PublicLayout (static pages) from DashboardLayout (authenticated dashboards). Added database seeding patterns (Hybrid approach for dev/prod). Staff activation via email link serves as implicit email verification. | Awwal (PO) |
+| 2026-01-24   | 7.7     | **Epic 1.5 Documentation:** Added Epic 1.5 (Public Website Foundation - Phase 1 Static) to PRD. This epic was created during Epic 1 Retrospective but was missing from PRD. Includes 7 stories: Design System Foundation, Homepage, About Section (6 pages), Participate Section (3 pages), Support Section (5 pages), Legal Pages & Navigation Cleanup, Guide Detail Pages (7 pages). References public-website-ia.md and ADR-016. | Awwal (PO) |
+| 2026-01-24   | 7.8     | **Story 3.0 - Google OAuth:** Added Story 3.0 (Google OAuth & Enhanced Public Registration) to Epic 3. This story implements ADR-015 which was documented in v7.6 but not assigned to a story. Story 3.0 is positioned before Story 3.5 as a prerequisite. Added story references to FR requirements (lines 625-627). | Awwal (PO) |
 
 ## Requirements
 
@@ -288,6 +290,7 @@ Given the full-stack nature of the application and the potential for shared comp
 ## Epic List
 
 *   **Epic 1: Foundation & Secure Access**
+*   **Epic 1.5: Public Website Foundation (Phase 1 Static)**
 *   **Epic 2: Core Administration & Questionnaire Management (ODK Integration)**
 *   **Epic 3: Enumerator, Public & Data Entry Collection**
 *   **Epic 4: Supervisor Oversight & Field Management**
@@ -379,6 +382,103 @@ so that the application feels "World Class" and responsive even on slow governme
 1.  **Skeleton Screens:** Use animated "Shimmer" skeletons (not spinners) for all initial data loading.
 2.  **Optimistic UI:** Buttons (e.g., "Verify", "Save") must react instantly. Revert changes and show a Toast only if the server request fails.
 3.  **Error Boundaries:** Catch unexpected crashes gracefully with user-friendly fallbacks.
+
+## Epic 1.5: Public Website Foundation (Phase 1 Static)
+**Goal:** Build the complete static public website infrastructure before Epic 2, establishing the Information Architecture (IA), design system, and all public-facing pages that create a professional first impression and guide users through registration.
+
+**Origin:** Added during Epic 1 Retrospective (2026-01-22) based on the decision to build the public website foundation before proceeding to Epic 2's ODK integration. This ensures users have a polished, informative experience when they first encounter OSLSR.
+
+**Scope:** Phase 1 focuses on static content pages only. Dynamic features (search functionality, live data) are deferred to later epics.
+
+#### Story 1.5.1 Design System Foundation & Layout Architecture
+As a **Developer**,
+I want to **establish the core design system and layout components**,
+so that all subsequent pages maintain visual consistency with Oyo State branding.
+
+**Acceptance Criteria:**
+1.  Tailwind CSS extended with Oyo State color palette (primary green, accent gold, neutrals).
+2.  Typography system using brand-appropriate fonts with responsive scaling.
+3.  PublicLayout component implementing Header, Footer, and content area (per ADR-016).
+4.  Header with Oyo State logo, navigation dropdowns (About, Participate), and CTAs (Register, Staff Login).
+5.  Footer with quick links, legal links, contact information, and copyright.
+6.  Mobile-responsive navigation with hamburger menu and slide-in drawer.
+7.  All navigation components meet WCAG 2.1 AA accessibility standards.
+
+#### Story 1.5.2 Homepage Implementation
+As a **Public Visitor**,
+I want to **understand what OSLSR is and how to participate**,
+so that I can make an informed decision about registration.
+
+**Acceptance Criteria:**
+1.  Hero section with clear value proposition and primary CTAs.
+2.  "What is OSLSR" section explaining the registry's purpose.
+3.  "Who Should Register" section with worker/employer pathways.
+4.  "How It Works" visual process steps.
+5.  Trust indicators (government backing, security badges, statistics).
+6.  All sections responsive and accessible.
+
+#### Story 1.5.3 About Section (6 Pages)
+As a **Public Visitor**,
+I want to **learn about the initiative, leadership, and privacy practices**,
+so that I trust the organization handling my data.
+
+**Acceptance Criteria:**
+1.  `/about` - Landing page with section overview.
+2.  `/about/initiative` - Why we are building this registry.
+3.  `/about/how-it-works` - Detailed registration process explanation.
+4.  `/about/leadership` - Ministry leadership team profiles.
+5.  `/about/partners` - Collaborating organizations.
+6.  `/about/privacy` - Privacy policy and data protection practices.
+
+#### Story 1.5.4 Participate Section (3 Pages)
+As a **Worker or Employer**,
+I want to **understand my specific registration pathway**,
+so that I know exactly what to expect and what I need.
+
+**Acceptance Criteria:**
+1.  `/participate` - Landing page with worker/employer choice.
+2.  `/participate/workers` - Worker registration benefits, requirements, and process.
+3.  `/participate/employers` - Employer marketplace access and verification tools.
+
+#### Story 1.5.5 Support Section (5 Pages)
+As a **Public Visitor**,
+I want to **find answers to common questions and contact support**,
+so that I can resolve issues without confusion.
+
+**Acceptance Criteria:**
+1.  `/support` - Support hub with quick links and popular FAQs.
+2.  `/support/faq` - Comprehensive FAQ organized by category.
+3.  `/support/guides` - Step-by-step guide cards for common tasks.
+4.  `/support/contact` - Contact information for various inquiry types.
+5.  `/support/verify-worker` - Public verification tool entry point.
+
+#### Story 1.5.6 Legal Pages & Navigation Cleanup
+As a **Public Visitor**,
+I want to **review terms of service and easily navigate to support resources**,
+so that I understand my rights and can quickly find help when needed.
+
+**Acceptance Criteria:**
+1.  `/terms` - Terms of Service with all required legal sections.
+2.  Support navigation converted to dropdown menu (matching About and Participate pattern).
+3.  Contact added as top-level navigation item for quick access.
+4.  Staff Login relocated from header to footer (reduced visibility for security).
+5.  Mobile navigation synchronized with desktop navigation changes.
+
+#### Story 1.5.7 Guide Detail Pages (7 Pages)
+As a **Worker or Employer**,
+I want to **read detailed step-by-step guides for each registration task**,
+so that I can complete the process confidently and correctly.
+
+**Acceptance Criteria:**
+1.  4 Worker guide pages: Register, Survey, Marketplace Opt-In, Get a NIN.
+2.  3 Employer guide pages: Search Marketplace, Employer Account, Verify Worker.
+3.  Each guide includes: time estimate, prerequisites, numbered steps, tips, related guides.
+4.  GuidesPage cards updated to link to detail pages instead of placeholders.
+
+**References:**
+*   `docs/public-website-ia.md` - Information Architecture specification
+*   `docs/ux-design-specification.md` - UX patterns and component designs
+*   ADR-016 - Layout Architecture (PublicLayout vs DashboardLayout)
 
 ## Epic 2: Core Administration & Questionnaire Management (ODK Integration)
 **Goal:** Provide Super Admins with a comprehensive interface to manage all user accounts, provision new staff users via an invite/bulk system, and manage survey questionnaires via ODK Central.
@@ -523,8 +623,8 @@ so that I can easily find relevant information and create an account to particip
 3.  The homepage features a prominent "Register" button for public users.
 4.  Public users can complete a self-registration process to create an account.
 5.  Self-registered public users are assigned a specific "Public User" role.
-6.  **Google OAuth (Primary):** Public registration offers "Continue with Google" as the primary option for reduced friction and pre-verified email addresses (Google already verifies email ownership during OAuth).
-7.  **Email Registration (Fallback):** Users without Google accounts can register via email with Hybrid Email Verification.
+6.  **Google OAuth (Primary):** Public registration offers "Continue with Google" as the primary option for reduced friction and pre-verified email addresses (Google already verifies email ownership during OAuth). **Implemented in Story 3.0.**
+7.  **Email Registration (Fallback):** Users without Google accounts can register via email with Hybrid Email Verification. **Implemented in Story 3.0.**
 
 **Hybrid Email Verification (ADR-015):**
 *   When users register via email (not Google OAuth), they receive a single email containing BOTH:

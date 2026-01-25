@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Livestock Value Chain Strategy for FFS Programme - Handout | AGRIKONSULT</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-green: #1B5E20;
+            --secondary-green: #2E7D32;
+            --accent-green: #4CAF50;
+            --light-green: #81C784;
+            --pale-green: #E8F5E9;
+            --dark: #1a1a1a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            font-size: 10pt;
+            line-height: 1.5;
+            color: var(--dark);
+            background: white;
+            padding: 15mm;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+            @page {
+                margin: 15mm;
+                size: A4;
+            }
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 3px solid var(--primary-green);
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-green), var(--accent-green));
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .logo-icon::before {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border: 2px solid white;
+            border-radius: 50%;
+            top: 4px;
+            left: 9px;
+        }
+
+        .logo-icon::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 14px solid white;
+            bottom: 6px;
+            left: 14px;
+        }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-name {
+            font-size: 14pt;
+            font-weight: 700;
+            color: var(--primary-green);
+            letter-spacing: 1px;
+        }
+
+        .logo-tagline {
+            font-size: 7pt;
+            color: var(--secondary-green);
+            text-transform: uppercase;
+        }
+
+        .header-title {
+            text-align: right;
+        }
+
+        .header-title h1 {
+            font-size: 14pt;
+            color: var(--primary-green);
+            font-weight: 600;
+        }
+
+        .header-title p {
+            font-size: 8pt;
+            color: #666;
+        }
+
+        /* Section Headers */
+        h2 {
+            font-size: 12pt;
+            color: var(--primary-green);
+            border-left: 4px solid var(--accent-green);
+            padding-left: 10px;
+            margin: 20px 0 12px 0;
+        }
+
+        h3 {
+            font-size: 10pt;
+            color: var(--secondary-green);
+            margin: 12px 0 8px 0;
+        }
+
+        p {
+            margin-bottom: 8px;
+            text-align: justify;
+        }
+
+        /* Stats Grid */
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .stat-box {
+            flex: 1;
+            background: var(--pale-green);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 18pt;
+            font-weight: 700;
+            color: var(--primary-green);
+        }
+
+        .stat-label {
+            font-size: 8pt;
+            color: #555;
+        }
+
+        /* Two Column Layout */
+        .two-col {
+            display: flex;
+            gap: 20px;
+        }
+
+        .two-col > div {
+            flex: 1;
+        }
+
+        /* Lists */
+        ul {
+            padding-left: 18px;
+            margin-bottom: 10px;
+        }
+
+        li {
+            margin-bottom: 4px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 9pt;
+        }
+
+        th {
+            background: var(--primary-green);
+            color: white;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        /* Strategic Pillars Table */
+        .pillar-table th:first-child {
+            width: 25%;
+        }
+
+        .pillar-table th:nth-child(2) {
+            width: 45%;
+        }
+
+        .pillar-table th:nth-child(3) {
+            width: 30%;
+        }
+
+        .target-badge {
+            display: inline-block;
+            background: var(--accent-green);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 8pt;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: var(--pale-green);
+            border-left: 4px solid var(--accent-green);
+            padding: 10px 15px;
+            margin: 15px 0;
+            font-size: 9pt;
+        }
+
+        /* Framework Flow */
+        .framework-flow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+            justify-content: center;
+            margin: 15px 0;
+        }
+
+        .framework-node {
+            background: var(--primary-green);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 8pt;
+            text-align: center;
+        }
+
+        .framework-arrow {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        /* Cross-cutting Grid */
+        .cross-grid {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+        }
+
+        .cross-item {
+            flex: 1;
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 12px;
+            border-top: 3px solid var(--accent-green);
+        }
+
+        .cross-item h4 {
+            font-size: 9pt;
+            color: var(--primary-green);
+            margin-bottom: 8px;
+        }
+
+        .cross-item ul {
+            font-size: 8pt;
+            padding-left: 15px;
+        }
+
+        /* Contact Footer */
+        .footer {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid var(--primary-green);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-contact {
+            font-size: 9pt;
+        }
+
+        .footer-contact strong {
+            color: var(--primary-green);
+        }
+
+        .footer-note {
+            font-size: 8pt;
+            color: #666;
+            text-align: right;
+        }
+
+        /* Case Study Boxes */
+        .case-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .case-box {
+            background: #f9f9f9;
+            border-radius: 6px;
+            padding: 10px;
+            border-left: 3px solid var(--accent-green);
+        }
+
+        .case-box strong {
+            color: var(--primary-green);
+            font-size: 9pt;
+        }
+
+        .case-box p {
+            font-size: 8pt;
+            margin: 5px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- PAGE 1 -->
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon"></div>
+            <div class="logo-text">
+                <span class="logo-name">AGRIKONSULT</span>
+                <span class="logo-tagline">Farm Solutions Nigeria Ltd</span>
+            </div>
+        </div>
+        <div class="header-title">
+            <h1>Livestock Value Chain Strategy for FFS</h1>
+            <p>Policy Workshop & Stakeholder Briefing | January 2026</p>
+        </div>
+    </div>
+
+    <h2>Executive Summary</h2>
+    <p>This strategy outlines a comprehensive approach to integrating livestock value chain perspectives into Nigeria's Farmers' Field School (FFS) program. The goal is to transform subsistence-oriented livestock production into ICT-innovative, knowledge-driven, market-oriented, climate-resilient, inclusive, and profitable enterprises.</p>
+
+    <div class="stats-row">
+        <div class="stat-box">
+            <div class="stat-number">563M</div>
+            <div class="stat-label">Chickens</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">124M</div>
+            <div class="stat-label">Goats</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">60M</div>
+            <div class="stat-label">Sheep</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">58M</div>
+            <div class="stat-label">Cattle</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">$74B</div>
+            <div class="stat-label">2035 Target</div>
+        </div>
+    </div>
+
+    <div class="highlight-box">
+        <strong>National Vision:</strong> The Federal Ministry of Livestock Development targets growing sector contribution from $32B to $74B by 2035, creating 2M+ jobs through the National Livestock Transformation Plan (NLTP).
+    </div>
+
+    <h2>Current Challenges</h2>
+    <div class="two-col">
+        <div>
+            <ul>
+                <li>Low productivity and high mortality rates</li>
+                <li>Weak input and service delivery systems</li>
+                <li>Poor husbandry and biosecurity practices</li>
+            </ul>
+        </div>
+        <div>
+            <ul>
+                <li>Limited access to finance and markets</li>
+                <li>High post-production losses and food safety risks</li>
+                <li>Climate and disease shocks (ND, ASF, PPR, CBPP)</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>Value Chain Framework within FFS</h2>
+    <div class="framework-flow">
+        <span class="framework-node">1. Research-Extension Linkage</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">2. Input Supply</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">3. Production & Husbandry</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">4. Animal Health</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">5. Aggregation & Processing</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">6. Marketing</span>
+        <span class="framework-arrow">→</span>
+        <span class="framework-node">7. Support Services</span>
+    </div>
+
+    <h2>Six Strategic Pillars with Targets</h2>
+    <table class="pillar-table">
+        <thead>
+            <tr>
+                <th>Pillar</th>
+                <th>Key FFS Strategies</th>
+                <th>Target Outcomes</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>1. Input Supply & Services</strong></td>
+                <td>Input quality testing, local feed formulation, bulk purchasing, vet engagement</td>
+                <td><span class="target-badge">20% cost reduction</span> <span class="target-badge">10% quality improvement</span></td>
+            </tr>
+            <tr>
+                <td><strong>2. Production & GAHP</strong></td>
+                <td>Season-long learning, comparative trials, farmer-led data collection</td>
+                <td><span class="target-badge">20% productivity increase</span> <span class="target-badge">10% mortality reduction</span></td>
+            </tr>
+            <tr>
+                <td><strong>3. Animal Health & Biosecurity</strong></td>
+                <td>Disease surveillance, biosecurity mapping, vaccination calendars, AMR training</td>
+                <td><span class="target-badge">20% disease reduction</span> <span class="target-badge">20% food safety improvement</span></td>
+            </tr>
+            <tr>
+                <td><strong>4. Aggregation & Value Addition</strong></td>
+                <td>Collective aggregation, basic processing, women/youth micro-processing units</td>
+                <td><span class="target-badge">30% margin increase</span> <span class="target-badge">20% loss reduction</span></td>
+            </tr>
+            <tr>
+                <td><strong>5. Marketing & Business</strong></td>
+                <td>Market mapping, standards training, collective marketing, digital tools</td>
+                <td><span class="target-badge">20% market access improvement</span> <span class="target-badge">10% commercial transition</span></td>
+            </tr>
+            <tr>
+                <td><strong>6. Finance & Institutions</strong></td>
+                <td>Financial literacy, microfinance linkages, insurance, government engagement</td>
+                <td><span class="target-badge">20% investment increase</span> <span class="target-badge">10% institutional support</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <!-- PAGE 2 -->
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon"></div>
+            <div class="logo-text">
+                <span class="logo-name">AGRIKONSULT</span>
+                <span class="logo-tagline">Farm Solutions Nigeria Ltd</span>
+            </div>
+        </div>
+        <div class="header-title">
+            <h1>Livestock Value Chain Strategy for FFS</h1>
+            <p>Policy Workshop & Stakeholder Briefing | January 2026</p>
+        </div>
+    </div>
+
+    <h2>Cross-Cutting Themes</h2>
+    <div class="cross-grid">
+        <div class="cross-item">
+            <h4>Gender & Social Inclusion</h4>
+            <ul>
+                <li>Targeted women-only and youth FFS groups</li>
+                <li>Enterprises with low entry barriers</li>
+                <li>Leadership and entrepreneurship training</li>
+            </ul>
+        </div>
+        <div class="cross-item">
+            <h4>Climate-Smart Practices</h4>
+            <ul>
+                <li>Heat stress management</li>
+                <li>Improved fodder, hay, silage systems</li>
+                <li>Manure management and biogas</li>
+            </ul>
+        </div>
+        <div class="cross-item">
+            <h4>Nutrition & Food Safety</h4>
+            <ul>
+                <li>Animal-source foods promotion</li>
+                <li>Hygiene and slaughter practices</li>
+                <li>Milk handling safety protocols</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>Alignment with National Policies</h2>
+    <div class="two-col">
+        <div>
+            <h3>L-PRES ($500M World Bank Project)</h3>
+            <ul>
+                <li>1.4 million beneficiaries targeted</li>
+                <li>Focus on beef cattle, sheep & goat value chains</li>
+                <li>Crisis prevention and conflict mitigation</li>
+                <li>Climate adaptation integration with NiMet</li>
+            </ul>
+        </div>
+        <div>
+            <h3>NLTP (National Transformation Plan)</h3>
+            <ul>
+                <li>₦100 billion budget (80% Federal, 20% States)</li>
+                <li>2 million+ jobs target by 2028</li>
+                <li>Modernizing through ranching and dairy processing</li>
+                <li>Farmer-herder conflict resolution</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>FFS Success Stories from Africa</h2>
+    <div class="case-grid">
+        <div class="case-box">
+            <strong>Tanzania - AMR in Poultry</strong>
+            <p>FAO integrated behavioural science into FFS to address antimicrobial resistance in broiler production across the region.</p>
+        </div>
+        <div class="case-box">
+            <strong>Zimbabwe - Broiler Production</strong>
+            <p>FAO piloted FFS in 8 districts, graduating 106 farmers and facilitators as multipliers.</p>
+        </div>
+        <div class="case-box">
+            <strong>Kenya - Agropastoralist Schools</strong>
+            <p>Built drought resilience through fodder production; FFS now institutionalized in national extension policy.</p>
+        </div>
+        <div class="case-box">
+            <strong>Eastern Africa Network</strong>
+            <p>2,000+ active FFS with 50,000+ direct beneficiaries; farmers building bottom-up producer organizations.</p>
+        </div>
+    </div>
+
+    <h2>Implementation & Sustainability</h2>
+    <div class="two-col">
+        <div>
+            <h3>Key Partners</h3>
+            <ul>
+                <li><strong>Lead:</strong> FMLD & State Ministries</li>
+                <li><strong>Technical:</strong> Research institutes, universities, NGOs</li>
+                <li><strong>Delivery:</strong> Extension officers as FFS facilitators</li>
+                <li><strong>Private Sector:</strong> Input suppliers, processors, off-takers</li>
+            </ul>
+        </div>
+        <div>
+            <h3>Scaling Strategy</h3>
+            <ul>
+                <li>FFS groups graduate into cooperatives/agribusiness clusters</li>
+                <li>Community-Based Facilitators (CBFs) for local ownership</li>
+                <li>Integration into state livestock development plans</li>
+                <li>Public-Private Partnership models for sustainable funding</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="highlight-box">
+        <strong>Timeline:</strong> FFS cycles run 9-12 months aligned with livestock production cycles. Phases include: Facilitator Training (Months 1-3) → FFS Establishment (Months 3-6) → Learning Cycles (Months 6-12) → Graduation & Scaling (Month 12+)
+    </div>
+
+    <h2>Monitoring & Evaluation Indicators</h2>
+    <table>
+        <tr>
+            <td><strong>Productivity</strong></td>
+            <td>Mortality rates, growth rates, output per animal</td>
+        </tr>
+        <tr>
+            <td><strong>Economic</strong></td>
+            <td>Income levels, profitability, cost reduction</td>
+        </tr>
+        <tr>
+            <td><strong>Adoption</strong></td>
+            <td>GAHP and biosecurity practice uptake rates</td>
+        </tr>
+        <tr>
+            <td><strong>Market</strong></td>
+            <td>Collective sales, market linkages, price realization</td>
+        </tr>
+    </table>
+
+    <div class="footer">
+        <div class="footer-contact">
+            <strong>Dr. SOSINA, A.O. (Ph.D., RAS)</strong><br>
+            Lead Strategist, AGRIKONSULT & Farm Solutions Ltd<br>
+            Email: dayososina@gmail.com
+        </div>
+        <div class="footer-note">
+            <em>"Integrating a livestock value chain strategy into Nigeria's FFS program offers a powerful pathway to transform smallholder livestock systems into resilient, market-linked, and inclusive value chains."</em>
+        </div>
+    </div>
+</body>
+</html>

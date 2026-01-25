@@ -1,7 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
+import { Redis } from 'ioredis';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 import { AppError } from '@oslsr/utils';
+
+// Redis connection for rate limiting
+let redis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (!redis) {
+    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null,
+    });
+  }
+  return redis;
+}
 
 export class StaffController {
   static async createManual(req: Request, res: Response, next: NextFunction) {
@@ -10,10 +23,13 @@ export class StaffController {
       const actorId = (req as any).user?.id;
       if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
 
-      const staff = await StaffService.createManual(req.body, actorId);
+      const { user, emailStatus } = await StaffService.createManual(req.body, actorId);
       res.status(201).json({
         status: 'success',
-        data: staff,
+        data: {
+          ...user,
+          emailStatus, // AC8: Include email status in response
+        },
       });
     } catch (err) {
       next(err);
@@ -76,6 +92,36 @@ export class StaffController {
         },
       });
     } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/staff/:userId/resend-invitation
+   *
+   * Resend invitation email to a staff member.
+   * AC5: Manual Resend Capability
+   */
+  static async resendInvitation(req: Request, res: Response, next: NextFunction) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actorId = (req as any).user?.id;
+      if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+
+      const { userId } = req.params;
+      if (!userId) throw new AppError('MISSING_PARAM', 'User ID is required', 400);
+
+      const result = await StaffService.resendInvitation(userId, actorId, getRedis());
+
+      res.json({
+        status: 'success',
+        data: result,
+      });
+    } catch (err) {
+      // Handle rate limit exceeded with proper headers
+      if (err instanceof AppError && err.code === 'RATE_LIMIT_EXCEEDED') {
+        res.setHeader('Retry-After', err.details?.retryAfter?.toString() || '86400');
+      }
       next(err);
     }
   }

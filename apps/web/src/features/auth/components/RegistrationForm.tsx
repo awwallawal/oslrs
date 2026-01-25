@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { HCaptcha } from './HCaptcha';
 import { PasswordRequirements } from './PasswordRequirements';
 import { publicRegister, AuthApiError } from '../api/auth.api';
-import { verhoeffCheck } from '@oslsr/utils/src/validation';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 
 // Registration form validation schema
 const registrationSchema = z.object({
@@ -33,7 +33,7 @@ const registrationSchema = z.object({
   nin: z.string()
     .length(11, 'NIN must be exactly 11 digits')
     .regex(/^\d{11}$/, 'NIN must contain only digits')
-    .refine(verhoeffCheck, 'Invalid NIN format'),
+    .refine(modulus11Check, 'Invalid NIN format'),
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password must be at most 128 characters')

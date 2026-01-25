@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { verhoeffCheck } from '@oslsr/utils/src/validation';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 
 export const ninSchema = z.string()
   .length(11, 'NIN must be exactly 11 digits')
   .regex(/^\d{11}$/, 'NIN must contain only digits')
-  .refine(verhoeffCheck, 'Invalid NIN checksum');
+  .refine(modulus11Check, 'Invalid NIN checksum');
 
 export const activationSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),

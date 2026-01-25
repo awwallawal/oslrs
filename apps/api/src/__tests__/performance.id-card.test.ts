@@ -17,7 +17,7 @@ vi.mock('../services/photo-processing.service.js', () => {
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
-import { verhoeffGenerate } from '@oslsr/utils';
+import { modulus11Generate } from '@oslsr/utils/src/validation';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 
@@ -36,7 +36,7 @@ describe('Performance: ID Card Generation', () => {
 
     const email = `perf-${Date.now()}@example.com`;
     const seed = Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-    const nin = verhoeffGenerate(seed);
+    const nin = modulus11Generate(seed);
 
     const [user] = await db.insert(users).values({
       email,

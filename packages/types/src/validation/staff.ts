@@ -29,8 +29,12 @@ export interface ImportJobSummary {
   errors: Array<{
     row: number;
     error: string;
-    data?: any;
+    data?: unknown;
   }>;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   downloadUrl?: string;
+  // Email tracking (AC7)
+  emailsQueued: number;
+  emailsDeferred: number;
+  estimatedDeliveryDate?: string; // ISO date when deferred emails will be sent
 }

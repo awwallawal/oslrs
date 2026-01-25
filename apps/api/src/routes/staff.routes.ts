@@ -17,5 +17,6 @@ router.use(authenticate, authorize(UserRole.SUPER_ADMIN));
 router.post('/manual', StaffController.createManual);
 router.post('/import', upload.single('file'), StaffController.importCsv);
 router.get('/import/:jobId', StaffController.getImportStatus);
+router.post('/:userId/resend-invitation', StaffController.resendInvitation);
 
 export default router;

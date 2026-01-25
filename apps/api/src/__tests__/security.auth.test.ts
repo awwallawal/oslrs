@@ -3,7 +3,8 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
-import { generateInvitationToken, verhoeffGenerate } from '@oslsr/utils';
+import { generateInvitationToken } from '@oslsr/utils';
+import { modulus11Generate } from '@oslsr/utils/src/validation';
 import { eq } from 'drizzle-orm';
 
 const request = supertest(app);
@@ -54,7 +55,7 @@ describe('Security: Authentication & Authorization', () => {
 
       // 4. Attempt activation
       const seed = Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-      const nin = verhoeffGenerate(seed);
+      const nin = modulus11Generate(seed);
 
       const res = await request.post(`/api/v1/auth/activate/${token}`).send({
         password: 'Password123!',

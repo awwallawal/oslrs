@@ -39,3 +39,23 @@ export const comparePassword = async (password: string, hash: string): Promise<b
 export const generateVerificationToken = (): string => {
   return randomBytes(32).toString('hex');
 };
+
+/**
+ * Generates a cryptographically secure 6-digit OTP code.
+ * Used for email verification fallback per ADR-015.
+ *
+ * Uses crypto.randomBytes to ensure unpredictability.
+ * Range: 000000 - 999999 (always 6 digits with leading zeros)
+ *
+ * @returns {string} 6-digit numeric string (e.g., "047293")
+ */
+export const generateOtpCode = (): string => {
+  // Generate 4 random bytes (32 bits)
+  const buffer = randomBytes(4);
+  // Convert to unsigned 32-bit integer
+  const value = buffer.readUInt32BE(0);
+  // Modulo 1,000,000 to get 6-digit range
+  const code = value % 1000000;
+  // Pad with leading zeros to ensure 6 digits
+  return code.toString().padStart(6, '0');
+};

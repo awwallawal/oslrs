@@ -107,7 +107,7 @@ NFR6.2: Verifiable in local/staging environment.
 
 FR1 (Consent): Epic 3, Epic 7
 FR2 (2-Stage Consent): Epic 3, Epic 7
-FR3 (Homepage/Auth): Epic 1
+FR3 (Homepage/Auth): Epic 1, **Epic 1.5** (Public Website)
 FR4 (Public Survey): Epic 3
 FR5 (Public NIN): Epic 1
 FR6 (Staff Provisioning): Epic 1
@@ -127,12 +127,24 @@ FR19 (Contact View Logging): Epic 7
 FR20 (Data Entry Interface): Epic 3
 FR21 (Global NIN Uniqueness): Epic 1 (Registration), Epic 3 (Submission)
 
+### NFR Coverage (Epic 1.5)
+
+NFR5.1 (WCAG 2.1 AA): Epic 1.5 (Design System, Color Contrast)
+NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
+
 ## Epic List
 
 ### Epic 1: Foundation, Secure Access & Staff Onboarding
 **Goal:** Establish the core infrastructure, secure authentication, and allow the state to provision and onboard its workforce with verified identities (NIN, Live Selfie).
 **User Outcome:** Admins can bulk-provision staff; Staff can securely log in, complete profiles, and verify their legitimacy via ID cards.
 **FRs covered:** FR3, FR5, FR6, FR7, FR21
+
+### Epic 1.5: Public Website Foundation (Phase 1 Static)
+**Goal:** Implement the public-facing website infrastructure and static pages, establishing the visual identity, layout architecture (ADR-016), and design system before proceeding to backend-heavy epics.
+**User Outcome:** Public visitors see a professional, complete website explaining OSLSR; Client can demonstrate progress to stakeholders; Visual patterns established for all future development.
+**FRs covered:** FR3 (Homepage), NFR5.1 (WCAG 2.1 AA), NFR5.2 (Legacy Device Support)
+**Dependencies:** Epic 1 (Foundation) complete
+**Source Documents:** `docs/public-website-ia.md`, `_bmad-output/planning-artifacts/ux-design-specification.md`, Architecture ADR-016
 
 ### Epic 2: Questionnaire Management & ODK Integration
 **Goal:** Enable the management of digital survey forms and the seamless connection between the Custom App and the ODK Central collection engine.
@@ -312,6 +324,383 @@ So that I can monitor test health and catch regressions early.
 
 ---
 
+## Epic 1.5: Public Website Foundation (Phase 1 Static)
+
+**Epic Goal:** Implement the public-facing website infrastructure and static pages defined in `docs/public-website-ia.md`, establishing the visual identity, layout architecture (ADR-016), and design system specified in the UX Design Specification. This provides visible progress to stakeholders before proceeding to backend-heavy Epic 2.
+
+**Dependencies:**
+- Epic 1 (Foundation) - Complete
+- `docs/public-website-ia.md` - Content ready
+- `_bmad-output/planning-artifacts/ux-design-specification.md` - Design system ready
+
+**Out of Scope (Phase 2 - API-dependent):**
+- Marketplace search/results (requires Epic 7)
+- Insights Dashboard with live data
+- Skills Map visualization
+- Live metrics on homepage
+
+### Story 1.5.1: Design System Foundation & Layout Architecture
+
+As a Developer,
+I want to implement the core design system tokens and layout components per ADR-016,
+So that all subsequent pages share consistent styling and navigation patterns.
+
+**Acceptance Criteria:**
+
+**Given** the UX Design Specification "Design System Foundation" section
+**When** I implement the design tokens and layout components
+**Then** CSS variables must be defined for:
+  - Oyo State color palette (Primary-50 through Primary-900, #9C1E23 as Primary-600)
+  - Semantic colors: Success-600 (#15803D), Warning-600 (#D97706), Error-600 (#DC2626), Info-600 (#0284C7), Neutrals
+  - Typography scale: Poppins (brand/headings), Inter (UI), JetBrains Mono (monospace)
+  - Spacing scale following 4px baseline grid
+**And** `PublicLayout` component must include:
+  - Global header with Oyo State logo (40px height, links to `/`)
+  - Primary navigation: About, Participate, Support, Marketplace
+  - Mobile hamburger menu with slide-in drawer (per `public-website-ia.md` Section 2)
+  - Footer with 3-column layout (Quick Links, About, Contact)
+  - Renders `<Outlet />` for page content
+**And** `AuthLayout` component must include (per ADR-016):
+  - Minimal chrome: "← Back to Homepage" link only
+  - Centered content card with Oyo State logo (60px height)
+  - No header/footer (focused auth experience)
+**And** Skeleton screen components must be created:
+  - `PageSkeleton` - Full page shimmer with Oyo State brand colors
+  - `CardSkeleton` - Dashboard card placeholder
+  - `TextSkeleton` - Line-by-line text loading
+
+**References:**
+- UX Spec: "Design System Foundation" section (Typography, Color System, Brand Assets)
+- Architecture: ADR-016 "Layout Architecture"
+- public-website-ia.md: Navigation wireframes (Section 2)
+
+---
+
+### Story 1.5.2: Homepage Implementation
+
+As a Public Visitor,
+I want to see a professional homepage that clearly explains OSLSR and provides paths to registration,
+So that I understand the initiative's purpose and can take action.
+
+**Acceptance Criteria:**
+
+**Given** the homepage wireframe in `public-website-ia.md` Section 3.1
+**When** I visit the homepage (`/`)
+**Then** the Hero Section must display:
+  - Oyo State Government logo centered (80px height)
+  - H1: "Oyo State Labour & Skills Registry" (Poppins SemiBold)
+  - Tagline: "Mapping the Workforce, Empowering the Economy"
+  - Primary CTA: "Register Now" → `/auth/register` (Oyo State Red button)
+  - Secondary CTA: "Explore Skills Marketplace" → `/marketplace` (Ghost button)
+**And** the Statistics Section must display 4 metric cards:
+  - "Registered Workers", "Skills Categories", "LGAs Covered" (33), "Verified Profiles"
+  - Phase 1: Display "Coming Soon" or static values; design supports future API integration
+**And** the "How It Works" Section must display 4-step visual:
+  - Create Account → Verify Email → Complete Survey → Get Verified
+  - Icon + title + description for each step (per wireframe)
+**And** the "For Workers / For Employers" Section must display:
+  - Two-column layout with benefits for each audience
+  - CTAs linking to `/participate/workers` and `/participate/employers`
+**And** the Trust Section must display:
+  - "Government Verified" badge explanation
+  - Partner logos placeholder grid
+**And** the Final CTA must display:
+  - "Ready to contribute to Oyo State's future?" + Register button
+
+**References:**
+- PRD FR3: "Public-facing Homepage with Staff Login and Public Register"
+- public-website-ia.md: Section 3.1 Homepage wireframe with exact copy
+- UX Spec: Logo placements (80px hero), typography scale
+
+---
+
+### Story 1.5.3: About Section (5 Pages)
+
+As a Public Visitor,
+I want to learn about the OSLSR initiative, leadership, and data practices,
+So that I trust the platform before registering.
+
+**Acceptance Criteria:**
+
+**Given** the About section wireframes in `public-website-ia.md` Sections 3.1-3.6
+**When** I navigate to the About section
+**Then** the following pages must be implemented with exact copy from wireframes:
+
+1. **/about** - Landing page:
+   - Section overview cards linking to sub-pages
+   - Brief introduction to OSLSR
+
+2. **/about/initiative** - The Initiative:
+   - Full explanation of OSLSR purpose
+   - "What is OSLSR?", "Why It Matters", "Who It Serves" sections
+   - "Living Registry" concept explanation
+   - "Ready to Contribute?" CTA
+
+3. **/about/how-it-works** - How It Works:
+   - 4-step visual registration walkthrough (icons + descriptions)
+   - Step 1: Create Account, Step 2: Verify Email, Step 3: Complete Survey, Step 4: Get Verified
+   - "What You'll Need" section (NIN, Phone, Email, 10 minutes)
+   - NIN info callout with link to NIMC
+
+4. **/about/leadership** - Leadership:
+   - Commissioner profile card (photo placeholder, quote)
+   - Project Director profile card
+   - Oversight section with government seals
+   - Contact information
+
+5. **/about/partners** - Partners:
+   - "Government Agencies" logo grid (Ministry, Bureau of Statistics, NBS)
+   - "Industry Associations" logo grid
+   - "Become a Partner" CTA with email
+
+6. **/about/privacy** - Privacy & Data Protection:
+   - TL;DR summary box (plain language)
+   - "What Data We Collect" section (Personal, Work/Skills, Optional Marketplace)
+   - "How We Use Your Data" section
+   - "What We Don't Do" box (Never sell, Never share unauthorized, etc.)
+   - "Data Protection Measures" (Encryption, Access Control, Audit Logging)
+   - "Your Rights Under NDPA" section
+   - "Data Retention" policy
+   - Data Protection Officer contact
+
+**References:**
+- public-website-ia.md: Sections 3.1-3.6 with complete wireframes and copy
+- PRD NFR4: NDPA compliance requirements
+- UX Spec: Trust signals, transparency principles
+
+---
+
+### Story 1.5.4: Participate Section (3 Pages)
+
+As a Public Visitor (worker or employer),
+I want to understand how the registry benefits me specifically,
+So that I'm motivated to register or engage.
+
+**Acceptance Criteria:**
+
+**Given** the Participate section wireframes in `public-website-ia.md` Section 4
+**When** I navigate to the Participate section
+**Then** the following pages must be implemented:
+
+1. **/participate** - Landing page:
+   - Hero: "Be Part of Oyo State's Workforce Revolution"
+   - Two pathway cards: "I'm a Worker" and "I'm an Employer"
+   - Brief description of benefits for each
+
+2. **/participate/workers** - For Workers:
+   - Hero: "Your Skills Deserve Recognition"
+   - Benefits grid:
+     - "Get Visible" - Appear in Skills Marketplace
+     - "Get Verified" - Government Verified badge
+     - "Get Opportunities" - Connect with employers
+     - "Get Trained" - Priority access to skills programs
+   - "How to Join" section with registration CTA
+   - FAQ accordion specific to workers
+
+3. **/participate/employers** - For Employers:
+   - Hero: "Find Verified Local Talent"
+   - Benefits grid:
+     - "Verified Profiles" - Government-vetted workers
+     - "Search by Skill" - Filter by trade, LGA, experience
+     - "Direct Contact" - Reveal contact with consent
+     - "Support Local" - Hire Oyo State residents
+   - "How It Works" section
+   - "Start Searching" CTA to marketplace
+
+**References:**
+- public-website-ia.md: Section 4 Participate wireframes
+- PRD FR17-FR19: Marketplace search and contact reveal requirements
+
+---
+
+### Story 1.5.5: Support Section (5 Pages)
+
+As a Public Visitor or Registered User,
+I want to find answers to common questions and contact support,
+So that I can resolve issues without confusion.
+
+**Acceptance Criteria:**
+
+**Given** the Support section wireframes in `public-website-ia.md` Section 5
+**When** I navigate to the Support section
+**Then** the following pages must be implemented:
+
+1. **/support** - Landing page:
+   - Support cards linking to: FAQ, Guides, Contact, Verify Worker
+   - Search box (Phase 1: UI only, full search in Phase 2)
+
+2. **/support/faq** - Frequently Asked Questions:
+   - Accordion FAQ grouped by category:
+     - Registration (5-7 questions)
+     - Marketplace (5-7 questions)
+     - Privacy & Data (5-7 questions)
+     - Technical Issues (5-7 questions)
+   - "Still have questions?" CTA to contact page
+
+3. **/support/guides** - How-To Guides:
+   - Guide cards for:
+     - "How to Register" - Step-by-step with screenshots
+     - "How to Update Your Profile" - Edit token process
+     - "How to Search the Marketplace" - Filters and contact reveal
+   - Each guide expandable with numbered steps
+
+4. **/support/contact** - Contact Us:
+   - Contact form with fields:
+     - Category dropdown (General, Technical, Privacy, Partnership)
+     - Email (required)
+     - Subject
+     - Message
+   - Ministry contact details sidebar (address, email, phone)
+   - Response time expectation ("We respond within 2-3 business days")
+
+5. **/support/verify-worker** - Verify a Worker:
+   - Explanation of ID card verification process
+   - QR code scanner (Phase 1: instructions only, links to `/verify-staff/:id`)
+   - Manual ID lookup field
+   - "What You'll See" section explaining verification result
+
+**References:**
+- public-website-ia.md: Section 5 Support wireframes
+- PRD UI Design Goals: "Reduce anxiety and build confidence"
+- Epic 1 Story 1.6: ID Card Generation & Public Verification
+
+---
+
+### Story 1.5.6: Legal Pages & Navigation Cleanup
+
+As a Public Visitor,
+I want to review terms of service and easily navigate to support resources,
+So that I understand my rights and can quickly find help when needed.
+
+**Acceptance Criteria:**
+
+**AC1: Terms of Service Page**
+**Given** the Legal section wireframes in `public-website-ia.md` Section 6
+**When** I navigate to `/terms`
+**Then** Terms of Service page must include:
+  - Last updated date
+  - Sections:
+    - Acceptance of Terms
+    - Eligibility
+    - User Responsibilities
+    - Marketplace Rules (for workers and employers)
+    - Prohibited Activities
+    - Limitation of Liability
+    - Disclaimer of Warranties
+    - Governing Law (Nigerian jurisdiction, Oyo State courts)
+    - Changes to Terms
+    - Contact Information
+
+**AC2: Navigation - Support Dropdown**
+**Given** the current navigation structure
+**When** I view the desktop navigation
+**Then** Support must be a dropdown menu (like About and Participate) containing:
+  - Support Center → `/support`
+  - FAQ → `/support/faq`
+  - Guides → `/support/guides`
+  - Verify Worker → `/support/verify-worker`
+**And** the dropdown must follow the same pattern as `aboutItems` and `participateItems`
+
+**AC3: Navigation - Contact Link**
+**Given** the user need for quick contact access
+**When** I view the desktop navigation
+**Then** "Contact" must appear as a top-level navigation item
+**And** it must link to `/support/contact`
+**And** it must replace the current Staff Login button position
+
+**AC4: Navigation - Staff Login Relocation**
+**Given** staff login is an internal feature
+**When** I view the desktop navigation
+**Then** Staff Login button must NOT appear in the main navigation
+**And** Staff Login link must be added to the Footer (less prominent for security)
+
+**AC5: Footer Updates**
+**Given** the footer link structure
+**When** I view the footer
+**Then** Footer must include:
+  - Privacy link → `/about/privacy`
+  - Terms link → `/terms`
+  - Contact Us link → `/support/contact` (not `/support`)
+  - Staff Login link → `/staff/login` (new addition)
+  - All support links functional
+  - Ministry contact information
+  - Copyright notice with current year
+
+**AC6: Mobile Navigation Sync**
+**Given** mobile navigation must match desktop
+**When** I view the mobile navigation
+**Then** Support must expand to show subpages
+**And** Contact must appear as a navigation item
+**And** Staff Login must NOT appear in mobile navigation
+
+**References:**
+- public-website-ia.md: Section 6 Legal pages
+- PRD NFR4: Security & Compliance requirements
+- UX Decision: Staff Login moved to footer to reduce visibility to bad actors
+
+---
+
+### Story 1.5.7: Guide Detail Pages
+
+As a Worker or Employer,
+I want to read detailed step-by-step guides for each registration task,
+So that I can complete the process confidently and correctly.
+
+**Acceptance Criteria:**
+
+**AC1: Worker Guide Pages (4 pages)**
+**Given** the GuidesPage worker section
+**When** I click "Read Guide" on any worker guide card
+**Then** I must be navigated to a dedicated guide page:
+  - `/support/guides/register` - How to Register
+  - `/support/guides/survey` - How to Complete the Survey
+  - `/support/guides/marketplace-opt-in` - How to Opt Into the Marketplace
+  - `/support/guides/get-nin` - How to Get a NIN
+**And** each page must include:
+  - Clear step-by-step instructions with numbered steps
+  - Visual aids or icons for each major step
+  - Estimated time to complete
+  - Prerequisites or requirements
+  - Common troubleshooting tips
+  - "Back to Guides" navigation link
+  - Related guides section
+
+**AC2: Employer Guide Pages (3 pages)**
+**Given** the GuidesPage employer section
+**When** I click "Read Guide" on any employer guide card
+**Then** I must be navigated to a dedicated guide page:
+  - `/support/guides/search-marketplace` - How to Search the Marketplace
+  - `/support/guides/employer-account` - Setting Up an Employer Account
+  - `/support/guides/verify-worker` - How to Verify a Worker
+**And** each page must include:
+  - Clear step-by-step instructions with numbered steps
+  - Visual aids or icons for each major step
+  - Estimated time to complete
+  - Prerequisites or requirements
+  - Common troubleshooting tips
+  - "Back to Guides" navigation link
+  - Related guides section
+
+**AC3: GuidesPage Link Updates**
+**Given** the current GuidesPage implementation
+**When** Guide cards are rendered
+**Then** Each "Read Guide" link must point to the corresponding guide detail page
+**And** Links must NOT use anchor navigation (e.g., `/participate/workers#survey`)
+
+**AC4: Routing Integration**
+**Given** the App.tsx routing structure
+**When** guide routes are added
+**Then** Routes must be nested under `/support/guides/*`
+**And** All guide pages must lazy load for code splitting
+**And** Pages must use PublicLayout
+
+**References:**
+- public-website-ia.md: Section 5.3 Guides wireframe
+- Story 1.5.5: Support Section (GuidesPage implementation)
+- PRD FR1.2: Worker digital registration journey
+
+---
+
 ## Epic 2: Questionnaire Management & ODK Integration
 
 **Epic Goal:** Enable the management of digital survey forms and the seamless connection between the Custom App and the ODK Central collection engine.
@@ -439,16 +828,108 @@ So that the data is available for reporting and fraud detection.
 **Then** the system should push the job to BullMQ and deduplicate by `submission_id`
 **And** the record should be extracted and saved to the `app_db` (idempotent ingestion).
 
+### Story 3.0: Google OAuth & Enhanced Public Registration
+
+As a Public User,
+I want to register using my Google account as the primary option,
+So that I can sign up faster with a pre-verified email and reduced friction.
+
+**Dependencies:**
+- Epic 1 (Foundation) - Complete
+- Epic 1.5 (Public Website) - Complete
+- ADR-015: Public User Registration & Email Verification Strategy
+
+**Blocks:** Story 3.5 (Public Self-Registration & Survey Access)
+
+**Acceptance Criteria:**
+
+**AC1: Google OAuth Primary Registration**
+**Given** the public registration page
+**When** I view the registration options
+**Then** "Continue with Google" MUST be displayed as the primary/recommended option
+**And** clicking it MUST initiate Google OAuth 2.0 authorization flow
+**And** upon successful OAuth callback, the system MUST:
+  - Extract verified email from Google response
+  - Create user account with `auth_provider: 'google'` and `google_id` stored
+  - Skip email verification (Google pre-verifies)
+  - Redirect to NIN entry and profile completion
+
+**AC2: Email Registration Fallback**
+**Given** the public registration page
+**When** I choose "Register with Email" (secondary option)
+**Then** I MUST provide email and password
+**And** the system MUST send Hybrid Verification Email per ADR-015:
+  - Single email containing BOTH magic link AND 6-digit OTP
+  - Magic link expires in 24 hours
+  - OTP expires in 10 minutes
+  - Either method verifies the email successfully
+
+**AC3: Database Schema Updates**
+**Given** the existing user table
+**When** implementing OAuth support
+**Then** the schema MUST include:
+  - `auth_provider` ENUM ('email', 'google') NOT NULL DEFAULT 'email'
+  - `google_id` VARCHAR(255) NULLABLE UNIQUE
+  - `password_hash` NULLABLE (NULL for Google OAuth users)
+  - `email_verified_at` TIMESTAMP (set immediately for Google users)
+
+**AC4: Login Flow Enhancement**
+**Given** an existing user
+**When** they attempt to log in
+**Then** the system MUST:
+  - Show "Continue with Google" as primary option
+  - Show "Login with Email" as secondary option
+  - For Google users: only allow Google OAuth login (no password)
+  - For Email users: allow email/password login
+  - Prevent account linking conflicts (same email, different providers)
+
+**AC5: Security Requirements**
+**Given** the OAuth implementation
+**When** handling authentication flows
+**Then** the system MUST:
+  - Use OAuth 2.0 `state` parameter to prevent CSRF attacks
+  - Validate Google ID token signature server-side
+  - Store only necessary Google data (id, email, name)
+  - Never store Google access/refresh tokens
+  - Implement rate limiting: 10 OAuth attempts per IP per hour
+
+**AC6: Profile Completion Flow**
+**Given** a newly registered user (via Google or Email)
+**When** registration is complete
+**Then** the user MUST be redirected to profile completion
+**And** profile completion flow remains unchanged:
+  - NIN entry with Verhoeff validation
+  - Live selfie capture
+  - Bank details for stipend
+  - Next of kin information
+
+**AC7: Password Reset Handling**
+**Given** a user requesting password reset
+**When** the user registered via Google OAuth
+**Then** the system MUST display message: "This account uses Google Sign-In. Please use 'Continue with Google' to access your account."
+**And** password reset MUST NOT be offered to Google OAuth users
+
+**References:**
+- ADR-015: Public User Registration & Email Verification Strategy
+- PRD FR3: Public Access & Authentication
+- Story 1.8: Public User Self-Registration (enhanced by this story)
+- UX Design Specification Section 8.3: Registration Flow
+
+---
+
 ### Story 3.5: Public Self-Registration & Survey Access
 
 As a Public User,
 I want to register on the website and fill out the survey,
 So that I can contribute my skills to the registry.
 
+**Dependencies:**
+- Story 3.0: Google OAuth & Enhanced Public Registration
+
 **Acceptance Criteria:**
 
 **Given** the public homepage
-**When** I register with my NIN and Phone Number
+**When** I register via Google OAuth or Email (per Story 3.0)
 **Then** the system should verify my NIN uniqueness and provide access to the survey portal
 **And** my submission should be ingested into the same pipeline as enumerator data.
 

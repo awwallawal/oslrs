@@ -62,3 +62,16 @@ export const resendVerificationRequestSchema = z.object({
 });
 
 export type ResendVerificationRequestInput = z.infer<typeof resendVerificationRequestSchema>;
+
+// OTP verification request schema (ADR-015)
+// Note: captchaToken is optional here because the verifyCaptcha middleware
+// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
+export const verifyOtpRequestSchema = z.object({
+  email: emailSchema,
+  otp: z.string()
+    .length(6, 'OTP must be exactly 6 digits')
+    .regex(/^\d{6}$/, 'OTP must contain only digits'),
+  captchaToken: captchaTokenSchema.optional(),
+});
+
+export type VerifyOtpRequestInput = z.infer<typeof verifyOtpRequestSchema>;

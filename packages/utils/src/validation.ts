@@ -1,6 +1,80 @@
 /**
+ * Checksum validation algorithms for NIN and other identifiers.
+ */
+
+/**
+ * Modulus 11 algorithm implementation
+ * Used for validating Nigerian National Identification Numbers (NIN).
+ *
+ * Algorithm:
+ * 1. Multiply first 10 digits by weights 10, 9, 8, 7, 6, 5, 4, 3, 2, 1
+ * 2. Sum all products
+ * 3. Calculate remainder: sum mod 11
+ * 4. Check digit = 11 - remainder (if result is 11, use 0)
+ * 5. Compare with the 11th digit
+ */
+export function modulus11Check(input: string): boolean {
+  if (!/^\d{11}$/.test(input)) {
+    return false;
+  }
+
+  const digits = input.split('').map(Number);
+  const weights = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+  // Calculate weighted sum of first 10 digits
+  let sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += digits[i] * weights[i];
+  }
+
+  // Calculate expected check digit
+  const remainder = sum % 11;
+  const expectedCheckDigit = remainder === 0 ? 0 : 11 - remainder;
+
+  // For Modulus 11, if check digit would be 10, it's typically invalid
+  // But Nigerian NIN uses 0 when remainder is 0 (11 - 0 = 11 → 0)
+  if (expectedCheckDigit === 11) {
+    return digits[10] === 0;
+  }
+
+  // Check digit 10 would be invalid (can't be single digit)
+  if (expectedCheckDigit === 10) {
+    return false;
+  }
+
+  return digits[10] === expectedCheckDigit;
+}
+
+/**
+ * Generates a Modulus 11 check digit and appends it to a 10-digit input.
+ */
+export function modulus11Generate(input: string): string {
+  if (!/^\d{10}$/.test(input)) {
+    throw new Error('Input must be exactly 10 digits');
+  }
+
+  const digits = input.split('').map(Number);
+  const weights = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+  let sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += digits[i] * weights[i];
+  }
+
+  const remainder = sum % 11;
+  const checkDigit = remainder === 0 ? 0 : 11 - remainder;
+
+  // If check digit would be 10, this base number cannot have a valid check digit
+  if (checkDigit === 10) {
+    throw new Error('This base number cannot have a valid Modulus 11 check digit');
+  }
+
+  return input + checkDigit;
+}
+
+/**
  * Verhoeff algorithm implementation
- * Used for validating and generating checksums for NIN.
+ * Kept for backwards compatibility and testing purposes.
  */
 
 const multiplicationTable = [

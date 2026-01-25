@@ -42,6 +42,13 @@ router.get('/verify-email/:token',
   AuthController.verifyEmail
 );
 
+// OTP verification - rate limited + CAPTCHA protected (ADR-015)
+router.post('/verify-otp',
+  verifyEmailRateLimit,
+  verifyCaptcha,
+  AuthController.verifyOtp
+);
+
 // Resend verification email - rate limited + CAPTCHA protected (Story 1.8)
 router.post('/resend-verification',
   resendVerificationRateLimit,
