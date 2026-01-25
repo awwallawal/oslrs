@@ -42,3 +42,12 @@ reporter*.log
 
 # Temp files
 tmpclaude-*
+new_error.txt
+nul
+
+# Unrelated/personal docs
+docs/agrikonsult_ffs_handout.html
+docs/agrikonsult_ffs_presentation.html
+docs/create_presentation.py
+docs/sosina.txt
+docs/Retrospective Workflow bmadbmm.txt
