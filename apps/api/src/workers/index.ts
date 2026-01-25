@@ -5,12 +5,12 @@
  */
 
 import { importWorker } from './import.worker.js';
-import { emailWorker, closeEmailWorker } from './email.worker.js';
+import { closeEmailWorker } from './email.worker.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'workers' });
 
-// Export workers for direct access if needed
+// Re-export workers for direct access
 export { importWorker } from './import.worker.js';
 export { emailWorker, closeEmailWorker } from './email.worker.js';
 

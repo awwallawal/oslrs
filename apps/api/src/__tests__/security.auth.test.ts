@@ -7,6 +7,23 @@ import { generateInvitationToken } from '@oslsr/utils';
 import { modulus11Generate } from '@oslsr/utils/src/validation';
 import { eq } from 'drizzle-orm';
 
+/**
+ * Generate a valid NIN with retry logic.
+ * ~9% of random seeds produce check digit 10 which is invalid for Modulus 11.
+ */
+function generateValidNin(): string {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const seed = (Math.floor(Math.random() * 1000000000) + attempt).toString().padStart(10, '0');
+    try {
+      return modulus11Generate(seed);
+    } catch {
+      // Retry with next seed
+    }
+  }
+  // Fallback to a known valid NIN (verified against real government NINs)
+  return '61961438053';
+}
+
 const request = supertest(app);
 
 describe('Security: Authentication & Authorization', () => {
@@ -53,9 +70,8 @@ describe('Security: Authentication & Authorization', () => {
       const futureTime = new Date('2025-01-02T11:00:00Z'); // +25h
       vi.setSystemTime(futureTime);
 
-      // 4. Attempt activation
-      const seed = Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-      const nin = modulus11Generate(seed);
+      // 4. Attempt activation (use helper with retry for Modulus 11 edge case)
+      const nin = generateValidNin();
 
       const res = await request.post(`/api/v1/auth/activate/${token}`).send({
         password: 'Password123!',

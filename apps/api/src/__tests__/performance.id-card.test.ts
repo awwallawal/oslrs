@@ -21,6 +21,23 @@ import { modulus11Generate } from '@oslsr/utils/src/validation';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 
+/**
+ * Generate a valid NIN with retry logic.
+ * ~9% of random seeds produce check digit 10 which is invalid for Modulus 11.
+ */
+function generateValidNin(): string {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const seed = (Math.floor(Math.random() * 1000000000) + attempt).toString().padStart(10, '0');
+    try {
+      return modulus11Generate(seed);
+    } catch {
+      // Retry with next seed
+    }
+  }
+  // Fallback to a known valid NIN
+  return '61961438053';
+}
+
 const request = supertest(app);
 
 describe('Performance: ID Card Generation', () => {
@@ -35,8 +52,7 @@ describe('Performance: ID Card Generation', () => {
     const lgaId = lga?.id || (await db.query.lgas.findFirst({ where: eq(lgas.name, 'Perf LGA') }))!.id;
 
     const email = `perf-${Date.now()}@example.com`;
-    const seed = Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-    const nin = modulus11Generate(seed);
+    const nin = generateValidNin();
 
     const [user] = await db.insert(users).values({
       email,

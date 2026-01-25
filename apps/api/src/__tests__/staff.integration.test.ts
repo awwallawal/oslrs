@@ -65,8 +65,12 @@ describe('Staff API Integration', () => {
 
     describe('POST /api/v1/staff/manual', () => {
         it('should create staff when authorized', async () => {
-            const mockStaff = { id: validUuid, email: 'test@example.com' };
-            vi.mocked(StaffService.createManual).mockResolvedValue(mockStaff);
+            const mockUser = { id: validUuid, email: 'test@example.com' };
+            // Service returns { user, emailStatus } per Story 1-11 AC8
+            vi.mocked(StaffService.createManual).mockResolvedValue({
+                user: mockUser,
+                emailStatus: 'sent',
+            } as any);
 
             const res = await request(app)
                 .post('/api/v1/staff/manual')
@@ -80,7 +84,8 @@ describe('Staff API Integration', () => {
                 });
 
             expect(res.status).toBe(201);
-            expect(res.body.data).toEqual(mockStaff);
+            // Controller spreads user and adds emailStatus
+            expect(res.body.data).toEqual({ ...mockUser, emailStatus: 'sent' });
             expect(StaffService.createManual).toHaveBeenCalled();
         });
 
