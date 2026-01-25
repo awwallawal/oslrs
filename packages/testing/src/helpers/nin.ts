@@ -10,12 +10,18 @@
 
 import { modulus11Generate } from '@oslsr/utils/src/validation';
 
+// Global counter to ensure unique NINs across test runs
+let ninCounter = 0;
+
 /**
  * Generate a valid Nigerian NIN with retry logic.
  *
  * About 9% of random 10-digit base numbers produce a check digit of 10,
  * which cannot be represented as a single digit. This function retries
  * with different seeds until a valid NIN is generated.
+ *
+ * Uses a global counter combined with random values to ensure uniqueness
+ * even when fallback is needed.
  *
  * @param maxAttempts - Maximum retry attempts (default: 20)
  * @returns A valid 11-digit NIN string
@@ -29,8 +35,11 @@ import { modulus11Generate } from '@oslsr/utils/src/validation';
  * ```
  */
 export function generateValidNin(maxAttempts = 20): string {
+  // Use counter + timestamp for unique base each call
+  const baseOffset = ninCounter++ * 1000 + Date.now() % 1000;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const seed = (Math.floor(Math.random() * 1000000000) + attempt)
+    const seed = ((baseOffset + Math.floor(Math.random() * 100000000) + attempt) % 10000000000)
       .toString()
       .padStart(10, '0');
     try {
@@ -40,9 +49,21 @@ export function generateValidNin(maxAttempts = 20): string {
     }
   }
 
-  // Fallback to a known valid NIN (verified against real government NINs)
-  // See: docs/SESSION-NOTES-2026-01-25-STORY-1-11-COMPLETION.md
-  return '61961438053';
+  // Fallback: use counter-based seed to guarantee uniqueness
+  // Try sequential seeds starting from counter value until one works
+  for (let i = 0; i < 100; i++) {
+    const fallbackSeed = ((ninCounter * 1000 + i) % 10000000000)
+      .toString()
+      .padStart(10, '0');
+    try {
+      return modulus11Generate(fallbackSeed);
+    } catch {
+      // Continue to next seed
+    }
+  }
+
+  // This should never happen - statistically impossible
+  throw new Error('Failed to generate valid NIN after exhaustive attempts');
 }
 
 /**
