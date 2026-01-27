@@ -57,6 +57,13 @@
       "when": 1769365467667,
       "tag": "0007_large_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1769414535990,
+      "tag": "0008_spotty_whizzer",
+      "breakpoints": true
     }
   ]
 }

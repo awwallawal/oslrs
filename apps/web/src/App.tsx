@@ -54,6 +54,9 @@ const GuideVerifyWorkerPage = lazy(() => import('./features/support/pages/guides
 // Lazy load Legal pages for code splitting
 const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
 
+// Lazy load Questionnaire Management page (Story 2-1)
+const QuestionnaireManagementPage = lazy(() => import('./features/questionnaires/pages/QuestionnaireManagementPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -473,6 +476,25 @@ function App() {
                   <div className="min-h-screen bg-neutral-50 p-6">
                     <h1 className="text-2xl font-semibold text-neutral-900">Admin Portal</h1>
                     <p className="text-neutral-600 mt-2">Welcome to the admin portal.</p>
+                  </div>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Questionnaire Management - Super Admin only (Story 2-1) */}
+            <Route
+              path="admin/questionnaires"
+              element={
+                <ProtectedRoute
+                  redirectTo="/staff/login"
+                  allowedRoles={['super_admin']}
+                >
+                  <div className="min-h-screen bg-neutral-50 p-6">
+                    <div className="max-w-5xl mx-auto">
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <QuestionnaireManagementPage />
+                      </Suspense>
+                    </div>
                   </div>
                 </ProtectedRoute>
               }

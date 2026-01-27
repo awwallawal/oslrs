@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSLSR Labour & Skills Registry Survey - Schema Review</title>
+    <title>OSLSR Labour & Skills Registry Survey - Schema Review v3.0</title>
     <style>
         * {
             box-sizing: border-box;
@@ -13,25 +13,25 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 40px 20px;
             background: #fff;
         }
 
         h1 {
-            color: #1a5f2a;
-            border-bottom: 3px solid #1a5f2a;
+            color: #9C1E23;
+            border-bottom: 3px solid #9C1E23;
             padding-bottom: 10px;
             margin-bottom: 5px;
         }
 
         h2 {
-            color: #2d7a3e;
+            color: #7a181c;
             margin-top: 40px;
-            padding: 10px 15px;
-            background: #e8f5e9;
-            border-left: 4px solid #1a5f2a;
+            padding: 12px 15px;
+            background: #fdf2f2;
+            border-left: 4px solid #9C1E23;
         }
 
         h3 {
@@ -47,13 +47,13 @@
         }
 
         .meta-box {
-            background: #f5f5f5;
-            border: 1px solid #ddd;
+            background: #fdf2f2;
+            border: 1px solid #e8c4c4;
             border-radius: 8px;
             padding: 20px;
             margin: 20px 0;
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 10px;
         }
 
@@ -64,7 +64,7 @@
         .meta-label {
             font-weight: 600;
             color: #555;
-            min-width: 120px;
+            min-width: 100px;
         }
 
         .meta-value {
@@ -73,12 +73,69 @@
 
         .status-badge {
             display: inline-block;
-            background: #1a5f2a;
+            background: #9C1E23;
             color: white;
             padding: 3px 12px;
             border-radius: 4px;
             font-size: 0.85em;
             font-weight: 600;
+        }
+
+        .whats-new {
+            background: linear-gradient(135deg, #9C1E23 0%, #c42a30 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .whats-new h2 {
+            color: white;
+            background: none;
+            border: none;
+            margin: 0 0 15px 0;
+            padding: 0;
+        }
+
+        .whats-new table {
+            background: rgba(255,255,255,0.95);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .whats-new th {
+            background: #7a181c;
+        }
+
+        .whats-new td {
+            color: #333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #9C1E23;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
         }
 
         .condition-note {
@@ -99,7 +156,7 @@
         }
 
         th {
-            background: #1a5f2a;
+            background: #9C1E23;
             color: white;
             padding: 12px 10px;
             text-align: left;
@@ -117,7 +174,7 @@
         }
 
         tr:hover {
-            background: #e8f5e9;
+            background: #fdf2f2;
         }
 
         .required-yes {
@@ -131,7 +188,7 @@
 
         .question-num {
             font-weight: 600;
-            color: #1a5f2a;
+            color: #9C1E23;
             white-space: nowrap;
         }
 
@@ -141,6 +198,16 @@
             border-radius: 3px;
             font-size: 0.85em;
             white-space: nowrap;
+        }
+
+        .new-badge {
+            background: #4caf50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7em;
+            margin-left: 5px;
+            vertical-align: middle;
         }
 
         .appendix {
@@ -157,7 +224,7 @@
 
         .choice-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 20px;
             margin: 20px 0;
         }
@@ -190,6 +257,124 @@
             padding: 6px 10px;
         }
 
+        .skills-category {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .skills-category-header {
+            background: #9C1E23;
+            color: white;
+            padding: 10px 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .skills-category-header:hover {
+            background: #7a181c;
+        }
+
+        .skills-category-content {
+            padding: 15px;
+            background: #fafafa;
+        }
+
+        .skill-tag {
+            display: inline-block;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .validation-rules {
+            background: #fff8e1;
+            border: 1px solid #ffcc02;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .validation-rules h3 {
+            color: #f57c00;
+            margin-top: 0;
+        }
+
+        .sign-off {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 30px;
+            margin-top: 50px;
+        }
+
+        .sign-off h2 {
+            color: #2e7d32;
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+
+        .checklist li {
+            padding: 10px 0;
+            border-bottom: 1px solid #c8e6c9;
+            display: flex;
+            align-items: center;
+        }
+
+        .checklist li:last-child {
+            border-bottom: none;
+        }
+
+        .checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #4caf50;
+            border-radius: 4px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .signature-area {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .signature-field {
+            border-bottom: 2px solid #333;
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+        }
+
+        .signature-label {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .comments-area {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #c8e6c9;
+            border-radius: 8px;
+            min-height: 100px;
+            background: white;
+        }
+
         .footer {
             margin-top: 50px;
             padding-top: 20px;
@@ -199,10 +384,19 @@
             font-size: 0.9em;
         }
 
+        .oyo-logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .oyo-logo img {
+            height: 80px;
+        }
+
         @media print {
             body {
                 padding: 20px;
-                font-size: 11pt;
+                font-size: 10pt;
             }
 
             h2 {
@@ -213,13 +407,28 @@
                 page-break-inside: avoid;
             }
 
+            .whats-new {
+                background: #9C1E23 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
             .choice-grid {
                 grid-template-columns: repeat(3, 1fr);
+            }
+
+            .sign-off {
+                page-break-before: always;
             }
         }
     </style>
 </head>
 <body>
+
+    <div class="oyo-logo">
+        <div style="font-size: 2em; color: #9C1E23; font-weight: bold;">OYO STATE GOVERNMENT</div>
+        <div style="color: #666;">Ministry of Trade, Investment and Cooperatives</div>
+    </div>
 
     <h1>OSLSR Labour & Skills Registry Survey</h1>
     <p class="subtitle">Questionnaire Schema for Validator Review</p>
@@ -227,27 +436,102 @@
     <div class="meta-box">
         <div class="meta-item">
             <span class="meta-label">Version:</span>
-            <span class="meta-value">2.0 (Policy Aligned)</span>
+            <span class="meta-value">3.0 (PRD-Aligned)</span>
         </div>
         <div class="meta-item">
             <span class="meta-label">Date:</span>
-            <span class="meta-value">2026-01-01</span>
-        </div>
-        <div class="meta-item">
-            <span class="meta-label">Form ID:</span>
-            <span class="meta-value">oslsr_master_v1</span>
+            <span class="meta-value">2026-01-26</span>
         </div>
         <div class="meta-item">
             <span class="meta-label">Status:</span>
             <span class="status-badge">FOR REVIEW</span>
         </div>
         <div class="meta-item">
-            <span class="meta-label">Form Title:</span>
-            <span class="meta-value">OSLSR Labour & Skills Registry Survey</span>
+            <span class="meta-label">Form ID:</span>
+            <span class="meta-value">oslsr_master_v3</span>
         </div>
         <div class="meta-item">
             <span class="meta-label">Language:</span>
             <span class="meta-value">English</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Endpoint:</span>
+            <span class="meta-value">/api/webhook/odk</span>
+        </div>
+    </div>
+
+    <!-- What's New Section -->
+    <div class="whats-new">
+        <h2>What's New in Version 3.0</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Change</th>
+                    <th>Impact</th>
+                    <th>PRD Reference</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>NIN now REQUIRED</strong></td>
+                    <td>All respondents must provide NIN</td>
+                    <td>FR5, FR21</td>
+                </tr>
+                <tr>
+                    <td><strong>LGA field added</strong></td>
+                    <td>Enables marketplace filtering by location</td>
+                    <td>FR17</td>
+                </tr>
+                <tr>
+                    <td><strong>Years of Experience added</strong></td>
+                    <td>Enables marketplace filtering by experience</td>
+                    <td>FR17</td>
+                </tr>
+                <tr>
+                    <td><strong>Skills expanded to 50+</strong></td>
+                    <td>Comprehensive coverage across 8 categories</td>
+                    <td>FR17</td>
+                </tr>
+                <tr>
+                    <td><strong>Employment types expanded</strong></td>
+                    <td>Added Contractor, Apprentice/Intern options</td>
+                    <td>Labor statistics</td>
+                </tr>
+                <tr>
+                    <td><strong>Education levels refined</strong></td>
+                    <td>9 granular options (NCE/OND, HND/BSc separated)</td>
+                    <td>Demographics</td>
+                </tr>
+                <tr>
+                    <td><strong>Business fields added</strong></td>
+                    <td>Address, Apprentice Count for enterprise data</td>
+                    <td>Skills/Business</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">6</div>
+            <div class="stat-label">Sections</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">~35</div>
+            <div class="stat-label">Questions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">28</div>
+            <div class="stat-label">Required</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">12</div>
+            <div class="stat-label">Conditional</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">10min</div>
+            <div class="stat-label">Est. Time</div>
         </div>
     </div>
 
@@ -266,14 +550,14 @@
         <tbody>
             <tr>
                 <td class="question-num">1.1</td>
-                <td>Welcome note introducing the Oyo State Labour & Skills Registry (OSLSR)</td>
+                <td>Welcome note introducing the Oyo State Labour & Skills Registry (OSLSR). This survey takes approximately 10 minutes.</td>
                 <td><span class="response-type">Display Only</span></td>
                 <td>-</td>
                 <td>Informational text shown to all participants</td>
             </tr>
             <tr>
                 <td class="question-num">1.2</td>
-                <td>Do you consent to participate?</td>
+                <td>Do you consent to participate in this survey?</td>
                 <td><span class="response-type">Yes / No</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Must consent to proceed with survey</td>
@@ -316,7 +600,7 @@
                 <td>Gender</td>
                 <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Options: Male, Female, Other</td>
+                <td>Male, Female, Prefer not to say</td>
             </tr>
             <tr>
                 <td class="question-num">2.4</td>
@@ -330,21 +614,21 @@
                 <td>Age</td>
                 <td><span class="response-type">Auto-calculated</span></td>
                 <td>-</td>
-                <td>Derived from Date of Birth; Must be 15+ years</td>
+                <td>Derived from DOB; Must be 15+ years</td>
             </tr>
             <tr>
                 <td class="question-num">2.6</td>
                 <td>Marital Status</td>
                 <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Options: Single, Married, Divorced, Widowed</td>
+                <td>Single, Married, Divorced, Widowed, Separated</td>
             </tr>
             <tr>
                 <td class="question-num">2.7</td>
                 <td>Highest Education Completed</td>
                 <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Options: None, Primary, Secondary, Vocational, Tertiary</td>
+                <td>9 options (see Appendix A)</td>
             </tr>
             <tr>
                 <td class="question-num">2.8</td>
@@ -358,24 +642,25 @@
                 <td>Phone Number</td>
                 <td><span class="response-type">Text</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Must be valid Nigerian format (e.g., 08012345678)</td>
+                <td>Nigerian mobile: 0[7-9][0-1]xxxxxxxx</td>
             </tr>
             <tr>
                 <td class="question-num">2.10</td>
-                <td>NIN (National Identification Number)</td>
+                <td>NIN (National Identification Number) <span class="new-badge">UPDATED</span></td>
                 <td><span class="response-type">Text</span></td>
-                <td class="required-no">No</td>
-                <td>Must be exactly 11 digits if provided</td>
+                <td class="required-yes"><strong>Yes</strong></td>
+                <td>Must be exactly 11 digits (was optional in v2.0)</td>
             </tr>
             <tr>
                 <td class="question-num">2.11</td>
-                <td>GPS Location</td>
-                <td><span class="response-type">Geolocation</span></td>
+                <td>Local Government Area (LGA) <span class="new-badge">NEW</span></td>
+                <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Captured automatically by device</td>
+                <td>33 Oyo State LGAs (see Appendix A)</td>
             </tr>
         </tbody>
     </table>
+    <p><em>Note: GPS Location captured automatically by device</em></p>
 
     <!-- Section 3 -->
     <h2>Section 3: Labour Force Participation</h2>
@@ -387,10 +672,10 @@
             <tr>
                 <th style="width:50px">#</th>
                 <th>Question</th>
-                <th style="width:120px">Response Type</th>
-                <th style="width:80px">Required</th>
-                <th>Show If</th>
-                <th>Validation / Notes</th>
+                <th style="width:110px">Response</th>
+                <th style="width:70px">Req'd</th>
+                <th style="width:140px">Show If</th>
+                <th>Validation</th>
             </tr>
         </thead>
         <tbody>
@@ -428,10 +713,10 @@
             </tr>
             <tr>
                 <td class="question-num">3.5</td>
-                <td>Main Occupation</td>
+                <td>Main Occupation/Job Title</td>
                 <td><span class="response-type">Text</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Q3.1 = Yes OR Q3.2 = Yes</td>
+                <td>Q3.1=Yes OR Q3.2=Yes</td>
                 <td>-</td>
             </tr>
             <tr>
@@ -439,24 +724,32 @@
                 <td>Type of Employment</td>
                 <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Q3.1 = Yes OR Q3.2 = Yes</td>
-                <td>Wage Earner, Self-Employed, Unpaid Family Worker</td>
+                <td>Q3.1=Yes OR Q3.2=Yes</td>
+                <td>6 options (see Appendix)</td>
             </tr>
             <tr>
                 <td class="question-num">3.7</td>
+                <td>Years of Experience <span class="new-badge">NEW</span></td>
+                <td><span class="response-type">Single Choice</span></td>
+                <td class="required-yes">Yes</td>
+                <td>Q3.1=Yes OR Q3.2=Yes</td>
+                <td>5 options (see Appendix)</td>
+            </tr>
+            <tr>
+                <td class="question-num">3.8</td>
                 <td>Hours worked last week</td>
                 <td><span class="response-type">Number</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Q3.1 = Yes</td>
-                <td>Must be between 0 and 168</td>
+                <td>0-168 hours</td>
             </tr>
             <tr>
-                <td class="question-num">3.8</td>
+                <td class="question-num">3.9</td>
                 <td>Estimated Monthly Income (Naira)</td>
                 <td><span class="response-type">Number</span></td>
                 <td class="required-no">No</td>
                 <td>Q3.1 = Yes</td>
-                <td>-</td>
+                <td>Cannot be negative</td>
             </tr>
         </tbody>
     </table>
@@ -486,78 +779,102 @@
                 <td>Total people in household</td>
                 <td><span class="response-type">Number</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Minimum value: 1</td>
+                <td>Minimum: 1</td>
             </tr>
             <tr>
                 <td class="question-num">4.3</td>
                 <td>Number of dependents (Children/Elderly)</td>
                 <td><span class="response-type">Number</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Cannot exceed total household size (Q4.2)</td>
+                <td>Cannot exceed household size</td>
             </tr>
             <tr>
                 <td class="question-num">4.4</td>
-                <td>Housing Ownership</td>
+                <td>Housing Ownership Status</td>
                 <td><span class="response-type">Single Choice</span></td>
-                <td class="required-no">No</td>
-                <td>Options: Owned, Rented, Living with Family (Free)</td>
+                <td class="required-yes">Yes</td>
+                <td>5 options (see Appendix)</td>
             </tr>
         </tbody>
     </table>
 
     <!-- Section 5 -->
-    <h2>Section 5: Skills & Interest</h2>
+    <h2>Section 5: Skills & Business</h2>
     <table>
         <thead>
             <tr>
                 <th style="width:50px">#</th>
                 <th>Question</th>
-                <th style="width:120px">Response Type</th>
-                <th style="width:80px">Required</th>
-                <th>Show If</th>
-                <th>Validation / Notes</th>
+                <th style="width:110px">Response</th>
+                <th style="width:70px">Req'd</th>
+                <th style="width:120px">Show If</th>
+                <th>Validation</th>
             </tr>
         </thead>
         <tbody>
             <tr>
                 <td class="question-num">5.1</td>
                 <td>Primary Skills (Select all that apply)</td>
-                <td><span class="response-type">Multiple Choice</span></td>
+                <td><span class="response-type">Multi Choice</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Always</td>
-                <td>See Skills List in Appendix</td>
+                <td>50+ skills (see Appendix B)</td>
             </tr>
             <tr>
                 <td class="question-num">5.2</td>
-                <td>Skills you wish to learn</td>
-                <td><span class="response-type">Multiple Choice</span></td>
+                <td>Other skills not listed <span class="new-badge">NEW</span></td>
+                <td><span class="response-type">Text</span></td>
                 <td class="required-no">No</td>
                 <td>Always</td>
-                <td>See Skills List in Appendix</td>
+                <td>Max 200 characters</td>
             </tr>
             <tr>
                 <td class="question-num">5.3</td>
-                <td>Do you own a business?</td>
+                <td>Skills you would like to learn</td>
+                <td><span class="response-type">Multi Choice</span></td>
+                <td class="required-no">No</td>
+                <td>Always</td>
+                <td>Same skills list</td>
+            </tr>
+            <tr>
+                <td class="question-num">5.4</td>
+                <td>Do you own or operate a business?</td>
                 <td><span class="response-type">Yes / No</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Always</td>
                 <td>-</td>
             </tr>
             <tr>
-                <td class="question-num">5.4</td>
+                <td class="question-num">5.5</td>
                 <td>Business Name</td>
                 <td><span class="response-type">Text</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Q5.3 = Yes</td>
+                <td>Q5.4 = Yes</td>
                 <td>-</td>
             </tr>
             <tr>
-                <td class="question-num">5.5</td>
-                <td>Registered with CAC?</td>
+                <td class="question-num">5.6</td>
+                <td>Is your business registered with CAC?</td>
                 <td><span class="response-type">Single Choice</span></td>
                 <td class="required-yes">Yes</td>
-                <td>Q5.3 = Yes</td>
-                <td>Options: Registered, Unregistered</td>
+                <td>Q5.4 = Yes</td>
+                <td>3 options</td>
+            </tr>
+            <tr>
+                <td class="question-num">5.7</td>
+                <td>Business Premises Address <span class="new-badge">NEW</span></td>
+                <td><span class="response-type">Text</span></td>
+                <td class="required-yes">Yes</td>
+                <td>Q5.4 = Yes</td>
+                <td>-</td>
+            </tr>
+            <tr>
+                <td class="question-num">5.8</td>
+                <td>Number of apprentices/trainees <span class="new-badge">NEW</span></td>
+                <td><span class="response-type">Number</span></td>
+                <td class="required-no">No</td>
+                <td>Q5.4 = Yes</td>
+                <td>Cannot be negative</td>
             </tr>
         </tbody>
     </table>
@@ -569,40 +886,48 @@
             <tr>
                 <th style="width:50px">#</th>
                 <th>Question</th>
-                <th style="width:120px">Response Type</th>
-                <th style="width:80px">Required</th>
-                <th>Show If</th>
-                <th>Validation / Notes</th>
+                <th style="width:110px">Response</th>
+                <th style="width:70px">Req'd</th>
+                <th style="width:120px">Show If</th>
+                <th>Notes</th>
             </tr>
         </thead>
         <tbody>
             <tr>
+                <td class="question-num">6.0</td>
+                <td>Marketplace explanation: The OSLSR Skills Marketplace connects skilled workers with employers. You can choose to be listed anonymously or share your contact details.</td>
+                <td><span class="response-type">Display Only</span></td>
+                <td>-</td>
+                <td>Always</td>
+                <td>Informational</td>
+            </tr>
+            <tr>
                 <td class="question-num">6.1</td>
-                <td>Join Anonymous Skills Marketplace?</td>
+                <td>Would you like to join the Anonymous Skills Marketplace?</td>
                 <td><span class="response-type">Yes / No</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Always</td>
-                <td>Allows skills to be visible anonymously to employers</td>
+                <td>Profession, LGA, experience visible</td>
             </tr>
             <tr>
                 <td class="question-num">6.2</td>
-                <td>Allow employers to see your Name and Phone?</td>
+                <td>Would you like employers to see your Name and Phone Number?</td>
                 <td><span class="response-type">Yes / No</span></td>
                 <td class="required-yes">Yes</td>
                 <td>Q6.1 = Yes</td>
-                <td>Enables direct employer contact</td>
+                <td>Enables direct contact</td>
             </tr>
             <tr>
                 <td class="question-num">6.3</td>
-                <td>Professional Bio</td>
+                <td>Professional Bio (brief description of your work)</td>
                 <td><span class="response-type">Text</span></td>
                 <td class="required-no">No</td>
                 <td>Q6.2 = Yes</td>
-                <td>Maximum 150 characters</td>
+                <td>Max 150 characters</td>
             </tr>
             <tr>
                 <td class="question-num">6.4</td>
-                <td>Portfolio Link</td>
+                <td>Portfolio or Social Media Link</td>
                 <td><span class="response-type">Text (URL)</span></td>
                 <td class="required-no">No</td>
                 <td>Q6.2 = Yes</td>
@@ -611,7 +936,7 @@
         </tbody>
     </table>
 
-    <!-- Appendix -->
+    <!-- Appendix A -->
     <div class="appendix">
         <h2>Appendix A: Choice Options Reference</h2>
 
@@ -622,7 +947,7 @@
                     <tr><th>Value</th><th>Label</th></tr>
                     <tr><td>male</td><td>Male</td></tr>
                     <tr><td>female</td><td>Female</td></tr>
-                    <tr><td>other</td><td>Other</td></tr>
+                    <tr><td>other</td><td>Prefer not to say</td></tr>
                 </table>
             </div>
 
@@ -634,89 +959,313 @@
                     <tr><td>married</td><td>Married</td></tr>
                     <tr><td>divorced</td><td>Divorced</td></tr>
                     <tr><td>widowed</td><td>Widowed</td></tr>
+                    <tr><td>separated</td><td>Separated</td></tr>
                 </table>
             </div>
 
             <div class="choice-box">
-                <h4>Education Level</h4>
+                <h4>Education Level (9 options)</h4>
                 <table>
                     <tr><th>Value</th><th>Label</th></tr>
                     <tr><td>none</td><td>No Formal Education</td></tr>
-                    <tr><td>primary</td><td>Primary</td></tr>
-                    <tr><td>secondary</td><td>Secondary</td></tr>
+                    <tr><td>primary</td><td>Primary School</td></tr>
+                    <tr><td>jss</td><td>Junior Secondary (JSS)</td></tr>
+                    <tr><td>sss</td><td>Senior Secondary (SSS/WAEC)</td></tr>
                     <tr><td>vocational</td><td>Vocational/Technical</td></tr>
-                    <tr><td>tertiary</td><td>Tertiary (Degree/HND)</td></tr>
+                    <tr><td>nce_ond</td><td>NCE/OND</td></tr>
+                    <tr><td>hnd_bsc</td><td>HND/Bachelor's</td></tr>
+                    <tr><td>masters</td><td>Master's Degree</td></tr>
+                    <tr><td>doctorate</td><td>Doctorate/PhD</td></tr>
                 </table>
             </div>
 
             <div class="choice-box">
-                <h4>Employment Type</h4>
+                <h4>Employment Type (6 options)</h4>
                 <table>
                     <tr><th>Value</th><th>Label</th></tr>
-                    <tr><td>wage</td><td>Wage Earner (Public/Private)</td></tr>
-                    <tr><td>self</td><td>Self-Employed (Artisan/Business)</td></tr>
-                    <tr><td>family</td><td>Unpaid Family Worker</td></tr>
+                    <tr><td>wage_public</td><td>Govt/Public Sector</td></tr>
+                    <tr><td>wage_private</td><td>Private Sector</td></tr>
+                    <tr><td>self_employed</td><td>Self-Employed</td></tr>
+                    <tr><td>contractor</td><td>Contractor/Consultant</td></tr>
+                    <tr><td>family_unpaid</td><td>Unpaid Family Worker</td></tr>
+                    <tr><td>apprentice</td><td>Apprentice/Intern</td></tr>
                 </table>
             </div>
 
             <div class="choice-box">
-                <h4>Housing Status</h4>
+                <h4>Years of Experience</h4>
+                <table>
+                    <tr><th>Value</th><th>Label</th></tr>
+                    <tr><td>less_1</td><td>Less than 1 year</td></tr>
+                    <tr><td>1_3</td><td>1-3 years</td></tr>
+                    <tr><td>4_6</td><td>4-6 years</td></tr>
+                    <tr><td>7_10</td><td>7-10 years</td></tr>
+                    <tr><td>over_10</td><td>Over 10 years</td></tr>
+                </table>
+            </div>
+
+            <div class="choice-box">
+                <h4>Housing Status (5 options)</h4>
                 <table>
                     <tr><th>Value</th><th>Label</th></tr>
                     <tr><td>owned</td><td>Owned</td></tr>
                     <tr><td>rented</td><td>Rented</td></tr>
-                    <tr><td>family</td><td>Living with Family (Free)</td></tr>
-                </table>
-            </div>
-
-            <div class="choice-box">
-                <h4>Business Registration</h4>
-                <table>
-                    <tr><th>Value</th><th>Label</th></tr>
-                    <tr><td>registered</td><td>Registered (CAC)</td></tr>
-                    <tr><td>unregistered</td><td>Unregistered</td></tr>
+                    <tr><td>family</td><td>Living with Family</td></tr>
+                    <tr><td>employer</td><td>Employer-Provided</td></tr>
+                    <tr><td>other</td><td>Other</td></tr>
                 </table>
             </div>
         </div>
 
-        <h3>Skills List (for Questions 5.1 and 5.2)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Value</th>
-                    <th>Label</th>
-                    <th>Value</th>
-                    <th>Label</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>carpentry</td><td>Carpentry</td>
-                    <td>plumbing</td><td>Plumbing</td>
-                </tr>
-                <tr>
-                    <td>electrical</td><td>Electrical/Solar</td>
-                    <td>farming</td><td>Farming/Agriculture</td>
-                </tr>
-                <tr>
-                    <td>tailoring</td><td>Fashion/Tailoring</td>
-                    <td>mechanical</td><td>Auto-Mechanical</td>
-                </tr>
-                <tr>
-                    <td>software</td><td>Software/Digital</td>
-                    <td>teaching</td><td>Teaching/Education</td>
-                </tr>
-                <tr>
-                    <td>nursing</td><td>Healthcare/Nursing</td>
-                    <td colspan="2">-</td>
-                </tr>
-            </tbody>
+        <h3>Business Registration Status</h3>
+        <table style="max-width: 400px;">
+            <tr><th>Value</th><th>Label</th></tr>
+            <tr><td>registered</td><td>Yes, registered with CAC</td></tr>
+            <tr><td>unregistered</td><td>No, not registered</td></tr>
+            <tr><td>in_progress</td><td>Registration in progress</td></tr>
         </table>
+
+        <h3>LGA List (33 Oyo State Local Government Areas)</h3>
+        <p style="background: #f5f5f5; padding: 15px; border-radius: 8px; font-size: 0.9em;">
+            Afijio, Akinyele, Atiba, Atisbo, Egbeda, Ibadan North, Ibadan North-East, Ibadan North-West, Ibadan South-East, Ibadan South-West, Ibarapa Central, Ibarapa East, Ibarapa North, Ido, Irepo, Iseyin, Itesiwaju, Iwajowa, Kajola, Lagelu, Ogbomosho North, Ogbomosho South, Ogo Oluwa, Olorunsogo, Oluyole, Ona Ara, Orelope, Ori Ire, Oyo East, Oyo West, Saki East, Saki West, Surulere
+        </p>
+    </div>
+
+    <!-- Appendix B: Skills -->
+    <div class="appendix">
+        <h2>Appendix B: Skills List (50+ Skills)</h2>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Construction & Building Trades (11)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Carpentry/Woodwork</span>
+                <span class="skill-tag">Plumbing</span>
+                <span class="skill-tag">Electrical Installation</span>
+                <span class="skill-tag">Welding & Fabrication</span>
+                <span class="skill-tag">Masonry/Bricklaying</span>
+                <span class="skill-tag">Painting & Decoration</span>
+                <span class="skill-tag">Tiling & Flooring</span>
+                <span class="skill-tag">Roofing</span>
+                <span class="skill-tag">HVAC/Air Conditioning</span>
+                <span class="skill-tag">Solar Installation</span>
+                <span class="skill-tag">Aluminum & Glass Fitting</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Automotive & Mechanical (7)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Auto Mechanic</span>
+                <span class="skill-tag">Auto Electrician</span>
+                <span class="skill-tag">Panel Beating & Spray Painting</span>
+                <span class="skill-tag">Vulcanizing/Tire Services</span>
+                <span class="skill-tag">Motorcycle/Tricycle Repair</span>
+                <span class="skill-tag">Heavy Equipment Operation</span>
+                <span class="skill-tag">Generator Repair</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Fashion, Beauty & Personal Care (8)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Tailoring/Sewing</span>
+                <span class="skill-tag">Fashion Design</span>
+                <span class="skill-tag">Hairdressing/Styling</span>
+                <span class="skill-tag">Barbing</span>
+                <span class="skill-tag">Makeup Artistry</span>
+                <span class="skill-tag">Shoe Making/Cobbling</span>
+                <span class="skill-tag">Bag Making/Leather Craft</span>
+                <span class="skill-tag">Jewelry Making</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Food, Agriculture & Processing (7)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Crop Farming</span>
+                <span class="skill-tag">Livestock/Poultry Farming</span>
+                <span class="skill-tag">Fishery/Aquaculture</span>
+                <span class="skill-tag">Catering/Event Cooking</span>
+                <span class="skill-tag">Baking & Confectionery</span>
+                <span class="skill-tag">Food Processing/Preservation</span>
+                <span class="skill-tag">Butchery/Meat Processing</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Digital, Technology & Office (9)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Software Development</span>
+                <span class="skill-tag">Web Design/Development</span>
+                <span class="skill-tag">Graphic Design</span>
+                <span class="skill-tag">Video Editing/Production</span>
+                <span class="skill-tag">Data Entry/Typing</span>
+                <span class="skill-tag">Accounting/Bookkeeping</span>
+                <span class="skill-tag">Office Administration</span>
+                <span class="skill-tag">Computer/Phone Repair</span>
+                <span class="skill-tag">Social Media Management</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Healthcare & Wellness (6)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Nursing/Patient Care</span>
+                <span class="skill-tag">Pharmacy Assistant</span>
+                <span class="skill-tag">Laboratory Technician</span>
+                <span class="skill-tag">Community Health Worker</span>
+                <span class="skill-tag">Elderly/Child Caregiving</span>
+                <span class="skill-tag">Physiotherapy Assistant</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Education & Professional Services (7)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Teaching/Tutoring</span>
+                <span class="skill-tag">Professional Driving</span>
+                <span class="skill-tag">Security Services</span>
+                <span class="skill-tag">Event Planning/Decoration</span>
+                <span class="skill-tag">Photography/Videography</span>
+                <span class="skill-tag">Professional Cleaning</span>
+                <span class="skill-tag">Laundry/Dry Cleaning</span>
+            </div>
+        </div>
+
+        <div class="skills-category">
+            <div class="skills-category-header">
+                <span>Artisan & Traditional Crafts (6)</span>
+            </div>
+            <div class="skills-category-content">
+                <span class="skill-tag">Furniture Making</span>
+                <span class="skill-tag">Upholstery</span>
+                <span class="skill-tag">Pottery/Ceramics</span>
+                <span class="skill-tag">Blacksmithing</span>
+                <span class="skill-tag">Weaving/Textile Crafts</span>
+                <span class="skill-tag">Sign Writing/Branding</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appendix C: Validation Rules -->
+    <div class="appendix">
+        <h2>Appendix C: Validation Rules Summary</h2>
+        <div class="validation-rules">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Constraint</th>
+                        <th>Error Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>NIN</strong></td>
+                        <td>11 digits, numeric only</td>
+                        <td>"NIN must be exactly 11 digits"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phone</strong></td>
+                        <td>Nigerian mobile (0[7-9][0-1]xxxxxxxx)</td>
+                        <td>"Enter valid Nigerian mobile number"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Age</strong></td>
+                        <td>>= 15 years from DOB</td>
+                        <td>"Respondent must be 15 years or older"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>DOB</strong></td>
+                        <td><= today()</td>
+                        <td>"Cannot be a future date"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hours Worked</strong></td>
+                        <td>0-168 range</td>
+                        <td>"Hours must be between 0 and 168"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Monthly Income</strong></td>
+                        <td>>= 0</td>
+                        <td>"Cannot be negative"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Dependents</strong></td>
+                        <td>< household_size</td>
+                        <td>"Dependents cannot exceed household size"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Household Size</strong></td>
+                        <td>>= 1</td>
+                        <td>"Must be at least 1"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Bio</strong></td>
+                        <td><= 150 characters</td>
+                        <td>"Bio must be 150 characters or less"</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Skills Other</strong></td>
+                        <td><= 200 characters</td>
+                        <td>"Maximum 200 characters"</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Sign-Off Section -->
+    <div class="sign-off">
+        <h2>Reviewer Sign-Off</h2>
+
+        <ul class="checklist">
+            <li><div class="checkbox"></div> Content accuracy verified</li>
+            <li><div class="checkbox"></div> Skip logic approved</li>
+            <li><div class="checkbox"></div> Validation rules confirmed</li>
+            <li><div class="checkbox"></div> Options lists complete</li>
+            <li><div class="checkbox"></div> PRD alignment verified</li>
+        </ul>
+
+        <div class="signature-area">
+            <div>
+                <div class="signature-field">&nbsp;</div>
+                <div class="signature-label">Reviewer Name</div>
+            </div>
+            <div>
+                <div class="signature-field">&nbsp;</div>
+                <div class="signature-label">Date</div>
+            </div>
+            <div>
+                <div class="signature-field">&nbsp;</div>
+                <div class="signature-label">Signature</div>
+            </div>
+        </div>
+
+        <div class="comments-area">
+            <strong>Comments:</strong>
+            <br><br>
+        </div>
     </div>
 
     <div class="footer">
-        <p><strong>OSLSR Project</strong> - Questionnaire Schema for Validator Review</p>
-        <p>Version 2.0 | January 2026</p>
+        <p><strong>Oyo State Labour & Skills Registry (OSLSR)</strong></p>
+        <p>Questionnaire Schema for Validator Review</p>
+        <p>Version 3.0 | January 2026</p>
     </div>
 
 </body>
