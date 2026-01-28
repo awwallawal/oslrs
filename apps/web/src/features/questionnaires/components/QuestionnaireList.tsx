@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History } from 'lucide-react';
-import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
+import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Upload, Loader2 } from 'lucide-react';
+import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire, usePublishToOdk } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
 import { SkeletonTable } from '../../../components/skeletons';
 import { QuestionnaireVersionHistory } from './QuestionnaireVersionHistory';
@@ -21,6 +21,7 @@ export function QuestionnaireList() {
   const { data, isLoading } = useQuestionnaires({ page, pageSize: 10, status: statusFilter });
   const updateStatus = useUpdateStatus();
   const deleteMutation = useDeleteQuestionnaire();
+  const publishMutation = usePublishToOdk();
 
   if (isLoading) {
     return <SkeletonTable rows={5} columns={6} />;
@@ -108,8 +109,24 @@ export function QuestionnaireList() {
                         {form.status === 'draft' && (
                           <>
                             <button
+                              onClick={() => {
+                                if (window.confirm(`Publish "${form.title}" v${form.version} to ODK Central?\n\nThis will make the form available for field collection.`)) {
+                                  publishMutation.mutate(form.id);
+                                }
+                              }}
+                              disabled={publishMutation.isPending}
+                              className="p-1.5 text-neutral-400 hover:text-green-600 rounded disabled:opacity-50"
+                              title="Publish to ODK Central"
+                            >
+                              {publishMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Upload className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
                               onClick={() => updateStatus.mutate({ id: form.id, status: 'archived' })}
-                              disabled={updateStatus.isPending}
+                              disabled={updateStatus.isPending || publishMutation.isPending}
                               className="p-1.5 text-neutral-400 hover:text-amber-600 rounded"
                               title="Archive"
                             >
@@ -121,7 +138,7 @@ export function QuestionnaireList() {
                                   deleteMutation.mutate(form.id);
                                 }
                               }}
-                              disabled={deleteMutation.isPending}
+                              disabled={deleteMutation.isPending || publishMutation.isPending}
                               className="p-1.5 text-neutral-400 hover:text-red-600 rounded"
                               title="Delete draft"
                             >

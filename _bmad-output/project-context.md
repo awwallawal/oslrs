@@ -1374,8 +1374,46 @@ For stories tagged `[SECURITY]`, require adversarial code review:
 
 ---
 
+## Database Migration Gotchas
+
+### Column Type Changes Require Manual Migration
+
+**CRITICAL:** When changing a column's data type (e.g., `text` → `bytea`), Drizzle's `db:push` and `db:migrate` cannot auto-convert. PostgreSQL requires explicit casting.
+
+**Example (Story 2-1 → 2-2):**
+- `questionnaire_files.file_blob` was changed from `text` (base64) to `bytea` (binary) for efficiency
+- `db:push` failed with: `column "file_blob" cannot be cast automatically to type bytea`
+- PostgreSQL hint: `You might need to specify "USING file_blob::bytea"`
+
+**Fix:** Run manual SQL with explicit cast:
+```sql
+-- Check if table has data first
+SELECT COUNT(*) FROM table_name;
+
+-- If empty or data is compatible, alter with USING clause
+ALTER TABLE table_name
+ALTER COLUMN column_name TYPE new_type
+USING column_name::new_type;
+```
+
+**Prevention Checklist:**
+1. When changing column types in schema, immediately create manual migration SQL
+2. Test `db:push` in dev environment before committing schema changes
+3. Document type changes in story Dev Notes for reviewers
+4. Consider data migration strategy if column has existing data
+
+**Common Type Change Scenarios:**
+| From | To | USING Clause |
+|------|-----|--------------|
+| `text` | `bytea` | `column::bytea` (only if text is valid hex/base64) |
+| `text` | `integer` | `column::integer` (only if text contains numbers) |
+| `varchar(n)` | `text` | Usually auto-converts (safe) |
+| `integer` | `bigint` | Usually auto-converts (safe) |
+
+---
+
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-28
 
-**Version:** 1.3.0 (Added: NIN Validation Pattern with Modulus 11, Epic Validation Checkpoints, Adversarial Code Review Checklist - from Epic 1/1.5/Story 1-11 Combined Retrospective)
+**Version:** 1.4.0 (Added: Database Migration Gotchas - column type changes require manual SQL with USING clause - from Story 2-2)

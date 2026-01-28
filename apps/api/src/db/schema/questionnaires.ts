@@ -59,6 +59,10 @@ export const questionnaireForms = pgTable('questionnaire_forms', {
   // Validation results stored as JSON
   validationWarnings: text('validation_warnings'), // JSON array of warning objects
 
+  // ODK Central deployment fields (Story 2.2)
+  odkXmlFormId: text('odk_xml_form_id'), // ODK Central's xmlFormId after deployment
+  odkPublishedAt: timestamp('odk_published_at', { withTimezone: true }), // Timestamp when published to ODK Central
+
   // Audit fields
   uploadedBy: uuid('uploaded_by').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

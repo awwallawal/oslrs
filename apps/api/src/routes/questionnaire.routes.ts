@@ -37,4 +37,7 @@ router.delete('/:id', QuestionnaireController.delete);
 // Download original file
 router.get('/:id/download', QuestionnaireController.download);
 
+// Publish form to ODK Central (Story 2.2)
+router.post('/:id/publish', QuestionnaireController.publishToOdk);
+
 export default router;

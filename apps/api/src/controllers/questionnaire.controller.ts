@@ -192,4 +192,27 @@ export class QuestionnaireController {
       next(err);
     }
   }
+
+  /**
+   * POST /api/v1/questionnaires/:id/publish
+   * Publish a draft form to ODK Central (AC: 1, 2, 3, 5)
+   */
+  static async publishToOdk(req: Request, res: Response, next: NextFunction) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user?.sub;
+      if (!userId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+
+      const { id } = req.params;
+
+      const result = await QuestionnaireService.publishToOdk(id, userId);
+
+      res.json({
+        status: 'success',
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }

@@ -130,3 +130,45 @@ export async function deleteQuestionnaire(id: string): Promise<void> {
 export function getDownloadUrl(id: string): string {
   return `${API_BASE_URL}/questionnaires/${id}/download`;
 }
+
+interface PublishResult {
+  status: string;
+  data: {
+    id: string;
+    formId: string;
+    version: string;
+    title: string;
+    status: QuestionnaireFormStatus;
+    odkXmlFormId: string;
+    odkPublishedAt: string;
+  };
+}
+
+/**
+ * Publish a draft form to ODK Central (Story 2.2)
+ */
+export async function publishToOdk(id: string): Promise<PublishResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/questionnaires/${id}/publish`,
+    {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(
+      data.message || 'Publish to ODK failed',
+      response.status,
+      data.code,
+      data.details
+    );
+  }
+
+  return data;
+}

@@ -174,6 +174,9 @@ export interface QuestionnaireFormResponse {
   fileName: string;
   fileSize: number;
   validationWarnings?: XlsformValidationIssue[];
+  // ODK Central deployment fields (Story 2.2)
+  odkXmlFormId?: string | null; // ODK Central's xmlFormId after deployment
+  odkPublishedAt?: string | null; // ISO 8601 timestamp when published to ODK Central
 }
 
 /**
