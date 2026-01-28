@@ -52,7 +52,7 @@ so that they are available for field collection.
 
 - [x] Task 6: Write integration tests for ODK client (AC: 3, 4, 6, 7, 8)
   - [x] 6.1 Create `services/odk-integration/src/__tests__/odk-client.test.ts` — mock HTTP calls, test session token caching, test token refresh on 401, test error mapping (17 tests passing)
-  - [ ] 6.2 Create `services/odk-integration/src/__tests__/odk-form.service.test.ts` — mock ODK client, test first-time publish flow, test version-update publish flow, test auto-deprecation of previous version, test partial failure (orphaned deploy) logging, test error handling, test status transition (deferred - requires ODK mock server)
+  - [x] 6.2 Create `services/odk-integration/src/__tests__/odk-form.service.test.ts` — mock ODK client, test first-time publish flow, test version-update publish flow, test auto-deprecation of previous version, test partial failure (orphaned deploy) logging, test error handling, test status transition (15 tests passing)
 
 ## Out of Scope
 
@@ -117,12 +117,20 @@ Claude Opus 4.5
 - Task 3: Form deployment service with first-time publish and version update flows
 - Task 4: Publish API endpoint at POST /api/v1/questionnaires/:id/publish with audit logging
 - Task 5: Frontend "Publish to ODK" button with confirmation dialog and loading state
-- Task 6: 17 unit tests for ODK client passing (session management, auth, error mapping)
+- Task 6: 32 unit tests total (17 odk-client + 15 odk-form.service)
+
+### Code Review Fixes (2026-01-28)
+- **C2 Fix:** Auto-deprecation bug in `questionnaire.service.ts` — added `ne(questionnaireForms.id, id)` to WHERE clause to prevent deprecating the just-published form
+- **H1 Fix:** Created `odk-form.service.test.ts` with 15 tests covering first-time publish, version update, error handling, orphaned deploy logging
+- **M1 Fix:** Publish button UX in `QuestionnaireList.tsx` — track specific `publishingFormId` to only disable the form being published, not all draft forms
+- **Bug Fix:** Content type detection in `odk-form.service.ts` — fixed `mimeType.includes('xml')` bug where 'openxmlformats' (xlsx mime) incorrectly matched 'xml'. Now checks for exact `application/xml` or `text/xml`
 
 ### File List
 **Backend - Schema & Types:**
 - `apps/api/src/db/schema/questionnaires.ts` - Added odkXmlFormId, odkPublishedAt columns
 - `apps/api/drizzle/0009_easy_the_initiative.sql` - Migration for new columns
+- `apps/api/drizzle/meta/_journal.json` - Migration journal updated
+- `apps/api/drizzle/meta/0009_snapshot.json` - NEW: Migration snapshot
 - `packages/types/src/questionnaire.ts` - Added odkXmlFormId, odkPublishedAt to QuestionnaireFormResponse
 - `packages/types/src/validation/odk-config.ts` - NEW: Zod schema for ODK env config
 - `packages/types/src/index.ts` - Export odk-config
@@ -132,20 +140,21 @@ Claude Opus 4.5
 - `services/odk-integration/tsconfig.json` - Updated for ESM
 - `services/odk-integration/vitest.config.ts` - NEW: Test config
 - `services/odk-integration/src/odk-client.ts` - NEW: ODK Central HTTP client with auth
-- `services/odk-integration/src/odk-form.service.ts` - NEW: Form deployment business logic
+- `services/odk-integration/src/odk-form.service.ts` - NEW: Form deployment business logic (content type bug fixed in code review)
 - `services/odk-integration/src/index.ts` - Barrel exports
 - `services/odk-integration/src/__tests__/odk-client.test.ts` - NEW: 17 unit tests
+- `services/odk-integration/src/__tests__/odk-form.service.test.ts` - NEW: 15 unit tests (added in code review)
 
 **Backend - API:**
 - `apps/api/package.json` - Added @oslsr/odk-integration dependency
-- `apps/api/src/services/questionnaire.service.ts` - Added publishToOdk method
+- `apps/api/src/services/questionnaire.service.ts` - Added publishToOdk method (auto-deprecation bug fixed in code review)
 - `apps/api/src/controllers/questionnaire.controller.ts` - Added publishToOdk handler
 - `apps/api/src/routes/questionnaire.routes.ts` - Added POST /:id/publish route
 
 **Frontend:**
 - `apps/web/src/features/questionnaires/api/questionnaire.api.ts` - Added publishToOdk function
 - `apps/web/src/features/questionnaires/hooks/useQuestionnaires.ts` - Added usePublishToOdk hook
-- `apps/web/src/features/questionnaires/components/QuestionnaireList.tsx` - Added Publish button
+- `apps/web/src/features/questionnaires/components/QuestionnaireList.tsx` - Added Publish button (UX fix: track specific publishingFormId)
 
 **Documentation:**
 - `_bmad-output/project-context.md` - Added Database Migration Gotchas section (v1.4.0)

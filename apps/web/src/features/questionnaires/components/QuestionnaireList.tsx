@@ -17,6 +17,7 @@ export function QuestionnaireList() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<QuestionnaireFormStatus | undefined>();
   const [versionHistoryFormId, setVersionHistoryFormId] = useState<string | null>(null);
+  const [publishingFormId, setPublishingFormId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuestionnaires({ page, pageSize: 10, status: statusFilter });
   const updateStatus = useUpdateStatus();
@@ -111,14 +112,17 @@ export function QuestionnaireList() {
                             <button
                               onClick={() => {
                                 if (window.confirm(`Publish "${form.title}" v${form.version} to ODK Central?\n\nThis will make the form available for field collection.`)) {
-                                  publishMutation.mutate(form.id);
+                                  setPublishingFormId(form.id);
+                                  publishMutation.mutate(form.id, {
+                                    onSettled: () => setPublishingFormId(null),
+                                  });
                                 }
                               }}
-                              disabled={publishMutation.isPending}
+                              disabled={publishingFormId === form.id}
                               className="p-1.5 text-neutral-400 hover:text-green-600 rounded disabled:opacity-50"
                               title="Publish to ODK Central"
                             >
-                              {publishMutation.isPending ? (
+                              {publishingFormId === form.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
                                 <Upload className="w-4 h-4" />
@@ -126,7 +130,7 @@ export function QuestionnaireList() {
                             </button>
                             <button
                               onClick={() => updateStatus.mutate({ id: form.id, status: 'archived' })}
-                              disabled={updateStatus.isPending || publishMutation.isPending}
+                              disabled={updateStatus.isPending || publishingFormId === form.id}
                               className="p-1.5 text-neutral-400 hover:text-amber-600 rounded"
                               title="Archive"
                             >
@@ -138,7 +142,7 @@ export function QuestionnaireList() {
                                   deleteMutation.mutate(form.id);
                                 }
                               }}
-                              disabled={deleteMutation.isPending || publishMutation.isPending}
+                              disabled={deleteMutation.isPending || publishingFormId === form.id}
                               className="p-1.5 text-neutral-400 hover:text-red-600 rounded"
                               title="Delete draft"
                             >

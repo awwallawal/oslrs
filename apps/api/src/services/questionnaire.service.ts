@@ -5,7 +5,7 @@ import {
   questionnaireVersions,
 } from '../db/schema/index.js';
 import { users, auditLogs } from '../db/schema/index.js';
-import { eq, desc, and, count } from 'drizzle-orm';
+import { eq, desc, and, count, ne } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { AppError } from '@oslsr/utils';
 import { XlsformParserService } from './xlsform-parser.service.js';
@@ -636,6 +636,7 @@ export class QuestionnaireService {
           .where(eq(questionnaireForms.id, id));
 
         // Auto-deprecate any previous published versions of the same logical formId
+        // IMPORTANT: Exclude the current form by ID since we just set it to 'published' above
         if (odkResult.isVersionUpdate) {
           await tx
             .update(questionnaireForms)
@@ -647,15 +648,9 @@ export class QuestionnaireService {
               and(
                 eq(questionnaireForms.formId, form.formId),
                 eq(questionnaireForms.status, 'published'),
-                // Don't deprecate the one we just published
-                // Since we updated it in the same transaction, we need to exclude by ID
+                ne(questionnaireForms.id, id) // Exclude the form we just published
               )
             );
-
-          // Actually, the above would also update the form we just published
-          // Let me fix this by using a different approach - update all OTHER published forms
-          // This is already handled by the earlier update setting status to published
-          // So we need to update forms that are still in 'published' status (which won't include our form)
         }
 
         // Create audit log

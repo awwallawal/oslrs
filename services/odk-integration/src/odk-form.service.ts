@@ -119,7 +119,9 @@ async function tryFirstTimePublish(
   const path = `/v1/projects/${config.ODK_PROJECT_ID}/forms?publish=true&ignoreWarnings=true`;
 
   // Determine content type based on file type
-  const contentType = mimeType.includes('xml')
+  // Check for XML-specific MIME types (not xlsx which contains 'xml' in 'openxmlformats')
+  const isXmlFile = mimeType === 'application/xml' || mimeType === 'text/xml';
+  const contentType = isXmlFile
     ? 'application/xml'
     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -201,7 +203,9 @@ async function doVersionUpdate(
   // Step 1: Upload as draft
   const draftPath = `/v1/projects/${config.ODK_PROJECT_ID}/forms/${encodeURIComponent(xmlFormId)}/draft`;
 
-  const contentType = mimeType.includes('xml')
+  // Check for XML-specific MIME types (not xlsx which contains 'xml' in 'openxmlformats')
+  const isXmlFile = mimeType === 'application/xml' || mimeType === 'text/xml';
+  const contentType = isXmlFile
     ? 'application/xml'
     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
