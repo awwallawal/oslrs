@@ -95,8 +95,11 @@ describe('AES-256-GCM Token Encryption', () => {
     it('should throw error when ciphertext is tampered', () => {
       const encrypted = encryptToken(testToken, testKey);
 
-      // Tamper with ciphertext by changing a character
-      const tamperedCiphertext = encrypted.ciphertext.slice(0, -2) + '00';
+      // Tamper with ciphertext by XORing the last byte with 0xff (guaranteed change)
+      const lastByteIndex = encrypted.ciphertext.length - 2;
+      const lastByte = parseInt(encrypted.ciphertext.slice(lastByteIndex), 16);
+      const flippedByte = (lastByte ^ 0xff).toString(16).padStart(2, '0');
+      const tamperedCiphertext = encrypted.ciphertext.slice(0, lastByteIndex) + flippedByte;
 
       expect(() => {
         decryptToken(tamperedCiphertext, encrypted.iv, testKey);
