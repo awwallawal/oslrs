@@ -1,6 +1,6 @@
 # Story 2.3: Automated ODK App User Provisioning
 
-Status: review
+Status: done
 
 ## Story
 
