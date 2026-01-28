@@ -1,6 +1,6 @@
 # Story 2.6: ODK Mock Server for Integration Testing
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -136,6 +136,14 @@ N/A
 ### Change Log
 
 - 2026-01-28: Story 2-6 implementation complete. MSW mock ODK Central server ready for integration testing.
+- 2026-01-28: Code review fixes applied:
+  - Fixed `handlers.ts` to use `X-XlsForm-FormId-Fallback` header (sent by real service) instead of test-only `x-odk-form-id`
+  - Fixed `request-inspector.ts` hasHeader filter to normalize to lowercase (HTTP headers are case-insensitive)
+  - Updated Task 4.6 test to demonstrate actual partial failure scenario with MSW
+  - Updated `vitest.config.ts` comment to reference `initMswForTest()`
+  - Added deprecation notice to `setup.ts`
+  - Added Form ID Detection section to README.md
+  - Updated `msw.integration.test.ts` to use correct header name
 
 ### File List
 
@@ -153,3 +161,4 @@ N/A
 **Modified Files:**
 - `services/odk-integration/package.json` - Added msw@2 devDependency
 - `services/odk-integration/vitest.config.ts` - Added comment noting MSW is opt-in
+- `pnpm-lock.yaml` - Updated with msw@2 dependency tree

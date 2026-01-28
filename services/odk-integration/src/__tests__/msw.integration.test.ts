@@ -82,7 +82,7 @@ describe('MSW ODK Central Mock Server', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'x-odk-form-id': 'test_form',
+            'X-XlsForm-FormId-Fallback': 'test_form',
           },
           body: Buffer.from('fake xlsx content'),
         }
@@ -108,7 +108,7 @@ describe('MSW ODK Central Mock Server', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'x-odk-form-id': 'existing_form',
+            'X-XlsForm-FormId-Fallback': 'existing_form',
           },
           body: Buffer.from('fake xlsx content'),
         }

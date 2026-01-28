@@ -53,7 +53,9 @@ export function getRequests(filter?: RequestFilter): LoggedRequest[] {
       requests = requests.filter(r => pattern.test(r.path));
     }
     if (filter.hasHeader) {
-      const header = filter.hasHeader;
+      // Normalize to lowercase since HTTP headers are case-insensitive
+      // and fetch stores them lowercase
+      const header = filter.hasHeader.toLowerCase();
       requests = requests.filter(r => header in r.headers);
     }
   }

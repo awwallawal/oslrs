@@ -92,10 +92,13 @@ const createFormHandler = http.post(
       });
     }
 
-    // Extract xmlFormId from form content or generate one
-    // In real ODK, this is parsed from the XLSForm/XML. We simulate with a header or default.
-    const formIdHeader = request.headers.get('x-odk-form-id');
-    const xmlFormId = formIdHeader || `form_${Date.now()}`;
+    // Extract xmlFormId from headers sent by the real service
+    // Priority: X-XlsForm-FormId-Fallback (sent by deployFormToOdk) > Content-Disposition filename > auto-generated
+    const formIdFallback = request.headers.get('x-xlsform-formid-fallback');
+    const contentDisposition = request.headers.get('content-disposition');
+    const filenameMatch = contentDisposition?.match(/filename="?([^";\s]+)"?/i);
+    const filenameFormId = filenameMatch?.[1]?.replace(/\.(xlsx|xml)$/i, '');
+    const xmlFormId = formIdFallback || filenameFormId || `form_${Date.now()}`;
 
     mockServerState.logRequest({
       method: 'POST',

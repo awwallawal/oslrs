@@ -76,6 +76,16 @@ mockServerState.setNextError(401, 401.2, 'Invalid credentials');
 // Error is consumed after one use (subsequent requests succeed)
 ```
 
+### Form ID Detection
+
+The mock server extracts `xmlFormId` using the same headers that `deployFormToOdk` sends:
+
+1. **`X-XlsForm-FormId-Fallback`** header (sent by the real service)
+2. **`Content-Disposition`** header filename (standard HTTP)
+3. Auto-generated fallback if neither is present
+
+This matches production behavior where ODK Central parses the form ID from the uploaded content.
+
 ### Form State Management
 
 Pre-register forms to trigger 409 (version update flow):

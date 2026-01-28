@@ -1,8 +1,16 @@
 /**
  * Vitest Setup File for MSW Integration
  *
- * This file is loaded before each test file runs (via vitest.config.ts setupFiles).
- * It manages the MSW server lifecycle:
+ * @deprecated Use `initMswForTest()` from `./index.js` instead.
+ * This file is preserved for backward compatibility but should not be used directly.
+ *
+ * Preferred usage:
+ * ```typescript
+ * import { initMswForTest } from './msw/index.js';
+ * initMswForTest();
+ * ```
+ *
+ * This file manages the MSW server lifecycle:
  * - beforeAll: Start the server
  * - afterEach: Reset handlers and state for test isolation
  * - afterAll: Clean up server resources

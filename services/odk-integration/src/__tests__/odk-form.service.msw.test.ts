@@ -286,21 +286,55 @@ describe('ODK Form Service - MSW Integration Tests', () => {
     });
   });
 
-  describe('Orphaned Deployment Logging (Task 4.6)', () => {
-    it('should log orphaned deployment without throwing', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  describe('Partial Failure Scenario (Task 4.6)', () => {
+    it('should handle ODK success followed by simulated DB failure', async () => {
+      // This test demonstrates the partial failure scenario:
+      // 1. ODK deployment succeeds (via MSW)
+      // 2. Simulated DB update fails
+      // 3. logOrphanedDeployment is called to record the orphaned state
 
-      // This function should log but not throw
+      // Step 1: Successful ODK deployment via MSW
+      const result = await deployFormToOdk(
+        testXlsxBuffer,
+        'orphan_test.xlsx',
+        testXlsxMimeType
+      );
+
+      // Verify ODK deployment succeeded
+      expect(result.xmlFormId).toBeDefined();
+      expect(result.projectId).toBe(1);
+
+      // Step 2: Simulate DB failure that would occur after ODK success
+      const dbError = new Error('DB transaction failed: connection timeout');
+      const simulatedDbUpdate = async () => {
+        // In real code, this would be: await db.questionnaire.update(...)
+        throw dbError;
+      };
+
+      // Step 3: In the real controller, this pattern would be used:
+      // try {
+      //   const odkResult = await deployFormToOdk(...);
+      //   await db.update(...); // <-- this fails
+      // } catch (dbError) {
+      //   logOrphanedDeployment(odkResult.xmlFormId, ...);
+      //   throw dbError;
+      // }
+
+      // Verify logOrphanedDeployment handles the error without throwing
+      await expect(simulatedDbUpdate()).rejects.toThrow('DB transaction failed');
+
       expect(() => {
         logOrphanedDeployment(
-          'orphaned_form',
-          1,
-          'uuid-123-456',
-          new Error('DB transaction failed')
+          result.xmlFormId,
+          result.projectId,
+          'questionnaire-uuid-123',
+          dbError
         );
       }).not.toThrow();
 
-      consoleSpy.mockRestore();
+      // Verify the MSW mock was actually used (real HTTP happened)
+      const requests = mockServerState.getRequests();
+      expect(requests.some(r => r.path.includes('/forms'))).toBe(true);
     });
   });
 });
