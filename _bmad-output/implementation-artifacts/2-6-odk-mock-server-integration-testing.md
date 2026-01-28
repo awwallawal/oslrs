@@ -1,6 +1,6 @@
 # Story 2.6: ODK Mock Server for Integration Testing
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,45 +23,45 @@ so that integration tests for `@oslsr/odk-integration` can verify full HTTP requ
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Set up MSW for `@oslsr/odk-integration` (AC: 7)
-  - [ ] 1.1 Add `msw` as devDependency to `services/odk-integration/package.json`
-  - [ ] 1.2 Create `services/odk-integration/src/__tests__/msw/handlers.ts` — define all ODK Central API handlers
-  - [ ] 1.3 Create `services/odk-integration/src/__tests__/msw/server.ts` — MSW `setupServer()` with default handlers
-  - [ ] 1.4 Update `services/odk-integration/vitest.config.ts` — add setup file for MSW lifecycle (`beforeAll`, `afterEach`, `afterAll`)
-  - [ ] 1.5 Create `services/odk-integration/src/__tests__/msw/setup.ts` — Vitest setup file with MSW server start/stop/reset
+- [x] Task 1: Set up MSW for `@oslsr/odk-integration` (AC: 7)
+  - [x] 1.1 Add `msw` as devDependency to `services/odk-integration/package.json`
+  - [x] 1.2 Create `services/odk-integration/src/__tests__/msw/handlers.ts` — define all ODK Central API handlers
+  - [x] 1.3 Create `services/odk-integration/src/__tests__/msw/server.ts` — MSW `setupServer()` with default handlers
+  - [x] 1.4 Update `services/odk-integration/vitest.config.ts` — add comment noting MSW is opt-in per test file (not auto-loaded)
+  - [x] 1.5 Create `services/odk-integration/src/__tests__/msw/setup.ts` — Vitest setup file with MSW server start/stop/reset
 
-- [ ] Task 2: Implement session endpoint handlers (AC: 2, 6)
-  - [ ] 2.1 `POST /v1/sessions` handler — accepts `email` + `password`, returns `OdkSessionResponse` with token, expiresAt, createdAt
-  - [ ] 2.2 Reject invalid credentials with 401 status and `OdkErrorResponse` body
-  - [ ] 2.3 Track all requests in a `requestLog` array for per-test assertion (method, path, headers, body)
+- [x] Task 2: Implement session endpoint handlers (AC: 2, 6)
+  - [x] 2.1 `POST /v1/sessions` handler — accepts `email` + `password`, returns `OdkSessionResponse` with token, expiresAt, createdAt
+  - [x] 2.2 Reject invalid credentials with 401 status and `OdkErrorResponse` body
+  - [x] 2.3 Track all requests in a `requestLog` array for per-test assertion (method, path, headers, body)
 
-- [ ] Task 3: Implement form management handlers (AC: 3, 4, 5)
-  - [ ] 3.1 `POST /v1/projects/:projectId/forms` handler — first-time publish, returns `OdkFormResponse`, stores form in in-memory state
-  - [ ] 3.2 Return 409 when form with same `xmlFormId` already exists (trigger version-update flow)
-  - [ ] 3.3 `POST /v1/projects/:projectId/forms/:xmlFormId/draft` handler — accepts file body, returns 200
-  - [ ] 3.4 `POST /v1/projects/:projectId/forms/:xmlFormId/draft/publish` handler — transitions draft to published, returns `OdkFormResponse` with `publishedAt`
-  - [ ] 3.5 Implement configurable error injection: `mockServerState.setNextError(status, code, message)` for per-test failure simulation
-  - [ ] 3.6 Validate `Content-Type` header on form uploads (xlsx vs xml) to catch content-type detection bugs like the one found in Story 2-2 review
+- [x] Task 3: Implement form management handlers (AC: 3, 4, 5)
+  - [x] 3.1 `POST /v1/projects/:projectId/forms` handler — first-time publish, returns `OdkFormResponse`, stores form in in-memory state
+  - [x] 3.2 Return 409 when form with same `xmlFormId` already exists (trigger version-update flow)
+  - [x] 3.3 `POST /v1/projects/:projectId/forms/:xmlFormId/draft` handler — accepts file body, returns 200
+  - [x] 3.4 `POST /v1/projects/:projectId/forms/:xmlFormId/draft/publish` handler — transitions draft to published, returns `OdkFormResponse` with `publishedAt`
+  - [x] 3.5 Implement configurable error injection: `mockServerState.setNextError(status, code, message)` for per-test failure simulation
+  - [x] 3.6 Validate `Content-Type` header on form uploads (xlsx vs xml) to catch content-type detection bugs like the one found in Story 2-2 review
 
-- [ ] Task 4: Upgrade `odk-form.service.test.ts` to use MSW (AC: 8)
-  - [ ] 4.1 Replace `vi.mock('../odk-client.js')` with MSW handlers for realistic HTTP-level testing
-  - [ ] 4.2 Add test: first-time publish end-to-end (session → form upload → verify response)
-  - [ ] 4.3 Add test: version-update end-to-end (session → 409 → draft upload → draft publish → verify response)
-  - [ ] 4.4 Add test: verify correct `Content-Type` header sent for xlsx vs xml files
-  - [ ] 4.5 Add test: verify `Authorization` header included on form requests
-  - [ ] 4.6 Add test: partial failure — mock server succeeds but handler throws during DB update (verify orphaned deploy logging)
-  - [ ] 4.7 Add test: network failure simulation (MSW `http.get().mockError()`)
-  - [ ] 4.8 Ensure existing 15 vi.fn()-based tests are preserved OR migrated (no test count regression)
+- [x] Task 4: Upgrade `odk-form.service.test.ts` to use MSW (AC: 8)
+  - [x] 4.1 Created new `odk-form.service.msw.test.ts` for MSW-based tests (preserved existing vi.fn tests for fast unit testing)
+  - [x] 4.2 Add test: first-time publish end-to-end (session → form upload → verify response)
+  - [x] 4.3 Add test: version-update end-to-end (session → 409 → draft upload → draft publish → verify response)
+  - [x] 4.4 Add test: verify correct `Content-Type` header sent for xlsx vs xml files
+  - [x] 4.5 Add test: verify `Authorization` header included on form requests
+  - [x] 4.6 Add test: partial failure — mock server succeeds but handler throws during DB update (verify orphaned deploy logging)
+  - [x] 4.7 Add test: network failure simulation (MSW `HttpResponse.error()`)
+  - [x] 4.8 Existing 15 vi.fn()-based tests preserved (now 54 total tests: 15 + 17 + 11 + 11)
 
-- [ ] Task 5: Add request inspection utilities (AC: 6)
-  - [ ] 5.1 Create `services/odk-integration/src/__tests__/msw/request-inspector.ts` — utility to query logged requests by path, method, or header
-  - [ ] 5.2 Add `getRequests(filter?)`, `getLastRequest()`, `clearRequests()` helpers
-  - [ ] 5.3 Add test verifying request inspector correctly captures method, path, headers, body
+- [x] Task 5: Add request inspection utilities (AC: 6)
+  - [x] 5.1 Create `services/odk-integration/src/__tests__/msw/request-inspector.ts` — utility to query logged requests by path, method, or header
+  - [x] 5.2 Add `getRequests(filter?)`, `getLastRequest()`, `clearRequests()`, `getRequestCount()`, `expectRequest()` helpers
+  - [x] 5.3 Tests in `msw.integration.test.ts` verify request inspector correctly captures method, path, headers, body
 
-- [ ] Task 6: Documentation and cross-story readiness (AC: 1)
-  - [ ] 6.1 Add inline JSDoc to all handlers explaining the ODK Central API behavior they simulate
-  - [ ] 6.2 Add `services/odk-integration/src/__tests__/msw/README.md` — usage guide for future stories (2-3, 2-4, 2-5) showing how to import and configure the mock server
-  - [ ] 6.3 Run full test suite to verify no regressions: `pnpm test` from monorepo root
+- [x] Task 6: Documentation and cross-story readiness (AC: 1)
+  - [x] 6.1 Add inline JSDoc to all handlers explaining the ODK Central API behavior they simulate
+  - [x] 6.2 Add `services/odk-integration/src/__tests__/msw/README.md` — comprehensive usage guide for future stories (2-3, 2-4, 2-5)
+  - [x] 6.3 Run full test suite to verify no regressions: 740 tests passing (208 API + 478 web + 54 odk-integration)
 
 ## Out of Scope
 
@@ -118,10 +118,38 @@ Tasks MUST be executed in order: 1 → 2 → 3 → 4 → 5 → 6. Task 1 (MSW se
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+N/A
+
 ### Completion Notes List
 
+- **Task 1**: MSW v2 installed, handlers/server/setup files created. Design decision: MSW not auto-loaded globally (preserves backward compatibility with existing vi.fn() tests). Tests opt-in via `initMswForTest()`.
+- **Task 2**: Session handler with credential validation, request logging, error injection. Default credentials: admin@example.com / secret123.
+- **Task 3**: Form handlers for create (with 409 detection), draft upload, draft publish. Content-Type validation implemented to catch Story 2-2 type bugs.
+- **Task 4**: Created separate `odk-form.service.msw.test.ts` (11 MSW-based tests) rather than modifying existing vi.fn() tests. This provides both fast unit tests and realistic integration tests.
+- **Task 5**: Request inspector with filtering by method/path/pattern/header. Includes `expectRequest()` helper for convenient assertions.
+- **Task 6**: Comprehensive README with quick start, API reference, extension guide for Stories 2-3/2-4/2-5.
+
+### Change Log
+
+- 2026-01-28: Story 2-6 implementation complete. MSW mock ODK Central server ready for integration testing.
+
 ### File List
+
+**New Files:**
+- `services/odk-integration/src/__tests__/msw/handlers.ts` - ODK Central API handlers (sessions, forms, drafts)
+- `services/odk-integration/src/__tests__/msw/server.ts` - MSW setupServer() instance
+- `services/odk-integration/src/__tests__/msw/server-state.ts` - State management (forms, requests, errors)
+- `services/odk-integration/src/__tests__/msw/setup.ts` - Vitest lifecycle hooks
+- `services/odk-integration/src/__tests__/msw/index.ts` - Barrel exports + initMswForTest()
+- `services/odk-integration/src/__tests__/msw/request-inspector.ts` - Request filtering utilities
+- `services/odk-integration/src/__tests__/msw/README.md` - Usage documentation
+- `services/odk-integration/src/__tests__/msw.integration.test.ts` - MSW handler verification tests (11 tests)
+- `services/odk-integration/src/__tests__/odk-form.service.msw.test.ts` - MSW-based form service tests (11 tests)
+
+**Modified Files:**
+- `services/odk-integration/package.json` - Added msw@2 devDependency
+- `services/odk-integration/vitest.config.ts` - Added comment noting MSW is opt-in

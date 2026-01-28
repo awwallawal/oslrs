@@ -1,0 +1,257 @@
+/**
+ * Mock Server State Management
+ *
+ * Manages in-memory state for the MSW mock ODK Central server.
+ * Includes form registry, request logging, error injection, and credential management.
+ *
+ * @module msw/server-state
+ */
+
+export interface LoggedRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: unknown;
+  query?: Record<string, string>;
+  contentTypeWarning?: string;
+  timestamp?: string;
+}
+
+export interface MockForm {
+  xmlFormId: string;
+  projectId: number;
+  name: string;
+  version: string;
+  state: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+}
+
+export interface InjectedError {
+  status: number;
+  code: number | string;
+  message: string;
+}
+
+interface Credentials {
+  email: string;
+  password: string;
+}
+
+/**
+ * MockServerState - Singleton class managing all mock server state
+ *
+ * Features:
+ * - Form registry (tracks which forms exist for 409 responses)
+ * - Request logging (for test assertions)
+ * - Error injection (programmable failures per-test)
+ * - Credential management (configurable valid credentials)
+ * - Session token generation
+ */
+class MockServerState {
+  private forms: Map<string, MockForm> = new Map();
+  private formDrafts: Set<string> = new Set();
+  private requestLog: LoggedRequest[] = [];
+  private nextError: InjectedError | null = null;
+  private validCredentials: Credentials = {
+    email: 'admin@example.com',
+    password: 'secret123',
+  };
+  private sessionCounter = 0;
+
+  /**
+   * Reset all state - call in beforeEach to ensure test isolation
+   */
+  reset(): void {
+    this.forms.clear();
+    this.formDrafts.clear();
+    this.requestLog = [];
+    this.nextError = null;
+    this.sessionCounter = 0;
+    // Keep credentials as configured
+  }
+
+  // =====================
+  // Form State Management
+  // =====================
+
+  /**
+   * Check if a form exists in the registry
+   */
+  formExists(xmlFormId: string): boolean {
+    return this.forms.has(xmlFormId);
+  }
+
+  /**
+   * Add a form to the registry
+   */
+  addForm(xmlFormId: string, form: MockForm): void {
+    this.forms.set(xmlFormId, form);
+  }
+
+  /**
+   * Get a form from the registry
+   */
+  getForm(xmlFormId: string): MockForm | undefined {
+    return this.forms.get(xmlFormId);
+  }
+
+  /**
+   * Update an existing form
+   */
+  updateForm(xmlFormId: string, form: MockForm): void {
+    this.forms.set(xmlFormId, form);
+  }
+
+  /**
+   * Pre-register a form as existing (for triggering 409 responses)
+   */
+  preRegisterForm(xmlFormId: string, projectId: number = 1): void {
+    const now = new Date().toISOString();
+    this.forms.set(xmlFormId, {
+      xmlFormId,
+      projectId,
+      name: xmlFormId,
+      version: '1.0.0',
+      state: 'open',
+      createdAt: now,
+      updatedAt: now,
+      publishedAt: now,
+    });
+  }
+
+  /**
+   * Check if form has a pending draft
+   */
+  hasFormDraft(xmlFormId: string): boolean {
+    return this.formDrafts.has(xmlFormId);
+  }
+
+  /**
+   * Set form draft status
+   */
+  setFormDraft(xmlFormId: string, hasDraft: boolean): void {
+    if (hasDraft) {
+      this.formDrafts.add(xmlFormId);
+    } else {
+      this.formDrafts.delete(xmlFormId);
+    }
+  }
+
+  // =======================
+  // Request Logging (AC: 6)
+  // =======================
+
+  /**
+   * Log an incoming request for later assertion
+   */
+  logRequest(request: Omit<LoggedRequest, 'timestamp'>): void {
+    this.requestLog.push({
+      ...request,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Get all logged requests
+   */
+  getRequests(): LoggedRequest[] {
+    return [...this.requestLog];
+  }
+
+  /**
+   * Get the last logged request
+   */
+  getLastRequest(): LoggedRequest | undefined {
+    return this.requestLog[this.requestLog.length - 1];
+  }
+
+  /**
+   * Get requests filtered by path
+   */
+  getRequestsByPath(pathPattern: string | RegExp): LoggedRequest[] {
+    return this.requestLog.filter((req) => {
+      if (typeof pathPattern === 'string') {
+        return req.path.includes(pathPattern);
+      }
+      return pathPattern.test(req.path);
+    });
+  }
+
+  /**
+   * Get requests filtered by method
+   */
+  getRequestsByMethod(method: string): LoggedRequest[] {
+    return this.requestLog.filter((req) => req.method === method.toUpperCase());
+  }
+
+  /**
+   * Clear all logged requests
+   */
+  clearRequests(): void {
+    this.requestLog = [];
+  }
+
+  // ========================
+  // Error Injection (AC: 5)
+  // ========================
+
+  /**
+   * Configure the next request to fail with a specific error
+   *
+   * @example
+   * mockServerState.setNextError(500, 'INTERNAL_ERROR', 'Database unavailable');
+   * // Next request to any endpoint will return 500
+   */
+  setNextError(status: number, code: number | string, message: string): void {
+    this.nextError = { status, code, message };
+  }
+
+  /**
+   * Consume and return the next error (if configured)
+   * Returns null if no error was configured
+   */
+  consumeNextError(): InjectedError | null {
+    const error = this.nextError;
+    this.nextError = null;
+    return error;
+  }
+
+  // ======================
+  // Credential Management
+  // ======================
+
+  /**
+   * Set valid credentials for authentication
+   */
+  setValidCredentials(email: string, password: string): void {
+    this.validCredentials = { email, password };
+  }
+
+  /**
+   * Get current valid credentials
+   */
+  getValidCredentials(): Credentials {
+    return { ...this.validCredentials };
+  }
+
+  // ===================
+  // Session Management
+  // ===================
+
+  /**
+   * Generate a unique session token
+   */
+  generateSessionToken(): string {
+    this.sessionCounter++;
+    return `mock-session-token-${this.sessionCounter}-${Date.now()}`;
+  }
+}
+
+/**
+ * Singleton instance of MockServerState
+ *
+ * Import this in handlers and tests to share state
+ */
+export const mockServerState = new MockServerState();
