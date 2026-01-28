@@ -754,6 +754,46 @@ src/services/
 
 **Why:** Frontend tests need test fixtures close by. Backend tests benefit from isolated `__tests__/` for cleaner service directories.
 
+### 9a. Test Dashboard Categories (5-Stage Pipeline)
+
+**Dashboard URL:** Generated as `test-pipeline.html` artifact in CI/CD
+
+**The 5 Stage Categories:**
+| Stage | Purpose | Blocking? |
+|-------|---------|-----------|
+| GoldenPath | Core functional tests (happy path) | Yes |
+| Security | Auth, authorization, crypto tests | Yes |
+| Contract | API contract validation | Yes |
+| UI | Component rendering tests | No |
+| Performance | Load, timing, SLA tests | No |
+
+**Auto-Detection (Current - Filename Pattern):**
+Tests are automatically categorized based on filename patterns:
+```
+security.*.test.ts    → Security
+*.performance.test.ts → Performance
+*.contract.test.ts    → Contract
+*.ui.test.ts          → UI
+*.test.ts (default)   → GoldenPath
+```
+
+**Optional Enhancement: Explicit Decorators (Future):**
+For per-test control or SLA enforcement, use `@oslsr/testing` decorators:
+```typescript
+import { goldenPath, securityTest } from '@oslsr/testing';
+
+// Instead of: it('should authenticate', ...)
+goldenPath('should authenticate', async () => { ... });
+securityTest('should reject invalid tokens', async () => { ... }, 2); // 2s SLA
+```
+
+**When to Use Decorators:**
+- Tests that need explicit category override (mixed-category files)
+- Tests with SLA requirements (e.g., performance-critical paths)
+- Tests that need `blocking: false` flag
+
+See `_bmad-output/TEST_DASHBOARD_DEBT.md` for full enhancement roadmap.
+
 ---
 
 ### 10. BullMQ Job Patterns

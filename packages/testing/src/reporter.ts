@@ -127,7 +127,7 @@ export class LiveReporter implements Reporter {
     for (const task of tasks) {
       if (task.type === 'test') {
         const meta = (task.meta || {}) as Record<string, unknown>;
-        const category = (meta.category as string) || 'unknown';
+        const category = this.detectCategory(this.currentFilePath, meta);
         const blocking = meta.blocking !== false;
         const tags = this.extractTags(meta, category);
         const pkg = this.detectPackage(this.currentFilePath);
@@ -187,6 +187,38 @@ export class LiveReporter implements Reporter {
     }
 
     return [...new Set(tags)]; // Deduplicate
+  }
+
+  /**
+   * Detect test category from file path or explicit metadata.
+   * Auto-infers from filename patterns when meta.category is not set.
+   *
+   * Priority: explicit meta.category > filename pattern > 'GoldenPath' default
+   */
+  private detectCategory(filepath: string, meta: Record<string, unknown>): string {
+    // Prefer explicit meta if set by decorators
+    if (meta.category && typeof meta.category === 'string') {
+      return meta.category;
+    }
+
+    // Infer from filename patterns
+    const normalized = filepath.toLowerCase().replace(/\\/g, '/');
+
+    if (normalized.includes('security') || normalized.includes('.security.')) {
+      return 'Security';
+    }
+    if (normalized.includes('performance') || normalized.includes('.performance.')) {
+      return 'Performance';
+    }
+    if (normalized.includes('contract') || normalized.includes('.contract.')) {
+      return 'Contract';
+    }
+    if (normalized.includes('.ui.test') || normalized.includes('/ui/') || normalized.includes('\\ui\\')) {
+      return 'UI';
+    }
+
+    // Default: most tests are functional/golden path tests
+    return 'GoldenPath';
   }
 
   /**

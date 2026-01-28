@@ -32,3 +32,85 @@ The following approach has been documented in **Story 1.10: Test Infrastructure 
 
 ## Path Forward
 This technical debt item is now tracked as **Story 1.10** in Epic 1. Implementation will follow the completion of core functional stories (1.7, 1.8, 1.9).
+
+---
+
+## Test Category Enhancement Roadmap
+
+**Date Added:** 2026-01-28
+**Status:** Phase 1 Complete (Auto-detect). Phase 2 Optional.
+**Priority:** Low (enhancement when time permits)
+
+### Phase 1: Auto-Detection (✅ IMPLEMENTED)
+
+The reporter now auto-detects category from filename patterns:
+
+| Pattern | Category |
+|---------|----------|
+| `security.*.test.ts` or `*.security.test.ts` | Security |
+| `performance.*.test.ts` or `*.performance.test.ts` | Performance |
+| `contract.*.test.ts` or `*.contract.test.ts` | Contract |
+| `*.ui.test.ts` or tests in `/ui/` directory | UI |
+| All other `*.test.ts` files | GoldenPath (default) |
+
+**Implementation:** `packages/testing/src/reporter.ts` - `detectCategory()` method.
+
+### Phase 2: Explicit Decorators (OPTIONAL - Future)
+
+For per-test control, SLA enforcement, or mixed-category files.
+
+**Option A: Full Migration**
+Update all tests to use decorators:
+```typescript
+import { goldenPath, securityTest, contractTest } from '@oslsr/testing';
+
+// Replaces: it('should authenticate user', ...)
+goldenPath('should authenticate user', async () => { ... });
+
+// With SLA enforcement (2 second max)
+goldenPath('should return results quickly', async () => { ... }, 2);
+
+// Security tests
+securityTest('should reject tampered tokens', async () => { ... });
+```
+
+**Benefits:**
+- Explicit per-test categorization
+- SLA enforcement (`sla` parameter in seconds)
+- Blocking vs optional marking (`blocking: false`)
+- Works for mixed-category test files
+
+**Effort:** High - requires updating all test files
+
+**Option B: Hybrid (RECOMMENDED for future)**
+Keep auto-detect as fallback, add decorators only where needed:
+- Auto-detect handles 90%+ of tests via naming convention
+- Decorators for tests needing:
+  - Explicit category override
+  - SLA enforcement
+  - Non-blocking flag
+
+**When to Consider Phase 2:**
+- Need per-test SLA enforcement for performance-critical paths
+- Have files with mixed-category tests
+- Want finer-grained dashboard filtering
+- Implementing CI gating by category (e.g., "fail build if Security tests fail")
+
+### Naming Convention Guide (for new tests)
+
+To ensure proper auto-categorization, follow these patterns:
+
+| Test Type | Naming Pattern | Example |
+|-----------|---------------|---------|
+| Security | `security.*.test.ts` | `security.auth.test.ts` |
+| Performance | `*.performance.test.ts` | `id-card.performance.test.ts` |
+| Contract | `*.contract.test.ts` | `api.contract.test.ts` |
+| UI | `*.ui.test.ts` or in `/ui/` folder | `LoginForm.ui.test.tsx` |
+| GoldenPath | `*.test.ts` (default) | `user.service.test.ts` |
+
+### Files Modified
+
+- `packages/testing/src/reporter.ts` - Added `detectCategory()` method
+- `packages/testing/src/decorators.ts` - Existing decorator helpers
+- `_bmad-output/project-context.md` - Section 9a documentation
+- `_bmad-output/implementation-artifacts/2-4-*.md` - Enhancement note
