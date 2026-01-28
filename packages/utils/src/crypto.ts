@@ -1,7 +1,10 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 12;
+const AES_ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // 12 bytes for GCM mode (NIST recommendation)
+const AUTH_TAG_LENGTH = 16; // 16 bytes for authentication tag
 
 /**
  * Generates a secure random 32-character hex token (16 bytes).
@@ -58,4 +61,78 @@ export const generateOtpCode = (): string => {
   const code = value % 1000000;
   // Pad with leading zeros to ensure 6 digits
   return code.toString().padStart(6, '0');
+};
+
+/**
+ * Encrypts a token using AES-256-GCM.
+ * Used for encrypting ODK App User tokens at rest (per ADR-006 defense-in-depth).
+ *
+ * @param plaintext The token to encrypt
+ * @param key 32-byte encryption key (256 bits)
+ * @returns Object containing hex-encoded ciphertext (with auth tag) and IV
+ * @throws Error if key is not exactly 32 bytes
+ */
+export const encryptToken = (plaintext: string, key: Buffer): { ciphertext: string; iv: string } => {
+  if (key.length !== 32) {
+    throw new Error(`Invalid key length: expected 32 bytes, got ${key.length} bytes`);
+  }
+
+  // Generate random 12-byte IV (NIST recommendation for GCM)
+  const iv = randomBytes(IV_LENGTH);
+
+  // Create cipher
+  const cipher = createCipheriv(AES_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+
+  // Encrypt the plaintext
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
+
+  // Get the authentication tag
+  const authTag = cipher.getAuthTag();
+
+  // Combine ciphertext and auth tag (auth tag appended for storage)
+  const combined = Buffer.concat([encrypted, authTag]);
+
+  return {
+    ciphertext: combined.toString('hex'),
+    iv: iv.toString('hex'),
+  };
+};
+
+/**
+ * Decrypts a token encrypted with AES-256-GCM.
+ * Used for decrypting ODK App User tokens for Enketo authentication.
+ *
+ * @param ciphertext Hex-encoded ciphertext (with auth tag appended)
+ * @param iv Hex-encoded initialization vector (12 bytes = 24 hex chars)
+ * @param key 32-byte decryption key (must match encryption key)
+ * @returns The original plaintext token
+ * @throws Error if decryption fails (wrong key, tampered data, invalid IV)
+ */
+export const decryptToken = (ciphertext: string, iv: string, key: Buffer): string => {
+  if (key.length !== 32) {
+    throw new Error(`Invalid key length: expected 32 bytes, got ${key.length} bytes`);
+  }
+
+  // Convert hex strings to buffers
+  const combined = Buffer.from(ciphertext, 'hex');
+  const ivBuffer = Buffer.from(iv, 'hex');
+
+  // Extract ciphertext and auth tag
+  const encrypted = combined.subarray(0, combined.length - AUTH_TAG_LENGTH);
+  const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH);
+
+  // Create decipher
+  const decipher = createDecipheriv(AES_ALGORITHM, key, ivBuffer, { authTagLength: AUTH_TAG_LENGTH });
+  decipher.setAuthTag(authTag);
+
+  // Decrypt and return plaintext
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]);
+
+  return decrypted.toString('utf8');
 };

@@ -4,6 +4,7 @@ import {
   type OdkConfig,
   type OdkSessionResponse,
   type OdkErrorResponse,
+  type OdkAppUserApiResponse,
   validateOdkConfig,
 } from '@oslsr/types';
 
@@ -300,4 +301,62 @@ export function requireOdkConfig(): OdkConfig {
     );
   }
   return config;
+}
+
+/**
+ * Create an App User in ODK Central for data collection.
+ * Per AC2: Calls POST /v1/projects/{projectId}/app-users
+ *
+ * ODK Central App Users are field keys used for Enketo form submission.
+ * The token returned is a long-lived key (never expires) used for authentication.
+ *
+ * CRITICAL: Token is only returned on creation. Store securely immediately.
+ *
+ * @param config ODK configuration
+ * @param projectId ODK Central project ID
+ * @param displayName Display name for the App User (staff full name + role)
+ * @returns OdkAppUserApiResponse containing id, type, displayName, token, createdAt
+ * @throws AppError with ODK_* codes on failure
+ */
+export async function createAppUser(
+  config: OdkConfig,
+  projectId: number,
+  displayName: string
+): Promise<OdkAppUserApiResponse> {
+  const path = `/v1/projects/${projectId}/app-users`;
+
+  logger.info({
+    event: 'odk.appuser.creating',
+    projectId,
+    displayName,
+  });
+
+  const response = await odkRequest(config, 'POST', path, {
+    body: { displayName },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let parsedError: OdkErrorResponse | string = errorBody;
+    try {
+      parsedError = JSON.parse(errorBody) as OdkErrorResponse;
+    } catch {
+      // Use raw error string if not JSON
+    }
+
+    handleOdkError(response, parsedError, { projectId, displayName });
+  }
+
+  const appUser = await response.json() as OdkAppUserApiResponse;
+
+  logger.info({
+    event: 'odk.appuser.created',
+    projectId,
+    odkAppUserId: appUser.id,
+    displayName: appUser.displayName,
+    createdAt: appUser.createdAt,
+    // Note: token is NOT logged for security
+  });
+
+  return appUser;
 }

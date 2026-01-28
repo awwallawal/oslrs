@@ -3,9 +3,11 @@ import { users, auditLogs } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
 import type { ActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
-import { UserRole } from '@oslsr/types';
+import { UserRole, isFieldRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
+import { queueOdkAppUserProvision } from '../queues/odk-app-user.queue.js';
+import { isOdkAvailable } from '@oslsr/odk-integration';
 import pino from 'pino';
 
 const logger = pino({ name: 'auth-service' });
@@ -30,9 +32,12 @@ export class AuthService {
     userAgent?: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
-    // 1. Find user by token
+    // 1. Find user by token with role included (AC1: need role to check if field role)
     const user = await db.query.users.findFirst({
-      where: eq(users.invitationToken, token)
+      where: eq(users.invitationToken, token),
+      with: {
+        role: true,
+      },
     });
 
     if (!user) {
@@ -55,19 +60,20 @@ export class AuthService {
     // 2. Hash password
     const passwordHash = await hashPassword(data.password);
 
+    let updatedUser;
     try {
       // 3. Update user and log audit in a transaction
-      return await db.transaction(async (tx) => {
+      updatedUser = await db.transaction(async (tx) => {
         // Double check NIN uniqueness within transaction
         const existingNin = await tx.query.users.findFirst({
             where: and(eq(users.nin, data.nin))
         });
-        
+
         if (existingNin && existingNin.id !== user.id) {
             throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered to another account.', 409);
         }
 
-        const [updatedUser] = await tx.update(users)
+        const [result] = await tx.update(users)
           .set({
             passwordHash,
             nin: data.nin,
@@ -95,7 +101,7 @@ export class AuthService {
           userAgent: userAgent || 'unknown'
         });
 
-        return updatedUser;
+        return result;
       });
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -114,6 +120,41 @@ export class AuthService {
       }
       throw err instanceof Error ? err : new Error(String(err));
     }
+
+    // 4. AC1: Trigger ODK App User provisioning for field roles
+    const roleName = user.role?.name as UserRole;
+    if (isFieldRole(roleName) && isOdkAvailable()) {
+      try {
+        await queueOdkAppUserProvision({
+          userId: user.id,
+          fullName: user.fullName,
+          role: roleName,
+        });
+        logger.info({
+          event: 'odk.appuser.provisioning_queued',
+          userId: user.id,
+          role: roleName,
+        });
+      } catch (queueErr: unknown) {
+        // Log error but don't fail activation - provisioning can be retried
+        logger.error({
+          event: 'odk.appuser.queue_failed',
+          userId: user.id,
+          role: roleName,
+          error: queueErr instanceof Error ? queueErr.message : 'Unknown error',
+        });
+      }
+    } else if (!isFieldRole(roleName)) {
+      // AC10: Log skipped back-office role
+      logger.debug({
+        event: 'odk.appuser.skipped_activation',
+        userId: user.id,
+        role: roleName,
+        reason: 'back-office role does not require ODK App User',
+      });
+    }
+
+    return updatedUser;
   }
 
   /**

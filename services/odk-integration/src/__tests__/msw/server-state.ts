@@ -28,6 +28,15 @@ export interface MockForm {
   publishedAt?: string;
 }
 
+export interface MockAppUser {
+  id: number;
+  type: 'field_key';
+  displayName: string;
+  token: string;
+  projectId: number;
+  createdAt: string;
+}
+
 export interface InjectedError {
   status: number;
   code: number | string;
@@ -52,6 +61,7 @@ interface Credentials {
 class MockServerState {
   private forms: Map<string, MockForm> = new Map();
   private formDrafts: Set<string> = new Set();
+  private appUsers: Map<number, MockAppUser> = new Map();
   private requestLog: LoggedRequest[] = [];
   private nextError: InjectedError | null = null;
   private validCredentials: Credentials = {
@@ -59,6 +69,7 @@ class MockServerState {
     password: 'secret123',
   };
   private sessionCounter = 0;
+  private appUserIdCounter = 100; // Start at 100 to distinguish from other IDs
 
   /**
    * Reset all state - call in beforeEach to ensure test isolation
@@ -66,9 +77,11 @@ class MockServerState {
   reset(): void {
     this.forms.clear();
     this.formDrafts.clear();
+    this.appUsers.clear();
     this.requestLog = [];
     this.nextError = null;
     this.sessionCounter = 0;
+    this.appUserIdCounter = 100;
     // Keep credentials as configured
   }
 
@@ -216,6 +229,50 @@ class MockServerState {
     const error = this.nextError;
     this.nextError = null;
     return error;
+  }
+
+  // =========================
+  // App User State Management
+  // =========================
+
+  /**
+   * Create a new App User and return the response
+   */
+  createAppUser(projectId: number, displayName: string): MockAppUser {
+    const id = this.appUserIdCounter++;
+    const now = new Date().toISOString();
+    // Generate a mock token (64-character hex string like real ODK)
+    const token = Array.from({ length: 64 }, () =>
+      Math.floor(Math.random() * 16).toString(16)
+    ).join('');
+
+    const appUser: MockAppUser = {
+      id,
+      type: 'field_key',
+      displayName,
+      token,
+      projectId,
+      createdAt: now,
+    };
+
+    this.appUsers.set(id, appUser);
+    return appUser;
+  }
+
+  /**
+   * Get all App Users for a project
+   */
+  getAppUsers(projectId?: number): MockAppUser[] {
+    const allUsers = Array.from(this.appUsers.values());
+    if (projectId === undefined) return allUsers;
+    return allUsers.filter((u) => u.projectId === projectId);
+  }
+
+  /**
+   * Get an App User by ID
+   */
+  getAppUser(id: number): MockAppUser | undefined {
+    return this.appUsers.get(id);
   }
 
   // ======================

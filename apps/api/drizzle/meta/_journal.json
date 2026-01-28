@@ -71,6 +71,13 @@
       "when": 1769601115348,
       "tag": "0009_easy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1769617584715,
+      "tag": "0010_orange_exodus",
+      "breakpoints": true
     }
   ]
 }

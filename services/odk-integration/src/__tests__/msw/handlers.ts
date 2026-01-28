@@ -260,6 +260,63 @@ const publishDraftHandler = http.post(
 );
 
 /**
+ * POST /v1/projects/:projectId/app-users - Create App User (field key)
+ *
+ * Creates a new App User for mobile/web data collection authentication.
+ * Returns the token ONLY on creation - it cannot be retrieved later.
+ *
+ * Per Story 2-3: Used for field role staff (Enumerator, Supervisor) to
+ * authenticate with Enketo for form submission.
+ *
+ * Success (200): Returns OdkAppUserApiResponse with id, type, displayName, token, createdAt
+ * Failure (401): Invalid session token
+ * Failure (404): Project not found
+ */
+const createAppUserHandler = http.post(
+  `${ODK_BASE_URL}/v1/projects/:projectId/app-users`,
+  async ({ request, params }) => {
+    const projectId = parseInt(params.projectId as string, 10);
+    const body = await request.json() as { displayName?: string };
+
+    mockServerState.logRequest({
+      method: 'POST',
+      path: `/v1/projects/${projectId}/app-users`,
+      headers: Object.fromEntries(request.headers.entries()),
+      body,
+    });
+
+    // Check for configured error injection
+    const injectedError = mockServerState.consumeNextError();
+    if (injectedError) {
+      return HttpResponse.json(
+        { code: injectedError.code, message: injectedError.message },
+        { status: injectedError.status }
+      );
+    }
+
+    // Validate displayName
+    if (!body.displayName || typeof body.displayName !== 'string') {
+      return HttpResponse.json(
+        { code: 400.1, message: 'displayName is required' },
+        { status: 400 }
+      );
+    }
+
+    // Create App User
+    const appUser = mockServerState.createAppUser(projectId, body.displayName);
+
+    // Return response matching ODK Central API
+    return HttpResponse.json({
+      id: appUser.id,
+      type: appUser.type,
+      displayName: appUser.displayName,
+      token: appUser.token,
+      createdAt: appUser.createdAt,
+    });
+  }
+);
+
+/**
  * All ODK Central API handlers for MSW
  *
  * Export as array for use with setupServer()
@@ -269,6 +326,7 @@ export const handlers = [
   createFormHandler,
   uploadDraftHandler,
   publishDraftHandler,
+  createAppUserHandler,
 ];
 
 export { ODK_BASE_URL };
