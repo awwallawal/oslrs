@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -109,6 +110,15 @@ function UnauthorizedPage() {
   );
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
 function App() {
   return (
     <ErrorBoundary
@@ -117,6 +127,7 @@ function App() {
         description: 'Something went wrong. Please refresh the page or contact support.',
       }}
     >
+      <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Routes>
@@ -508,6 +519,7 @@ function App() {
           <ReAuthModal />
         </AuthProvider>
       </BrowserRouter>
+      </QueryClientProvider>
 
       {/* Toast notifications - positioned top-right with Oyo State theme */}
       <Toaster
