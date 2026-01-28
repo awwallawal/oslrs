@@ -31,24 +31,12 @@ export const odkConfigSchema = z.object({
 export type OdkConfig = z.infer<typeof odkConfigSchema>;
 
 /**
- * Validates that the encryption key is configured for App User provisioning.
- * Call this before creating/using encrypted tokens.
- * @throws Error if ODK_TOKEN_ENCRYPTION_KEY is not configured
- */
-export function requireEncryptionKey(config: OdkConfig): Buffer {
-  if (!config.ODK_TOKEN_ENCRYPTION_KEY) {
-    throw new Error('ODK_TOKEN_ENCRYPTION_KEY is required for App User provisioning');
-  }
-  return Buffer.from(config.ODK_TOKEN_ENCRYPTION_KEY, 'hex');
-}
-
-/**
  * Validates ODK environment configuration.
  * Returns null if configuration is incomplete (ODK features unavailable).
  * Throws if configuration is present but invalid.
  *
  * Note: ODK_TOKEN_ENCRYPTION_KEY is optional for basic ODK operations.
- * Use requireEncryptionKey() to ensure it's configured for App User provisioning.
+ * Use requireEncryptionKey from @oslsr/utils for App User provisioning.
  */
 export function validateOdkConfig(env: Record<string, string | undefined>): OdkConfig | null {
   // Check if any ODK vars are set (excluding encryption key which is optional)

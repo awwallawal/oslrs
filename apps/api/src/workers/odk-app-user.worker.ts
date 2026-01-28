@@ -6,11 +6,10 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import type { CreateOdkAppUserPayload, OdkAppUserRecord, OdkAppUserResponse, UserRole } from '@oslsr/types';
+import type { CreateOdkAppUserPayload, OdkAppUserRecord, UserRole } from '@oslsr/types';
 import { isFieldRole, createOdkAppUserPayloadSchema } from '@oslsr/types';
 import {
   provisionAppUser,
-  logOrphanedAppUser,
   type OdkAppUserPersistence,
   type OdkAppUserAudit,
 } from '@oslsr/odk-integration';

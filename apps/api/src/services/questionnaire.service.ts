@@ -4,7 +4,7 @@ import {
   questionnaireFiles,
   questionnaireVersions,
 } from '../db/schema/index.js';
-import { users, auditLogs } from '../db/schema/index.js';
+import { auditLogs } from '../db/schema/index.js';
 import { eq, desc, and, count, ne } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { AppError } from '@oslsr/utils';

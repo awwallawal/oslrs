@@ -1,12 +1,11 @@
 import pino from 'pino';
-import { AppError, encryptToken } from '@oslsr/utils';
+import { AppError, encryptToken, requireEncryptionKey } from '@oslsr/utils';
 import type {
   OdkConfig,
   OdkAppUserRecord,
   OdkAppUserResponse,
   OdkAppUserApiResponse,
 } from '@oslsr/types';
-import { requireEncryptionKey } from '@oslsr/types';
 import { createAppUser, requireOdkConfig } from './odk-client.js';
 
 /**
@@ -155,7 +154,7 @@ export function encryptAppUserToken(
   config: OdkConfig
 ): EncryptedAppUserData {
   // Get encryption key (throws if not configured)
-  const encryptionKey = requireEncryptionKey(config);
+  const encryptionKey = requireEncryptionKey(config.ODK_TOKEN_ENCRYPTION_KEY);
 
   // Encrypt the token using AES-256-GCM
   const { ciphertext, iv } = encryptToken(odkAppUser.token, encryptionKey);

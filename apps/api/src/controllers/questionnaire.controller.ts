@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { QuestionnaireService } from '../services/questionnaire.service.js';
 import { AppError } from '@oslsr/utils';
-import type { QuestionnaireFormStatus } from '@oslsr/types';
 import {
   updateStatusSchema,
   listQuestionnairesQuerySchema,

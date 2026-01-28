@@ -136,3 +136,21 @@ export const decryptToken = (ciphertext: string, iv: string, key: Buffer): strin
 
   return decrypted.toString('utf8');
 };
+
+/**
+ * Validates and returns the ODK token encryption key as a Buffer.
+ * Used for AES-256-GCM encryption of ODK App User tokens.
+ *
+ * @param encryptionKeyHex Optional 64-character hex string (32 bytes)
+ * @returns 32-byte Buffer for use with encryptToken/decryptToken
+ * @throws Error if key is not provided or invalid
+ */
+export const requireEncryptionKey = (encryptionKeyHex: string | undefined): Buffer => {
+  if (!encryptionKeyHex) {
+    throw new Error('ODK_TOKEN_ENCRYPTION_KEY is required for App User provisioning');
+  }
+  if (encryptionKeyHex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(encryptionKeyHex)) {
+    throw new Error('ODK_TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)');
+  }
+  return Buffer.from(encryptionKeyHex, 'hex');
+};
