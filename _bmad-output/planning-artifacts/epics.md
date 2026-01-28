@@ -718,18 +718,19 @@ So that I can update the survey structure without using the ODK Central UI.
 **Then** the system should validate the file format and questionnaire schema
 **And** successfully validated forms should be stored and versioned in the `app_db`.
 
-### Story 2.2: ODK Central Form Deployment
+### Story 2.2: ODK Central Form Publishing
 
 As a Super Admin,
-I want validated questionnaires to be automatically pushed to ODK Central,
+I want to publish validated questionnaires to ODK Central via a manual action,
 So that they are available for field collection.
 
 **Acceptance Criteria:**
 
 **Given** a validated XLSForm in the Custom App
 **When** I click "Publish to ODK"
-**Then** the `services/odk-integration/` layer should call the ODK Central API to deploy the form
-**And** the form status in the Custom App should update to "Published" upon success.
+**Then** the `@oslsr/odk-integration` package should call the ODK Central API to deploy the form
+**And** the form status in the Custom App should update to "Published" upon success
+**And** if a previous version of the same form_id was published, it should be auto-deprecated.
 
 ### Story 2.3: Automated ODK App User Provisioning
 
@@ -768,7 +769,23 @@ So that I can resolve synchronization issues promptly.
 **Given** a failure in an ODK API call (e.g., timeout or auth error)
 **When** I view the "System Health" dashboard
 **Then** the failure should be displayed in the "ODK Sync Failures" widget
-**And** I should have a "Manual Resync" button to retry the failed operation.
+**And** I should have a "Manual Resync" button to retry the failed operation
+**And** I should be able to unpublish/rollback a published form from ODK Central, with the app_db status reverting to "draft" and an audit log entry recorded (identified as gap in Story 2-2 validation).
+
+### Story 2.6: ODK Mock Server for Integration Testing
+
+As a Developer,
+I want a mock ODK Central server that simulates the real ODK Central API,
+So that integration tests for `@oslsr/odk-integration` can verify full HTTP request/response flows without requiring a live ODK Central instance.
+
+**Acceptance Criteria:**
+
+**Given** the `@oslsr/odk-integration` test suite, **when** integration tests run, **then** a mock ODK Central server (MSW) MUST be available that responds to all ODK endpoints used by the project.
+**And** the mock server MUST support session auth, first-time publish, version-update (draft+publish), and programmable error injection.
+**And** all HTTP requests MUST be inspectable for assertion purposes.
+**And** existing tests MUST be upgraded to use the mock server for realistic HTTP-level validation.
+
+**Source:** Identified as gap during Story 2-2 code review (2026-01-28). Task 6.2 was originally deferred due to "requires ODK mock server."
 
 ---
 

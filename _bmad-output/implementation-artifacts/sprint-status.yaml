@@ -74,9 +74,10 @@ development_status:
   epic-2: in-progress  # Started 2026-01-26: First story created
   2-1-xlsform-upload-validation: done  # Completed 2026-01-27: Code review passed, all fixes applied, 55/55 tests pass
   2-2-odk-central-form-deployment: done  # Completed 2026-01-28: ODK client, form deployment service, publish endpoint, frontend button, 17 tests
-  2-3-automated-odk-app-user-provisioning: backlog
-  2-4-encrypted-odk-token-management: backlog
-  2-5-odk-sync-health-monitoring: backlog
+  2-6-odk-mock-server-integration-testing: ready-for-dev  # Reordered before 2-3: test infra prerequisite for all remaining ODK stories
+  2-3-automated-odk-app-user-provisioning: backlog  # Depends on 2-6 for integration test coverage
+  2-4-encrypted-odk-token-management: backlog  # Depends on 2-6 for integration test coverage
+  2-5-odk-sync-health-monitoring: backlog  # Depends on 2-6 for integration test coverage
   epic-2-retrospective: optional
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
