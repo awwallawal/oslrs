@@ -1,41 +1,43 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
+    },
     "test:golden": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "cache": false
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
     },
     "test:security": {
-      "dependsOn": ["test:golden"],
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "cache": false
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
     },
     "test:contract": {
-      "dependsOn": ["test:security"],
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "cache": false
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
     },
     "test:ui": {
-      "dependsOn": ["test:contract"],
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "cache": false
-    },
-    "test": {
-      "dependsOn": ["test:golden", "test:security", "test:contract", "test:ui"],
-      "outputs": []
+      "env": ["NODE_ENV"]
     },
     "test:dashboard": {
-      "dependsOn": ["test"],
+      "dependsOn": [],
       "outputs": ["test-pipeline.html", ".vitest-live.json"],
       "cache": false
-    },
-    "lint": {
-      "outputs": []
     }
   }
 }

@@ -2,14 +2,140 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
 jobs:
-  build-and-test:
+  # ============================================
+  # Job 1: Lint and Build (shared by all test jobs)
+  # ============================================
+  lint-and-build:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Needed for change detection
 
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      # Optimization 1: Turbo Remote Cache (GitHub Actions)
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      # Upload build artifacts for parallel test jobs
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            apps/*/dist
+            packages/*/dist
+            services/*/dist
+            node_modules
+            .turbo
+          retention-days: 1
+
+  # ============================================
+  # Job 2: Fast Unit Tests (no services needed)
+  # Optimization 4: Fast tests run first
+  # ============================================
+  test-unit:
+    needs: lint-and-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Optimization 2: Parallel matrix - fast packages
+        package: [utils, testing, odk-integration]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Optimization 3: Skip unchanged packages on PRs
+      - name: Run tests
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Only test if this package or its dependencies changed
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/${{ matrix.package }}...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            if [ "$CHANGED" -gt 0 ]; then
+              echo "Changes detected, running tests..."
+              pnpm --filter @oslsr/${{ matrix.package }} test
+            else
+              echo "No changes in ${{ matrix.package }}, skipping tests"
+            fi
+          else
+            pnpm --filter @oslsr/${{ matrix.package }} test
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.package }}
+          path: |
+            .vitest-live-*.json
+            packages/${{ matrix.package }}/.vitest-live-*.json
+            services/${{ matrix.package }}/.vitest-live-*.json
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ============================================
+  # Job 3: API Tests (needs Postgres + Redis)
+  # ============================================
+  test-api:
+    needs: lint-and-build
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:15-alpine
@@ -38,42 +164,179 @@ jobs:
     env:
       DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
       REDIS_URL: redis://localhost:6379
-      NODE_ENV: test
       JWT_SECRET: test-jwt-secret-for-ci
       REFRESH_TOKEN_SECRET: test-refresh-token-secret-for-ci
       PUBLIC_APP_URL: http://localhost:5173
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Database
+        run: pnpm --filter @oslsr/api db:push
+
+      # Optimization 3: Skip unchanged packages on PRs
+      - name: Run API tests
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/api...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            if [ "$CHANGED" -gt 0 ]; then
+              echo "Changes detected, running API tests..."
+              pnpm --filter @oslsr/api test
+            else
+              echo "No changes in API, skipping tests"
+            fi
+          else
+            pnpm --filter @oslsr/api test
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-api
+          path: |
+            .vitest-live-*.json
+            apps/api/.vitest-live-*.json
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ============================================
+  # Job 4: Web Tests (no services, but larger)
+  # ============================================
+  test-web:
+    needs: lint-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Optimization 3: Skip unchanged packages on PRs
+      - name: Run Web tests
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/web...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            if [ "$CHANGED" -gt 0 ]; then
+              echo "Changes detected, running Web tests..."
+              pnpm --filter @oslsr/web test
+            else
+              echo "No changes in Web, skipping tests"
+            fi
+          else
+            pnpm --filter @oslsr/web test
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-web
+          path: |
+            .vitest-live-*.json
+            apps/web/.vitest-live-*.json
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ============================================
+  # Job 5: Generate Dashboard (merge all results)
+  # ============================================
+  dashboard:
+    needs: [test-unit, test-api, test-web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+      # Download all test results
+      - name: Download test results (utils)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-utils
+          path: .
+        continue-on-error: true
 
-      - name: Build
-        run: pnpm build
+      - name: Download test results (testing)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-testing
+          path: .
+        continue-on-error: true
 
-      - name: Setup Database
-        run: pnpm --filter @oslsr/api db:push
+      - name: Download test results (odk-integration)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-odk-integration
+          path: .
+        continue-on-error: true
 
-      - name: Test
-        run: pnpm test
+      - name: Download test results (api)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-api
+          path: .
+        continue-on-error: true
+
+      - name: Download test results (web)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-web
+          path: .
+        continue-on-error: true
 
       - name: Generate Test Dashboard
-        if: always()
         run: pnpm test:dashboard
 
       - name: Upload Test Dashboard
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-dashboard
@@ -83,13 +346,11 @@ jobs:
           retention-days: 30
 
       - name: Generate Test Summary
-        if: always()
         run: |
           if [ -f ".vitest-live.json" ]; then
             echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
-            # Extract test counts using Node.js
             node -e "
               const data = require('./.vitest-live.json');
               const tests = data.tests || [];
@@ -98,6 +359,15 @@ jobs:
               const failed = tests.filter(t => t.status === 'failed').length;
               const skipped = tests.filter(t => t.status === 'skipped').length;
 
+              // Group by package
+              const byPkg = {};
+              tests.forEach(t => {
+                const pkg = t.package || 'unknown';
+                byPkg[pkg] = byPkg[pkg] || { passed: 0, failed: 0 };
+                if (t.status === 'passed') byPkg[pkg].passed++;
+                if (t.status === 'failed') byPkg[pkg].failed++;
+              });
+
               console.log('| Status | Count |');
               console.log('|--------|-------|');
               console.log('| Total | ' + total + ' |');
@@ -105,12 +375,21 @@ jobs:
               console.log('| ❌ Failed | ' + failed + ' |');
               console.log('| ⏭️ Skipped | ' + skipped + ' |');
 
+              console.log('');
+              console.log('### By Package');
+              console.log('| Package | Passed | Failed |');
+              console.log('|---------|--------|--------|');
+              Object.entries(byPkg).sort((a,b) => b[1].passed - a[1].passed).forEach(([pkg, stats]) => {
+                const status = stats.failed > 0 ? '❌' : '✅';
+                console.log('| ' + status + ' ' + pkg + ' | ' + stats.passed + ' | ' + stats.failed + ' |');
+              });
+
               if (failed > 0) {
                 console.log('');
                 console.log('### Failed Tests');
                 console.log('');
                 tests.filter(t => t.status === 'failed').forEach(t => {
-                  console.log('- **' + t.name + '**');
+                  console.log('- **' + t.name + '** (' + (t.package || 'unknown') + ')');
                   if (t.error) console.log('  - Error: \`' + t.error.substring(0, 100) + '\`');
                 });
               }
@@ -119,8 +398,23 @@ jobs:
             echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # Fail the job if any tests failed
+      - name: Check for failures
+        run: |
+          if [ -f ".vitest-live.json" ]; then
+            FAILED=$(node -e "const d = require('./.vitest-live.json'); console.log(d.tests.filter(t => t.status === 'failed').length)")
+            if [ "$FAILED" -gt 0 ]; then
+              echo "❌ $FAILED tests failed"
+              exit 1
+            fi
+            echo "✅ All tests passed"
+          fi
+
+  # ============================================
+  # Job 6: Deploy (only on main, after tests pass)
+  # ============================================
   deploy:
-    needs: build-and-test
+    needs: dashboard
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
