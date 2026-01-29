@@ -6,6 +6,8 @@ import { LiveReporter } from './packages/testing/src/reporter'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 console.log('[Vitest Base] Loading config with LiveReporter...'); // Debug
+console.log('[Vitest Base] __dirname:', __dirname);
+console.log('[Vitest Base] CWD:', process.cwd());
 
 export const baseConfig = defineConfig({
   test: {
