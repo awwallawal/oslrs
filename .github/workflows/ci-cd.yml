@@ -136,7 +136,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.package }}
-          path: .vitest-live-*.json
+          path: |
+            .vitest-live-*.json
+            .vitest-config-loaded
+            reporter-trace.log
+            packages/${{ matrix.package }}/vitest-report.json
+            services/${{ matrix.package }}/vitest-report.json
           retention-days: 1
           if-no-files-found: warn
 
@@ -238,7 +243,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-api
-          path: .vitest-live-*.json
+          path: |
+            .vitest-live-*.json
+            .vitest-config-loaded
+            reporter-trace.log
+            apps/api/vitest-report.json
           retention-days: 1
           if-no-files-found: warn
 
@@ -305,7 +314,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-web
-          path: .vitest-live-*.json
+          path: |
+            .vitest-live-*.json
+            .vitest-config-loaded
+            reporter-trace.log
+            apps/web/vitest-report.json
           retention-days: 1
           if-no-files-found: warn
 
