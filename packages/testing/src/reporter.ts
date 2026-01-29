@@ -223,7 +223,7 @@ export class LiveReporter implements Reporter {
 
   /**
    * Detect package name from file path.
-   * Supports apps/api, apps/web, packages/* patterns.
+   * Supports apps/*, packages/*, services/* patterns.
    */
   private detectPackage(filepath: string): string | undefined {
     if (!filepath) return undefined;
@@ -241,6 +241,12 @@ export class LiveReporter implements Reporter {
     const packagesMatch = normalized.match(/packages\/([^/]+)\//);
     if (packagesMatch) {
       return packagesMatch[1];
+    }
+
+    // Match services/{name}/ pattern
+    const servicesMatch = normalized.match(/services\/([^/]+)\//);
+    if (servicesMatch) {
+      return servicesMatch[1];
     }
 
     return undefined;
