@@ -122,6 +122,8 @@ jobs:
         run: |
           echo "=== Current directory ==="
           pwd
+          echo "=== Config marker file (proves config loaded) ==="
+          cat .vitest-config-loaded 2>/dev/null || echo "NO MARKER FILE - CONFIG NOT LOADED!"
           echo "=== All .vitest-live files in repo ==="
           find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
           echo "=== Reporter trace log ==="
@@ -222,6 +224,8 @@ jobs:
         run: |
           echo "=== Current directory ==="
           pwd
+          echo "=== Config marker file (proves config loaded) ==="
+          cat .vitest-config-loaded 2>/dev/null || echo "NO MARKER FILE - CONFIG NOT LOADED!"
           echo "=== All .vitest-live files in repo ==="
           find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
           echo "=== Reporter trace log ==="
@@ -287,6 +291,8 @@ jobs:
         run: |
           echo "=== Current directory ==="
           pwd
+          echo "=== Config marker file (proves config loaded) ==="
+          cat .vitest-config-loaded 2>/dev/null || echo "NO MARKER FILE - CONFIG NOT LOADED!"
           echo "=== All .vitest-live files in repo ==="
           find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
           echo "=== Reporter trace log ==="

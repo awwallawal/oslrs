@@ -38,6 +38,15 @@ console.log('[Vitest Base] import.meta.url dir:', importMetaDir);
 console.log('[Vitest Base] CWD:', process.cwd());
 console.log('[Vitest Base] Reporter will write to:', workspaceRoot);
 
+// Debug: Write a marker file to prove config is loaded
+try {
+  const markerPath = path.join(workspaceRoot, '.vitest-config-loaded');
+  fs.writeFileSync(markerPath, `Config loaded at ${new Date().toISOString()}\nWorkspace: ${workspaceRoot}\nCWD: ${process.cwd()}\n`);
+  console.log('[Vitest Base] Wrote marker file:', markerPath);
+} catch (err) {
+  console.error('[Vitest Base] Failed to write marker file:', (err as Error).message);
+}
+
 export const baseConfig = defineConfig({
   test: {
     environment: 'jsdom',
