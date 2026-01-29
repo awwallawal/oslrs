@@ -123,12 +123,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.package }}
-          path: |
-            .vitest-live-*.json
-            packages/${{ matrix.package }}/.vitest-live-*.json
-            services/${{ matrix.package }}/.vitest-live-*.json
+          path: .vitest-live-*.json
           retention-days: 1
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   # ============================================
   # Job 3: API Tests (needs Postgres + Redis)
@@ -214,11 +211,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-api
-          path: |
-            .vitest-live-*.json
-            apps/api/.vitest-live-*.json
+          path: .vitest-live-*.json
           retention-days: 1
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   # ============================================
   # Job 4: Web Tests (no services, but larger)
@@ -269,11 +264,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-web
-          path: |
-            .vitest-live-*.json
-            apps/web/.vitest-live-*.json
+          path: .vitest-live-*.json
           retention-days: 1
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   # ============================================
   # Job 5: Generate Dashboard (merge all results)
