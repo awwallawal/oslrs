@@ -3,11 +3,25 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { LiveReporter } from './packages/testing/src/reporter'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// Calculate __dirname with fallback for different environments
+let __dirname: string;
+try {
+  __dirname = path.dirname(fileURLToPath(import.meta.url));
+} catch {
+  // Fallback: use CWD and navigate up if in a package directory
+  const cwd = process.cwd();
+  if (cwd.includes('/packages/') || cwd.includes('/apps/') || cwd.includes('/services/') ||
+      cwd.includes('\\packages\\') || cwd.includes('\\apps\\') || cwd.includes('\\services\\')) {
+    __dirname = path.resolve(cwd, '../..');
+  } else {
+    __dirname = cwd;
+  }
+}
 
-console.log('[Vitest Base] Loading config with LiveReporter...'); // Debug
+console.log('[Vitest Base] Loading config with LiveReporter...');
 console.log('[Vitest Base] __dirname:', __dirname);
 console.log('[Vitest Base] CWD:', process.cwd());
+console.log('[Vitest Base] Reporter output dir:', __dirname);
 
 export const baseConfig = defineConfig({
   test: {

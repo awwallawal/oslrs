@@ -22,21 +22,25 @@ export class LiveReporter implements Reporter {
   private results: Map<string, TestResult> = new Map();
   private outputPath: string;
   private currentFilePath: string = '';
+  private baseDir: string;
 
   constructor(options: { outputDir?: string } = {}) {
-    const baseDir = options.outputDir || process.cwd();
+    this.baseDir = options.outputDir || process.cwd();
     const timestamp = Date.now();
     const pid = process.pid;
-    this.outputPath = path.resolve(baseDir, `.vitest-live-${timestamp}-${pid}.json`);
+    this.outputPath = path.resolve(this.baseDir, `.vitest-live-${timestamp}-${pid}.json`);
 
-    // Log initialization (non-critical, don't crash if fails)
+    // Log initialization - output to both console and trace log for CI visibility
+    const initMsg = `[LiveReporter] Initialized PID ${pid} writing to ${this.outputPath}`;
+    console.log(initMsg);
+
     try {
       fs.appendFileSync(
-        path.resolve(baseDir, 'reporter-trace.log'),
-        `[${new Date().toISOString()}] Initialized PID ${pid} writing to ${this.outputPath}\n`
+        path.resolve(this.baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] ${initMsg}\n`
       );
-    } catch {
-      // Silently ignore trace log failures
+    } catch (err) {
+      console.warn(`[LiveReporter] Could not write trace log: ${(err as Error).message}`);
     }
   }
 
@@ -68,19 +72,21 @@ export class LiveReporter implements Reporter {
    * Handles both Vitest v2 and v4 file structures
    */
   private processFiles(files?: File[] | unknown) {
-    // Log to trace file for debugging
-    const baseDir = path.dirname(this.outputPath);
+    const fileCount = Array.isArray(files) ? files.length : 0;
+    const processMsg = `[LiveReporter] Processing ${fileCount} files, PID ${process.pid}`;
+    console.log(processMsg);
+
     try {
-      const fileCount = Array.isArray(files) ? files.length : 0;
       fs.appendFileSync(
-        path.resolve(baseDir, 'reporter-trace.log'),
-        `[${new Date().toISOString()}] Processing ${fileCount} files, PID ${process.pid}\n`
+        path.resolve(this.baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] ${processMsg}\n`
       );
     } catch {
       // Ignore trace errors
     }
 
     if (!files || !Array.isArray(files)) {
+      console.log('[LiveReporter] No files to process (files is undefined or not array)');
       return;
     }
 
@@ -106,10 +112,13 @@ export class LiveReporter implements Reporter {
     }
 
     // Log collection result
+    const collectMsg = `[LiveReporter] Collected ${this.results.size} results, saving to ${this.outputPath}`;
+    console.log(collectMsg);
+
     try {
       fs.appendFileSync(
-        path.resolve(baseDir, 'reporter-trace.log'),
-        `[${new Date().toISOString()}] Collected ${this.results.size} results, saving to ${this.outputPath}\n`
+        path.resolve(this.baseDir, 'reporter-trace.log'),
+        `[${new Date().toISOString()}] ${collectMsg}\n`
       );
     } catch {
       // Ignore trace errors
@@ -258,19 +267,32 @@ export class LiveReporter implements Reporter {
    */
   private save() {
     const data = Array.from(this.results.values());
-    if (data.length === 0) return;
+    if (data.length === 0) {
+      console.log('[LiveReporter] No results to save (empty)');
+      return;
+    }
 
     const tempPath = this.outputPath + '.tmp';
 
     try {
+      // Ensure directory exists
+      const dir = path.dirname(this.outputPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
       // Write to temp file first
       fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
 
       // Atomically rename to final path
       fs.renameSync(tempPath, this.outputPath);
+
+      console.log(`[LiveReporter] Successfully saved ${data.length} results to ${this.outputPath}`);
     } catch (err) {
       // Log warning but don't crash tests
-      console.warn(`[LiveReporter] Failed to write test results: ${(err as Error).message}`);
+      console.error(`[LiveReporter] Failed to write test results: ${(err as Error).message}`);
+      console.error(`[LiveReporter] Output path: ${this.outputPath}`);
+      console.error(`[LiveReporter] Base dir: ${this.baseDir}`);
 
       // Clean up temp file if it exists
       try {
