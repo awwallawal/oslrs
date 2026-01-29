@@ -198,11 +198,16 @@ describe('Result Merger', () => {
   describe('metadata', () => {
     it('should include file count in results', async () => {
       const glob = await import('fast-glob');
-      vi.mocked(glob.default).mockResolvedValue([
+      const customFiles = [
         path.join(tempDir, '.vitest-live-1234-5678.json'),
         path.join(tempDir, '.vitest-live-1235-5679.json'),
         path.join(tempDir, '.vitest-live-1236-5680.json'),
-      ]);
+      ];
+      // Mock returns custom files for first call, empty for vitest-report.json
+      vi.mocked(glob.default).mockImplementation((pattern: string) => {
+        if (pattern === '.vitest-live-*.json') return Promise.resolve(customFiles);
+        return Promise.resolve([]); // No vitest-report.json files
+      });
 
       mockFs.readFileSync.mockReturnValue(JSON.stringify([]));
 
@@ -217,7 +222,11 @@ describe('Result Merger', () => {
         path.join(tempDir, '.vitest-live-1234-5678.json'),
         path.join(tempDir, '.vitest-live-1235-5679.json'),
       ];
-      vi.mocked(glob.default).mockResolvedValue(files);
+      // Mock returns custom files for first call, empty for vitest-report.json
+      vi.mocked(glob.default).mockImplementation((pattern: string) => {
+        if (pattern === '.vitest-live-*.json') return Promise.resolve(files);
+        return Promise.resolve([]); // No vitest-report.json files
+      });
 
       mockFs.readFileSync.mockReturnValue(JSON.stringify([]));
 
