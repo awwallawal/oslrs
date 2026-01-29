@@ -221,8 +221,8 @@ describe('LiveReporter', () => {
       }).not.toThrow();
     });
 
-    it('should log warning when file write fails', () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should log error when file write fails', () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockFs.writeFileSync.mockImplementation(() => {
         throw new Error('Permission denied');
       });
