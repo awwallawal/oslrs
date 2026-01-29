@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { generateInvitationToken, encryptToken, decryptToken } from '../crypto.js';
+import { generateInvitationToken, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
 
 describe('Crypto Utils', () => {
   it('should generate a 32-character hex token', () => {
@@ -95,11 +95,11 @@ describe('AES-256-GCM Token Encryption', () => {
     it('should throw error when ciphertext is tampered', () => {
       const encrypted = encryptToken(testToken, testKey);
 
-      // Tamper with ciphertext by XORing the last byte with 0xff (guaranteed change)
-      const lastByteIndex = encrypted.ciphertext.length - 2;
-      const lastByte = parseInt(encrypted.ciphertext.slice(lastByteIndex), 16);
-      const flippedByte = (lastByte ^ 0xff).toString(16).padStart(2, '0');
-      const tamperedCiphertext = encrypted.ciphertext.slice(0, lastByteIndex) + flippedByte;
+      // GCM ciphertext structure: [encrypted_data][16-byte auth tag]
+      // Tamper with byte 0 (actual ciphertext), not the auth tag at the end
+      const ciphertextBuffer = Buffer.from(encrypted.ciphertext, 'hex');
+      ciphertextBuffer[0] ^= 0xff; // Flip bits in actual ciphertext
+      const tamperedCiphertext = ciphertextBuffer.toString('hex');
 
       expect(() => {
         decryptToken(tamperedCiphertext, encrypted.iv, testKey);
@@ -142,6 +142,59 @@ describe('AES-256-GCM Token Encryption', () => {
       expect(() => {
         encryptToken(testToken, longKey);
       }).toThrow(/key/i);
+    });
+  });
+
+  describe('requireEncryptionKey Edge Cases', () => {
+    it('should throw error for empty string', () => {
+      expect(() => {
+        requireEncryptionKey('');
+      }).toThrow(/required/i);
+    });
+
+    it('should throw error for undefined', () => {
+      expect(() => {
+        requireEncryptionKey(undefined);
+      }).toThrow(/required/i);
+    });
+
+    it('should throw error for wrong length (too short)', () => {
+      expect(() => {
+        requireEncryptionKey('abc123'); // 6 chars, needs 64
+      }).toThrow(/64 hex characters/i);
+    });
+
+    it('should throw error for wrong length (too long)', () => {
+      expect(() => {
+        requireEncryptionKey('a'.repeat(128)); // 128 chars, needs 64
+      }).toThrow(/64 hex characters/i);
+    });
+
+    it('should throw error for invalid hex chars', () => {
+      expect(() => {
+        // 64 chars but contains invalid hex chars (xyz)
+        requireEncryptionKey('xyz'.repeat(21) + 'ab');
+      }).toThrow(/64 hex characters/i);
+    });
+
+    it('should return Buffer for valid 64-char hex key', () => {
+      const validKey = randomBytes(32).toString('hex'); // 64 hex chars
+      const result = requireEncryptionKey(validKey);
+
+      expect(result).toBeInstanceOf(Buffer);
+      expect(result.length).toBe(32);
+    });
+
+    it('should decrypt token encrypted with different valid key (wrong key failure)', () => {
+      const key1 = randomBytes(32);
+      const key2 = randomBytes(32); // Different key
+
+      const encrypted = encryptToken(testToken, key1);
+
+      // Decryption with wrong key should fail
+      expect(() => {
+        decryptToken(encrypted.ciphertext, encrypted.iv, key2);
+      }).toThrow();
     });
   });
 });

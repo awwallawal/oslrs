@@ -25,3 +25,6 @@ export const AUDIT_ACTION_QUESTIONNAIRE_PUBLISH_TO_ODK = 'questionnaire.publish_
 
 // Email actions
 export const AUDIT_ACTION_EMAIL_DELIVERY_FAILED = 'email.delivery.failed';
+
+// ODK Token actions (Story 2-4)
+export const AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED = 'user.odk_token_accessed';

@@ -40,6 +40,29 @@ export {
   type EncryptedAppUserData,
 } from './odk-app-user.service.js';
 
+// ODK Token Service - Token retrieval and management (Story 2.4)
+export {
+  createOdkTokenService,
+  type TokenAccessContext,
+  type TokenHealthResult,
+  type HealthCheckContext,
+  type OdkTokenPersistence,
+  type OdkTokenAudit,
+  type OdkTokenConfig,
+  type OdkTokenLogger,
+  type OdkTokenServiceDeps,
+  type OdkTokenService,
+} from './odk-token.service.js';
+
+// ODK Configuration Validation (Story 2.4)
+export {
+  validateOdkTokenConfig,
+  isOdkFullyConfigured,
+  logOdkConfigStatus,
+  requireTokenEncryptionKey,
+  type OdkConfigValidationResult,
+} from './odk-config.js';
+
 // Re-export types from @oslsr/types for convenience
 export type {
   OdkConfig,

@@ -1,6 +1,6 @@
 # Story 2.4: Encrypted ODK Token Management
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -31,71 +31,71 @@ so that tokens can be retrieved for Enketo authentication while maintaining defe
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create ODK Token Management Service (AC: 1, 2, 8)
-  - [ ] 1.1 Create `services/odk-integration/src/odk-token.service.ts`:
+- [x] Task 1: Create ODK Token Management Service (AC: 1, 2, 8)
+  - [x] 1.1 Create `services/odk-integration/src/odk-token.service.ts`:
     - `getDecryptedToken(userId: string, callerContext: TokenAccessContext): Promise<string>`
     - `validateTokenHealth(userId: string): Promise<{ valid: boolean; error?: string }>`
     - `TokenAccessContext` type: `{ callerId: string; purpose: 'enketo_launch' | 'health_check' | 'system'; role?: UserRole }`
-  - [ ] 1.2 Import `decryptToken` and `requireEncryptionKey` from `@oslsr/utils` (NOT local copy)
-  - [ ] 1.3 Extend `OdkAppUserPersistence` interface from Story 2-3 with `findByUserId(userId)` method
-  - [ ] 1.4 Implement authorization check per AC2 rules (see Implementation Reference below)
-  - [ ] 1.5 Add graceful error handling with sanitized messages
-  - [ ] 1.6 Export from `services/odk-integration/src/index.ts`
+  - [x] 1.2 Import `decryptToken` and `requireEncryptionKey` from `@oslsr/utils` (NOT local copy)
+  - [x] 1.3 Extend `OdkAppUserPersistence` interface from Story 2-3 with `findByUserId(userId)` method
+  - [x] 1.4 Implement authorization check per AC2 rules (see Implementation Reference below)
+  - [x] 1.5 Add graceful error handling with sanitized messages
+  - [x] 1.6 Export from `services/odk-integration/src/index.ts`
 
-- [ ] Task 2: Define Error Code Constants (AC: 4, 7)
-  - [ ] 2.1 Create or extend `packages/types/src/error-codes.ts`:
+- [x] Task 2: Define Error Code Constants (AC: 4, 7)
+  - [x] 2.1 Create or extend `packages/types/src/error-codes.ts`:
     - `ODK_TOKEN_NOT_FOUND = 'TOKEN_NOT_FOUND'`
     - `ODK_TOKEN_ACCESS_DENIED = 'TOKEN_ACCESS_DENIED'`
     - `ODK_TOKEN_DECRYPTION_ERROR = 'TOKEN_DECRYPTION_ERROR'`
     - `ODK_CONFIG_ERROR = 'ODK_CONFIG_ERROR'`
-  - [ ] 2.2 Export from `packages/types/src/index.ts`
+  - [x] 2.2 Export from `packages/types/src/index.ts`
 
-- [ ] Task 3: Implement Audit Logging for Token Access (AC: 3)
-  - [ ] 3.1 Define audit action constant in `packages/types/src/audit.ts`:
+- [x] Task 3: Implement Audit Logging for Token Access (AC: 3)
+  - [x] 3.1 Define audit action constant in `packages/types/src/audit.ts`:
     - `AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED = 'user.odk_token_accessed'`
-  - [ ] 3.2 Add audit logging in `odk-token.service.ts`:
+  - [x] 3.2 Add audit logging in `odk-token.service.ts`:
     - Log on successful token retrieval (NOT on health check)
     - Include: `userId`, `accessorId`, `purpose`, `timestamp`
-  - [ ] 3.3 Use existing `OdkAppUserAudit` interface pattern from Story 2-3
+  - [x] 3.3 Use existing `OdkAppUserAudit` interface pattern from Story 2-3
 
-- [ ] Task 4: Add Structured Logging for Security Events (AC: 2, 4)
-  - [ ] 4.1 Add Pino logger to odk-token.service.ts
-  - [ ] 4.2 Log Pino events (operational monitoring—distinct from audit logs):
+- [x] Task 4: Add Structured Logging for Security Events (AC: 2, 4)
+  - [x] 4.1 Add Pino logger to odk-token.service.ts
+  - [x] 4.2 Log Pino events (operational monitoring—distinct from audit logs):
     - `odk.token.accessed` — successful decryption (info)
     - `odk.token.unauthorized_access` — authorization failure (warn)
     - `odk.token.decryption_failed` — crypto error (error)
     - `odk.token.not_found` — missing token (warn)
     - `odk.token.health_check` — validation result (info)
 
-- [ ] Task 5: Graceful Startup Validation (AC: 7)
-  - [ ] 5.1 Create `services/odk-integration/src/odk-config.ts`:
+- [x] Task 5: Graceful Startup Validation (AC: 7)
+  - [x] 5.1 Create `services/odk-integration/src/odk-config.ts`:
     - `validateOdkConfig(): { valid: boolean; errors: string[] }`
     - `isOdkFullyConfigured(): boolean` (checks URL, credentials, AND encryption key)
-  - [ ] 5.2 Update existing `isOdkAvailable()` to include encryption key check
-  - [ ] 5.3 Add startup warning log if ODK config incomplete (don't crash, just disable ODK features)
-  - [ ] 5.4 ODK token endpoints return 503 with `ODK_CONFIG_ERROR` if key missing
+  - [x] 5.2 Update existing `isOdkAvailable()` to include encryption key check
+  - [x] 5.3 Add startup warning log if ODK config incomplete (don't crash, just disable ODK features)
+  - [x] 5.4 ODK token endpoints return 503 with `ODK_CONFIG_ERROR` if key missing
 
-- [ ] Task 6: Fix CI Tamper Detection Test (SECURITY BLOCKER) (AC: 4)
-  - [ ] 6.1 **Root cause:** Current test tampers with auth tag (last 16 bytes), not ciphertext. The hex string manipulation `slice(lastByteIndex)` targets wrong bytes.
-  - [ ] 6.2 **Fix:** Tamper with byte 0 (actual ciphertext) instead of last byte:
+- [x] Task 6: Fix CI Tamper Detection Test (SECURITY BLOCKER) (AC: 4)
+  - [x] 6.1 **Root cause:** Current test tampers with auth tag (last 16 bytes), not ciphertext. The hex string manipulation `slice(lastByteIndex)` targets wrong bytes.
+  - [x] 6.2 **Fix:** Tamper with byte 0 (actual ciphertext) instead of last byte:
     ```typescript
     const ciphertextBuffer = Buffer.from(encrypted.ciphertext, 'hex');
     ciphertextBuffer[0] ^= 0xff;  // Flip bits in actual ciphertext, not auth tag
     const tamperedCiphertext = ciphertextBuffer.toString('hex');
     ```
-  - [ ] 6.3 Run test locally with debug output to verify fix before pushing
-  - [ ] 6.4 Add comment explaining GCM structure: `[ciphertext][16-byte auth tag]`
+  - [x] 6.3 Run test locally with debug output to verify fix before pushing
+  - [x] 6.4 Add comment explaining GCM structure: `[ciphertext][16-byte auth tag]`
 
-- [ ] Task 7: Add Encryption Key Edge Case Tests (AC: 7)
-  - [ ] 7.1 Add tests in `packages/utils/src/__tests__/crypto.test.ts`:
+- [x] Task 7: Add Encryption Key Edge Case Tests (AC: 7)
+  - [x] 7.1 Add tests in `packages/utils/src/__tests__/crypto.test.ts`:
     - Empty string: `''`
     - Wrong length (short): `'abc123'` (6 chars)
     - Wrong length (long): `'a'.repeat(128)` (128 chars)
     - Invalid hex chars: `'xyz'.repeat(21) + 'ab'` (64 chars, invalid)
     - Valid but wrong key: Different 64-char hex (decryption fails)
 
-- [ ] Task 8: Write Unit Tests for Token Service (AC: 1-4, 6)
-  - [ ] 8.1 Create `services/odk-integration/src/__tests__/odk-token.service.test.ts`:
+- [x] Task 8: Write Unit Tests for Token Service (AC: 1-4, 6)
+  - [x] 8.1 Create `services/odk-integration/src/__tests__/odk-token.service.test.ts`:
     - Test: successful token retrieval with system context
     - Test: successful token retrieval with owner context
     - Test: authorization failure for wrong user (non-owner, non-admin)
@@ -106,12 +106,12 @@ so that tokens can be retrieved for Enketo authentication while maintaining defe
     - Test: missing user returns TOKEN_NOT_FOUND
     - Test: audit log created on retrieval (not health check)
 
-- [ ] Task 9: Write Integration Tests with MSW Mock (AC: 5)
-  - [ ] 9.1 Create `services/odk-integration/src/__tests__/odk-token.integration.test.ts`:
+- [x] Task 9: Write Integration Tests with MSW Mock (AC: 5)
+  - [x] 9.1 Create `services/odk-integration/src/__tests__/odk-token.integration.test.ts`:
     - Test: full flow - provision App User (MSW) → encrypt token → store → retrieve → decrypt
     - Test: multiple users with different tokens (isolation verification)
-  - [ ] 9.2 Use MSW server from Story 2-6 `setupServer()` for provisioning step only
-  - [ ] 9.3 Add error injection tests for decryption failure scenarios
+  - [x] 9.2 Use MSW server from Story 2-6 `setupServer()` for provisioning step only
+  - [x] 9.3 Add error injection tests for decryption failure scenarios
 
 ## Out of Scope
 
@@ -255,10 +255,51 @@ services/odk-integration/src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+- All odk-integration tests: 89/89 passing (post-review)
+- All utils crypto tests: 22/22 passing
+
 ### Completion Notes List
 
+- Created ODK Token Service with `getDecryptedToken()` and `validateTokenHealth()` methods
+- Implemented authorization model: system (always), enketo_launch (owner only), health_check (SUPER_ADMIN)
+- Added error codes: TOKEN_NOT_FOUND, TOKEN_ACCESS_DENIED, TOKEN_DECRYPTION_ERROR, ODK_CONFIG_ERROR
+- Added audit action constant `user.odk_token_accessed` for compliance logging
+- Created odk-config.ts with graceful startup validation (don't crash, just disable features)
+- Fixed tamper detection test - now targets byte 0 (ciphertext) instead of auth tag
+- Added 7 encryption key edge case tests for requireEncryptionKey()
+- Added 13 unit tests for token service covering all authorization scenarios
+- Added 8 integration tests verifying full encrypt→store→retrieve→decrypt flow
+
+### Code Review Fixes (2026-01-29)
+
+**H1 (AC2 Violation):** Fixed `getDecryptedToken()` to reject `health_check` purpose per AC2 ("no plaintext returned"). Health checks must use `validateTokenHealth()` instead.
+
+**H2 (AppError):** Fixed `requireTokenEncryptionKey()` in odk-config.ts to use `AppError` class instead of plain object.
+
+**M1 (Unused Import):** Removed unused `AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED` import from odk-token.service.ts.
+
+**M2 (Config Validation):** Fixed `validateOdkTokenConfig()` to check individual env vars instead of assuming all missing.
+
+**M3 (Test Comment):** Updated test to correctly expect authorization rejection for health_check purpose.
+
+**Additional:** Added `HealthCheckContext` type and optional context parameter to `validateTokenHealth()` for SUPER_ADMIN verification (AC6).
+
 ### File List
+
+**New Files:**
+- services/odk-integration/src/odk-token.service.ts
+- services/odk-integration/src/odk-config.ts
+- services/odk-integration/src/__tests__/odk-token.service.test.ts
+- services/odk-integration/src/__tests__/odk-token.integration.test.ts
+- packages/types/src/error-codes.ts
+
+**Modified Files:**
+- packages/types/src/audit.ts (added AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED)
+- packages/types/src/index.ts (added export for error-codes.ts)
+- packages/utils/src/__tests__/crypto.test.ts (fixed tamper test, added edge case tests)
+- services/odk-integration/src/index.ts (added token service exports, HealthCheckContext type)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (status: review)

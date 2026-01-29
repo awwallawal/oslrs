@@ -10,3 +10,4 @@ export * from './validation/auth.js';
 export * from './validation/registration.js';
 export * from './validation/questionnaire.js';
 export * from './validation/odk-config.js';
+export * from './error-codes.js';
