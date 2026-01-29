@@ -63,7 +63,6 @@ jobs:
             apps/*/dist
             packages/*/dist
             services/*/dist
-            node_modules
             .turbo
           retention-days: 1
 
@@ -117,6 +116,18 @@ jobs:
           else
             pnpm --filter @oslsr/${{ matrix.package }} test
           fi
+
+      - name: Debug - List test result files
+        if: always()
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== All .vitest-live files in repo ==="
+          find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
+          echo "=== Reporter trace log ==="
+          cat reporter-trace.log 2>/dev/null || echo "No trace log"
+          echo "=== Files in current dir ==="
+          ls -la .vitest-live*.json 2>/dev/null || echo "No .vitest-live files in current dir"
 
       - name: Upload test results
         if: always()
@@ -206,6 +217,18 @@ jobs:
             pnpm --filter @oslsr/api test
           fi
 
+      - name: Debug - List test result files
+        if: always()
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== All .vitest-live files in repo ==="
+          find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
+          echo "=== Reporter trace log ==="
+          cat reporter-trace.log 2>/dev/null || echo "No trace log"
+          echo "=== Files in current dir ==="
+          ls -la .vitest-live*.json 2>/dev/null || echo "No .vitest-live files in current dir"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -258,6 +281,18 @@ jobs:
           else
             pnpm --filter @oslsr/web test
           fi
+
+      - name: Debug - List test result files
+        if: always()
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== All .vitest-live files in repo ==="
+          find . -name ".vitest-live*.json" -type f 2>/dev/null || echo "None found"
+          echo "=== Reporter trace log ==="
+          cat reporter-trace.log 2>/dev/null || echo "No trace log"
+          echo "=== Files in current dir ==="
+          ls -la .vitest-live*.json 2>/dev/null || echo "No .vitest-live files in current dir"
 
       - name: Upload test results
         if: always()
