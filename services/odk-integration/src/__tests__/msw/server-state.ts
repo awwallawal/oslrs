@@ -37,6 +37,14 @@ export interface MockAppUser {
   createdAt: string;
 }
 
+export interface MockSubmission {
+  instanceId: string;
+  submitterId: number;
+  createdAt: string;
+  updatedAt: string;
+  reviewState?: string;
+}
+
 export interface InjectedError {
   status: number;
   code: number | string;
@@ -71,6 +79,12 @@ class MockServerState {
   private sessionCounter = 0;
   private appUserIdCounter = 100; // Start at 100 to distinguish from other IDs
 
+  // Health monitoring state (Story 2-5)
+  private submissionCounts: Map<string, number> = new Map();
+  private submissions: Map<string, MockSubmission[]> = new Map();
+  private connectivityEnabled = true;
+  private simulatedLatencyMs = 0;
+
   /**
    * Reset all state - call in beforeEach to ensure test isolation
    */
@@ -82,6 +96,11 @@ class MockServerState {
     this.nextError = null;
     this.sessionCounter = 0;
     this.appUserIdCounter = 100;
+    // Health monitoring state reset
+    this.submissionCounts.clear();
+    this.submissions.clear();
+    this.connectivityEnabled = true;
+    this.simulatedLatencyMs = 0;
     // Keep credentials as configured
   }
 
@@ -303,6 +322,115 @@ class MockServerState {
   generateSessionToken(): string {
     this.sessionCounter++;
     return `mock-session-token-${this.sessionCounter}-${Date.now()}`;
+  }
+
+  // ================================
+  // Health Monitoring State (AC: 7)
+  // ================================
+
+  /**
+   * Set submission count for a form (for health monitoring tests)
+   */
+  setSubmissionCount(xmlFormId: string, count: number): void {
+    this.submissionCounts.set(xmlFormId, count);
+  }
+
+  /**
+   * Get submission count for a form
+   */
+  getSubmissionCount(xmlFormId: string): number {
+    return this.submissionCounts.get(xmlFormId) ?? 0;
+  }
+
+  /**
+   * Enable/disable connectivity simulation
+   */
+  setConnectivityStatus(reachable: boolean): void {
+    this.connectivityEnabled = reachable;
+  }
+
+  /**
+   * Check if connectivity is enabled
+   */
+  isConnectivityEnabled(): boolean {
+    return this.connectivityEnabled;
+  }
+
+  /**
+   * Set simulated latency for requests
+   */
+  simulateLatency(ms: number): void {
+    this.simulatedLatencyMs = ms;
+  }
+
+  /**
+   * Get simulated latency
+   */
+  getSimulatedLatency(): number {
+    return this.simulatedLatencyMs;
+  }
+
+  /**
+   * Get all forms for a specific project
+   */
+  getFormsForProject(projectId: number): MockForm[] {
+    return Array.from(this.forms.values()).filter(
+      (form) => form.projectId === projectId
+    );
+  }
+
+  /**
+   * Bulk set forms for a project (clears existing forms for that project first)
+   */
+  setFormsForProject(projectId: number, forms: Array<{ xmlFormId: string; name: string; state: string }>): void {
+    // Remove existing forms for this project
+    for (const [key, form] of this.forms.entries()) {
+      if (form.projectId === projectId) {
+        this.forms.delete(key);
+      }
+    }
+
+    // Add new forms
+    const now = new Date().toISOString();
+    for (const form of forms) {
+      this.forms.set(form.xmlFormId, {
+        xmlFormId: form.xmlFormId,
+        projectId,
+        name: form.name,
+        version: '1.0.0',
+        state: form.state,
+        createdAt: now,
+        updatedAt: now,
+        publishedAt: form.state === 'open' ? now : undefined,
+      });
+    }
+  }
+
+  /**
+   * Set submissions for a form
+   */
+  setSubmissions(xmlFormId: string, submissions: MockSubmission[]): void {
+    this.submissions.set(xmlFormId, submissions);
+    // Also update submission count to match
+    this.submissionCounts.set(xmlFormId, submissions.length);
+  }
+
+  /**
+   * Get submissions for a form
+   */
+  getSubmissions(xmlFormId: string): MockSubmission[] {
+    return this.submissions.get(xmlFormId) ?? [];
+  }
+
+  /**
+   * Get submissions for a form after a specific date
+   */
+  getSubmissionsAfter(xmlFormId: string, afterDate: string): MockSubmission[] {
+    const allSubmissions = this.submissions.get(xmlFormId) ?? [];
+    const afterTime = new Date(afterDate).getTime();
+    return allSubmissions.filter(
+      (sub) => new Date(sub.createdAt).getTime() > afterTime
+    );
   }
 }
 

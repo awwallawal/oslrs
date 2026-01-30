@@ -8,6 +8,7 @@ import type {
   StaffInvitationEmailData,
   VerificationEmailData,
   PasswordResetEmailData,
+  OdkSyncAlertEmailData,
 } from '@oslsr/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -117,6 +118,21 @@ export async function queuePasswordResetEmail(
     type: 'password-reset',
     data,
     userId,
+  } as EmailJob);
+  return job.id || '';
+}
+
+/**
+ * Add an ODK sync alert email to the queue (Story 2-5, AC4/AC6)
+ *
+ * System alerts don't have a userId context - they're sent to SUPER_ADMIN.
+ */
+export async function queueOdkSyncAlertEmail(
+  data: OdkSyncAlertEmailData
+): Promise<string> {
+  const job = await emailQueue.add('odk-sync-alert', {
+    type: 'odk-sync-alert',
+    data,
   } as EmailJob);
   return job.id || '';
 }

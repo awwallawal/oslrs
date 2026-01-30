@@ -5,3 +5,5 @@ export * from './audit.js';
 export * from './relations.js';
 export * from './questionnaires.js';
 export * from './odk-app-users.js';
+export * from './odk-sync-failures.js';
+export * from './submissions.js';

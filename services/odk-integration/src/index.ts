@@ -21,6 +21,11 @@ export {
   handleOdkError,
   requireOdkConfig,
   createAppUser,
+  // Health monitoring methods (Story 2.5)
+  getProjectForms,
+  getFormSubmissionCount,
+  getSubmissionsAfter,
+  setFormState,
 } from './odk-client.js';
 
 // ODK Form Service - form deployment business logic
@@ -63,6 +68,37 @@ export {
   type OdkConfigValidationResult,
 } from './odk-config.js';
 
+// ODK Health Service - Health monitoring and backfill (Story 2.5)
+export {
+  createOdkHealthService,
+  type OdkSyncFailurePersistence,
+  type OdkHealthLogger,
+  type OdkHealthServiceDeps,
+  type OdkHealthService,
+  type RetryHandler,
+} from './odk-health.service.js';
+
+// ODK Form Unpublish Service - Form lifecycle management (Story 2.5)
+export {
+  createOdkFormUnpublishService,
+  type OdkFormUnpublishPersistence,
+  type OdkFormUnpublishServiceDeps,
+  type UnpublishFormResult,
+  type OdkFormUnpublishService,
+} from './odk-form-unpublish.service.js';
+
+// ODK Backfill Service - Manual submission backfill (Story 2.5, AC5)
+export {
+  createOdkBackfillService,
+  type OdkBackfillPersistence,
+  type OdkBackfillLock,
+  type OdkBackfillServiceDeps,
+  type OdkBackfillService,
+  type FormSubmissionGap,
+  type SubmissionGapResult,
+  type BackfillResult,
+} from './odk-backfill.service.js';
+
 // Re-export types from @oslsr/types for convenience
 export type {
   OdkConfig,
@@ -72,4 +108,13 @@ export type {
   OdkAppUserApiResponse,
   OdkAppUserRecord,
   OdkAppUserResponse,
+  OdkOperation,
+  OdkSyncFailure,
+  OdkConnectivityStatus,
+  OdkSubmissionSyncStatus,
+  OdkHealthResponse,
+  OdkFormInfo,
+  OdkSubmissionInfo,
+  RecordSyncFailureInput,
+  RetrySyncFailureResult,
 } from '@oslsr/types';

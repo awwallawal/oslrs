@@ -6,6 +6,7 @@ import { UserRole } from '@oslsr/types';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { getEmailConfigFromEnv } from '../providers/index.js';
 import { getEmailQueueStats } from '../queues/email.queue.js';
+import odkHealthRoutes from './admin/odk-health.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -158,5 +159,8 @@ router.post(
     }
   }
 );
+
+// ODK Health Admin Routes (Story 2-5)
+router.use('/odk', odkHealthRoutes);
 
 export default router;

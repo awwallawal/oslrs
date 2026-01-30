@@ -4,6 +4,7 @@ import { roles } from './roles.js';
 import { lgas } from './lgas.js';
 import { questionnaireForms, questionnaireFiles, questionnaireVersions } from './questionnaires.js';
 import { odkAppUsers } from './odk-app-users.js';
+import { submissions } from './submissions.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -61,4 +62,10 @@ export const odkAppUsersRelations = relations(odkAppUsers, ({ one }) => ({
     fields: [odkAppUsers.userId],
     references: [users.id],
   }),
+}));
+
+// Submissions relations (Story 2-5 foundation, enhanced in Story 3.4)
+// Note: respondent_id and enumerator_id FK relations will be added in Story 3.4
+export const submissionsRelations = relations(submissions, () => ({
+  // No relations yet - will be added when respondent/enumerator FKs are added
 }));

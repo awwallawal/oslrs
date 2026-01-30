@@ -77,7 +77,7 @@ development_status:
   2-6-odk-mock-server-integration-testing: done  # Code review passed 2026-01-28: All fixes applied, 54 tests pass
   2-3-automated-odk-app-user-provisioning: done  # Completed 2026-01-28: Code review passed, 260 API + 66 odk-integration tests pass
   2-4-encrypted-odk-token-management: done  # Code review passed 2026-01-29: All AC2/AC6 fixes applied, 89 tests pass
-  2-5-odk-sync-health-monitoring: backlog  # Depends on 2-6 for integration test coverage
+  2-5-odk-sync-health-monitoring: done  # Code review passed 2026-01-30: Email alert fix applied, 396 tests pass (283 API + 113 odk-integration)
   epic-2-retrospective: optional
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline

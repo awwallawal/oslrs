@@ -5,6 +5,8 @@ import {
   type OdkSessionResponse,
   type OdkErrorResponse,
   type OdkAppUserApiResponse,
+  type OdkFormInfo,
+  type OdkSubmissionInfo,
   validateOdkConfig,
 } from '@oslsr/types';
 
@@ -359,4 +361,199 @@ export async function createAppUser(
   });
 
   return appUser;
+}
+
+// ============================================================================
+// Health Monitoring Methods (Story 2-5)
+// ============================================================================
+
+/**
+ * Get all forms in an ODK Central project.
+ * Used for health monitoring to aggregate submission counts.
+ *
+ * @param config ODK configuration
+ * @param projectId ODK Central project ID
+ * @returns Array of form information
+ */
+export async function getProjectForms(
+  config: OdkConfig,
+  projectId: number
+): Promise<OdkFormInfo[]> {
+  const path = `/v1/projects/${projectId}/forms`;
+
+  logger.debug({
+    event: 'odk.forms.listing',
+    projectId,
+  });
+
+  const response = await odkRequest(config, 'GET', path);
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    handleOdkError(response, errorBody, { projectId });
+  }
+
+  const forms = await response.json() as OdkFormInfo[];
+
+  logger.debug({
+    event: 'odk.forms.listed',
+    projectId,
+    count: forms.length,
+  });
+
+  return forms;
+}
+
+/**
+ * Get submission count for a specific form.
+ * Uses OData $count=true with $top=0 for efficient count-only query.
+ *
+ * @param config ODK configuration
+ * @param projectId ODK Central project ID
+ * @param xmlFormId Form identifier
+ * @returns Number of submissions
+ */
+export async function getFormSubmissionCount(
+  config: OdkConfig,
+  projectId: number,
+  xmlFormId: string
+): Promise<number> {
+  const path = `/v1/projects/${projectId}/forms/${encodeURIComponent(xmlFormId)}/submissions?$count=true&$top=0`;
+
+  logger.debug({
+    event: 'odk.submissions.counting',
+    projectId,
+    xmlFormId,
+  });
+
+  const response = await odkRequest(config, 'GET', path);
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    handleOdkError(response, errorBody, { projectId, xmlFormId });
+  }
+
+  const data = await response.json() as { '@odata.count'?: number; value: unknown[] };
+  const count = data['@odata.count'] ?? data.value?.length ?? 0;
+
+  logger.debug({
+    event: 'odk.submissions.counted',
+    projectId,
+    xmlFormId,
+    count,
+  });
+
+  return count;
+}
+
+/**
+ * Get submissions after a specific date for backfill operations.
+ * Handles pagination automatically (ODK returns max 250 per request).
+ *
+ * CRITICAL: This method paginates through ALL results. Use with caution
+ * on forms with large submission counts.
+ *
+ * @param config ODK configuration
+ * @param projectId ODK Central project ID
+ * @param xmlFormId Form identifier
+ * @param afterDate ISO date string to filter submissions
+ * @returns Array of submission info
+ */
+export async function getSubmissionsAfter(
+  config: OdkConfig,
+  projectId: number,
+  xmlFormId: string,
+  afterDate: string
+): Promise<OdkSubmissionInfo[]> {
+  const allSubmissions: OdkSubmissionInfo[] = [];
+  const pageSize = 250; // ODK Central max per request
+  let skip = 0;
+  let hasMore = true;
+
+  logger.info({
+    event: 'odk.submissions.fetching',
+    projectId,
+    xmlFormId,
+    afterDate,
+  });
+
+  while (hasMore) {
+    const filterParam = encodeURIComponent(`__system/submissionDate gt ${afterDate}`);
+    const path = `/v1/projects/${projectId}/forms/${encodeURIComponent(xmlFormId)}/submissions?$filter=${filterParam}&$top=${pageSize}&$skip=${skip}`;
+
+    const response = await odkRequest(config, 'GET', path);
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      handleOdkError(response, errorBody, { projectId, xmlFormId, afterDate });
+    }
+
+    const data = await response.json() as { value: OdkSubmissionInfo[] };
+    const submissions = data.value || [];
+
+    allSubmissions.push(...submissions);
+
+    // Check if there are more pages
+    if (submissions.length < pageSize) {
+      hasMore = false;
+    } else {
+      skip += pageSize;
+    }
+  }
+
+  logger.info({
+    event: 'odk.submissions.fetched',
+    projectId,
+    xmlFormId,
+    afterDate,
+    count: allSubmissions.length,
+  });
+
+  return allSubmissions;
+}
+
+/**
+ * Set the state of a form in ODK Central.
+ * Used for unpublishing forms (setting state to 'closing').
+ *
+ * ODK Central form states:
+ * - 'open': Accepting submissions (published)
+ * - 'closing': No new submissions, existing data accessible (unpublished)
+ * - 'closed': Archived, no access
+ *
+ * @param config ODK configuration
+ * @param projectId ODK Central project ID
+ * @param xmlFormId Form identifier
+ * @param state New form state
+ */
+export async function setFormState(
+  config: OdkConfig,
+  projectId: number,
+  xmlFormId: string,
+  state: 'open' | 'closing' | 'closed'
+): Promise<void> {
+  const path = `/v1/projects/${projectId}/forms/${encodeURIComponent(xmlFormId)}`;
+
+  logger.info({
+    event: 'odk.form.state_changing',
+    projectId,
+    xmlFormId,
+    newState: state,
+  });
+
+  const response = await odkRequest(config, 'PATCH', path, {
+    body: { state },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    handleOdkError(response, errorBody, { projectId, xmlFormId, state });
+  }
+
+  logger.info({
+    event: 'odk.form.state_changed',
+    projectId,
+    xmlFormId,
+    newState: state,
+  });
 }

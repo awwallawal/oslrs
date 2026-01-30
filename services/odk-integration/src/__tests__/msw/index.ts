@@ -29,7 +29,49 @@
 
 export { server, handlers, ODK_BASE_URL } from './server.js';
 export { mockServerState } from './server-state.js';
-export type { LoggedRequest, MockForm, InjectedError } from './server-state.js';
+export type { LoggedRequest, MockForm, MockSubmission, InjectedError } from './server-state.js';
+
+// Convenience functions for test setup
+
+/**
+ * Reset server state to initial values
+ */
+export function resetServerState(): void {
+  mockServerState.reset();
+}
+
+/**
+ * Set forms for a project
+ */
+export function setForms(
+  projectId: number,
+  forms: Array<{ xmlFormId: string; name: string; state: string }>
+): void {
+  mockServerState.setFormsForProject(projectId, forms);
+}
+
+/**
+ * Set submission count for a form
+ */
+export function setSubmissionCount(xmlFormId: string, count: number): void {
+  mockServerState.setSubmissionCount(xmlFormId, count);
+}
+
+/**
+ * Set submissions for a form
+ */
+export function setSubmissions(
+  xmlFormId: string,
+  submissions: Array<{
+    instanceId: string;
+    submitterId: number;
+    createdAt: string;
+    updatedAt: string;
+    reviewState?: string;
+  }>
+): void {
+  mockServerState.setSubmissions(xmlFormId, submissions);
+}
 
 // Re-export MSW primitives for custom handler creation
 export { http, HttpResponse } from 'msw';

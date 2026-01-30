@@ -141,8 +141,15 @@ export const OSLSR_REQUIRED_CHOICE_LISTS = {
 
 /**
  * Form lifecycle statuses
+ *
+ * Status mapping to ODK Central:
+ * - draft: Form uploaded but not deployed to ODK
+ * - published: Form deployed and accepting submissions (ODK state: 'open')
+ * - closing: Form no longer accepting submissions but data accessible (ODK state: 'closing')
+ * - deprecated: Replaced by newer version
+ * - archived: Hidden from active views (ODK state: 'closed')
  */
-export const QUESTIONNAIRE_FORM_STATUSES = ['draft', 'published', 'deprecated', 'archived'] as const;
+export const QUESTIONNAIRE_FORM_STATUSES = ['draft', 'published', 'closing', 'deprecated', 'archived'] as const;
 export type QuestionnaireFormStatus = typeof QUESTIONNAIRE_FORM_STATUSES[number];
 
 /**
@@ -150,7 +157,8 @@ export type QuestionnaireFormStatus = typeof QUESTIONNAIRE_FORM_STATUSES[number]
  */
 export const VALID_STATUS_TRANSITIONS: Record<QuestionnaireFormStatus, QuestionnaireFormStatus[]> = {
   draft: ['published', 'archived'],
-  published: ['deprecated'],
+  published: ['closing', 'deprecated'],
+  closing: ['deprecated', 'archived'], // Unpublished forms can be deprecated or archived
   deprecated: ['archived'],
   archived: [], // Terminal state
 };

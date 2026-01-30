@@ -260,6 +260,242 @@ const publishDraftHandler = http.post(
 );
 
 /**
+ * GET /v1/users/current - Connectivity check (Story 2-5)
+ *
+ * Lightweight endpoint to verify ODK Central is reachable and authenticated.
+ * Per ADR-009: Used for health monitoring.
+ *
+ * Success (200): Returns current user info
+ * Failure (401): Invalid/expired session
+ */
+const getCurrentUserHandler = http.get(
+  `${ODK_BASE_URL}/v1/users/current`,
+  async ({ request }) => {
+    mockServerState.logRequest({
+      method: 'GET',
+      path: '/v1/users/current',
+      headers: Object.fromEntries(request.headers.entries()),
+      body: null,
+    });
+
+    // Check for configured error injection
+    const injectedError = mockServerState.consumeNextError();
+    if (injectedError) {
+      return HttpResponse.json(
+        { code: injectedError.code, message: injectedError.message },
+        { status: injectedError.status }
+      );
+    }
+
+    // Check connectivity simulation
+    if (!mockServerState.isConnectivityEnabled()) {
+      return HttpResponse.json(
+        { code: 503, message: 'Service unavailable' },
+        { status: 503 }
+      );
+    }
+
+    // Return mock user
+    return HttpResponse.json({
+      id: 1,
+      type: 'user',
+      displayName: 'Admin User',
+      email: 'admin@example.com',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+  }
+);
+
+/**
+ * GET /v1/projects/:projectId/forms - List forms (Story 2-5)
+ *
+ * Returns all forms in a project. Used for health monitoring to
+ * aggregate submission counts across forms.
+ *
+ * Success (200): Returns array of OdkFormInfo
+ */
+const listFormsHandler = http.get(
+  `${ODK_BASE_URL}/v1/projects/:projectId/forms`,
+  async ({ request, params }) => {
+    const projectId = parseInt(params.projectId as string, 10);
+
+    mockServerState.logRequest({
+      method: 'GET',
+      path: `/v1/projects/${projectId}/forms`,
+      headers: Object.fromEntries(request.headers.entries()),
+      body: null,
+    });
+
+    // Check for configured error injection
+    const injectedError = mockServerState.consumeNextError();
+    if (injectedError) {
+      return HttpResponse.json(
+        { code: injectedError.code, message: injectedError.message },
+        { status: injectedError.status }
+      );
+    }
+
+    // Return all forms for this project
+    const forms = mockServerState.getFormsForProject(projectId);
+    return HttpResponse.json(forms);
+  }
+);
+
+/**
+ * GET /v1/projects/:projectId/forms/:xmlFormId/submissions - List submissions (Story 2-5)
+ *
+ * Returns submissions for a specific form. Supports OData query params:
+ * - $count=true to include total count
+ * - $top=N to limit results
+ * - $skip=N for pagination
+ * - $filter=... for filtering (supports __system/submissionDate gt 'date')
+ *
+ * Used for health monitoring submission gap detection and backfill.
+ *
+ * Success (200): Returns OData response with submissions and @odata.count
+ */
+const listSubmissionsHandler = http.get(
+  `${ODK_BASE_URL}/v1/projects/:projectId/forms/:xmlFormId/submissions`,
+  async ({ request, params }) => {
+    const projectId = parseInt(params.projectId as string, 10);
+    const xmlFormId = decodeURIComponent(params.xmlFormId as string);
+    const url = new URL(request.url);
+    const includeCount = url.searchParams.get('$count') === 'true';
+    const top = parseInt(url.searchParams.get('$top') || '250', 10);
+    const skip = parseInt(url.searchParams.get('$skip') || '0', 10);
+    const filter = url.searchParams.get('$filter');
+
+    mockServerState.logRequest({
+      method: 'GET',
+      path: `/v1/projects/${projectId}/forms/${xmlFormId}/submissions`,
+      headers: Object.fromEntries(request.headers.entries()),
+      body: null,
+      query: Object.fromEntries(url.searchParams.entries()),
+    });
+
+    // Check for configured error injection
+    const injectedError = mockServerState.consumeNextError();
+    if (injectedError) {
+      return HttpResponse.json(
+        { code: injectedError.code, message: injectedError.message },
+        { status: injectedError.status }
+      );
+    }
+
+    // Try to get explicitly set submissions first
+    let submissions = mockServerState.getSubmissions(xmlFormId);
+    let totalCount: number;
+
+    // If explicit submissions were set, use those
+    if (submissions.length > 0) {
+      totalCount = submissions.length;
+    } else {
+      // Otherwise generate based on stored count
+      totalCount = mockServerState.getSubmissionCount(xmlFormId);
+      if (top > 0) {
+        const startIndex = skip;
+        const endIndex = Math.min(skip + top, totalCount);
+        for (let i = startIndex; i < endIndex; i++) {
+          submissions.push({
+            instanceId: `submission-${xmlFormId}-${i}`,
+            submitterId: 1,
+            createdAt: new Date(Date.now() - i * 60000).toISOString(),
+            updatedAt: new Date(Date.now() - i * 60000).toISOString(),
+          });
+        }
+      }
+    }
+
+    // Apply filter if present (supports __system/submissionDate gt 'date')
+    if (filter) {
+      const dateMatch = filter.match(/__system\/submissionDate gt '([^']+)'/);
+      if (dateMatch) {
+        const afterDate = new Date(dateMatch[1]).getTime();
+        submissions = submissions.filter(
+          (sub) => new Date(sub.createdAt).getTime() > afterDate
+        );
+        // Recalculate count after filtering
+        totalCount = submissions.length;
+      }
+    }
+
+    // Apply pagination
+    const paginatedSubmissions = submissions.slice(skip, skip + top);
+
+    // Return OData-style response
+    const response: Record<string, unknown> = {
+      value: paginatedSubmissions,
+    };
+
+    if (includeCount) {
+      response['@odata.count'] = totalCount;
+    }
+
+    return HttpResponse.json(response);
+  }
+);
+
+/**
+ * PATCH /v1/projects/:projectId/forms/:xmlFormId - Update form (Story 2-5)
+ *
+ * Updates form properties including state. Used for unpublishing forms.
+ *
+ * ODK Central form states:
+ * - 'open': Accepting submissions (published)
+ * - 'closing': No new submissions, existing data accessible (unpublished)
+ * - 'closed': Archived, no access
+ *
+ * Success (200): Returns updated form info
+ * Failure (404): Form not found
+ */
+const updateFormHandler = http.patch(
+  `${ODK_BASE_URL}/v1/projects/:projectId/forms/:xmlFormId`,
+  async ({ request, params }) => {
+    const projectId = parseInt(params.projectId as string, 10);
+    const xmlFormId = decodeURIComponent(params.xmlFormId as string);
+    const body = await request.json() as { state?: string };
+
+    mockServerState.logRequest({
+      method: 'PATCH',
+      path: `/v1/projects/${projectId}/forms/${xmlFormId}`,
+      headers: Object.fromEntries(request.headers.entries()),
+      body,
+    });
+
+    // Check for configured error injection
+    const injectedError = mockServerState.consumeNextError();
+    if (injectedError) {
+      return HttpResponse.json(
+        { code: injectedError.code, message: injectedError.message },
+        { status: injectedError.status }
+      );
+    }
+
+    // Check if form exists
+    const existingForm = mockServerState.getForm(xmlFormId);
+    if (!existingForm) {
+      return HttpResponse.json(
+        { code: 404.1, message: 'Form not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update form state
+    const now = new Date();
+    const updatedForm: MockForm = {
+      ...existingForm,
+      state: body.state || existingForm.state,
+      updatedAt: now.toISOString(),
+    };
+
+    mockServerState.updateForm(xmlFormId, updatedForm);
+
+    return HttpResponse.json(updatedForm);
+  }
+);
+
+/**
  * POST /v1/projects/:projectId/app-users - Create App User (field key)
  *
  * Creates a new App User for mobile/web data collection authentication.
@@ -323,9 +559,13 @@ const createAppUserHandler = http.post(
  */
 export const handlers = [
   sessionsHandler,
+  getCurrentUserHandler,
+  listFormsHandler,
+  listSubmissionsHandler,
   createFormHandler,
   uploadDraftHandler,
   publishDraftHandler,
+  updateFormHandler,
   createAppUserHandler,
 ];
 

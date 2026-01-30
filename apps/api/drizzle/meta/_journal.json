@@ -78,6 +78,20 @@
       "when": 1769617584715,
       "tag": "0010_orange_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1769706564576,
+      "tag": "0011_elite_payback",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1769757717937,
+      "tag": "0012_nasty_puck",
+      "breakpoints": true
     }
   ]
 }

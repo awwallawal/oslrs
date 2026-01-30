@@ -28,3 +28,6 @@ export const AUDIT_ACTION_EMAIL_DELIVERY_FAILED = 'email.delivery.failed';
 
 // ODK Token actions (Story 2-4)
 export const AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED = 'user.odk_token_accessed';
+
+// ODK Form actions (Story 2-5)
+export const AUDIT_ACTION_FORM_UNPUBLISHED = 'form.unpublished';

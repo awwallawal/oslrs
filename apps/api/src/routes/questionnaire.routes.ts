@@ -40,4 +40,7 @@ router.get('/:id/download', QuestionnaireController.download);
 // Publish form to ODK Central (Story 2.2)
 router.post('/:id/publish', QuestionnaireController.publishToOdk);
 
+// Unpublish form from ODK Central (Story 2.5, AC: 3)
+router.patch('/:id/unpublish', QuestionnaireController.unpublishFromOdk);
+
 export default router;

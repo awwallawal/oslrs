@@ -13,7 +13,7 @@ import type {
   QuestionnaireFormStatus,
   XlsformValidationResult,
 } from '@oslsr/types';
-import { VALID_STATUS_TRANSITIONS } from '@oslsr/types';
+import { VALID_STATUS_TRANSITIONS, AUDIT_ACTION_FORM_UNPUBLISHED } from '@oslsr/types';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 
@@ -714,6 +714,161 @@ export class QuestionnaireService {
       status: 'published',
       odkXmlFormId: odkResult.xmlFormId,
       odkPublishedAt: odkResult.publishedAt,
+    };
+  }
+
+  /**
+   * Unpublish a form from ODK Central (Story 2-5, AC: 3)
+   *
+   * Sets the form state to 'closing' in ODK Central (no new submissions,
+   * existing data still accessible), updates local status, and creates audit log.
+   *
+   * @param id The questionnaire form UUID
+   * @param userId The user performing the action
+   * @param requestContext Optional IP address and user agent for audit log
+   */
+  static async unpublishFromOdk(
+    id: string,
+    userId: string,
+    requestContext?: { ipAddress?: string; userAgent?: string }
+  ): Promise<{
+    id: string;
+    formId: string;
+    version: string;
+    title: string;
+    status: QuestionnaireFormStatus;
+    previousStatus: QuestionnaireFormStatus;
+  }> {
+    // Import ODK integration dynamically to avoid circular dependencies
+    const { setFormState, isOdkAvailable, getOdkConfig } = await import('@oslsr/odk-integration');
+
+    // Check ODK is configured
+    if (!isOdkAvailable()) {
+      throw new AppError(
+        'ODK_UNAVAILABLE',
+        'ODK Central integration is not configured',
+        503
+      );
+    }
+
+    const config = getOdkConfig();
+    if (!config) {
+      throw new AppError(
+        'ODK_UNAVAILABLE',
+        'ODK Central integration is not configured',
+        503
+      );
+    }
+
+    // Get the form
+    const form = await db.query.questionnaireForms.findFirst({
+      where: eq(questionnaireForms.id, id),
+    });
+
+    if (!form) {
+      throw new AppError('FORM_NOT_FOUND', 'Questionnaire form not found', 404);
+    }
+
+    // Validate form is in published status
+    if (form.status !== 'published') {
+      throw new AppError(
+        'INVALID_STATUS_FOR_UNPUBLISH',
+        `Cannot unpublish form in '${form.status}' status. Only published forms can be unpublished.`,
+        400,
+        { currentStatus: form.status }
+      );
+    }
+
+    // Verify form has been deployed to ODK
+    if (!form.odkXmlFormId) {
+      throw new AppError(
+        'FORM_NOT_DEPLOYED',
+        'Form has not been deployed to ODK Central and cannot be unpublished',
+        400
+      );
+    }
+
+    logger.info({
+      event: 'questionnaire.unpublish_started',
+      formId: form.formId,
+      version: form.version,
+      odkXmlFormId: form.odkXmlFormId,
+      id,
+      userId,
+    });
+
+    // Step 1: Set ODK form state to 'closing'
+    try {
+      await setFormState(config, config.ODK_PROJECT_ID, form.odkXmlFormId, 'closing');
+    } catch (error) {
+      logger.error({
+        event: 'questionnaire.unpublish_odk_failed',
+        formId: form.formId,
+        version: form.version,
+        odkXmlFormId: form.odkXmlFormId,
+        error: (error as Error).message,
+      });
+      throw new AppError(
+        'ODK_UNPUBLISH_FAILED',
+        `Failed to unpublish form in ODK Central: ${(error as Error).message}`,
+        502,
+        { odkXmlFormId: form.odkXmlFormId }
+      );
+    }
+
+    logger.info({
+      event: 'questionnaire.unpublish_odk_success',
+      formId: form.formId,
+      odkXmlFormId: form.odkXmlFormId,
+    });
+
+    // Step 2: Update local database
+    await db.transaction(async (tx) => {
+      await tx
+        .update(questionnaireForms)
+        .set({
+          status: 'closing',
+          updatedAt: new Date(),
+        })
+        .where(eq(questionnaireForms.id, id));
+
+      // Create audit log
+      await tx.insert(auditLogs).values({
+        id: uuidv7(),
+        actorId: userId,
+        action: AUDIT_ACTION_FORM_UNPUBLISHED,
+        targetResource: 'questionnaire_forms',
+        targetId: id,
+        details: {
+          formId: form.formId,
+          version: form.version,
+          title: form.title,
+          odkXmlFormId: form.odkXmlFormId,
+          previousStatus: 'published',
+          newStatus: 'closing',
+        },
+        ipAddress: requestContext?.ipAddress || null,
+        userAgent: requestContext?.userAgent || null,
+      });
+    });
+
+    logger.info({
+      event: 'questionnaire.unpublish_success',
+      formId: form.formId,
+      version: form.version,
+      odkXmlFormId: form.odkXmlFormId,
+      previousStatus: 'published',
+      newStatus: 'closing',
+      userId,
+    });
+
+    return {
+      id: form.id,
+      formId: form.formId,
+      version: form.version,
+      title: form.title,
+      status: 'closing' as QuestionnaireFormStatus,
+      previousStatus: 'published' as QuestionnaireFormStatus,
     };
   }
 }

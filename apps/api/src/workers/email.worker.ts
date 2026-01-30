@@ -4,7 +4,7 @@ import pino from 'pino';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, EmailTier } from '@oslsr/types';
+import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, OdkSyncAlertEmailData, EmailTier } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { db } from '../db/index.js';
@@ -40,7 +40,9 @@ const budgetService = new EmailBudgetService(connection, emailTier, overageBudge
 export const emailWorker = new Worker<EmailJob>(
   'email-notification',
   async (job: Job<EmailJob>) => {
-    const { type, data, userId } = job.data;
+    const { type, data } = job.data;
+    // userId is not present for system emails like ODK sync alerts
+    const userId = 'userId' in job.data ? job.data.userId : null;
 
     logger.info({
       event: 'email.job.started',
@@ -92,6 +94,10 @@ export const emailWorker = new Worker<EmailJob>(
 
         case 'password-reset':
           result = await EmailService.sendPasswordResetEmail(data as PasswordResetEmailData);
+          break;
+
+        case 'odk-sync-alert':
+          result = await EmailService.sendOdkSyncAlertEmail(data as OdkSyncAlertEmailData);
           break;
 
         default:
@@ -157,10 +163,13 @@ export const emailWorker = new Worker<EmailJob>(
  */
 async function logEmailFailureToAudit(emailJob: EmailJob, errorMessage: string): Promise<void> {
   try {
+    // userId is not present for system emails like ODK sync alerts
+    const userId = 'userId' in emailJob ? emailJob.userId : null;
+
     // Sanitize data - never log full URLs (NFR4.7)
     const sanitizedData = {
       type: emailJob.type,
-      userId: emailJob.userId,
+      userId,
       email: 'email' in emailJob.data ? emailJob.data.email : undefined,
       error: errorMessage,
       // Intentionally NOT logging: activationUrl, verificationUrl, resetUrl, otpCode
@@ -170,7 +179,7 @@ async function logEmailFailureToAudit(emailJob: EmailJob, errorMessage: string):
       id: uuidv7(),
       action: 'email.delivery.failed',
       targetResource: 'email',
-      targetId: emailJob.userId,
+      targetId: userId ?? 'system',
       actorId: null, // System action
       details: sanitizedData,
       createdAt: new Date(),
@@ -179,7 +188,7 @@ async function logEmailFailureToAudit(emailJob: EmailJob, errorMessage: string):
     logger.info({
       event: 'email.failure.audited',
       type: emailJob.type,
-      userId: emailJob.userId,
+      userId,
     });
   } catch (auditError: unknown) {
     // Don't let audit logging failure break the worker

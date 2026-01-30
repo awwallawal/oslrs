@@ -27,11 +27,12 @@ import { users } from './users.js';
 /**
  * Form status lifecycle:
  * - draft: Initial upload, not deployed to ODK
- * - published: Pushed to ODK Central (Story 2.2)
+ * - published: Pushed to ODK Central (Story 2.2), accepting submissions (ODK state: 'open')
+ * - closing: Unpublished - no new submissions, data accessible (ODK state: 'closing')
  * - deprecated: Replaced by newer version, still visible
- * - archived: Hidden from active views
+ * - archived: Hidden from active views (ODK state: 'closed')
  */
-export const questionnaireFormStatus = ['draft', 'published', 'deprecated', 'archived'] as const;
+export const questionnaireFormStatus = ['draft', 'published', 'closing', 'deprecated', 'archived'] as const;
 export type QuestionnaireFormStatus = typeof questionnaireFormStatus[number];
 
 /**
