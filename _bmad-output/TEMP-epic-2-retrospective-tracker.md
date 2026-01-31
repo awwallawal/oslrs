@@ -100,8 +100,8 @@
   6. [x] dashboard-assessor.excalidraw - Desktop, audit queue + evidence panel
   7. [x] dashboard-official.excalidraw - Desktop read-only, analytics + export
 
-**Fix Required:**
-- [ ] Add Logout button to all dashboard headers (Profile menu dropdown with Logout option)
+**Fix Applied:**
+- [x] Add Logout button to all dashboard headers (Profile menu dropdown with Logout option)
 
 ---
 

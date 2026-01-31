@@ -205,7 +205,7 @@ if (user.role !== routeRole) {
 
 | Priority | Action | Owner | Target |
 |----------|--------|-------|--------|
-| P0 | Add Logout button to all dashboard wireframes | Story 2.5-1 | Epic 2.5 Start |
+| ~~P0~~ | ~~Add Logout button to all dashboard wireframes~~ | ~~Story 2.5-1~~ | ✅ Done |
 | P0 | Implement RBAC route protection tests (7x7 matrix) | Story 2.5-8 | Epic 2.5 |
 | P1 | Document ODK mock server setup in project-context.md | Dev Team | Sprint 3 |
 | P1 | Add migration best practices to architecture.md | Dev Team | Sprint 3 |
@@ -281,7 +281,7 @@ All wireframes stored in `_bmad-output/wireframes/` in Excalidraw JSON format.
 | `dashboard-assessor.excalidraw` | Desktop Split | Audit Queue, Evidence Panel, Approve/Reject | 2.5-4 |
 | `dashboard-official.excalidraw` | Desktop Read-Only | Registration Stats, Trends Chart, LGA Breakdown, Export | 2.5-7 |
 
-**Note:** All wireframes need Logout button added to header (Profile menu dropdown).
+**Note:** All wireframes include Profile menu dropdown with Logout button in header.
 
 ---
 
