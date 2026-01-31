@@ -1088,7 +1088,7 @@ SUPER_ADMIN_PASSWORD=<secure-password>
 - Full footer with About | Contact | Privacy | NDPA Compliance
 
 ### 2. DashboardLayout
-**Used for:** All authenticated role-based dashboards
+**Used for:** All authenticated role-based dashboards (Epic 2.5)
 ```typescript
 <DashboardLayout>
   <EnumeratorDashboard />
@@ -1097,6 +1097,19 @@ SUPER_ADMIN_PASSWORD=<secure-password>
 - Header with Logo + Role Badge + Notifications + Profile + Logout
 - Sidebar with role-specific navigation
 - NO public website header/footer (separate experience)
+
+**Route Structure (Epic 2.5 - Strict Role Isolation):**
+```
+/dashboard/super-admin/*     - Super Admin only
+/dashboard/supervisor/*      - Supervisors only
+/dashboard/enumerator/*      - Enumerators only
+/dashboard/data-entry/*      - Data Entry Clerks only
+/dashboard/assessor/*        - Verification Assessors only
+/dashboard/official/*        - Government Officials only
+/dashboard/public/*          - Public Users only
+```
+
+**Security:** Each role can ONLY access their own dashboard routes. Super Admin gets 360° visibility via aggregated widgets on their own dashboard, NOT by accessing other role routes. This prevents watering hole attacks where compromising one role's route could expose Super Admin.
 
 ### 3. AuthLayout
 **Used for:** Login, Register, Forgot Password, Email Verification
@@ -1109,7 +1122,7 @@ SUPER_ADMIN_PASSWORD=<secure-password>
 - Centered card layout
 - No header/footer (focused experience)
 
-**ROUTING PATTERN:**
+**ROUTING PATTERN (Updated for Epic 2.5):**
 ```typescript
 // Public routes
 { path: '/', element: <PublicLayout><HomePage /></PublicLayout> },
@@ -1117,8 +1130,17 @@ SUPER_ADMIN_PASSWORD=<secure-password>
 // Auth routes
 { path: '/login', element: <AuthLayout><LoginPage /></AuthLayout> },
 
-// Dashboard routes (requires auth)
-{ path: '/dashboard/*', element: <AuthGuard><DashboardLayout><Routes /></DashboardLayout></AuthGuard> },
+// Dashboard routes - ROLE-SPECIFIC (Epic 2.5)
+{ path: '/dashboard/super-admin/*', element: <ProtectedRoute allowedRoles={['super_admin']}><DashboardLayout><SuperAdminRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/supervisor/*', element: <ProtectedRoute allowedRoles={['supervisor']}><DashboardLayout><SupervisorRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/enumerator/*', element: <ProtectedRoute allowedRoles={['enumerator']}><DashboardLayout><EnumeratorRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/data-entry/*', element: <ProtectedRoute allowedRoles={['data_entry_clerk']}><DashboardLayout><DataEntryRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/assessor/*', element: <ProtectedRoute allowedRoles={['verification_assessor']}><DashboardLayout><AssessorRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/official/*', element: <ProtectedRoute allowedRoles={['government_official']}><DashboardLayout><OfficialRoutes /></DashboardLayout></ProtectedRoute> },
+{ path: '/dashboard/public/*', element: <ProtectedRoute allowedRoles={['public_user']}><DashboardLayout><PublicUserRoutes /></DashboardLayout></ProtectedRoute> },
+
+// Redirect /dashboard to role-specific dashboard
+{ path: '/dashboard', element: <DashboardRedirect /> },  // Redirects based on user.role
 ```
 
 ---
@@ -1454,6 +1476,6 @@ USING column_name::new_type;
 
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-01-31
 
-**Version:** 1.4.0 (Added: Database Migration Gotchas - column type changes require manual SQL with USING clause - from Story 2-2)
+**Version:** 1.5.0 (Added: Epic 2.5 Role-Based Dashboard Routes - strict role isolation pattern `/dashboard/{role}/*`, RBAC matrix, DashboardRedirect component)

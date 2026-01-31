@@ -14,10 +14,12 @@ staffing: '99 Enumerators + 33 Supervisors'
 hostingProvider: 'Hetzner Cloud'
 idStrategy: 'UUIDv7'
 status: 'complete'
-validationStatus: 'READY FOR IMPLEMENTATION - PRD v7.5 ALIGNED'
+validationStatus: 'READY FOR IMPLEMENTATION - PRD v7.9 ALIGNED'
 completedAt: '2026-01-04'
-prdVersion: 'v7.5'
+lastUpdated: '2026-01-31'
+prdVersion: 'v7.9'
 v75Updates: 'Data Routing Matrix, Live Selfie Spec, Terminology Fix, Marketplace Security'
+v79Updates: 'Epic 2.5 Role-Based Dashboards - ADR-016 updated with strict route isolation pattern, RBAC matrix, code splitting benefits'
 ---
 
 # OSLSR Architecture Decision Document
@@ -2676,7 +2678,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 }
 ```
 
-**Route Organization:**
+**Route Organization (Updated for Epic 2.5 - Strict Role Isolation):**
 ```typescript
 // apps/web/src/routes.tsx
 const routes = [
@@ -2691,26 +2693,59 @@ const routes = [
   { path: '/forgot-password', element: <AuthLayout><ForgotPasswordPage /></AuthLayout> },
   { path: '/verify-email', element: <AuthLayout><VerifyEmailPage /></AuthLayout> },
 
-  // Dashboard routes - use DashboardLayout (requires auth)
-  { path: '/dashboard/*', element: <AuthGuard><DashboardLayout><DashboardRoutes /></DashboardLayout></AuthGuard> },
+  // Dashboard routes - ROLE-SPECIFIC with strict isolation (Epic 2.5)
+  // Each role can ONLY access their own dashboard routes
+  { path: '/dashboard/super-admin/*', element: <ProtectedRoute allowedRoles={['super_admin']}><DashboardLayout><SuperAdminRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/supervisor/*', element: <ProtectedRoute allowedRoles={['supervisor']}><DashboardLayout><SupervisorRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/enumerator/*', element: <ProtectedRoute allowedRoles={['enumerator']}><DashboardLayout><EnumeratorRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/data-entry/*', element: <ProtectedRoute allowedRoles={['data_entry_clerk']}><DashboardLayout><DataEntryRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/assessor/*', element: <ProtectedRoute allowedRoles={['verification_assessor']}><DashboardLayout><AssessorRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/official/*', element: <ProtectedRoute allowedRoles={['government_official']}><DashboardLayout><OfficialRoutes /></DashboardLayout></ProtectedRoute> },
+  { path: '/dashboard/public/*', element: <ProtectedRoute allowedRoles={['public_user']}><DashboardLayout><PublicUserRoutes /></DashboardLayout></ProtectedRoute> },
+
+  // Redirect /dashboard to role-specific dashboard based on user.role
+  { path: '/dashboard', element: <DashboardRedirect /> },
 ];
 ```
+
+**Epic 2.5 Security Model (Strict Route Isolation):**
+
+**RBAC Matrix:**
+| Route Pattern | super_admin | supervisor | enumerator | data_entry | assessor | official | public_user |
+|--------------|:-----------:|:----------:|:----------:|:----------:|:--------:|:--------:|:-----------:|
+| `/dashboard/super-admin/*` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `/dashboard/supervisor/*` | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `/dashboard/enumerator/*` | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `/dashboard/data-entry/*` | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `/dashboard/assessor/*` | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| `/dashboard/official/*` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| `/dashboard/public/*` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**Why Strict Isolation (NOT Super Admin access to all routes):**
+- **Security:** Prevents watering hole attacks where compromising one role's route exposes Super Admin
+- **Attack Surface:** If attacker breaches `/dashboard/enumerator/*`, they cannot exploit Super Admin visiting that route
+- **360° Visibility:** Super Admin gets full system view via aggregated widgets on `/dashboard/super-admin/*` (staff lists, ODK health, system stats)
+- **View-As Feature:** Deferred to Story 6-7 (Epic 6) where audit infrastructure exists for proper tracking
 
 **Key Principles:**
 1. **Clear Visual Separation:** Users know when they're on public website vs inside the app
 2. **Role-Specific Navigation:** Dashboard sidebar shows only relevant menu items per role
 3. **Auth Pages Focused:** Login/Register pages have minimal distraction (no full header/footer)
-4. **Future Enhancement:** Full header/footer on auth pages can be added in future iteration
+4. **Strict Route Isolation:** Each role can ONLY access their own dashboard routes (Epic 2.5)
+5. **Code Splitting:** `/dashboard/{role}` pattern enables lazy loading per role (~30KB each vs 200KB bundle)
 
 **Trade-offs:**
 - ✅ Clear user experience separation between public website and application
 - ✅ Role-specific dashboards feel like dedicated tools
 - ✅ Auth pages are focused and distraction-free
 - ✅ Easier to maintain separate design systems
+- ✅ Strict route isolation prevents cross-role attacks
+- ✅ Code splitting improves performance
 - ❌ Users don't see website navigation while in dashboard
 - ❌ May need "Return to Website" link in dashboard
+- ❌ Super Admin needs aggregated widgets instead of visiting other routes
 
-**Affects:** All frontend pages, Story 1.9 (Global UI Patterns), Story 3.6 (Public Homepage)
+**Affects:** All frontend pages, Story 1.9 (Global UI Patterns), Story 3.6 (Public Homepage), **Epic 2.5 (Role-Based Dashboards)**
 
 ---
 

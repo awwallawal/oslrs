@@ -81,6 +81,7 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
 | 2026-01-22   | 7.6     | **Epic 1 Retrospective Decisions:** Added Google OAuth as primary public registration method (ADR-015) with email fallback using Hybrid Email Verification (Magic Link + OTP in same email). Defined Layout Architecture (ADR-016) separating PublicLayout (static pages) from DashboardLayout (authenticated dashboards). Added database seeding patterns (Hybrid approach for dev/prod). Staff activation via email link serves as implicit email verification. | Awwal (PO) |
 | 2026-01-24   | 7.7     | **Epic 1.5 Documentation:** Added Epic 1.5 (Public Website Foundation - Phase 1 Static) to PRD. This epic was created during Epic 1 Retrospective but was missing from PRD. Includes 7 stories: Design System Foundation, Homepage, About Section (6 pages), Participate Section (3 pages), Support Section (5 pages), Legal Pages & Navigation Cleanup, Guide Detail Pages (7 pages). References public-website-ia.md and ADR-016. | Awwal (PO) |
 | 2026-01-24   | 7.8     | **Story 3.0 - Google OAuth:** Added Story 3.0 (Google OAuth & Enhanced Public Registration) to Epic 3. This story implements ADR-015 which was documented in v7.6 but not assigned to a story. Story 3.0 is positioned before Story 3.5 as a prerequisite. Added story references to FR requirements (lines 625-627). | Awwal (PO) |
+| 2026-01-31   | 7.9     | **Epic 2.5 - Role-Based Dashboards:** Added Epic 2.5 (Role-Based Dashboards & Feature Integration) with 8 stories. Created during Epic 2 Retrospective to address visibility gap - backend features from Epic 1-2 need testable UI surfaces. Implements strict route isolation (`/dashboard/{role}`) where each role can ONLY access their own dashboard. Deferred View-As feature to Story 6-7 (requires audit infrastructure). References ADR-016, ux-design-specification.md. | Awwal (PO) |
 
 ## Requirements
 
@@ -292,6 +293,7 @@ Given the full-stack nature of the application and the potential for shared comp
 *   **Epic 1: Foundation & Secure Access**
 *   **Epic 1.5: Public Website Foundation (Phase 1 Static)**
 *   **Epic 2: Core Administration & Questionnaire Management (ODK Integration)**
+*   **Epic 2.5: Role-Based Dashboards & Feature Integration** _(Added 2026-01-31 per Epic 2 Retrospective)_
 *   **Epic 3: Enumerator, Public & Data Entry Collection**
 *   **Epic 4: Supervisor Oversight & Field Management**
 *   **Epic 5: High-Level Reporting & Data Insights**

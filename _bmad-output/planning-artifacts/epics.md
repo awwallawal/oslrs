@@ -107,24 +107,24 @@ NFR6.2: Verifiable in local/staging environment.
 
 FR1 (Consent): Epic 3, Epic 7
 FR2 (2-Stage Consent): Epic 3, Epic 7
-FR3 (Homepage/Auth): Epic 1, **Epic 1.5** (Public Website)
+FR3 (Homepage/Auth): Epic 1, **Epic 1.5** (Public Website), **Epic 2.5** (Role Dashboards)
 FR4 (Public Survey): Epic 3
 FR5 (Public NIN): Epic 1
-FR6 (Staff Provisioning): Epic 1
-FR7 (Staff Login): Epic 1
-FR8 (Enumerator Progress): Epic 3 (integrated with dashboard)
+FR6 (Staff Provisioning): Epic 1, **Epic 2.5** (Staff Management UI)
+FR7 (Staff Login): Epic 1, **Epic 2.5** (Dashboard Access)
+FR8 (Enumerator Progress): Epic 3 (integrated with dashboard), **Epic 2.5** (Dashboard Shell)
 FR9 (Offline PWA): Epic 3
 FR10 (Pause/Resume): Epic 3
 FR11 (In-App Messaging): Epic 4
-FR12 (Supervisor Dashboard): Epic 4
+FR12 (Supervisor Dashboard): Epic 4, **Epic 2.5** (Dashboard Shell)
 FR13 (Fraud Signal Engine): Epic 4 (Oversight/Action)
-FR14 (XLSForm Management): Epic 2
-FR15 (Back-Office Dashboards): Epic 5
+FR14 (XLSForm Management): Epic 2, **Epic 2.5** (UI Integration)
+FR15 (Back-Office Dashboards): Epic 5, **Epic 2.5** (Dashboard Shells)
 FR16 (Audit Trails): Epic 6
 FR17 (Marketplace Search): Epic 7
 FR18 (Enriched Contact Access): Epic 7
 FR19 (Contact View Logging): Epic 7
-FR20 (Data Entry Interface): Epic 3
+FR20 (Data Entry Interface): Epic 3, **Epic 2.5** (Keyboard Dashboard Shell)
 FR21 (Global NIN Uniqueness): Epic 1 (Registration), Epic 3 (Submission)
 
 ### NFR Coverage (Epic 1.5)
@@ -150,6 +150,14 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **Goal:** Enable the management of digital survey forms and the seamless connection between the Custom App and the ODK Central collection engine.
 **User Outcome:** Admins can upload and version XLSForms; the system is ready to receive and process field data.
 **FRs covered:** FR14
+
+### Epic 2.5: Role-Based Dashboards & Feature Integration
+**Goal:** Scaffold role-specific dashboard shells for all 7 system roles, wire up existing backend capabilities from Epic 1 and Epic 2, establish RBAC route protection, and create testable UI surfaces before proceeding to Epic 3.
+**User Outcome:** Every user role has a functional post-login experience that demonstrates implemented capabilities; developers can test features end-to-end; stakeholders can see progress demos; route guards prevent unauthorized cross-role access.
+**FRs covered:** FR3 (Dashboard Access), FR6 (Staff Management UI), FR7 (Staff Login), FR8 (Enumerator Dashboard), FR12 (Supervisor Dashboard), FR14 (XLSForm UI), FR15 (Back-Office Dashboards), FR20 (Data Entry Interface)
+**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (ODK Integration) - Complete
+**Source Documents:** `ux-design-specification.md`, `ux-design-directions.html`, Architecture ADR-016
+**Security:** Strict route isolation - each role can ONLY access their own dashboard routes
 
 ### Epic 3: Mobile Data Collection & Ingestion Pipeline
 **Goal:** Provide field enumerators and the public with a robust, offline-capable tool for data submission, and establish the real-time ingestion of that data.
@@ -789,6 +797,183 @@ So that integration tests for `@oslsr/odk-integration` can verify full HTTP requ
 
 ---
 
+## Epic 2.5: Role-Based Dashboards & Feature Integration
+
+**Epic Goal:** Scaffold role-specific dashboard shells for all 7 system roles, wire up existing backend capabilities from Epic 1 and Epic 2, establish RBAC route protection, and create testable UI surfaces before proceeding to Epic 3.
+
+**Why This Epic Exists:**
+- Backend features from Epic 1 and Epic 2 cannot be tested via frontend
+- No way to verify RBAC is working without role-specific routes
+- Stakeholders need to see progress per role, not just API responses
+- Epic 3 requires dashboard foundations (Stories 3-1, 3-5, 3-6 depend on dashboard shells)
+- Mirrors Epic 1.5 pattern: build → reflect → consolidate → advance
+
+**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (ODK Integration) - All Complete
+
+**Security Model:** Strict route isolation - each role can ONLY access their own dashboard routes. Super Admin gets 360° visibility via aggregated widgets, not by visiting other role's routes.
+
+**Route Structure:**
+- `/dashboard/super-admin` - Super Admin
+- `/dashboard/supervisor` - Supervisor
+- `/dashboard/enumerator` - Enumerator
+- `/dashboard/clerk` - Data Entry Clerk
+- `/dashboard/assessor` - Verification Assessor
+- `/dashboard/official` - Government Official
+- `/dashboard/public` - Public User
+
+### Story 2.5-1: Dashboard Layout Architecture & Role-Based Routing
+
+As a System Architect,
+I want the DashboardLayout component and role-based routing infrastructure,
+So that each role lands on their appropriate dashboard with correct navigation and route protection.
+
+**Acceptance Criteria:**
+
+1. **Given** ADR-016 layout patterns, **when** a user navigates to `/dashboard/*`, **then** DashboardLayout renders with role-appropriate sidebar (Enumerator: 3-4 items, Super Admin: 12+ items).
+2. **Given** a logged-in user with role X, **when** they access the root `/dashboard` route, **then** they are redirected to their role-specific home.
+3. **Given** the existing `useAuth()` hook and RBAC middleware, **when** a user attempts to access another role's route, **then** they receive a 403 Forbidden response and are redirected to their own dashboard.
+4. **Given** the sidebar navigation component, **when** a user clicks a nav item, **then** the active state is visually indicated and the route loads in the main content area.
+5. **Given** the UX spec requirement for role-specific navigation, **then** sidebar items are dynamically rendered based on `user.role` with icons from the design system.
+6. **Given** the Oyo State branding guidelines, **then** DashboardLayout includes header with logo, user dropdown with profile/logout, consistent footer, and mobile bottom navigation for touch-primary roles.
+7. **Given** the UX spec loading state requirements, **when** any dashboard data is being fetched, **then** skeleton screens (shimmer effect in Oyo brand colors) MUST be displayed instead of spinners, following the patterns established in Story 1.5-1 and Story 1.9.
+
+### Story 2.5-2: Super Admin Dashboard - Questionnaire & ODK Integration (Epic 2 Features)
+
+As a Super Admin,
+I want my dashboard with Questionnaire Management and ODK Health panels,
+So that I can manage XLSForms and monitor ODK Central integration from a consolidated view.
+
+**Acceptance Criteria:**
+
+1. **Given** the Super Admin dashboard at `/dashboard/super-admin`, **when** the page loads, **then** a dashboard home displays with Questionnaire Management card, ODK Central Status card, and Quick Stats card.
+2. **Given** the questionnaire list, **when** clicking a questionnaire, **then** the detail view shows version history, publish status, and "Publish to ODK" / "Unpublish" buttons.
+3. **Given** the XLSForm upload feature, **when** Super Admin clicks "Upload XLSForm", **then** a modal opens with file picker, validation feedback, and upload progress.
+4. **Given** the ODK Health widget, **when** ODK is unreachable for 3+ consecutive checks, **then** a prominent warning banner displays.
+5. **Given** the UX spec multi-panel layout, **then** the Super Admin dashboard uses card-based layout with critical metrics prominent and skeleton loading states.
+
+### Story 2.5-3: Super Admin Dashboard - Staff Management (Epic 1 Features)
+
+As a Super Admin,
+I want Staff Management features on my dashboard,
+So that I can provision users, send invitations, and manage roles from a unified interface.
+
+**Acceptance Criteria:**
+
+1. **Given** the Super Admin dashboard, **when** navigating to "Staff Management" section, **then** a table displays all staff with columns: Name, Email, Role, LGA, Status, Actions.
+2. **Given** the bulk import feature, **when** Super Admin clicks "Bulk Import", **then** a modal opens for CSV upload with validation feedback.
+3. **Given** the invitation system, **when** Super Admin clicks "Send Invitation" for a pending user, **then** the invitation email is triggered and status updates.
+4. **Given** a staff member in "pending" status, **when** Super Admin views them, **then** they see options: "Resend Invitation", "Edit Role", "Deactivate".
+5. **Given** the RBAC system, **when** Super Admin changes a user's role, **then** the change is reflected immediately and logged.
+6. **Given** a role change occurs, **when** the user has active sessions, **then** ALL active sessions for that user MUST be invalidated (JTIs added to Redis blacklist), forcing re-login with updated permissions.
+7. **Given** the ID card generation, **when** Super Admin views an active staff member, **then** they can generate/download their ID card.
+
+### Story 2.5-4: Supervisor Dashboard Shell
+
+As a Supervisor,
+I want my dashboard to show team overview and fraud alerts,
+So that I can monitor my enumerators and investigate suspicious activity.
+
+**Acceptance Criteria:**
+
+1. **Given** a Supervisor logging in, **when** they reach `/dashboard/supervisor`, **then** they see a team-focused dashboard with Team Overview card, Pending Alerts card (placeholder), Today's Collection card, and Last Updated timestamp with refresh button.
+2. **Given** the Team Overview card, **when** clicked, **then** they see a list of their enumerators with status indicators.
+3. **Given** the sidebar navigation, **then** Supervisor sees: Dashboard, Team, Alerts, Messages (4 items).
+4. **Given** route guards, **when** a Supervisor tries to access `/dashboard/super-admin/*` or `/dashboard/enumerator`, **then** they receive 403 Forbidden.
+
+### Story 2.5-5: Enumerator Dashboard Shell
+
+As an Enumerator,
+I want my mobile-optimized dashboard with survey access and sync status,
+So that I can start surveys, resume drafts, and know my work is being saved.
+
+**Acceptance Criteria:**
+
+1. **Given** an Enumerator logging in on mobile, **when** they reach `/dashboard/enumerator`, **then** they see a touch-optimized layout with large tap targets (minimum 44x44px).
+2. **Given** the dashboard, **when** rendered, **then** it displays "Start Survey" primary CTA, "Resume Draft" button (placeholder), "Daily Progress" card, and Sync status indicator.
+3. **Given** the questionnaires published via ODK, **when** Enumerator views available surveys, **then** they see a list of active questionnaires with "Start Survey" buttons.
+4. **Given** no questionnaires are published, **when** Enumerator views the survey list, **then** they see an empty state: "No surveys assigned yet. Contact your supervisor."
+5. **Given** the "Start Survey" button, **when** clicked, **then** it shows "Coming in Epic 3" modal.
+6. **Given** the sidebar navigation (mobile: bottom nav), **then** Enumerator sees: Home, Surveys, Drafts, Profile (3-4 items).
+7. **Given** the PWA offline capability requirement, **then** the dashboard shell registers a service worker with no-op fetch handler (actual caching in Epic 3).
+8. **Given** an Enumerator attempts to access `/dashboard/super-admin/*` or `/dashboard/supervisor`, **then** they receive 403 Forbidden.
+
+### Story 2.5-6: Data Entry Clerk Dashboard
+
+As a Data Entry Clerk,
+I want a keyboard-optimized dashboard for paper form digitization,
+So that I can process hundreds of forms efficiently without using a mouse.
+
+**Acceptance Criteria:**
+
+1. **Given** a Data Entry Clerk logging in, **when** they reach `/dashboard/clerk`, **then** they see a desktop-optimized interface with keyboard shortcuts guide.
+2. **Given** the UX spec keyboard-primary requirement, **when** the page loads, **then** focus is automatically set to the first actionable element.
+3. **Given** the dashboard, **when** rendered, **then** it displays "New Form Entry" primary action, "Today's Progress" card, "Recent Entries" list, and keyboard shortcuts help.
+4. **Given** the questionnaire list, **when** pressing Tab, **then** focus moves sequentially through interactive elements without traps.
+5. **Given** keyboard shortcuts, **then** the following shortcuts work (single keys, NOT Ctrl+ to avoid browser conflicts): `N` - New entry, `D` - View drafts, `?` - Show shortcuts modal, `Esc` - Close modal.
+6. **Given** the "Start Entry" action, **when** pressing Enter on a questionnaire, **then** placeholder form opens (actual Enketo launch in Epic 3).
+7. **Given** the sidebar navigation, **then** Clerk sees: Dashboard, Active Forms, Completed, Help (4 items).
+8. **Given** a Data Entry Clerk attempts to access `/dashboard/super-admin/*` or `/dashboard/supervisor`, **then** they receive 403 Forbidden.
+
+### Story 2.5-7: Verification Assessor & Government Official Dashboards
+
+As a Verification Assessor or Government Official,
+I want my dashboard with appropriate data views,
+So that I can perform audits (Assessor) or view read-only reports (Official).
+
+**Acceptance Criteria:**
+
+**Verification Assessor Dashboard (`/dashboard/assessor`):**
+
+1. **Given** a Verification Assessor at `/dashboard/assessor`, **when** the page loads, **then** they see an audit-focused dashboard with Verification Queue card (placeholder), Recent Activity card, Evidence Panel placeholder, and quick filters (By LGA, By Enumerator, By Date Range).
+2. **Given** the UX spec evidence display requirement, **then** Assessor dashboard includes placeholder area for GPS clustering, completion times, and response patterns (Epic 5 wiring).
+
+**Government Official Dashboard (`/dashboard/official`):**
+
+3. **Given** a Government Official at `/dashboard/official`, **when** the page loads, **then** they see a read-only Reports Dashboard with State Overview card, Collection Progress card, Export Data button (placeholder), and formal styling per Direction 08.
+4. **Given** all Government Official dashboard elements, **when** rendered, **then** they are READ-ONLY (no edit/action buttons except export).
+5. **Given** the formal interface requirement, **then** the Government Official dashboard uses Direction 08 styling from ux-design-directions.html.
+
+**Shared Route Isolation:**
+
+6. **Given** route isolation, **when** Assessor tries to access Official routes (or vice versa), **then** they receive 403.
+7. **Given** either role attempts to access `/dashboard/super-admin/*`, **then** they receive 403 Forbidden.
+
+### Story 2.5-8: Public User Dashboard & RBAC Integration Testing
+
+As a Public User,
+I want my simple dashboard with profile status and Insights placeholder,
+So that I can access public features and know my next steps.
+
+As a Developer/QA,
+I want comprehensive RBAC integration tests,
+So that we can verify all role routes are properly protected.
+
+**Acceptance Criteria:**
+
+1. **Given** a Public User at `/dashboard/public`, **when** the page loads, **then** they see a simple, mobile-first dashboard with profile completion status, "Complete Survey" CTA, marketplace opt-in status, and "Coming Soon: Skills Marketplace Insights" teaser.
+2. **Given** the UX spec mobile-first requirement for public users, **then** the dashboard is optimized for mobile with minimal complexity.
+3. **Given** the public user's limited scope, **then** navigation shows only: Home, Profile, Help (2-3 items).
+4. **Given** a Public User attempts to access any `/dashboard/*` route except `/dashboard/public`, **then** they receive 403 Forbidden.
+5. **Given** all 7 role dashboards are implemented, **when** running RBAC integration tests, **then** the access matrix verifies each role can ONLY access their own routes (strict isolation).
+6. **Given** the RBAC integration tests, **then** they run in CI on every PR and block merge if any role can access unauthorized routes.
+7. **Given** any RBAC violation attempt, **when** it occurs, **then** it is logged to audit trail with: attempted route, user ID, role, timestamp.
+8. **Given** RBAC violation logging, **when** integration tests run, **then** they verify both the 403 response AND that an audit log entry was created.
+
+**RBAC Access Matrix (Strict Isolation):**
+
+| From Role ↓ \ To Route → | super-admin | supervisor | enumerator | clerk | assessor | official | public |
+|--------------------------|-------------|------------|------------|-------|----------|----------|--------|
+| **Super Admin**          | ✓ Allow     | ✗ 403      | ✗ 403      | ✗ 403 | ✗ 403   | ✗ 403   | ✗ 403  |
+| **Supervisor**           | ✗ 403       | ✓ Allow    | ✗ 403      | ✗ 403 | ✗ 403   | ✗ 403   | ✗ 403  |
+| **Enumerator**           | ✗ 403       | ✗ 403      | ✓ Allow    | ✗ 403 | ✗ 403   | ✗ 403   | ✗ 403  |
+| **Clerk**                | ✗ 403       | ✗ 403      | ✗ 403      | ✓ Allow | ✗ 403  | ✗ 403   | ✗ 403  |
+| **Assessor**             | ✗ 403       | ✗ 403      | ✗ 403      | ✗ 403 | ✓ Allow | ✗ 403   | ✗ 403  |
+| **Official**             | ✗ 403       | ✗ 403      | ✗ 403      | ✗ 403 | ✗ 403   | ✓ Allow | ✗ 403  |
+| **Public**               | ✗ 403       | ✗ 403      | ✗ 403      | ✗ 403 | ✗ 403   | ✗ 403   | ✓ Allow |
+| **Unauthenticated**      | → Login     | → Login    | → Login    | → Login | → Login | → Login | → Login |
+
+---
+
 ## Epic 3: Mobile Data Collection & Ingestion Pipeline
 
 **Epic Goal:** Provide field enumerators and the public with a robust, offline-capable tool for data submission, and establish the real-time ingestion of that data.
@@ -1188,6 +1373,29 @@ So that staff grievances are handled fairly.
 **When** I provide "Resolution Evidence" (e.g., bank screenshot) and mark as "Resolved"
 **Then** the staff member should receive a notification
 **And** the audit trail must record the resolution details and the admin who closed the case.
+
+### Story 6.7: Super Admin View-As Feature
+
+As a Super Admin,
+I want to view what another role's dashboard looks like for debugging and demos,
+So that I can troubleshoot user issues and demonstrate the system to stakeholders.
+
+**Source:** Deferred from Epic 2.5 retrospective - requires audit infrastructure from Story 6.1.
+
+**Acceptance Criteria:**
+
+1. **Given** a Super Admin at `/dashboard/super-admin/view-as/:role`, **when** they select a role to view as, **then** the target role's dashboard renders in a sandboxed context (NOT the actual route).
+2. **Given** the View-As mode, **when** active, **then** a prominent banner displays "Viewing as [Role] - Read Only" to prevent confusion.
+3. **Given** the View-As session, **when** it starts and ends, **then** full audit trail is recorded: who viewed as whom, start timestamp, end timestamp, duration.
+4. **Given** the View-As context, **when** Super Admin attempts any action, **then** the action is blocked (read-only mode) with message "Actions disabled in View-As mode."
+5. **Given** security requirements, **when** implementing View-As, **then** Super Admin session remains isolated - no cross-contamination with target role's permissions.
+6. **Given** the View-As feature, **when** accessed, **then** it does NOT grant Super Admin access to other role's actual routes (strict isolation preserved).
+
+**Security Notes:**
+- View-As renders target dashboard components in Super Admin's context
+- Super Admin NEVER visits other role's actual routes
+- Full audit logging required before this feature can be enabled
+- Consider adding "reason for viewing" mandatory field
 
 ---
 
