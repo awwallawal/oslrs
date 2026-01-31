@@ -2,12 +2,23 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { Redis } from 'ioredis';
 
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Lazy-initialized Redis client to avoid connection during test imports
+let redisClient: Redis | null = null;
+
+function getRedisClient(): Redis {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redisClient;
+}
+
+// In test environment, use memory store to avoid Redis dependency
+const isTestEnv = process.env.NODE_ENV === 'test';
 
 export const publicVerificationRateLimit = rateLimit({
-  store: new RedisStore({
+  store: isTestEnv ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
-    sendCommand: (...args: string[]) => redisClient.call(...args),
+    sendCommand: (...args: string[]) => getRedisClient().call(...args),
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 30, // 30 requests per minute per IP (matches marketplace search limit)

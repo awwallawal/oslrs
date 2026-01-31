@@ -49,6 +49,7 @@ export {
 export {
   createOdkTokenService,
   type TokenAccessContext,
+  type TokenAccessPurpose,
   type TokenHealthResult,
   type HealthCheckContext,
   type OdkTokenPersistence,

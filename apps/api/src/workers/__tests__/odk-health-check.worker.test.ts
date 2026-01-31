@@ -11,9 +11,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock Redis
+// Mock Redis - includes setex for rate limiting (Story 2-5 Code Review fix)
 const mockRedisGet = vi.fn();
 const mockRedisSet = vi.fn();
+const mockRedisSetex = vi.fn();
 const mockRedisIncr = vi.fn();
 const mockRedisDel = vi.fn();
 const mockRedisExpire = vi.fn();
@@ -22,6 +23,7 @@ vi.mock('ioredis', () => ({
   Redis: vi.fn().mockImplementation(() => ({
     get: mockRedisGet,
     set: mockRedisSet,
+    setex: mockRedisSetex, // Required for alert rate limiting
     incr: mockRedisIncr,
     del: mockRedisDel,
     expire: mockRedisExpire,
@@ -198,35 +200,34 @@ describe('ODK Health Check Worker', () => {
   });
 
   describe('Email Rate Limiting', () => {
-    it('should allow alert when no recent alert sent', async () => {
-      mockRedisGet.mockResolvedValue(null); // No recent alert
+    /**
+     * NOTE: Detailed rate limiting tests are in:
+     * apps/api/src/services/__tests__/odk-alert-rate-limiter.test.ts
+     *
+     * The rate limiting logic is extracted into a dedicated module
+     * (odk-alert-rate-limiter.ts) for proper unit testing.
+     *
+     * Tests here verify the algorithm/decision logic only.
+     */
 
-      const lastSent = await mockRedisGet(ALERT_LAST_SENT_KEY);
+    it('should allow alert when no recent alert sent (algorithm)', async () => {
+      // This tests the decision logic, not the actual Redis interaction
+      const lastSent: string | null = null; // Simulates Redis returning null
       const shouldSendAlert = lastSent === null;
 
       expect(shouldSendAlert).toBe(true);
     });
 
-    it('should block alert when recent alert exists', async () => {
-      mockRedisGet.mockResolvedValue('2024-01-15T10:00:00Z'); // Recent alert
-
-      const lastSent = await mockRedisGet(ALERT_LAST_SENT_KEY);
+    it('should block alert when recent alert exists (algorithm)', async () => {
+      const lastSent: string | null = '2024-01-15T10:00:00Z'; // Simulates recent alert
       const shouldSendAlert = lastSent === null;
 
       expect(shouldSendAlert).toBe(false);
     });
 
-    it('should set rate limit key with 6h TTL after sending alert', async () => {
-      const ttlSeconds = ALERT_RATE_LIMIT_HOURS * 60 * 60;
-
-      await mockRedisSet(ALERT_LAST_SENT_KEY, new Date().toISOString(), 'EX', ttlSeconds);
-
-      expect(mockRedisSet).toHaveBeenCalledWith(
-        ALERT_LAST_SENT_KEY,
-        expect.any(String),
-        'EX',
-        ttlSeconds
-      );
+    it('should use 6-hour rate limit TTL', () => {
+      // Verify the constant value matches expected rate limit
+      expect(ALERT_RATE_LIMIT_HOURS * 60 * 60).toBe(21600); // 6 hours in seconds
     });
   });
 

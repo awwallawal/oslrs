@@ -17,10 +17,15 @@ const REMEMBER_ME_SESSION_EXPIRY = 30 * 24 * 60 * 60; // 30 days
 const BLACKLIST_KEY_PREFIX = 'jwt:blacklist:';
 const REFRESH_TOKEN_KEY_PREFIX = 'refresh:';
 
-// Redis client (singleton)
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Redis client (lazy-initialized singleton to avoid connection during test imports)
+let redisClient: Redis | null = null;
 
-const getRedisClient = () => redisClient;
+const getRedisClient = (): Redis => {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redisClient;
+};
 
 export class TokenService {
   private static jwtSecret = process.env.JWT_SECRET || 'default-secret-change-in-production';

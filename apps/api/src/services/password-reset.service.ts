@@ -19,10 +19,15 @@ const RESET_RATE_KEY_PREFIX = 'password_reset_rate:';
 // Check if we're in test mode (vitest sets VITEST env var)
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 
-// Redis client (singleton)
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Redis client (lazy-initialized singleton to avoid connection during test imports)
+let redisClient: Redis | null = null;
 
-const getRedisClient = () => redisClient;
+const getRedisClient = (): Redis => {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redisClient;
+};
 
 interface ResetTokenData {
   userId: string;

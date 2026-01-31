@@ -51,12 +51,17 @@ export interface OdkTokenPersistence {
 }
 
 /**
+ * Token access purpose type - matches TokenAccessContext.purpose
+ */
+export type TokenAccessPurpose = 'enketo_launch' | 'health_check' | 'system';
+
+/**
  * Interface for audit logging.
  * Implemented by the caller (apps/api) to handle audit operations.
  */
 export interface OdkTokenAudit {
   /** Log token access for compliance tracking */
-  logTokenAccessed(userId: string, accessorId: string, purpose: string): Promise<void>;
+  logTokenAccessed(userId: string, accessorId: string, purpose: TokenAccessPurpose): Promise<void>;
 }
 
 /**
@@ -69,12 +74,14 @@ export interface OdkTokenConfig {
 
 /**
  * Logger interface for structured logging.
+ * Compatible with Pino logger.
  */
 export interface OdkTokenLogger {
   info(obj: object): void;
   warn(obj: object): void;
   error(obj: object): void;
   debug?(obj: object): void;
+  fatal?(obj: object): void;
 }
 
 /**

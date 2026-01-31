@@ -272,6 +272,25 @@ None required - all tests passing.
 
 6. **Code Review Fix (2026-01-30)**: Fixed critical issue where email alerts were not actually being queued. Updated `odk-health-check.worker.ts` to properly call `queueOdkSyncAlertEmail()` instead of just logging. Added `queueOdkSyncAlertEmail()` function to `email.queue.ts`. Now sends alerts to `SUPER_ADMIN_EMAIL` when ODK Central is unreachable for 3+ consecutive health checks.
 
+7. **Code Review Fix (2026-01-31)**: Fixed dynamic import in loop in `odk-backfill.service.ts` - moved `getFormSubmissionCount` to static import at file level for better performance. Added `TODO(Story-3.4)` comment in health check worker documenting that submission gap comparison (AC4) depends on Story 3.4 populating the submissions table.
+
+### Deferred: Submission Gap Alerts (AC4)
+
+**Status:** Infrastructure complete, comparison logic deferred to Story 3.4.
+
+**What's Done:**
+- Health check worker queries ODK submission counts per form
+- `sendAlertIfAllowed('submission_gap', ...)` function exists and is rate-limited
+- Email template for `odk-sync-alert` type is implemented
+
+**What's Deferred:**
+- Querying app_db submission counts (requires `submissions` table to be populated)
+- Comparing ODK vs app_db counts and calculating gap
+- Triggering `submission_gap` alert when gap > threshold
+- Logging `odk.health.submission_gap_detected` event
+
+**Trigger:** Story 3.4 "Idempotent Webhook Ingestion" will populate the `submissions` table. Once complete, add comparison logic to `odk-health-check.worker.ts` at the TODO comment.
+
 ### File List
 
 **New Files (Task 1 - ODK Health Service):**
@@ -335,3 +354,15 @@ None required - all tests passing.
 - `apps/api/src/db/schema/index.ts` - Added odk-sync-failures, submissions exports
 - `apps/api/src/db/schema/relations.ts` - Added submissions relations
 - `packages/types/src/index.ts` - Added odk-health types export
+
+**Code Review Fixes (2026-01-31):**
+- `services/odk-integration/src/odk-backfill.service.ts` - Fixed dynamic import in loop, moved to static import
+- `apps/api/src/workers/odk-health-check.worker.ts` - Added TODO(Story-3.4) comment for submission gap comparison
+
+**Code Review Fixes (2026-01-31 - MEDIUM/LOW):**
+- `apps/api/src/services/odk-alert-rate-limiter.ts` (NEW) - Extracted rate limiting logic from worker for proper unit testing
+- `apps/api/src/services/__tests__/odk-alert-rate-limiter.test.ts` (NEW) - 8 proper unit tests for rate limiter
+- `apps/api/src/workers/odk-health-check.worker.ts` - Refactored to use extracted rate limiter, made UNREACHABLE_THRESHOLD configurable via env var
+- `apps/api/src/workers/__tests__/odk-health-check.worker.test.ts` - Fixed tautological tests, added setex to Redis mock
+- `services/odk-integration/src/odk-health.service.ts` - Added optional `fatal()` to `OdkHealthLogger` interface for Pino compatibility
+- `services/odk-integration/src/odk-form-unpublish.service.ts` - Added explicit `OdkFormUnpublishService` interface with proper return type

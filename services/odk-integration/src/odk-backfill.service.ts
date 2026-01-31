@@ -15,7 +15,7 @@
 import pino from 'pino';
 import { AppError } from '@oslsr/utils';
 import type { OdkConfig, OdkSubmissionInfo } from '@oslsr/types';
-import { getOdkConfig, getProjectForms, getSubmissionsAfter } from './odk-client.js';
+import { getOdkConfig, getProjectForms, getSubmissionsAfter, getFormSubmissionCount } from './odk-client.js';
 import { isOdkFullyConfigured } from './odk-config.js';
 
 const logger = pino({
@@ -150,7 +150,6 @@ export function createOdkBackfillService(deps: OdkBackfillServiceDeps): OdkBackf
 
     for (const form of forms) {
       // Get ODK count via OData
-      const { getFormSubmissionCount } = await import('./odk-client.js');
       const odkCount = await getFormSubmissionCount(config, projectId, form.xmlFormId);
 
       // Get app_db count

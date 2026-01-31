@@ -42,13 +42,15 @@ export interface OdkSyncFailurePersistence {
 }
 
 /**
- * Logger interface for health service
+ * Logger interface for health service.
+ * Compatible with Pino logger.
  */
 export interface OdkHealthLogger {
   info: (obj: Record<string, unknown>) => void;
   warn: (obj: Record<string, unknown>) => void;
   error: (obj: Record<string, unknown>) => void;
   debug: (obj: Record<string, unknown>) => void;
+  fatal?: (obj: Record<string, unknown>) => void;
 }
 
 /**

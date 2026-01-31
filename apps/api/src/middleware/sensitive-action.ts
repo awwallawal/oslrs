@@ -5,10 +5,15 @@ import pino from 'pino';
 
 const logger = pino({ name: 'sensitive-action-middleware' });
 
-// Redis client (singleton)
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Redis client (lazy-initialized singleton to avoid connection during test imports)
+let redisClient: Redis | null = null;
 
-const getRedisClient = () => redisClient;
+const getRedisClient = (): Redis => {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redisClient;
+};
 
 // Re-auth key prefix
 const REAUTH_KEY_PREFIX = 'reauth:';

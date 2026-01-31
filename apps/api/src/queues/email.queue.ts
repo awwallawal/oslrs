@@ -16,14 +16,51 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+// Check if we're in test mode
+const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+
+// Lazy-initialized connection and queue to avoid Redis connection during test imports
+let connection: Redis | null = null;
+let emailQueueInstance: Queue<EmailJob> | null = null;
+
+function getConnection(): Redis {
+  if (!connection) {
+    connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null,
+    });
+  }
+  return connection;
+}
 
 /**
  * Custom backoff delays per AC3: 30s, 2min, 10min
  */
 const BACKOFF_DELAYS = [30000, 120000, 600000]; // 30s, 2min, 10min
+
+/**
+ * Get the email queue instance (lazy-initialized)
+ */
+function getEmailQueue(): Queue<EmailJob> {
+  if (!emailQueueInstance) {
+    emailQueueInstance = new Queue<EmailJob>('email-notification', {
+      connection: getConnection(),
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'custom',
+        },
+        removeOnComplete: {
+          age: 3600, // Keep completed jobs for 1 hour
+          count: 1000, // Keep max 1000 completed jobs
+        },
+        removeOnFail: {
+          age: 24 * 3600, // Keep failed jobs for 24 hours
+        },
+      },
+    });
+  }
+  return emailQueueInstance;
+}
 
 /**
  * Email notification queue
@@ -37,23 +74,41 @@ const BACKOFF_DELAYS = [30000, 120000, 600000]; // 30s, 2min, 10min
  * - staff-invitation: Staff provisioning invitation emails
  * - verification: Public user email verification (Magic Link + OTP)
  * - password-reset: Password reset emails
+ *
+ * @deprecated Use getEmailQueue() for lazy initialization. This export is kept for backwards compatibility.
  */
-export const emailQueue = new Queue<EmailJob>('email-notification', {
-  connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'custom',
-    },
-    removeOnComplete: {
-      age: 3600, // Keep completed jobs for 1 hour
-      count: 1000, // Keep max 1000 completed jobs
-    },
-    removeOnFail: {
-      age: 24 * 3600, // Keep failed jobs for 24 hours
-    },
+export const emailQueue = {
+  get add() {
+    return getEmailQueue().add.bind(getEmailQueue());
   },
-});
+  get getWaitingCount() {
+    return getEmailQueue().getWaitingCount.bind(getEmailQueue());
+  },
+  get getActiveCount() {
+    return getEmailQueue().getActiveCount.bind(getEmailQueue());
+  },
+  get getCompletedCount() {
+    return getEmailQueue().getCompletedCount.bind(getEmailQueue());
+  },
+  get getFailedCount() {
+    return getEmailQueue().getFailedCount.bind(getEmailQueue());
+  },
+  get getDelayedCount() {
+    return getEmailQueue().getDelayedCount.bind(getEmailQueue());
+  },
+  get isPaused() {
+    return getEmailQueue().isPaused.bind(getEmailQueue());
+  },
+  get pause() {
+    return getEmailQueue().pause.bind(getEmailQueue());
+  },
+  get resume() {
+    return getEmailQueue().resume.bind(getEmailQueue());
+  },
+  get close() {
+    return getEmailQueue().close.bind(getEmailQueue());
+  },
+};
 
 /**
  * Get backoff delay for a given attempt number (0-indexed)
@@ -74,7 +129,12 @@ export async function queueStaffInvitationEmail(
     priority?: number;
   }
 ): Promise<string> {
-  const job = await emailQueue.add(
+  // In test mode, return a mock job ID
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add(
     'staff-invitation',
     {
       type: 'staff-invitation',
@@ -99,7 +159,12 @@ export async function queueVerificationEmail(
   data: VerificationEmailData,
   userId: string
 ): Promise<string> {
-  const job = await emailQueue.add('verification', {
+  // In test mode, return a mock job ID
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('verification', {
     type: 'verification',
     data,
     userId,
@@ -114,7 +179,12 @@ export async function queuePasswordResetEmail(
   data: PasswordResetEmailData,
   userId: string
 ): Promise<string> {
-  const job = await emailQueue.add('password-reset', {
+  // In test mode, return a mock job ID
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('password-reset', {
     type: 'password-reset',
     data,
     userId,
@@ -130,7 +200,12 @@ export async function queuePasswordResetEmail(
 export async function queueOdkSyncAlertEmail(
   data: OdkSyncAlertEmailData
 ): Promise<string> {
-  const job = await emailQueue.add('odk-sync-alert', {
+  // In test mode, return a mock job ID
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('odk-sync-alert', {
     type: 'odk-sync-alert',
     data,
   } as EmailJob);
@@ -148,13 +223,26 @@ export async function getEmailQueueStats(): Promise<{
   delayed: number;
   paused: boolean;
 }> {
+  // In test mode, return mock stats
+  if (isTestMode()) {
+    return {
+      waiting: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      delayed: 0,
+      paused: false,
+    };
+  }
+
+  const queue = getEmailQueue();
   const [waiting, active, completed, failed, delayed, isPaused] = await Promise.all([
-    emailQueue.getWaitingCount(),
-    emailQueue.getActiveCount(),
-    emailQueue.getCompletedCount(),
-    emailQueue.getFailedCount(),
-    emailQueue.getDelayedCount(),
-    emailQueue.isPaused(),
+    queue.getWaitingCount(),
+    queue.getActiveCount(),
+    queue.getCompletedCount(),
+    queue.getFailedCount(),
+    queue.getDelayedCount(),
+    queue.isPaused(),
   ]);
 
   return {
@@ -171,20 +259,28 @@ export async function getEmailQueueStats(): Promise<{
  * Pause the email queue (used when budget is exhausted)
  */
 export async function pauseEmailQueue(): Promise<void> {
-  await emailQueue.pause();
+  if (isTestMode()) return;
+  await getEmailQueue().pause();
 }
 
 /**
  * Resume the email queue
  */
 export async function resumeEmailQueue(): Promise<void> {
-  await emailQueue.resume();
+  if (isTestMode()) return;
+  await getEmailQueue().resume();
 }
 
 /**
  * Close the queue connection (for graceful shutdown)
  */
 export async function closeEmailQueue(): Promise<void> {
-  await emailQueue.close();
-  await connection.quit();
+  if (emailQueueInstance) {
+    await emailQueueInstance.close();
+    emailQueueInstance = null;
+  }
+  if (connection) {
+    await connection.quit();
+    connection = null;
+  }
 }

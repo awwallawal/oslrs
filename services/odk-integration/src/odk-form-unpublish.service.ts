@@ -67,9 +67,20 @@ export interface UnpublishFormResult {
 }
 
 /**
+ * ODK Form Unpublish Service interface
+ */
+export interface OdkFormUnpublishService {
+  unpublishForm(
+    formId: string,
+    actorId: string,
+    requestContext?: { ipAddress?: string; userAgent?: string }
+  ): Promise<UnpublishFormResult>;
+}
+
+/**
  * Create ODK Form Unpublish Service with dependency injection
  */
-export function createOdkFormUnpublishService(deps: OdkFormUnpublishServiceDeps) {
+export function createOdkFormUnpublishService(deps: OdkFormUnpublishServiceDeps): OdkFormUnpublishService {
   const { persistence, getOdkConfig, logger: log = logger } = deps;
 
   /**
@@ -214,5 +225,3 @@ export function createOdkFormUnpublishService(deps: OdkFormUnpublishServiceDeps)
     unpublishForm,
   };
 }
-
-export type OdkFormUnpublishService = ReturnType<typeof createOdkFormUnpublishService>;

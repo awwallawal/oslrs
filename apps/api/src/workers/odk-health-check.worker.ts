@@ -17,6 +17,7 @@ import {
 import { db } from '../db/index.js';
 import { odkSyncFailures } from '../db/schema/index.js';
 import { eq, isNull } from 'drizzle-orm';
+import { createAlertRateLimiter } from '../services/odk-alert-rate-limiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,12 +32,13 @@ const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', 
 
 // Redis keys for tracking
 const CONSECUTIVE_FAILURES_KEY = 'odk:health:consecutive_failures';
-const LAST_ALERT_KEY = 'odk:alert:last_sent';
 const CONSECUTIVE_FAILURES_TTL = 24 * 60 * 60; // 24 hours
-const ALERT_RATE_LIMIT_TTL = 6 * 60 * 60; // 6 hours
 
-// Threshold for "unreachable" status
-const UNREACHABLE_THRESHOLD = 3;
+// Create alert rate limiter instance
+const alertRateLimiter = createAlertRateLimiter({ redis: connection });
+
+// Threshold for "unreachable" status (configurable via env var)
+const UNREACHABLE_THRESHOLD = parseInt(process.env.ODK_UNREACHABLE_THRESHOLD || '3', 10);
 
 /**
  * Create persistence adapter for the health service
@@ -249,13 +251,21 @@ export const odkHealthCheckWorker = new Worker<OdkHealthCheckJobData>(
       const submissionCounts = await healthService.getSubmissionCounts(config.ODK_PROJECT_ID);
       const threshold = getSubmissionGapThreshold();
 
-      // TODO: Compare with app_db counts when submission tracking is implemented
-      // For now, just log the ODK counts
+      // TODO(Story-3.4): Wire up submission gap comparison and alerts
+      // Story 3.4 "Idempotent Webhook Ingestion" will populate the submissions table.
+      // Once populated, add logic here to:
+      // 1. Query app_db submission counts per form
+      // 2. Compare with submissionCounts.byForm
+      // 3. Calculate gap per form and total
+      // 4. If gap > threshold, call: sendAlertIfAllowed('submission_gap', { gap, threshold, byForm })
+      // 5. Log event: 'odk.health.submission_gap_detected'
+      // Reference: AC4 in Story 2-5
       logger.info({
         event: 'odk.health.submission_counts',
         jobId: job.id,
         odkCount: submissionCounts.odkCount,
         formCount: submissionCounts.byForm.length,
+        note: 'Gap comparison deferred to Story 3.4',
       });
 
       // Step 3: Get unresolved sync failures
@@ -344,9 +354,10 @@ async function sendAlertIfAllowed(
     lastError?: string;
   }
 ): Promise<boolean> {
-  // Check if we've sent an alert recently
-  const lastSent = await connection.get(LAST_ALERT_KEY);
-  if (lastSent) {
+  // Check if we've sent an alert recently (using extracted rate limiter)
+  const canSend = await alertRateLimiter.canSendAlert();
+  if (!canSend) {
+    const lastSent = await alertRateLimiter.getLastSentTimestamp();
     logger.info({
       event: 'odk.health.alert_rate_limited',
       alertType,
@@ -367,7 +378,7 @@ async function sendAlertIfAllowed(
   }
 
   // Set rate limit key before sending to prevent duplicate sends
-  await connection.setex(LAST_ALERT_KEY, ALERT_RATE_LIMIT_TTL, new Date().toISOString());
+  await alertRateLimiter.markAlertSent();
 
   // Queue email alert job (Task 8)
   const dashboardUrl = `${process.env.APP_URL || 'https://app.oslsr.gov.ng'}/admin/odk-health`;
