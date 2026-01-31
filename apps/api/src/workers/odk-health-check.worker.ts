@@ -249,7 +249,8 @@ export const odkHealthCheckWorker = new Worker<OdkHealthCheckJobData>(
 
       // Step 2: Check submission counts
       const submissionCounts = await healthService.getSubmissionCounts(config.ODK_PROJECT_ID);
-      const threshold = getSubmissionGapThreshold();
+      // Threshold for gap detection - used in Story 3.4 when submissions table is populated
+      const _threshold = getSubmissionGapThreshold();
 
       // TODO(Story-3.4): Wire up submission gap comparison and alerts
       // Story 3.4 "Idempotent Webhook Ingestion" will populate the submissions table.

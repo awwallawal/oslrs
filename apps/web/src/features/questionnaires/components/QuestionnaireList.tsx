@@ -9,6 +9,7 @@ import type { QuestionnaireFormStatus } from '@oslsr/types';
 const STATUS_BADGES: Record<QuestionnaireFormStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-neutral-100 text-neutral-700' },
   published: { label: 'Published', className: 'bg-green-100 text-green-700' },
+  closing: { label: 'Closing', className: 'bg-orange-100 text-orange-700' },
   deprecated: { label: 'Deprecated', className: 'bg-amber-100 text-amber-700' },
   archived: { label: 'Archived', className: 'bg-neutral-200 text-neutral-500' },
 };
@@ -48,6 +49,7 @@ export function QuestionnaireList() {
             <option value="">All</option>
             <option value="draft">Draft</option>
             <option value="published">Published</option>
+            <option value="closing">Closing</option>
             <option value="deprecated">Deprecated</option>
             <option value="archived">Archived</option>
           </select>
