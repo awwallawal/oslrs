@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "clean:ports": "npx kill-port 3000 5173 5174 5175 5176 5177 5178 5179 5180 5181 || true",
-    "dev": "pnpm run clean:ports && pnpm --filter \"*\" dev",
-    "dev:skip-clean": "pnpm --filter \"*\" dev",
+    "dev": "pnpm run clean:ports && pnpm --filter \"./apps/*\" --parallel --stream dev",
+    "dev:skip-clean": "pnpm --filter \"./apps/*\" --parallel --stream dev",
     "build": "pnpm exec turbo run build",
     "test": "pnpm exec turbo run test",
     "test:golden": "pnpm exec turbo run test:golden",
