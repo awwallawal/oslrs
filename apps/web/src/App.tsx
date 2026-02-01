@@ -1,12 +1,13 @@
 import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
 import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
-import { PublicLayout, AuthLayout } from './layouts';
+import { PublicLayout, AuthLayout, DashboardLayout } from './layouts';
+import { DashboardRedirect } from './features/dashboard';
 
 // Lazy load page components for code splitting and loading indicators
 const ActivationPage = lazy(() => import('./features/auth/pages/ActivationPage'));
@@ -58,6 +59,16 @@ const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
 // Lazy load Questionnaire Management page (Story 2-1)
 const QuestionnaireManagementPage = lazy(() => import('./features/questionnaires/pages/QuestionnaireManagementPage'));
 
+// Lazy load Dashboard pages (Story 2.5-1)
+const SuperAdminHome = lazy(() => import('./features/dashboard/pages/SuperAdminHome'));
+const SupervisorHome = lazy(() => import('./features/dashboard/pages/SupervisorHome'));
+const EnumeratorHome = lazy(() => import('./features/dashboard/pages/EnumeratorHome'));
+const ClerkHome = lazy(() => import('./features/dashboard/pages/ClerkHome'));
+const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'));
+const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
+const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
+const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -70,6 +81,13 @@ function PageLoadingFallback() {
  */
 function AuthLoadingFallback() {
   return <PageSkeleton variant="form" showHeader={false} showFooter={false} />;
+}
+
+/**
+ * Dashboard page loading fallback - shows dashboard skeleton
+ */
+function DashboardLoadingFallback() {
+  return <PageSkeleton variant="dashboard" showHeader={false} showFooter={false} />;
 }
 
 /**
@@ -452,7 +470,6 @@ function App() {
 
             {/* ============================================
              * PROTECTED ROUTES - Require Authentication
-             * (Dashboard layout to be implemented in future epic)
              * ============================================ */}
             <Route
               path="profile-completion"
@@ -464,51 +481,237 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* ============================================
+             * DASHBOARD ROUTES - Role-Based (Story 2.5-1)
+             * Per AC3: Strict RBAC Route Isolation
+             * Each role can ONLY access their own dashboard
+             * ============================================ */}
             <Route
               path="dashboard"
               element={
                 <ProtectedRoute redirectTo="/login">
-                  <div className="min-h-screen bg-neutral-50 p-6">
-                    <h1 className="text-2xl font-semibold text-neutral-900">Dashboard</h1>
-                    <p className="text-neutral-600 mt-2">Welcome to your dashboard.</p>
-                  </div>
+                  <DashboardLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              {/* Root dashboard redirect to role-specific home (AC2) */}
+              <Route index element={<DashboardRedirect />} />
 
-            {/* Admin Routes - Require Staff Role */}
+              {/* Super Admin Routes - Story 2.5-2, 2.5-3 */}
+              <Route
+                path="super-admin"
+                element={
+                  <ProtectedRoute allowedRoles={['super_admin']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SuperAdminHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="questionnaires"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <QuestionnaireManagementPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                {/* Placeholder routes for future stories */}
+                <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
+              </Route>
+
+              {/* Supervisor Routes - Story 2.5-4 */}
+              <Route
+                path="supervisor"
+                element={
+                  <ProtectedRoute allowedRoles={['supervisor']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Supervisor Feature" />} />
+              </Route>
+
+              {/* Enumerator Routes - Story 2.5-5 */}
+              <Route
+                path="enumerator"
+                element={
+                  <ProtectedRoute allowedRoles={['enumerator']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Enumerator Feature" />} />
+              </Route>
+
+              {/* Data Entry Clerk Routes - Story 2.5-6 */}
+              <Route
+                path="clerk"
+                element={
+                  <ProtectedRoute allowedRoles={['clerk']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ClerkHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Clerk Feature" />} />
+              </Route>
+
+              {/* Verification Assessor Routes - Story 2.5-7 */}
+              <Route
+                path="assessor"
+                element={
+                  <ProtectedRoute allowedRoles={['assessor']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AssessorHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
+              </Route>
+
+              {/* Government Official Routes - Story 2.5-7 */}
+              <Route
+                path="official"
+                element={
+                  <ProtectedRoute allowedRoles={['official']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OfficialHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Official Feature" />} />
+              </Route>
+
+              {/* Public User Routes - Story 2.5-8 */}
+              <Route
+                path="public"
+                element={
+                  <ProtectedRoute allowedRoles={['public_user']} redirectTo="/dashboard">
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <PublicUserHome />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route path="*" element={<PlaceholderPage title="Public User Feature" />} />
+              </Route>
+            </Route>
+
+            {/* Legacy admin route - redirect to dashboard */}
             <Route
               path="admin"
-              element={
-                <ProtectedRoute
-                  redirectTo="/staff/login"
-                  allowedRoles={['admin', 'super_admin', 'supervisor', 'enumerator']}
-                >
-                  <div className="min-h-screen bg-neutral-50 p-6">
-                    <h1 className="text-2xl font-semibold text-neutral-900">Admin Portal</h1>
-                    <p className="text-neutral-600 mt-2">Welcome to the admin portal.</p>
-                  </div>
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/dashboard" replace />}
             />
-
-            {/* Questionnaire Management - Super Admin only (Story 2-1) */}
             <Route
-              path="admin/questionnaires"
-              element={
-                <ProtectedRoute
-                  redirectTo="/staff/login"
-                  allowedRoles={['super_admin']}
-                >
-                  <div className="min-h-screen bg-neutral-50 p-6">
-                    <div className="max-w-5xl mx-auto">
-                      <Suspense fallback={<PageLoadingFallback />}>
-                        <QuestionnaireManagementPage />
-                      </Suspense>
-                    </div>
-                  </div>
-                </ProtectedRoute>
-              }
+              path="admin/*"
+              element={<Navigate to="/dashboard" replace />}
             />
 
             {/* Catch-all redirect */}

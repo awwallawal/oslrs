@@ -18,7 +18,7 @@ interface PageSkeletonProps {
    * Variant for content area
    * @default 'default'
    */
-  variant?: 'default' | 'cards' | 'form';
+  variant?: 'default' | 'cards' | 'form' | 'dashboard';
   /**
    * Additional CSS classes
    */
@@ -145,6 +145,26 @@ function PageSkeleton({
 
               {/* Submit button */}
               <Skeleton className="h-11 w-full rounded-lg" />
+            </div>
+          )}
+
+          {variant === 'dashboard' && (
+            <div className="space-y-6 p-6">
+              {/* Page title */}
+              <div>
+                <Skeleton className="h-8 w-1/3 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+
+              {/* Stats cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <SkeletonCard key={index} />
+                ))}
+              </div>
+
+              {/* Content area */}
+              <SkeletonCard className="h-64" />
             </div>
           )}
         </div>

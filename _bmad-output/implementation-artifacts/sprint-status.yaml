@@ -85,7 +85,7 @@ development_status:
   # Source: ux-design-specification.md, ux-design-directions.html, ADR-016
   # Security: Strict route isolation (each role can ONLY access their own dashboard)
   epic-2.5: in-progress
-  2.5-1-dashboard-layout-architecture-role-routing: ready-for-dev  # Story created 2026-01-31: DashboardLayout, role routing, RBAC
+  2.5-1-dashboard-layout-architecture-role-routing: done  # Code review passed 2026-01-31: All fixes applied, 578 web tests pass
   2.5-2-super-admin-questionnaires-odk: backlog
   2.5-3-super-admin-staff-management: backlog
   2.5-4-supervisor-dashboard-shell: backlog

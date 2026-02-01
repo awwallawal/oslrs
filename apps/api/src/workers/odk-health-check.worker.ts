@@ -250,6 +250,7 @@ export const odkHealthCheckWorker = new Worker<OdkHealthCheckJobData>(
       // Step 2: Check submission counts
       const submissionCounts = await healthService.getSubmissionCounts(config.ODK_PROJECT_ID);
       // Threshold for gap detection - used in Story 3.4 when submissions table is populated
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used in Story 3.4
       const _threshold = getSubmissionGapThreshold();
 
       // TODO(Story-3.4): Wire up submission gap comparison and alerts
