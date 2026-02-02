@@ -459,11 +459,10 @@ jobs:
 
   # ============================================
   # Job 6: Lighthouse Performance Audit
-  # Runs on PRs to catch performance regressions
+  # Runs on both push and PRs for performance monitoring
   # ============================================
   lighthouse:
     needs: lint-and-build
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -490,6 +489,7 @@ jobs:
         run: pnpm --filter @oslsr/web build
 
       - name: Run Lighthouse CI
+        id: lighthouse
         uses: treosh/lighthouse-ci-action@v11
         with:
           configPath: ./apps/web/lighthouserc.json
@@ -509,34 +509,40 @@ jobs:
               return `🔴 ${Math.round(score * 100)}`;
             };
 
-            let comment = '## ⚡ Lighthouse Report\n\n';
-            comment += '| Category | Score |\n';
-            comment += '|----------|-------|\n';
+            let report = '## ⚡ Lighthouse Report\n\n';
+            report += '| Category | Score |\n';
+            report += '|----------|-------|\n';
 
             for (const result of results) {
               const summary = JSON.parse(fs.readFileSync(result.jsonPath, 'utf8'));
               const categories = summary.categories;
 
-              comment += `| Performance | ${formatScore(categories.performance.score)} |\n`;
-              comment += `| Accessibility | ${formatScore(categories.accessibility.score)} |\n`;
-              comment += `| Best Practices | ${formatScore(categories['best-practices'].score)} |\n`;
-              comment += `| SEO | ${formatScore(categories.seo.score)} |\n`;
+              report += `| Performance | ${formatScore(categories.performance.score)} |\n`;
+              report += `| Accessibility | ${formatScore(categories.accessibility.score)} |\n`;
+              report += `| Best Practices | ${formatScore(categories['best-practices'].score)} |\n`;
+              report += `| SEO | ${formatScore(categories.seo.score)} |\n`;
 
               // Add LCP warning if needed
               const lcp = summary.audits['largest-contentful-paint'];
               if (lcp && lcp.numericValue > 2500) {
-                comment += `\n⚠️ **LCP Warning**: ${Math.round(lcp.numericValue)}ms (target: <2500ms)\n`;
+                report += `\n⚠️ **LCP Warning**: ${Math.round(lcp.numericValue)}ms (target: <2500ms)\n`;
               }
             }
 
-            comment += '\n📊 [View full report](https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/' + results[0].url + ')';
+            report += '\n📊 [View full report](https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/' + results[0].url + ')';
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+            // Always write to job summary (visible in Actions tab)
+            await core.summary.addRaw(report).write();
+
+            // Post comment only on PRs
+            if (context.eventName === 'pull_request') {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            }
 
   # ============================================
   # Job 7: Deploy (only on main, after tests pass)
