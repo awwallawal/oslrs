@@ -11,6 +11,7 @@
       "numberOfRuns": 3
     },
     "assert": {
+      "preset": "lighthouse:no-pwa",
       "assertions": {
         "categories:performance": ["warn", { "minScore": 0.8 }],
         "categories:accessibility": ["error", { "minScore": 0.9 }],
@@ -20,7 +21,15 @@
         "first-contentful-paint": ["warn", { "maxNumericValue": 1800 }],
         "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
         "total-blocking-time": ["warn", { "maxNumericValue": 300 }]
-      }
+      },
+      "assertMatrix": [
+        {
+          "matchingUrlPattern": ".*/login$",
+          "assertions": {
+            "categories:best-practices": ["warn", { "minScore": 0.5 }]
+          }
+        }
+      ]
     },
     "upload": {
       "target": "temporary-public-storage"
