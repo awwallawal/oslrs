@@ -22,11 +22,12 @@ export const verifyCaptcha = async (req: Request, res: Response, next: NextFunct
   try {
     const { captchaToken } = req.body;
 
-    // Skip CAPTCHA in test mode only (for automated testing)
-    if (process.env.NODE_ENV === 'test') {
+    // In test mode, only bypass if the specific test token is provided
+    // This allows tests to verify CAPTCHA rejection when no token is sent
+    if (process.env.NODE_ENV === 'test' && captchaToken === 'test-captcha-bypass') {
       logger.debug({
         event: 'captcha.skipped',
-        reason: 'test_mode',
+        reason: 'test_bypass_token',
       });
       return next();
     }
