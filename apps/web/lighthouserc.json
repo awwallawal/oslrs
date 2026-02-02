@@ -1,11 +1,12 @@
 {
   "ci": {
     "collect": {
-      "staticDistDir": "./apps/web/dist",
+      "startServerCommand": "pnpm --filter @oslsr/web preview --port 4173",
+      "startServerReadyPattern": "Local:",
       "url": [
-        "http://localhost/",
-        "http://localhost/about",
-        "http://localhost/login"
+        "http://localhost:4173/",
+        "http://localhost:4173/about",
+        "http://localhost:4173/login"
       ],
       "numberOfRuns": 3
     },
