@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../../../lib/logger';
 
 const IDCardDownload: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -51,8 +52,7 @@ const IDCardDownload: React.FC = () => {
             window.URL.revokeObjectURL(url);
 
         } catch (err: unknown) {
-            // eslint-disable-next-line no-console
-            console.error('ID card download error:', err);
+            logger.error('ID card download error:', err);
             const message = err instanceof Error ? err.message : 'Failed to download ID Card. Please try again.';
             setError(message);
         } finally {

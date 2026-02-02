@@ -9,6 +9,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { AboutPageWrapper } from '../components';
+import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 
 /**
  * Navigation cards data for the About section
@@ -78,6 +79,8 @@ const milestones = [
  * Provides overview of OSLSR with navigation to detailed pages.
  */
 function AboutLandingPage() {
+  useDocumentTitle('About');
+
   return (
     <AboutPageWrapper
       title="Understanding Oyo State's Workforce"

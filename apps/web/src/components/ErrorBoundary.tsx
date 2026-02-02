@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ErrorFallback, type ErrorFallbackProps } from './ErrorFallback';
+import { logger } from '../lib/logger';
 
 interface ErrorBoundaryProps {
   /**
@@ -92,11 +93,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * Note: Does NOT catch errors in event handlers (expected React behavior)
    */
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error with component stack trace (intentional for debugging)
-    // eslint-disable-next-line no-console
-    console.error('[ErrorBoundary] Caught error:', error);
-    // eslint-disable-next-line no-console
-    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+    // Log error with component stack trace (only in development)
+    logger.error('[ErrorBoundary] Caught error:', error);
+    logger.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
 
     // Call optional error handler
     this.props.onError?.(error, errorInfo);

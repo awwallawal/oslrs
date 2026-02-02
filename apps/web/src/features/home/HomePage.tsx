@@ -9,6 +9,7 @@ import {
   TrustSection,
   FinalCtaSection,
 } from './sections';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 /**
  * HomePage - Main homepage component.
@@ -28,6 +29,8 @@ import {
  * 9. Final CTA (H2)
  */
 function HomePage() {
+  useDocumentTitle('Home');
+
   return (
     <>
       <HeroSection />

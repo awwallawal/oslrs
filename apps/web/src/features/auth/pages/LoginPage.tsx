@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { LoginForm } from '../components/LoginForm';
+import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 
 interface LoginPageProps {
   type?: 'staff' | 'public';
@@ -12,6 +13,7 @@ interface LoginPageProps {
  * Handles redirect after successful login.
  */
 export default function LoginPage({ type = 'public' }: LoginPageProps) {
+  useDocumentTitle(type === 'staff' ? 'Staff Login' : 'Login');
   const location = useLocation();
 
   // Get redirect destination from state (set by ProtectedRoute)

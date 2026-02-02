@@ -4,6 +4,7 @@ import Human from '@vladmandic/human';
 import { SkeletonCard } from '../../../components/skeletons';
 import { useToast } from '../../../hooks/useToast';
 import { useDelayedLoading } from '../../../hooks/useDelayedLoading';
+import { logger } from '../../../lib/logger';
 
 interface LiveSelfieCaptureProps {
   onCapture: (file: File) => void;
@@ -38,8 +39,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         setHuman(humanInstance);
         setIsModelLoadingRaw(false);
       } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load Human:', e);
+        logger.error('Failed to load Human:', e);
         setHasError(true);
         setIsModelLoadingRaw(false);
       }
@@ -61,8 +61,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
       const result = await human.detect(webcamRef.current.video);
       setFaceCount(result.face.length);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Detection error:', e);
+      logger.error('Detection error:', e);
     }
   }, [human, capturedImage]);
 
