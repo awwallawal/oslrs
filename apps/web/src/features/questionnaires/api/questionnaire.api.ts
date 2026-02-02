@@ -145,6 +145,36 @@ interface PublishResult {
 }
 
 /**
+ * Unpublish a form from ODK Central (Story 2.5-2)
+ * Sets form status back to draft and removes from ODK Central
+ */
+export async function unpublishFromOdk(id: string): Promise<PublishResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/questionnaires/${id}/unpublish`,
+    {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(
+      data.message || 'Unpublish failed',
+      response.status,
+      data.code,
+      data.details
+    );
+  }
+
+  return data;
+}
+
+/**
  * Publish a draft form to ODK Central (Story 2.2)
  */
 export async function publishToOdk(id: string): Promise<PublishResult> {
