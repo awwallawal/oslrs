@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@oslsr/utils';
-import { UserRole, JwtPayload } from '@oslsr/types';
+import { JwtPayload } from '@oslsr/types';
 import { TokenService } from '../services/token.service.js';
 import { SessionService } from '../services/session.service.js';
 import pino from 'pino';
@@ -34,21 +34,6 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 
     const token = authHeader.replace('Bearer ', '');
-
-    // MOCK AUTH for development - keep for backward compatibility
-    // TODO: Remove after full auth implementation testing
-    if (process.env.NODE_ENV !== 'production' && token === 'superadmin') {
-      req.user = {
-        sub: 'mock-super-admin-id',
-        jti: 'mock-jti',
-        role: UserRole.SUPER_ADMIN,
-        email: 'admin@oslsr.gov.ng',
-        rememberMe: false,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      };
-      return next();
-    }
 
     // Verify JWT
     const decoded = TokenService.verifyAccessToken(token);

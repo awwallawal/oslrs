@@ -22,20 +22,11 @@ export const verifyCaptcha = async (req: Request, res: Response, next: NextFunct
   try {
     const { captchaToken } = req.body;
 
-    // Skip CAPTCHA in test/development mode
-    if (process.env.NODE_ENV !== 'production' && process.env.SKIP_CAPTCHA === 'true') {
-      logger.info({
+    // Skip CAPTCHA in test mode only (for automated testing)
+    if (process.env.NODE_ENV === 'test') {
+      logger.debug({
         event: 'captcha.skipped',
-        reason: 'development_mode',
-      });
-      return next();
-    }
-
-    // Allow bypass token for testing
-    if (process.env.NODE_ENV !== 'production' && captchaToken === 'test-captcha-bypass') {
-      logger.info({
-        event: 'captcha.skipped',
-        reason: 'test_bypass_token',
+        reason: 'test_mode',
       });
       return next();
     }
@@ -51,16 +42,7 @@ export const verifyCaptcha = async (req: Request, res: Response, next: NextFunct
     const secret = process.env.HCAPTCHA_SECRET_KEY;
 
     if (!secret) {
-      // In development without secret, log warning but allow through
-      if (process.env.NODE_ENV !== 'production') {
-        logger.warn({
-          event: 'captcha.missing_secret',
-          note: 'HCAPTCHA_SECRET_KEY not configured, skipping verification in development',
-        });
-        return next();
-      }
-
-      // In production, this is an error
+      // Missing secret is always an error (except in test mode, already handled above)
       logger.error({
         event: 'captcha.configuration_error',
         error: 'HCAPTCHA_SECRET_KEY not configured',

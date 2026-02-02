@@ -14,6 +14,42 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// Environment validation - fail fast on misconfiguration
+const validateEnvironment = () => {
+  const nodeEnv = process.env.NODE_ENV;
+
+  // Warn if NODE_ENV is not set
+  if (!nodeEnv) {
+    console.error('[SECURITY] NODE_ENV is not set. Defaulting to "development".');
+    console.error('[SECURITY] In production, always set NODE_ENV=production');
+    process.env.NODE_ENV = 'development';
+  }
+
+  // Validate production requirements
+  if (nodeEnv === 'production') {
+    const requiredProdVars = [
+      'JWT_SECRET',
+      'REFRESH_TOKEN_SECRET',
+      'DATABASE_URL',
+      'HCAPTCHA_SECRET_KEY',
+    ];
+
+    const missing = requiredProdVars.filter(v => !process.env[v]);
+    if (missing.length > 0) {
+      console.error(`[SECURITY] Missing required production environment variables: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+
+    // Warn about weak secrets in production
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+      console.error('[SECURITY] JWT_SECRET is too short. Use at least 32 characters in production.');
+      process.exit(1);
+    }
+  }
+};
+
+validateEnvironment();
+
 export const logger = pino({
   level: process.env.NODE_ENV === 'test' ? 'silent' : (process.env.LOG_LEVEL || 'info'),
   transport: process.env.NODE_ENV === 'development' ? {

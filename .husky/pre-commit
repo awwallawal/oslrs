@@ -1,0 +1,44 @@
+#!/usr/bin/env sh
+
+# =============================================================================
+# SECURITY: Block commits containing .env files or secrets
+# =============================================================================
+
+# Check for .env files in staged changes
+ENV_FILES=$(git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' || true)
+
+if [ -n "$ENV_FILES" ]; then
+  echo ""
+  echo "COMMIT BLOCKED: .env files detected in staged changes!"
+  echo ""
+  echo "The following files should not be committed:"
+  echo "$ENV_FILES"
+  echo ""
+  echo "These files may contain secrets (API keys, passwords, etc.)"
+  echo ""
+  echo "To fix this:"
+  echo "  1. git reset HEAD <file>  # Unstage the file"
+  echo "  2. Ensure .env is in .gitignore"
+  echo "  3. If secrets were already committed, rotate them immediately"
+  echo ""
+  exit 1
+fi
+
+# Check for common secret patterns in staged files (warning only)
+SECRET_PATTERNS='(PRIVATE_KEY|SECRET_KEY|API_KEY|PASSWORD|CREDENTIAL|ACCESS_TOKEN)[\s]*=[\s]*["\047][^"\047]+'
+SECRETS_FOUND=$(git diff --cached -U0 | grep -iE "$SECRET_PATTERNS" | head -5 || true)
+
+if [ -n "$SECRETS_FOUND" ]; then
+  echo ""
+  echo "WARNING: Potential secrets detected in staged changes!"
+  echo ""
+  echo "Review these lines carefully:"
+  echo "$SECRETS_FOUND"
+  echo ""
+  echo "If these are actual secrets, unstage the file."
+  echo "If these are example values or tests, you can proceed."
+  echo ""
+fi
+
+# Run lint on staged files (fast check)
+pnpm lint

@@ -7,10 +7,14 @@ dist/
 build/
 coverage/
 
-# Environment
+# Environment & Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
 
 # Logs
 npm-debug.log*

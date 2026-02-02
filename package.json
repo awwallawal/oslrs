@@ -19,7 +19,8 @@
     "lint": "pnpm exec turbo run lint",
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",
-    "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f"
+    "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f",
+    "prepare": "husky"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "fast-glob": "^3.3.3",
+    "husky": "^9.1.7",
     "kill-port": "^2.0.1",
     "tsx": "^4.10.5",
     "turbo": "^1.13.0",
