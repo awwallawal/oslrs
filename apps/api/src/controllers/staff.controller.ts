@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 import { AppError } from '@oslsr/utils';
+import type { AuthenticatedRequest } from '../types.js';
 
 // Redis connection for rate limiting
 let redis: Redis | null = null;
@@ -17,11 +18,112 @@ function getRedis(): Redis {
 }
 
 export class StaffController {
-  static async createManual(req: Request, res: Response, next: NextFunction) {
+  /**
+   * GET /api/v1/staff
+   *
+   * List all staff members with pagination, filtering, and search.
+   * Story 2.5-3, AC1
+   */
+  static async list(req: Request, res: Response, next: NextFunction) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const actorId = (req as any).user?.id;
-      if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      const { page, limit, status, roleId, lgaId, search } = req.query;
+
+      const result = await StaffService.listUsers({
+        page: page ? Number(page) : undefined,
+        limit: limit ? Math.min(Number(limit), 100) : undefined,
+        status: status as string | undefined,
+        roleId: roleId as string | undefined,
+        lgaId: lgaId as string | undefined,
+        search: search as string | undefined,
+      });
+
+      res.json({
+        status: 'success',
+        ...result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/staff/:userId/role
+   *
+   * Update a user's role with session invalidation.
+   * Story 2.5-3, AC5, AC6
+   */
+  static async updateRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user.sub;
+
+      const { userId } = req.params;
+      const { roleId } = req.body;
+
+      if (!roleId) {
+        throw new AppError('VALIDATION_ERROR', 'roleId is required', 400);
+      }
+
+      const result = await StaffService.updateRole(userId, roleId, actorId);
+
+      res.json({
+        status: 'success',
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/staff/:userId/deactivate
+   *
+   * Deactivate a user account with session invalidation.
+   * Story 2.5-3, AC4, AC6
+   */
+  static async deactivate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user.sub;
+
+      const { userId } = req.params;
+
+      const result = await StaffService.deactivateUser(userId, actorId);
+
+      res.json({
+        status: 'success',
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/staff/:userId/id-card
+   *
+   * Download ID card for a staff member (Super Admin only).
+   * Story 2.5-3, AC7
+   */
+  static async downloadIdCard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+
+      const { buffer, fileName } = await StaffService.downloadIdCard(userId);
+
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Length': buffer.length.toString(),
+      });
+
+      res.send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async createManual(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user.sub;
 
       const { user, emailStatus } = await StaffService.createManual(req.body, actorId);
       res.status(201).json({
@@ -36,11 +138,9 @@ export class StaffController {
     }
   }
 
-  static async importCsv(req: Request, res: Response, next: NextFunction) {
+  static async importCsv(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const actorId = (req as any).user?.id;
-      if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      const actorId = req.user.sub;
 
       if (!req.file) {
         throw new AppError('FILE_REQUIRED', 'No CSV file uploaded', 400);
@@ -102,11 +202,9 @@ export class StaffController {
    * Resend invitation email to a staff member.
    * AC5: Manual Resend Capability
    */
-  static async resendInvitation(req: Request, res: Response, next: NextFunction) {
+  static async resendInvitation(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const actorId = (req as any).user?.id;
-      if (!actorId) throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      const actorId = req.user.sub;
 
       const { userId } = req.params;
       if (!userId) throw new AppError('MISSING_PARAM', 'User ID is required', 400);

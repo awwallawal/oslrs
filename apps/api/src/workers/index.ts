@@ -5,7 +5,7 @@
  */
 
 import { importWorker } from './import.worker.js';
-import { closeEmailWorker } from './email.worker.js';
+import { emailWorker, closeEmailWorker } from './email.worker.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'workers' });
@@ -16,11 +16,17 @@ export { emailWorker, closeEmailWorker } from './email.worker.js';
 
 /**
  * Initialize all workers
+ * Workers are auto-started when imported (via new Worker() at module load)
+ * This function logs their status and ensures they're running.
  */
 export function initializeWorkers(): void {
+  // Workers are already created when imported above
+  // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
     workers: ['import', 'email'],
+    importWorkerRunning: importWorker.isRunning(),
+    emailWorkerRunning: emailWorker.isRunning(),
   });
 }
 

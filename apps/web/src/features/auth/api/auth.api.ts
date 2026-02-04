@@ -239,3 +239,78 @@ export async function resendVerificationEmail(request: ResendVerificationRequest
     body: JSON.stringify(request),
   });
 }
+
+/**
+ * Activation with selfie request type
+ * Matches ActivationWithSelfiePayload from @oslsr/types
+ */
+export interface ActivationWithSelfieRequest {
+  password: string;
+  nin: string;
+  dateOfBirth: string;
+  homeAddress: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  selfieBase64?: string;
+}
+
+/**
+ * Activation response type
+ */
+export interface ActivationResponse {
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    status: string;
+  };
+}
+
+/**
+ * Token validation response
+ */
+export interface ValidateTokenResponse {
+  valid: boolean;
+  email?: string;
+  fullName?: string;
+  expired?: boolean;
+}
+
+/**
+ * Validate activation token before showing the wizard
+ * Returns user info if token is valid
+ */
+export async function validateActivationToken(token: string): Promise<ValidateTokenResponse> {
+  try {
+    return await authFetch<ValidateTokenResponse>(`/auth/activate/${token}/validate`, {
+      method: 'GET',
+    });
+  } catch (error) {
+    if (error instanceof AuthApiError) {
+      if (error.code === 'AUTH_TOKEN_EXPIRED') {
+        return { valid: false, expired: true };
+      }
+      if (error.code === 'AUTH_INVALID_TOKEN' || error.code === 'AUTH_ALREADY_ACTIVATED') {
+        return { valid: false, expired: false };
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Activate staff account with profile data and optional selfie
+ * Story 2.5-3, Tasks 19-20: Supports selfieBase64 for ID card generation
+ */
+export async function activateWithSelfie(
+  token: string,
+  request: ActivationWithSelfieRequest
+): Promise<ActivationResponse> {
+  return authFetch<ActivationResponse>(`/auth/activate/${token}`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}

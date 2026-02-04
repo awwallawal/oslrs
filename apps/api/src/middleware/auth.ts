@@ -1,21 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@oslsr/utils';
-import { JwtPayload } from '@oslsr/types';
 import { TokenService } from '../services/token.service.js';
 import { SessionService } from '../services/session.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'auth-middleware' });
 
-// Extend Express Request type
-declare global {
-  namespace Express {
-    interface Request {
-      user?: JwtPayload;
-      sessionId?: string;
-    }
-  }
-}
+// Express Request type extensions are in ../types.d.ts
 
 /**
  * Authentication middleware - validates JWT and session

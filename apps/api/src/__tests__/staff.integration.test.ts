@@ -14,7 +14,7 @@ vi.mock('../middleware/auth.js', () => ({
         }
         // Set mock user for authorized requests
         req.user = {
-            id: '018e5f2a-1234-7890-abcd-1234567890ab',
+            sub: '018e5f2a-1234-7890-abcd-1234567890ab',
             email: 'admin@example.com',
             role: 'super_admin',
             lgaId: null,

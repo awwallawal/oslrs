@@ -2,10 +2,11 @@ import { db } from '../db/index.js';
 import { users, auditLogs } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
-import type { ActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
+import type { ActivationWithSelfiePayload, AuthUser, LoginResponse } from '@oslsr/types';
 import { UserRole, isFieldRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
+import { PhotoProcessingService } from './photo-processing.service.js';
 import { queueOdkAppUserProvision } from '../queues/odk-app-user.queue.js';
 import { isOdkAvailable } from '@oslsr/odk-integration';
 import pino from 'pino';
@@ -19,15 +20,55 @@ const EXTENDED_LOCKOUT_THRESHOLD = 10;
 
 export class AuthService {
   /**
+   * Validates an activation token without consuming it.
+   * Returns user info if valid, or specific error states.
+   * @param token Secure invitation token
+   */
+  static async validateActivationToken(token: string): Promise<{
+    valid: boolean;
+    email?: string;
+    fullName?: string;
+    expired?: boolean;
+  }> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.invitationToken, token),
+    });
+
+    if (!user) {
+      return { valid: false, expired: false };
+    }
+
+    if (user.status !== 'invited') {
+      // Already activated
+      return { valid: false, expired: false };
+    }
+
+    // Check expiry (24 hours)
+    if (user.invitedAt) {
+      const expiryDate = new Date(user.invitedAt);
+      expiryDate.setHours(expiryDate.getHours() + 24);
+      if (new Date() > expiryDate) {
+        return { valid: false, expired: true };
+      }
+    }
+
+    return {
+      valid: true,
+      email: user.email,
+      fullName: user.fullName,
+    };
+  }
+
+  /**
    * Activates a staff account using an invitation token.
    * @param token Secure invitation token
-   * @param data Profile data and password
+   * @param data Profile data, password, and optional selfie
    * @param ipAddress Client IP address for audit logging
    * @param userAgent Client user agent for audit logging
    */
   static async activateAccount(
     token: string,
-    data: ActivationPayload,
+    data: ActivationWithSelfiePayload,
     ipAddress?: string,
     userAgent?: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,9 +101,41 @@ export class AuthService {
     // 2. Hash password
     const passwordHash = await hashPassword(data.password);
 
+    // 3. Process selfie if provided
+    let selfieData: { originalUrl: string; idCardUrl: string; livenessScore: number } | null = null;
+    if (data.selfieBase64) {
+      try {
+        // Decode base64 to buffer
+        const imageBuffer = this.decodeBase64Image(data.selfieBase64);
+
+        // Process selfie using PhotoProcessingService
+        const photoService = new PhotoProcessingService();
+        selfieData = await photoService.processLiveSelfie(imageBuffer);
+
+        logger.info({
+          event: 'activation.selfie_processed',
+          userId: user.id,
+          livenessScore: selfieData.livenessScore,
+        });
+      } catch (err: unknown) {
+        // Log error but don't fail activation - selfie can be uploaded later
+        logger.warn({
+          event: 'activation.selfie_failed',
+          userId: user.id,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+        // Re-throw validation errors so user knows to fix the image
+        if (err instanceof AppError && err.code === 'VALIDATION_ERROR') {
+          throw err;
+        }
+        // For other errors (S3, etc.), allow activation to proceed without selfie
+        selfieData = null;
+      }
+    }
+
     let updatedUser;
     try {
-      // 3. Update user and log audit in a transaction
+      // 4. Update user and log audit in a transaction
       updatedUser = await db.transaction(async (tx) => {
         // Double check NIN uniqueness within transaction
         const existingNin = await tx.query.users.findFirst({
@@ -73,21 +146,31 @@ export class AuthService {
             throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered to another account.', 409);
         }
 
+        // Build update object with optional selfie fields
+        const updateData: Record<string, unknown> = {
+          passwordHash,
+          nin: data.nin,
+          dateOfBirth: data.dateOfBirth,
+          homeAddress: data.homeAddress,
+          bankName: data.bankName,
+          accountNumber: data.accountNumber,
+          accountName: data.accountName,
+          nextOfKinName: data.nextOfKinName,
+          nextOfKinPhone: data.nextOfKinPhone,
+          status: 'active',
+          invitationToken: null, // Invalidate token
+          updatedAt: new Date(),
+        };
+
+        // Add selfie data if processed successfully
+        if (selfieData) {
+          updateData.liveSelfieOriginalUrl = selfieData.originalUrl;
+          updateData.liveSelfieIdCardUrl = selfieData.idCardUrl;
+          updateData.livenessScore = selfieData.livenessScore.toString();
+        }
+
         const [result] = await tx.update(users)
-          .set({
-            passwordHash,
-            nin: data.nin,
-            dateOfBirth: data.dateOfBirth,
-            homeAddress: data.homeAddress,
-            bankName: data.bankName,
-            accountNumber: data.accountNumber,
-            accountName: data.accountName,
-            nextOfKinName: data.nextOfKinName,
-            nextOfKinPhone: data.nextOfKinPhone,
-            status: 'active',
-            invitationToken: null, // Invalidate token
-            updatedAt: new Date()
-          })
+          .set(updateData)
           .where(eq(users.id, user.id))
           .returning();
 
@@ -96,7 +179,10 @@ export class AuthService {
           action: 'user.activated',
           targetResource: 'users',
           targetId: user.id,
-          details: { activatedAt: new Date().toISOString() },
+          details: {
+            activatedAt: new Date().toISOString(),
+            selfieUploaded: !!selfieData,
+          },
           ipAddress: ipAddress || 'unknown',
           userAgent: userAgent || 'unknown'
         });
@@ -647,5 +733,28 @@ export class AuthService {
       verified: true,
       expiresIn: REAUTH_EXPIRY,
     };
+  }
+
+  /**
+   * Decodes a base64 image string to a Buffer
+   * Handles both data URL format (data:image/jpeg;base64,...) and raw base64
+   */
+  private static decodeBase64Image(base64String: string): Buffer {
+    // Remove data URL prefix if present
+    let base64Data = base64String;
+    const dataUrlMatch = base64String.match(/^data:image\/\w+;base64,(.+)$/);
+    if (dataUrlMatch) {
+      base64Data = dataUrlMatch[1];
+    }
+
+    // Decode base64 to buffer
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Basic validation - ensure we got actual data
+    if (buffer.length === 0) {
+      throw new AppError('VALIDATION_ERROR', 'Invalid base64 image data', 400);
+    }
+
+    return buffer;
   }
 }

@@ -132,23 +132,25 @@ describe('RegistrationService', () => {
       const email1 = `test-dup-nin-1-${Date.now()}@example.com`;
       const email2 = `test-dup-nin-2-${Date.now()}@example.com`;
       const nin = generateValidNin();
+      const basePhone = Date.now().toString().slice(-8);
 
       // First registration
       const result1 = await RegistrationService.registerPublicUser({
         fullName: 'First User',
         email: email1,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: `+23480${basePhone}`,
         nin,
         password: 'SecurePass123!',
       });
       testUsers.push(result1.userId);
 
       // Second registration with same NIN should fail
+      // Use different phone to ensure we're testing NIN duplicate, not phone
       await expect(
         RegistrationService.registerPublicUser({
           fullName: 'Second User',
           email: email2,
-          phone: '+2348012345679',
+          phone: `+23481${basePhone}`,
           nin,
           password: 'SecurePass123!',
         })
@@ -159,23 +161,25 @@ describe('RegistrationService', () => {
       const email = `test-dup-email-${Date.now()}@example.com`;
       const nin1 = generateValidNin();
       const nin2 = generateValidNin();
+      const basePhone = Date.now().toString().slice(-8);
 
       // First registration
       const result1 = await RegistrationService.registerPublicUser({
         fullName: 'First User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: `+23480${basePhone}`,
         nin: nin1,
         password: 'SecurePass123!',
       });
       testUsers.push(result1.userId);
 
       // Second registration with same email should fail
+      // Use different phone to ensure we're testing email duplicate, not phone
       await expect(
         RegistrationService.registerPublicUser({
           fullName: 'Second User',
           email,
-          phone: '+2348012345679',
+          phone: `+23481${basePhone}`,
           nin: nin2,
           password: 'SecurePass123!',
         })

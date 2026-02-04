@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from './routes/index.js';
 import { AppError } from '@oslsr/utils';
+import { initializeWorkers } from './workers/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,11 @@ const validateEnvironment = () => {
 };
 
 validateEnvironment();
+
+// Initialize BullMQ workers (email, import) - only in non-test mode
+if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+  initializeWorkers();
+}
 
 export const logger = pino({
   level: process.env.NODE_ENV === 'test' ? 'silent' : (process.env.LOG_LEVEL || 'info'),

@@ -22,6 +22,16 @@ export const verifyCaptcha = async (req: Request, res: Response, next: NextFunct
   try {
     const { captchaToken } = req.body;
 
+    // In development mode, skip CAPTCHA verification entirely
+    // This allows local development without hCaptcha secret key
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug({
+        event: 'captcha.skipped',
+        reason: 'development_mode',
+      });
+      return next();
+    }
+
     // In test mode, only bypass if the specific test token is provided
     // This allows tests to verify CAPTCHA rejection when no token is sent
     if (process.env.NODE_ENV === 'test' && captchaToken === 'test-captcha-bypass') {

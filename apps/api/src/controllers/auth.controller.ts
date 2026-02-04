@@ -5,7 +5,7 @@ import { RegistrationService } from '../services/registration.service.js';
 import { EmailService } from '../services/email.service.js';
 import { setReAuthValid } from '../middleware/sensitive-action.js';
 import {
-  activationSchema,
+  activationWithSelfieSchema,
   loginRequestSchema,
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
@@ -27,13 +27,40 @@ const COOKIE_OPTIONS = {
 
 export class AuthController {
   /**
+   * GET /api/v1/auth/activate/:token/validate
+   * Validates activation token before showing the wizard
+   * Returns user info if valid, or error state if invalid/expired
+   */
+  static async validateActivationToken(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { token } = req.params;
+
+      if (!token || token.length < 32) {
+        return res.status(200).json({
+          data: { valid: false, expired: false },
+        });
+      }
+
+      const result = await AuthService.validateActivationToken(token);
+
+      res.status(200).json({
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * POST /api/v1/auth/activate/:token
+   * Activates staff account with profile data and optional selfie
    */
   static async activate(req: Request, res: Response, next: NextFunction) {
     try {
       const { token } = req.params;
 
-      const validation = activationSchema.safeParse(req.body);
+      // Use extended schema that accepts optional selfieBase64
+      const validation = activationWithSelfieSchema.safeParse(req.body);
       if (!validation.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid profile data', 400, { errors: validation.error.errors });
       }

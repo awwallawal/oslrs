@@ -1,0 +1,4 @@
+full_name,email,phone,role_name,lga_name
+John Doe,john.doe@example.com,08012345678,enumerator,Ibadan North
+Jane Smith,jane.smith@example.com,08087654321,supervisor,Oyo
+Bob Wilson,bob.wilson@example.com,08011223344,super_admin,

@@ -9,6 +9,9 @@ import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimi
 const router = Router();
 
 // Account activation (from Story 1.4)
+// Validate activation token - for frontend to check before showing wizard
+router.get('/activate/:token/validate', AuthController.validateActivationToken);
+// Complete activation with profile data
 router.post('/activate/:token', AuthController.activate);
 
 // Staff login - rate limited + CAPTCHA protected

@@ -7,6 +7,7 @@ import { EmailBudgetService } from '../services/email-budget.service.js';
 import { getEmailConfigFromEnv } from '../providers/index.js';
 import { getEmailQueueStats } from '../queues/email.queue.js';
 import odkHealthRoutes from './admin/odk-health.routes.js';
+import { db } from '../db/index.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -162,5 +163,40 @@ router.post(
 
 // ODK Health Admin Routes (Story 2-5)
 router.use('/odk', odkHealthRoutes);
+
+/**
+ * GET /api/v1/admin/lgas
+ *
+ * Get list of all LGAs for dropdowns and filters.
+ * Used in staff management for assigning enumerators/supervisors to LGAs.
+ */
+router.get(
+  '/lgas',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN),
+  async (_req: Request, res: Response) => {
+    try {
+      const lgasList = await db.query.lgas.findMany({
+        columns: { id: true, name: true, code: true },
+        orderBy: (lgas, { asc }) => [asc(lgas.name)],
+      });
+
+      res.json({
+        status: 'success',
+        data: lgasList,
+      });
+    } catch (error: unknown) {
+      logger.error({
+        event: 'admin.lgas.list_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to retrieve LGAs list',
+      });
+    }
+  }
+);
 
 export default router;

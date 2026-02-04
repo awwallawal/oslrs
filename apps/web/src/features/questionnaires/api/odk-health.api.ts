@@ -81,7 +81,7 @@ export interface BackfillStatus {
  * Get auth headers for authenticated requests
  */
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('accessToken');
+  const token = sessionStorage.getItem('oslsr_access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

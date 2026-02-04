@@ -87,7 +87,7 @@ development_status:
   epic-2.5: in-progress
   2.5-1-dashboard-layout-architecture-role-routing: done  # Code review passed 2026-01-31: All fixes applied, 578 web tests pass
   2.5-2-super-admin-questionnaires-odk: done  # Code review passed 2026-02-01: Missing tests added (3), File List corrected. 620 web tests pass
-  2.5-3-super-admin-staff-management: backlog
+  2.5-3-super-admin-staff-management: review  # Ready for review 2026-02-04: Staff management + Activation Wizard (Tasks 19-29). S3 integration verified with DO Spaces. 327 API + 745 web tests pass
   2.5-4-supervisor-dashboard-shell: backlog
   2.5-5-enumerator-dashboard-shell: backlog
   2.5-6-data-entry-clerk-dashboard: backlog

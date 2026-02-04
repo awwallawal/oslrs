@@ -3,22 +3,76 @@ import { S3Client, PutObjectCommand, GetObjectCommand, S3ClientConfig } from '@a
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AppError } from '@oslsr/utils';
 import { uuidv7 } from 'uuidv7';
+import pino from 'pino';
+
+const logger = pino({ name: 'photo-processing-service' });
 
 export class PhotoProcessingService {
   private s3Client: S3Client;
   private bucketName: string;
+  private cdnEndpoint: string | null;
 
   constructor() {
-    const region = process.env.AWS_REGION || 'us-east-1';
+    // Support DigitalOcean Spaces and other S3-compatible providers
+    const region = process.env.S3_REGION || process.env.AWS_REGION || 'us-east-1';
     const config: S3ClientConfig = { region };
 
     if (process.env.S3_ENDPOINT) {
       config.endpoint = process.env.S3_ENDPOINT;
-      config.forcePathStyle = true; // Required for MinIO
+      config.forcePathStyle = true; // Required for DO Spaces, MinIO, etc.
+    }
+
+    // DigitalOcean Spaces requires explicit credentials
+    if (process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY) {
+      config.credentials = {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+      };
     }
 
     this.s3Client = new S3Client(config);
     this.bucketName = process.env.S3_BUCKET_NAME || 'oslsr-media';
+    this.cdnEndpoint = process.env.S3_CDN_ENDPOINT || null;
+
+    logger.info({
+      event: 'photo_service.initialized',
+      bucket: this.bucketName,
+      endpoint: process.env.S3_ENDPOINT || 'aws-default',
+      cdnEnabled: !!this.cdnEndpoint,
+    });
+  }
+
+  /**
+   * Get CDN URL for a public asset (faster loading via edge cache)
+   * Falls back to signed URL if CDN not configured
+   */
+  getCdnUrl(key: string): string | null {
+    if (!this.cdnEndpoint) return null;
+    return `${this.cdnEndpoint}/${key}`;
+  }
+
+  /**
+   * Check if the S3 connection is working
+   */
+  async healthCheck(): Promise<{ healthy: boolean; bucket: string; error?: string }> {
+    try {
+      // Try to get bucket info by listing with max 1 item
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: '.health-check', // Non-existent key is fine, we just check auth
+      });
+
+      await this.s3Client.send(command).catch((err) => {
+        // NoSuchKey is expected and means auth worked
+        if (err.name !== 'NoSuchKey') throw err;
+      });
+
+      return { healthy: true, bucket: this.bucketName };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      logger.error({ event: 'photo_service.health_check_failed', error: errorMessage });
+      return { healthy: false, bucket: this.bucketName, error: errorMessage };
+    }
   }
 
   async processLiveSelfie(imageBuffer: Buffer): Promise<{ originalUrl: string; idCardUrl: string; livenessScore: number }> {
