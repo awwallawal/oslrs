@@ -4,8 +4,8 @@
 # SECURITY: Block commits containing .env files or secrets
 # =============================================================================
 
-# Check for .env files in staged changes
-ENV_FILES=$(git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' || true)
+# Check for .env files in staged changes (excluding .env.example which is safe to commit)
+ENV_FILES=$(git diff --cached --name-only | grep -E '(^|/)\.env($|\.[^e])' | grep -v '\.env\.example' || true)
 
 if [ -n "$ENV_FILES" ]; then
   echo ""
@@ -20,6 +20,8 @@ if [ -n "$ENV_FILES" ]; then
   echo "  1. git reset HEAD <file>  # Unstage the file"
   echo "  2. Ensure .env is in .gitignore"
   echo "  3. If secrets were already committed, rotate them immediately"
+  echo ""
+  echo "Note: .env.example is allowed (contains only placeholder values)"
   echo ""
   exit 1
 fi
