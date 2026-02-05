@@ -1,12 +1,12 @@
 /**
- * Webhook Ingestion Queue
+ * Submission Ingestion Queue
  *
- * BullMQ queue for processing ODK Central submissions.
- * Foundation created in Story 2-5 (backfill), enhanced in Story 3.4 (webhook endpoint).
+ * BullMQ queue for processing form submissions from the native form system.
+ * Foundation created in Story 2-5, repurposed for native forms.
  *
  * Data flow:
- * 1. Webhook endpoint (Story 3.4) or Backfill (Story 2-5) adds job
- * 2. Worker deduplicates by odk_submission_id
+ * 1. Native form renderer submits via API
+ * 2. Worker deduplicates by submission_id (column named odk_submission_id for migration compatibility)
  * 3. Worker saves to submissions table
  * 4. Future: Triggers fraud detection (Story 4.3)
  */
@@ -18,29 +18,26 @@ import pino from 'pino';
 const logger = pino({ name: 'webhook-ingestion-queue' });
 
 /**
- * Job data for webhook ingestion
+ * Job data for submission ingestion
  */
 export interface WebhookIngestionJobData {
-  /** Source of the submission */
-  source: 'webhook' | 'backfill';
+  /** Source of the submission (webapp, mobile, backfill, manual) */
+  source: 'webapp' | 'mobile' | 'backfill' | 'manual';
 
-  /** ODK Central submission instance ID (for deduplication) */
+  /** Unique submission ID for deduplication (column named odk_submission_id for migration compatibility) */
   odkSubmissionId: string;
 
-  /** Form XML ID */
+  /** Form ID reference */
   formXmlId: string;
 
-  /** ODK Central submitter ID */
+  /** Submitter user ID (column named odk_submitter_id for migration compatibility) */
   odkSubmitterId?: string;
 
-  /** When submitted to ODK Central */
+  /** When the form was submitted */
   submittedAt: string;
 
-  /** Raw submission data (for webhook source) */
+  /** Raw submission data */
   rawData?: Record<string, unknown>;
-
-  /** Project ID (for fetching full data if needed) */
-  projectId?: number;
 }
 
 let webhookIngestionQueue: Queue<WebhookIngestionJobData> | null = null;

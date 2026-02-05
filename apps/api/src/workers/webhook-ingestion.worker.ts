@@ -1,16 +1,15 @@
 /**
- * Webhook Ingestion Worker
+ * Submission Ingestion Worker
  *
- * BullMQ worker that processes ODK Central submissions.
- * Foundation created in Story 2-5 (backfill), enhanced in Story 3.4.
+ * BullMQ worker that processes form submissions from the native form system.
+ * Foundation created in Story 2-5, repurposed for native forms.
  *
- * Current capabilities (Story 2-5):
- * - Deduplication by odk_submission_id
+ * Current capabilities:
+ * - Deduplication by submission_id (column named odk_submission_id for migration compatibility)
  * - Save to submissions table
  * - Basic error handling
  *
  * To be added in Story 3.4:
- * - Fetch full submission data from ODK Central (for backfill source)
  * - Extract respondent data
  * - Link to enumerator
  *

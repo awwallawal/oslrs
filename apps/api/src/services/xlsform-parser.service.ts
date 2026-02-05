@@ -43,7 +43,7 @@ const VALID_QUESTION_TYPES = [
 ];
 
 // Field types that require labels (user-facing input fields)
-// These are shown to users in ODK Collect and MUST have labels
+// These are shown to users in form renderers and MUST have labels
 const TYPES_REQUIRING_LABELS = [
   'text', 'integer', 'decimal', 'date', 'time', 'datetime',
   'select_one', 'select_multiple', 'rank',
@@ -306,7 +306,7 @@ export class XlsformParserService {
       }
 
       // Validate user-facing fields have labels (BF-2.5-2-1: Missing label validation)
-      // ODK Central rejects forms with user-facing fields missing labels
+      // Form renderers require labels on user-facing fields for proper display
       if (row.type) {
         const baseType = row.type.split(' ')[0].toLowerCase();
         const requiresLabel = TYPES_REQUIRING_LABELS.includes(baseType);
@@ -318,7 +318,7 @@ export class XlsformParserService {
             row: rowNum,
             column: 'label',
             field: row.name,
-            message: `Field '${row.name}' (type: ${row.type}) requires a label. ODK Central will reject forms with missing labels on user-facing fields.`,
+            message: `Field '${row.name}' (type: ${row.type}) requires a label. Form renderers require labels on user-facing fields for proper display.`,
             severity: 'error',
             suggestion: `Add a descriptive label for this field in the 'label' column`,
           });

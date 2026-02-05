@@ -361,8 +361,8 @@ describe('XlsformParserService', () => {
     });
 
     it('should detect missing labels on user-facing fields (BF-2.5-2-1)', () => {
-      // This test verifies the fix for the ODK Central rejection issue
-      // where geopoint and other user-facing fields without labels cause publish failure
+      // This test verifies validation for missing labels on user-facing fields
+      // where geopoint and other user-facing fields without labels cause rendering issues
       const survey = [
         { type: 'geopoint', name: 'gps_location', label: '' }, // Missing label - should error
         { type: 'text', name: 'name', label: 'Full Name' }, // Has label - OK
@@ -389,7 +389,7 @@ describe('XlsformParserService', () => {
 
       // Error messages should be helpful
       expect(labelErrors[0].message).toContain('requires a label');
-      expect(labelErrors[0].message).toContain('ODK Central will reject');
+      expect(labelErrors[0].message).toContain('Form renderers require labels');
     });
 
     it('should not require labels for metadata and structure types', () => {
