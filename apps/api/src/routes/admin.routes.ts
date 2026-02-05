@@ -6,7 +6,6 @@ import { UserRole } from '@oslsr/types';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { getEmailConfigFromEnv } from '../providers/index.js';
 import { getEmailQueueStats } from '../queues/email.queue.js';
-import odkHealthRoutes from './admin/odk-health.routes.js';
 import { db } from '../db/index.js';
 import pino from 'pino';
 
@@ -161,8 +160,6 @@ router.post(
   }
 );
 
-// ODK Health Admin Routes (Story 2-5)
-router.use('/odk', odkHealthRoutes);
 
 /**
  * GET /api/v1/admin/lgas

@@ -3,7 +3,6 @@ import { users } from './users.js';
 import { roles } from './roles.js';
 import { lgas } from './lgas.js';
 import { questionnaireForms, questionnaireFiles, questionnaireVersions } from './questionnaires.js';
-import { odkAppUsers } from './odk-app-users.js';
 import { submissions } from './submissions.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -17,7 +16,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   uploadedQuestionnaires: many(questionnaireForms),
   createdVersions: many(questionnaireVersions),
-  odkAppUser: one(odkAppUsers),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -52,14 +50,6 @@ export const questionnaireVersionsRelations = relations(questionnaireVersions, (
   }),
   createdBy: one(users, {
     fields: [questionnaireVersions.createdBy],
-    references: [users.id],
-  }),
-}));
-
-// ODK App Users relations
-export const odkAppUsersRelations = relations(odkAppUsers, ({ one }) => ({
-  user: one(users, {
-    fields: [odkAppUsers.userId],
     references: [users.id],
   }),
 }));

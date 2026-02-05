@@ -6,7 +6,6 @@
 // User lifecycle actions
 export const AUDIT_ACTION_USER_ACTIVATED = 'user.activated';
 export const AUDIT_ACTION_USER_CREATE = 'user.create';
-export const AUDIT_ACTION_USER_ODK_APP_USER_PROVISIONED = 'user.odk_app_user_provisioned';
 
 // Authentication actions
 export const AUDIT_ACTION_AUTH_LOGIN_SUCCESS = 'auth.login_success';
@@ -21,13 +20,10 @@ export const AUDIT_ACTION_INVITATION_RESEND = 'invitation.resend';
 export const AUDIT_ACTION_QUESTIONNAIRE_UPLOAD = 'questionnaire.upload';
 export const AUDIT_ACTION_QUESTIONNAIRE_STATUS_CHANGE = 'questionnaire.status_change';
 export const AUDIT_ACTION_QUESTIONNAIRE_DELETE = 'questionnaire.delete';
-export const AUDIT_ACTION_QUESTIONNAIRE_PUBLISH_TO_ODK = 'questionnaire.publish_to_odk';
+export const AUDIT_ACTION_QUESTIONNAIRE_PUBLISH = 'questionnaire.publish';
 
 // Email actions
 export const AUDIT_ACTION_EMAIL_DELIVERY_FAILED = 'email.delivery.failed';
 
-// ODK Token actions (Story 2-4)
-export const AUDIT_ACTION_USER_ODK_TOKEN_ACCESSED = 'user.odk_token_accessed';
-
-// ODK Form actions (Story 2-5)
+// Form actions
 export const AUDIT_ACTION_FORM_UNPUBLISHED = 'form.unpublished';

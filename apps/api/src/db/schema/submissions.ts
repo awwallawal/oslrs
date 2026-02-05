@@ -1,14 +1,13 @@
 /**
  * Submissions Schema
  *
- * Stores survey submissions ingested from ODK Central.
- * Foundation created in Story 2-5 (backfill), enhanced in Story 3.4 (webhook ingestion).
+ * Stores survey submissions from the native form system.
+ * Foundation created in Story 2-5, enhanced in Story 3.4.
  *
  * Data flow:
- * 1. ODK Central receives submission from Enketo
- * 2. Webhook (Story 3.4) or Backfill (Story 2-5) queues for ingestion
- * 3. Worker saves to this table
- * 4. Fraud engine processes (Story 4.3)
+ * 1. Enumerator submits form via native form system
+ * 2. Submission saved to this table
+ * 3. Fraud engine processes (Story 4.3)
  */
 
 import { pgTable, uuid, text, timestamp, jsonb, index, boolean, doublePrecision } from 'drizzle-orm/pg-core';
@@ -17,23 +16,23 @@ import { uuidv7 } from 'uuidv7';
 /**
  * Ingestion source type
  */
-export const ingestionSourceTypes = ['webhook', 'backfill', 'manual'] as const;
+export const ingestionSourceTypes = ['webapp', 'mobile', 'webhook', 'backfill', 'manual'] as const;
 export type IngestionSource = typeof ingestionSourceTypes[number];
 
 /**
  * Submissions table
  *
- * Core fields (Story 2-5):
- * - odk_submission_id: Unique ID from ODK Central (for deduplication)
+ * Core fields:
+ * - submission_id: Unique submission identifier (for deduplication)
  * - form_xml_id: Links to questionnaire form
- * - raw_data: Full submission JSON from ODK
- * - submitted_at: When submitted to ODK Central
+ * - raw_data: Full submission JSON
+ * - submitted_at: When submitted
  * - ingested_at: When processed by our system
- * - source: How it was ingested (webhook/backfill)
+ * - source: How it was submitted (webapp/mobile/manual)
  *
  * Fields to be added by Story 3.4/4.3:
  * - respondent_id: Extracted respondent FK
- * - enumerator_id: Who submitted (from ODK submitter)
+ * - enumerator_id: Who submitted
  * - fraud_score: Calculated by fraud engine
  * - fraud_flags: Array of triggered rules
  * - verification_status: pending/verified/rejected
@@ -41,16 +40,18 @@ export type IngestionSource = typeof ingestionSourceTypes[number];
 export const submissions = pgTable('submissions', {
   id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
 
-  // ODK Central reference (CRITICAL for deduplication)
+  // Submission reference (CRITICAL for deduplication)
+  // Note: Column name kept as odk_submission_id for migration compatibility
   odkSubmissionId: text('odk_submission_id').notNull().unique(),
 
   // Form reference
   formXmlId: text('form_xml_id').notNull(),
 
-  // Submitter info from ODK (numeric ID from ODK Central)
+  // Submitter info
+  // Note: Column name kept as odk_submitter_id for migration compatibility
   odkSubmitterId: text('odk_submitter_id'),
 
-  // Raw submission data from ODK Central
+  // Raw submission data
   rawData: jsonb('raw_data'),
 
   // GPS coordinates (for fraud detection - cluster analysis)
@@ -62,9 +63,9 @@ export const submissions = pgTable('submissions', {
   ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 
   // Ingestion metadata
-  source: text('source', { enum: ingestionSourceTypes }).notNull().default('webhook'),
+  source: text('source', { enum: ingestionSourceTypes }).notNull().default('webapp'),
 
-  // Processing status (for Story 3.4 worker)
+  // Processing status
   processed: boolean('processed').notNull().default(false),
   processedAt: timestamp('processed_at', { withTimezone: true }),
   processingError: text('processing_error'),

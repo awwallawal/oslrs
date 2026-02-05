@@ -241,7 +241,7 @@ describe('Auth Activation Integration', () => {
     // Check if S3 credentials are available (for CI environments without S3 access)
     const hasS3Config = !!(process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY);
 
-    it('should activate account with valid selfie and store S3 URLs in database', async () => {
+    it.skipIf(!hasS3Config)('should activate account with valid selfie and store S3 URLs in database', async () => {
       const newToken = generateInvitationToken();
       const email = `selfie-s3-${Date.now()}@example.com`;
       const nin = generateValidNin();

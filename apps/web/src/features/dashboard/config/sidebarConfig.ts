@@ -36,7 +36,6 @@ import {
   Database,
   ScrollText,
   UserCog,
-  HeartPulse,
 } from 'lucide-react';
 
 /**
@@ -148,7 +147,6 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Home', href: '/dashboard/super-admin', icon: Home },
     { label: 'Staff Management', href: '/dashboard/super-admin/staff', icon: Users },
     { label: 'Questionnaires', href: '/dashboard/super-admin/questionnaires', icon: FileText },
-    { label: 'ODK Health', href: '/dashboard/super-admin/odk-health', icon: HeartPulse },
     { label: 'Fraud Review', href: '/dashboard/super-admin/fraud', icon: AlertTriangle },
     { label: 'Audit Queue', href: '/dashboard/super-admin/audit', icon: FileSearch },
     { label: 'Data Overview', href: '/dashboard/super-admin/data', icon: Database },

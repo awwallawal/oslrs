@@ -7,12 +7,10 @@
  * Tests:
  * - Loading skeleton renders during fetch
  * - Questionnaire summary card displays correct counts
- * - ODK status card displays health info
- * - Warning banner appears when consecutiveFailures >= 3
+ * - Staff management card displays
+ * - Quick stats card displays
  * - Navigation to questionnaires page on card click
- * - Navigation to ODK health page on card click
- * - Error handling for failed API calls
- * - Updates when data changes
+ * - Navigation to staff page on card click
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -26,23 +24,9 @@ import SuperAdminHome from '../SuperAdminHome';
 
 // Mock the hooks
 const mockUseQuestionnaires = vi.fn();
-const mockUseOdkHealth = vi.fn();
 
 vi.mock('../../../questionnaires/hooks/useQuestionnaires', () => ({
   useQuestionnaires: () => mockUseQuestionnaires(),
-}));
-
-vi.mock('../../../questionnaires/hooks/useOdkHealth', () => ({
-  useOdkHealth: () => mockUseOdkHealth(),
-}));
-
-// Mock the warning banner
-vi.mock('../../../questionnaires/components/OdkWarningBanner', () => ({
-  OdkWarningBanner: ({ onViewDetails }: { onViewDetails: () => void }) => (
-    <div data-testid="odk-warning-banner">
-      <button onClick={onViewDetails} data-testid="view-details-btn">View Details</button>
-    </div>
-  ),
 }));
 
 // Mock navigate
@@ -80,29 +64,10 @@ describe('SuperAdminHome', () => {
         data: undefined,
         isLoading: true,
       });
-      mockUseOdkHealth.mockReturnValue({
-        data: { data: { status: 'healthy', consecutiveFailures: 0, lastCheckAt: '2026-01-31T10:00:00Z', unresolvedFailures: 0 } },
-        isLoading: false,
-      });
 
       renderWithProviders(<SuperAdminHome />);
 
       // Should show skeleton cards during loading
-      expect(screen.getAllByLabelText('Loading card')).toHaveLength(3);
-    });
-
-    it('renders loading skeleton when ODK health data is loading', () => {
-      mockUseQuestionnaires.mockReturnValue({
-        data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
-        data: undefined,
-        isLoading: true,
-      });
-
-      renderWithProviders(<SuperAdminHome />);
-
       expect(screen.getAllByLabelText('Loading card')).toHaveLength(3);
     });
   });
@@ -120,10 +85,6 @@ describe('SuperAdminHome', () => {
         },
         isLoading: false,
       });
-      mockUseOdkHealth.mockReturnValue({
-        data: { data: { status: 'healthy', consecutiveFailures: 0, lastCheckAt: '2026-01-31T10:00:00Z', unresolvedFailures: 0 } },
-        isLoading: false,
-      });
 
       renderWithProviders(<SuperAdminHome />);
 
@@ -139,10 +100,6 @@ describe('SuperAdminHome', () => {
         data: { data: [], meta: { total: 0 } },
         isLoading: false,
       });
-      mockUseOdkHealth.mockReturnValue({
-        data: { data: { status: 'healthy', consecutiveFailures: 0, lastCheckAt: '2026-01-31T10:00:00Z', unresolvedFailures: 0 } },
-        isLoading: false,
-      });
 
       renderWithProviders(<SuperAdminHome />);
 
@@ -156,69 +113,49 @@ describe('SuperAdminHome', () => {
     });
   });
 
-  describe('ODK Status Card', () => {
-    it('displays ODK health info correctly', async () => {
+  describe('Staff Management Card', () => {
+    it('displays staff management card', async () => {
       mockUseQuestionnaires.mockReturnValue({
         data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
-        data: {
-          data: {
-            status: 'healthy',
-            consecutiveFailures: 0,
-            lastCheckAt: '2026-01-31T10:00:00Z',
-            unresolvedFailures: 2,
-            projectId: 'proj-123',
-          },
-        },
         isLoading: false,
       });
 
       renderWithProviders(<SuperAdminHome />);
 
       await waitFor(() => {
-        expect(screen.getByText('Healthy')).toBeInTheDocument();
-        expect(screen.getByText('2')).toBeInTheDocument(); // Issues count
+        expect(screen.getByText('Staff Management')).toBeInTheDocument();
+        expect(screen.getByText('Manage supervisors, enumerators, and other staff members')).toBeInTheDocument();
       });
     });
 
-    it('navigates to ODK health page on card click', async () => {
+    it('navigates to staff page on card click', async () => {
       mockUseQuestionnaires.mockReturnValue({
         data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
-        data: { data: { status: 'healthy', consecutiveFailures: 0, lastCheckAt: '2026-01-31T10:00:00Z', unresolvedFailures: 0 } },
         isLoading: false,
       });
 
       renderWithProviders(<SuperAdminHome />);
 
       await waitFor(() => {
-        const card = screen.getByText('ODK Central').closest('[data-slot="card"]');
+        const card = screen.getByText('Staff Management').closest('[data-slot="card"]');
         expect(card).toBeInTheDocument();
         fireEvent.click(card!);
       });
 
-      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/super-admin/odk-health');
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/super-admin/staff');
     });
   });
 
-  describe('Warning Banner (AC4)', () => {
-    it('shows warning banner when consecutiveFailures >= 3', async () => {
+  describe('Quick Stats Card', () => {
+    it('displays active forms count', async () => {
       mockUseQuestionnaires.mockReturnValue({
-        data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
         data: {
-          data: {
-            status: 'error',
-            consecutiveFailures: 3,
-            lastCheckAt: '2026-01-31T10:00:00Z',
-            unresolvedFailures: 0,
-          },
+          data: [
+            { id: '1', status: 'published' },
+            { id: '2', status: 'published' },
+            { id: '3', status: 'draft' },
+          ],
+          meta: { total: 5 },
         },
         isLoading: false,
       });
@@ -226,59 +163,10 @@ describe('SuperAdminHome', () => {
       renderWithProviders(<SuperAdminHome />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('odk-warning-banner')).toBeInTheDocument();
+        expect(screen.getByText('Quick Stats')).toBeInTheDocument();
+        expect(screen.getByText('Active Forms')).toBeInTheDocument();
+        expect(screen.getByText('Online')).toBeInTheDocument(); // System Status
       });
-    });
-
-    it('does not show warning banner when consecutiveFailures < 3', async () => {
-      mockUseQuestionnaires.mockReturnValue({
-        data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
-        data: {
-          data: {
-            status: 'warning',
-            consecutiveFailures: 2,
-            lastCheckAt: '2026-01-31T10:00:00Z',
-            unresolvedFailures: 0,
-          },
-        },
-        isLoading: false,
-      });
-
-      renderWithProviders(<SuperAdminHome />);
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('odk-warning-banner')).not.toBeInTheDocument();
-      });
-    });
-
-    it('navigates to ODK health page when View Details is clicked', async () => {
-      mockUseQuestionnaires.mockReturnValue({
-        data: { data: [], meta: { total: 0 } },
-        isLoading: false,
-      });
-      mockUseOdkHealth.mockReturnValue({
-        data: {
-          data: {
-            status: 'error',
-            consecutiveFailures: 5,
-            lastCheckAt: '2026-01-31T10:00:00Z',
-            unresolvedFailures: 0,
-          },
-        },
-        isLoading: false,
-      });
-
-      renderWithProviders(<SuperAdminHome />);
-
-      await waitFor(() => {
-        const viewDetailsBtn = screen.getByTestId('view-details-btn');
-        fireEvent.click(viewDetailsBtn);
-      });
-
-      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/super-admin/odk-health');
     });
   });
 });

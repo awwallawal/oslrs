@@ -7,8 +7,6 @@ import {
   uploadQuestionnaire,
   updateQuestionnaireStatus,
   deleteQuestionnaire,
-  publishToOdk,
-  unpublishFromOdk,
 } from '../api/questionnaire.api';
 import type { QuestionnaireFormStatus } from '@oslsr/types';
 
@@ -85,70 +83,6 @@ export function useDeleteQuestionnaire() {
     },
     onError: (err: Error) => {
       showError({ message: err.message || 'Delete failed' });
-    },
-  });
-}
-
-/**
- * Publish a draft form to ODK Central (Story 2.2)
- */
-export function usePublishToOdk() {
-  const queryClient = useQueryClient();
-  const { success, error: showError } = useToast();
-
-  return useMutation({
-    mutationFn: (id: string) => publishToOdk(id),
-    onSuccess: (data) => {
-      success({
-        message: `"${data.data.title}" v${data.data.version} published to ODK Central`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['questionnaires'] });
-    },
-    onError: (err: Error & { code?: string; details?: Record<string, unknown> }) => {
-      // Handle specific ODK error codes
-      if (err.code === 'ODK_UNAVAILABLE') {
-        showError({ message: 'ODK Central is not configured. Contact administrator.' });
-      } else if (err.code === 'ODK_AUTH_FAILED') {
-        showError({ message: 'ODK Central authentication failed. Check credentials.' });
-      } else if (err.code === 'ODK_DEPLOYMENT_PARTIAL') {
-        showError({
-          message: 'Form deployed to ODK but database update failed. Contact administrator.',
-        });
-      } else {
-        showError({ message: err.message || 'Publish to ODK failed' });
-      }
-    },
-  });
-}
-
-/**
- * Unpublish a form from ODK Central (Story 2.5-2)
- */
-export function useUnpublishFromOdk() {
-  const queryClient = useQueryClient();
-  const { success, error: showError } = useToast();
-
-  return useMutation({
-    mutationFn: (id: string) => unpublishFromOdk(id),
-    onSuccess: (data) => {
-      success({
-        message: `"${data.data.title}" unpublished from ODK Central`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['questionnaires'] });
-    },
-    onError: (err: Error & { code?: string; details?: Record<string, unknown> }) => {
-      // Handle specific ODK error codes
-      if (err.code === 'ODK_UNAVAILABLE') {
-        showError({ message: 'ODK Central is not configured. Contact administrator.' });
-      } else if (err.code === 'ODK_AUTH_FAILED') {
-        showError({ message: 'ODK Central authentication failed. Check credentials.' });
-      } else if (err.code === 'FORM_HAS_SUBMISSIONS') {
-        showError({
-          message: 'Cannot unpublish form with existing submissions. Archive instead.',
-        });
-      } else {
-        showError({ message: err.message || 'Unpublish failed' });
-      }
     },
   });
 }

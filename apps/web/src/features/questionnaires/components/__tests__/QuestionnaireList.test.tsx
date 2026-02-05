@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 /**
- * QuestionnaireList Unpublish Tests
+ * QuestionnaireList Tests
  *
- * Story 2.5-2: Tests for unpublish functionality in QuestionnaireList
- *
- * Tests:
- * - Shows unpublish button only for published forms
- * - Unpublish button opens confirmation dialog
- * - Confirmation dialog triggers mutation on confirm
+ * Tests for the QuestionnaireList component:
+ * - Renders forms table with status badges
+ * - Shows delete button only for draft forms
+ * - Delete button opens confirmation dialog
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -23,8 +21,6 @@ import { QuestionnaireList } from '../QuestionnaireList';
 const mockUseQuestionnaires = vi.fn();
 const mockUpdateStatus = vi.fn();
 const mockDeleteMutation = vi.fn();
-const mockPublishMutation = vi.fn();
-const mockUnpublishMutation = vi.fn();
 
 vi.mock('../../hooks/useQuestionnaires', () => ({
   useQuestionnaires: () => mockUseQuestionnaires(),
@@ -34,14 +30,6 @@ vi.mock('../../hooks/useQuestionnaires', () => ({
   }),
   useDeleteQuestionnaire: () => ({
     mutate: mockDeleteMutation,
-    isPending: false,
-  }),
-  usePublishToOdk: () => ({
-    mutate: mockPublishMutation,
-    isPending: false,
-  }),
-  useUnpublishFromOdk: () => ({
-    mutate: mockUnpublishMutation,
     isPending: false,
   }),
 }));
@@ -65,12 +53,12 @@ function renderWithProviders(component: React.ReactNode) {
   );
 }
 
-describe('QuestionnaireList - Unpublish Functionality', () => {
+describe('QuestionnaireList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('shows unpublish button only for published forms', async () => {
+  it('shows delete button only for draft forms', async () => {
     mockUseQuestionnaires.mockReturnValue({
       data: {
         data: [
@@ -86,32 +74,28 @@ describe('QuestionnaireList - Unpublish Functionality', () => {
     renderWithProviders(<QuestionnaireList />);
 
     await waitFor(() => {
-      // Published form should have unpublish button (CloudOff icon)
       const rows = screen.getAllByRole('row');
-      // Row 0 is header, Row 1 is published form
+      // Row 0 is header, Row 1 is published, Row 2 is draft, Row 3 is archived
       const publishedRow = rows[1];
-      const unpublishButton = publishedRow.querySelector('button[title="Unpublish from ODK Central"]');
-      expect(unpublishButton).toBeInTheDocument();
-
-      // Draft form should NOT have unpublish button
       const draftRow = rows[2];
-      const draftUnpublishButton = draftRow.querySelector('button[title="Unpublish from ODK Central"]');
-      expect(draftUnpublishButton).not.toBeInTheDocument();
-
-      // Archived form should NOT have unpublish button
       const archivedRow = rows[3];
-      const archivedUnpublishButton = archivedRow.querySelector('button[title="Unpublish from ODK Central"]');
-      expect(archivedUnpublishButton).not.toBeInTheDocument();
+
+      // Published form should NOT have delete button
+      expect(publishedRow.querySelector('button[title="Delete draft"]')).not.toBeInTheDocument();
+
+      // Draft form SHOULD have delete button
+      expect(draftRow.querySelector('button[title="Delete draft"]')).toBeInTheDocument();
+
+      // Archived form should NOT have delete button
+      expect(archivedRow.querySelector('button[title="Delete draft"]')).not.toBeInTheDocument();
     });
   });
 
-  it('unpublish button opens confirmation dialog', async () => {
+  it('shows empty state when no forms exist', async () => {
     mockUseQuestionnaires.mockReturnValue({
       data: {
-        data: [
-          { id: '1', formId: 'form-1', title: 'Test Form', version: '2.0', status: 'published', uploadedAt: '2026-01-31T10:00:00Z' },
-        ],
-        meta: { total: 1, page: 1, pageSize: 10, totalPages: 1 },
+        data: [],
+        meta: { total: 0, page: 1, pageSize: 10, totalPages: 0 },
       },
       isLoading: false,
     });
@@ -119,54 +103,7 @@ describe('QuestionnaireList - Unpublish Functionality', () => {
     renderWithProviders(<QuestionnaireList />);
 
     await waitFor(() => {
-      const unpublishButton = screen.getByTitle('Unpublish from ODK Central');
-      fireEvent.click(unpublishButton);
-    });
-
-    // Dialog should be visible
-    await waitFor(() => {
-      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-      expect(screen.getByText('Unpublish from ODK Central?')).toBeInTheDocument();
-      expect(screen.getByText(/This will unpublish "Test Form" v2.0/)).toBeInTheDocument();
-    });
-  });
-
-  it('confirmation dialog triggers mutation on confirm', async () => {
-    mockUseQuestionnaires.mockReturnValue({
-      data: {
-        data: [
-          { id: 'form-uuid-123', formId: 'form-1', title: 'Test Form', version: '1.0', status: 'published', uploadedAt: '2026-01-31T10:00:00Z' },
-        ],
-        meta: { total: 1, page: 1, pageSize: 10, totalPages: 1 },
-      },
-      isLoading: false,
-    });
-
-    renderWithProviders(<QuestionnaireList />);
-
-    // Click unpublish button to open dialog
-    await waitFor(() => {
-      const unpublishButton = screen.getByTitle('Unpublish from ODK Central');
-      fireEvent.click(unpublishButton);
-    });
-
-    // Click the confirm button in dialog
-    await waitFor(() => {
-      const confirmButton = screen.getByRole('button', { name: /unpublish/i });
-      // Filter to get the action button, not the trigger
-      if (confirmButton.closest('[role="alertdialog"]')) {
-        fireEvent.click(confirmButton);
-      }
-    });
-
-    // Mutation should be called with the form ID
-    await waitFor(() => {
-      expect(mockUnpublishMutation).toHaveBeenCalledWith(
-        'form-uuid-123',
-        expect.objectContaining({
-          onSettled: expect.any(Function),
-        })
-      );
+      expect(screen.getByText('No questionnaire forms found')).toBeInTheDocument();
     });
   });
 });

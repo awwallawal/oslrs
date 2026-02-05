@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Upload, Loader2, CloudOff } from 'lucide-react';
-import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire, usePublishToOdk, useUnpublishFromOdk } from '../hooks/useQuestionnaires';
+import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History } from 'lucide-react';
+import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
 import { SkeletonTable } from '../../../components/skeletons';
 import { QuestionnaireVersionHistory } from './QuestionnaireVersionHistory';
@@ -24,10 +24,8 @@ const STATUS_BADGES: Record<QuestionnaireFormStatus, { label: string; className:
   archived: { label: 'Archived', className: 'bg-neutral-200 text-neutral-500' },
 };
 
-type ConfirmDialogType = 'publish' | 'delete' | 'unpublish' | null;
-
 interface ConfirmDialogState {
-  type: ConfirmDialogType;
+  open: boolean;
   formId: string | null;
   formTitle: string;
   formVersion: string;
@@ -37,10 +35,8 @@ export function QuestionnaireList() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<QuestionnaireFormStatus | undefined>();
   const [versionHistoryFormId, setVersionHistoryFormId] = useState<string | null>(null);
-  const [publishingFormId, setPublishingFormId] = useState<string | null>(null);
-  const [unpublishingFormId, setUnpublishingFormId] = useState<string | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
-    type: null,
+  const [deleteDialog, setDeleteDialog] = useState<ConfirmDialogState>({
+    open: false,
     formId: null,
     formTitle: '',
     formVersion: '',
@@ -49,34 +45,16 @@ export function QuestionnaireList() {
   const { data, isLoading } = useQuestionnaires({ page, pageSize: 10, status: statusFilter });
   const updateStatus = useUpdateStatus();
   const deleteMutation = useDeleteQuestionnaire();
-  const publishMutation = usePublishToOdk();
-  const unpublishMutation = useUnpublishFromOdk();
 
-  const closeDialog = () => {
-    setConfirmDialog({ type: null, formId: null, formTitle: '', formVersion: '' });
+  const closeDeleteDialog = () => {
+    setDeleteDialog({ open: false, formId: null, formTitle: '', formVersion: '' });
   };
 
-  const handleConfirmAction = () => {
-    if (!confirmDialog.formId) return;
-
-    switch (confirmDialog.type) {
-      case 'publish':
-        setPublishingFormId(confirmDialog.formId);
-        publishMutation.mutate(confirmDialog.formId, {
-          onSettled: () => setPublishingFormId(null),
-        });
-        break;
-      case 'delete':
-        deleteMutation.mutate(confirmDialog.formId);
-        break;
-      case 'unpublish':
-        setUnpublishingFormId(confirmDialog.formId);
-        unpublishMutation.mutate(confirmDialog.formId, {
-          onSettled: () => setUnpublishingFormId(null),
-        });
-        break;
+  const handleConfirmDelete = () => {
+    if (deleteDialog.formId) {
+      deleteMutation.mutate(deleteDialog.formId);
     }
-    closeDialog();
+    closeDeleteDialog();
   };
 
   if (isLoading) {
@@ -166,63 +144,27 @@ export function QuestionnaireList() {
                         {form.status === 'draft' && (
                           <>
                             <button
-                              onClick={() => setConfirmDialog({
-                                type: 'publish',
-                                formId: form.id,
-                                formTitle: form.title,
-                                formVersion: form.version,
-                              })}
-                              disabled={publishingFormId === form.id}
-                              className="p-1.5 text-neutral-400 hover:text-green-600 rounded disabled:opacity-50"
-                              title="Publish to ODK Central"
-                            >
-                              {publishingFormId === form.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Upload className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
                               onClick={() => updateStatus.mutate({ id: form.id, status: 'archived' })}
-                              disabled={updateStatus.isPending || publishingFormId === form.id}
+                              disabled={updateStatus.isPending}
                               className="p-1.5 text-neutral-400 hover:text-amber-600 rounded"
                               title="Archive"
                             >
                               <Archive className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => setConfirmDialog({
-                                type: 'delete',
+                              onClick={() => setDeleteDialog({
+                                open: true,
                                 formId: form.id,
                                 formTitle: form.title,
                                 formVersion: form.version,
                               })}
-                              disabled={deleteMutation.isPending || publishingFormId === form.id}
+                              disabled={deleteMutation.isPending}
                               className="p-1.5 text-neutral-400 hover:text-red-600 rounded"
                               title="Delete draft"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </>
-                        )}
-                        {form.status === 'published' && (
-                          <button
-                            onClick={() => setConfirmDialog({
-                              type: 'unpublish',
-                              formId: form.id,
-                              formTitle: form.title,
-                              formVersion: form.version,
-                            })}
-                            disabled={unpublishingFormId === form.id}
-                            className="p-1.5 text-neutral-400 hover:text-orange-600 rounded disabled:opacity-50"
-                            title="Unpublish from ODK Central"
-                          >
-                            {unpublishingFormId === form.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <CloudOff className="w-4 h-4" />
-                            )}
-                          </button>
                         )}
                       </div>
                     </td>
@@ -267,56 +209,20 @@ export function QuestionnaireList() {
         />
       )}
 
-      {/* Confirmation Dialogs */}
-      <AlertDialog open={confirmDialog.type === 'publish'} onOpenChange={(open) => !open && closeDialog()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Publish to ODK Central?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will publish "{confirmDialog.formTitle}" v{confirmDialog.formVersion} to ODK Central
-              and make it available for field collection.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction} className="bg-green-600 hover:bg-green-700">
-              Publish
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmDialog.type === 'delete'} onOpenChange={(open) => !open && closeDialog()}>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && closeDeleteDialog()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete draft form?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{confirmDialog.formTitle}" v{confirmDialog.formVersion}.
+              This will permanently delete "{deleteDialog.formTitle}" v{deleteDialog.formVersion}.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
               Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmDialog.type === 'unpublish'} onOpenChange={(open) => !open && closeDialog()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unpublish from ODK Central?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will unpublish "{confirmDialog.formTitle}" v{confirmDialog.formVersion} from ODK Central
-              and remove it from field collection. Forms with existing submissions cannot be unpublished.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction} className="bg-orange-600 hover:bg-orange-700">
-              Unpublish
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

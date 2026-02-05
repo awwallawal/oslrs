@@ -26,11 +26,11 @@ import { users } from './users.js';
 
 /**
  * Form status lifecycle:
- * - draft: Initial upload, not deployed to ODK
- * - published: Pushed to ODK Central (Story 2.2), accepting submissions (ODK state: 'open')
- * - closing: Unpublished - no new submissions, data accessible (ODK state: 'closing')
+ * - draft: Initial upload, not active for data collection
+ * - published: Active and accepting submissions
+ * - closing: No new submissions, existing data accessible
  * - deprecated: Replaced by newer version, still visible
- * - archived: Hidden from active views (ODK state: 'closed')
+ * - archived: Hidden from active views
  */
 export const questionnaireFormStatus = ['draft', 'published', 'closing', 'deprecated', 'archived'] as const;
 export type QuestionnaireFormStatus = typeof questionnaireFormStatus[number];
@@ -59,10 +59,6 @@ export const questionnaireForms = pgTable('questionnaire_forms', {
 
   // Validation results stored as JSON
   validationWarnings: text('validation_warnings'), // JSON array of warning objects
-
-  // ODK Central deployment fields (Story 2.2)
-  odkXmlFormId: text('odk_xml_form_id'), // ODK Central's xmlFormId after deployment
-  odkPublishedAt: timestamp('odk_published_at', { withTimezone: true }), // Timestamp when published to ODK Central
 
   // Audit fields
   uploadedBy: uuid('uploaded_by').notNull().references(() => users.id),

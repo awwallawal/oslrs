@@ -65,7 +65,7 @@ export const generateOtpCode = (): string => {
 
 /**
  * Encrypts a token using AES-256-GCM.
- * Used for encrypting ODK App User tokens at rest (per ADR-006 defense-in-depth).
+ * Used for encrypting sensitive tokens at rest (per ADR-006 defense-in-depth).
  *
  * @param plaintext The token to encrypt
  * @param key 32-byte encryption key (256 bits)
@@ -103,7 +103,6 @@ export const encryptToken = (plaintext: string, key: Buffer): { ciphertext: stri
 
 /**
  * Decrypts a token encrypted with AES-256-GCM.
- * Used for decrypting ODK App User tokens for Enketo authentication.
  *
  * @param ciphertext Hex-encoded ciphertext (with auth tag appended)
  * @param iv Hex-encoded initialization vector (12 bytes = 24 hex chars)
@@ -138,8 +137,8 @@ export const decryptToken = (ciphertext: string, iv: string, key: Buffer): strin
 };
 
 /**
- * Validates and returns the ODK token encryption key as a Buffer.
- * Used for AES-256-GCM encryption of ODK App User tokens.
+ * Validates and returns an encryption key as a Buffer.
+ * Used for AES-256-GCM encryption of sensitive tokens.
  *
  * @param encryptionKeyHex Optional 64-character hex string (32 bytes)
  * @returns 32-byte Buffer for use with encryptToken/decryptToken
@@ -147,10 +146,10 @@ export const decryptToken = (ciphertext: string, iv: string, key: Buffer): strin
  */
 export const requireEncryptionKey = (encryptionKeyHex: string | undefined): Buffer => {
   if (!encryptionKeyHex) {
-    throw new Error('ODK_TOKEN_ENCRYPTION_KEY is required for App User provisioning');
+    throw new Error('Encryption key is required (64 hex characters / 32 bytes)');
   }
   if (encryptionKeyHex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(encryptionKeyHex)) {
-    throw new Error('ODK_TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)');
+    throw new Error('Encryption key must be exactly 64 hex characters (32 bytes)');
   }
   return Buffer.from(encryptionKeyHex, 'hex');
 };

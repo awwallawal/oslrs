@@ -77,7 +77,7 @@ jobs:
       fail-fast: false
       matrix:
         # Optimization 2: Parallel matrix - fast packages
-        package: [utils, testing, odk-integration]
+        package: [utils, testing]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -356,13 +356,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: test-results-testing
-          path: .
-        continue-on-error: true
-
-      - name: Download test results (odk-integration)
-        uses: actions/download-artifact@v4
-        with:
-          name: test-results-odk-integration
           path: .
         continue-on-error: true
 

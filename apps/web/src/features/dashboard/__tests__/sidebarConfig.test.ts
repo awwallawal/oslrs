@@ -62,9 +62,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(8);
     });
 
-    it('super_admin has 12+ sidebar items', () => {
+    it('super_admin has 11+ sidebar items', () => {
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBeGreaterThanOrEqual(12);
+      expect(items.length).toBeGreaterThanOrEqual(11);
     });
   });
 

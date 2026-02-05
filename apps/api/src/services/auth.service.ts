@@ -3,12 +3,10 @@ import { users, auditLogs } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
 import type { ActivationWithSelfiePayload, AuthUser, LoginResponse } from '@oslsr/types';
-import { UserRole, isFieldRole } from '@oslsr/types';
+import { UserRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
-import { queueOdkAppUserProvision } from '../queues/odk-app-user.queue.js';
-import { isOdkAvailable } from '@oslsr/odk-integration';
 import pino from 'pino';
 
 const logger = pino({ name: 'auth-service' });
@@ -205,39 +203,6 @@ export class AuthService {
         throw new AppError('CONFLICT', 'A conflict occurred with existing data.', 409);
       }
       throw err instanceof Error ? err : new Error(String(err));
-    }
-
-    // 4. AC1: Trigger ODK App User provisioning for field roles
-    const roleName = user.role?.name as UserRole;
-    if (isFieldRole(roleName) && isOdkAvailable()) {
-      try {
-        await queueOdkAppUserProvision({
-          userId: user.id,
-          fullName: user.fullName,
-          role: roleName,
-        });
-        logger.info({
-          event: 'odk.appuser.provisioning_queued',
-          userId: user.id,
-          role: roleName,
-        });
-      } catch (queueErr: unknown) {
-        // Log error but don't fail activation - provisioning can be retried
-        logger.error({
-          event: 'odk.appuser.queue_failed',
-          userId: user.id,
-          role: roleName,
-          error: queueErr instanceof Error ? queueErr.message : 'Unknown error',
-        });
-      }
-    } else if (!isFieldRole(roleName)) {
-      // AC10: Log skipped back-office role
-      logger.debug({
-        event: 'odk.appuser.skipped_activation',
-        userId: user.id,
-        role: roleName,
-        reason: 'back-office role does not require ODK App User',
-      });
     }
 
     return updatedUser;

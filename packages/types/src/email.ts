@@ -147,59 +147,6 @@ export const duplicateRegistrationEmailDataSchema = z.object({
 });
 
 // ============================================================================
-// ODK Sync Alert Email Types (Story 2-5)
-// ============================================================================
-
-/**
- * Data required to send an ODK sync alert email to Super Admin
- */
-export interface OdkSyncAlertEmailData {
-  email: string;
-  alertType: 'submission_gap' | 'unreachable';
-  gapDetails?: {
-    odkCount: number;
-    appDbCount: number;
-    gap: number;
-    threshold: number;
-    byForm: Array<{ formId: string; odkCount: number; appDbCount: number; gap: number }>;
-  };
-  unreachableDetails?: {
-    consecutiveFailures: number;
-    lastSuccessful: string | null;
-    lastError: string;
-  };
-  dashboardUrl: string;
-  checkedAt: string;
-}
-
-/**
- * Zod schema for ODK sync alert email data validation
- */
-export const odkSyncAlertEmailDataSchema = z.object({
-  email: z.string().email(),
-  alertType: z.enum(['submission_gap', 'unreachable']),
-  gapDetails: z.object({
-    odkCount: z.number().int().nonnegative(),
-    appDbCount: z.number().int().nonnegative(),
-    gap: z.number().int(),
-    threshold: z.number().int().positive(),
-    byForm: z.array(z.object({
-      formId: z.string(),
-      odkCount: z.number().int().nonnegative(),
-      appDbCount: z.number().int().nonnegative(),
-      gap: z.number().int(),
-    })),
-  }).optional(),
-  unreachableDetails: z.object({
-    consecutiveFailures: z.number().int().positive(),
-    lastSuccessful: z.string().nullable(),
-    lastError: z.string(),
-  }).optional(),
-  dashboardUrl: z.string().url(),
-  checkedAt: z.string().datetime(),
-});
-
-// ============================================================================
 // Email Job Types (for BullMQ queue)
 // ============================================================================
 
@@ -239,17 +186,9 @@ export interface PasswordResetJob extends BaseEmailJob {
 }
 
 /**
- * ODK sync alert email job payload
- */
-export interface OdkSyncAlertJob extends BaseEmailJob {
-  type: 'odk-sync-alert';
-  data: OdkSyncAlertEmailData;
-}
-
-/**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | OdkSyncAlertJob;
+export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob;
 
 // ============================================================================
 // Email Configuration Types

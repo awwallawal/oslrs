@@ -59,9 +59,6 @@ const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
 // Lazy load Questionnaire Management page (Story 2-1)
 const QuestionnaireManagementPage = lazy(() => import('./features/questionnaires/pages/QuestionnaireManagementPage'));
 
-// Lazy load ODK Health page (Story 2.5-2)
-const OdkHealthPage = lazy(() => import('./features/questionnaires/pages/OdkHealthPage'));
-
 // Lazy load Staff Management page (Story 2.5-3)
 const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManagementPage'));
 
@@ -526,14 +523,6 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <QuestionnaireManagementPage />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path="odk-health"
-                  element={
-                    <Suspense fallback={<DashboardLoadingFallback />}>
-                      <OdkHealthPage />
                     </Suspense>
                   }
                 />

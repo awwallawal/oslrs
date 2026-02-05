@@ -142,12 +142,11 @@ export const OSLSR_REQUIRED_CHOICE_LISTS = {
 /**
  * Form lifecycle statuses
  *
- * Status mapping to ODK Central:
- * - draft: Form uploaded but not deployed to ODK
- * - published: Form deployed and accepting submissions (ODK state: 'open')
- * - closing: Form no longer accepting submissions but data accessible (ODK state: 'closing')
+ * - draft: Form created but not active for data collection
+ * - published: Active and accepting submissions
+ * - closing: No new submissions, existing data accessible
  * - deprecated: Replaced by newer version
- * - archived: Hidden from active views (ODK state: 'closed')
+ * - archived: Hidden from active views
  */
 export const QUESTIONNAIRE_FORM_STATUSES = ['draft', 'published', 'closing', 'deprecated', 'archived'] as const;
 export type QuestionnaireFormStatus = typeof QUESTIONNAIRE_FORM_STATUSES[number];
@@ -182,9 +181,6 @@ export interface QuestionnaireFormResponse {
   fileName: string;
   fileSize: number;
   validationWarnings?: XlsformValidationIssue[];
-  // ODK Central deployment fields (Story 2.2)
-  odkXmlFormId?: string | null; // ODK Central's xmlFormId after deployment
-  odkPublishedAt?: string | null; // ISO 8601 timestamp when published to ODK Central
 }
 
 /**
