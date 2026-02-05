@@ -54,6 +54,9 @@ export class StaffController {
    */
   static async updateRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
       const actorId = req.user.sub;
 
       const { userId } = req.params;
@@ -82,6 +85,9 @@ export class StaffController {
    */
   static async deactivate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
       const actorId = req.user.sub;
 
       const { userId } = req.params;

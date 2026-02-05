@@ -19,7 +19,7 @@ describe('Email Queue', () => {
           fullName: 'Test User',
           roleName: 'Enumerator',
           lgaName: 'Ibadan North',
-          activationUrl: 'http://localhost:5173/staff/activate/token123',
+          activationUrl: 'http://localhost:5173/activate/token123',
           expiresInHours: 24,
         } satisfies StaffInvitationEmailData,
         userId: 'user-123',

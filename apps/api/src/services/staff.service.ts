@@ -77,7 +77,7 @@ export class StaffService {
     const conditions: SQL[] = [];
 
     if (params.status) {
-      conditions.push(eq(users.status, params.status));
+      conditions.push(eq(users.status, params.status as typeof users.status.enumValues[number]));
     }
 
     if (params.roleId) {

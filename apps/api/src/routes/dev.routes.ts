@@ -31,7 +31,7 @@ router.get('/email-preview/staff-invitation', (_req: Request, res: Response) => 
     fullName: 'Adewale Johnson',
     roleName: 'Enumerator',
     lgaName: 'Ibadan North',
-    activationUrl: 'http://localhost:5173/staff/activate/sample-token-12345',
+    activationUrl: 'http://localhost:5173/activate/sample-token-12345',
     expiresInHours: 24,
     email: 'adewale.johnson@example.com',
   };
@@ -51,7 +51,7 @@ router.get('/email-preview/staff-invitation/text', (_req: Request, res: Response
     fullName: 'Adewale Johnson',
     roleName: 'Enumerator',
     lgaName: 'Ibadan North',
-    activationUrl: 'http://localhost:5173/staff/activate/sample-token-12345',
+    activationUrl: 'http://localhost:5173/activate/sample-token-12345',
     expiresInHours: 24,
     email: 'adewale.johnson@example.com',
   };
@@ -70,7 +70,7 @@ router.get('/email-preview/staff-invitation/no-lga', (_req: Request, res: Respon
   const sampleData = {
     fullName: 'Fatima Okonkwo',
     roleName: 'Verification Assessor',
-    activationUrl: 'http://localhost:5173/staff/activate/sample-token-67890',
+    activationUrl: 'http://localhost:5173/activate/sample-token-67890',
     expiresInHours: 24,
     email: 'fatima.okonkwo@example.com',
   };

@@ -95,9 +95,31 @@ export async function getOdkHealth(): Promise<{ data: OdkHealthData }> {
 }
 
 /**
- * Trigger a manual health check
+ * Extended health data with latency info (returned by check-now)
  */
-export async function triggerHealthCheck(): Promise<{ data: OdkHealthData }> {
+export interface OdkHealthCheckResult extends OdkHealthData {
+  /** Response latency in milliseconds */
+  latencyMs: number;
+  /** Whether ODK Central is reachable */
+  reachable: boolean;
+}
+
+/**
+ * Trigger an immediate, synchronous health check
+ * Returns real-time connectivity status directly (not queued)
+ */
+export async function triggerHealthCheck(): Promise<{ data: OdkHealthCheckResult }> {
+  return apiClient('/admin/odk/health/check-now', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+}
+
+/**
+ * Trigger an asynchronous health check (queued job)
+ * Returns job ID for tracking
+ */
+export async function triggerHealthCheckAsync(): Promise<{ data: { jobId: string; message: string } }> {
   return apiClient('/admin/odk/health/check', {
     method: 'POST',
     headers: getAuthHeaders(),

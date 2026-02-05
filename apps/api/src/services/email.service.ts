@@ -517,10 +517,10 @@ Government of Oyo State
 
   /**
    * Generates a staff activation URL
-   * Format: {APP_URL}/staff/activate/{token}
+   * Format: {APP_URL}/activate/{token}
    */
   static generateStaffActivationUrl(token: string): string {
-    return `${this.APP_URL}/staff/activate/${token}`;
+    return `${this.APP_URL}/activate/${token}`;
   }
 
   // ==========================================================================

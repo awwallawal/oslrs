@@ -42,6 +42,24 @@ const VALID_QUESTION_TYPES = [
   'acknowledge', 'range', 'barcode',
 ];
 
+// Field types that require labels (user-facing input fields)
+// These are shown to users in ODK Collect and MUST have labels
+const TYPES_REQUIRING_LABELS = [
+  'text', 'integer', 'decimal', 'date', 'time', 'datetime',
+  'select_one', 'select_multiple', 'rank',
+  'image', 'audio', 'video', 'file',
+  'geopoint', 'geotrace', 'geoshape',
+  'acknowledge', 'range', 'barcode',
+];
+
+// Types that do NOT require labels (metadata, structure, calculated fields)
+const TYPES_NOT_REQUIRING_LABELS = [
+  'start', 'end', 'deviceid', 'phonenumber', 'username', 'email',
+  'audit', 'calculate', 'hidden', 'xml-external',
+  'begin_group', 'end_group', 'begin_repeat', 'end_repeat',
+  'note', // Notes have their own display text
+];
+
 /**
  * XLSForm Parser Service
  * Parses and validates XLSForm files (.xlsx and .xml)
@@ -282,6 +300,26 @@ export class XlsformParserService {
               severity: 'error',
             });
           }
+        }
+      }
+
+      // Validate user-facing fields have labels (BF-2.5-2-1: Missing label validation)
+      // ODK Central rejects forms with user-facing fields missing labels
+      if (row.type) {
+        const baseType = row.type.split(' ')[0].toLowerCase();
+        const requiresLabel = TYPES_REQUIRING_LABELS.includes(baseType);
+        const hasLabel = row.label && String(row.label).trim().length > 0;
+
+        if (requiresLabel && !hasLabel) {
+          issues.push({
+            worksheet: 'survey',
+            row: rowNum,
+            column: 'label',
+            field: row.name,
+            message: `Field '${row.name}' (type: ${row.type}) requires a label. ODK Central will reject forms with missing labels on user-facing fields.`,
+            severity: 'error',
+            suggestion: `Add a descriptive label for this field in the 'label' column`,
+          });
         }
       }
     });

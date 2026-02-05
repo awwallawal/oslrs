@@ -359,6 +359,88 @@ describe('XlsformParserService', () => {
       );
       expect(emptyErrors.length).toBe(1);
     });
+
+    it('should detect missing labels on user-facing fields (BF-2.5-2-1)', () => {
+      // This test verifies the fix for the ODK Central rejection issue
+      // where geopoint and other user-facing fields without labels cause publish failure
+      const survey = [
+        { type: 'geopoint', name: 'gps_location', label: '' }, // Missing label - should error
+        { type: 'text', name: 'name', label: 'Full Name' }, // Has label - OK
+        { type: 'integer', name: 'age', label: '' }, // Missing label - should error
+        { type: 'calculate', name: 'calc', label: '' }, // Calculate doesn't need label - OK
+        { type: 'start', name: 'start_time', label: '' }, // Metadata doesn't need label - OK
+      ];
+      const choices = [{ list_name: 'test', name: 'a', label: 'A' }];
+      const settings = [{ form_id: 'test', version: '1', form_title: 'Test' }];
+      const buffer = createXlsxBuffer(survey, choices, settings);
+      const formData = XlsformParserService.parseXlsxFile(buffer);
+
+      const issues = XlsformParserService.validateStructure(formData);
+
+      // Should have errors for gps_location and age (missing labels)
+      const labelErrors = issues.filter(
+        i => i.column === 'label' && i.severity === 'error'
+      );
+      expect(labelErrors.length).toBe(2);
+
+      const fieldNames = labelErrors.map(e => e.field);
+      expect(fieldNames).toContain('gps_location');
+      expect(fieldNames).toContain('age');
+
+      // Error messages should be helpful
+      expect(labelErrors[0].message).toContain('requires a label');
+      expect(labelErrors[0].message).toContain('ODK Central will reject');
+    });
+
+    it('should not require labels for metadata and structure types', () => {
+      const survey = [
+        { type: 'start', name: 'start_time', label: '' },
+        { type: 'end', name: 'end_time', label: '' },
+        { type: 'deviceid', name: 'device_id', label: '' },
+        { type: 'calculate', name: 'calc_field', label: '' },
+        { type: 'begin_group', name: 'grp1', label: 'Group 1' },
+        { type: 'text', name: 'q1', label: 'Question' },
+        { type: 'end_group', name: 'grp1', label: '' },
+      ];
+      const choices = [{ list_name: 'test', name: 'a', label: 'A' }];
+      const settings = [{ form_id: 'test', version: '1', form_title: 'Test' }];
+      const buffer = createXlsxBuffer(survey, choices, settings);
+      const formData = XlsformParserService.parseXlsxFile(buffer);
+
+      const issues = XlsformParserService.validateStructure(formData);
+
+      // Should NOT have label errors for metadata types
+      const labelErrors = issues.filter(
+        i => i.column === 'label' && i.severity === 'error'
+      );
+      expect(labelErrors.length).toBe(0);
+    });
+
+    it('should detect missing labels on all user-facing input types', () => {
+      // Test all types that require labels
+      const survey = [
+        { type: 'text', name: 'f1', label: '' },
+        { type: 'integer', name: 'f2', label: '' },
+        { type: 'decimal', name: 'f3', label: '' },
+        { type: 'date', name: 'f4', label: '' },
+        { type: 'geopoint', name: 'f5', label: '' },
+        { type: 'image', name: 'f6', label: '' },
+        { type: 'select_one list', name: 'f7', label: '' },
+        { type: 'select_multiple list', name: 'f8', label: '' },
+      ];
+      const choices = [{ list_name: 'list', name: 'a', label: 'A' }];
+      const settings = [{ form_id: 'test', version: '1', form_title: 'Test' }];
+      const buffer = createXlsxBuffer(survey, choices, settings);
+      const formData = XlsformParserService.parseXlsxFile(buffer);
+
+      const issues = XlsformParserService.validateStructure(formData);
+
+      const labelErrors = issues.filter(
+        i => i.column === 'label' && i.severity === 'error'
+      );
+      // All 8 fields should have missing label errors
+      expect(labelErrors.length).toBe(8);
+    });
   });
 
   describe('validateSchema (OSLSR compliance)', () => {

@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@oslsr/utils';
-import { isOdkFullyConfigured, getOdkConfig } from '@oslsr/odk-integration';
+import { isOdkFullyConfigured, getOdkConfig, createOdkHealthService } from '@oslsr/odk-integration';
 import { authenticate } from '../../middleware/auth.js';
 import { authorize } from '../../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
 import { OdkHealthAdminService } from '../../services/odk-health-admin.service.js';
 import { OdkBackfillAdminService } from '../../services/odk-backfill-admin.service.js';
+import pino from 'pino';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.get('/health', async (req: Request, res: Response, next: NextFunction) =>
 /**
  * POST /api/v1/admin/odk/health/check
  *
- * Triggers a manual health check.
+ * Triggers a manual health check (async, queued job).
  * Returns job ID for tracking.
  */
 router.post('/health/check', async (req: Request, res: Response, next: NextFunction) => {
@@ -60,6 +61,72 @@ router.post('/health/check', async (req: Request, res: Response, next: NextFunct
       data: {
         jobId,
         message: 'Health check job queued',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/admin/odk/health/check-now
+ *
+ * Performs an immediate, synchronous health check against ODK Central.
+ * Returns real-time connectivity status directly (not queued).
+ * Per Story 2.5-2: Used by "Check Now" button for immediate feedback.
+ */
+router.post('/health/check-now', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = getOdkConfig();
+    if (!config) {
+      throw new AppError('ODK_CONFIG_ERROR', 'ODK integration is not fully configured', 503);
+    }
+
+    const logger = pino({ name: 'odk-health-check-now' });
+
+    // Create a minimal persistence object (we don't need persistence for connectivity check)
+    const healthService = createOdkHealthService({
+      persistence: {
+        createSyncFailure: async () => { throw new Error('Not implemented'); },
+        getSyncFailures: async () => [],
+        getSyncFailureById: async () => null,
+        updateSyncFailure: async () => {},
+        deleteSyncFailure: async () => {},
+      },
+      logger: {
+        info: (obj) => logger.info(obj),
+        warn: (obj) => logger.warn(obj),
+        error: (obj) => logger.error(obj),
+        debug: (obj) => logger.debug(obj),
+      },
+    });
+
+    // Perform synchronous connectivity check
+    const connectivity = await healthService.checkOdkConnectivity();
+
+    // Update Redis cache with new status
+    await OdkHealthAdminService.cacheConnectivityStatus(connectivity);
+
+    // Determine overall status
+    const status = connectivity.reachable
+      ? 'healthy'
+      : connectivity.consecutiveFailures >= 3
+        ? 'error'
+        : 'warning';
+
+    // Get unresolved failure count
+    const unresolvedFailures = await OdkHealthAdminService.getUnresolvedFailureCount();
+
+    res.json({
+      status: 'success',
+      data: {
+        status,
+        lastCheckAt: connectivity.lastChecked,
+        consecutiveFailures: connectivity.consecutiveFailures,
+        projectId: config.ODK_PROJECT_ID,
+        unresolvedFailures,
+        latencyMs: connectivity.latencyMs,
+        reachable: connectivity.reachable,
       },
     });
   } catch (err) {

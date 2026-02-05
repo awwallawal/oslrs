@@ -7,7 +7,7 @@ describe('Email Templates', () => {
       fullName: 'Adewale Johnson',
       roleName: 'Enumerator',
       lgaName: 'Ibadan North',
-      activationUrl: 'http://localhost:5173/staff/activate/test-token-123',
+      activationUrl: 'http://localhost:5173/activate/test-token-123',
       expiresInHours: 24,
       email: 'adewale@example.com',
     };
@@ -136,7 +136,7 @@ describe('Email Templates', () => {
       const token = 'abc123def456';
       const url = EmailService.generateStaffActivationUrl(token);
 
-      expect(url).toContain('/staff/activate/');
+      expect(url).toContain('/activate/');
       expect(url).toContain(token);
     });
 
