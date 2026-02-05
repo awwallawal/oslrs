@@ -19,7 +19,7 @@ const mockUseImportStaffCsv = vi.fn(() => ({
   mutate: mockMutate,
   isPending: false,
 }));
-const mockUseImportStatus = vi.fn(() => ({
+const mockUseImportStatus = vi.fn((): { data: unknown } => ({
   data: null,
 }));
 

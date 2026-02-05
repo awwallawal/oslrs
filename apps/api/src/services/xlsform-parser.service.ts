@@ -52,13 +52,15 @@ const TYPES_REQUIRING_LABELS = [
   'acknowledge', 'range', 'barcode',
 ];
 
-// Types that do NOT require labels (metadata, structure, calculated fields)
-const TYPES_NOT_REQUIRING_LABELS = [
-  'start', 'end', 'deviceid', 'phonenumber', 'username', 'email',
-  'audit', 'calculate', 'hidden', 'xml-external',
-  'begin_group', 'end_group', 'begin_repeat', 'end_repeat',
-  'note', // Notes have their own display text
-];
+/**
+ * Types that do NOT require labels (metadata, structure, calculated fields).
+ * Documented here for reference - these types are implicitly excluded from label validation
+ * because they are not in TYPES_REQUIRING_LABELS above.
+ *
+ * Includes: start, end, deviceid, phonenumber, username, email,
+ * audit, calculate, hidden, xml-external, begin_group, end_group,
+ * begin_repeat, end_repeat, note (notes have their own display text)
+ */
 
 /**
  * XLSForm Parser Service

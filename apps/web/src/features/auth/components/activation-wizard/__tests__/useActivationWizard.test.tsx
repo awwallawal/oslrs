@@ -9,7 +9,7 @@ import {
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+(globalThis as unknown as { fetch: typeof fetch }).fetch = mockFetch;
 
 describe('useActivationWizard', () => {
   const defaultOptions = {

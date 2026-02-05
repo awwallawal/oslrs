@@ -17,7 +17,7 @@ import StaffManagementPage from '../StaffManagementPage';
 const mockRefetch = vi.fn();
 const mockMutate = vi.fn();
 
-const mockUseStaffList = vi.fn(() => ({
+const mockUseStaffList = vi.fn((): { data: unknown; isLoading: boolean; refetch: typeof mockRefetch } => ({
   data: {
     data: [
       {

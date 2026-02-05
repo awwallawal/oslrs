@@ -280,7 +280,7 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
    */
   const submitAll = useCallback(async (): Promise<boolean> => {
     // Validate all steps first
-    for (let step = WIZARD_STEPS.PASSWORD; step <= WIZARD_STEPS.SELFIE; step++) {
+    for (let step: number = WIZARD_STEPS.PASSWORD; step <= WIZARD_STEPS.SELFIE; step++) {
       const validation = validateStep(step as WizardStep);
       if (!validation.isValid && step !== WIZARD_STEPS.SELFIE) {
         // Selfie is optional, other steps are required
@@ -289,7 +289,8 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
       }
     }
 
-    // Validate the full schema
+    // Validate the full schema (confirmPassword excluded from API submission)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...submissionData } = formData;
     const fullValidation = activationWithSelfieSchema.safeParse(submissionData);
 

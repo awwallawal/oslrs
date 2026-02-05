@@ -90,7 +90,7 @@ export function SelfieStep({
       const base64 = await resizeImageToBase64(file);
       updateFormData({ selfieBase64: base64 });
       setCaptureMode('captured');
-    } catch (err) {
+    } catch {
       setCameraError('Failed to process image. Please try again.');
     } finally {
       setProcessingImage(false);

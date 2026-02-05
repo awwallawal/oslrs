@@ -11,7 +11,7 @@ import {
 } from '../components/activation-wizard/steps';
 import { WIZARD_STEPS } from '../components/activation-wizard/useActivationWizard';
 import type { StepRenderProps } from '../components/activation-wizard/ActivationWizard';
-import { validateActivationToken, type ValidateTokenResponse } from '../api/auth.api';
+import { validateActivationToken } from '../api/auth.api';
 
 type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'error' | 'activated';
 
@@ -59,10 +59,11 @@ export default function ActivationPage() {
     }
 
     let cancelled = false;
+    const tokenValue = token; // Capture for closure
 
     async function validate() {
       try {
-        const result = await validateActivationToken(token);
+        const result = await validateActivationToken(tokenValue!);
         if (cancelled) return;
 
         if (result.valid) {
@@ -100,10 +101,10 @@ export default function ActivationPage() {
     }, 5000);
   };
 
-  const handleError = (error: Error) => {
+  const handleError = (_error: Error) => {
     // Errors are handled by the wizard internally
-    // This callback is for logging or analytics if needed
-    console.error('Activation error:', error.message);
+    // This callback is for logging or analytics if needed in production
+    // Error details available via _error.message
   };
 
   // Loading state

@@ -1,4 +1,4 @@
-import { UserRole, JwtPayload } from '@oslsr/types';
+import { JwtPayload } from '@oslsr/types';
 import { Request } from 'express';
 
 declare global {

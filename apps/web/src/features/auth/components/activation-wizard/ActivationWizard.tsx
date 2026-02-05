@@ -5,7 +5,6 @@ import { WizardProgressBar } from './WizardProgressBar';
 import { WizardNavigation } from './WizardNavigation';
 import {
   useActivationWizard,
-  WIZARD_STEPS,
   type WizardStep,
   type UseActivationWizardOptions,
 } from './useActivationWizard';

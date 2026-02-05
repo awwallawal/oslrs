@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { roles } from '../db/schema/index.js';
 
 export class RolesController {
   /**
