@@ -73,6 +73,10 @@ vi.mock('../../hooks/useStaff', () => ({
     mutate: mockMutate,
     isPending: false,
   }),
+  useReactivateStaff: () => ({
+    mutate: mockMutate,
+    isPending: false,
+  }),
   useResendInvitation: () => ({
     mutate: mockMutate,
   }),

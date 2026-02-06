@@ -154,14 +154,14 @@ describe('PersonalInfoStep', () => {
     expect(screen.getByText('5/11 digits')).toBeInTheDocument();
   });
 
-  it('shows success color when NIN is 11 digits', () => {
+  it('shows success color when NIN is 11 digits with valid checksum', () => {
     render(
       <PersonalInfoStep
         {...createMockProps({
           formData: {
             password: '',
             confirmPassword: '',
-            nin: '12345678901',
+            nin: '12345678919',
             dateOfBirth: '',
             homeAddress: '',
             bankName: '',

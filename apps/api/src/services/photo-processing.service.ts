@@ -97,9 +97,11 @@ export class PhotoProcessingService {
       throw new AppError('VALIDATION_ERROR', 'Unable to determine image dimensions', 400);
     }
 
-    // Check resolution (Minimum 640x480)
-    if (metadata.width < 640 || metadata.height < 480) {
-      throw new AppError('VALIDATION_ERROR', 'Image resolution too low. Minimum 640x480 required.', 400);
+    // Check resolution — ID card output is 400x533, so minimum input is 320x240
+    const minDim = Math.min(metadata.width, metadata.height);
+    const maxDim = Math.max(metadata.width, metadata.height);
+    if (minDim < 240 || maxDim < 320) {
+      throw new AppError('VALIDATION_ERROR', 'Image resolution too low. Please use a higher resolution camera.', 400);
     }
 
     // Simple sharpness check (Standard Deviation of brightness channel)

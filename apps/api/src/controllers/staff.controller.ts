@@ -101,6 +101,30 @@ export class StaffController {
   }
 
   /**
+   * POST /api/v1/staff/:userId/reactivate
+   *
+   * Reactivate a deactivated or suspended user account.
+   */
+  static async reactivate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
+      const actorId = req.user.sub;
+
+      const { userId } = req.params;
+
+      const result = await StaffService.reactivateUser(userId, actorId);
+
+      res.json({
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * GET /api/v1/staff/:userId/id-card
    *
    * Download ID card for a staff member (Super Admin only).

@@ -11,6 +11,7 @@ import {
   listLgas,
   updateStaffRole,
   deactivateStaff,
+  reactivateStaff,
   resendInvitation,
   downloadStaffIdCard,
   importStaffCsv,
@@ -121,6 +122,30 @@ export function useDeactivateStaff() {
         showError({ message: 'User is already deactivated' });
       } else {
         showError({ message: err.message || 'Failed to deactivate user' });
+      }
+    },
+  });
+}
+
+/**
+ * Reactivate a deactivated or suspended user
+ * Invalidates staff cache and shows toast on success/error
+ */
+export function useReactivateStaff() {
+  const queryClient = useQueryClient();
+  const { success, error: showError } = useToast();
+
+  return useMutation({
+    mutationFn: reactivateStaff,
+    onSuccess: () => {
+      success({ message: 'User reactivated successfully' });
+      queryClient.invalidateQueries({ queryKey: staffKeys.all });
+    },
+    onError: (err: Error & { code?: string }) => {
+      if (err.code === 'INVALID_STATUS') {
+        showError({ message: 'Only deactivated or suspended users can be reactivated' });
+      } else {
+        showError({ message: err.message || 'Failed to reactivate user' });
       }
     },
   });

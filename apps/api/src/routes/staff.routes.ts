@@ -38,6 +38,9 @@ router.patch('/:userId/role', StaffController.updateRole as RequestHandler);
 // Story 2.5-3, AC4, AC6: Deactivate user with session invalidation
 router.post('/:userId/deactivate', StaffController.deactivate as RequestHandler);
 
+// Reactivate a deactivated or suspended user
+router.post('/:userId/reactivate', StaffController.reactivate as RequestHandler);
+
 // Story 2.5-3, AC7: Download ID card for staff member
 router.get('/:userId/id-card', StaffController.downloadIdCard);
 

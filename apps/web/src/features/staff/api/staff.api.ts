@@ -57,6 +57,16 @@ export async function deactivateStaff(userId: string): Promise<StaffResponse> {
 }
 
 /**
+ * Reactivate a deactivated or suspended user
+ * POST /api/v1/staff/:userId/reactivate
+ */
+export async function reactivateStaff(userId: string): Promise<StaffResponse> {
+  return apiClient(`/staff/${userId}/reactivate`, {
+    method: 'POST',
+  });
+}
+
+/**
  * Resend invitation email to a pending user
  * POST /api/v1/staff/:userId/resend-invitation
  */

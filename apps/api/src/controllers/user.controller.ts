@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
@@ -5,6 +8,10 @@ import { eq } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { PhotoProcessingService } from '../services/photo-processing.service.js';
 import { IDCardService } from '../services/id-card.service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const logoBuffer = readFileSync(join(__dirname, '../../assets/oyo-coat-of-arms.png'));
 
 const photoService = new PhotoProcessingService();
 const idCardService = new IDCardService();
@@ -85,7 +92,10 @@ export class UserController {
             fullName: user.fullName,
             role: user.role.name,
             lga: user.lga?.name || 'Oyo State',
+            phone: user.phone || '',
+            staffId: user.id,
             photoBuffer,
+            logoBuffer,
             verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oslrs.oyostate.gov.ng'}/verify-staff/${user.id}`
         });
 

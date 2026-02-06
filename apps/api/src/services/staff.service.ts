@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { parse } from 'csv-parse/sync';
 import { Redis } from 'ioredis';
 import pino from 'pino';
@@ -12,6 +15,10 @@ import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
 import { IDCardService } from './id-card.service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const logoBuffer = readFileSync(join(__dirname, '../../assets/oyo-coat-of-arms.png'));
 
 const photoService = new PhotoProcessingService();
 const idCardService = new IDCardService();
@@ -303,6 +310,63 @@ export class StaffService {
   }
 
   /**
+   * Reactivate a deactivated or suspended user account
+   *
+   * @param userId The user ID to reactivate
+   * @param actorId The admin performing the action
+   * @returns The reactivated user
+   */
+  static async reactivateUser(
+    userId: string,
+    actorId: string
+  ): Promise<typeof users.$inferSelect> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    if (user.status !== 'deactivated' && user.status !== 'suspended') {
+      throw new AppError('INVALID_STATUS', 'Only deactivated or suspended users can be reactivated', 400);
+    }
+
+    const previousStatus = user.status;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(users.id, userId));
+
+      await tx.insert(auditLogs).values({
+        actorId,
+        action: 'user.reactivate',
+        targetResource: 'users',
+        targetId: userId,
+        details: {
+          previousStatus,
+          newStatus: 'active',
+        },
+      });
+    });
+
+    logger.info({
+      event: 'staff.reactivated',
+      userId,
+      previousStatus,
+      actorId,
+    });
+
+    const reactivatedUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    return reactivatedUser!;
+  }
+
+  /**
    * Download ID card for a staff member (Super Admin only)
    * Story 2.5-3, AC7
    *
@@ -344,7 +408,10 @@ export class StaffService {
       fullName: user.fullName,
       role: user.role?.name || 'Staff',
       lga: user.lga?.name || 'Oyo State',
+      phone: user.phone || '',
+      staffId: user.id,
       photoBuffer,
+      logoBuffer,
       verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oslrs.oyostate.gov.ng'}/verify-staff/${user.id}`,
     });
 

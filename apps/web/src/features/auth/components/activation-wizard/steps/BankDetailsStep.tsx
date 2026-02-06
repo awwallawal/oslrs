@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import type { StepRenderProps } from '../ActivationWizard';
 
@@ -180,6 +181,14 @@ export function BankDetailsStep({
               )}
               aria-label="Search banks"
             />
+            {/* Selected bank indicator */}
+            {formData.bankName && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-success-50 border-x border-success-300 text-success-700 text-sm">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span className="font-medium">Selected:</span>
+                <span>{formData.bankName}</span>
+              </div>
+            )}
             {/* Bank dropdown with categories */}
             <select
               id="bankName"

@@ -6,12 +6,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, UserPlus, Upload, ChevronDown, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
-import { StaffTable, RoleChangeDialog, DeactivateDialog, BulkImportModal, AddStaffModal } from '../components';
+import { StaffTable, RoleChangeDialog, DeactivateDialog, ReactivateDialog, BulkImportModal, AddStaffModal } from '../components';
 import {
   useStaffList,
   useRoles,
   useUpdateRole,
   useDeactivateStaff,
+  useReactivateStaff,
   useResendInvitation,
   useDownloadIdCard,
 } from '../hooks/useStaff';
@@ -50,11 +51,13 @@ export default function StaffManagementPage() {
   // Dialog state
   const [roleChangeStaff, setRoleChangeStaff] = useState<StaffMember | null>(null);
   const [deactivateStaff, setDeactivateStaff] = useState<StaffMember | null>(null);
+  const [reactivateStaff, setReactivateStaff] = useState<StaffMember | null>(null);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
 
   // Track loading states for individual actions
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [reactivatingUserId, setReactivatingUserId] = useState<string | null>(null);
   const [downloadingUserId, setDownloadingUserId] = useState<string | null>(null);
 
   // Debounced search
@@ -79,6 +82,7 @@ export default function StaffManagementPage() {
   // Mutations
   const updateRoleMutation = useUpdateRole();
   const deactivateMutation = useDeactivateStaff();
+  const reactivateMutation = useReactivateStaff();
   const resendInvitationMutation = useResendInvitation();
   const downloadIdCardMutation = useDownloadIdCard();
 
@@ -129,6 +133,14 @@ export default function StaffManagementPage() {
   const handleDeactivateConfirm = (userId: string) => {
     deactivateMutation.mutate(userId, {
       onSuccess: () => setDeactivateStaff(null),
+    });
+  };
+
+  const handleReactivateConfirm = (userId: string) => {
+    setReactivatingUserId(userId);
+    reactivateMutation.mutate(userId, {
+      onSuccess: () => setReactivateStaff(null),
+      onSettled: () => setReactivatingUserId(null),
     });
   };
 
@@ -236,8 +248,10 @@ export default function StaffManagementPage() {
             onResendInvitation={handleResendInvitation}
             onChangeRole={setRoleChangeStaff}
             onDeactivate={setDeactivateStaff}
+            onReactivate={setReactivateStaff}
             onDownloadIdCard={handleDownloadIdCard}
             resendingUserId={resendingUserId}
+            reactivatingUserId={reactivatingUserId}
             downloadingUserId={downloadingUserId}
           />
         </CardContent>
@@ -259,6 +273,15 @@ export default function StaffManagementPage() {
         onClose={() => setDeactivateStaff(null)}
         onConfirm={handleDeactivateConfirm}
         isLoading={deactivateMutation.isPending}
+      />
+
+      {/* Reactivate Dialog */}
+      <ReactivateDialog
+        staff={reactivateStaff}
+        isOpen={reactivateStaff !== null}
+        onClose={() => setReactivateStaff(null)}
+        onConfirm={handleReactivateConfirm}
+        isLoading={reactivateMutation.isPending}
       />
 
       {/* Bulk Import Modal */}

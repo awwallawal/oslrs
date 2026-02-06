@@ -72,6 +72,7 @@ const defaultProps = {
   onResendInvitation: vi.fn(),
   onChangeRole: vi.fn(),
   onDeactivate: vi.fn(),
+  onReactivate: vi.fn(),
   onDownloadIdCard: vi.fn(),
 };
 
@@ -196,18 +197,10 @@ describe('StaffTable', () => {
     it('shows actions menu button for each row with actions', () => {
       render(<StaffTable {...defaultProps} />);
 
-      // Active and invited users should have action menus
+      // Active, invited, and deactivated users all have action menus
+      // (deactivated users have a reactivate action)
       const menuButtons = screen.getAllByLabelText('Open actions menu');
-      expect(menuButtons.length).toBe(2); // John (active) and Jane (invited)
-    });
-
-    it('shows placeholder for deactivated users', () => {
-      render(<StaffTable {...defaultProps} />);
-
-      // Deactivated user (Bob) should show dash instead of menu
-      const rows = screen.getAllByRole('row');
-      const bobRow = rows[3]; // 0 is header, 3 is Bob
-      expect(bobRow).toHaveTextContent('-');
+      expect(menuButtons.length).toBe(3); // John (active), Jane (invited), Bob (deactivated - reactivate)
     });
   });
 });

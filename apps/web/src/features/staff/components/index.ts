@@ -8,5 +8,6 @@ export { StaffStatusBadge } from './StaffStatusBadge';
 export { StaffActionsMenu } from './StaffActionsMenu';
 export { RoleChangeDialog } from './RoleChangeDialog';
 export { DeactivateDialog } from './DeactivateDialog';
+export { ReactivateDialog } from './ReactivateDialog';
 export { BulkImportModal } from './BulkImportModal';
 export { AddStaffModal } from './AddStaffModal';

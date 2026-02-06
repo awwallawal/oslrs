@@ -1,3 +1,6 @@
+import { useMemo } from 'react';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 import { cn } from '../../../../../lib/utils';
 import type { StepRenderProps } from '../ActivationWizard';
 
@@ -13,15 +16,38 @@ export function PersonalInfoStep({
   errors,
   isSubmitting,
 }: StepRenderProps) {
+  // Real-time NIN checksum validation (only when 11 digits entered)
+  const ninStatus = useMemo(() => {
+    if (formData.nin.length < 11) return 'incomplete';
+    return modulus11Check(formData.nin) ? 'valid' : 'invalid';
+  }, [formData.nin]);
+
   // Calculate reasonable date bounds for DOB
-  // Minimum age: 18 years, Maximum age: 100 years
-  const today = new Date();
-  const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
-    .toISOString()
-    .split('T')[0];
-  const minDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate())
-    .toISOString()
-    .split('T')[0];
+  // Workforce age: 15-70 years
+  const { maxDate, minDate } = useMemo(() => {
+    const now = new Date();
+    return {
+      maxDate: new Date(now.getFullYear() - 15, now.getMonth(), now.getDate())
+        .toISOString()
+        .split('T')[0],
+      minDate: new Date(now.getFullYear() - 70, now.getMonth(), now.getDate())
+        .toISOString()
+        .split('T')[0],
+    };
+  }, []);
+
+  // Real-time DOB age validation
+  const dobStatus = useMemo(() => {
+    if (!formData.dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(formData.dateOfBirth)) return 'empty';
+    const date = new Date(formData.dateOfBirth);
+    if (isNaN(date.getTime())) return 'invalid';
+    const now = new Date();
+    const age = now.getFullYear() - date.getFullYear() -
+      (now < new Date(now.getFullYear(), date.getMonth(), date.getDate()) ? 1 : 0);
+    if (age < 15) return 'too-young';
+    if (age > 70) return 'too-old';
+    return 'valid';
+  }, [formData.dateOfBirth]);
 
   return (
     <div className="space-y-5">
@@ -61,9 +87,11 @@ export function PersonalInfoStep({
             'w-full px-4 py-3 rounded-lg border transition-colors',
             'focus:outline-none focus-visible:ring-2',
             'disabled:bg-neutral-100 disabled:cursor-not-allowed',
-            errors.nin
+            errors.nin || ninStatus === 'invalid'
               ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
-              : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
+              : ninStatus === 'valid'
+                ? 'border-success-500 focus-visible:ring-success-500 focus:border-success-500'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
           )}
           placeholder="Enter your 11-digit NIN"
           aria-invalid={!!errors.nin}
@@ -72,6 +100,16 @@ export function PersonalInfoStep({
         {errors.nin ? (
           <p id="nin-error" className="text-error-600 text-sm">
             {errors.nin}
+          </p>
+        ) : ninStatus === 'valid' ? (
+          <p id="nin-hint" className="flex items-center gap-1 text-success-600 text-sm">
+            <CheckCircle2 className="w-4 h-4" />
+            Valid NIN
+          </p>
+        ) : ninStatus === 'invalid' ? (
+          <p id="nin-hint" className="flex items-center gap-1 text-error-600 text-sm">
+            <XCircle className="w-4 h-4" />
+            Invalid NIN — please check for typos
           </p>
         ) : (
           <p id="nin-hint" className="text-neutral-500 text-xs">
@@ -83,7 +121,9 @@ export function PersonalInfoStep({
           <span
             className={cn(
               'text-xs',
-              formData.nin.length === 11 ? 'text-success-600' : 'text-neutral-400'
+              ninStatus === 'valid' ? 'text-success-600' :
+              ninStatus === 'invalid' ? 'text-error-600' :
+              'text-neutral-400'
             )}
           >
             {formData.nin.length}/11 digits
@@ -111,16 +151,42 @@ export function PersonalInfoStep({
             'w-full px-4 py-3 rounded-lg border transition-colors',
             'focus:outline-none focus-visible:ring-2',
             'disabled:bg-neutral-100 disabled:cursor-not-allowed',
-            errors.dateOfBirth
+            errors.dateOfBirth || dobStatus === 'too-young' || dobStatus === 'too-old' || dobStatus === 'invalid'
               ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
-              : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
+              : dobStatus === 'valid'
+                ? 'border-success-500 focus-visible:ring-success-500 focus:border-success-500'
+                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
           )}
-          aria-invalid={!!errors.dateOfBirth}
-          aria-describedby={errors.dateOfBirth ? 'dob-error' : undefined}
+          aria-invalid={!!errors.dateOfBirth || dobStatus === 'too-young' || dobStatus === 'too-old'}
+          aria-describedby={errors.dateOfBirth ? 'dob-error' : 'dob-hint'}
         />
-        {errors.dateOfBirth && (
+        {errors.dateOfBirth ? (
           <p id="dob-error" className="text-error-600 text-sm">
             {errors.dateOfBirth}
+          </p>
+        ) : dobStatus === 'valid' ? (
+          <p id="dob-hint" className="flex items-center gap-1 text-success-600 text-sm">
+            <CheckCircle2 className="w-4 h-4" />
+            Valid date of birth
+          </p>
+        ) : dobStatus === 'too-young' ? (
+          <p id="dob-hint" className="flex items-center gap-1 text-error-600 text-sm">
+            <XCircle className="w-4 h-4" />
+            Must be at least 15 years old
+          </p>
+        ) : dobStatus === 'too-old' ? (
+          <p id="dob-hint" className="flex items-center gap-1 text-error-600 text-sm">
+            <XCircle className="w-4 h-4" />
+            Age cannot exceed 70 years
+          </p>
+        ) : dobStatus === 'invalid' ? (
+          <p id="dob-hint" className="flex items-center gap-1 text-error-600 text-sm">
+            <XCircle className="w-4 h-4" />
+            Invalid date
+          </p>
+        ) : (
+          <p id="dob-hint" className="text-neutral-500 text-xs">
+            You must be between 15 and 70 years old
           </p>
         )}
       </div>

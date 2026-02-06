@@ -3,7 +3,7 @@
  * Story 2.5-3, AC4: Row actions dropdown with conditional items
  */
 
-import { MoreHorizontal, Mail, Shield, UserX, CreditCard, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, UserX, UserCheck, CreditCard, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { StaffMember, UserStatus } from '../types';
 
@@ -12,8 +12,10 @@ interface StaffActionsMenuProps {
   onResendInvitation: (userId: string) => void;
   onChangeRole: (staff: StaffMember) => void;
   onDeactivate: (staff: StaffMember) => void;
+  onReactivate: (staff: StaffMember) => void;
   onDownloadIdCard: (userId: string) => void;
   isResendingInvitation?: boolean;
+  isReactivating?: boolean;
   isDownloadingIdCard?: boolean;
 }
 
@@ -25,6 +27,7 @@ function getAvailableActions(status: UserStatus) {
     resendInvitation: false,
     changeRole: false,
     deactivate: false,
+    reactivate: false,
     downloadIdCard: false,
   };
 
@@ -46,10 +49,10 @@ function getAvailableActions(status: UserStatus) {
       break;
     case 'suspended':
       actions.changeRole = true;
-      // Reactivate action would go here in future
+      actions.reactivate = true;
       break;
     case 'deactivated':
-      // No actions for deactivated users (read-only)
+      actions.reactivate = true;
       break;
   }
 
@@ -61,8 +64,10 @@ export function StaffActionsMenu({
   onResendInvitation,
   onChangeRole,
   onDeactivate,
+  onReactivate,
   onDownloadIdCard,
   isResendingInvitation = false,
+  isReactivating = false,
   isDownloadingIdCard = false,
 }: StaffActionsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -170,6 +175,28 @@ export function StaffActionsMenu({
               )}
               Download ID Card
             </button>
+          )}
+
+          {actions.reactivate && (
+            <>
+              <div className="border-t border-neutral-200 my-1" />
+              <button
+                onClick={() => {
+                  onReactivate(staff);
+                  setIsOpen(false);
+                }}
+                disabled={isReactivating}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-green-50 disabled:opacity-50"
+                role="menuitem"
+              >
+                {isReactivating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UserCheck className="w-4 h-4" />
+                )}
+                Reactivate
+              </button>
+            </>
           )}
 
           {actions.deactivate && (

@@ -18,8 +18,10 @@ interface StaffTableProps {
   onResendInvitation: (userId: string) => void;
   onChangeRole: (staff: StaffMember) => void;
   onDeactivate: (staff: StaffMember) => void;
+  onReactivate: (staff: StaffMember) => void;
   onDownloadIdCard: (userId: string) => void;
   resendingUserId?: string | null;
+  reactivatingUserId?: string | null;
   downloadingUserId?: string | null;
 }
 
@@ -32,8 +34,10 @@ export function StaffTable({
   onResendInvitation,
   onChangeRole,
   onDeactivate,
+  onReactivate,
   onDownloadIdCard,
   resendingUserId,
+  reactivatingUserId,
   downloadingUserId,
 }: StaffTableProps) {
   if (isLoading) {
@@ -112,8 +116,10 @@ export function StaffTable({
                       onResendInvitation={onResendInvitation}
                       onChangeRole={onChangeRole}
                       onDeactivate={onDeactivate}
+                      onReactivate={onReactivate}
                       onDownloadIdCard={onDownloadIdCard}
                       isResendingInvitation={resendingUserId === staff.id}
+                      isReactivating={reactivatingUserId === staff.id}
                       isDownloadingIdCard={downloadingUserId === staff.id}
                     />
                   </div>

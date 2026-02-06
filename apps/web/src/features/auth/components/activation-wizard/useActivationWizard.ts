@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { z } from 'zod';
-import { activationWithSelfieSchema } from '@oslsr/types';
+import { activationWithSelfieSchema, ninSchema } from '@oslsr/types';
 
 /**
  * Wizard step definitions
@@ -80,8 +80,17 @@ const stepSchemas = {
   }),
 
   [WIZARD_STEPS.PERSONAL_INFO]: z.object({
-    nin: z.string().length(11, 'NIN must be exactly 11 digits').regex(/^\d{11}$/, 'NIN must contain only digits'),
-    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    nin: ninSchema,
+    dateOfBirth: z.string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+      .refine((val) => {
+        const date = new Date(val);
+        if (isNaN(date.getTime())) return false;
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear() -
+          (today < new Date(today.getFullYear(), date.getMonth(), date.getDate()) ? 1 : 0);
+        return age >= 15 && age <= 70;
+      }, 'Age must be between 15 and 70 years'),
     homeAddress: z.string().min(5, 'Home address is too short'),
   }),
 
