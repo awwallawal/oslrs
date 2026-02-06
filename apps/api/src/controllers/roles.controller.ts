@@ -19,7 +19,6 @@ export class RolesController {
       });
 
       res.json({
-        status: 'success',
         data: rolesList,
       });
     } catch (err) {

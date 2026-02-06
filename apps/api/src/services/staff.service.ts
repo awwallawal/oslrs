@@ -89,11 +89,13 @@ export class StaffService {
     }
 
     if (params.search) {
+      // Escape SQL ILIKE wildcards to prevent wildcard injection
+      const sanitizedSearch = params.search.replace(/[%_\\]/g, '\\$&');
       // Case-insensitive partial match on name or email
       conditions.push(
         or(
-          ilike(users.fullName, `%${params.search}%`),
-          ilike(users.email, `%${params.search}%`)
+          ilike(users.fullName, `%${sanitizedSearch}%`),
+          ilike(users.email, `%${sanitizedSearch}%`)
         )!
       );
     }

@@ -1,14 +1,11 @@
-import { apiClient, ApiError } from '../../../lib/api-client';
+import { apiClient, ApiError, API_BASE_URL, getAuthHeaders } from '../../../lib/api-client';
 import type {
   QuestionnaireFormResponse,
   QuestionnaireFormStatus,
   XlsformValidationResult,
 } from '@oslsr/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-
 interface UploadFormResult {
-  status: string;
   data: {
     id: string;
     formId: string;
@@ -20,7 +17,6 @@ interface UploadFormResult {
 }
 
 interface ListFormsResult {
-  status: string;
   data: QuestionnaireFormResponse[];
   meta: {
     total: number;
@@ -31,7 +27,6 @@ interface ListFormsResult {
 }
 
 interface FormDetailResult {
-  status: string;
   data: QuestionnaireFormResponse & {
     versions: Array<{
       id: string;
@@ -41,11 +36,6 @@ interface FormDetailResult {
       createdAt: string;
     }>;
   };
-}
-
-function getAuthHeaders(): Record<string, string> {
-  const token = sessionStorage.getItem('oslsr_access_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function uploadQuestionnaire(
@@ -92,21 +82,15 @@ export async function listQuestionnaires(params?: {
   if (params?.status) searchParams.set('status', params.status);
 
   const query = searchParams.toString();
-  return apiClient(`/questionnaires${query ? `?${query}` : ''}`, {
-    headers: getAuthHeaders(),
-  });
+  return apiClient(`/questionnaires${query ? `?${query}` : ''}`);
 }
 
 export async function getQuestionnaire(id: string): Promise<FormDetailResult> {
-  return apiClient(`/questionnaires/${id}`, {
-    headers: getAuthHeaders(),
-  });
+  return apiClient(`/questionnaires/${id}`);
 }
 
-export async function getVersionHistory(formId: string): Promise<{ status: string; data: Array<FormDetailResult['data']> }> {
-  return apiClient(`/questionnaires/form/${formId}/versions`, {
-    headers: getAuthHeaders(),
-  });
+export async function getVersionHistory(formId: string): Promise<{ data: Array<FormDetailResult['data']> }> {
+  return apiClient(`/questionnaires/form/${formId}/versions`);
 }
 
 export async function updateQuestionnaireStatus(
@@ -115,7 +99,6 @@ export async function updateQuestionnaireStatus(
 ): Promise<FormDetailResult> {
   return apiClient(`/questionnaires/${id}/status`, {
     method: 'PATCH',
-    headers: getAuthHeaders(),
     body: JSON.stringify({ status }),
   });
 }
@@ -123,7 +106,6 @@ export async function updateQuestionnaireStatus(
 export async function deleteQuestionnaire(id: string): Promise<void> {
   await apiClient(`/questionnaires/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
 }
 

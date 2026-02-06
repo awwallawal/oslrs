@@ -4,11 +4,21 @@ import { StaffController } from '../controllers/staff.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
+import { AppError } from '@oslsr/utils';
 
 const router = Router();
-const upload = multer({ 
+const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+// Validate UUID format for :userId param before hitting database
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.param('userId', (req, _res, next, value) => {
+  if (!UUID_REGEX.test(value)) {
+    return next(new AppError('INVALID_USER_ID', 'Invalid user ID format', 400));
+  }
+  next();
 });
 
 // All routes require Super Admin

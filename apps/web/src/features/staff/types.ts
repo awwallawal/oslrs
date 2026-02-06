@@ -45,7 +45,6 @@ export interface PaginationMeta {
  * Staff list API response
  */
 export interface StaffListResponse {
-  status: string;
   data: StaffMember[];
   meta: PaginationMeta;
 }
@@ -75,7 +74,6 @@ export interface Role {
  * Roles list API response
  */
 export interface RolesListResponse {
-  status: string;
   data: Role[];
 }
 
@@ -99,7 +97,6 @@ export interface Lga {
  * LGAs list API response
  */
 export interface LgasListResponse {
-  status: string;
   data: Lga[];
 }
 
@@ -107,7 +104,6 @@ export interface LgasListResponse {
  * Single staff response (for mutations)
  */
 export interface StaffResponse {
-  status: string;
   data: StaffMember;
 }
 
@@ -115,7 +111,6 @@ export interface StaffResponse {
  * Resend invitation response
  */
 export interface ResendInvitationResponse {
-  status: string;
   data: {
     message: string;
     remainingResends?: number;
@@ -131,7 +126,6 @@ export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
  * Bulk import job response
  */
 export interface ImportJobResponse {
-  status: string;
   data: {
     jobId: string;
     status: ImportJobStatus;

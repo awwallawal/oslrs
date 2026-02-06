@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+const ACCESS_TOKEN_KEY = 'oslsr_access_token';
 
 /**
  * Custom API error with additional context
@@ -17,12 +19,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Get auth headers from sessionStorage (if token exists).
+ * Exported for raw fetch calls that bypass apiClient (e.g. blob downloads, file uploads).
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function apiClient(endpoint: string, options: RequestInit = {}) {
   const { headers, ...rest } = options;
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...headers,
     },
     ...rest,

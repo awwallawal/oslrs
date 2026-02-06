@@ -62,7 +62,6 @@ describe('RolesController', () => {
         },
       });
       expect(jsonMock).toHaveBeenCalledWith({
-        status: 'success',
         data: mockRoles,
       });
     });

@@ -68,7 +68,6 @@ describe('StaffController', () => {
         search: undefined,
       });
       expect(jsonMock).toHaveBeenCalledWith({
-        status: 'success',
         ...mockData,
       });
     });
@@ -187,7 +186,6 @@ describe('StaffController', () => {
 
       expect(StaffService.updateRole).toHaveBeenCalledWith('user-123', 'new-role-id', 'actor-123');
       expect(jsonMock).toHaveBeenCalledWith({
-        status: 'success',
         data: mockUser,
       });
     });
@@ -235,7 +233,6 @@ describe('StaffController', () => {
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
       expect(jsonMock).toHaveBeenCalledWith({
-        status: 'success',
         data: mockUser,
       });
     });
@@ -281,7 +278,6 @@ describe('StaffController', () => {
 
       expect(StaffService.deactivateUser).toHaveBeenCalledWith('user-123', 'actor-123');
       expect(jsonMock).toHaveBeenCalledWith({
-        status: 'success',
         data: mockUser,
       });
     });

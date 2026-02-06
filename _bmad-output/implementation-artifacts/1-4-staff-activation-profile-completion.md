@@ -130,7 +130,21 @@ So that my identity is verified and my payroll details are captured.
 - `apps/web/src/App.tsx`
 - `apps/api/src/__tests__/auth.activation.test.ts`
 
-## 9. Status Update
+## 9. Retrospective Notes
+
+### Scope Creep from Story 2.5-3
+**Identified during Code Review #2 (2026-02-06):** Tasks 19-29 in Story 2.5-3 (Activation Wizard — multi-step wizard with selfie capture during activation) belong to the Story 1-4 scope (Staff Activation & Profile Completion), not Story 2.5-3 (Staff Management Dashboard). The wizard was implemented during 2.5-3 development because the activation flow was discovered to need enhancement during the "Add Staff → Invitation → Activation" end-to-end flow testing. Future sprints should scope activation-related features to this story to avoid cross-story tracking confusion.
+
+**Affected Tasks (implemented in 2.5-3, should have been tracked here):**
+- Task 19: Backend schema extension for `activationWithSelfieSchema`
+- Task 20: Backend selfie processing during activation
+- Task 21: `useActivationWizard` state management hook
+- Task 22: Wizard UI components (WizardProgressBar, WizardNavigation, ActivationWizard)
+- Tasks 23-27: Wizard steps (Password, PersonalInfo, BankDetails, NextOfKin, Selfie)
+- Task 28: ActivationPage integration + token validation endpoint
+- Task 29: Testing & verification (S3 integration, edge cases)
+
+## 10. Status Update
 *   **Created:** 2026-01-06
 *   **Assigned:** BMad Master
 **Status:** done

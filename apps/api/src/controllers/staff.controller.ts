@@ -38,7 +38,6 @@ export class StaffController {
       });
 
       res.json({
-        status: 'success',
         ...result,
       });
     } catch (err) {
@@ -69,7 +68,6 @@ export class StaffController {
       const result = await StaffService.updateRole(userId, roleId, actorId);
 
       res.json({
-        status: 'success',
         data: result,
       });
     } catch (err) {
@@ -95,7 +93,6 @@ export class StaffController {
       const result = await StaffService.deactivateUser(userId, actorId);
 
       res.json({
-        status: 'success',
         data: result,
       });
     } catch (err) {
@@ -129,11 +126,13 @@ export class StaffController {
 
   static async createManual(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
       const actorId = req.user.sub;
 
       const { user, emailStatus } = await StaffService.createManual(req.body, actorId);
       res.status(201).json({
-        status: 'success',
         data: {
           ...user,
           emailStatus, // AC8: Include email status in response
@@ -146,6 +145,9 @@ export class StaffController {
 
   static async importCsv(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
       const actorId = req.user.sub;
 
       if (!req.file) {
@@ -161,7 +163,6 @@ export class StaffController {
       });
 
       res.status(202).json({
-        status: 'success',
         message: 'Import job queued',
         data: {
           jobId: job.id,
@@ -188,7 +189,6 @@ export class StaffController {
       const reason = job.failedReason;
 
       res.json({
-        status: 'success',
         data: {
           jobId: job.id,
           state,
@@ -210,6 +210,9 @@ export class StaffController {
    */
   static async resendInvitation(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      if (!req.user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'User not authenticated', 401);
+      }
       const actorId = req.user.sub;
 
       const { userId } = req.params;
@@ -218,7 +221,6 @@ export class StaffController {
       const result = await StaffService.resendInvitation(userId, actorId, getRedis());
 
       res.json({
-        status: 'success',
         data: result,
       });
     } catch (err) {

@@ -3,7 +3,7 @@
  * Story 2.5-3, AC1-AC4: Main staff management page
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, UserPlus, Upload, ChevronDown, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { StaffTable, RoleChangeDialog, DeactivateDialog, BulkImportModal, AddStaffModal } from '../components';
@@ -21,7 +21,7 @@ import type { StaffMember, UserStatus, ListStaffParams } from '../types';
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
-  useMemo(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setDebouncedValue(value), delay);
     return () => clearTimeout(timer);
   }, [value, delay]);

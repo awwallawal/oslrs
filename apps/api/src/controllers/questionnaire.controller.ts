@@ -40,7 +40,6 @@ export class QuestionnaireController {
       );
 
       res.status(201).json({
-        status: 'success',
         data: {
           id: result.id,
           formId: result.formId,
@@ -69,7 +68,6 @@ export class QuestionnaireController {
       const result = await QuestionnaireService.listForms(parsed.data);
 
       res.json({
-        status: 'success',
         data: result.data,
         meta: result.meta,
       });
@@ -93,7 +91,6 @@ export class QuestionnaireController {
       }
 
       res.json({
-        status: 'success',
         data: form,
       });
     } catch (err) {
@@ -116,7 +113,6 @@ export class QuestionnaireController {
       }
 
       res.json({
-        status: 'success',
         data: versions,
       });
     } catch (err) {
@@ -146,7 +142,6 @@ export class QuestionnaireController {
       const updatedForm = await QuestionnaireService.getFormById(id);
 
       res.json({
-        status: 'success',
         data: updatedForm,
       });
     } catch (err) {

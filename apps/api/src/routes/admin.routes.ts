@@ -179,7 +179,6 @@ router.get(
       });
 
       res.json({
-        status: 'success',
         data: lgasList,
       });
     } catch (error: unknown) {

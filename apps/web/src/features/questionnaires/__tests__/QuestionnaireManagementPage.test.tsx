@@ -11,11 +11,10 @@ expect.extend(matchers);
 // Mock the API calls - must return data (not undefined) to avoid TanStack Query warning
 vi.mock('../api/questionnaire.api', () => ({
   listQuestionnaires: vi.fn().mockResolvedValue({
-    status: 'success',
     data: [],
     meta: { total: 0, page: 1, pageSize: 10, totalPages: 0 },
   }),
-  getQuestionnaire: vi.fn().mockResolvedValue({ status: 'success', data: {} }),
+  getQuestionnaire: vi.fn().mockResolvedValue({ data: {} }),
   uploadQuestionnaire: vi.fn(),
   updateQuestionnaireStatus: vi.fn(),
   deleteQuestionnaire: vi.fn(),

@@ -42,7 +42,6 @@ export class UserController {
       }
 
       res.status(200).json({
-        status: 'success',
         data: {
           liveSelfieOriginalUrl: updatedUser.liveSelfieOriginalUrl,
           liveSelfieIdCardUrl: updatedUser.liveSelfieIdCardUrl,
@@ -120,7 +119,6 @@ export class UserController {
           }
 
           res.status(200).json({
-              status: 'success',
               data: {
                   id: user.id,
                   fullName: user.fullName,

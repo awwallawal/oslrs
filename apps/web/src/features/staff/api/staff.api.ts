@@ -3,7 +3,7 @@
  * Story 2.5-3: API functions for Staff Management
  */
 
-import { apiClient, ApiError } from '../../../lib/api-client';
+import { apiClient, ApiError, API_BASE_URL, getAuthHeaders } from '../../../lib/api-client';
 import type {
   ListStaffParams,
   StaffListResponse,
@@ -13,16 +13,6 @@ import type {
   ImportJobResponse,
   LgasListResponse,
 } from '../types';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-
-/**
- * Get auth headers from localStorage
- */
-function getAuthHeaders(): Record<string, string> {
-  const token = sessionStorage.getItem('oslsr_access_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 /**
  * List staff with pagination, filtering, and search
@@ -39,9 +29,7 @@ export async function listStaff(params: ListStaffParams = {}): Promise<StaffList
   if (params.search) searchParams.set('search', params.search);
 
   const query = searchParams.toString();
-  return apiClient(`/staff${query ? `?${query}` : ''}`, {
-    headers: getAuthHeaders(),
-  });
+  return apiClient(`/staff${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -54,7 +42,6 @@ export async function updateStaffRole(
 ): Promise<StaffResponse> {
   return apiClient(`/staff/${userId}/role`, {
     method: 'PATCH',
-    headers: getAuthHeaders(),
     body: JSON.stringify({ roleId }),
   });
 }
@@ -66,7 +53,6 @@ export async function updateStaffRole(
 export async function deactivateStaff(userId: string): Promise<StaffResponse> {
   return apiClient(`/staff/${userId}/deactivate`, {
     method: 'POST',
-    headers: getAuthHeaders(),
   });
 }
 
@@ -79,12 +65,11 @@ export async function resendInvitation(
 ): Promise<ResendInvitationResponse> {
   return apiClient(`/staff/${userId}/resend-invitation`, {
     method: 'POST',
-    headers: getAuthHeaders(),
   });
 }
 
 /**
- * Download ID card for a staff member
+ * Download ID card for a staff member (raw fetch for blob response)
  * GET /api/v1/staff/:userId/id-card
  */
 export async function downloadStaffIdCard(userId: string): Promise<Blob> {
@@ -110,9 +95,7 @@ export async function downloadStaffIdCard(userId: string): Promise<Blob> {
  * GET /api/v1/roles
  */
 export async function listRoles(): Promise<RolesListResponse> {
-  return apiClient('/roles', {
-    headers: getAuthHeaders(),
-  });
+  return apiClient('/roles');
 }
 
 /**
@@ -120,9 +103,7 @@ export async function listRoles(): Promise<RolesListResponse> {
  * GET /api/v1/admin/lgas
  */
 export async function listLgas(): Promise<LgasListResponse> {
-  return apiClient('/admin/lgas', {
-    headers: getAuthHeaders(),
-  });
+  return apiClient('/admin/lgas');
 }
 
 /**
@@ -138,13 +119,12 @@ export async function createStaffManual(data: {
 }): Promise<StaffResponse> {
   return apiClient('/staff/manual', {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
 }
 
 /**
- * Import staff from CSV file
+ * Import staff from CSV file (raw fetch for multipart/form-data)
  * POST /api/v1/staff/import
  */
 export async function importStaffCsv(file: File): Promise<ImportJobResponse> {
@@ -176,7 +156,5 @@ export async function importStaffCsv(file: File): Promise<ImportJobResponse> {
  * GET /api/v1/staff/import/:jobId
  */
 export async function getImportStatus(jobId: string): Promise<ImportJobResponse> {
-  return apiClient(`/staff/import/${jobId}`, {
-    headers: getAuthHeaders(),
-  });
+  return apiClient(`/staff/import/${jobId}`);
 }
