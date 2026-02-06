@@ -15,7 +15,7 @@ status: 'complete'
 
 _This file contains critical rules and patterns that AI agents must follow when implementing code in the Oyo State Labour & Skills Registry (OSLSR) project. Focus on unobvious details that agents might otherwise miss._
 
-**Architecture Version:** v7.4 (2026-01-02)
+**Architecture Version:** v8.0 (2026-02-06) — SCP-2026-02-05-001: ODK Central removed, native form system
 **Target Scale:** 1M records over 12 months, 200 staff users, 1K concurrent public users
 **Deployment:** Single Hetzner VPS (CX43), Docker Compose, NDPA-compliant
 
@@ -45,7 +45,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **Backend Stack:**
 - **Express.js** - REST API framework (NOT Fastify, NOT NestJS)
 - **Drizzle ORM 1.x** - TypeScript-first ORM (~50KB, SQL-like syntax)
-- **PostgreSQL 15** - Both app_db and odk_db (NOT MongoDB per ADR-010)
+- **PostgreSQL 15** - Single app_db (NOT MongoDB per ADR-010)
 - **Redis 7** - Caching, rate limiting, JWT blacklist, BullMQ queue
 - **BullMQ** - Job queue for async processing
 - **Pino 9.x** - Structured logging (fastest Node.js logger)
@@ -58,11 +58,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **Infrastructure:**
 - **Docker Compose** - Local development and production deployment
 - **pnpm** - Monorepo package manager (NOT npm, NOT yarn)
-- **ODK Central (self-hosted)** - Data collection engine
+- ~~**ODK Central (self-hosted)**~~ REMOVED (SCP-2026-02-05-001) — Native form system replaces ODK
 
 **Version Constraints:**
 - React MUST be 18.3.x (NOT 19.x due to security vulnerabilities)
-- PostgreSQL MUST be 15.x (ODK Central compatibility requirement)
+- PostgreSQL MUST be 15.x (PostGIS required for GPS data)
 - Node.js MUST be 20.x LTS (not 21+, not <20)
 
 ---
@@ -180,7 +180,7 @@ CREATE TABLE respondents (
 - ✅ Files: `kebab-case` (`fraud-detection.service.ts`, `enumerator-dashboard.tsx`)
 
 **Environment Variables:**
-- ✅ Prefix by domain: `DB_HOST`, `REDIS_PORT`, `ODK_CENTRAL_URL`
+- ✅ Prefix by domain: `DB_HOST`, `REDIS_PORT`, `AWS_SES_REGION`
 - ✅ Boolean flags: `FEATURE_FRAUD_DETECTION_ENABLED`
 
 ---
@@ -514,7 +514,7 @@ useOptimisticMutation({
 ```typescript
 logger.info({ event: 'user.login', userId, role, lga });
 logger.warn({ event: 'fraud.detected', heuristic: 'gps_cluster', score: 0.85 });
-logger.error({ event: 'odk.webhook.failed', submissionId, error: err.message });
+logger.error({ event: 'submission.ingestion.failed', submissionId, error: err.message });
 logger.info({ event: 'marketplace.search', query, resultsCount, searcherId });
 logger.debug({ event: 'cache.hit', key: 'fraud_thresholds', ttl: 3600 });
 ```
@@ -530,7 +530,7 @@ logger.error({ event: 'ERROR' });  // WRONG! Too generic
 **Log Levels:**
 - `logger.info()` - Normal operations (most common)
 - `logger.warn()` - Warning signs (high queue lag, fraud threshold hits)
-- `logger.error()` - Errors needing attention (webhook failures, database errors)
+- `logger.error()` - Errors needing attention (submission ingestion failures, database errors)
 - `logger.fatal()` - Application crash
 
 ---
@@ -802,7 +802,7 @@ See `_bmad-output/TEST_DASHBOARD_DEBT.md` for full enhancement roadmap.
 
 **✅ CORRECT Patterns:**
 ```typescript
-await queue.add('webhook-ingestion', { submissionId });
+await queue.add('submission-ingestion', { submissionId });
 await queue.add('fraud-detection', { submissionId });
 await queue.add('email-notification', { userId, template: 'welcome' });
 await queue.add('marketplace-export', { format: 'csv' });
@@ -817,7 +817,7 @@ await queue.add('send_email', { to });  // WRONG! snake_case
 
 **Retry Configuration (Exponential Backoff):**
 ```typescript
-queue.add('webhook-ingestion', { submissionId }, {
+queue.add('submission-ingestion', { submissionId }, {
   attempts: 5,
   backoff: {
     type: 'exponential',
@@ -841,8 +841,6 @@ oslr_cl/
 │   ├── types/            # Shared TypeScript types + Zod schemas
 │   ├── utils/            # Shared utilities (AppError, verhoeff, UUIDv7 helpers)
 │   └── config/           # Shared configuration (constants, roles, LGAs)
-├── services/
-│   └── odk-integration/  # ODK Central abstraction (ADR-002)
 ├── docker/
 │   ├── docker-compose.yml
 │   ├── Dockerfile.api
@@ -1019,11 +1017,11 @@ services/
 **Source Document:** `_bmad-output/planning-artifacts/architecture.md`
 
 **Key ADRs:**
-- ADR-001: Composed Monolith (Custom App + ODK Central)
-- ADR-002: ODK Integration Abstraction (`services/odk-integration/`)
+- ADR-001: Custom Modular Monolith (Custom App with native form system) _(Amended: SCP-2026-02-05-001)_
+- ~~ADR-002: ODK Integration Abstraction~~ SUPERSEDED (SCP-2026-02-05-001)
 - ADR-003: Fraud Detection Engine (Pluggable heuristics, DB-backed config)
 - ADR-004: Offline Data Model (Browser owns drafts, server validates)
-- ADR-007: Database Separation (app_db + odk_db, read replica for marketplace)
+- ADR-007: Single Database (app_db, read-only replica for marketplace) _(Amended: SCP-2026-02-05-001)_
 - ADR-010: PostgreSQL Selection (UNIQUE constraints, ACID transactions, proven for fraud detection)
 - ADR-011: Hetzner Infrastructure (CX43, $168/year, 73x headroom)
 
@@ -1311,8 +1309,8 @@ docker compose -f docker/docker-compose.dev.yml up
 - PostgreSQL instead of MongoDB (relational, strict schemas, UNIQUE constraints)
 - Drizzle ORM instead of Mongoose (TypeScript-first, migration-based)
 - Offline-first PWA (7-day client-side operation, IndexedDB, service workers)
-- Dual databases (app_db + odk_db, no foreign keys between them)
-- Job queue (BullMQ) for async processing (fraud detection, webhooks)
+- Single database (app_db with native form schemas as JSONB, full referential integrity)
+- Job queue (BullMQ) for async processing (fraud detection, submission ingestion)
 
 ---
 
@@ -1398,7 +1396,7 @@ For stories tagged `[SECURITY]`, require adversarial code review:
 
 **Security Stories in Epics:**
 - Story 1-11: Email Invitation System `[SECURITY]`
-- Story 2-4: Encrypted ODK Token Management `[SECURITY]`
+- ~~Story 2-4: Encrypted ODK Token Management~~ SUPERSEDED (SCP-2026-02-05-001)
 
 ---
 

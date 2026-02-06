@@ -22,7 +22,7 @@ The Registry is not a one-off data exercise but a **living state asset** that su
 ## 2. Goals and Strategic Objectives
 
 #### Primary Goals
-*   **Establish the Registry:** Create a secure, mobile-optimized repository for labor data using **ODK (Open Data Kit)** as the robust collection engine.
+*   **Establish the Registry:** Create a secure, mobile-optimized repository for labor data using a **native form system** with offline-capable PWA collection.
 *   **Ensure Integrity:** Implement robust mechanisms for data authenticity to prevent fraud, utilizing a custom **Context-Aware Fraud Signal Engine**.
 *   **Empower Decision Makers:** Provide comprehensive, tailored dashboards for Government Officials to visualize workforce trends in real-time.
 *   **Enable the Marketplace:** Connect skilled workers to opportunities via a Public Skills Marketplace (Logically Isolated Read Replica for security).
@@ -51,9 +51,11 @@ To ensure the project is delivering on its objectives, success will be measured 
     *   Ensure no critical security vulnerabilities are identified in quarterly penetration tests.
 
 #### Technical Background (The Engine)
-The **Robust Data Collection Platform (RDCP)** is the technical backbone powering the OSLSR. We are adopting a **Composed Architecture**: utilizing **ODK Central** for the "hard" problems of form delivery and offline synchronization, while building a **Custom Modular Monolith** for User Management, Dashboards, Fraud Analysis, and the Public Marketplace.
+The **Robust Data Collection Platform (RDCP)** is the technical backbone powering the OSLSR. We are adopting a **Custom Modular Monolith** architecture with a **native form system** for form definition, skip logic, offline data collection (IndexedDB + PWA), and background sync. User Management, Dashboards, Fraud Analysis, and the Public Marketplace are all part of the same monolith.
 
-We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-performance VPS, Postgres as BullMQ Queue) to balance performance with government procurement constraints. This "Best of Both Worlds" approach minimizes technical risk, accelerates delivery, and ensures field-proven reliability.
+> **SCP-2026-02-05-001 (2026-02-06):** ODK Central was originally the collection engine but was removed due to persistent, unresolved Enketo connectivity issues blocking the pilot timeline. The native form system provides full team control with no external dependencies.
+
+We are adopting a **Lean Infrastructure Strategy** (Docker, Single high-performance VPS, Postgres as BullMQ Queue) to balance performance with government procurement constraints. This approach minimizes technical risk, accelerates delivery, and ensures field-proven reliability.
 
 #### Change Log
 
@@ -82,27 +84,28 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
 | 2026-01-24   | 7.7     | **Epic 1.5 Documentation:** Added Epic 1.5 (Public Website Foundation - Phase 1 Static) to PRD. This epic was created during Epic 1 Retrospective but was missing from PRD. Includes 7 stories: Design System Foundation, Homepage, About Section (6 pages), Participate Section (3 pages), Support Section (5 pages), Legal Pages & Navigation Cleanup, Guide Detail Pages (7 pages). References public-website-ia.md and ADR-016. | Awwal (PO) |
 | 2026-01-24   | 7.8     | **Story 3.0 - Google OAuth:** Added Story 3.0 (Google OAuth & Enhanced Public Registration) to Epic 3. This story implements ADR-015 which was documented in v7.6 but not assigned to a story. Story 3.0 is positioned before Story 3.5 as a prerequisite. Added story references to FR requirements (lines 625-627). | Awwal (PO) |
 | 2026-01-31   | 7.9     | **Epic 2.5 - Role-Based Dashboards:** Added Epic 2.5 (Role-Based Dashboards & Feature Integration) with 8 stories. Created during Epic 2 Retrospective to address visibility gap - backend features from Epic 1-2 need testable UI surfaces. Implements strict route isolation (`/dashboard/{role}`) where each role can ONLY access their own dashboard. Deferred View-As feature to Story 6-7 (requires audit infrastructure). References ADR-016, ux-design-specification.md. | Awwal (PO) |
+| 2026-02-06   | 8.0     | **SCP-2026-02-05-001: ODK Central Removed, Native Form System.** Removed all ODK Central/Enketo dependencies. Replaced with native form system (JSONB schemas, skip logic engine, Form Builder UI, IndexedDB offline sync). Single PostgreSQL database. Infrastructure simplified from 6 to 4 containers. Updated FR2, FR4, FR9, FR10, FR14, FR21, NFR1.3, NFR3.2, NFR3.3, NFR6.2. Architecture rewritten. Epic 2 Stories 2.2-2.6 superseded, new Stories 2.7-2.10 added. Epic 3 Story 3.1 rewritten. See sprint-change-proposal-2026-02-05.md for full details. | Awwal (PO) |
 
 ## Requirements
 
 #### Functional
 *   **FR1:** The system shall present a clear consent screen at the beginning of any survey (Enumerator-led, Paper, or Public self-submission) to allow respondents to explicitly opt-in for an anonymous marketplace profile (Profession, LGA, Experience Level).
     *   **Paper Collection Purpose:** Paper forms are provided as an **inclusion and accessibility strategy** to reach: (1) residents that Enumerators cannot physically attend to due to time/distance constraints, (2) non-technically literate populations (elderly, those without digital skills), and (3) overflow capacity when digital collection channels are saturated. All paper forms must have pre-printed serial numbers and be submitted to Supervisors before Data Entry Clerk digitization to maintain accountability.
-*   **FR2:** The system shall implement a **Two-Stage Consent Workflow** within the ODK survey form itself:
+*   **FR2:** The system shall implement a **Two-Stage Consent Workflow** within the native survey form:
     *   **Stage 1 (Field: `consent_marketplace`):** "Do you consent to join an anonymous marketplace profile?" (Profession, LGA, Experience Level only)
     *   **Stage 2 (Field: `consent_enriched`, only shown if Stage 1 = Yes):** "Do you consent to allow employers to view your Name and Phone Number?"
     *   **Technical Note:** Both consent fields are part of the XLSForm specification (see `docs/questionnaire_schema.md` Section 6). Data extraction logic in Story 7.1 and 7.2 must reference these exact field names.
 *   **FR3:** The system shall provide a public-facing Homepage with options for "Staff Login" and "Public Register".
     *   **Clarification:** Staff Login and Public Login must use **distinct authentication endpoints** (`/auth/staff/login` vs `/auth/public/login`) to enable separate session management, rate limiting policies, and role-based security controls. The homepage structure is defined in `docs/homepage_structure.md`.
-*   **FR4:** The system shall allow registered Public Users to securely log in and fill out survey questionnaires (served via Enketo integration).
+*   **FR4:** The system shall allow registered Public Users to securely log in and fill out survey questionnaires via the native form renderer.
 *   **FR5:** The system shall require public users to provide their National Identity Number (NIN) during registration, preventing multiple completed registrations by the same individual. **Note:** Only NIN is accepted for identity verification to ensure NDPA compliance (BVN is explicitly excluded per NFR4.1).
 *   **FR6:** The system shall allow Super Admins to invite (provision) new staff users (**Supervisors, Enumerators, Data Entry Clerks, Verification Assessors, Government Officials**) via **Manual Single-User Creation** or **Bulk CSV Import**.
     *   **Manual Creation:** Super Admins can create individual staff accounts through a form interface requiring: Full Name, Email, Phone, Role, Assigned LGA (for Enumerators/Supervisors). System generates invitation link/token immediately.
     *   **Bulk Import:** Super Admins can upload CSV with columns: `full_name,email,phone,role,lga_code` (LGA optional for non-field roles). Upon Bulk Import, the system shall asynchronously queue and send individual invitation emails/SMS to all imported users containing unique, time-limited account setup links.
 *   **FR7:** The system shall allow Enumerators and all other defined staff roles to securely log in to the Custom App using unique credentials.
 *   **FR8:** The system shall provide Enumerators with a personalized dashboard displaying their daily/weekly progress against targets.
-*   **FR9:** The system shall enable Enumerators to collect data offline using **embedded Enketo forms** (browser-based PWA), and synchronize automatically via ODK Central when connectivity is restored. **Note:** ODK Collect mobile app is NOT used in this implementation - all data collection happens via Progressive Web App (PWA) accessed through Chrome browser. Enumerators can use "Add to Home Screen" for app-like experience.
-*   **FR10:** The system shall support pausing and resuming incomplete survey sessions for Enumerators (native ODK feature).
+*   **FR9:** The system shall enable Enumerators to collect data offline using the **native form renderer** (browser-based PWA) with IndexedDB draft storage and background sync to the API when connectivity is restored. All data collection happens via Progressive Web App (PWA) accessed through Chrome browser. Enumerators can use "Add to Home Screen" for app-like experience.
+*   **FR10:** The system shall support pausing and resuming incomplete survey sessions for Enumerators via IndexedDB draft storage with exact question position restore.
 *   **FR11:** The system shall provide in-app communication channels for staff to message their Supervisors or teams.
 *   **FR12:** The system shall allow Supervisors to view the real-time progress and activity of all assigned Enumerators on a dashboard.
 *   **FR13:** The system shall implement a **Context-Aware Fraud Signal Engine** with **configurable thresholds**:
@@ -112,7 +115,7 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
     *   **Configuration Access:** Super Admin can adjust all thresholds via Settings UI based on pilot feedback and real-world validation.
     *   **Action:** These flags do **NOT** reject data. They mark submissions as "Pending Verification".
     *   **Resolution:** Supervisors receive an alert and can "Verify Event" (e.g., "Association Meeting confirmed") to clear flags in bulk, or "Reject" if fraud is confirmed. Supervisors can mark false positives, allowing system to learn over time.
-*   **FR14:** The system shall enable Super Admins to manage questionnaires via **XLSForm upload** to the Custom App, which pushes to ODK Central.
+*   **FR14:** The system shall enable Super Admins to manage questionnaires via the **native Form Builder UI**, with one-time XLSForm migration for existing forms.
 *   **FR15:** The system shall provide **Government Officials and Verification Assessors** with comprehensive dashboards and reporting tools. Both are **back-office analytical roles** (not field staff) with full data access:
     *   **Verification Assessors:** State-level auditors (not restricted by LGA) with:
         *   **READ Access:** Full access to all individual respondent records including PII (names, NINs, phone numbers, addresses) for quality verification
@@ -128,13 +131,13 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
 *   **FR18:** The system shall require Public Searchers to register and log in to view the unredacted contact details of skilled workers who have provided enriched consent.
 *   **FR19:** The system shall log every instance of a registered Public Searcher viewing a skilled worker's unredacted contact details, including Searcher ID, Worker ID, and timestamp.
 *   **FR20:** The system shall provide a dedicated, **High-Volume Data Entry Interface** for Clerks. This interface must be fully keyboard-optimized, ensuring all form navigation can be performed via 'Tab' and submissions triggered via 'Enter' (or similar hotkey) without requiring mouse interaction.
-*   **FR21:** The system shall enforce **Global NIN Uniqueness** across all submission sources (Enumerator ODK, Public Self-Registration, Paper Entry). Any submission with a NIN that already exists in the database shall be rejected with error message: "This individual has already been registered on [DATE] via [SOURCE]." Super Admins can override with documented justification (e.g., "Correcting erroneous previous entry").
+*   **FR21:** The system shall enforce **Global NIN Uniqueness** across all submission sources (Enumerator, Public Self-Registration, Paper Entry). Any submission with a NIN that already exists in the database shall be rejected with error message: "This individual has already been registered on [DATE] via [SOURCE]." Super Admins can override with documented justification (e.g., "Correcting erroneous previous entry").
 
 #### Non-Functional
 *   **NFR1: Performance**
     *   **NFR1.1:** API response times for all standard CRUD operations must be below 250ms at the 95th percentile (p95).
     *   **NFR1.2:** Frontend page loads (Largest Contentful Paint) for authenticated dashboards must be under 2.5 seconds on a 4G mobile connection.
-    *   **NFR1.3:** Offline-to-online sync of 20 completed surveys (average size) must complete in under 60 seconds (ODK Central native performance).
+    *   **NFR1.3:** Offline-to-online sync of 20 completed surveys (average size) must complete in under 60 seconds (native IndexedDB → API sync).
 *   **NFR2: Scalability**
     *   **NFR2.1:** **Staffing Model:** Support a **baseline capacity of 132 Field Staff** (33 Supervisors + 99 Enumerators), structured as 1 Supervisor + 3 Enumerators per Local Government Area (33 LGAs). The system architecture must support **unlimited staff accounts** with no hard technical limits.
     *   **NFR2.2:** **Planning Capacity:** The initial deployment targets **~200 total staff accounts** (132 field staff + ~68 back-office/admin). This is a **soft planning number**, not a hard limit. The system must gracefully scale beyond 200 if needed via vertical scaling (VPS resource upgrade).
@@ -143,18 +146,18 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
     *   **NFR2.5:** **Concurrency:** Support ~1,000 concurrent Public Users during peak registration periods.
 *   **NFR3: Availability & Reliability**
     *   **NFR3.1:** **99.5% SLA** (Honest Single-VPS target = 3.65 hours downtime/month maximum).
-    *   **NFR3.2:** **Degraded Mode (Process-Level Only):** If Custom App process crashes/restarts, ODK Central Docker container must remain available for raw data collection. **Note:** This does NOT apply to VPS-level failures (hardware crash, network partition) - in such scenarios, both Custom App and ODK Central will be unavailable. Enumerators must be trained to continue offline data collection on their devices for up to 7 days until VPS is restored.
+    *   **NFR3.2:** **Degraded Mode (Offline-First):** If the API is unavailable, the native form renderer continues to operate using IndexedDB for draft storage and submission queuing. Background sync retries automatically when connectivity is restored. Enumerators can continue offline data collection on their devices for up to 7 days.
     *   **NFR3.3:** **Comprehensive Backup Strategy:**
         *   **Custom App DB:** Daily encrypted dump to S3 at 2:00 AM WAT
-        *   **ODK Central DB:** Daily encrypted dump to S3 at 3:00 AM WAT
-        *   **Media Attachments:** Real-time sync to S3 (configured in ODK Central)
+        *   ~~**ODK Central DB:** Daily encrypted dump to S3 at 3:00 AM WAT~~ REMOVED (SCP-2026-02-05-001: Single database)
+        *   ~~**Media Attachments:** Real-time sync to S3 (configured in ODK Central)~~ REMOVED (No media in forms — GPS is coordinates only)
         *   **Retention Policy:** 7-day rolling window + monthly snapshots retained for 7 years (per NFR4.2)
         *   **Backup Testing:** Monthly restore drills in staging environment to validate backup integrity
     *   **NFR3.4:** **Disaster Recovery:** VPS must have automated snapshots every 6 hours with 1-hour Recovery Time Objective (RTO). Super Admin can initiate Point-in-Time Restore (PITR) via Admin panel for recovery up to 24 hours back. Dashboard must detect VPS connectivity issues and display "OFFLINE MODE - Data Will Sync When Server Returns" banner to enumerators.
 *   **NFR4: Security & Compliance (NDPA-Aligned)**
     *   **NFR4.1 Data Minimization:** Collect NIN (validated via Verhoeff) but **explicitly DO NOT** collect or store BVN.
     *   **NFR4.2 Retention:** Raw survey data retained 7 years; Marketplace profiles retained until consent revoked.
-    *   **NFR4.3 Logically Isolated Marketplace:** Public Search queries a separate **Read-Only Replica** of the marketplace table (never ODK directly). This logical separation ensures marketplace traffic cannot impact data collection performance.
+    *   **NFR4.3 Logically Isolated Marketplace:** Public Search queries a separate **Read-Only Replica** of the marketplace table (logically isolated from operational database). This logical separation ensures marketplace traffic cannot impact data collection performance.
     *   **NFR4.4 Defense-in-Depth:** Rate Limiting (Redis), Honeypots, strict Content Security Policy (CSP), and IP Throttling with the following thresholds:
         *   **Login Attempts:** 5 attempts per IP per 15 minutes (temporary 30-minute block after 10 failed attempts)
         *   **Marketplace Search:** 30 queries per IP per minute
@@ -178,24 +181,24 @@ We are also adopting a **Lean Infrastructure Strategy** (Docker, Single high-per
     *   **NFR8.2: Atomic Transactions:** All multi-step write operations (e.g., User Provisioning) must be wrapped in ACID-compliant database transactions.
     *   **NFR8.3: Immutable Audit Logs:** The `audit_logs` table must be implemented as **Append-Only** (via DB permissions or Trigger logic) to prevent tampering by compromised admin accounts.
     *   **NFR8.4: Anti-XSS:** The system must enforce a strict **Content Security Policy (CSP)** and utilize automated output encoding (React default) to neutralize malicious scripts in User Bios or Form definitions.
-    *   **NFR6.2:** The entire system (Custom App + ODK Integration) must be verifiable in a local/staging environment before production deployment.
+    *   **NFR6.2:** The entire system (Custom App + Native Form System) must be verifiable in a local/staging environment before production deployment.
 
 ## User Interface Design Goals
 
 #### Overall UX Vision
-**Seamless Integration.** Users should feel they are using *one* application. The application's user experience should be **intuitive, efficient, and minimize cognitive load** for all users, featuring **optimistic UI updates** and **skeleton screens** to ensure responsiveness on slow government networks. The transition between the Custom Dashboard and the ODK/Enketo data collection form must be visually consistent and fluid.
+**Seamless Integration.** Users should feel they are using *one* application. The application's user experience should be **intuitive, efficient, and minimize cognitive load** for all users, featuring **optimistic UI updates** and **skeleton screens** to ensure responsiveness on slow government networks. The transition between the Custom Dashboard and the native form renderer must be visually consistent and fluid.
 
 #### Core Screens and Views
 *   **Homepage:** Public-facing page with "Staff Login" and "Public Register" buttons.
 *   **Login Screen:** Secure and straightforward access for all roles (staff and public).
 *   **Public Registration Portal:** For new public users to create accounts and access surveys.
-*   **Enumerator Dashboard:** Overview of personal progress, targets, and communication. Includes "Start Survey" button (Seamless Enketo Launch) and "Pending Upload" warning banners.
+*   **Enumerator Dashboard:** Overview of personal progress, targets, and communication. Includes "Start Survey" button (launches native form renderer) and "Pending Upload" warning banners.
 *   **Supervisor Dashboard:** Real-time team monitoring, alerts, and communication hub.
 *   **Super Admin Dashboard:** Bulk User Import, XLSForm Management, and System Health metrics.
 *   **Verification Assessor Dashboard:** Progress tracking and report generation.
 *   **Government Official Dashboard:** High-level data insights and policy-making support.
-*   **Questionnaire Form (ODK/Enketo):** Clear, grouped questions with progress indicators and validation feedback (embedded in Custom App).
-*   **Data Entry Interface:** Dedicated screen for Data Entry Clerks to input paper-based survey responses via Enketo.
+*   **Questionnaire Form (Native Renderer):** Clear, one-question-per-screen navigation with progress indicators and validation feedback (built into Custom App).
+*   **Data Entry Interface:** Dedicated screen for Data Entry Clerks to input paper-based survey responses via the native form renderer (keyboard-optimized).
 *   **Public Skills Marketplace:** Public-facing search and profile discovery platform with 3-route structure.
 *   **Verification Portal:** Public `/verify-staff/:id` URL for ID Card verification.
 
@@ -234,53 +237,51 @@ Given the full-stack nature of the application and the potential for shared comp
 *   **Custom App (Node.js/React):** The **Single Source of Truth**. Handles Auth, Users, Dashboards, Marketplace, Fraud Logic, and Orchestration.
     *   **Frontend Stack:** React with **Tailwind CSS** and **shadcn/ui**.
     *   **Queue:** **BullMQ** utilizing the **Sidecar Redis** instance for high-performance ingestion.
-    *   **Ingestion Pattern:** The synchronization between ODK Central and the Custom App must be **Idempotent**. Re-processing the same Submission ID (e.g., in case of queue retry) must not result in duplicate records or data corruption.
+    *   **Ingestion Pattern:** The submission ingestion pipeline must be **Idempotent**. Re-processing the same Submission ID (e.g., in case of queue retry) must not result in duplicate records or data corruption.
     *   **Notification Service:** Use **AWS SES** (or equivalent high-deliverability provider) for emails. Implement a strict **Daily Cost Circuit Breaker** (e.g., max $50/day) to prevent SMS/Email billing spikes.
-    *   **Storage Strategy:** All Database Backups and ODK Media Attachments must be stored in **S3-Compatible Object Storage** (e.g., DigitalOcean Spaces, AWS S3) to ensure data survival even if the VPS is destroyed.
+    *   **Storage Strategy:** All Database Backups must be stored in **S3-Compatible Object Storage** (e.g., DigitalOcean Spaces, AWS S3) to ensure data survival even if the VPS is destroyed.
     *   **Scalability:** **Vertical Scaling Strategy.** The system is designed to run on a single high-performance VPS (8GB+ RAM). Increased load is handled by upgrading server resources (CPU/RAM) rather than horizontal auto-scaling, to minimize cost and architectural complexity.
-*   **Collection Engine (ODK Central):** **Self-hosted containerized instance** handling Form Management (Enketo) and Data Aggregation. ODK Central will be deployed via Docker on the same VPS as the Custom App to ensure **data residency within Nigeria** for NDPA compliance. No cloud-hosted ODK services will be used to prevent data from leaving Nigerian infrastructure.
+*   **Native Form System:** The Custom App includes a built-in form management system with JSONB form schemas stored in PostgreSQL, a skip-logic engine, Form Builder UI, and a one-question-per-screen mobile renderer. All form data resides in the same database as the application, deployed on a single VPS within Nigeria for **NDPA compliance**. _(Amended per SCP-2026-02-05-001: ODK Central removed in favour of native forms.)_
 *   **Source of Truth Matrix:**
-    *   **Raw Submissions:** ODK Central (Immutable).
-    *   **Ingested Records:** Custom App DB (Derived/Idempotent).
-    *   **Marketplace Profiles:** Custom App DB (Derived/Revocable).
-    *   **Drafts:** Enketo (Ephemeral/Non-Authoritative).
+    *   **Form Definitions:** App DB — JSONB schemas with version history (Immutable per version).
+    *   **Raw Submissions:** App DB — survey_responses table (Immutable once submitted).
+    *   **Marketplace Profiles:** App DB — derived view (Derived/Revocable).
+    *   **Drafts:** Client IndexedDB (Ephemeral/Non-Authoritative), auto-synced to App DB as `DRAFT` status.
 *   **Data Routing Matrix (What Goes Where):**
-    *   **ODK Central Database (PostgreSQL) Stores:**
-        *   Survey form definitions (XLSForms pushed from Custom App)
-        *   Raw survey submissions (JSON with media attachments)
-        *   Submission metadata (GPS coordinates, timestamps, device info)
-        *   ODK App User tokens (for Enumerator authentication)
-        *   Draft survey data (stored locally in browser IndexedDB, synced to ODK when submitted)
-    *   **Custom App Database (PostgreSQL) Stores:**
+    *   **Application Database (PostgreSQL) Stores:**
+        *   Native form definitions (JSONB schemas with sections, questions, skip logic, choice lists)
+        *   Form version history and publishing state (draft → published → archived)
         *   User accounts & authentication (all roles: Staff, Public Users, Admins)
         *   RBAC permissions & role assignments
         *   LGA assignments for Field Staff
         *   Staff profile data (NIN, bank details, live selfie, next of kin)
-        *   Ingested survey records (extracted from ODK webhooks and enriched)
+        *   Survey submissions with structured JSONB responses and metadata (GPS, timestamps, device info)
         *   Fraud detection scores and flags
         *   Marketplace profiles (derived from consent fields)
         *   Audit logs (all user actions, system events)
         *   Payment records and dispute tracking
         *   Communication/messaging between Supervisors and Enumerators
-        *   Encrypted ODK tokens (AES-256, for seamless Enketo launch)
+    *   **Client-Side Storage (IndexedDB):**
+        *   Offline draft responses (synced to server when connectivity resumes)
+        *   Cached form definitions for offline rendering
+        *   Pending submission queue with retry logic
     *   **Data Flow Rules:**
-        *   **Questionnaires:** Custom App → ODK Central (XLSForm upload)
-        *   **Survey Submissions:** Enketo (browser) → ODK Central → Custom App (webhook)
-        *   **User Provisioning:** Custom App → ODK Central (create App User via API)
-        *   **Authentication:** Custom App handles ALL login flows; ODK tokens used only for embedded Enketo forms
-        *   **Reporting/Dashboards:** Custom App queries its own database (never queries ODK directly)
-        *   **Marketplace:** Custom App Read-Only Replica (logically isolated from main database)
-    *   **Why Two Databases?**
-        *   **Separation of Concerns:** ODK Central is the immutable "field collection vault"; Custom App is the "operational system of record"
-        *   **Performance Isolation:** Public marketplace traffic cannot slow down data collection
-        *   **Data Integrity:** Raw survey data remains untouched; Custom App can re-ingest if processing logic changes
-        *   **NDPA Compliance:** Both databases reside on the same Nigerian VPS (no data leaves the country)
-*   **ODK Constraints:** The Custom App must **not** attempt to modify Enketo's internal UI or Draft state directly. All "Resume" functionality must rely on native Enketo/ODK links.
-*   **Database Strategy:** Two Separate Databases (App DB vs ODK DB) on the same Linux VPS server.
-*   **Integration Strategy:**
-    *   **User Sync:** Custom App -> ODK API (Automatically create ODK 'App Users').
-    *   **Data Sync:** ODK Webhook -> Custom App (Real-time BullMQ ingestion pipeline).
-    *   **Questionnaire Flow:** Custom App hosts the XLSForm upload which pushes to ODK Central.
+        *   **Form Management:** Super Admin creates/edits forms in Form Builder UI → stored in App DB as JSONB
+        *   **Survey Collection:** Native renderer (browser) → IndexedDB (offline) → App DB (submission API)
+        *   **Authentication:** Custom App handles ALL login flows; JWT-based session management
+        *   **Reporting/Dashboards:** Custom App queries its own database
+        *   **Marketplace:** Custom App Read-Only Replica (logically isolated from operational database)
+    *   **Single Database Rationale:**
+        *   **Simplified Operations:** One database to back up, monitor, and maintain
+        *   **Performance Isolation:** Marketplace queries run against a read-only replica; operational traffic is isolated
+        *   **Data Integrity:** Submissions are immutable rows with version-controlled form schema references
+        *   **NDPA Compliance:** Database resides on Nigerian VPS (no data leaves the country)
+        *   **Reduced Infrastructure:** 4 containers (App, PostgreSQL, Redis, Nginx) instead of 6+ with ODK
+*   **Database Strategy:** Single PostgreSQL database on the Linux VPS server, with a logical read-only replica for marketplace queries.
+*   **Submission Pipeline:**
+    *   **Online:** Native form renderer → REST API → BullMQ queue → survey_responses table (idempotent by submission UUID).
+    *   **Offline:** Native form renderer → IndexedDB queue → sync on reconnect → same API pipeline.
+    *   **Migration:** One-time XLSForm → native JSONB migration script (Story 2.9) converts existing questionnaire.
 
 #### Infrastructure & Deployment
 *   **Hosting:** Single VPS (Linux) running Docker Compose.
@@ -292,7 +293,7 @@ Given the full-stack nature of the application and the potential for shared comp
 
 *   **Epic 1: Foundation & Secure Access**
 *   **Epic 1.5: Public Website Foundation (Phase 1 Static)**
-*   **Epic 2: Core Administration & Questionnaire Management (ODK Integration)**
+*   **Epic 2: Core Administration & Questionnaire Management (Native Form System)**
 *   **Epic 2.5: Role-Based Dashboards & Feature Integration** _(Added 2026-01-31 per Epic 2 Retrospective)_
 *   **Epic 3: Enumerator, Public & Data Entry Collection**
 *   **Epic 4: Supervisor Oversight & Field Management**
@@ -317,15 +318,13 @@ so that we have a stable and automated environment for development, testing, and
 6.  A `.env.example` file is created containing placeholders for:
     *   `DATABASE_URL` (PostgreSQL)
     *   `REDIS_URL`
-    *   `ODK_SERVER_URL` (Cloud Sandbox URL)
-    *   `ODK_ADMIN_TOKEN`
     *   `JWT_SECRET` and other session/security tokens.
     *   `PORT` and other environment-specific variables.
     *   `AWS_SES_CREDENTIALS` (or equivalent) for emails.
     *   `S3_BUCKET_URL` for backups.
 7.  An initial `README.md` is created that includes: required tools, installation steps, and comprehensive Portainer deployment guide with:
     *   **Portainer Installation:** Step-by-step installation of Portainer CE (Community Edition) on VPS before deploying OSLSR
-    *   **Container Management:** Portainer manages all system containers: ODK Central, Custom App, Redis, PostgreSQL
+    *   **Container Management:** Portainer manages all system containers: Custom App, PostgreSQL, Redis, Nginx
     *   **Security:** Portainer access restricted to Super Admin via strong password + 2FA (Two-Factor Authentication)
     *   **Stack Import:** Instructions for importing OSLSR Docker Compose stack into Portainer
     *   **Configuration:** Environment variable management and container health monitoring via Portainer UI
@@ -365,7 +364,7 @@ so that each user only accesses features and data relevant to their responsibili
 **Back-Office Roles** (Analysts - State-Wide Access):
 *   **Verification Assessors:** READ all respondent data including PII (state-wide), WRITE verification status (approve/reject), Cannot modify respondent data.
 *   **Government Officials:** READ all respondent data including PII (state-wide), READ-ONLY (no write permissions), Can export detailed reports with PII.
-*   **Data Entry Clerks:** WRITE survey data (paper digitization via Enketo), READ paper form assignment queue, Cannot view digital submissions by Enumerators.
+*   **Data Entry Clerks:** WRITE survey data (paper digitization via native form renderer), READ paper form assignment queue, Cannot view digital submissions by Enumerators.
 
 **Administrative Roles** (System Management):
 *   **Super Admin:** Full READ/WRITE access to all system functions, user management, configuration, backups.
@@ -388,7 +387,7 @@ so that the application feels "World Class" and responsive even on slow governme
 ## Epic 1.5: Public Website Foundation (Phase 1 Static)
 **Goal:** Build the complete static public website infrastructure before Epic 2, establishing the Information Architecture (IA), design system, and all public-facing pages that create a professional first impression and guide users through registration.
 
-**Origin:** Added during Epic 1 Retrospective (2026-01-22) based on the decision to build the public website foundation before proceeding to Epic 2's ODK integration. This ensures users have a polished, informative experience when they first encounter OSLSR.
+**Origin:** Added during Epic 1 Retrospective (2026-01-22) based on the decision to build the public website foundation before proceeding to Epic 2's questionnaire management. This ensures users have a polished, informative experience when they first encounter OSLSR.
 
 **Scope:** Phase 1 focuses on static content pages only. Dynamic features (search functionality, live data) are deferred to later epics.
 
@@ -482,8 +481,8 @@ so that I can complete the process confidently and correctly.
 *   `docs/ux-design-specification.md` - UX patterns and component designs
 *   ADR-016 - Layout Architecture (PublicLayout vs DashboardLayout)
 
-## Epic 2: Core Administration & Questionnaire Management (ODK Integration)
-**Goal:** Provide Super Admins with a comprehensive interface to manage all user accounts, provision new staff users via an invite/bulk system, and manage survey questionnaires via ODK Central.
+## Epic 2: Core Administration & Questionnaire Management (Native Form System)
+**Goal:** Provide Super Admins with a comprehensive interface to manage all user accounts, provision new staff users via an invite/bulk system, and manage survey questionnaires via the native Form Builder and JSONB form schema system. _(Amended per SCP-2026-02-05-001: ODK Central removed, native form system replaces.)_
 
 #### Story 2.1 User Management Interface
 As a **Super Admin**,
@@ -497,34 +496,13 @@ so that I can effectively manage the workforce and their access to the system.
 4.  Super Admin can deactivate or delete user accounts.
 5.  **User Deletion Policy:** Deleting a user account does **NOT delete** their historical survey submissions (required for 7-year retention per NFR4.2). Submissions are re-assigned to `DELETED_USER_[ID]` in the database to maintain audit trail. User PII (name, email, phone) is **redacted** 90 days after account deletion, replaced with `[REDACTED]`.
 6.  **Right to Erasure:** Public Users can request complete data deletion via email to Super Admin. Admin must verify identity (NIN + Phone validation) and manually purge data, logging the action in audit trail with justification.
-7.  **Synchronization Check:** When a user is created/deactivated, the system must check if an ODK App User needs to be created/revoked.
+7.  **Role Provisioning:** When a user is created/deactivated, the system must update their form access permissions accordingly (e.g., revoke access to assigned questionnaires on deactivation).
 
-#### Story 2.2 Questionnaire Management (XLSForm Upload)
-As a **Super Admin**,
-I want to **upload an XLSForm definition file directly to the Custom App**,
-so that the survey structure is updated in the collection engine (ODK Central) without needing complex custom builders.
+#### ~~Story 2.2 Questionnaire Management (XLSForm Upload)~~ — SUPERSEDED
+> **SUPERSEDED by SCP-2026-02-05-001.** ODK Central removed. XLSForm upload retained as a one-time migration utility only (see Story 2.9). Questionnaire management now handled by native Form Builder (Stories 2.7-2.10).
 
-**Acceptance Criteria:**
-1.  Admin uploads `.xlsx` or `.xml` form definition via the Custom App dashboard.
-2.  System validates file format and schema.
-3.  System pushes form to ODK Central API as a new Draft or Published version.
-4.  System stores and versions the raw XLS file in the App database for audit and rollback.
-
-#### Story 2.3 Staff Provisioning (ODK Sync & Encrypted Tokens)
-As a **System**,
-I want to **automatically provision ODK users and securely store their tokens**,
-so that Enumerators have a seamless experience and the App remains the master of all credentials.
-
-**Acceptance Criteria:**
-1.  When an Enumerator account is created or an invite is accepted:
-2.  Backend calls ODK Central API to create a corresponding 'App User'.
-3.  Backend retrieves the ODK Token and stores it in the App Database using **AES-256 encryption**.
-4.  The system ensures that the Enumerator's dashboard can now generate correct Enketo survey links using these credentials automatically.
-5.  **Error Handling:** If ODK API call fails during account creation:
-    *   System logs error to Admin Dashboard ("ODK Sync Failures" widget with error details)
-    *   Enumerator can log in but sees "Account Setup Incomplete - Contact Administrator" banner
-    *   Super Admin receives automated email alert with user details and error message
-6.  **Manual Resync:** Super Admin dashboard includes a "Fix Sync" button that retries API call and displays detailed error logs if retry fails (e.g., "ODK Central unreachable", "Invalid credentials", "Network timeout").
+#### ~~Story 2.3 Staff Provisioning (ODK Sync & Encrypted Tokens)~~ — SUPERSEDED
+> **SUPERSEDED by SCP-2026-02-05-001.** ODK Central removed. Staff provisioning no longer requires ODK App User creation or encrypted token management. Authentication is fully handled by the Custom App's JWT-based session system.
 
 #### Story 2.4 ID Card Generation & Public Verification
 As a **Staff Member** or **Admin**,
@@ -552,45 +530,44 @@ so that the data collection efforts are properly organized, managed, and monitor
 ## Epic 3: Enumerator, Public & Data Entry Collection
 **Goal:** Provide Enumerators with a robust mobile tool for offline data collection, enable Public Users to self-register and submit data, and allow Data Entry Clerks to digitize paper forms.
 
-#### Story 3.1 Seamless Collection Interface & Offline Safety
+#### Story 3.1 Native Form Renderer & Offline Safety
 As an **Enumerator**,
-I want to **launch the survey directly from my dashboard and be warned if I have unsent data**,
-so that I never lose my hard work due to a browser cache clear.
+I want to **launch the survey directly from my dashboard using the native form renderer and be warned if I have unsent data**,
+so that I never lose my hard work due to a browser cache clear. _(Amended per SCP-2026-02-05-001: Enketo replaced by native form renderer.)_
 
 **Acceptance Criteria:**
-1.  Dashboard has a "Start Survey" button which launches a pre-authenticated Enketo form.
+1.  Dashboard has a "Start Survey" button which launches the native one-question-per-screen form renderer.
 2.  **Persistent Storage:** The application explicitly requests browser **"Persistent Storage"** permission.
-3.  **Data Warning Banner:** The Dashboard must query the browser's IndexedDB. If unsent Enketo records are found, a **Red Warning Banner** ("X Surveys Pending Upload - Do Not Clear Cache") is displayed.
-4.  **Service Worker:** Key Enketo assets are cached via Service Worker to ensure the form loads instantly even when offline.
+3.  **Data Warning Banner:** The Dashboard must query the browser's IndexedDB. If unsent form responses are found, a **Red Warning Banner** ("X Surveys Pending Upload - Do Not Clear Cache") is displayed.
+4.  **Service Worker:** Native form renderer assets and form definitions are cached via Service Worker to ensure the form loads instantly even when offline.
 5.  **Legacy Support:** The interface must be tested and fully functional on **Android 8.0 / Chrome 80** devices.
 6.  Upon submission, user is redirected back to the Custom App Dashboard.
 
-#### Story 3.2 Data Ingestion Pipeline (Webhook)
+#### Story 3.2 Submission Ingestion Pipeline (Native Forms)
 As a **System**,
-I want to **automatically ingest data from ODK Central via Webhook**,
-so that the Custom App database is updated in near real-time.
+I want to **reliably process form submissions from the native form renderer**,
+so that survey responses are validated, stored, and downstream pipelines are triggered. _(Amended per SCP-2026-02-05-001: ODK webhook replaced by native submission API.)_
 
 **Acceptance Criteria:**
-1.  Webhook listener endpoint established in the Custom App backend (`/api/webhook/odk`).
-2.  Webhook pushed to **BullMQ Job Queue** to ensure reliable processing with exponential backoff retry (5min, 15min, 1hr, 4hr, 24hr).
-3.  Worker parses JSON, maps fields to local `SurveyResponse` table, and identifies the submitting Enumerator.
+1.  Submission API endpoint established in the Custom App backend (`/api/v1/submissions`).
+2.  Submissions pushed to **BullMQ Job Queue** to ensure reliable processing with exponential backoff retry (5min, 15min, 1hr, 4hr, 24hr).
+3.  Worker validates JSONB response against form schema, stores in `survey_responses` table, and identifies the submitting user.
 4.  Trigger "Fraud Scoring Engine" (Epic 6) and "Marketplace Extractor" (Epic 7) upon successful ingestion.
-5.  **Webhook Failure Handling:** If ODK Central cannot reach Custom App (network issues, server down):
-    *   ODK Central automatically retries webhook delivery with built-in exponential backoff
-    *   Custom App exposes `/admin/missing-submissions` page showing gaps in submission IDs
-    *   Super Admin can manually trigger "Pull from ODK" to fetch all submissions since last successful sync
-    *   Failed webhook attempts are logged with timestamp and error reason for debugging
+5.  **Offline Sync Handling:** When client comes back online and syncs queued submissions:
+    *   Submissions are processed idempotently (duplicate submission UUIDs are rejected gracefully)
+    *   Custom App exposes `/admin/submission-health` page showing sync status and any failed submissions
+    *   Failed submissions are logged with timestamp and validation error for debugging
 
 #### Story 3.3 Session Management & Resume
 As an **Enumerator**,
 I want to **be able to pause and resume data collection sessions**,
-so that I can handle interruptions without losing progress.
+so that I can handle interruptions without losing progress. _(Amended per SCP-2026-02-05-001: IndexedDB drafts replace Enketo draft system.)_
 
 **Acceptance Criteria:**
-1.  The system leverages Enketo's native "Save as Draft" functionality (drafts stored locally in browser IndexedDB).
-2.  **Client-Side Only:** Drafts are stored on the Enumerator's device and are **NOT visible to Supervisors** until submitted to ODK Central.
-3.  The Custom App Dashboard provides a "Resume Draft" link that retrieves saved surveys from local storage.
-4.  **Device Loss Protection:** If an Enumerator is inactive on a draft for >15 minutes, system auto-submits a partial record with **"DRAFT_INCOMPLETE"** flag to ODK Central for backup/recovery purposes.
+1.  The native form renderer saves draft responses to browser **IndexedDB** with exact question position tracking.
+2.  **Client-Side Only:** Drafts are stored on the Enumerator's device and are **NOT visible to Supervisors** until submitted via the submission API.
+3.  The Custom App Dashboard provides a "Resume Draft" link that retrieves saved surveys from IndexedDB and restores exact position.
+4.  **Device Loss Protection:** If an Enumerator is inactive on a draft for >15 minutes, system auto-syncs a partial record with **"DRAFT_INCOMPLETE"** status to the server for backup/recovery purposes.
 5.  The system implements auto-save every 30 seconds to prevent data loss during unexpected interruptions.
 
 #### Story 3.4 In-App Communication for Enumerators
@@ -658,7 +635,7 @@ I want to **access a dedicated interface to accurately input responses from pape
 so that data collected via traditional methods can be digitised.
 
 **Acceptance Criteria:**
-1.  Data Entry Clerks can log in to a dedicated web interface optimized for rapid data entry via Enketo.
+1.  Data Entry Clerks can log in to a dedicated web interface optimized for rapid data entry via the native form renderer.
 2.  **Keyboard-Optimized:** The interface is designed for high-speed transcription (minimal mouse usage).
 3.  The interface includes all smart checks and validation rules (e.g., Verhoeff checksum for NIN).
 4.  Clerks must select the relevant LGA and respondent details for each entry.
@@ -782,11 +759,11 @@ so that the collected information is accurate and reliable.
 
 #### Story 6.2 Fraud Scoring Engine (Ingestion Pipeline)
 As a **System**,
-I want to **analyze incoming ODK submissions for fraud signals (GPS, Time, Logic)**,
+I want to **analyze incoming survey submissions for fraud signals (GPS, Time, Logic)**,
 so that Supervisors are alerted immediately to potential fraud.
 
 **Acceptance Criteria:**
-1.  Engine runs automatically upon webhook ingestion from ODK Central.
+1.  Engine runs automatically upon submission ingestion via the BullMQ pipeline.
 2.  **Duration Check:** Flags submissions where (End Time - Start Time) < Threshold (e.g., 2 minutes for 50 questions).
 3.  **GPS Clustering:** Flags submissions that are geographically identical to previous submissions by the same enumerator ("filling at a spot").
 4.  **Logic Checks:** Identify patterns of "Straight-lining" (choosing the first option for every question).
@@ -961,7 +938,7 @@ The following official documents are incorporated by reference as the definitive
 ### **STEP 1: Architecture Design** (Do This First)
 
 #### Architect Prompt
-"Design the **Composed Modular Monolith** based on OSLSR PRD v7.5 (all critique issues resolved, data routing clarified). Define the **Lean Infrastructure Stack** (Docker, Single self-hosted VPS, Sidecar Redis, Postgres Queue, ODK Central self-hosted).
+"Design the **Custom Modular Monolith** based on OSLSR PRD v8.0 (native form system, SCP-2026-02-05-001 applied). Define the **Lean Infrastructure Stack** (Docker, Single self-hosted VPS, Sidecar Redis, Single PostgreSQL database).
 
 **Key Requirements:**
 - **Scalability:** Support unlimited staff accounts (baseline 200, flexible vertical scaling). No hard caps.
@@ -972,10 +949,10 @@ The following official documents are incorporated by reference as the definitive
 - **Data Security:** Global NIN uniqueness (DB-level UNIQUE constraint), Verhoeff validation, PII access controls
 - **Fraud Detection:** Configurable thresholds (cluster/speed/pattern) via Admin UI
 - **Marketplace:** 3-Route structure with Read-Only replica, enhanced bot protection (CAPTCHA, fingerprinting)
-- **ODK Integration:** Self-hosted ODK Central (NDPA compliance), idempotent webhook handling with exponential backoff retry, encrypted token storage (AES-256), error recovery (`/admin/missing-submissions`)
-- **Backup Strategy:** Dual-database daily backups (App DB + ODK DB) to S3, real-time media sync, 7-year retention
+- **Native Form System:** JSONB form schemas in PostgreSQL, skip-logic engine, Form Builder UI, one-question-per-screen renderer, IndexedDB offline sync with idempotent submission API
+- **Backup Strategy:** Single-database daily backups to S3, 7-year retention
 
-Reference: `docs/questionnaire_schema.md` (XLSForm fields), `docs/homepage_structure.md` (routes). All technical ambiguities resolved - proceed with confidence."
+Reference: `docs/questionnaire_schema.md` (form fields), `docs/homepage_structure.md` (routes). All technical ambiguities resolved - proceed with confidence."
 
 ---
 

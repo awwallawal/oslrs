@@ -1,4 +1,5 @@
 # generated: 2026-01-23
+# updated: 2026-02-06 - SCP-2026-02-05-001: ODK removal, native form system stories added
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -21,6 +22,7 @@
 #   - in-progress: Developer actively working on implementation
 #   - review: Ready for code review (via Dev's code-review workflow)
 #   - done: Story completed
+#   - superseded: Story replaced by course correction (SCP). Code removed or never needed.
 #
 # Retrospective Status:
 #   - optional: Can be completed but not required
@@ -70,23 +72,30 @@ development_status:
   1.5-8-navigation-footer-polish: done  # Completed 2026-01-24: Code review passed, all 9 ACs verified
   epic-1.5-retrospective: done  # Completed 2026-01-24: Deep-dive with gap analysis, Story 1.5-8 created
 
-  # Epic 2: Questionnaire Management & ODK Integration
-  epic-2: done  # Completed 2026-01-31: All 6 stories done
-  2-1-xlsform-upload-validation: done  # Completed 2026-01-27: Code review passed, all fixes applied, 55/55 tests pass
-  2-2-odk-central-form-deployment: done  # Completed 2026-01-28: ODK client, form deployment service, publish endpoint, frontend button, 17 tests
-  2-6-odk-mock-server-integration-testing: done  # Code review passed 2026-01-28: All fixes applied, 54 tests pass
-  2-3-automated-odk-app-user-provisioning: done  # Completed 2026-01-28: Code review passed, 260 API + 66 odk-integration tests pass
-  2-4-encrypted-odk-token-management: done  # Code review passed 2026-01-31: Added odk-config tests (AC7), fixed audit types, logger interface. 126 odk-integration tests pass
-  2-5-odk-sync-health-monitoring: done  # Code review passed 2026-01-31: Extracted rate limiter, fixed tautological tests, lazy Redis init, added 'closing' status to web. 991 total tests pass
+  # Epic 2: Questionnaire Management & Native Form System
+  # Updated: 2026-02-06 - Per SCP-2026-02-05-001: ODK removed, native form system replaces
+  # Stories 2.2-2.6 SUPERSEDED, new Stories 2.7-2.10 added for native forms
+  epic-2: in-progress  # Reopened 2026-02-06: ODK stories superseded, native form stories added
+  2-1-xlsform-upload-validation: done  # Completed 2026-01-27: Retained for one-time migration only (see Story 2.9)
+  2-2-odk-central-form-deployment: superseded  # SCP-2026-02-05-001: ODK removed, replaced by Stories 2.7-2.10
+  2-6-odk-mock-server-integration-testing: superseded  # SCP-2026-02-05-001: ODK removed
+  2-3-automated-odk-app-user-provisioning: superseded  # SCP-2026-02-05-001: ODK removed
+  2-4-encrypted-odk-token-management: superseded  # SCP-2026-02-05-001: ODK removed
+  2-5-odk-sync-health-monitoring: superseded  # SCP-2026-02-05-001: ODK removed
+  2-7-native-form-schema-types: backlog  # NEW: Database migration, TypeScript types, Zod schemas
+  2-8-skip-logic-form-services: backlog  # NEW: Skip logic engine, native form CRUD, API endpoints
+  2-9-xlsform-migration-script: backlog  # NEW: One-time migration of oslsr_master_v3.xlsx to native format
+  2-10-native-form-builder-ui: backlog  # NEW: Form Builder UI with tabs (Settings, Sections, Choices, Preview)
   epic-2-retrospective: done  # Completed 2026-01-31: Identified visibility gap, created Epic 2.5
 
   # Epic 2.5: Role-Based Dashboards & Feature Integration
   # Added: 2026-01-31 - Per Epic 2 retrospective decision to scaffold role dashboards before Epic 3
+  # Updated: 2026-02-06 - Story 2.5-2 needs cleanup post-ODK removal (SCP-2026-02-05-001)
   # Source: ux-design-specification.md, ux-design-directions.html, ADR-016
   # Security: Strict route isolation (each role can ONLY access their own dashboard)
   epic-2.5: in-progress
   2.5-1-dashboard-layout-architecture-role-routing: done  # Code review passed 2026-01-31: All fixes applied, 578 web tests pass
-  2.5-2-super-admin-questionnaires-odk: done  # Code review passed 2026-02-01: Missing tests added (3), File List corrected. 620 web tests pass
+  2.5-2-super-admin-questionnaires-form-management: done  # Code review passed 2026-02-01: 620 web tests pass. NEEDS CLEANUP: Remove ODK components, add Form Builder links (SCP-2026-02-05-001)
   2.5-3-super-admin-staff-management: review  # Ready for review 2026-02-04: Staff management + Activation Wizard (Tasks 19-29). S3 integration verified with DO Spaces. 327 API + 745 web tests pass
   2.5-4-supervisor-dashboard-shell: backlog
   2.5-5-enumerator-dashboard-shell: backlog
@@ -96,12 +105,13 @@ development_status:
   epic-2.5-retrospective: optional
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
+  # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)
   epic-3: backlog
   3-0-google-oauth-enhanced-public-registration: backlog  # ADR-015: Blocks Story 3.5
-  3-1-seamless-enketo-launch-dashboard: backlog
-  3-2-pwa-service-worker-offline-assets: backlog
-  3-3-offline-queue-sync-status-ui: backlog
-  3-4-idempotent-webhook-ingestion-bullmq: backlog
+  3-1-native-form-renderer-dashboard: backlog  # REWRITTEN: Was "Seamless Enketo Launch". Now native form renderer. Depends on Epic 2 Stories 2.7-2.10
+  3-2-pwa-service-worker-offline-assets: backlog  # Updated: Enketo assets → native form assets
+  3-3-offline-queue-sync-status-ui: backlog  # Updated: IndexedDB for native forms
+  3-4-idempotent-submission-ingestion-bullmq: backlog  # REPURPOSED: Was ODK webhook ingestion. Now native form submission API
   3-5-public-self-registration-survey-access: backlog
   3-6-keyboard-optimized-data-entry-interface-clerks: backlog
   3-7-global-nin-uniqueness-enforcement: backlog

@@ -21,19 +21,19 @@ This document provides the complete epic and story breakdown for Oyo State Labou
 ### Functional Requirements
 
 FR1: Consent Management - The system shall present a clear consent screen (Two-stage marketplace consent workflow) allowing respondents to opt-in for an anonymous marketplace profile. Paper forms must have pre-printed serial numbers.
-FR2: Two-Stage Consent Workflow - The system shall implement `consent_marketplace` (Stage 1: Anonymous) and `consent_enriched` (Stage 2: Name/Phone) fields within the ODK survey form.
+FR2: Two-Stage Consent Workflow - The system shall implement `consent_marketplace` (Stage 1: Anonymous) and `consent_enriched` (Stage 2: Name/Phone) fields within the survey form.
 FR3: Public Access & Authentication - The system shall provide a public-facing Homepage with distinct authentication endpoints for "Staff Login" and "Public Register".
-FR4: Public User Survey - The system shall allow registered Public Users to securely log in and fill out survey questionnaires via Enketo.
+FR4: Public User Survey - The system shall allow registered Public Users to securely log in and fill out survey questionnaires via the native form renderer.
 FR5: NIN Verification - The system shall require public users to provide their National Identity Number (NIN) during registration (Global Uniqueness enforced).
 FR6: Staff Provisioning - The system shall allow Super Admins to invite/provision new staff via Manual Single-User Creation or Bulk CSV Import (with LGA locking).
 FR7: Staff Login - The system shall allow Enumerators and staff to securely log in to the Custom App using unique credentials.
 FR8: Enumerator Dashboard - The system shall provide Enumerators with a personalized dashboard displaying daily/weekly progress.
-FR9: Offline Collection (PWA) - The system shall enable offline data collection using embedded Enketo forms (browser-based PWA) and sync automatically via ODK Central.
-FR10: Pause/Resume - The system shall support pausing and resuming incomplete survey sessions (native ODK feature).
+FR9: Offline Collection (PWA) - The system shall enable offline data collection using the native form renderer (browser-based PWA) with IndexedDB draft storage and background sync to the API.
+FR10: Pause/Resume - The system shall support pausing and resuming incomplete survey sessions via IndexedDB draft storage with exact question position restore.
 FR11: In-App Communication - The system shall provide communication channels for staff to message Supervisors.
 FR12: Supervisor Dashboard - The system shall allow Supervisors to view real-time progress of assigned Enumerators.
 FR13: Context-Aware Fraud Detection - The system shall implement a Fraud Signal Engine with configurable thresholds for Cluster Detection, Speed Run, and Straight-lining. Flags do NOT block data.
-FR14: Questionnaire Management - The system shall enable Super Admins to manage questionnaires via XLSForm upload to Custom App (push to ODK Central).
+FR14: Questionnaire Management - The system shall enable Super Admins to manage questionnaires via the native Form Builder UI, with one-time XLSForm migration for existing forms.
 FR15: Back-Office Reporting - The system shall provide Verification Assessors (Read/Write verification status) and Government Officials (Read-Only/Export) with dashboards.
 FR16: Audit Trails - The system shall include detailed immutable audit trails for all user actions and data modifications.
 FR17: Marketplace Search - The system shall provide a public-facing interface for searching skilled worker profiles by skill, LGA, and experience.
@@ -53,7 +53,7 @@ NFR2.3: Capacity monitoring alerts at 120 and 180 field staff.
 NFR2.4: Bulk Import supports 500+ users.
 NFR2.5: Support ~1,000 concurrent Public Users.
 NFR3.1: 99.5% SLA (Single-VPS target).
-NFR3.2: Degraded Mode (ODK Central remains available if Custom App crashes).
+NFR3.2: Degraded Mode (IndexedDB preserves drafts if API is unavailable; background sync retries).
 NFR3.3: Comprehensive Backup Strategy (Daily S3 dumps, Real-time media sync, 7-year retention).
 NFR3.4: Disaster Recovery (6-hour snapshots, 1-hour RTO).
 NFR4.1: Data Minimization (Collect NIN, DO NOT collect BVN).
@@ -75,11 +75,11 @@ NFR6.2: Verifiable in local/staging environment.
 ### Additional Requirements
 
 **Architecture:**
-- **Starter Template:** Custom Manual Initialization (Monorepo structure: `apps/web`, `apps/api`, `packages/*`, `services/odk-integration`).
+- **Starter Template:** Custom Manual Initialization (Monorepo structure: `apps/web`, `apps/api`, `packages/*`).
 - **Infrastructure:** Single self-hosted Linux VPS (Hetzner CX43), Docker Compose orchestration.
-- **Database Architecture:** Two PostgreSQL databases (`app_db` + `odk_db`) on same VPS.
+- **Database Architecture:** Single PostgreSQL database (`app_db`) with native form schemas stored as JSONB.
 - **Authentication:** Hybrid strategy (JWT + Redis blacklist).
-- **ODK Integration:** Dedicated `services/odk-integration/` abstraction layer; Idempotent webhook ingestion.
+- **Native Form System:** Form definitions stored as JSONB in PostgreSQL; skip logic engine; IndexedDB offline sync; one-question-per-screen renderer.
 - **Marketplace Search:** PostgreSQL Full-Text Search (tsvector) with Read-Only Replica.
 - **Fraud Engine:** Rule-based with pluggable heuristics, running on `app_db` ingested records.
 - **Media Handling:** Live Selfie (Dual-purpose: Identity + ID Card) using `face-api.js` (client) and `sharp`/`Rekognition` (server).
@@ -118,7 +118,7 @@ FR10 (Pause/Resume): Epic 3
 FR11 (In-App Messaging): Epic 4
 FR12 (Supervisor Dashboard): Epic 4, **Epic 2.5** (Dashboard Shell)
 FR13 (Fraud Signal Engine): Epic 4 (Oversight/Action)
-FR14 (XLSForm Management): Epic 2, **Epic 2.5** (UI Integration)
+FR14 (Form Management): Epic 2 (Native Forms), **Epic 2.5** (Form Builder UI Integration)
 FR15 (Back-Office Dashboards): Epic 5, **Epic 2.5** (Dashboard Shells)
 FR16 (Audit Trails): Epic 6
 FR17 (Marketplace Search): Epic 7
@@ -146,16 +146,16 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **Dependencies:** Epic 1 (Foundation) complete
 **Source Documents:** `docs/public-website-ia.md`, `_bmad-output/planning-artifacts/ux-design-specification.md`, Architecture ADR-016
 
-### Epic 2: Questionnaire Management & ODK Integration
-**Goal:** Enable the management of digital survey forms and the seamless connection between the Custom App and the ODK Central collection engine.
-**User Outcome:** Admins can upload and version XLSForms; the system is ready to receive and process field data.
+### Epic 2: Questionnaire Management & Native Form System
+**Goal:** Enable the management of digital survey forms via a native form definition system with skip logic, validation, and a visual Form Builder UI.
+**User Outcome:** Admins can create, edit, and publish questionnaires via the Form Builder; the system stores form schemas natively and is ready to render forms for data collection.
 **FRs covered:** FR14
 
 ### Epic 2.5: Role-Based Dashboards & Feature Integration
 **Goal:** Scaffold role-specific dashboard shells for all 7 system roles, wire up existing backend capabilities from Epic 1 and Epic 2, establish RBAC route protection, and create testable UI surfaces before proceeding to Epic 3.
 **User Outcome:** Every user role has a functional post-login experience that demonstrates implemented capabilities; developers can test features end-to-end; stakeholders can see progress demos; route guards prevent unauthorized cross-role access.
-**FRs covered:** FR3 (Dashboard Access), FR6 (Staff Management UI), FR7 (Staff Login), FR8 (Enumerator Dashboard), FR12 (Supervisor Dashboard), FR14 (XLSForm UI), FR15 (Back-Office Dashboards), FR20 (Data Entry Interface)
-**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (ODK Integration) - Complete
+**FRs covered:** FR3 (Dashboard Access), FR6 (Staff Management UI), FR7 (Staff Login), FR8 (Enumerator Dashboard), FR12 (Supervisor Dashboard), FR14 (Form Builder UI), FR15 (Back-Office Dashboards), FR20 (Data Entry Interface)
+**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (Native Form System) - Complete
 **Source Documents:** `ux-design-specification.md`, `ux-design-directions.html`, Architecture ADR-016
 **Security:** Strict route isolation - each role can ONLY access their own dashboard routes
 
@@ -709,9 +709,9 @@ So that I can complete the process confidently and correctly.
 
 ---
 
-## Epic 2: Questionnaire Management & ODK Integration
+## Epic 2: Questionnaire Management & Native Form System
 
-**Epic Goal:** Enable the management of digital survey forms and the seamless connection between the Custom App and the ODK Central collection engine.
+**Epic Goal:** Enable the management of digital survey forms via a native form definition system with skip logic, validation, and a visual Form Builder UI.
 
 ### Story 2.1: XLSForm Upload & Validation
 
@@ -726,74 +726,150 @@ So that I can update the survey structure without using the ODK Central UI.
 **Then** the system should validate the file format and questionnaire schema
 **And** successfully validated forms should be stored and versioned in the `app_db`.
 
-### Story 2.2: ODK Central Form Publishing
+> **Note (SCP-2026-02-05-001):** This story is COMPLETE. The XlsformParserService is retained solely for the one-time migration of oslsr_master_v3.xlsx to the native form schema (see Story 2.9). No ongoing XLSForm parsing is required.
 
-As a Super Admin,
+### ~~Story 2.2: ODK Central Form Publishing~~ — SUPERSEDED
+
+> **SUPERSEDED by Sprint Change Proposal SCP-2026-02-05-001**
+> Reason: ODK Central removed. Native form system replaces all ODK integration.
+> Replaced by: Stories 2.7-2.10 (Native Form System)
+
+~~As a Super Admin,
 I want to publish validated questionnaires to ODK Central via a manual action,
-So that they are available for field collection.
+So that they are available for field collection.~~
 
-**Acceptance Criteria:**
+### ~~Story 2.3: Automated ODK App User Provisioning~~ — SUPERSEDED
 
-**Given** a validated XLSForm in the Custom App
-**When** I click "Publish to ODK"
-**Then** the `@oslsr/odk-integration` package should call the ODK Central API to deploy the form
-**And** the form status in the Custom App should update to "Published" upon success
-**And** if a previous version of the same form_id was published, it should be auto-deprecated.
+> **SUPERSEDED by Sprint Change Proposal SCP-2026-02-05-001**
+> Reason: ODK Central removed. No ODK App Users needed with native forms.
+> Replaced by: Stories 2.7-2.10 (Native Form System)
 
-### Story 2.3: Automated ODK App User Provisioning
-
-As a System,
+~~As a System,
 I want to automatically create ODK App Users for every provisioned staff member,
-So that they can collect data immediately.
+So that they can collect data immediately.~~
 
-**Acceptance Criteria:**
+### ~~Story 2.4: Encrypted ODK Token Management~~ — SUPERSEDED
 
-**Given** a new staff member account creation
-**When** the account is successfully created in the Custom App
-**Then** the system should asynchronously call the ODK API to create a corresponding App User
-**And** the ODK project permissions should be correctly assigned to that user.
+> **SUPERSEDED by Sprint Change Proposal SCP-2026-02-05-001**
+> Reason: ODK Central removed. No ODK tokens needed with native forms.
+> Replaced by: Stories 2.7-2.10 (Native Form System)
 
-### Story 2.4: Encrypted ODK Token Management
-
-As a System,
+~~As a System,
 I want to securely store ODK App User tokens,
-So that I can launch seamless Enketo forms without exposing credentials.
+So that I can launch seamless Enketo forms without exposing credentials.~~
 
-**Acceptance Criteria:**
+### ~~Story 2.5: ODK Sync Health Monitoring~~ — SUPERSEDED
 
-**Given** a newly created ODK App User
-**When** the ODK API returns the session token
-**Then** the system should encrypt the token using AES-256 before storing it in the `app_db`
-**And** the token should be retrievable only by the authorized backend service.
+> **SUPERSEDED by Sprint Change Proposal SCP-2026-02-05-001**
+> Reason: ODK Central removed. No ODK sync monitoring needed.
+> Replaced by: Stories 2.7-2.10 (Native Form System)
 
-### Story 2.5: ODK Sync Health Monitoring
-
-As a Super Admin,
+~~As a Super Admin,
 I want to monitor the health of the ODK Central integration,
-So that I can resolve synchronization issues promptly.
+So that I can resolve synchronization issues promptly.~~
 
-**Acceptance Criteria:**
+### ~~Story 2.6: ODK Mock Server for Integration Testing~~ — SUPERSEDED
 
-**Given** a failure in an ODK API call (e.g., timeout or auth error)
-**When** I view the "System Health" dashboard
-**Then** the failure should be displayed in the "ODK Sync Failures" widget
-**And** I should have a "Manual Resync" button to retry the failed operation
-**And** I should be able to unpublish/rollback a published form from ODK Central, with the app_db status reverting to "draft" and an audit log entry recorded (identified as gap in Story 2-2 validation).
+> **SUPERSEDED by Sprint Change Proposal SCP-2026-02-05-001**
+> Reason: ODK Central removed. No ODK mock server needed.
+> Replaced by: Stories 2.7-2.10 (Native Form System)
 
-### Story 2.6: ODK Mock Server for Integration Testing
+~~As a Developer,
+I want a mock ODK Central server that simulates the real ODK Central API,
+So that integration tests for `@oslsr/odk-integration` can verify full HTTP request/response flows without requiring a live ODK Central instance.~~
+
+---
+
+### Story 2.7: Native Form Schema & Types
 
 As a Developer,
-I want a mock ODK Central server that simulates the real ODK Central API,
-So that integration tests for `@oslsr/odk-integration` can verify full HTTP request/response flows without requiring a live ODK Central instance.
+I want the database schema and TypeScript types for native forms,
+So that I can build the form builder and renderer with type safety.
+
+**Dependencies:** Story 2.1 (XLSForm Parser — for migration only)
 
 **Acceptance Criteria:**
 
-**Given** the `@oslsr/odk-integration` test suite, **when** integration tests run, **then** a mock ODK Central server (MSW) MUST be available that responds to all ODK endpoints used by the project.
-**And** the mock server MUST support session auth, first-time publish, version-update (draft+publish), and programmable error injection.
-**And** all HTTP requests MUST be inspectable for assertion purposes.
-**And** existing tests MUST be upgraded to use the mock server for realistic HTTP-level validation.
+**AC2.7.1:** **Given** the existing `questionnaire_forms` table, **when** I run the database migration, **then** it adds `form_schema` JSONB and `is_native` BOOLEAN columns with a GIN index for JSON queries.
 
-**Source:** Identified as gap during Story 2-2 code review (2026-01-28). Task 6.2 was originally deferred due to "requires ODK mock server."
+**AC2.7.2:** **Given** the native form schema requirements, **when** I create types in `packages/types/src/native-form.ts`, **then** all form components (NativeFormSchema, Section, Question, Condition, ConditionGroup, Choice, ValidationRule) are fully typed.
+
+**AC2.7.3:** **Given** the TypeScript interfaces, **when** I create Zod schemas in `packages/types/src/validation/native-form.ts`, **then** I can validate form schemas at runtime with 10+ unit tests passing.
+
+**Tasks/Subtasks:**
+- Task 2.7.1: Create migration `apps/api/drizzle/0014_add_native_form_schema.sql`
+- Task 2.7.2: Update `apps/api/src/db/schema/questionnaires.ts` with new columns
+- Task 2.7.3: Create `packages/types/src/native-form.ts` with all interfaces
+- Task 2.7.4: Create `packages/types/src/validation/native-form.ts` with Zod schemas and tests
+
+### Story 2.8: Skip Logic & Form Services
+
+As a Developer,
+I want API services for skip logic evaluation and form CRUD,
+So that the Form Builder can save and validate forms.
+
+**Dependencies:** Story 2.7
+
+**Acceptance Criteria:**
+
+**AC2.8.1:** **Given** a form with conditions, **when** I evaluate skip logic using the SkipLogicService, **then** it correctly determines field visibility for all operator types (equals, not_equals, greater_than, etc.) and condition groups (AND/OR).
+
+**AC2.8.2:** **Given** a form schema, **when** I call CRUD methods on the NativeFormService, **then** forms are created, updated, validated for publish, and flattened for rendering.
+
+**AC2.8.3:** **Given** an authenticated Super Admin, **when** they call native form API endpoints (`POST /native`, `GET /:id/schema`, `PUT /:id/schema`, `GET /:id/preview`), **then** they can create and manage forms with proper validation.
+
+**Tasks/Subtasks:**
+- Task 2.8.1: Create `apps/api/src/services/skip-logic.service.ts` (evaluateCondition, evaluateConditionGroup, parseXlsformRelevance) with 15+ unit tests
+- Task 2.8.2: Create `apps/api/src/services/native-form.service.ts` (createForm, updateFormSchema, validateForPublish, getFormSchema, flattenForRender) with 12+ unit tests
+- Task 2.8.3: Update `apps/api/src/routes/questionnaire.routes.ts` with native form endpoints
+- Task 2.8.4: Update `apps/api/src/controllers/questionnaire.controller.ts` with native form methods
+
+### Story 2.9: XLSForm Migration Script
+
+As a Super Admin,
+I want the existing oslsr_master_v3 form migrated to native format,
+So that I can use the native form system with existing questionnaire data.
+
+**Dependencies:** Story 2.8
+
+**Acceptance Criteria:**
+
+**AC2.9.1:** **Given** the `oslsr_master_v3.xlsx` file, **when** I run the migration script, **then** it parses all worksheets (survey, choices, settings) correctly, maps XLSForm types to native types, and converts begin_group/end_group to sections.
+
+**AC2.9.2:** **Given** the parsed XLSForm data, **when** the script converts relevance expressions, **then** it produces valid native form Condition objects that pass Zod validation.
+
+**AC2.9.3:** **Given** the converted form, **when** the script completes, **then** the form is stored in the database with `is_native=true` and all 35 questions, 6 sections, and 12 choice lists are present.
+
+**Tasks/Subtasks:**
+- Task 2.9.1: Create `scripts/migrate-xlsform-to-native.ts` (parse, map types, convert groups, convert relevance, generate UUIDs)
+- Task 2.9.2: Add validation and logging (validate against Zod schema, log migration summary)
+- Task 2.9.3: Run migration and verify output
+
+### Story 2.10: Native Form Builder UI
+
+As a Super Admin,
+I want a Form Builder UI to create and edit questionnaires,
+So that I can manage forms without uploading XLSForm files.
+
+**Dependencies:** Story 2.8
+
+**Acceptance Criteria:**
+
+**AC2.10.1:** **Given** Super Admin navigates to `/dashboard/super-admin/questionnaires/builder`, **when** the page loads, **then** they see a tabbed interface (Settings, Sections, Choices, Preview) for form editing with Save/Publish buttons.
+
+**AC2.10.2:** **Given** the Settings tab, **when** Super Admin edits form title and version, **then** changes are persisted via the native form API.
+
+**AC2.10.3:** **Given** the Sections tab, **when** Super Admin adds/edits/deletes sections and questions, **then** they can configure question types, required flags, and skip logic conditions via a visual ConditionBuilder.
+
+**AC2.10.4:** **Given** the Choices tab, **when** Super Admin creates/edits choice lists, **then** the lists are available for `select_one` and `select_multiple` question types.
+
+**AC2.10.5:** **Given** the Preview tab, **when** Super Admin opens it, **then** they see the JSON structure and a field summary of the form.
+
+**Tasks/Subtasks:**
+- Task 2.10.1: Create `FormBuilderPage.tsx` (tab state, form data state, Save/Publish)
+- Task 2.10.2: Create form-builder components (FormBuilderTabs, FormSettingsTab, SectionsTab, SectionEditor, QuestionEditor, ConditionBuilder, ChoiceListsTab, ChoiceListEditor, PreviewTab)
+- Task 2.10.3: Create React Query hooks (`useNativeForm.ts`, `native-form.api.ts`)
+- Task 2.10.4: Update routes in `App.tsx` and `QuestionnaireManagementPage.tsx`
 
 ---
 
@@ -808,7 +884,7 @@ So that integration tests for `@oslsr/odk-integration` can verify full HTTP requ
 - Epic 3 requires dashboard foundations (Stories 3-1, 3-5, 3-6 depend on dashboard shells)
 - Mirrors Epic 1.5 pattern: build → reflect → consolidate → advance
 
-**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (ODK Integration) - All Complete
+**Dependencies:** Epic 1 (Foundation), Epic 1.5 (Public Website), Epic 2 (Native Form System) - All Complete
 
 **Security Model:** Strict route isolation - each role can ONLY access their own dashboard routes. Super Admin gets 360° visibility via aggregated widgets, not by visiting other role's routes.
 
@@ -837,19 +913,22 @@ So that each role lands on their appropriate dashboard with correct navigation a
 6. **Given** the Oyo State branding guidelines, **then** DashboardLayout includes header with logo, user dropdown with profile/logout, consistent footer, and mobile bottom navigation for touch-primary roles.
 7. **Given** the UX spec loading state requirements, **when** any dashboard data is being fetched, **then** skeleton screens (shimmer effect in Oyo brand colors) MUST be displayed instead of spinners, following the patterns established in Story 1.5-1 and Story 1.9.
 
-### Story 2.5-2: Super Admin Dashboard - Questionnaire & ODK Integration (Epic 2 Features)
+### Story 2.5-2: Super Admin Dashboard - Questionnaire & Form Management (Epic 2 Features)
 
 As a Super Admin,
-I want my dashboard with Questionnaire Management and ODK Health panels,
-So that I can manage XLSForms and monitor ODK Central integration from a consolidated view.
+I want my dashboard with Questionnaire Management and Form Builder access,
+So that I can manage native forms and monitor questionnaire status from a consolidated view.
+
+> **Updated per SCP-2026-02-05-001:** ODK Health panel removed. Form Builder CTA added. XLSForm upload retained for migration only.
 
 **Acceptance Criteria:**
 
-1. **Given** the Super Admin dashboard at `/dashboard/super-admin`, **when** the page loads, **then** a dashboard home displays with Questionnaire Management card, ODK Central Status card, and Quick Stats card.
-2. **Given** the questionnaire list, **when** clicking a questionnaire, **then** the detail view shows version history, publish status, and "Publish to ODK" / "Unpublish" buttons.
-3. **Given** the XLSForm upload feature, **when** Super Admin clicks "Upload XLSForm", **then** a modal opens with file picker, validation feedback, and upload progress.
-4. **Given** the ODK Health widget, **when** ODK is unreachable for 3+ consecutive checks, **then** a prominent warning banner displays.
-5. **Given** the UX spec multi-panel layout, **then** the Super Admin dashboard uses card-based layout with critical metrics prominent and skeleton loading states.
+1. **Given** the Super Admin dashboard at `/dashboard/super-admin`, **when** the page loads, **then** a dashboard home displays with Questionnaire Management card and Quick Stats card.
+2. **Given** the questionnaire list, **when** clicking a questionnaire, **then** the detail view shows version history, status, and "Edit in Form Builder" button for native forms.
+3. ~~**Given** the XLSForm upload feature, **when** Super Admin clicks "Upload XLSForm", **then** a modal opens with file picker, validation feedback, and upload progress.~~ SUPERSEDED — replaced by Form Builder (Story 2.10).
+4. ~~**Given** the ODK Health widget, **when** ODK is unreachable for 3+ consecutive checks, **then** a prominent warning banner displays.~~ REMOVED — no longer applicable.
+5. **Given** the Form Builder link, **when** Super Admin clicks "Create Form", **then** navigate to `/dashboard/super-admin/questionnaires/builder`.
+6. **Given** the UX spec multi-panel layout, **then** the Super Admin dashboard uses card-based layout with critical metrics prominent and skeleton loading states.
 
 ### Story 2.5-3: Super Admin Dashboard - Staff Management (Epic 1 Features)
 
@@ -890,7 +969,7 @@ So that I can start surveys, resume drafts, and know my work is being saved.
 
 1. **Given** an Enumerator logging in on mobile, **when** they reach `/dashboard/enumerator`, **then** they see a touch-optimized layout with large tap targets (minimum 44x44px).
 2. **Given** the dashboard, **when** rendered, **then** it displays "Start Survey" primary CTA, "Resume Draft" button (placeholder), "Daily Progress" card, and Sync status indicator.
-3. **Given** the questionnaires published via ODK, **when** Enumerator views available surveys, **then** they see a list of active questionnaires with "Start Survey" buttons.
+3. **Given** the published native form questionnaires, **when** Enumerator views available surveys, **then** they see a list of active questionnaires with "Start Survey" buttons.
 4. **Given** no questionnaires are published, **when** Enumerator views the survey list, **then** they see an empty state: "No surveys assigned yet. Contact your supervisor."
 5. **Given** the "Start Survey" button, **when** clicked, **then** it shows "Coming in Epic 3" modal.
 6. **Given** the sidebar navigation (mobile: bottom nav), **then** Enumerator sees: Home, Surveys, Drafts, Profile (3-4 items).
@@ -910,7 +989,7 @@ So that I can process hundreds of forms efficiently without using a mouse.
 3. **Given** the dashboard, **when** rendered, **then** it displays "New Form Entry" primary action, "Today's Progress" card, "Recent Entries" list, and keyboard shortcuts help.
 4. **Given** the questionnaire list, **when** pressing Tab, **then** focus moves sequentially through interactive elements without traps.
 5. **Given** keyboard shortcuts, **then** the following shortcuts work (single keys, NOT Ctrl+ to avoid browser conflicts): `N` - New entry, `D` - View drafts, `?` - Show shortcuts modal, `Esc` - Close modal.
-6. **Given** the "Start Entry" action, **when** pressing Enter on a questionnaire, **then** placeholder form opens (actual Enketo launch in Epic 3).
+6. **Given** the "Start Entry" action, **when** pressing Enter on a questionnaire, **then** placeholder form opens (actual native form renderer launch in Epic 3).
 7. **Given** the sidebar navigation, **then** Clerk sees: Dashboard, Active Forms, Completed, Help (4 items).
 8. **Given** a Data Entry Clerk attempts to access `/dashboard/super-admin/*` or `/dashboard/supervisor`, **then** they receive 403 Forbidden.
 
@@ -978,18 +1057,32 @@ So that we can verify all role routes are properly protected.
 
 **Epic Goal:** Provide field enumerators and the public with a robust, offline-capable tool for data submission, and establish the real-time ingestion of that data.
 
-### Story 3.1: Seamless Enketo Launch & Dashboard
+### Story 3.1: Native Form Renderer & Dashboard
+
+> **Rewritten per SCP-2026-02-05-001:** Enketo replaced by native form renderer.
 
 As an Enumerator,
-I want to launch the survey directly from my dashboard without re-authenticating,
+I want to fill out surveys using a native form interface,
 So that I can collect data efficiently in the field.
+
+**Dependencies:** Epic 2 Stories 2.7-2.10 (Native Form System)
 
 **Acceptance Criteria:**
 
-**Given** an authenticated session in the Custom App
-**When** I click the "Start Survey" button
-**Then** the system should decrypt my ODK token and launch the embedded Enketo form
-**And** the respondent's consent for the Marketplace must be the first mandatory field.
+**AC3.1.1:** **Given** an authenticated session, **when** I click "Start Survey", **then** the native form renderer loads with one-question-per-screen navigation, progress indicator, and Next/Back buttons.
+
+**AC3.1.2:** **Given** the form schema, **when** rendering questions, **then** all types are supported: text, number, date, select_one, select_multiple, geopoint, note.
+
+**AC3.1.3:** **Given** a question with `showWhen` condition, **when** the condition is not met, **then** the question is skipped automatically.
+
+**AC3.1.4:** **Given** a geopoint question, **when** the user captures location, **then** GPS coordinates are stored with accuracy indicator.
+
+**AC3.1.5:** **And** the respondent's consent for the Marketplace must be the first mandatory field.
+
+**Tasks/Subtasks:**
+- Task 3.1.1: Create `apps/web/src/features/forms/pages/FormFillerPage.tsx` (load schema, track current question, navigation)
+- Task 3.1.2: Create question renderer components (QuestionRenderer, TextInput, NumberInput, DateInput, SelectOneInput, SelectMultipleInput, GeopointInput, NoteDisplay)
+- Task 3.1.3: Create `skipLogic.ts` client-side utility (getVisibleQuestions, getNextQuestionIndex)
 
 ### Story 3.2: PWA Service Worker & Offline Assets
 
@@ -1001,7 +1094,7 @@ So that I can work in remote areas without interruption.
 
 **Given** a device that has previously loaded the app
 **When** I access the survey interface without a network connection
-**Then** the Service Worker should serve the Enketo assets and form definitions from the cache
+**Then** the Service Worker should serve the native form assets and form schema definitions from the cache
 **And** the app must request browser "Persistent Storage" to prevent cache eviction.
 
 ### Story 3.3: Offline Queue & Sync Status UI
@@ -1017,16 +1110,18 @@ So that I know if my data has been successfully uploaded or is pending.
 **Then** the Sync Status Badge should show "Syncing" (Amber) if uploading or "Offline" (Red) if no connection
 **And** a Red Warning Banner must appear if there is unsent data.
 
-### Story 3.4: Idempotent Webhook Ingestion (BullMQ)
+### Story 3.4: Idempotent Submission Ingestion (BullMQ)
+
+> **Updated per SCP-2026-02-05-001:** ODK webhook replaced by native form submission API.
 
 As a System,
-I want to reliably ingest survey submissions from ODK Central,
+I want to reliably ingest survey submissions from the native form renderer,
 So that the data is available for reporting and fraud detection.
 
 **Acceptance Criteria:**
 
-**Given** a survey submission from Enketo
-**When** ODK Central sends a webhook to the Custom App
+**Given** a survey submission from the native form renderer
+**When** the client syncs a completed form via the submission API
 **Then** the system should push the job to BullMQ and deduplicate by `submission_id`
 **And** the record should be extracted and saved to the `app_db` (idempotent ingestion).
 
@@ -1332,7 +1427,7 @@ So that the registry is resilient against catastrophic hardware failure.
 
 **Given** the daily backup schedule (2 AM / 3 AM)
 **When** the backup job triggers
-**Then** the system should generate encrypted SQL dumps of `app_db` and `odk_db`
+**Then** the system should generate encrypted SQL dumps of `app_db`
 **And** successfully upload them to S3-compatible storage with a 7-year retention policy.
 
 ### Story 6.4: Staff Remuneration Bulk Recording

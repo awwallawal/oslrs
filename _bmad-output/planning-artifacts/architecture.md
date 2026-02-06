@@ -16,18 +16,21 @@ idStrategy: 'UUIDv7'
 status: 'complete'
 validationStatus: 'READY FOR IMPLEMENTATION - PRD v7.9 ALIGNED'
 completedAt: '2026-01-04'
-lastUpdated: '2026-01-31'
-prdVersion: 'v7.9'
+lastUpdated: '2026-02-06'
+prdVersion: 'v8.0'
 v75Updates: 'Data Routing Matrix, Live Selfie Spec, Terminology Fix, Marketplace Security'
 v79Updates: 'Epic 2.5 Role-Based Dashboards - ADR-016 updated with strict route isolation pattern, RBAC matrix, code splitting benefits'
+v80Updates: 'SCP-2026-02-05-001: ODK Central removed, native form system replaces. ADR-001/002/004/005/007/008/009/010 amended. Database, infrastructure, and data flow sections updated.'
 ---
 
 # OSLSR Architecture Decision Document
 
 **Project:** Oyo State Labour & Skills Registry (OSLSR)
-**PRD Version:** v7.5
+**PRD Version:** v8.0
 **Date:** 2026-01-04
 **Architect:** Awwal (with Claude Code facilitation)
+
+> **Amendment (2026-02-06) — SCP-2026-02-05-001:** ODK Central has been removed from the architecture. The native form system (JSONB schemas, skip-logic engine, Form Builder UI, one-question-per-screen renderer) replaces all ODK/Enketo functionality. Infrastructure reduced from 6 containers to 4, from 2 PostgreSQL databases to 1. ADRs amended inline below.
 
 ---
 
@@ -41,9 +44,9 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 The OSLSR system comprises 21 functional requirements organized around five core capabilities:
 
-1. **Consent & Privacy Management (FR1-FR5):** Two-stage consent workflow embedded in ODK forms, NIN-based identity verification with global uniqueness enforcement, paper collection strategy for inclusion
+1. **Consent & Privacy Management (FR1-FR5):** Two-stage consent workflow embedded in native survey forms, NIN-based identity verification with global uniqueness enforcement, paper collection strategy for inclusion
 2. **User Management & Provisioning (FR6-FR8):** Bulk CSV import for 132+ field staff, role-based onboarding with profile completion (NIN validation, live selfie, bank details), LGA-locking for field staff
-3. **Data Collection & Sync (FR9-FR11):** Offline-first PWA via embedded Enketo forms (not ODK Collect app), pause/resume capability, in-app staff communication
+3. **Data Collection & Sync (FR9-FR11):** Offline-first PWA via native form renderer with IndexedDB sync, pause/resume capability, in-app staff communication
 4. **Oversight & Quality Control (FR12-FR16):** Real-time supervisor dashboards, context-aware fraud detection with configurable thresholds (cluster/speed/pattern), verification assessor audit queue, immutable audit trails, government official read-only oversight with full PII access
 5. **Public Marketplace (FR17-FR21):** Anonymous skills profiles with optional enrichment, authenticated searcher contact logging, high-volume keyboard-optimized data entry interface for paper digitization
 
@@ -53,7 +56,7 @@ Critical NFRs driving architectural decisions:
 
 - **Performance (NFR1):** 250ms p95 API response, 2.5s LCP on 4G, 60s offline sync for 20 surveys
 - **Scalability (NFR2):** Unlimited technical capacity with baseline 200 staff (132 field + 68 back-office), monitoring alerts at 120/180 field staff, ~1,000 concurrent public users
-- **Availability (NFR3):** 99.5% SLA on single VPS (3.65hr/month max downtime), process-level degraded mode (ODK survives Custom App crashes), comprehensive backup strategy (dual DB daily to S3, real-time media sync, 7-year retention, monthly restore drills), 6-hour VPS snapshots with 1-hour RTO
+- **Availability (NFR3):** 99.5% SLA on single VPS (3.65hr/month max downtime), offline-first design (IndexedDB drafts survive server outages), comprehensive backup strategy (daily DB to S3, 7-year retention, monthly restore drills), 6-hour VPS snapshots with 1-hour RTO
 - **Security & Compliance (NFR4):** NDPA-aligned data minimization (NIN only, no BVN), 7-year retention, logically isolated marketplace (read-only replica for performance and security separation), defense-in-depth (Redis rate limiting, honeypots, CSP, IP throttling with specific thresholds per endpoint), role conflict prevention, AES-256 encryption at rest/TLS 1.2+ in transit
 - **Usability (NFR5):** WCAG 2.1 AA compliance, legacy device support (Android 8.0+ / Chrome 80+)
 - **Operations (NFR6):** Portainer for visual management, GitHub Actions CI/CD, staging environment validation
@@ -61,70 +64,63 @@ Critical NFRs driving architectural decisions:
 
 **Scale & Complexity:**
 
-- **Primary domain:** Full-stack government registry system (React PWA frontend + Node.js/Express API + Self-hosted ODK Central + PostgreSQL)
+- **Primary domain:** Full-stack government registry system (React PWA frontend + Node.js/Express API + Native Form System + PostgreSQL)
 - **Complexity level:** High/Enterprise
-- **Estimated architectural components:** 12+ major components (Auth service, User management, ODK integration layer, Webhook ingestion pipeline, Fraud detection engine, Dashboard service, Marketplace service, Data entry interface, Audit logging, Backup orchestrator, Rate limiting middleware, Notification service)
+- **Estimated architectural components:** 12+ major components (Auth service, User management, Native form engine, Submission ingestion pipeline, Fraud detection engine, Dashboard service, Marketplace service, Data entry interface, Audit logging, Backup orchestrator, Rate limiting middleware, Notification service)
 - **Data volume projections:** 200 staff accounts, potentially 100,000+ respondent records across 33 LGAs, skills marketplace profiles
-- **Integration complexity:** Bidirectional ODK Central integration (user provisioning to ODK, webhook ingestion from ODK), S3-compatible storage, AWS SES for notifications
+- **Integration complexity:** S3-compatible storage, AWS SES for notifications. _(Simplified per SCP-2026-02-05-001: ODK Central removed, all form management is internal.)_
 
 ### Technical Constraints & Dependencies
 
 **Hard Constraints:**
 
 1. **Infrastructure:** Single self-hosted Linux VPS (NDPA data residency - data must remain in Nigeria), Docker Compose deployment, no cloud-hosted services for core data
-2. **ODK Central:** Self-hosted containerized instance (not cloud ODK), same VPS as Custom App, separate database
+2. ~~**ODK Central:** Self-hosted containerized instance~~ **REMOVED (SCP-2026-02-05-001).** Native form system replaces ODK Central entirely.
 3. **Technology Stack (Locked per PRD):**
    - Node.js 20 LTS
-   - PostgreSQL 15 (both ODK Central and Custom App per ADR-010)
+   - PostgreSQL 15
    - Redis 7
    - React with Tailwind CSS + shadcn/ui
    - BullMQ for job queue
-   - **Technical Note - BullMQ vs RabbitMQ:** BullMQ is sufficient for this composed monolith architecture because: (1) All job producers and consumers run in the same Node.js process (webhook ingestion, fraud detection, email/SMS queues, backup jobs), (2) Redis provides adequate persistence for job durability with AOF enabled, (3) Current scale (200 staff, 1K concurrent users) doesn't require distributed message routing. **RabbitMQ would be needed if:** (a) Migrating to microservices with polyglot services (Python fraud ML service, Go analytics engine), (b) Complex routing topologies (topic exchanges, fanout patterns across multiple consumers), (c) Strict message delivery guarantees beyond BullMQ's Redis-backed durability. For this project, BullMQ's simplicity (single Redis dependency) outweighs RabbitMQ's feature richness.
-4. **Integration Pattern:** Custom App is single source of truth; ODK Central is collection engine only (not queryable by other services)
+   - **Technical Note - BullMQ vs RabbitMQ:** BullMQ is sufficient for this modular monolith architecture because: (1) All job producers and consumers run in the same Node.js process (submission ingestion, fraud detection, email/SMS queues, backup jobs), (2) Redis provides adequate persistence for job durability with AOF enabled, (3) Current scale (200 staff, 1K concurrent users) doesn't require distributed message routing. **RabbitMQ would be needed if:** (a) Migrating to microservices with polyglot services (Python fraud ML service, Go analytics engine), (b) Complex routing topologies (topic exchanges, fanout patterns across multiple consumers), (c) Strict message delivery guarantees beyond BullMQ's Redis-backed durability. For this project, BullMQ's simplicity (single Redis dependency) outweighs RabbitMQ's feature richness.
+4. **Integration Pattern:** Custom App is single source of truth for all data including form definitions, submissions, and user management
 5. **Browser Support:** Must support Android 8.0+ running Chrome 80+ (legacy devices in field)
-6. **Form Management:** XLSForm upload via Custom App dashboard (not direct ODK access)
+6. **Form Management:** Native Form Builder UI for creating/editing JSONB form schemas; one-time XLSForm migration for existing questionnaire
 
 **Key Dependencies:**
 
-- ODK Central API for App User provisioning and form deployment
-- Enketo embedded forms (browser-based PWA, not ODK Collect mobile app)
-- ODK webhook push to Custom App for real-time ingestion
-- S3-compatible object storage (DigitalOcean Spaces or AWS S3) for backups and media
+- S3-compatible object storage (DigitalOcean Spaces or AWS S3) for backups
 - AWS SES (or equivalent) for email/SMS with cost circuit breaker ($50/day max)
 - Verhoeff algorithm for NIN validation (client-side and server-side)
+- ~~ODK Central API, Enketo forms, ODK webhook~~ **REMOVED (SCP-2026-02-05-001)**
 
 **Architectural Boundaries:**
 
-- Custom App must NOT modify Enketo internal UI or draft state directly
-- All "Resume" functionality relies on native Enketo/ODK capabilities
-- Marketplace queries must use read-only database replica (never ODK directly)
+- Native form renderer handles all form display; drafts stored in IndexedDB with position tracking
+- Marketplace queries must use read-only database replica (logically isolated from operational database)
 - Field staff accounts are LGA-locked; back-office roles have state-wide access
 
 ### Key Architectural Decisions
 
-**ADR-001: Composed Monolith Architecture Pattern**
-- **Decision:** Custom Node.js App as master orchestrator + Self-hosted ODK Central as collection engine
-- **Rationale:** Balances government procurement constraints (single VPS), data residency (NDPA), and proven field reliability
+**ADR-001: Custom Modular Monolith Architecture Pattern**
+- **Decision:** Custom Node.js App with native form system as a self-contained modular monolith
+- **Amendment (SCP-2026-02-05-001):** Originally "Custom App + Self-hosted ODK Central". ODK Central was removed due to persistent Enketo connectivity issues blocking pilot timeline. Native form system now provides full team control with no external dependencies.
+- **Rationale:** Balances government procurement constraints (single VPS), data residency (NDPA), and full team control over form management
 - **Trade-offs:**
-  - ✅ Reduced operational complexity vs microservices
+  - ✅ Reduced operational complexity (4 containers vs 6+)
   - ✅ Data sovereignty (Nigerian infrastructure)
-  - ✅ Lower hosting costs
-  - ❌ Tighter coupling between components
+  - ✅ Lower hosting costs (~6GB RAM vs ~8GB)
+  - ✅ No external dependency for form rendering/collection
   - ❌ Vertical scaling only (sufficient for baseline 200 staff + 1K concurrent users)
 - **Alternatives Considered:**
   - **Cloud ODK:** Rejected due to NDPA data residency requirements (Nigerian data must remain in-country)
   - **Full Microservices:** Rejected as overkill for 1K concurrent users; increases operational complexity 3-4x without scaling benefit at current scale
-  - **Build Custom Survey Engine (No ODK):** Rejected despite technical feasibility. Would require 4-6 weeks additional development to replicate: (1) Offline-first sync protocol, (2) XLSForm parsing, (3) Skip logic engine, (4) Multi-language support, (5) Media attachment handling, (6) Form versioning. ODK Central provides these as proven, battle-tested features (10+ years field deployment). Risk: Custom implementation would be greenfield code vs ODK's mature codebase. Trade-off: Accepting ODK integration complexity in exchange for proven reliability and accelerated delivery.
+  - ~~**Build Custom Survey Engine (No ODK):** Previously rejected~~ **NOW ADOPTED (SCP-2026-02-05-001):** Native form system built with JSONB schemas, skip-logic engine, Form Builder UI, and one-question-per-screen renderer. Enketo connectivity issues made ODK integration unreliable for pilot timeline.
   - **SaaS Form Builders (Typeform, Google Forms, Kobo Toolbox):** Rejected due to NDPA compliance, offline requirements, and lack of integration control
 
-**ADR-002: Integration Boundary Management**
-- **Decision:** All ODK integration through abstraction layer in Custom App
-- **Implementation:** `services/odk-integration/` module with versioned API contracts
-- **Rationale:** Isolates ODK version changes, enables mocking for tests
-- **Trade-offs:**
-  - ✅ Testability improved (mock ODK responses)
-  - ✅ Future ODK upgrades isolated
-  - ❌ Additional abstraction layer complexity
+**~~ADR-002: Integration Boundary Management~~** — SUPERSEDED
+- ~~**Decision:** All ODK integration through abstraction layer in Custom App~~
+- **SUPERSEDED (SCP-2026-02-05-001):** ODK Central removed. The `services/odk-integration/` module has been deleted. Form management is now a native service within the Custom App (`services/form-management/`).
 
 **ADR-003: Fraud Detection Engine Design**
 - **Decision:** Rule-based engine with pluggable heuristics and database-stored configuration
@@ -144,27 +140,30 @@ Critical NFRs driving architectural decisions:
   - ❌ More complex than hardcoded rules initially
 
 **ADR-004: Offline Data Responsibility Model**
-- **Decision:** Browser (Enketo/IndexedDB) owns draft state; Server validates on submission
+- **Decision:** Browser (IndexedDB) owns draft state; Server validates on submission
+- **Amendment (SCP-2026-02-05-001):** Originally "Enketo/IndexedDB". Now uses native form renderer with IndexedDB for offline storage.
 - **Boundaries:**
-  - Client: Draft storage, form validation, submission queue
+  - Client: Draft storage in IndexedDB (with question position tracking), form validation, submission queue
   - Server: Authoritative record, fraud detection, NIN uniqueness
-- **Rationale:** Leverages native ODK/Enketo offline capabilities
+- **Rationale:** Native form renderer uses IndexedDB for offline-first data persistence
 - **Critical Note:** User-initiated cache clear is unrecoverable - enumerator training must emphasize this. IndexedDB persists across browser crashes but NOT across cache clears or device resets.
 - **Trade-offs:**
-  - ✅ Proven ODK offline reliability
-  - ✅ No custom sync protocol needed
+  - ✅ Full control over offline sync protocol
+  - ✅ IndexedDB is browser-native and well-supported
   - ❌ Cannot enforce NIN uniqueness until online (mitigated by idempotency)
 
 **ADR-005: Degraded Mode Strategy**
-- **Decision:** Process-level degraded mode only (ODK survives Custom App crashes); VPS failure = full offline with honest engineering approach
+- **Decision:** Offline-first design with IndexedDB draft persistence; VPS failure = full offline with honest engineering approach
+- **Amendment (SCP-2026-02-05-001):** Originally relied on "ODK survives Custom App crashes". With single application stack, degraded mode = offline-first IndexedDB storage on enumerator devices.
 - **Mitigation:**
-  - Train enumerators for 7-day device-only operation
+  - Train enumerators for 7-day device-only operation (drafts persist in IndexedDB)
   - 6-hour VPS snapshots with 1-hour RTO
   - Dashboard displays "OFFLINE MODE" banner when server unreachable
+  - Pending submissions queue in IndexedDB syncs automatically on reconnect
 - **Rationale:** Realistic expectations - single VPS cannot provide true HA
 - **Trade-offs:**
   - ✅ Honest expectations set
-  - ✅ Focus on data durability (backups) over high availability
+  - ✅ Focus on data durability (backups + IndexedDB) over high availability
   - ❌ No failover during VPS outages
 
 **ADR-006: Defense-in-Depth Security Architecture**
@@ -180,21 +179,23 @@ Critical NFRs driving architectural decisions:
   - ✅ Each layer unit-testable
   - ❌ More moving parts to maintain
 
-**ADR-007: Database Separation Strategy**
-- **Decision:** Two PostgreSQL databases on same VPS (app_db + odk_db)
+**ADR-007: Database Strategy** _(Amended)_
+- **Decision:** Single PostgreSQL database on same VPS (app_db)
+- **Amendment (SCP-2026-02-05-001):** Originally "Two PostgreSQL databases (app_db + odk_db)". With ODK Central removed, single database holds all data.
 - **Source of Truth Matrix:**
-  - Raw submissions → odk_db (immutable)
-  - Ingested records → app_db (derived, idempotent)
+  - Form definitions → app_db (JSONB, versioned, immutable per version)
+  - Raw submissions → app_db (immutable once submitted)
   - Marketplace profiles → app_db (derived, revocable)
-- **Rationale:** ODK Central requires isolation, simplifies backup, clear ownership boundaries
+- **Rationale:** Single database simplifies operations, backups, and data integrity. Marketplace isolation achieved via read-only replica.
 - **Trade-offs:**
-  - ✅ Clean separation of concerns
-  - ✅ ODK upgrades don't touch app data
-  - ❌ Two backup processes required
-  - ❌ No foreign key constraints between DBs
+  - ✅ Single backup process
+  - ✅ Foreign key constraints across all data
+  - ✅ Simplified operations and monitoring
+  - ❌ Marketplace read-only replica needed for performance isolation
 
 **ADR-008: Emergency Data Sync Control**
-- **Decision:** Explicit 'Upload Now' button on Enumerator Dashboard forcing IndexedDB → ODK Central sync with progress feedback
+- **Decision:** Explicit 'Upload Now' button on Enumerator Dashboard forcing IndexedDB → App API sync with progress feedback
+- **Amendment (SCP-2026-02-05-001):** Sync target changed from ODK Central to Custom App submission API.
 - **Rationale:** Addresses cache management risk during 7-day offline periods - enumerators need safe way to clear device storage
 - **Implementation:** Button only enables cache clearing when upload queue is empty, preventing data loss
 - **Trade-offs:**
@@ -202,18 +203,9 @@ Critical NFRs driving architectural decisions:
   - ✅ User-controlled sync timing
   - ❌ Additional UI complexity
 
-**ADR-009: Webhook Failure Detection & Recovery**
-- **Decision:** Automated health check job detecting submission ID gaps between ODK Central and app_db
-- **Implementation:**
-  - Scheduled job: 6-hour interval during pilot, 24-hour in production
-  - Queries ODK API for submission count, compares to app_db count
-  - Emails Super Admin if delta > threshold
-  - Provides one-click 'Pull from ODK' backfill button in admin dashboard
-- **Rationale:** If Custom App is down >24 hours, ODK webhook retry exhaustion causes data loss without manual intervention
-- **Trade-offs:**
-  - ✅ Proactive detection of webhook failures
-  - ✅ Automated recovery mechanism
-  - ❌ Additional monitoring infrastructure
+**~~ADR-009: Webhook Failure Detection & Recovery~~** — SUPERSEDED
+- ~~**Decision:** Automated health check job detecting submission ID gaps between ODK Central and app_db~~
+- **SUPERSEDED (SCP-2026-02-05-001):** ODK Central removed. Submission pipeline is now direct (native form renderer → App API). Offline submissions queue in IndexedDB and sync idempotently on reconnect. The `/admin/submission-health` page monitors sync status and failed submissions.
 
 **ADR-010: Database Technology Selection for Custom App**
 - **Decision:** Use PostgreSQL 15 for Custom App database (app_db)
@@ -221,7 +213,7 @@ Critical NFRs driving architectural decisions:
 - **Rationale:**
   - NFR8.1 requires database-level UNIQUE constraints for race condition defense (MongoDB's uniqueness weaker in distributed mode)
   - NFR8.2 requires ACID transactions (PostgreSQL more mature)
-  - Operational simplicity: single database technology (PostgreSQL for both ODK + Custom App)
+  - Operational simplicity: single PostgreSQL database for all application data
   - Fraud detection queries (JOINs, PostGIS geospatial) proven in PostgreSQL
   - RBAC and audit trails naturally relational
   - PostgreSQL JSONB provides schema flexibility where needed without sacrificing guarantees
@@ -242,7 +234,7 @@ Critical NFRs driving architectural decisions:
 - PII access controls (back-office only for individual records)
 - Defense-in-depth bot protection (rate limiting, CAPTCHA, honeypots, device fingerprinting)
 - Database-level race condition prevention (unique constraints, ACID transactions)
-- **NIN Uniqueness Race Condition Defense:** Database UNIQUE constraint on `respondents.nin` prevents simultaneous submissions across all sources (Enumerator ODK, Public Self-Registration, Paper Entry), with friendly error message showing original registration date/source
+- **NIN Uniqueness Race Condition Defense:** Database UNIQUE constraint on `respondents.nin` prevents simultaneous submissions across all sources (Enumerator survey, Public Self-Registration, Paper Entry), with friendly error message showing original registration date/source
 
 **Data Integrity:**
 - Context-aware fraud detection engine (GPS clustering, speed runs, straight-lining patterns)
@@ -255,14 +247,14 @@ Critical NFRs driving architectural decisions:
 - Progressive Web App (PWA) with service worker caching
 - Persistent storage permission with warning banners for unsent data
 - 7-day offline operation capability for field enumerators
-- Idempotent webhook ingestion with exponential backoff retry (5min → 24hr)
+- Idempotent submission ingestion with offline queue and automatic sync on reconnect
 - Emergency sync control with safe cache management (ADR-008)
 
 **Monitoring & Observability:**
 - System health dashboard for Super Admin
 - Staff capacity alerts (120/180 thresholds)
-- ODK sync failure detection with manual resync capability
-- Missing submission detection with automated health checks (ADR-009)
+- Submission sync health monitoring via `/admin/submission-health` dashboard
+- Failed submission detection with validation error logging
 - Backup integrity validation (monthly restore drills)
 
 **Performance:**
@@ -272,12 +264,10 @@ Critical NFRs driving architectural decisions:
 - Sidecar Redis for rate limiting and caching
 
 **Disaster Recovery:**
-- Dual-database backup strategy (Custom App DB + ODK DB to S3)
-- Real-time media attachment sync to S3
+- Single-database backup strategy (app_db to S3 daily)
 - VPS snapshots every 6 hours with 1-hour RTO
 - Point-in-Time Restore (PITR) capability up to 24 hours back
-- **VPS Hardware Failure Mitigation:** Acknowledges single-VPS risk, 6-hour snapshots, daily S3 dumps, real-time media sync, 1-hour RTO, 7-day enumerator offline training (rejects multi-region HA as out of scope)
-- **ODK Central Compromise Recovery:** ODK is collection engine not system of record, daily S3 backups enable restore, container isolation limits attack surface, immutable audit logs survive compromise, manual Super Admin restore process defined
+- **VPS Hardware Failure Mitigation:** Acknowledges single-VPS risk, 6-hour snapshots, daily S3 dumps, 1-hour RTO, 7-day enumerator offline training (rejects multi-region HA as out of scope)
 
 **Marketplace Security:**
 - **Scraping Defense Architecture:** Five-layer bot protection (IP rate limiting, device fingerprinting, progressive CAPTCHA, pagination limits max 100 profiles, honeypot fields). Anonymous profiles contain no PII without authentication.
@@ -287,7 +277,7 @@ Critical NFRs driving architectural decisions:
 
 ### Primary Technology Domain
 
-**Full-Stack Government Registry System** requiring composed modular monolith architecture with React PWA frontend, Node.js/Express backend, dual PostgreSQL databases, and self-hosted ODK Central integration.
+**Full-Stack Government Registry System** requiring custom modular monolith architecture with React PWA frontend, Node.js/Express backend, PostgreSQL database, and native form system.
 
 ### Starter Options Considered
 
@@ -299,9 +289,9 @@ Critical NFRs driving architectural decisions:
 ### Selected Approach: Custom Manual Initialization
 
 **Rationale for Manual Setup:**
-- **Unique Composed Architecture:** Custom App + ODK Central integration (ADR-001) with dual PostgreSQL databases (ADR-007) doesn't map to existing starters
-- **ODK Integration Abstraction:** Requires custom `services/odk-integration/` layer (ADR-002) not found in standard boilerplates
-- **Specific Docker Compose Orchestration:** Multi-container setup (Custom App + ODK Central + PostgreSQL×2 + Redis) requires custom configuration
+- **Unique Modular Architecture:** Custom App with native form system (ADR-001) and single PostgreSQL database (ADR-007) doesn't map to existing starters
+- **Native Form Engine:** Requires custom form management with JSONB schemas, skip-logic engine, and Form Builder UI not found in standard boilerplates
+- **Specific Docker Compose Orchestration:** Multi-container setup (Custom App + PostgreSQL + Redis + Nginx) requires custom configuration
 - **NDPA Compliance:** Self-hosted constraints and data residency needs demand tailored setup
 - **10 ADRs Already Defined:** Architectural decisions already made; starters would introduce conflicting opinions
 
@@ -311,14 +301,12 @@ oslsr/
 ├── apps/
 │   ├── web/          # React PWA (Vite + Tailwind + shadcn/ui)
 │   └── api/          # Node.js/Express API
-├── services/
-│   └── odk-integration/  # ODK Central abstraction layer (ADR-002)
 ├── packages/
 │   ├── types/        # Shared TypeScript types
 │   ├── utils/        # Shared utilities (Verhoeff, validation)
 │   └── config/       # Shared configuration
 ├── docker/
-│   ├── docker-compose.yml    # ODK Central + Custom App + DBs + Redis
+│   ├── docker-compose.yml    # Custom App + PostgreSQL + Redis + Nginx
 │   ├── Dockerfile.api
 │   └── Dockerfile.web
 └── package.json      # Monorepo root with pnpm workspaces
@@ -354,11 +342,6 @@ cd packages/types && pnpm init && cd ../..
 cd packages/utils && pnpm init && cd ../..
 cd packages/config && pnpm init && cd ../..
 
-# 5. ODK Integration Service
-mkdir -p services/odk-integration && cd services/odk-integration
-pnpm init
-pnpm add axios
-cd ../..
 ```
 
 **Architectural Decisions Provided by Manual Setup:**
@@ -387,7 +370,7 @@ cd ../..
 
 **Code Organization:**
 - **Monorepo Pattern:** Workspace-based with `apps/`, `packages/`, `services/` separation
-- **ODK Abstraction:** `services/odk-integration/` isolates ODK Central API calls (ADR-002)
+- **Native Forms:** Form management services within `apps/api/src/services/` (skip-logic engine, form CRUD, validation)
 - **Shared Concerns:** `packages/utils/` for Verhoeff validation, fraud heuristics, common helpers
 - **Type Safety:** `packages/types/` for shared interfaces (User, Respondent, Survey, etc.)
 
@@ -465,92 +448,75 @@ cd ../..
 
 ### Data Routing & Ownership Matrix
 
-**Purpose:** This section provides a comprehensive explanation of what data resides in which database, why we use two databases, and the data flow rules that govern the system. This addresses PRD v7.5 lines 242-272 data routing clarifications.
+**Purpose:** This section provides a comprehensive explanation of what data resides in the database, the ownership boundaries, and the data flow rules that govern the system. This addresses PRD v8.0 data routing clarifications.
 
-#### Database Separation Rationale (ADR-007 Extended)
+#### Single Database Rationale (ADR-007 Amended per SCP-2026-02-05-001)
 
-OSLSR uses a **Composed Architecture** with two PostgreSQL databases on the same VPS:
+OSLSR uses a **single PostgreSQL database** (`app_db`) on one VPS:
 
-1. **ODK Central Database (odk_db)**: Form definitions, raw submissions, metadata
-2. **Custom App Database (app_db)**: Users, RBAC, ingested records, marketplace, audit logs
+> Previously the architecture had two databases (app_db + odk_db). ODK Central was removed per SCP-2026-02-05-001; all data now resides in a single database.
 
-**Why Two Databases?**
+- **Simplified Operations**: One database to back up, monitor, and maintain
+- **Performance Isolation**: Marketplace queries use a logical read-only replica, isolating public traffic from operational workload
+- **Data Integrity**: Submissions are immutable rows with version-controlled JSONB form schema references
+- **NDPA Compliance**: Database resides on Nigerian VPS (no data leaves the country)
+- **Foreign Key Integrity**: All data in one database enables referential integrity across forms, submissions, and users
 
-- **Separation of Concerns**: ODK Central is the immutable "field collection vault"; Custom App is the "operational system of record"
-- **Performance Isolation**: Public marketplace traffic cannot slow down data collection
-- **Data Integrity**: Raw survey data remains untouched; Custom App can re-ingest if processing logic changes
-- **NDPA Compliance**: Both databases reside on the same Nigerian VPS (no data leaves the country)
-- **ODK Upgrade Safety**: ODK Central upgrades don't touch operational data
-
-#### ODK Central Database (odk_db) Stores
+#### Application Database (app_db) Stores
 
 | Data Type | Description | Source | Authoritative |
 |-----------|-------------|--------|---------------|
-| **Form Definitions** | XLSForm JSON, skip logic, validation rules | Custom App (XLSForm upload via Admin UI) | ODK Central |
-| **Raw Submissions** | JSON responses, GPS coordinates, timestamps | Enketo (browser PWA) | ODK Central (immutable) |
-| **Submission Metadata** | Device ID, submission date, form version | Enketo auto-capture | ODK Central |
-| **ODK App User Tokens** | Authentication tokens for Enumerators | Custom App → ODK API | ODK Central |
-| **Draft Survey Data** | Incomplete responses (paused surveys) | Browser IndexedDB → ODK on submit | Enumerator device (ephemeral) |
+| **Form Definitions** | JSONB schemas with sections, questions, skip logic, choice lists | Form Builder UI / one-time XLSForm migration | App DB (versioned, immutable per version) |
+| **Form Version History** | Draft → Published → Archived lifecycle | Form Builder UI | App DB |
+| **User Accounts** | Staff & Public User credentials, roles, RBAC | Super Admin bulk import, Public self-registration | App DB |
+| **LGA Assignments** | Field Staff hard-locked to LGAs | Bulk CSV import | App DB |
+| **Staff Profile Data** | NIN, bank details, live selfie, next of kin | Staff profile completion (Story 1.2) | App DB |
+| **Survey Submissions** | JSONB responses with GPS, timestamps, device info | Native form renderer → submission API | App DB (immutable once submitted) |
+| **Fraud Detection Scores** | GPS cluster, speed run, straight-lining flags | Fraud Engine (ADR-003) during ingestion | App DB |
+| **Marketplace Profiles** | Anonymous skills profiles (consent-based) | Extraction from ingested records (Story 7.1) | App DB |
+| **Audit Logs** | All user actions, system events (immutable) | All API endpoints | App DB (append-only) |
+| **Payment Records** | Staff remuneration, tranches, disputes | Super Admin bulk recording (Story 6.7) | App DB (append-only) |
+| **Communication** | Supervisor ↔ Enumerator messages | In-app messaging (Story 3.4) | App DB |
 
 **Critical Notes:**
-- **Custom App NEVER queries odk_db directly** (violates ADR-002 abstraction boundary)
-- **Drafts are client-side only** until submitted (Supervisors cannot see drafts per Story 3.3)
-- **ODK tokens are encrypted AES-256** in Custom App database for seamless Enketo launch
-
-#### Custom App Database (app_db) Stores
-
-| Data Type | Description | Source | Authoritative |
-|-----------|-------------|--------|---------------|
-| **User Accounts** | Staff & Public User credentials, roles, RBAC | Super Admin bulk import, Public self-registration | Custom App |
-| **LGA Assignments** | Field Staff hard-locked to LGAs | Bulk CSV import | Custom App |
-| **Staff Profile Data** | NIN, bank details, live selfie, next of kin | Staff profile completion (Story 1.2) | Custom App |
-| **Ingested Survey Records** | Respondent profiles extracted from ODK submissions | ODK webhook → BullMQ ingestion pipeline | Custom App (derived) |
-| **Fraud Detection Scores** | GPS cluster, speed run, straight-lining flags | Fraud Engine (ADR-003) during ingestion | Custom App |
-| **Marketplace Profiles** | Anonymous skills profiles (consent-based) | Extraction from ingested records (Story 7.1) | Custom App |
-| **Audit Logs** | All user actions, system events (immutable) | All API endpoints | Custom App (append-only) |
-| **Payment Records** | Staff remuneration, tranches, disputes | Super Admin bulk recording (Story 6.7) | Custom App (append-only) |
-| **Communication** | Supervisor ↔ Enumerator messages | In-app messaging (Story 3.4) | Custom App |
-| **Encrypted ODK Tokens** | AES-256 encrypted tokens for Enketo launch | ODK API response during provisioning | Custom App (encrypted) |
+- **Drafts are client-side only** (IndexedDB) until submitted (Supervisors cannot see drafts per Story 3.3)
+- **Form definitions are versioned** — published forms are immutable; new versions create new records
 
 #### Data Flow Rules
 
-**Rule 1: Questionnaire Deployment**
+**Rule 1: Form Management**
 ```
-Custom App Admin UI (XLSForm upload)
-  → ODK Integration Service (services/odk-integration/)
-  → ODK Central API (POST /v1/projects/{id}/forms)
-  → odk_db (form definitions stored)
+Super Admin → Form Builder UI (create/edit JSONB schema)
+  → App API (POST /api/v1/forms)
+  → app_db (form_definitions table, status: draft)
+  → Super Admin publishes form
+  → app_db (form_definitions.status: published, version incremented)
 ```
 
 **Rule 2: Survey Submission (Primary Flow)**
 ```
-Enumerator → Enketo Form (Browser PWA)
-  → Browser IndexedDB (draft storage, client-side only)
-  → ODK Central API (online sync)
-  → odk_db (raw submission stored)
-  → ODK Webhook → Custom App (/api/webhook/odk)
-  → BullMQ Queue (idempotent processing)
-  → Ingestion Worker (ADR-009)
-  → app_db (respondent record created)
+Enumerator → Native Form Renderer (one-question-per-screen, browser PWA)
+  → Browser IndexedDB (draft storage with question position tracking)
+  → Submit → App API (POST /api/v1/submissions)
+  → BullMQ Queue (idempotent processing, dedup by submission UUID)
+  → Ingestion Worker
+  → app_db (survey_responses record created)
   → Fraud Detection Worker (ADR-003)
   → app_db (fraud_scores updated)
 ```
 
-**Rule 3: User Provisioning Sync**
+**Rule 3: Offline Submission Sync**
 ```
-Custom App (Bulk CSV import or Manual)
-  → app_db (users table)
-  → ODK Integration Service
-  → ODK Central API (create App User)
-  → odk_db (odk_users table)
-  → Custom App (store encrypted token)
-  → app_db (user.odk_token_encrypted)
+Enumerator (offline) → Native Form Renderer
+  → Browser IndexedDB (queued submissions)
+  → On reconnect: IndexedDB queue → App API (same submission endpoint)
+  → Idempotent processing (duplicate submission UUIDs rejected gracefully)
 ```
 
 **Rule 4: Marketplace Profile Creation**
 ```
 Ingestion Worker (after respondent created)
-  → Check consent_marketplace field from ODK submission
+  → Check consent_marketplace field from submission
   → IF consent = "yes":
        Extract (profession, LGA, experience_level)
        → app_db (marketplace_profiles table)
@@ -562,8 +528,7 @@ Ingestion Worker (after respondent created)
 ```
 Government Official Dashboard
   → Custom App API (/api/v1/reports/*)
-  → app_db ONLY (never queries odk_db)
-  → Aggregate queries on ingested records
+  → app_db (aggregate queries on survey_responses)
   → Results cached in Redis (15-minute TTL)
 ```
 
@@ -573,28 +538,26 @@ All Login Flows (Staff & Public)
   → Custom App handles authentication
   → app_db (users table verification)
   → JWT issued (15-minute access token)
-  → ODK tokens used ONLY for embedded Enketo forms (not login)
 ```
 
-#### Architectural Boundaries (ADR-002 Enforcement)
+#### Architectural Boundaries
 
 **MUST DO:**
-- ✅ All ODK interactions via `services/odk-integration/` abstraction
-- ✅ Webhook ingestion must be idempotent (submission_id uniqueness check)
+- ✅ Submission ingestion must be idempotent (submission UUID uniqueness check)
 - ✅ Marketplace queries use read-only replica connection
-- ✅ Fraud detection runs on ingested records in app_db, not raw odk_db
+- ✅ Fraud detection runs on submitted records in app_db
+- ✅ Form definitions are immutable once published (new version required for changes)
 
 **MUST NOT DO:**
-- ❌ Custom App cannot query odk_db directly (violates abstraction)
-- ❌ ODK Central cannot write to app_db (unidirectional flow)
-- ❌ Frontend cannot access odk_db (must go through Custom App API)
 - ❌ Marketplace API cannot modify any data (read-only replica)
+- ❌ Frontend cannot bypass API to access database directly
+- ❌ Published form definitions cannot be modified (only new versions)
 
 #### Performance Implications
 
-**Ingestion Latency (Webhook → Dashboard Visibility):**
+**Ingestion Latency (Submission → Dashboard Visibility):**
 - **Target**: <5 seconds (p95) for submission to appear in Supervisor dashboard
-- **Measured**: ODK webhook delivery (1-2s) + BullMQ processing (2-3s) + Redis cache invalidation (0.5s)
+- **Measured**: API receipt (~0.5s) + BullMQ processing (2-3s) + Redis cache invalidation (0.5s)
 - **Bottleneck**: Fraud detection geospatial queries (mitigated by PostGIS spatial indexes)
 
 **Marketplace Query Performance:**
@@ -975,11 +938,11 @@ export const contactViews = pgTable('contact_views', {
   ```json
   {
     "code": "NIN_DUPLICATE",
-    "message": "This individual was already registered on 2026-01-15 via enumerator_odk",
+    "message": "This individual was already registered on 2026-01-15 via enumerator_survey",
     "details": {
       "nin": "12345678901",
       "originalSubmissionDate": "2026-01-15",
-      "originalSource": "enumerator_odk"
+      "originalSource": "enumerator_survey"
     }
   }
   ```
@@ -1564,7 +1527,7 @@ const errorCounts = logs.reduce((acc, log) => {
 }, {});
 
 console.log('Errors in last 24 hours:', errorCounts);
-// Output: { 'NIN_DUPLICATE': 3, 'ValidationError': 12, 'ODKWebhookTimeout': 1 }
+// Output: { 'NIN_DUPLICATE': 3, 'ValidationError': 12, 'SubmissionTimeout': 1 }
 ```
 
 **When to Upgrade to Self-Hosted Sentry:**
@@ -1632,7 +1595,7 @@ Think of car dashboard:
    ```javascript
    const webhookLagGauge = new promClient.Gauge({
      name: 'webhook_ingestion_lag_seconds',
-     help: 'Time between ODK submission and Custom App ingestion'
+     help: 'Time between form submission and ingestion processing'
    });
 
    const lagSeconds = (Date.now() - submission.submissionDate) / 1000;
@@ -1670,7 +1633,7 @@ Super Admin dashboard polls every 30 seconds, updates charts:
 |--------|---------------|------------------|
 | `http_request_duration_ms{p95}` | 95% of API calls complete in X ms | If >250ms: Add database indexes, optimize queries |
 | `fraud_detections_total{heuristic="gps_cluster"}` | GPS clustering frauds detected | If spike: Check thresholds or real fraud wave |
-| `webhook_ingestion_lag_seconds` | Delay between ODK submission and ingestion | If >60s: Scale BullMQ workers, check queue backlog |
+| `submission_ingestion_lag_seconds` | Delay between form submission and ingestion | If >60s: Scale BullMQ workers, check queue backlog |
 | `db_connection_pool_active` | Database connections in use | If near max: Connection leak or need scaling |
 
 **Real Example:**
@@ -1822,7 +1785,7 @@ To mitigate Single Point of Failure (SPOF) risk identified in project critique, 
 3. Remap Floating IP to new instance via `hcloud floating-ip assign <floating-ip-id> <new-server-id>`
 4. Verify health endpoint responds (apps/api/health returning 200 OK)
 5. Notify Super Admin of recovery completion
-6. Accept data loss window: Maximum 6 hours of Custom App data (ODK data safe on enumerator devices)
+6. Accept data loss window: Maximum 6 hours of server data (offline drafts safe on enumerator devices in IndexedDB)
 
 **Affects:** Infrastructure planning, budget approval, Story 1.4 (Production Deployment), disaster recovery procedures
 
@@ -1937,7 +1900,7 @@ If typo-tolerance becomes critical user feedback, consider hybrid approach:
 **Decision:** Use NGINX as the single entry point reverse proxy for all traffic routing, SSL termination, and edge-level rate limiting. Implement self-hosted privacy-respecting analytics (Plausible or Umami) for traffic monitoring.
 
 **Context:**
-- **Challenge 1:** Two co-located applications on single VPS (Custom App on port 3000 + ODK Central on port 8383) require unified entry point
+- **Challenge 1:** Application on single VPS (Custom App on port 3000) requires a production-grade entry point with SSL termination
 - **Challenge 2:** SSL/TLS certificates need centralized management (Let's Encrypt)
 - **Challenge 3:** Rate limiting must occur at edge before hitting application servers
 - **Challenge 4:** Static assets (React build) need efficient serving
@@ -1961,16 +1924,17 @@ Internet Traffic (HTTPS Port 443)
   │                                                       │
   ↓ (Domain/Path Routing)                               ↓
   │                                                       │
-  ├─ oslsr.gov.ng/*                                     ├─ odk.oslsr.gov.ng/*
-  ├─ oslsr.gov.ng/api/*                                 │  (Subdomain for ODK)
-  ├─ oslsr.gov.ng/marketplace/*                         │
-  │                                                       │
-  ↓                                                       ↓
-[Custom App Container]                              [ODK Central Container]
-  - React SPA (served as static)                      - ODK Central API :8383
-  - Express API :3000                                 - Enketo Forms
-  - BullMQ Workers                                    - PostgreSQL (odk_db)
-  - PostgreSQL (app_db)                               - Persistent volumes
+  ├─ oslsr.gov.ng/*
+  ├─ oslsr.gov.ng/api/*
+  ├─ oslsr.gov.ng/marketplace/*
+  │
+  ↓
+[Custom App Container]
+  - React SPA (served as static via Nginx)
+  - Express API :3000
+  - BullMQ Workers
+  - Native Form Renderer
+  - PostgreSQL (app_db)
   - Redis :6379
 
   ↓ (Analytics Tracking - Privacy-Respecting)
@@ -1991,11 +1955,6 @@ Internet Traffic (HTTPS Port 443)
 upstream custom_app {
     server custom-app:3000;
     keepalive 32;
-}
-
-upstream odk_central {
-    server odk-central:8383;
-    keepalive 8;
 }
 
 # Rate limiting zones (Redis-backed via lua-resty-redis)
@@ -2095,46 +2054,10 @@ server {
     }
 }
 
-# ODK Central - Separate subdomain
-server {
-    listen 443 ssl http2;
-    server_name odk.oslsr.gov.ng;
-
-    # SSL Configuration (Let's Encrypt via Certbot)
-    ssl_certificate /etc/letsencrypt/live/odk.oslsr.gov.ng/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/odk.oslsr.gov.ng/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    # Security Headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    # Proxy all requests to ODK Central
-    location / {
-        proxy_pass http://odk_central;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-
-        # ODK Central specific timeouts (large form uploads)
-        client_max_body_size 50M;
-        proxy_connect_timeout 30s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-    }
-}
-
 # HTTP to HTTPS redirect
 server {
     listen 80;
-    server_name oslsr.gov.ng odk.oslsr.gov.ng;
+    server_name oslsr.gov.ng;
     return 301 https://$server_name$request_uri;
 }
 ```
@@ -2161,7 +2084,6 @@ services:
       - ./apps/web/dist:/var/www/oslsr/dist:ro  # React build
     depends_on:
       - custom-app
-      - odk-central
     networks:
       - oslsr-network
     restart: unless-stopped
@@ -2176,7 +2098,6 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
-      - ODK_SERVER_URL=http://odk-central:8383
     depends_on:
       - postgres
       - redis
@@ -2184,26 +2105,7 @@ services:
       - oslsr-network
     restart: unless-stopped
 
-  # ODK Central
-  odk-central:
-    image: odk/central:latest
-    container_name: oslsr-odk-central
-    expose:
-      - "8383"  # Not published to host, only accessible via nginx
-    environment:
-      - DB_HOST=postgres-odk
-      - DB_NAME=odk_db
-      - DB_USER=${ODK_DB_USER}
-      - DB_PASSWORD=${ODK_DB_PASSWORD}
-    volumes:
-      - odk-data:/data
-    depends_on:
-      - postgres-odk
-    networks:
-      - oslsr-network
-    restart: unless-stopped
-
-  # PostgreSQL (Custom App)
+  # PostgreSQL (Application Database)
   postgres:
     image: postgis/postgis:15-3.4-alpine
     container_name: oslsr-postgres
@@ -2215,22 +2117,6 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    networks:
-      - oslsr-network
-    restart: unless-stopped
-
-  # PostgreSQL (ODK Central)
-  postgres-odk:
-    image: postgres:15-alpine
-    container_name: oslsr-postgres-odk
-    expose:
-      - "5432"
-    environment:
-      - POSTGRES_DB=odk_db
-      - POSTGRES_USER=${ODK_DB_USER}
-      - POSTGRES_PASSWORD=${ODK_DB_PASSWORD}
-    volumes:
-      - postgres-odk-data:/var/lib/postgresql/data
     networks:
       - oslsr-network
     restart: unless-stopped
@@ -2293,8 +2179,6 @@ services:
 
 volumes:
   postgres-data:
-  postgres-odk-data:
-  odk-data:
   redis-data:
   plausible-db-data:
   plausible-clickhouse-data:
@@ -2419,7 +2303,7 @@ trackEvent('Registration Completed', {
 - **Disk:** ~500MB/year for 1M page views
 
 **Total Infrastructure Impact:**
-- Previous: Custom App + ODK Central = ~6GB RAM used
+- Previous: Custom App + ODK Central = ~8GB RAM used; now ~6GB with ODK removed (SCP-2026-02-05-001)
 - New: + NGINX (10MB) + Plausible (350MB) = ~6.4GB RAM used
 - **Remaining Headroom:** Hetzner CX43 has 16GB RAM → 9.6GB free (60% headroom)
 
@@ -2724,7 +2608,7 @@ const routes = [
 **Why Strict Isolation (NOT Super Admin access to all routes):**
 - **Security:** Prevents watering hole attacks where compromising one role's route exposes Super Admin
 - **Attack Surface:** If attacker breaches `/dashboard/enumerator/*`, they cannot exploit Super Admin visiting that route
-- **360° Visibility:** Super Admin gets full system view via aggregated widgets on `/dashboard/super-admin/*` (staff lists, ODK health, system stats)
+- **360° Visibility:** Super Admin gets full system view via aggregated widgets on `/dashboard/super-admin/*` (staff lists, form management, submission health, system stats)
 - **View-As Feature:** Deferred to Story 6-7 (Epic 6) where audit infrastructure exists for proper tracking
 
 **Key Principles:**
@@ -3179,8 +3063,8 @@ DELETE /api/v1/sessions  # Logout
 - ✅ **Files:** kebab-case (`fraud-detection.service.ts`, `enumerator-dashboard.tsx`)
 
 **Environment Variables:**
-- ✅ **Prefix by domain:** `DB_`, `REDIS_`, `ODK_`, `AWS_`, `FRAUD_`
-- ✅ **SCREAMING_SNAKE_CASE** (`DB_HOST`, `REDIS_PORT`, `ODK_CENTRAL_URL`)
+- ✅ **Prefix by domain:** `DB_`, `REDIS_`, `AWS_`, `FRAUD_`
+- ✅ **SCREAMING_SNAKE_CASE** (`DB_HOST`, `REDIS_PORT`, `AWS_SES_REGION`)
 - ✅ **Boolean flags:** `FEATURE_` prefix (`FEATURE_FRAUD_DETECTION_ENABLED`)
 
 ---
@@ -3217,7 +3101,7 @@ oslsr/
 │       │   ├── services/         # Business logic
 │       │   │   ├── auth.service.ts
 │       │   │   ├── fraud-detection.service.ts
-│       │   │   └── odk-integration.service.ts
+│       │   │   └── form-management.service.ts
 │       │   ├── middleware/       # Express middleware
 │       │   ├── db/               # Drizzle schema + migrations
 │       │   │   ├── schema/
@@ -3229,8 +3113,6 @@ oslsr/
 │   ├── types/            # Shared TypeScript types
 │   ├── utils/            # Shared utilities
 │   └── config/           # Shared configuration
-├── services/
-│   └── odk-integration/  # ODK Central abstraction (ADR-002)
 ├── docker/
 │   ├── docker-compose.yml
 │   ├── Dockerfile.api
@@ -3315,11 +3197,11 @@ interface ApiError {
 // Example: NIN duplicate
 {
   "code": "NIN_DUPLICATE",
-  "message": "This individual was already registered on 2026-01-15 via enumerator_odk",
+  "message": "This individual was already registered on 2026-01-15 via enumerator_survey",
   "details": {
     "nin": "12345678901",
     "originalSubmissionDate": "2026-01-15T10:30:00.000Z",
-    "originalSource": "enumerator_odk",
+    "originalSource": "enumerator_survey",
     "originalSubmissionId": "018e5f1a-abcd-7890-1234-567890abcdef"
   }
 }
@@ -3356,7 +3238,7 @@ Pattern: `{domain}.{action}` (lowercase, underscores)
 // ✅ Good patterns
 logger.info({ event: 'user.login', userId, role, lga });
 logger.warn({ event: 'fraud.detected', heuristic: 'gps_cluster', score: 0.85 });
-logger.error({ event: 'odk.webhook.failed', submissionId, error: err.message });
+logger.error({ event: 'submission.ingestion.failed', submissionId, error: err.message });
 logger.info({ event: 'marketplace.search', query, resultsCount, searcherId });
 logger.debug({ event: 'cache.hit', key: 'fraud_thresholds', ttl: 3600 });
 
@@ -3725,7 +3607,7 @@ oslsr/
 │       └── deploy-production.yml   # Deploy to production
 │
 ├── docker/
-│   ├── docker-compose.yml          # Orchestrates: Custom App + ODK Central + PostgreSQL×2 + Redis
+│   ├── docker-compose.yml          # Orchestrates: Custom App + PostgreSQL + Redis + Nginx
 │   ├── docker-compose.dev.yml      # Development overrides
 │   ├── Dockerfile.api              # Node.js API container
 │   ├── Dockerfile.web              # Nginx + React build container
@@ -3839,13 +3721,13 @@ oslsr/
 │   │       │   │   └── api/
 │   │       │   │       └── adminApi.ts
 │   │       │   │
-│   │       │   └── odk-forms/     # FR9-FR11: Embedded Enketo Forms
+│   │       │   └── native-forms/   # FR9-FR11: Native Form Renderer
 │   │       │       ├── components/
-│   │       │       │   ├── EnketoEmbed.tsx
+│   │       │       │   ├── FormRenderer.tsx      # One-question-per-screen renderer
 │   │       │       │   ├── FormList.tsx
-│   │       │       │   └── DraftManager.tsx     # ADR-004: Draft state management
+│   │       │       │   └── DraftManager.tsx     # ADR-004: IndexedDB draft management
 │   │       │       └── hooks/
-│   │       │           └── useEnketoForm.ts
+│   │       │           └── useNativeForm.ts
 │   │       │
 │   │       ├── components/         # Shared UI components
 │   │       │   ├── ui/            # shadcn/ui base components
@@ -3897,7 +3779,7 @@ oslsr/
 │           ├── config/             # Configuration management
 │           │   ├── database.ts
 │           │   ├── redis.ts
-│           │   ├── odk.ts
+│           │   ├── forms.ts
 │           │   ├── aws.ts
 │           │   └── logger.ts       # Pino configuration
 │           │
@@ -3912,7 +3794,7 @@ oslsr/
 │           │       ├── data-entry.routes.ts    # FR21: Paper digitization
 │           │       ├── dashboards.routes.ts    # FR12-FR13: Supervisor dashboards
 │           │       ├── admin.routes.ts         # FR16: Super admin
-│           │       ├── webhooks.routes.ts      # ODK webhook receiver
+│           │       ├── forms.routes.ts          # Native form management API
 │           │       └── health.routes.ts        # Health check endpoint
 │           │
 │           ├── services/           # Business logic layer
@@ -3963,12 +3845,11 @@ oslsr/
 │           ├── jobs/               # BullMQ job workers
 │           │   ├── queues.ts       # Queue setup
 │           │   ├── workers/
-│           │   │   ├── webhook-ingestion.worker.ts   # ADR-009: ODK webhook processing
+│           │   │   ├── submission-ingestion.worker.ts  # Submission processing pipeline
 │           │   │   ├── fraud-detection.worker.ts     # ADR-003: Async fraud checks
 │           │   │   ├── email-notification.worker.ts
 │           │   │   ├── backup-database.worker.ts     # NFR3: Automated backups
-│           │   │   ├── marketplace-export.worker.ts
-│           │   │   └── webhook-health-check.worker.ts # ADR-009: Gap detection
+│           │   │   └── marketplace-export.worker.ts
 │           │   └── __tests__/
 │           │       └── ... (worker tests)
 │           │
@@ -3983,22 +3864,6 @@ oslsr/
 │               ├── express.d.ts    # Express request extensions
 │               ├── api.types.ts
 │               └── models.types.ts
-│
-├── services/
-│   └── odk-integration/            # ADR-002: ODK Central abstraction layer
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── src/
-│           ├── index.ts
-│           ├── client.ts           # ODK Central API client
-│           ├── app-users.ts        # FR8: App User provisioning
-│           ├── forms.ts            # Form deployment
-│           ├── submissions.ts      # Submission retrieval
-│           ├── projects.ts         # ODK project management
-│           ├── types.ts            # ODK API response types
-│           └── __tests__/
-│               ├── client.test.ts
-│               └── ... (integration tests with mock ODK)
 │
 ├── packages/
 │   ├── types/                      # Shared TypeScript types
@@ -4062,7 +3927,7 @@ oslsr/
     │       └── test-data.ts
     │
     └── integration/                # Cross-service integration tests
-        ├── odk-webhook.test.ts     # Test ODK → Custom App flow
+        ├── submission-pipeline.test.ts  # Test submission → ingestion → dashboard flow
         ├── fraud-pipeline.test.ts   # Test ingestion → fraud → dashboard
         └── marketplace-sync.test.ts # Test respondent → marketplace flow
 ```
@@ -4081,19 +3946,13 @@ oslsr/
    - JWT authentication required (Decision 2.1)
    - Role-based authorization (7 roles: Super Admin, Enumerator, Supervisor, etc.)
    - Rate-limited (100 req/min per user)
-   - Access to app_db (not odk_db directly)
+   - Access to app_db
 
-3. **ODK Webhook Receiver** (`/api/v1/webhooks/odk`)
-   - Receives submissions from ODK Central
-   - Secret-based authentication (ODK webhook secret)
-   - BullMQ job queue for async processing (ADR-009)
-   - Idempotent ingestion (handles retries)
-
-4. **ODK Central API** (External Integration)
-   - Abstracted via `services/odk-integration/` (ADR-002)
-   - Basic authentication (ODK API credentials)
-   - Used for: App User provisioning, form deployment, submission retrieval
-   - Never exposed to frontend directly
+3. **Submission API** (`/api/v1/submissions`)
+   - Receives form submissions from native form renderer (online and offline sync)
+   - JWT authentication required
+   - BullMQ job queue for async processing (idempotent by submission UUID)
+   - Handles both online submissions and offline queue sync
 
 **Component Boundaries:**
 
@@ -4109,25 +3968,22 @@ oslsr/
    - Services never import routes or middleware directly
    - Services communicate via function calls (synchronous) or BullMQ jobs (asynchronous)
 
-3. **ODK Integration Abstraction** (ADR-002)
-   - `services/odk-integration/` is the ONLY module that calls ODK Central API
-   - Other services import from `@oslsr/odk-integration` package
-   - Enables mocking ODK responses in tests
-   - Isolates ODK version changes
+3. ~~**ODK Integration Abstraction** (ADR-002)~~ **REMOVED (SCP-2026-02-05-001)**
+   - Form management is now a native service within the Custom App
 
 **Service Boundaries:**
 
 1. **Fraud Detection Pipeline**
-   - **Trigger:** BullMQ job `fraud-detection` fired after webhook ingestion
+   - **Trigger:** BullMQ job `fraud-detection` fired after submission ingestion
    - **Input:** Submission ID from app_db
    - **Processing:** `fraud-detection.service.ts` runs all heuristics (ADR-003)
    - **Output:** Fraud score + flagged heuristics written to `fraud_detections` table
    - **Notification:** If score > threshold, add to Verification Assessor queue
 
-2. **Webhook Ingestion Pipeline**
-   - **Entry:** `/api/v1/webhooks/odk` receives POST from ODK Central
-   - **Queue:** BullMQ job `webhook-ingestion` (ADR-009, exponential backoff)
-   - **Processing:** Extract submission data, validate, insert into app_db (idempotent)
+2. **Submission Ingestion Pipeline**
+   - **Entry:** `/api/v1/submissions` receives POST from native form renderer
+   - **Queue:** BullMQ job `submission-ingestion` (idempotent by submission UUID)
+   - **Processing:** Validate JSONB response against form schema, insert into app_db (idempotent)
    - **Downstream:** Trigger `fraud-detection` job, update dashboard stats cache
 
 3. **Marketplace Sync**
@@ -4138,11 +3994,10 @@ oslsr/
 
 **Data Boundaries:**
 
-1. **Database Separation** (ADR-007)
-   - **app_db:** Source of truth for all custom app data (users, respondents, fraud, marketplace)
-   - **odk_db:** ODK Central's database (raw submissions, form definitions)
-   - **No foreign keys between databases**
-   - **Ingestion direction:** odk_db → app_db (one-way, idempotent)
+1. **Single Database** (ADR-007 amended)
+   - **app_db:** Source of truth for ALL data (users, form definitions, submissions, fraud, marketplace)
+   - **Full referential integrity** via foreign keys across all tables
+   - **Marketplace isolation:** Read-only replica for public queries
 
 2. **Data Access Patterns**
    - **Drizzle ORM:** All queries go through `apps/api/src/db/schema/*`
@@ -4161,7 +4016,7 @@ oslsr/
 
 | FR Category | Frontend Feature | Key Components |
 |-------------|------------------|----------------|
-| FR1-FR5: Consent & Privacy | `odk-forms/` | EnketoEmbed, DraftManager |
+| FR1-FR5: Consent & Privacy | `native-forms/` | FormRenderer, DraftManager |
 | FR6-FR8: User Management | `auth/` | LoginForm, OnboardingWizard, ProfileCompletion |
 | FR9-FR11: Data Collection | `enumerator-dashboard/` | Dashboard, SubmissionList, OfflineIndicator, UploadNowButton |
 | FR12-FR13: Supervisor Oversight | `supervisor-dashboard/` | EnumeratorPerformance, FraudAlerts, RealTimeMap |
@@ -4174,8 +4029,8 @@ oslsr/
 
 | FR Category | Backend Service | Key Functions |
 |-------------|-----------------|---------------|
-| FR6-FR8: User Management | `user.service.ts`, `auth.service.ts` | Bulk CSV import, NIN validation, LGA-locking, ODK App User provisioning |
-| FR9-FR11: Data Collection | `submission.service.ts`, ODK integration | Webhook ingestion, idempotent insert, submission retrieval |
+| FR6-FR8: User Management | `user.service.ts`, `auth.service.ts` | Bulk CSV import, NIN validation, LGA-locking |
+| FR9-FR11: Data Collection | `submission.service.ts`, `native-form.service.ts` | Native form rendering, IndexedDB sync, idempotent insert, submission retrieval |
 | FR12-FR16: Oversight & Quality | `fraud-detection.service.ts`, `dashboard.service.ts`, `audit.service.ts` | Fraud heuristics, supervisor stats, verification queue, immutable audit logs |
 | FR17-FR21: Marketplace | `marketplace.service.ts` | Anonymous profile creation, searcher contact logging, profile edit tokens |
 
@@ -4183,14 +4038,14 @@ oslsr/
 
 | ADR | Location | Implementation |
 |-----|----------|----------------|
-| ADR-001: Composed Monolith | `docker/docker-compose.yml` | Single VPS with Custom App + ODK Central containers |
-| ADR-002: ODK Abstraction | `services/odk-integration/` | Isolated module with versioned contracts |
+| ADR-001: Custom Modular Monolith | `docker/docker-compose.yml` | Single VPS with Custom App + PostgreSQL + Redis containers |
+| ~~ADR-002: ODK Abstraction~~ | ~~`services/odk-integration/`~~ | SUPERSEDED (SCP-2026-02-05-001) — form management is native |
 | ADR-003: Fraud Detection | `apps/api/src/services/fraud-detection.service.ts`, `apps/api/src/jobs/workers/fraud-detection.worker.ts` | Pluggable heuristics + DB-backed thresholds |
-| ADR-004: Offline Data | `apps/web/src/features/odk-forms/`, `apps/web/public/service-worker.js` | Browser IndexedDB + PWA service worker |
+| ADR-004: Offline Data | `apps/web/src/features/native-forms/`, `apps/web/public/service-worker.js` | Browser IndexedDB + PWA service worker |
 | ADR-006: Defense-in-Depth | `apps/api/src/middleware/rate-limit.ts`, `apps/web/src/features/marketplace/components/CaptchaChallenge.tsx` | Layered security (rate limit + CAPTCHA + replica) |
-| ADR-007: Database Separation | `apps/api/src/db/`, `apps/api/src/db/replica.ts` | Dual PostgreSQL with replica for marketplace |
+| ADR-007: Single Database | `apps/api/src/db/`, `apps/api/src/db/replica.ts` | Single PostgreSQL with read-only replica for marketplace |
 | ADR-008: Emergency Sync | `apps/web/src/features/enumerator-dashboard/components/UploadNowButton.tsx` | Explicit upload button with progress feedback |
-| ADR-009: Webhook Health | `apps/api/src/jobs/workers/webhook-health-check.worker.ts` | Scheduled job detects submission gaps |
+| ~~ADR-009: Webhook Health~~ | ~~`apps/api/src/jobs/workers/webhook-health-check.worker.ts`~~ | SUPERSEDED (SCP-2026-02-05-001) — native submission pipeline |
 | ADR-010: PostgreSQL | `apps/api/src/db/schema/*.ts` | Drizzle ORM with UNIQUE constraints + ACID transactions |
 | ADR-011: Infrastructure | `docker/docker-compose.yml`, `scripts/backup-to-s3.sh` | Hetzner CX43 deployment, S3 backups |
 
@@ -4217,18 +4072,13 @@ oslsr/
 
 4. **Backend ↔ BullMQ Workers**
    - Protocol: Redis-backed job queue
-   - Job names: Kebab-case (Pattern Category 5: `webhook-ingestion`)
+   - Job names: Kebab-case (Pattern Category 5: `submission-ingestion`)
    - Retry: Exponential backoff (5 attempts: 5s, 10s, 20s, 40s, 80s)
    - Concurrency: 4 workers for fraud detection
 
 **External Integrations:**
 
-1. **Custom App ↔ ODK Central**
-   - **Provisioning:** Custom App creates App Users in ODK via API (FR8)
-   - **Form Deployment:** Custom App uploads XLSForm to ODK projects
-   - **Webhook:** ODK pushes submissions to Custom App (`/api/v1/webhooks/odk`)
-   - **Backfill:** Custom App polls ODK API if webhook fails (ADR-009)
-   - **Abstraction:** All calls via `services/odk-integration/` (ADR-002)
+1. ~~**Custom App ↔ ODK Central**~~ **REMOVED (SCP-2026-02-05-001)** — Form management is now native. No external integration needed for data collection.
 
 2. **Custom App ↔ AWS S3 (Hetzner Object Storage)**
    - **Daily Backups:** Automated pg_dump uploads (NFR3)
@@ -4245,11 +4095,9 @@ oslsr/
 
 1. **Submission Collection Flow:**
    ```
-   Enumerator → Enketo Form (Browser) → IndexedDB (Draft)
-      ↓ (Online sync)
-   ODK Central (odk_db) → Webhook
-      ↓
-   Custom App API (`/api/v1/webhooks/odk`) → BullMQ (`webhook-ingestion`)
+   Enumerator → Native Form Renderer (Browser) → IndexedDB (Draft)
+      ↓ (Online sync / background queue)
+   Custom App API (`/api/v1/submissions`) → BullMQ (`submission-ingestion`)
       ↓
    Ingestion Worker → app_db (respondents, submissions)
       ↓ (Trigger)
@@ -4295,7 +4143,7 @@ oslsr/
 - **Frontend:** Feature-based (`features/auth/`, `features/marketplace/`), NOT page-based
 - **Backend:** Layered architecture (`routes/` → `services/` → `db/`)
 - **Shared code:** Monorepo packages (`packages/types/`, `packages/utils/`, `packages/config/`)
-- **ODK abstraction:** Isolated service (`services/odk-integration/`)
+- **Native forms:** Form management services within `apps/api/src/services/` (no separate package)
 
 **Test Organization:**
 
@@ -4342,9 +4190,8 @@ pnpm build
 # 1. packages/types → Shared types compiled
 # 2. packages/utils → Shared utilities compiled
 # 3. packages/config → Shared config compiled
-# 4. services/odk-integration → ODK client compiled
-# 5. apps/api → Express API compiled to dist/
-# 6. apps/web → Vite builds React to dist/ (HTML, CSS, JS)
+# 4. apps/api → Express API compiled to dist/
+# 5. apps/web → Vite builds React to dist/ (HTML, CSS, JS)
 ```
 
 **Deployment Structure:**
@@ -4356,9 +4203,7 @@ docker compose -f docker/docker-compose.yml up -d
 # Containers:
 # - oslsr-web (Nginx serving React build)
 # - oslsr-api (Node.js Express API)
-# - odk-central (ODK Central stack)
-# - postgres-app (app_db)
-# - postgres-odk (odk_db)
+# - postgres (app_db)
 # - redis (Cache + BullMQ)
 
 # Automated backups via cron:
@@ -4372,10 +4217,8 @@ docker compose -f docker/docker-compose.yml up -d
 |---------|------|---------|-------------|
 | oslsr-web | 80, 443 | Nginx + React build | None (stateless) |
 | oslsr-api | 3000 | Express API + BullMQ workers | Logs: `/var/log/oslsr/` |
-| postgres-app | 5432 | Custom App database (app_db) | `/var/lib/postgresql/data/app` |
-| postgres-odk | 5433 | ODK Central database (odk_db) | `/var/lib/postgresql/data/odk` |
+| postgres | 5432 | Application database (app_db) | `/var/lib/postgresql/data` |
 | redis | 6379 | Cache + Queue | `/data` |
-| odk-central | 8383 | ODK Central web + API | `/data/odk` |
 
 **Monorepo Workspace Dependencies:**
 
@@ -4384,10 +4227,7 @@ apps/web
   └── depends on: packages/types, packages/utils
 
 apps/api
-  └── depends on: packages/types, packages/utils, packages/config, services/odk-integration
-
-services/odk-integration
-  └── depends on: packages/types
+  └── depends on: packages/types, packages/utils, packages/config
 
 packages/utils
   └── depends on: packages/types
@@ -4408,14 +4248,14 @@ _This section provides comprehensive validation of the complete architecture for
 
 **Overall Status:** **READY FOR IMPLEMENTATION**
 
-**PRD Version:** **v7.5** (Updated 2026-01-04)
+**PRD Version:** **v8.0** (Updated 2026-02-06)
 
 **Confidence Level:** **HIGH (98%)**
 
 **Validation Completed:** 2026-01-04
 
 **PRD v7.5 Updates Incorporated:**
-- ✅ **Data Routing Matrix**: Comprehensive explanation of ODK Central DB vs Custom App DB (what data goes where, why two databases, data flow rules)
+- ✅ **Data Routing Matrix**: Comprehensive explanation of single-database data ownership (what data goes where, data flow rules). _(Amended: ODK Central removed per SCP-2026-02-05-001)_
 - ✅ **Live Selfie Technical Specification**: Dual-purpose photo implementation (identity verification + ID card portrait) with liveness detection, auto-crop, and security measures
 - ✅ **Terminology Correction**: "Air-Gapped" → "Logically Isolated Read Replica" with accurate technical explanation
 - ✅ **Marketplace Security Architecture**: 3-route model with authentication boundaries, rate limiting, and bot protection strategies
@@ -4443,9 +4283,9 @@ All technology choices work together without conflicts:
 **Non-Functional Requirements:** 23+/23+ NFRs architecturally supported (100%)
 
 **Key Validations:**
-- ✅ FR1-FR5 (Consent) → Enketo forms + NIN UNIQUE constraints
-- ✅ FR6-FR8 (User Management) → Bulk CSV + LGA-locking + ODK provisioning
-- ✅ FR9-FR11 (Data Collection) → Offline PWA + webhook ingestion + emergency sync
+- ✅ FR1-FR5 (Consent) → Native form renderer + NIN UNIQUE constraints
+- ✅ FR6-FR8 (User Management) → Bulk CSV + LGA-locking
+- ✅ FR9-FR11 (Data Collection) → Offline PWA + native form renderer + IndexedDB sync + emergency upload
 - ✅ FR12-FR16 (Oversight) → Fraud detection + dashboards + audit logs
 - ✅ FR17-FR21 (Marketplace) → Anonymous profiles + read replica + bot protection
 - ✅ NFR1 (Performance 250ms p95) → 73x headroom validated
@@ -4498,7 +4338,7 @@ All technology choices work together without conflicts:
 
 1. **Follow decisions exactly:** React 18.3, UUIDv7, PostgreSQL 15, Drizzle ORM
 2. **Apply patterns consistently:** snake_case DB, camelCase API, Pino logging, AppError class, skeleton screens
-3. **Respect boundaries:** Frontend features self-contained, ODK integration via abstraction only
+3. **Respect boundaries:** Frontend features self-contained, form management via native services only
 4. **Refer to this document:** ADRs provide rationale, patterns prevent conflicts
 
 **First Implementation Priority:**
@@ -4509,7 +4349,6 @@ All technology choices work together without conflicts:
 # 2. Initialize React 18.3 + Vite + Tailwind + shadcn/ui
 # 3. Initialize Node.js 20 + Express + TypeScript
 # 4. Create packages/{types,utils,config}
-# 5. Create services/odk-integration
 # See "Starter Template Evaluation" section for complete commands
 ```
 
