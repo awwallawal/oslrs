@@ -1,42 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { Redis } from 'ioredis';
+import { randomInt } from 'crypto';
 import { db } from '../../db/index.js';
 import { users, roles, auditLogs } from '../../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
 import { RegistrationService } from '../registration.service.js';
 import { EmailService } from '../email.service.js';
-import { hashPassword } from '@oslsr/utils';
-import { UserRole } from '@oslsr/types';
-import { modulus11Generate } from '@oslsr/utils/src/validation';
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
 
 // Redis client for test verification
 const testRedis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const OTP_KEY_PREFIX = 'verification_otp:';
 
-// Generate unique valid NINs for testing
-// Uses combination of timestamp + random + counter for uniqueness
-let globalNinCounter = 0;
-const generateValidNin = (): string => {
-  // Generate a truly unique 10-digit base using timestamp, random, and counter
-  const timestamp = Date.now() % 100000000; // 8 digits from timestamp
-  const random = Math.floor(Math.random() * 100); // 2 digits random
-  let currentBase = timestamp * 100 + random + globalNinCounter++;
-
-  // Ensure we stay within 10 digits
-  currentBase = currentBase % 10000000000;
-
-  // Some base numbers produce check digit 10, which is invalid
-  // In that case, increment until we find a valid one
-  while (true) {
-    const baseNum = String(currentBase).padStart(10, '0');
-    try {
-      return modulus11Generate(baseNum);
-    } catch {
-      // Check digit was 10, try next number
-      currentBase = (currentBase + 1) % 10000000000;
-    }
-  }
-};
+// Generate unique phone numbers using crypto randomness to avoid collisions
+// across parallel vitest threads (pool: 'threads')
+const uniquePhone = () => `+23480${String(randomInt(10000000, 99999999))}`;
 
 describe('RegistrationService', () => {
   let publicRoleId: string;
@@ -52,8 +30,10 @@ describe('RegistrationService', () => {
       where: eq(roles.name, 'public_user'),
     });
     publicRoleId = publicRole!.id;
+  });
 
-    // Mock EmailService
+  // Mock EmailService in beforeEach so it survives vitest's restoreMocks: true
+  beforeEach(() => {
     vi.spyOn(EmailService, 'sendVerificationEmail').mockResolvedValue({
       success: true,
       messageId: 'test-message-id',
@@ -83,7 +63,7 @@ describe('RegistrationService', () => {
       const result = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -113,7 +93,7 @@ describe('RegistrationService', () => {
       const result = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password,
       });
@@ -132,13 +112,12 @@ describe('RegistrationService', () => {
       const email1 = `test-dup-nin-1-${Date.now()}@example.com`;
       const email2 = `test-dup-nin-2-${Date.now()}@example.com`;
       const nin = generateValidNin();
-      const basePhone = Date.now().toString().slice(-8);
 
       // First registration
       const result1 = await RegistrationService.registerPublicUser({
         fullName: 'First User',
         email: email1,
-        phone: `+23480${basePhone}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -150,7 +129,7 @@ describe('RegistrationService', () => {
         RegistrationService.registerPublicUser({
           fullName: 'Second User',
           email: email2,
-          phone: `+23481${basePhone}`,
+          phone: uniquePhone(),
           nin,
           password: 'SecurePass123!',
         })
@@ -161,13 +140,12 @@ describe('RegistrationService', () => {
       const email = `test-dup-email-${Date.now()}@example.com`;
       const nin1 = generateValidNin();
       const nin2 = generateValidNin();
-      const basePhone = Date.now().toString().slice(-8);
 
       // First registration
       const result1 = await RegistrationService.registerPublicUser({
         fullName: 'First User',
         email,
-        phone: `+23480${basePhone}`,
+        phone: uniquePhone(),
         nin: nin1,
         password: 'SecurePass123!',
       });
@@ -179,7 +157,7 @@ describe('RegistrationService', () => {
         RegistrationService.registerPublicUser({
           fullName: 'Second User',
           email,
-          phone: `+23481${basePhone}`,
+          phone: uniquePhone(),
           nin: nin2,
           password: 'SecurePass123!',
         })
@@ -193,7 +171,7 @@ describe('RegistrationService', () => {
       const result = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -215,7 +193,7 @@ describe('RegistrationService', () => {
       const result = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -244,7 +222,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -286,7 +264,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -318,7 +296,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -349,7 +327,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -392,7 +370,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -418,7 +396,7 @@ describe('RegistrationService', () => {
       const result = await RegistrationService.registerPublicUser({
         fullName: 'Test OTP User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -442,7 +420,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test OTP User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -474,7 +452,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test OTP User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -500,7 +478,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test OTP User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -526,7 +504,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test Mutual User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -557,7 +535,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test Mutual User',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
@@ -591,7 +569,7 @@ describe('RegistrationService', () => {
       const registerResult = await RegistrationService.registerPublicUser({
         fullName: 'Test OTP Resend',
         email,
-        phone: `+23480${Date.now().toString().slice(-8)}`,
+        phone: uniquePhone(),
         nin,
         password: 'SecurePass123!',
       });
