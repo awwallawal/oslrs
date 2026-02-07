@@ -8,6 +8,24 @@ importers:
 
   .:
     dependencies:
+      '@oslsr/types':
+        specifier: workspace:*
+        version: link:packages/types
+      '@oslsr/utils':
+        specifier: workspace:*
+        version: link:packages/utils
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      drizzle-orm:
+        specifier: ^0.30.10
+        version: 0.30.10(@types/pg@8.16.0)(@types/react@18.3.1)(pg@8.16.3)(react@18.3.1)
+      pg:
+        specifier: ^8.11.5
+        version: 8.16.3
+      uuidv7:
+        specifier: ^1.0.2
+        version: 1.1.0
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
@@ -45,9 +63,6 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.966.0
         version: 3.966.0
-      '@oslsr/odk-integration':
-        specifier: workspace:^
-        version: link:../../services/odk-integration
       '@oslsr/testing':
         specifier: workspace:^
         version: link:../../packages/testing
@@ -385,34 +400,6 @@ importers:
       '@types/bcrypt':
         specifier: ^6.0.0
         version: 6.0.0
-      vitest:
-        specifier: ^4.0.16
-        version: 4.0.16(@types/node@20.19.27)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(msw@2.12.7(@types/node@20.19.27)(typescript@5.9.3))(tsx@4.21.0)
-
-  services/odk-integration:
-    dependencies:
-      '@oslsr/types':
-        specifier: workspace:^
-        version: link:../../packages/types
-      '@oslsr/utils':
-        specifier: workspace:^
-        version: link:../../packages/utils
-      pino:
-        specifier: ^9.1.0
-        version: 9.14.0
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.12
-        version: 20.19.27
-      msw:
-        specifier: '2'
-        version: 2.12.7(@types/node@20.19.27)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.4.5
-        version: 5.9.3
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@20.19.27)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(msw@2.12.7(@types/node@20.19.27)(typescript@5.9.3))(tsx@4.21.0)
@@ -6834,7 +6821,8 @@ snapshots:
   '@img/sharp-win32-x64@0.34.5':
     optional: true
 
-  '@inquirer/ansi@1.0.2': {}
+  '@inquirer/ansi@1.0.2':
+    optional: true
 
   '@inquirer/confirm@5.1.21(@types/node@20.19.27)':
     dependencies:
@@ -6842,6 +6830,7 @@ snapshots:
       '@inquirer/type': 3.0.10(@types/node@20.19.27)
     optionalDependencies:
       '@types/node': 20.19.27
+    optional: true
 
   '@inquirer/core@10.3.2(@types/node@20.19.27)':
     dependencies:
@@ -6855,12 +6844,15 @@ snapshots:
       yoctocolors-cjs: 2.1.3
     optionalDependencies:
       '@types/node': 20.19.27
+    optional: true
 
-  '@inquirer/figures@1.0.15': {}
+  '@inquirer/figures@1.0.15':
+    optional: true
 
   '@inquirer/type@3.0.10(@types/node@20.19.27)':
     optionalDependencies:
       '@types/node': 20.19.27
+    optional: true
 
   '@ioredis/as-callback@3.0.0': {}
 
@@ -7160,6 +7152,7 @@ snapshots:
       is-node-process: 1.2.0
       outvariant: 1.4.3
       strict-event-emitter: 0.5.1
+    optional: true
 
   '@noble/hashes@1.8.0': {}
 
@@ -7175,14 +7168,17 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@open-draft/deferred-promise@2.2.0': {}
+  '@open-draft/deferred-promise@2.2.0':
+    optional: true
 
   '@open-draft/logger@0.3.0':
     dependencies:
       is-node-process: 1.2.0
       outvariant: 1.4.3
+    optional: true
 
-  '@open-draft/until@2.1.0': {}
+  '@open-draft/until@2.1.0':
+    optional: true
 
   '@paralleldrive/cuid2@2.3.1':
     dependencies:
@@ -8157,7 +8153,8 @@ snapshots:
       '@types/node': 20.19.27
       '@types/send': 0.17.6
 
-  '@types/statuses@2.0.6': {}
+  '@types/statuses@2.0.6':
+    optional: true
 
   '@types/superagent@8.1.9':
     dependencies:
@@ -8598,7 +8595,8 @@ snapshots:
       memoizee: 0.4.17
       timers-ext: 0.1.8
 
-  cli-width@4.1.0: {}
+  cli-width@4.1.0:
+    optional: true
 
   cliui@6.0.0:
     dependencies:
@@ -8611,6 +8609,7 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
+    optional: true
 
   clone@2.1.2: {}
 
@@ -8664,7 +8663,8 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  cookie@1.1.1: {}
+  cookie@1.1.1:
+    optional: true
 
   cookiejar@2.1.4: {}
 
@@ -9495,7 +9495,8 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql@16.12.0: {}
+  graphql@16.12.0:
+    optional: true
 
   hanji@0.0.5:
     dependencies:
@@ -9524,7 +9525,8 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  headers-polyfill@4.0.3: {}
+  headers-polyfill@4.0.3:
+    optional: true
 
   heap@0.2.7: {}
 
@@ -9698,7 +9700,8 @@ snapshots:
 
   is-negative-zero@2.0.3: {}
 
-  is-node-process@1.2.0: {}
+  is-node-process@1.2.0:
+    optional: true
 
   is-number-object@1.1.1:
     dependencies:
@@ -10105,6 +10108,7 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@types/node'
+    optional: true
 
   multer@2.0.2:
     dependencies:
@@ -10116,7 +10120,8 @@ snapshots:
       type-is: 1.6.18
       xtend: 4.0.2
 
-  mute-stream@2.0.0: {}
+  mute-stream@2.0.0:
+    optional: true
 
   nanoid@3.3.11: {}
 
@@ -10198,7 +10203,8 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  outvariant@1.4.3: {}
+  outvariant@1.4.3:
+    optional: true
 
   own-keys@1.0.1:
     dependencies:
@@ -10257,7 +10263,8 @@ snapshots:
 
   path-to-regexp@0.1.12: {}
 
-  path-to-regexp@6.3.0: {}
+  path-to-regexp@6.3.0:
+    optional: true
 
   pathe@2.0.3: {}
 
@@ -10592,7 +10599,8 @@ snapshots:
 
   restructure@3.0.2: {}
 
-  rettime@0.7.0: {}
+  rettime@0.7.0:
+    optional: true
 
   reusify@1.1.0: {}
 
@@ -10794,7 +10802,8 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  signal-exit@4.1.0: {}
+  signal-exit@4.1.0:
+    optional: true
 
   sisteransi@1.0.5: {}
 
@@ -10844,7 +10853,8 @@ snapshots:
 
   streamsearch@1.1.0: {}
 
-  strict-event-emitter@0.5.1: {}
+  strict-event-emitter@0.5.1:
+    optional: true
 
   string-width@4.2.3:
     dependencies:
@@ -10946,7 +10956,8 @@ snapshots:
 
   symbol-tree@3.2.4: {}
 
-  tagged-tag@1.0.0: {}
+  tagged-tag@1.0.0:
+    optional: true
 
   tailwind-merge@2.6.0: {}
 
@@ -11051,6 +11062,7 @@ snapshots:
   type-fest@5.4.2:
     dependencies:
       tagged-tag: 1.0.0
+    optional: true
 
   type-is@1.6.18:
     dependencies:
@@ -11128,7 +11140,8 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  until-async@3.0.2: {}
+  until-async@3.0.2:
+    optional: true
 
   update-browserslist-db@1.2.3(browserslist@4.28.1):
     dependencies:
@@ -11322,6 +11335,7 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
+    optional: true
 
   wrappy@1.0.2: {}
 
@@ -11361,7 +11375,8 @@ snapshots:
 
   y18n@4.0.3: {}
 
-  y18n@5.0.8: {}
+  y18n@5.0.8:
+    optional: true
 
   yallist@3.1.1: {}
 
@@ -11370,7 +11385,8 @@ snapshots:
       camelcase: 5.3.1
       decamelize: 1.2.0
 
-  yargs-parser@21.1.1: {}
+  yargs-parser@21.1.1:
+    optional: true
 
   yargs@15.4.1:
     dependencies:
@@ -11395,10 +11411,12 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+    optional: true
 
   yocto-queue@0.1.0: {}
 
-  yoctocolors-cjs@2.1.3: {}
+  yoctocolors-cjs@2.1.3:
+    optional: true
 
   zod-validation-error@4.0.2(zod@3.25.76):
     dependencies:

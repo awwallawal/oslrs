@@ -20,7 +20,8 @@
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",
     "services:logs": "docker compose -f docker/docker-compose.dev.yml logs -f",
-    "prepare": "husky"
+    "prepare": "husky",
+    "migrate:xlsform": "tsx scripts/migrate-xlsform-to-native.ts"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -37,6 +38,12 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
+    "@oslsr/types": "workspace:*",
+    "@oslsr/utils": "workspace:*",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.10",
+    "pg": "^8.11.5",
+    "uuidv7": "^1.0.2",
     "xlsx": "^0.18.5"
   }
 }
