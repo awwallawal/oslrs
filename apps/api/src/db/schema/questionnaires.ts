@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, index, unique, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, unique, customType } from 'drizzle-orm/pg-core';
 
 /**
  * Custom bytea column type for storing binary data (e.g., file blobs).
@@ -59,6 +59,11 @@ export const questionnaireForms = pgTable('questionnaire_forms', {
 
   // Validation results stored as JSON
   validationWarnings: text('validation_warnings'), // JSON array of warning objects
+
+  // Native form schema (JSONB) — stores NativeFormSchema for native forms
+  formSchema: jsonb('form_schema'),
+  isNative: boolean('is_native').default(false),
+  nativePublishedAt: timestamp('native_published_at', { withTimezone: true }),
 
   // Audit fields
   uploadedBy: uuid('uploaded_by').notNull().references(() => users.id),
