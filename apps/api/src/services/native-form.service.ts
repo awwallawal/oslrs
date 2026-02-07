@@ -4,7 +4,7 @@ import { auditLogs } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
-import type { NativeFormSchema, Section, Question, Choice } from '@oslsr/types';
+import type { NativeFormSchema, Question, Choice } from '@oslsr/types';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 
