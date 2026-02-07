@@ -175,6 +175,7 @@ export interface QuestionnaireFormResponse {
   version: string;
   title: string;
   status: QuestionnaireFormStatus;
+  isNative: boolean;
   uploadedBy: string;
   uploadedAt: string;
   fileHash: string;

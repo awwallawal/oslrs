@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit } from 'lucide-react';
 import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
 import { SkeletonTable } from '../../../components/skeletons';
@@ -32,6 +33,7 @@ interface ConfirmDialogState {
 }
 
 export function QuestionnaireList() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<QuestionnaireFormStatus | undefined>();
   const [versionHistoryFormId, setVersionHistoryFormId] = useState<string | null>(null);
@@ -127,6 +129,15 @@ export function QuestionnaireList() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
+                        {form.isNative && form.status === 'draft' && (
+                          <button
+                            onClick={() => navigate(`/dashboard/super-admin/questionnaires/builder/${form.id}`)}
+                            className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"
+                            title="Edit in Form Builder"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
                         <a
                           href={getDownloadUrl(form.id)}
                           className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"

@@ -59,6 +59,9 @@ const TermsPage = lazy(() => import('./features/legal/pages/TermsPage'));
 // Lazy load Questionnaire Management page (Story 2-1)
 const QuestionnaireManagementPage = lazy(() => import('./features/questionnaires/pages/QuestionnaireManagementPage'));
 
+// Lazy load Form Builder page (Story 2.10)
+const FormBuilderPage = lazy(() => import('./features/questionnaires/pages/FormBuilderPage'));
+
 // Lazy load Staff Management page (Story 2.5-3)
 const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManagementPage'));
 
@@ -523,6 +526,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <QuestionnaireManagementPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 2.10: Form Builder */}
+                <Route
+                  path="questionnaires/builder/:formId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <FormBuilderPage />
                     </Suspense>
                   }
                 />

@@ -85,7 +85,7 @@ development_status:
   2-7-native-form-schema-types: done  # Code review passed 2026-02-07: 8 issues fixed (5M, 3L), 22 tests pass, 0 regressions
   2-8-skip-logic-form-services: done  # Code review passed 2026-02-07: 10 issues found, 9 fixed, 1 dismissed (false positive), 47 tests pass
   2-9-xlsform-migration-script: done  # Code review passed 2026-02-07: 10 issues found (2H, 5M, 3L), all fixed. 30 tests pass (22 original + 8 review). Transaction wrapping, test coverage gaps closed.
-  2-10-native-form-builder-ui: backlog  # NEW: Form Builder UI with tabs (Settings, Sections, Choices, Preview)
+  2-10-native-form-builder-ui: done  # Code review passed 2026-02-07: 13 issues found (5H, 4M, 3L), 9 fixed (5H, 2M, 1L, 1 test fix), 2 accepted (M2 false positive, M3 adequate coverage). 780 web tests pass, 0 regressions.
   epic-2-retrospective: done  # Completed 2026-01-31: Identified visibility gap, created Epic 2.5
 
   # Epic 2.5: Role-Based Dashboards & Feature Integration

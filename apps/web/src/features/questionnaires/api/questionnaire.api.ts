@@ -3,6 +3,7 @@ import type {
   QuestionnaireFormResponse,
   QuestionnaireFormStatus,
   XlsformValidationResult,
+  NativeFormSchema,
 } from '@oslsr/types';
 
 interface UploadFormResult {
@@ -111,4 +112,30 @@ export async function deleteQuestionnaire(id: string): Promise<void> {
 
 export function getDownloadUrl(id: string): string {
   return `${API_BASE_URL}/questionnaires/${id}/download`;
+}
+
+// ── Native Form API Functions (Story 2.10) ──────────────────────────────
+
+export async function getNativeFormSchema(formId: string): Promise<{ data: NativeFormSchema }> {
+  return apiClient(`/questionnaires/${formId}/schema`);
+}
+
+export async function updateNativeFormSchema(formId: string, schema: NativeFormSchema): Promise<{ data: { success: boolean } }> {
+  return apiClient(`/questionnaires/${formId}/schema`, {
+    method: 'PUT',
+    body: JSON.stringify(schema),
+  });
+}
+
+export async function publishNativeForm(formId: string): Promise<void> {
+  await apiClient(`/questionnaires/${formId}/publish`, {
+    method: 'POST',
+  });
+}
+
+export async function createNativeForm(data: { title: string; formId?: string }): Promise<{ data: { id: string; formId: string; title: string; version: string; status: string } }> {
+  return apiClient('/questionnaires/native', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
