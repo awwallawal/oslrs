@@ -104,7 +104,7 @@ export const nativeFormSchema = z
     id: z.string().uuid(),
     title: z.string().min(1),
     version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must be valid semver (e.g., "1.0.0")'),
-    status: z.enum(['draft', 'published', 'archived']),
+    status: z.enum(['draft', 'published', 'closing', 'deprecated', 'archived']),
     sections: z.array(sectionSchema),
     choiceLists: choiceListsSchema,
     createdAt: z.string().datetime(),
@@ -123,3 +123,10 @@ export const nativeFormSchema = z
     },
     { message: 'Question references a nonexistent choice list' },
   );
+
+// ── API Request Schemas ──────────────────────────────────────────────────
+
+export const createNativeFormRequestSchema = z.object({
+  title: z.string().min(1).max(200),
+  formId: z.string().min(1).max(100).optional(),
+});

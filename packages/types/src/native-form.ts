@@ -88,7 +88,7 @@ export interface NativeFormSchema {
   id: string;
   title: string;
   version: string;
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published' | 'closing' | 'deprecated' | 'archived';
   sections: Section[];
   choiceLists: Record<string, Choice[]>;
   createdAt: string;

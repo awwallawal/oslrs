@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { QuestionnaireService } from '../services/questionnaire.service.js';
+import { NativeFormService } from '../services/native-form.service.js';
 import { AppError } from '@oslsr/utils';
 import {
   updateStatusSchema,
   listQuestionnairesQuerySchema,
   uploadQuestionnaireSchema,
+  createNativeFormRequestSchema,
+  nativeFormSchema,
 } from '@oslsr/types';
 
 export class QuestionnaireController {
@@ -182,6 +185,107 @@ export class QuestionnaireController {
       res.setHeader('Content-Type', file.mimeType);
       res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
       res.send(file.buffer);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  // ── Native Form Endpoints ────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/questionnaires/native
+   * Create a new native form
+   */
+  static async createNativeForm(req: Request, res: Response, next: NextFunction) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user?.sub;
+      if (!userId) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      const parsed = createNativeFormRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', parsed.error.issues[0].message, 400);
+      }
+
+      const result = await NativeFormService.createForm(parsed.data, userId);
+
+      res.status(201).json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/questionnaires/:id/schema
+   * Get native form schema
+   */
+  static async getFormSchema(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const schema = await NativeFormService.getFormSchema(id);
+      res.json({ data: schema });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PUT /api/v1/questionnaires/:id/schema
+   * Update native form schema
+   */
+  static async updateFormSchema(req: Request, res: Response, next: NextFunction) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user?.sub;
+      if (!userId) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      const { id } = req.params;
+
+      const parsed = nativeFormSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', parsed.error.issues[0].message, 400, {
+          issues: parsed.error.issues,
+        });
+      }
+
+      await NativeFormService.updateFormSchema(id, parsed.data, userId);
+
+      res.json({ data: { success: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/questionnaires/:id/publish
+   * Publish a native form
+   */
+  static async publishNativeForm(req: Request, res: Response, next: NextFunction) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user?.sub;
+      if (!userId) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      const { id } = req.params;
+      const result = await NativeFormService.publishForm(id, userId);
+
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/questionnaires/:id/preview
+   * Get flattened form for preview/rendering
+   */
+  static async getFormPreview(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const schema = await NativeFormService.getFormSchema(id);
+      const flattened = NativeFormService.flattenForRender(schema);
+
+      res.json({ data: flattened });
     } catch (err) {
       next(err);
     }
