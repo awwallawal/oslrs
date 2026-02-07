@@ -41,15 +41,13 @@ export const submissions = pgTable('submissions', {
   id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
 
   // Submission reference (CRITICAL for deduplication)
-  // Note: Column name kept as odk_submission_id for migration compatibility
-  odkSubmissionId: text('odk_submission_id').notNull().unique(),
+  submissionUid: text('submission_uid').notNull().unique(),
 
   // Form reference
   formXmlId: text('form_xml_id').notNull(),
 
   // Submitter info
-  // Note: Column name kept as odk_submitter_id for migration compatibility
-  odkSubmitterId: text('odk_submitter_id'),
+  submitterId: text('submitter_id'),
 
   // Raw submission data
   rawData: jsonb('raw_data'),
@@ -75,7 +73,7 @@ export const submissions = pgTable('submissions', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
 }, (table) => ({
   // Index for deduplication lookups
-  odkSubmissionIdIdx: index('submissions_odk_submission_id_idx').on(table.odkSubmissionId),
+  submissionUidIdx: index('submissions_submission_uid_idx').on(table.submissionUid),
   // Index for form-based queries
   formXmlIdIdx: index('submissions_form_xml_id_idx').on(table.formXmlId),
   // Index for processing queue

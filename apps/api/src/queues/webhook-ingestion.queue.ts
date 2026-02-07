@@ -6,7 +6,7 @@
  *
  * Data flow:
  * 1. Native form renderer submits via API
- * 2. Worker deduplicates by submission_id (column named odk_submission_id for migration compatibility)
+ * 2. Worker deduplicates by submission_uid
  * 3. Worker saves to submissions table
  * 4. Future: Triggers fraud detection (Story 4.3)
  */
@@ -24,14 +24,14 @@ export interface WebhookIngestionJobData {
   /** Source of the submission (webapp, mobile, backfill, manual) */
   source: 'webapp' | 'mobile' | 'backfill' | 'manual';
 
-  /** Unique submission ID for deduplication (column named odk_submission_id for migration compatibility) */
-  odkSubmissionId: string;
+  /** Unique submission ID for deduplication */
+  submissionUid: string;
 
   /** Form ID reference */
   formXmlId: string;
 
-  /** Submitter user ID (column named odk_submitter_id for migration compatibility) */
-  odkSubmitterId?: string;
+  /** Submitter user ID */
+  submitterId?: string;
 
   /** When the form was submitted */
   submittedAt: string;
@@ -75,7 +75,7 @@ export function getWebhookIngestionQueue(): Queue<WebhookIngestionJobData> {
 /**
  * Add a submission to the ingestion queue
  *
- * Uses odkSubmissionId as jobId for automatic deduplication.
+ * Uses submissionUid as jobId for automatic deduplication.
  * If a job with the same ID already exists, BullMQ will ignore it.
  */
 export async function queueSubmissionForIngestion(
@@ -83,8 +83,8 @@ export async function queueSubmissionForIngestion(
 ): Promise<string | null> {
   const queue = getWebhookIngestionQueue();
 
-  // Use odkSubmissionId as jobId for idempotent ingestion
-  const jobId = `ingest-${data.odkSubmissionId}`;
+  // Use submissionUid as jobId for idempotent ingestion
+  const jobId = `ingest-${data.submissionUid}`;
 
   try {
     const job = await queue.add('ingest-submission', data, {
@@ -94,7 +94,7 @@ export async function queueSubmissionForIngestion(
     logger.debug({
       event: 'queue.webhook_ingestion.added',
       jobId: job.id,
-      odkSubmissionId: data.odkSubmissionId,
+      submissionUid: data.submissionUid,
       source: data.source,
     });
 
@@ -104,7 +104,7 @@ export async function queueSubmissionForIngestion(
     if (error instanceof Error && error.message.includes('Job already exists')) {
       logger.debug({
         event: 'queue.webhook_ingestion.deduplicated',
-        odkSubmissionId: data.odkSubmissionId,
+        submissionUid: data.submissionUid,
         source: data.source,
       });
       return null;

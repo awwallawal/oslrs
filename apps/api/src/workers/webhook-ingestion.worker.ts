@@ -5,7 +5,7 @@
  * Foundation created in Story 2-5, repurposed for native forms.
  *
  * Current capabilities:
- * - Deduplication by submission_id (column named odk_submission_id for migration compatibility)
+ * - Deduplication by submission_uid
  * - Save to submissions table
  * - Basic error handling
  *
@@ -40,7 +40,7 @@ interface IngestionResult {
   success: boolean;
   submissionId?: string;
   action: 'created' | 'skipped' | 'failed';
-  odkSubmissionId: string;
+  submissionUid: string;
   error?: string;
 }
 
@@ -48,19 +48,19 @@ interface IngestionResult {
  * Process a single submission job
  */
 async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<IngestionResult> {
-  const { odkSubmissionId, formXmlId, source, submittedAt, odkSubmitterId, rawData } = job.data;
+  const { submissionUid, formXmlId, source, submittedAt, submitterId, rawData } = job.data;
 
   logger.info({
     event: 'webhook_ingestion.processing',
     jobId: job.id,
-    odkSubmissionId,
+    submissionUid,
     formXmlId,
     source,
   });
 
   // Check if submission already exists (idempotency)
   const existing = await db.query.submissions.findFirst({
-    where: eq(submissions.odkSubmissionId, odkSubmissionId),
+    where: eq(submissions.submissionUid, submissionUid),
     columns: { id: true },
   });
 
@@ -68,7 +68,7 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
     logger.info({
       event: 'webhook_ingestion.skipped',
       jobId: job.id,
-      odkSubmissionId,
+      submissionUid,
       reason: 'already_exists',
       existingId: existing.id,
     });
@@ -77,7 +77,7 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
       success: true,
       submissionId: existing.id,
       action: 'skipped',
-      odkSubmissionId,
+      submissionUid,
     };
   }
 
@@ -86,9 +86,9 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
 
   await db.insert(submissions).values({
     id: submissionId,
-    odkSubmissionId,
+    submissionUid,
     formXmlId,
-    odkSubmitterId: odkSubmitterId ?? null,
+    submitterId: submitterId ?? null,
     rawData: rawData ?? null,
     submittedAt: new Date(submittedAt),
     source,
@@ -99,7 +99,7 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
     event: 'webhook_ingestion.created',
     jobId: job.id,
     submissionId,
-    odkSubmissionId,
+    submissionUid,
     formXmlId,
     source,
   });
@@ -108,7 +108,7 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
     success: true,
     submissionId,
     action: 'created',
-    odkSubmissionId,
+    submissionUid,
   };
 }
 
@@ -126,7 +126,7 @@ export const webhookIngestionWorker = new Worker<WebhookIngestionJobData, Ingest
       logger.error({
         event: 'webhook_ingestion.failed',
         jobId: job.id,
-        odkSubmissionId: job.data.odkSubmissionId,
+        submissionUid: job.data.submissionUid,
         error: errorMessage,
         attempt: job.attemptsMade + 1,
       });
@@ -146,7 +146,7 @@ webhookIngestionWorker.on('completed', (job, result) => {
     event: 'webhook_ingestion.job_completed',
     jobId: job.id,
     action: result.action,
-    odkSubmissionId: result.odkSubmissionId,
+    submissionUid: result.submissionUid,
   });
 });
 
@@ -154,7 +154,7 @@ webhookIngestionWorker.on('failed', (job, error) => {
   logger.error({
     event: 'webhook_ingestion.job_failed',
     jobId: job?.id,
-    odkSubmissionId: job?.data.odkSubmissionId,
+    submissionUid: job?.data.submissionUid,
     error: error.message,
     attempts: job?.attemptsMade,
   });
