@@ -29,9 +29,9 @@ export function DashboardRedirect() {
     return <PageSkeleton variant="dashboard" showHeader={false} showFooter={false} />;
   }
 
-  // Redirect to login if not authenticated (should be caught by ProtectedRoute, but just in case)
+  // Redirect to homepage if not authenticated (should be caught by ProtectedRoute, but just in case)
   if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Get the appropriate dashboard route for the user's role

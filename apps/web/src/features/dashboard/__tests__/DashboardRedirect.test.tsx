@@ -69,7 +69,7 @@ function TestWrapper({ user, isLoading = false, initialEntries = ['/dashboard'] 
             <Route path="/dashboard/assessor" element={<div data-testid="assessor-page">Assessor Page</div>} />
             <Route path="/dashboard/official" element={<div data-testid="official-page">Official Page</div>} />
             <Route path="/dashboard/public" element={<div data-testid="public-page">Public Page</div>} />
-            <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
+            <Route path="/" element={<div data-testid="homepage">Homepage</div>} />
             <Route path="/unauthorized" element={<div data-testid="unauthorized-page">Unauthorized</div>} />
           </Routes>
         </AuthContext.Provider>
@@ -134,7 +134,7 @@ describe('DashboardRedirect', () => {
       });
     });
 
-    it('redirects to login when not authenticated', async () => {
+    it('redirects to homepage when not authenticated', async () => {
       render(
         <TestWrapper user={null} initialEntries={['/dashboard']}>
           <></>
@@ -142,7 +142,7 @@ describe('DashboardRedirect', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('login-page')).toBeInTheDocument();
+        expect(screen.getByTestId('homepage')).toBeInTheDocument();
       });
     });
 
