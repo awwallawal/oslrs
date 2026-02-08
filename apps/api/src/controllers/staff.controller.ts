@@ -17,6 +17,8 @@ function getRedis(): Redis {
   return redis;
 }
 
+const VALID_STATUSES = new Set(['invited', 'pending_verification', 'active', 'verified', 'suspended', 'deactivated']);
+
 export class StaffController {
   /**
    * GET /api/v1/staff
@@ -27,6 +29,14 @@ export class StaffController {
   static async list(req: Request, res: Response, next: NextFunction) {
     try {
       const { page, limit, status, roleId, lgaId, search } = req.query;
+
+      if (status && !VALID_STATUSES.has(status as string)) {
+        throw new AppError(
+          'INVALID_STATUS',
+          `Invalid status filter. Must be one of: ${[...VALID_STATUSES].join(', ')}`,
+          400
+        );
+      }
 
       const result = await StaffService.listUsers({
         page: page ? Number(page) : undefined,
@@ -104,6 +114,7 @@ export class StaffController {
    * POST /api/v1/staff/:userId/reactivate
    *
    * Reactivate a deactivated or suspended user account.
+   * Body: { reOnboard?: boolean } - when true, clears password and sends new invitation
    */
   static async reactivate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
@@ -113,8 +124,9 @@ export class StaffController {
       const actorId = req.user.sub;
 
       const { userId } = req.params;
+      const { reOnboard = false } = req.body || {};
 
-      const result = await StaffService.reactivateUser(userId, actorId);
+      const result = await StaffService.reactivateUser(userId, actorId, !!reOnboard);
 
       res.json({
         data: result,

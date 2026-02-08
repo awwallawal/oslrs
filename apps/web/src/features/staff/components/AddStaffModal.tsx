@@ -90,6 +90,11 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
 
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
+    } else {
+      const digitsOnly = formData.phone.replace(/\D/g, '');
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        newErrors.phone = 'Phone number must be 10-15 digits';
+      }
     }
 
     if (!formData.roleId) {

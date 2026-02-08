@@ -136,9 +136,9 @@ export default function StaffManagementPage() {
     });
   };
 
-  const handleReactivateConfirm = (userId: string) => {
+  const handleReactivateConfirm = (userId: string, reOnboard: boolean) => {
     setReactivatingUserId(userId);
-    reactivateMutation.mutate(userId, {
+    reactivateMutation.mutate({ userId, reOnboard }, {
       onSuccess: () => setReactivateStaff(null),
       onSettled: () => setReactivatingUserId(null),
     });

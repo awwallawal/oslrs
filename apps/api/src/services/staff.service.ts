@@ -310,15 +310,22 @@ export class StaffService {
   }
 
   /**
-   * Reactivate a deactivated or suspended user account
+   * Reactivate a deactivated or suspended user account.
+   *
+   * Two-tier reactivation:
+   * - reOnboard=false (default): Quick restore to 'active' status, all data preserved
+   * - reOnboard=true: Clears password, generates new invitation token, sets status
+   *   to 'invited', and sends a new invitation email for full re-onboarding
    *
    * @param userId The user ID to reactivate
    * @param actorId The admin performing the action
+   * @param reOnboard Whether to require full re-onboarding
    * @returns The reactivated user
    */
   static async reactivateUser(
     userId: string,
-    actorId: string
+    actorId: string,
+    reOnboard: boolean = false
   ): Promise<typeof users.$inferSelect> {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -333,31 +340,79 @@ export class StaffService {
     }
 
     const previousStatus = user.status;
+    const newStatus = reOnboard ? 'invited' : 'active';
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(users)
-        .set({ status: 'active', updatedAt: new Date() })
-        .where(eq(users.id, userId));
+    if (reOnboard) {
+      // Re-onboarding: clear password, generate new invitation token, queue email
+      const invitationToken = generateInvitationToken();
 
-      await tx.insert(auditLogs).values({
-        actorId,
-        action: 'user.reactivate',
-        targetResource: 'users',
-        targetId: userId,
-        details: {
-          previousStatus,
-          newStatus: 'active',
-        },
+      await db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({
+            status: newStatus,
+            passwordHash: null,
+            invitationToken,
+            invitedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, userId));
+
+        await tx.insert(auditLogs).values({
+          actorId,
+          action: 'user.reactivate',
+          targetResource: 'users',
+          targetId: userId,
+          details: {
+            previousStatus,
+            newStatus,
+            reOnboard: true,
+          },
+        });
       });
-    });
 
-    logger.info({
-      event: 'staff.reactivated',
-      userId,
-      previousStatus,
-      actorId,
-    });
+      // Queue invitation email
+      await queueStaffInvitationEmail({
+        to: user.email,
+        fullName: user.fullName,
+        invitationToken,
+      });
+
+      logger.info({
+        event: 'staff.reactivated_with_reonboard',
+        userId,
+        previousStatus,
+        actorId,
+        invitationSent: true,
+      });
+    } else {
+      // Quick reactivation: restore to active
+      await db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(eq(users.id, userId));
+
+        await tx.insert(auditLogs).values({
+          actorId,
+          action: 'user.reactivate',
+          targetResource: 'users',
+          targetId: userId,
+          details: {
+            previousStatus,
+            newStatus,
+            reOnboard: false,
+          },
+        });
+      });
+
+      logger.info({
+        event: 'staff.reactivated',
+        userId,
+        previousStatus,
+        actorId,
+      });
+    }
 
     const reactivatedUser = await db.query.users.findFirst({
       where: eq(users.id, userId),

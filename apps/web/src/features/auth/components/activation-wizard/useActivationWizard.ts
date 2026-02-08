@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { activationWithSelfieSchema, ninSchema } from '@oslsr/types';
+import { activateWithSelfie, AuthApiError } from '../../api/auth.api';
 
 /**
  * Wizard step definitions
@@ -177,14 +178,13 @@ export interface UseActivationWizardOptions {
   token: string;
   onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
-  apiBaseUrl?: string;
 }
 
 /**
  * Hook for managing multi-step activation wizard state
  */
 export function useActivationWizard(options: UseActivationWizardOptions): UseActivationWizardReturn {
-  const { token, onSuccess, onError, apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1' } = options;
+  const { token, onSuccess, onError } = options;
 
   // State
   const [currentStep, setCurrentStep] = useState<WizardStep>(WIZARD_STEPS.PASSWORD);
@@ -312,38 +312,31 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
     setSubmitError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/activate/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submissionData),
-      });
+      const result = await activateWithSelfie(token, submissionData);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        let message = 'Activation failed. Please try again.';
-        if (result.code === 'AUTH_INVALID_TOKEN') message = 'This activation link is invalid or has expired.';
-        if (result.code === 'AUTH_ALREADY_ACTIVATED') message = 'This account has already been activated.';
-        if (result.code === 'AUTH_TOKEN_EXPIRED') message = 'This activation link has expired. Please request a new invitation.';
-        if (result.code === 'PROFILE_NIN_DUPLICATE') message = 'This NIN is already associated with another account.';
-        if (result.code === 'VALIDATION_ERROR') message = result.message || 'Invalid data provided.';
-
-        setSubmitError(message);
-        onError?.(new Error(message));
-        return false;
-      }
-
-      onSuccess?.(result.data);
+      onSuccess?.(result);
       return true;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+      let message = 'Activation failed. Please try again.';
+
+      if (err instanceof AuthApiError) {
+        if (err.code === 'AUTH_INVALID_TOKEN') message = 'This activation link is invalid or has expired.';
+        else if (err.code === 'AUTH_ALREADY_ACTIVATED') message = 'This account has already been activated.';
+        else if (err.code === 'AUTH_TOKEN_EXPIRED') message = 'This activation link has expired. Please request a new invitation.';
+        else if (err.code === 'PROFILE_NIN_DUPLICATE') message = 'This NIN is already associated with another account.';
+        else if (err.code === 'VALIDATION_ERROR') message = err.message || 'Invalid data provided.';
+        else message = err.message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+
       setSubmitError(message);
       onError?.(err instanceof Error ? err : new Error(message));
       return false;
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, token, apiBaseUrl, onSuccess, onError, validateStep]);
+  }, [formData, token, onSuccess, onError, validateStep]);
 
   /**
    * Reset the wizard

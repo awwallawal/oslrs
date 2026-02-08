@@ -136,9 +136,13 @@ export function useReactivateStaff() {
   const { success, error: showError } = useToast();
 
   return useMutation({
-    mutationFn: reactivateStaff,
-    onSuccess: () => {
-      success({ message: 'User reactivated successfully' });
+    mutationFn: ({ userId, reOnboard = false }: { userId: string; reOnboard?: boolean }) =>
+      reactivateStaff(userId, reOnboard),
+    onSuccess: (_data, variables) => {
+      const message = variables.reOnboard
+        ? 'User set to re-onboard. A new invitation email has been sent.'
+        : 'User reactivated successfully';
+      success({ message });
       queryClient.invalidateQueries({ queryKey: staffKeys.all });
     },
     onError: (err: Error & { code?: string }) => {
@@ -167,7 +171,7 @@ export function useResendInvitation() {
       success({ message });
     },
     onError: (err: Error & { code?: string }) => {
-      if (err.code === 'RESEND_LIMIT_EXCEEDED') {
+      if (err.code === 'RATE_LIMIT_EXCEEDED') {
         showError({ message: 'Daily resend limit exceeded. Please try again tomorrow.' });
       } else {
         showError({ message: err.message || 'Failed to resend invitation' });

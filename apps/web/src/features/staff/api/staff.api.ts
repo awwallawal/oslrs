@@ -59,10 +59,12 @@ export async function deactivateStaff(userId: string): Promise<StaffResponse> {
 /**
  * Reactivate a deactivated or suspended user
  * POST /api/v1/staff/:userId/reactivate
+ * @param reOnboard When true, clears password and sends new invitation for re-onboarding
  */
-export async function reactivateStaff(userId: string): Promise<StaffResponse> {
+export async function reactivateStaff(userId: string, reOnboard: boolean = false): Promise<StaffResponse> {
   return apiClient(`/staff/${userId}/reactivate`, {
     method: 'POST',
+    body: JSON.stringify({ reOnboard }),
   });
 }
 

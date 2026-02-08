@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { ActivationWizard } from '../components/activation-wizard/ActivationWizard';
 import {
@@ -93,10 +93,22 @@ export default function ActivationPage() {
     };
   }, [token]);
 
+  // Track redirect timeout for cleanup
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up redirect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleSuccess = () => {
     setPageState('activated');
     // Auto-redirect after 5 seconds
-    setTimeout(() => {
+    redirectTimerRef.current = setTimeout(() => {
       navigate('/login');
     }, 5000);
   };
