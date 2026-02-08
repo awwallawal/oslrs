@@ -72,6 +72,9 @@ const SupervisorTeamPage = lazy(() => import('./features/dashboard/pages/Supervi
 const SupervisorFraudPage = lazy(() => import('./features/dashboard/pages/SupervisorFraudPage'));
 const SupervisorMessagesPage = lazy(() => import('./features/dashboard/pages/SupervisorMessagesPage'));
 const EnumeratorHome = lazy(() => import('./features/dashboard/pages/EnumeratorHome'));
+const EnumeratorSurveysPage = lazy(() => import('./features/dashboard/pages/EnumeratorSurveysPage'));
+const EnumeratorDraftsPage = lazy(() => import('./features/dashboard/pages/EnumeratorDraftsPage'));
+const EnumeratorSyncPage = lazy(() => import('./features/dashboard/pages/EnumeratorSyncPage'));
 const ClerkHome = lazy(() => import('./features/dashboard/pages/ClerkHome'));
 const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'));
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
@@ -499,7 +502,7 @@ function App() {
             <Route
               path="dashboard"
               element={
-                <ProtectedRoute redirectTo="/login">
+                <ProtectedRoute redirectTo="/">
                   <DashboardLayout />
                 </ProtectedRoute>
               }
@@ -636,6 +639,30 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="survey"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorSurveysPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="drafts"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorDraftsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="sync"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorSyncPage />
                     </Suspense>
                   }
                 />

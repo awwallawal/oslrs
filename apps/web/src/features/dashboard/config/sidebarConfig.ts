@@ -90,7 +90,7 @@ export const roleDisplayNames: Record<UserRole, string> = {
  * Sidebar configuration by role
  *
  * AC5 Requirements:
- * - Enumerator: Home, Start Survey, Drafts, Sync Status
+ * - Enumerator: Home, Surveys, Drafts, Sync Status
  * - Public User: Home, Survey Status, Marketplace, Support
  * - Clerk: Home, Entry Queue, Completed, My Stats
  * - Supervisor: Home, Team Progress, Fraud Alerts, Messages (4 items, Story 2.5-4 AC3)
@@ -101,7 +101,7 @@ export const roleDisplayNames: Record<UserRole, string> = {
 export const sidebarConfig: Record<UserRole, NavItem[]> = {
   enumerator: [
     { label: 'Home', href: '/dashboard/enumerator', icon: Home },
-    { label: 'Start Survey', href: '/dashboard/enumerator/survey', icon: FileText },
+    { label: 'Surveys', href: '/dashboard/enumerator/survey', icon: FileText },
     { label: 'Drafts', href: '/dashboard/enumerator/drafts', icon: Save },
     { label: 'Sync Status', href: '/dashboard/enumerator/sync', icon: RefreshCw },
   ],

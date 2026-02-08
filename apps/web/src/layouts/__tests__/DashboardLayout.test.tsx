@@ -130,7 +130,7 @@ describe('DashboardLayout', () => {
       },
       {
         role: 'enumerator',
-        expectedItems: ['Home', 'Start Survey', 'Drafts'],
+        expectedItems: ['Home', 'Surveys', 'Drafts'],
       },
       {
         role: 'clerk',
