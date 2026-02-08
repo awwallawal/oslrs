@@ -40,6 +40,11 @@ export async function apiClient(endpoint: string, options: RequestInit = {}) {
     ...rest,
   });
 
+  // 204 No Content has no body to parse
+  if (response.status === 204) {
+    return null;
+  }
+
   const data = await response.json();
 
   if (!response.ok) {

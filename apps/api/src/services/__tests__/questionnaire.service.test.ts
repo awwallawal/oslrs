@@ -432,7 +432,7 @@ describe('QuestionnaireService', () => {
       await QuestionnaireService.updateFormStatus(uploaded.id, 'published', testUserId);
 
       await expect(QuestionnaireService.deleteForm(uploaded.id, testUserId))
-        .rejects.toThrow('Only draft forms can be deleted');
+        .rejects.toThrow('Only draft or archived forms can be deleted');
     });
   });
 

@@ -58,7 +58,7 @@ describe('QuestionnaireList', () => {
     vi.clearAllMocks();
   });
 
-  it('shows delete button only for draft forms', async () => {
+  it('shows delete button only for draft and archived forms', async () => {
     mockUseQuestionnaires.mockReturnValue({
       data: {
         data: [
@@ -81,13 +81,13 @@ describe('QuestionnaireList', () => {
       const archivedRow = rows[3];
 
       // Published form should NOT have delete button
-      expect(publishedRow.querySelector('button[title="Delete draft"]')).not.toBeInTheDocument();
+      expect(publishedRow.querySelector('button[title="Delete permanently"]')).not.toBeInTheDocument();
 
       // Draft form SHOULD have delete button
-      expect(draftRow.querySelector('button[title="Delete draft"]')).toBeInTheDocument();
+      expect(draftRow.querySelector('button[title="Delete permanently"]')).toBeInTheDocument();
 
-      // Archived form should NOT have delete button
-      expect(archivedRow.querySelector('button[title="Delete draft"]')).not.toBeInTheDocument();
+      // Archived form SHOULD also have delete button
+      expect(archivedRow.querySelector('button[title="Delete permanently"]')).toBeInTheDocument();
     });
   });
 

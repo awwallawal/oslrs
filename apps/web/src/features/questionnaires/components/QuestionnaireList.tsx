@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit } from 'lucide-react';
+import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit, Send, XCircle, AlertTriangle } from 'lucide-react';
 import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
 import { SkeletonTable } from '../../../components/skeletons';
@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
+import { VALID_STATUS_TRANSITIONS } from '@oslsr/types';
 import type { QuestionnaireFormStatus } from '@oslsr/types';
 
 const STATUS_BADGES: Record<QuestionnaireFormStatus, { label: string; className: string }> = {
@@ -25,11 +26,26 @@ const STATUS_BADGES: Record<QuestionnaireFormStatus, { label: string; className:
   archived: { label: 'Archived', className: 'bg-neutral-200 text-neutral-500' },
 };
 
+const STATUS_ACTION_CONFIG: Record<QuestionnaireFormStatus, { icon: typeof Send; label: string; className: string }> = {
+  published: { icon: Send, label: 'Publish', className: 'hover:text-green-600' },
+  closing: { icon: XCircle, label: 'Close', className: 'hover:text-orange-600' },
+  deprecated: { icon: AlertTriangle, label: 'Deprecate', className: 'hover:text-amber-600' },
+  archived: { icon: Archive, label: 'Archive', className: 'hover:text-amber-600' },
+  draft: { icon: Edit, label: 'Draft', className: '' },
+};
+
 interface ConfirmDialogState {
   open: boolean;
   formId: string | null;
   formTitle: string;
   formVersion: string;
+}
+
+interface StatusDialogState {
+  open: boolean;
+  formId: string | null;
+  formTitle: string;
+  targetStatus: QuestionnaireFormStatus | null;
 }
 
 export function QuestionnaireList() {
@@ -42,6 +58,12 @@ export function QuestionnaireList() {
     formId: null,
     formTitle: '',
     formVersion: '',
+  });
+  const [statusDialog, setStatusDialog] = useState<StatusDialogState>({
+    open: false,
+    formId: null,
+    formTitle: '',
+    targetStatus: null,
   });
 
   const { data, isLoading } = useQuestionnaires({ page, pageSize: 10, status: statusFilter });
@@ -57,6 +79,17 @@ export function QuestionnaireList() {
       deleteMutation.mutate(deleteDialog.formId);
     }
     closeDeleteDialog();
+  };
+
+  const closeStatusDialog = () => {
+    setStatusDialog({ open: false, formId: null, formTitle: '', targetStatus: null });
+  };
+
+  const handleConfirmStatusChange = () => {
+    if (statusDialog.formId && statusDialog.targetStatus) {
+      updateStatus.mutate({ id: statusDialog.formId, status: statusDialog.targetStatus });
+    }
+    closeStatusDialog();
   };
 
   if (isLoading) {
@@ -138,13 +171,15 @@ export function QuestionnaireList() {
                             <Edit className="w-4 h-4" />
                           </button>
                         )}
-                        <a
-                          href={getDownloadUrl(form.id)}
-                          className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"
-                          title="Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
+                        {!form.isNative && (
+                          <a
+                            href={getDownloadUrl(form.id)}
+                            className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        )}
                         <button
                           onClick={() => setVersionHistoryFormId(form.formId)}
                           className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"
@@ -152,30 +187,42 @@ export function QuestionnaireList() {
                         >
                           <History className="w-4 h-4" />
                         </button>
-                        {form.status === 'draft' && (
-                          <>
+                        {/* Status transition buttons */}
+                        {VALID_STATUS_TRANSITIONS[form.status].map((targetStatus) => {
+                          const config = STATUS_ACTION_CONFIG[targetStatus];
+                          const Icon = config.icon;
+                          return (
                             <button
-                              onClick={() => updateStatus.mutate({ id: form.id, status: 'archived' })}
-                              disabled={updateStatus.isPending}
-                              className="p-1.5 text-neutral-400 hover:text-amber-600 rounded"
-                              title="Archive"
-                            >
-                              <Archive className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteDialog({
+                              key={targetStatus}
+                              onClick={() => setStatusDialog({
                                 open: true,
                                 formId: form.id,
                                 formTitle: form.title,
-                                formVersion: form.version,
+                                targetStatus,
                               })}
-                              disabled={deleteMutation.isPending}
-                              className="p-1.5 text-neutral-400 hover:text-red-600 rounded"
-                              title="Delete draft"
+                              disabled={updateStatus.isPending}
+                              className={`p-1.5 text-neutral-400 ${config.className} rounded`}
+                              title={config.label}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Icon className="w-4 h-4" />
                             </button>
-                          </>
+                          );
+                        })}
+                        {/* Delete for draft and archived forms */}
+                        {(form.status === 'draft' || form.status === 'archived') && (
+                          <button
+                            onClick={() => setDeleteDialog({
+                              open: true,
+                              formId: form.id,
+                              formTitle: form.title,
+                              formVersion: form.version,
+                            })}
+                            disabled={deleteMutation.isPending}
+                            className="p-1.5 text-neutral-400 hover:text-red-600 rounded"
+                            title="Delete permanently"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -224,9 +271,9 @@ export function QuestionnaireList() {
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && closeDeleteDialog()}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete draft form?</AlertDialogTitle>
+            <AlertDialogTitle>Delete form?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{deleteDialog.formTitle}" v{deleteDialog.formVersion}.
+              This will permanently delete &quot;{deleteDialog.formTitle}&quot; v{deleteDialog.formVersion}.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -234,6 +281,26 @@ export function QuestionnaireList() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Change Confirmation Dialog */}
+      <AlertDialog open={statusDialog.open} onOpenChange={(open) => !open && closeStatusDialog()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusDialog.targetStatus ? STATUS_ACTION_CONFIG[statusDialog.targetStatus].label : ''} form?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Change &quot;{statusDialog.formTitle}&quot; status to {statusDialog.targetStatus}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmStatusChange}>
+              Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

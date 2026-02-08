@@ -425,10 +425,10 @@ export class QuestionnaireService {
       throw new AppError('FORM_NOT_FOUND', 'Questionnaire form not found', 404);
     }
 
-    if (form.status !== 'draft') {
+    if (form.status !== 'draft' && form.status !== 'archived') {
       throw new AppError(
-        'CANNOT_DELETE_NON_DRAFT',
-        'Only draft forms can be deleted. Use archive for non-draft forms.',
+        'CANNOT_DELETE_ACTIVE_FORM',
+        'Only draft or archived forms can be deleted. Archive the form first.',
         400,
         { currentStatus: form.status }
       );
