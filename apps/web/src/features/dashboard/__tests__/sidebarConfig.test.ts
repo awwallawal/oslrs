@@ -56,10 +56,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(4);
     });
 
-    it('supervisor has 6-8 sidebar items', () => {
+    it('supervisor has exactly 4 sidebar items (AC3)', () => {
       const items = sidebarConfig.supervisor;
-      expect(items.length).toBeGreaterThanOrEqual(5);
-      expect(items.length).toBeLessThanOrEqual(8);
+      expect(items.length).toBe(4);
     });
 
     it('super_admin has 11+ sidebar items', () => {

@@ -68,6 +68,9 @@ const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManag
 // Lazy load Dashboard pages (Story 2.5-1)
 const SuperAdminHome = lazy(() => import('./features/dashboard/pages/SuperAdminHome'));
 const SupervisorHome = lazy(() => import('./features/dashboard/pages/SupervisorHome'));
+const SupervisorTeamPage = lazy(() => import('./features/dashboard/pages/SupervisorTeamPage'));
+const SupervisorFraudPage = lazy(() => import('./features/dashboard/pages/SupervisorFraudPage'));
+const SupervisorMessagesPage = lazy(() => import('./features/dashboard/pages/SupervisorMessagesPage'));
 const EnumeratorHome = lazy(() => import('./features/dashboard/pages/EnumeratorHome'));
 const ClerkHome = lazy(() => import('./features/dashboard/pages/ClerkHome'));
 const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'));
@@ -581,6 +584,30 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="team"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorTeamPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="fraud"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorFraudPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="messages"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorMessagesPage />
                     </Suspense>
                   }
                 />

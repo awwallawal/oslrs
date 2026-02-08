@@ -6,7 +6,7 @@
  *
  * Story 2.5-1 AC5: Dynamic Sidebar Items
  * - Enumerator/Public User: 3-4 items (mobile-first)
- * - Supervisor: 6-8 items
+ * - Supervisor: 4 items (Story 2.5-4 AC3)
  * - Super Admin: 12+ items
  */
 
@@ -93,7 +93,7 @@ export const roleDisplayNames: Record<UserRole, string> = {
  * - Enumerator: Home, Start Survey, Drafts, Sync Status
  * - Public User: Home, Survey Status, Marketplace, Support
  * - Clerk: Home, Entry Queue, Completed, My Stats
- * - Supervisor: Home, Team Progress, Fraud Alerts, Messages (6-8 items)
+ * - Supervisor: Home, Team Progress, Fraud Alerts, Messages (4 items, Story 2.5-4 AC3)
  * - Assessor: Home, Audit Queue, Completed, Evidence
  * - Official: Home, Statistics, Trends, Export
  * - Super Admin: 12+ items
@@ -123,10 +123,8 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
   supervisor: [
     { label: 'Home', href: '/dashboard/supervisor', icon: Home },
     { label: 'Team Progress', href: '/dashboard/supervisor/team', icon: Users },
-    { label: 'Assignments', href: '/dashboard/supervisor/assignments', icon: ClipboardList },
     { label: 'Fraud Alerts', href: '/dashboard/supervisor/fraud', icon: AlertTriangle },
     { label: 'Messages', href: '/dashboard/supervisor/messages', icon: MessageSquare },
-    { label: 'Reports', href: '/dashboard/supervisor/reports', icon: BarChart },
   ],
 
   assessor: [
