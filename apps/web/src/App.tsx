@@ -76,6 +76,9 @@ const EnumeratorSurveysPage = lazy(() => import('./features/dashboard/pages/Enum
 const EnumeratorDraftsPage = lazy(() => import('./features/dashboard/pages/EnumeratorDraftsPage'));
 const EnumeratorSyncPage = lazy(() => import('./features/dashboard/pages/EnumeratorSyncPage'));
 const ClerkHome = lazy(() => import('./features/dashboard/pages/ClerkHome'));
+const ClerkQueuePage = lazy(() => import('./features/dashboard/pages/ClerkQueuePage'));
+const ClerkCompletedPage = lazy(() => import('./features/dashboard/pages/ClerkCompletedPage'));
+const ClerkStatsPage = lazy(() => import('./features/dashboard/pages/ClerkStatsPage'));
 const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'));
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
 const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
@@ -691,6 +694,30 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="queue"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ClerkQueuePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="completed"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ClerkCompletedPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="stats"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ClerkStatsPage />
                     </Suspense>
                   }
                 />
