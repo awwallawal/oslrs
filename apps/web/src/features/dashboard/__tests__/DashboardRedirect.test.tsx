@@ -97,19 +97,19 @@ describe('DashboardRedirect', () => {
         description: 'redirects enumerator to /dashboard/enumerator',
       },
       {
-        role: 'clerk',
+        role: 'data_entry_clerk',
         expectedTestId: 'clerk-page',
-        description: 'redirects clerk to /dashboard/clerk',
+        description: 'redirects data_entry_clerk to /dashboard/clerk',
       },
       {
-        role: 'assessor',
+        role: 'verification_assessor',
         expectedTestId: 'assessor-page',
-        description: 'redirects assessor to /dashboard/assessor',
+        description: 'redirects verification_assessor to /dashboard/assessor',
       },
       {
-        role: 'official',
+        role: 'government_official',
         expectedTestId: 'official-page',
-        description: 'redirects official to /dashboard/official',
+        description: 'redirects government_official to /dashboard/official',
       },
       {
         role: 'public_user',

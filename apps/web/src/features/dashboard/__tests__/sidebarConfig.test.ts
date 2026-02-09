@@ -61,6 +61,21 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(4);
     });
 
+    it('data_entry_clerk has exactly 4 sidebar items', () => {
+      const items = sidebarConfig.data_entry_clerk;
+      expect(items.length).toBe(4);
+    });
+
+    it('verification_assessor has exactly 4 sidebar items', () => {
+      const items = sidebarConfig.verification_assessor;
+      expect(items.length).toBe(4);
+    });
+
+    it('government_official has exactly 4 sidebar items', () => {
+      const items = sidebarConfig.government_official;
+      expect(items.length).toBe(4);
+    });
+
     it('super_admin has 11+ sidebar items', () => {
       const items = sidebarConfig.super_admin;
       expect(items.length).toBeGreaterThanOrEqual(11);
@@ -126,7 +141,7 @@ describe('sidebarConfig', () => {
       it('returns correct display name for valid role', () => {
         expect(getRoleDisplayName('super_admin')).toBe('Super Admin');
         expect(getRoleDisplayName('public_user')).toBe('Public User');
-        expect(getRoleDisplayName('clerk')).toBe('Data Entry Clerk');
+        expect(getRoleDisplayName('data_entry_clerk')).toBe('Data Entry Clerk');
       });
 
       it('returns "User" for invalid role', () => {
@@ -140,9 +155,9 @@ describe('sidebarConfig', () => {
       super_admin: '/dashboard/super-admin',
       supervisor: '/dashboard/supervisor',
       enumerator: '/dashboard/enumerator',
-      clerk: '/dashboard/clerk',
-      assessor: '/dashboard/assessor',
-      official: '/dashboard/official',
+      data_entry_clerk: '/dashboard/clerk',
+      verification_assessor: '/dashboard/assessor',
+      government_official: '/dashboard/official',
       public_user: '/dashboard/public',
     };
 

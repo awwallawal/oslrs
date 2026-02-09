@@ -80,7 +80,13 @@ const ClerkQueuePage = lazy(() => import('./features/dashboard/pages/ClerkQueueP
 const ClerkCompletedPage = lazy(() => import('./features/dashboard/pages/ClerkCompletedPage'));
 const ClerkStatsPage = lazy(() => import('./features/dashboard/pages/ClerkStatsPage'));
 const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'));
+const AssessorQueuePage = lazy(() => import('./features/dashboard/pages/AssessorQueuePage'));
+const AssessorCompletedPage = lazy(() => import('./features/dashboard/pages/AssessorCompletedPage'));
+const AssessorEvidencePage = lazy(() => import('./features/dashboard/pages/AssessorEvidencePage'));
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
+const OfficialStatsPage = lazy(() => import('./features/dashboard/pages/OfficialStatsPage'));
+const OfficialTrendsPage = lazy(() => import('./features/dashboard/pages/OfficialTrendsPage'));
+const OfficialExportPage = lazy(() => import('./features/dashboard/pages/OfficialExportPage'));
 const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
@@ -676,7 +682,7 @@ function App() {
               <Route
                 path="clerk"
                 element={
-                  <ProtectedRoute allowedRoles={['clerk']} redirectTo="/dashboard">
+                  <ProtectedRoute allowedRoles={['data_entry_clerk']} redirectTo="/dashboard">
                     <Outlet />
                   </ProtectedRoute>
                 }
@@ -728,7 +734,7 @@ function App() {
               <Route
                 path="assessor"
                 element={
-                  <ProtectedRoute allowedRoles={['assessor']} redirectTo="/dashboard">
+                  <ProtectedRoute allowedRoles={['verification_assessor']} redirectTo="/dashboard">
                     <Outlet />
                   </ProtectedRoute>
                 }
@@ -749,6 +755,30 @@ function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="queue"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AssessorQueuePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="completed"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AssessorCompletedPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="evidence"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AssessorEvidencePage />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
               </Route>
 
@@ -756,7 +786,7 @@ function App() {
               <Route
                 path="official"
                 element={
-                  <ProtectedRoute allowedRoles={['official']} redirectTo="/dashboard">
+                  <ProtectedRoute allowedRoles={['government_official']} redirectTo="/dashboard">
                     <Outlet />
                   </ProtectedRoute>
                 }
@@ -774,6 +804,30 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="stats"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OfficialStatsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="trends"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OfficialTrendsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="export"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OfficialExportPage />
                     </Suspense>
                   }
                 />

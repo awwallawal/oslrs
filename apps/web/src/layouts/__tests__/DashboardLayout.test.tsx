@@ -133,15 +133,15 @@ describe('DashboardLayout', () => {
         expectedItems: ['Home', 'Surveys', 'Drafts'],
       },
       {
-        role: 'clerk',
+        role: 'data_entry_clerk',
         expectedItems: ['Home', 'Entry Queue', 'Completed'],
       },
       {
-        role: 'assessor',
+        role: 'verification_assessor',
         expectedItems: ['Home', 'Audit Queue', 'Evidence'],
       },
       {
-        role: 'official',
+        role: 'government_official',
         expectedItems: ['Home', 'Statistics', 'Trends'],
       },
       {

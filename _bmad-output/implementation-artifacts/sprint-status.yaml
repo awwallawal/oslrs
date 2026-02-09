@@ -100,7 +100,7 @@ development_status:
   2.5-4-supervisor-dashboard-shell: done  # Code review passed 2026-02-08: 6 findings (1H, 3M, 2L) all fixed. 800 web tests pass, 0 regressions.
   2.5-5-enumerator-dashboard-shell: done  # Code review passed 2026-02-08: 7 findings (2H, 3M, 2L), all fixed. 823 web tests pass, 0 regressions.
   2.5-6-data-entry-clerk-dashboard: done  # Code review passed 2026-02-09: 7 findings (1H, 4M, 2L), all H+M fixed. 851 web tests pass, 0 regressions.
-  2.5-7-assessor-official-dashboards: backlog
+  2.5-7-assessor-official-dashboards: done  # Code review passed 2026-02-09: 8 findings (2H, 3M, 3L), all 8 fixed. 917 web tests pass, 0 regressions.
   2.5-8-public-user-rbac-testing: backlog
   epic-2.5-retrospective: optional
 

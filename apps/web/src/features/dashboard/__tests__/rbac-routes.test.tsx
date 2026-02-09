@@ -27,9 +27,9 @@ const ALL_ROLES = [
   'super_admin',
   'supervisor',
   'enumerator',
-  'clerk',
-  'assessor',
-  'official',
+  'data_entry_clerk',
+  'verification_assessor',
+  'government_official',
   'public_user',
 ] as const;
 
@@ -40,9 +40,9 @@ const ROLE_ROUTES: Record<UserRole, string> = {
   super_admin: '/dashboard/super-admin',
   supervisor: '/dashboard/supervisor',
   enumerator: '/dashboard/enumerator',
-  clerk: '/dashboard/clerk',
-  assessor: '/dashboard/assessor',
-  official: '/dashboard/official',
+  data_entry_clerk: '/dashboard/clerk',
+  verification_assessor: '/dashboard/assessor',
+  government_official: '/dashboard/official',
   public_user: '/dashboard/public',
 };
 
@@ -125,8 +125,8 @@ function RBACTestWrapper({ user, initialPath }: TestWrapperProps) {
             <Route
               path="/dashboard/clerk/*"
               element={
-                <ProtectedRoute allowedRoles={['clerk']} redirectTo="/dashboard">
-                  <div data-testid="clerk-dashboard">Clerk Dashboard</div>
+                <ProtectedRoute allowedRoles={['data_entry_clerk']} redirectTo="/dashboard">
+                  <div data-testid="data-entry-clerk-dashboard">Clerk Dashboard</div>
                 </ProtectedRoute>
               }
             />
@@ -135,8 +135,8 @@ function RBACTestWrapper({ user, initialPath }: TestWrapperProps) {
             <Route
               path="/dashboard/assessor/*"
               element={
-                <ProtectedRoute allowedRoles={['assessor']} redirectTo="/dashboard">
-                  <div data-testid="assessor-dashboard">Assessor Dashboard</div>
+                <ProtectedRoute allowedRoles={['verification_assessor']} redirectTo="/dashboard">
+                  <div data-testid="verification-assessor-dashboard">Assessor Dashboard</div>
                 </ProtectedRoute>
               }
             />
@@ -145,8 +145,8 @@ function RBACTestWrapper({ user, initialPath }: TestWrapperProps) {
             <Route
               path="/dashboard/official/*"
               element={
-                <ProtectedRoute allowedRoles={['official']} redirectTo="/dashboard">
-                  <div data-testid="official-dashboard">Official Dashboard</div>
+                <ProtectedRoute allowedRoles={['government_official']} redirectTo="/dashboard">
+                  <div data-testid="government-official-dashboard">Official Dashboard</div>
                 </ProtectedRoute>
               }
             />
@@ -176,7 +176,7 @@ describe('RBAC Route Protection Matrix (AC3)', () => {
       it(`${role} CAN access ${ROLE_ROUTES[role]}`, async () => {
         const user = createMockUser(role);
         const targetRoute = ROLE_ROUTES[role];
-        const expectedTestId = `${role.replace('_', '-')}-dashboard`;
+        const expectedTestId = `${role.replaceAll('_', '-')}-dashboard`;
 
         render(<RBACTestWrapper user={user} initialPath={targetRoute} />);
 
@@ -236,7 +236,7 @@ describe('RBAC Security Validation', () => {
   });
 
   it('ensures clerk cannot access assessor routes', async () => {
-    const clerk = createMockUser('clerk');
+    const clerk = createMockUser('data_entry_clerk');
 
     render(<RBACTestWrapper user={clerk} initialPath="/dashboard/assessor" />);
 
@@ -247,7 +247,7 @@ describe('RBAC Security Validation', () => {
   });
 
   it('ensures official cannot access supervisor routes', async () => {
-    const official = createMockUser('official');
+    const official = createMockUser('government_official');
 
     render(<RBACTestWrapper user={official} initialPath="/dashboard/supervisor" />);
 

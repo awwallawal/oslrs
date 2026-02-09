@@ -45,9 +45,9 @@ export type UserRole =
   | 'super_admin'
   | 'supervisor'
   | 'enumerator'
-  | 'clerk'
-  | 'assessor'
-  | 'official'
+  | 'data_entry_clerk'
+  | 'verification_assessor'
+  | 'government_official'
   | 'public_user';
 
 /**
@@ -67,9 +67,9 @@ export const roleRouteMap: Record<UserRole, string> = {
   super_admin: '/dashboard/super-admin',
   supervisor: '/dashboard/supervisor',
   enumerator: '/dashboard/enumerator',
-  clerk: '/dashboard/clerk',
-  assessor: '/dashboard/assessor',
-  official: '/dashboard/official',
+  data_entry_clerk: '/dashboard/clerk',
+  verification_assessor: '/dashboard/assessor',
+  government_official: '/dashboard/official',
   public_user: '/dashboard/public',
 };
 
@@ -80,9 +80,9 @@ export const roleDisplayNames: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   supervisor: 'Supervisor',
   enumerator: 'Enumerator',
-  clerk: 'Data Entry Clerk',
-  assessor: 'Verification Assessor',
-  official: 'Government Official',
+  data_entry_clerk: 'Data Entry Clerk',
+  verification_assessor: 'Verification Assessor',
+  government_official: 'Government Official',
   public_user: 'Public User',
 };
 
@@ -113,7 +113,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Support', href: '/dashboard/public/support', icon: HelpCircle },
   ],
 
-  clerk: [
+  data_entry_clerk: [
     { label: 'Home', href: '/dashboard/clerk', icon: Home },
     { label: 'Entry Queue', href: '/dashboard/clerk/queue', icon: ListOrdered },
     { label: 'Completed', href: '/dashboard/clerk/completed', icon: CheckSquare },
@@ -127,14 +127,14 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Messages', href: '/dashboard/supervisor/messages', icon: MessageSquare },
   ],
 
-  assessor: [
+  verification_assessor: [
     { label: 'Home', href: '/dashboard/assessor', icon: Home },
     { label: 'Audit Queue', href: '/dashboard/assessor/queue', icon: FileSearch },
     { label: 'Completed', href: '/dashboard/assessor/completed', icon: CheckCircle },
     { label: 'Evidence', href: '/dashboard/assessor/evidence', icon: Shield },
   ],
 
-  official: [
+  government_official: [
     { label: 'Home', href: '/dashboard/official', icon: Home },
     { label: 'Statistics', href: '/dashboard/official/stats', icon: PieChart },
     { label: 'Trends', href: '/dashboard/official/trends', icon: TrendingUp },
@@ -184,8 +184,8 @@ export const ALL_ROLES: UserRole[] = [
   'super_admin',
   'supervisor',
   'enumerator',
-  'clerk',
-  'assessor',
-  'official',
+  'data_entry_clerk',
+  'verification_assessor',
+  'government_official',
   'public_user',
 ];
