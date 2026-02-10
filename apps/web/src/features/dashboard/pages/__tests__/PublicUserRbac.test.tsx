@@ -20,6 +20,7 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProtectedRoute } from '../../../auth/components/ProtectedRoute';
 import { AuthContext } from '../../../auth/context/AuthContext';
+import { UserRole } from '@oslsr/types';
 import type { AuthUser } from '@oslsr/types';
 
 const createMockUser = (role: AuthUser['role']): AuthUser => ({
@@ -99,7 +100,7 @@ function RBACTestApp({ user, initialPath }: TestProps) {
 
 describe('Public User RBAC Edge Cases (AC4, AC5)', () => {
   it('public user CAN access /dashboard/public', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/public" />);
 
     await waitFor(() => {
@@ -108,7 +109,7 @@ describe('Public User RBAC Edge Cases (AC4, AC5)', () => {
   });
 
   it('public user accessing /dashboard/super-admin is redirected to /unauthorized', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/super-admin" />);
 
     await waitFor(() => {
@@ -118,7 +119,7 @@ describe('Public User RBAC Edge Cases (AC4, AC5)', () => {
   });
 
   it('public user accessing /dashboard/enumerator is redirected to /unauthorized', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/enumerator" />);
 
     await waitFor(() => {
@@ -128,7 +129,7 @@ describe('Public User RBAC Edge Cases (AC4, AC5)', () => {
   });
 
   it('ProtectedRoute passes redirect state with from path and requiredRoles', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     let capturedState: Record<string, unknown> | null = null;
 
     const queryClient = new QueryClient({
@@ -172,7 +173,7 @@ describe('Public User RBAC Edge Cases (AC4, AC5)', () => {
 
 describe('Public User Sub-Route Access (AC3)', () => {
   it('public user CAN access /dashboard/public/surveys', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/public/surveys" />);
 
     await waitFor(() => {
@@ -181,7 +182,7 @@ describe('Public User Sub-Route Access (AC3)', () => {
   });
 
   it('public user CAN access /dashboard/public/marketplace', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/public/marketplace" />);
 
     await waitFor(() => {
@@ -190,7 +191,7 @@ describe('Public User Sub-Route Access (AC3)', () => {
   });
 
   it('public user CAN access /dashboard/public/support', async () => {
-    const user = createMockUser('public_user');
+    const user = createMockUser(UserRole.PUBLIC_USER);
     render(<RBACTestApp user={user} initialPath="/dashboard/public/support" />);
 
     await waitFor(() => {

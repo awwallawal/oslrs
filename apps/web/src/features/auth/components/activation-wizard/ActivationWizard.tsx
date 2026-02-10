@@ -32,11 +32,10 @@ export function ActivationWizard({
   token,
   onSuccess,
   onError,
-  apiBaseUrl,
   renderStep,
   className,
 }: ActivationWizardProps) {
-  const wizard = useActivationWizard({ token, onSuccess, onError, apiBaseUrl });
+  const wizard = useActivationWizard({ token, onSuccess, onError });
 
   const handleStepClick = (step: WizardStep) => {
     wizard.goToStep(step);

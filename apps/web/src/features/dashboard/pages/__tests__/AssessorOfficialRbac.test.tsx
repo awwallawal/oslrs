@@ -33,16 +33,22 @@ function mockAuth(role: string) {
     user: {
       id: 'test-id',
       email: 'test@test.com',
+      fullName: 'Test User',
       role,
-      firstName: 'Test',
-      lastName: 'User',
+      status: 'active',
     },
-    login: vi.fn(),
+    accessToken: 'mock-token',
+    error: null,
+    isRememberMe: false,
+    requiresReAuth: false,
+    reAuthAction: null,
+    loginStaff: vi.fn(),
+    loginPublic: vi.fn(),
     logout: vi.fn(),
-    refreshToken: vi.fn(),
-    isSessionExpired: false,
-    setIsSessionExpired: vi.fn(),
-  } as ReturnType<typeof AuthContext.useAuth>);
+    reAuthenticate: vi.fn(),
+    clearError: vi.fn(),
+    updateActivity: vi.fn(),
+  } as unknown as ReturnType<typeof AuthContext.useAuth>);
 }
 
 /** Captures redirect state so we can verify ProtectedRoute passes the original path */
