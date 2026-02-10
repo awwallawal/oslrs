@@ -329,6 +329,10 @@ export class StaffService {
   ): Promise<typeof users.$inferSelect> {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
+      with: {
+        role: true,
+        lga: true,
+      },
     });
 
     if (!user) {
@@ -372,11 +376,18 @@ export class StaffService {
       });
 
       // Queue invitation email
-      await queueStaffInvitationEmail({
-        to: user.email,
-        fullName: user.fullName,
-        invitationToken,
-      });
+      const activationUrl = EmailService.generateStaffActivationUrl(invitationToken);
+      await queueStaffInvitationEmail(
+        {
+          email: user.email,
+          fullName: user.fullName,
+          roleName: user.role?.name || 'Staff',
+          lgaName: user.lga?.name,
+          activationUrl,
+          expiresInHours: 24,
+        },
+        userId
+      );
 
       logger.info({
         event: 'staff.reactivated_with_reonboard',

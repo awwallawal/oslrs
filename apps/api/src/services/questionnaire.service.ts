@@ -34,6 +34,7 @@ export interface FormWithVersions {
   version: string;
   title: string;
   status: QuestionnaireFormStatus;
+  isNative: boolean;
   fileHash: string;
   fileName: string;
   fileSize: number;
@@ -245,6 +246,7 @@ export class QuestionnaireService {
         version: form.version,
         title: form.title,
         status: form.status as QuestionnaireFormStatus,
+        isNative: form.isNative ?? false,
         fileHash: form.fileHash,
         fileName: form.fileName,
         fileSize: form.fileSize,
