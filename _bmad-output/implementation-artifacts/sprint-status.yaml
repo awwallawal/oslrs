@@ -75,7 +75,7 @@ development_status:
   # Epic 2: Questionnaire Management & Native Form System
   # Updated: 2026-02-06 - Per SCP-2026-02-05-001: ODK removed, native form system replaces
   # Stories 2.2-2.6 SUPERSEDED, new Stories 2.7-2.10 added for native forms
-  epic-2: in-progress  # Reopened 2026-02-06: ODK stories superseded, native form stories added
+  epic-2: done  # Completed 2026-02-10: ODK stories superseded (SCP-2026-02-05-001), native form stories 2.7-2.10 done. Combined retro with Epic 2.5.
   2-1-xlsform-upload-validation: done  # Completed 2026-01-27: Retained for one-time migration only (see Story 2.9)
   2-2-odk-central-form-deployment: superseded  # SCP-2026-02-05-001: ODK removed, replaced by Stories 2.7-2.10
   2-6-odk-mock-server-integration-testing: superseded  # SCP-2026-02-05-001: ODK removed
@@ -86,14 +86,14 @@ development_status:
   2-8-skip-logic-form-services: done  # Code review passed 2026-02-07: 10 issues found, 9 fixed, 1 dismissed (false positive), 47 tests pass
   2-9-xlsform-migration-script: done  # Code review passed 2026-02-07: 10 issues found (2H, 5M, 3L), all fixed. 30 tests pass (22 original + 8 review). Transaction wrapping, test coverage gaps closed.
   2-10-native-form-builder-ui: done  # Code review passed 2026-02-07: 13 issues found (5H, 4M, 3L), 9 fixed (5H, 2M, 1L, 1 test fix), 2 accepted (M2 false positive, M3 adequate coverage). 780 web tests pass, 0 regressions.
-  epic-2-retrospective: done  # Completed 2026-01-31: Identified visibility gap, created Epic 2.5
+  epic-2-retrospective: done  # Completed 2026-01-31 (original), Combined retro 2026-02-10 with Epic 2.5
 
   # Epic 2.5: Role-Based Dashboards & Feature Integration
   # Added: 2026-01-31 - Per Epic 2 retrospective decision to scaffold role dashboards before Epic 3
   # Updated: 2026-02-06 - Story 2.5-2 needs cleanup post-ODK removal (SCP-2026-02-05-001)
   # Source: ux-design-specification.md, ux-design-directions.html, ADR-016
   # Security: Strict route isolation (each role can ONLY access their own dashboard)
-  epic-2.5: in-progress
+  epic-2.5: done  # Completed 2026-02-10: All 8 stories done, combined retro with Epic 2
   2.5-1-dashboard-layout-architecture-role-routing: done  # Code review passed 2026-01-31: All fixes applied, 578 web tests pass
   2.5-2-super-admin-questionnaires-form-management: done  # Code review passed 2026-02-01: 620 web tests pass. NEEDS CLEANUP: Remove ODK components, add Form Builder links (SCP-2026-02-05-001)
   2.5-3-super-admin-staff-management: done  # Code Review #2 passed 2026-02-06: All 8 issues resolved (2H, 4M, 2L), zero technical debt. 247 API + 766 web tests pass
@@ -102,10 +102,24 @@ development_status:
   2.5-6-data-entry-clerk-dashboard: done  # Code review passed 2026-02-09: 7 findings (1H, 4M, 2L), all H+M fixed. 851 web tests pass, 0 regressions.
   2.5-7-assessor-official-dashboards: done  # Code review passed 2026-02-09: 8 findings (2H, 3M, 3L), all 8 fixed. 917 web tests pass, 0 regressions.
   2.5-8-public-user-rbac-testing: done  # Code review passed 2026-02-10: 7 findings (1H, 3M, 3L), 6/7 fixed. 957 web tests pass (+3 new), 0 regressions.
-  epic-2.5-retrospective: optional
+  epic-2.5-retrospective: done  # Completed 2026-02-10: Combined retro with Epic 2. Pivot analysis, preview gap identified, 3-layer quality strategy agreed.
+
+  # Prep Phase: Epic 3 Readiness (from Combined Epic 2+2.5 Retrospective 2026-02-10)
+  # Source: epic-2-2.5-retrospective-2026-02-10.md Action Items
+  # Must complete before Epic 3 begins. Incorporates tech debt (T1-T3) and prep tasks (EP1-EP7).
+  prep-epic-3: backlog
+  prep-1-odk-cleanup-story-2.5-2: backlog  # EP1 + T1: Remove dead ODK components from 2.5-2, wire Form Builder links
+  prep-2-shared-role-constants: backlog  # T3: Create shared role constants in packages/types (prevents frontend/backend mismatch)
+  prep-3-db-migration-workflow-fix: backlog  # T2 + EP5: Fix db:push interactive prompt, write migration workflow guide
+  prep-4-playwright-framework-setup: backlog  # EP3: Playwright setup + smoke tests + handholding guide for Awwal (incl. codegen)
+  prep-5-service-worker-indexeddb-spike: backlog  # EP4: Research spike for offline storage — blocks Stories 3.2, 3.3
+  prep-6-load-test-baseline: backlog  # EP6: k6/autocannon script for baseline performance metrics (traffic surge concern)
+  prep-7-e2e-golden-path-spec: backlog  # EP7: Define E2E test spec — form → database → dashboard proof (validates after Story 3.4)
+  prep-8-update-story-3.1-acs: backlog  # EP2: Add admin form preview AC to Story 3.1 (same FormFillerPage in read-only sandbox mode)
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)
+  # NOTE: Story 3.1 ACs to be updated per prep-8 (admin form preview from retro)
   epic-3: backlog
   3-0-google-oauth-enhanced-public-registration: backlog  # ADR-015: Blocks Story 3.5
   3-1-native-form-renderer-dashboard: backlog  # REWRITTEN: Was "Seamless Enketo Launch". Now native form renderer. Depends on Epic 2 Stories 2.7-2.10

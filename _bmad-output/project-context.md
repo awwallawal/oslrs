@@ -1472,8 +1472,43 @@ USING column_name::new_type;
 
 ---
 
+## Team Agreements & Process Guardrails
+
+> Source: Combined Epic 2+2.5 Retrospective (2026-02-10)
+> These are MANDATORY standards. All AI agents and developers must follow them.
+
+### UI/Component Standards (A1-A3)
+
+1. **Every AlertDialog modal MUST include an explicit Cancel button.** No dismiss-only modals. Users must always have a clear escape path.
+
+2. **Skeleton loading layouts MUST match the shape of actual content.** A skeleton for a table must look like a table. A skeleton for a card grid must look like a card grid. No generic spinners for structured content.
+
+3. **Test selectors: text content, `data-testid`, and ARIA roles ONLY.** Never use CSS classes, internal component names, or DOM structure for test selectors. This makes tests resilient to styling/refactoring changes.
+
+### Story Sizing & Planning (A4-A5)
+
+4. **Stories exceeding 15 tasks MUST be split.** If task breakdown produces >15 items, stop and split the story before writing any code. The split cost is always less than the scope explosion cost. (Lesson: Story 2.5-3 exploded from 13 to 21 tasks.)
+
+5. **External integration epics MUST start with a spike story.** The spike validates the critical *user-facing* capability end-to-end (not just API connectivity). Only after the spike succeeds should production-quality stories be created. (Lesson: ODK pivot — 5 stories superseded because we built bottom-up without validating the preview path.)
+
+### Quality & UAT (A6)
+
+6. **Structured UAT after every story.** Product owner walks through acceptance criteria on the running application (local or staging). Findings are documented in the story file. Unit tests passing does NOT mean the system works. (Lesson: 53 RBAC tests passed while 3 roles couldn't access their dashboards.)
+
+### Process Guardrails (from Retrospective)
+
+7. **Spike-first for external integrations.** Before investing in adapter layers, webhooks, or service clients for any external system, build a throwaway vertical spike that proves the critical user path works.
+
+8. **Spec compliance check at mid-epic.** Halfway through any epic, PO reviews implemented work against the PRD/UX spec to catch drift before it compounds.
+
+9. **Previous retrospective action items are reviewed first** at every new retrospective. Each item must be marked as: done, irrelevant, or carried forward (with assigned story).
+
+10. **Shared constants for cross-boundary values.** Role names, status enums, error codes, and any value used by both API and Web must be defined in `packages/types` as a single source of truth. Never hardcode these strings in application code. (Lesson: Frontend used `admin`, database used `super_admin` — 3 roles broken at runtime.)
+
+---
+
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-01-31
+**Last Updated:** 2026-02-10
 
-**Version:** 1.5.0 (Added: Epic 2.5 Role-Based Dashboard Routes - strict role isolation pattern `/dashboard/{role}/*`, RBAC matrix, DashboardRedirect component)
+**Version:** 1.6.0 (Added: Team Agreements A1-A6, Process Guardrails from Epic 2+2.5 retrospective. Prep phase for Epic 3.)
