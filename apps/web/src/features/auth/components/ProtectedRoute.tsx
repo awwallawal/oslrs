@@ -69,6 +69,8 @@ export function ProtectedRoute({
 
   // Check role-based access
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    // TODO: Log RBAC violation to audit trail (Epic 6, Story 6-1) with:
+    // attempted route, user ID, role, timestamp
     // Redirect to unauthorized page or home
     return (
       <Navigate

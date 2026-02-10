@@ -88,6 +88,9 @@ const OfficialStatsPage = lazy(() => import('./features/dashboard/pages/Official
 const OfficialTrendsPage = lazy(() => import('./features/dashboard/pages/OfficialTrendsPage'));
 const OfficialExportPage = lazy(() => import('./features/dashboard/pages/OfficialExportPage'));
 const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
+const PublicSurveysPage = lazy(() => import('./features/dashboard/pages/PublicSurveysPage'));
+const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/PublicMarketplacePage'));
+const PublicSupportPage = lazy(() => import('./features/dashboard/pages/PublicSupportPage'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
 /**
@@ -856,6 +859,30 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="surveys"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <PublicSurveysPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="marketplace"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <PublicMarketplacePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="support"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <PublicSupportPage />
                     </Suspense>
                   }
                 />
