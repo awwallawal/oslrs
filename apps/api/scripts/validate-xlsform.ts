@@ -1,9 +1,9 @@
 /**
  * XLSForm Validation Script
  *
- * Analyzes an XLSForm (.xlsx) file for common issues before uploading to ODK Central.
+ * Analyzes an XLSForm (.xlsx) file for common issues before importing into the form system.
  *
- * Usage: npx tsx apps/api/scripts/validate-xlsform.ts <path-to-xlsx>
+ * Usage: pnpm tsx apps/api/scripts/validate-xlsform.ts <path-to-xlsx>
  */
 
 import XLSX from 'xlsx';
@@ -13,7 +13,7 @@ import fs from 'fs';
 const filePath = process.argv[2];
 
 if (!filePath) {
-  console.log('Usage: npx tsx apps/api/scripts/validate-xlsform.ts <path-to-xlsx>');
+  console.log('Usage: pnpm tsx apps/api/scripts/validate-xlsform.ts <path-to-xlsx>');
   process.exit(1);
 }
 
@@ -92,7 +92,7 @@ surveyData.forEach((row, index) => {
     console.log(`     label: "${label || '⚠️ MISSING'}"`);
     console.log(`     hint: "${hint || '(none)'}"`);
     if (!label) {
-      issues.push(`Row ${rowNum}: GPS field "${name}" is MISSING A LABEL - this will cause ODK error!`);
+      issues.push(`Row ${rowNum}: GPS field "${name}" is MISSING A LABEL - this will cause a form validation error!`);
     }
   }
 
@@ -137,7 +137,7 @@ if (settingsSheet) {
     console.log(`  version: "${settings['version'] || '(not set)'}"`);
 
     if (!settings['form_id']) {
-      warnings.push('Settings: form_id is not set (ODK will generate one)');
+      warnings.push('Settings: form_id is not set (one will be auto-generated)');
     }
   }
 } else {
@@ -152,7 +152,7 @@ if (issues.length === 0 && warnings.length === 0) {
   console.log('✅ No issues found! The form should be valid.\n');
 } else {
   if (issues.length > 0) {
-    console.log(`❌ ERRORS (${issues.length}) - These WILL cause ODK to reject the form:\n`);
+    console.log(`❌ ERRORS (${issues.length}) - These WILL cause the form to be rejected:\n`);
     issues.forEach(issue => console.log(`   • ${issue}`));
     console.log('');
   }

@@ -161,7 +161,7 @@ function parseAtomicExpression(expr: string): Condition {
 }
 
 /**
- * Parses an ODK XLSForm relevance string into a native Condition or ConditionGroup.
+ * Parses an XLSForm relevance string into a native Condition or ConditionGroup.
  *
  * Supports:
  * - Simple: `${consent_basic} = 'yes'`

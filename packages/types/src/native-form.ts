@@ -1,6 +1,6 @@
 /**
  * Native Form Schema types for the OSLSR native form system.
- * Replaces ODK/Enketo (SCP-2026-02-05-001).
+ * Introduced by SCP-2026-02-05-001 (native form system).
  *
  * The NativeFormSchema is stored as JSONB in questionnaire_forms.form_schema.
  */

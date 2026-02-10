@@ -19,7 +19,7 @@ describe('Crypto Utils', () => {
 describe('AES-256-GCM Token Encryption', () => {
   // Generate a valid 32-byte key for testing
   const testKey = randomBytes(32);
-  const testToken = 'odk-app-user-token-12345678901234567890';
+  const testToken = 'test-app-user-token-12345678901234567890';
 
   describe('encryptToken', () => {
     it('should encrypt a token and return ciphertext and IV', () => {

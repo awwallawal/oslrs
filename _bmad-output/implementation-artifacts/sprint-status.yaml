@@ -107,9 +107,9 @@ development_status:
   # Prep Phase: Epic 3 Readiness (from Combined Epic 2+2.5 Retrospective 2026-02-10)
   # Source: epic-2-2.5-retrospective-2026-02-10.md Action Items
   # Must complete before Epic 3 begins. Incorporates tech debt (T1-T3) and prep tasks (EP1-EP7).
-  prep-epic-3: backlog
-  prep-1-odk-cleanup-story-2.5-2: backlog  # EP1 + T1: Remove dead ODK components from 2.5-2, wire Form Builder links
-  prep-2-shared-role-constants: backlog  # T3: Create shared role constants in packages/types (prevents frontend/backend mismatch)
+  prep-epic-3: in-progress
+  prep-1-odk-cleanup-story-2.5-2: done  # EP1 + T1: Remove dead ODK components from 2.5-2, wire Form Builder links
+  prep-2-shared-role-constants: ready-for-dev  # T3: Create shared role constants in packages/types (prevents frontend/backend mismatch)
   prep-3-db-migration-workflow-fix: backlog  # T2 + EP5: Fix db:push interactive prompt, write migration workflow guide
   prep-4-playwright-framework-setup: backlog  # EP3: Playwright setup + smoke tests + handholding guide for Awwal (incl. codegen)
   prep-5-service-worker-indexeddb-spike: backlog  # EP4: Research spike for offline storage — blocks Stories 3.2, 3.3
