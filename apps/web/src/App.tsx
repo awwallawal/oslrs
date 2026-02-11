@@ -65,6 +65,9 @@ const FormBuilderPage = lazy(() => import('./features/questionnaires/pages/FormB
 // Lazy load Staff Management page (Story 2.5-3)
 const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManagementPage'));
 
+// SPIKE: prep-5 — Lazy load offline PoC page (dev-only, not linked from navigation)
+const SpikeOfflinePage = lazy(() => import('./features/spike/SpikeOfflinePage'));
+
 // Lazy load Dashboard pages (Story 2.5-1)
 const SuperAdminHome = lazy(() => import('./features/dashboard/pages/SuperAdminHome'));
 const SupervisorHome = lazy(() => import('./features/dashboard/pages/SupervisorHome'));
@@ -488,6 +491,18 @@ function App() {
                 </Suspense>
               }
             />
+
+            {/* SPIKE: prep-5 — Offline PoC route (dev-only, no navigation link) */}
+            {import.meta.env.DEV && (
+              <Route
+                path="spike/offline"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <SpikeOfflinePage />
+                  </Suspense>
+                }
+              />
+            )}
 
             {/* Unauthorized Page */}
             <Route path="unauthorized" element={<UnauthorizedPage />} />
