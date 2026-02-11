@@ -115,7 +115,7 @@ development_status:
   prep-5-service-worker-indexeddb-spike: done  # EP4: Research spike for offline storage — blocks Stories 3.2, 3.3. Code review passed 2026-02-11: 9 findings (5M, 4L), all 9 fixed. 971 web tests pass, 0 regressions.
   prep-6-load-test-baseline: done  # EP6: k6 load test scripts + baseline report. Code review passed 2026-02-11: 8 findings (2H, 5M, 1L), all 8 fixed. 971 tests pass, 0 regressions.
   prep-7-e2e-golden-path-spec: done  # EP7: Golden path spec complete. 11 stubs + GP-1 active (4 passed, 17 skipped). Code review passed 2026-02-11: 9 findings (1H, 5M, 3L), 8 fixed, 1 acknowledged.
-  prep-8-update-story-3.1-acs: backlog  # EP2: Add admin form preview AC to Story 3.1 (same FormFillerPage in read-only sandbox mode)
+  prep-8-update-story-3.1-acs: done  # EP2: Add admin form preview AC to Story 3.1 (same FormFillerPage in read-only sandbox mode). Code review passed 2026-02-11: 7 findings (2H, 3M, 2L), all 7 fixed.
 
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)

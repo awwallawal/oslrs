@@ -1079,10 +1079,18 @@ So that I can collect data efficiently in the field.
 
 **AC3.1.5:** **And** the respondent's consent for the Marketplace must be the first mandatory field.
 
+**AC3.1.6:** **Given** a Super Admin navigating to `/dashboard/super-admin/questionnaires/:formId/preview`, **when** the page loads, **then** `FormFillerPage` renders in read-only sandbox mode (`mode='preview'`) with one-question-per-screen navigation, progress indicator, and skip logic — but submit is disabled, no data is persisted, and a "Preview Mode" banner is displayed. `FormFillerPage` accepts a `mode` prop (`'fill' | 'preview'`) defaulting to `'fill'` for normal data collection; existing ACs (3.1.1–3.1.5) describe `fill` mode behavior.
+
+**AC3.1.7:** **Given** the Form Builder interface, **when** a Super Admin views a form, **then** a "Live Preview" button is available on the existing Preview tab (alongside the schema summary and field table) that navigates to `/dashboard/super-admin/questionnaires/:formId/preview`, launching the form renderer in preview mode.
+
 **Tasks/Subtasks:**
 - Task 3.1.1: Create `apps/web/src/features/forms/pages/FormFillerPage.tsx` (load schema, track current question, navigation)
 - Task 3.1.2: Create question renderer components (QuestionRenderer, TextInput, NumberInput, DateInput, SelectOneInput, SelectMultipleInput, GeopointInput, NoteDisplay)
 - Task 3.1.3: Create `skipLogic.ts` client-side utility (getVisibleQuestions, getNextQuestionIndex)
+- _Preview Mode (Tasks 3.1.4–3.1.6 are non-blocking; implement after core renderer Tasks 3.1.1–3.1.3)_
+- Task 3.1.4: Add `mode` prop to `FormFillerPage` (`'fill' | 'preview'`) — in preview mode, disable submit, prevent data persistence, show "Preview Mode" banner
+- Task 3.1.5: Create preview route `/dashboard/super-admin/questionnaires/:formId/preview` and wire `FormFillerPage` with `mode='preview'`
+- Task 3.1.6: Update `FormBuilderPage` to include "Live Preview" button/link navigating to the preview route
 
 ### Story 3.2: PWA Service Worker & Offline Assets
 
