@@ -6,7 +6,7 @@
  */
 
 import { useAuth } from '../../auth/context/AuthContext';
-import { getRoleDisplayName } from '../config/sidebarConfig';
+import { getRoleDisplayName } from '@oslsr/types';
 import { SkeletonCard, SkeletonForm } from '../../../components/skeletons';
 
 export default function ProfilePage() {

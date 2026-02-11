@@ -91,7 +91,7 @@ describe('IDCardService', () => {
 
   const mockData = {
     fullName: 'Adewale Johnson',
-    role: 'Enumerator',
+    role: 'enumerator',
     lga: 'Ibadan North',
     phone: '+2348012345678',
     staffId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',

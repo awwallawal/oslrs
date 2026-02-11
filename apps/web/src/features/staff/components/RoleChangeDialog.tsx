@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, Loader2 } from 'lucide-react';
+import { getRoleDisplayName } from '@oslsr/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,7 +86,7 @@ export function RoleChangeDialog({
                       </option>
                       {roles.map((role) => (
                         <option key={role.id} value={role.id}>
-                          {role.name.replace(/_/g, ' ')}
+                          {getRoleDisplayName(role.name)}
                           {role.id === currentRoleId ? ' (current)' : ''}
                         </option>
                       ))}

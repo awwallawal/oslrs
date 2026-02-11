@@ -5,6 +5,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Search, UserPlus, Upload, ChevronDown, RefreshCw } from 'lucide-react';
+import { getRoleDisplayName } from '@oslsr/types';
 import { Card, CardContent } from '../../../components/ui/card';
 import { StaffTable, RoleChangeDialog, DeactivateDialog, ReactivateDialog, BulkImportModal, AddStaffModal } from '../components';
 import {
@@ -217,7 +218,7 @@ export default function StaffManagementPage() {
                 <option value="">All Roles</option>
                 {roles.map((role) => (
                   <option key={role.id} value={role.id}>
-                    {role.name.replace(/_/g, ' ')}
+                    {getRoleDisplayName(role.name)}
                   </option>
                 ))}
               </select>

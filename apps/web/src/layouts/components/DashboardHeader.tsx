@@ -15,7 +15,8 @@
 import { Link } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../../features/auth/context/AuthContext';
-import { getDashboardRoute, getRoleDisplayName } from '../../features/dashboard/config/sidebarConfig';
+import { getRoleDisplayName } from '@oslsr/types';
+import { getDashboardRoute } from '../../features/dashboard/config/sidebarConfig';
 import { ProfileDropdown } from './ProfileDropdown';
 import { cn } from '../../lib/utils';
 

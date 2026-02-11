@@ -14,7 +14,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { User, LogOut, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../features/auth/context/AuthContext';
-import { getRoleDisplayName, getDashboardRoute } from '../../features/dashboard/config/sidebarConfig';
+import { getRoleDisplayName } from '@oslsr/types';
+import { getDashboardRoute } from '../../features/dashboard/config/sidebarConfig';
 import { cn } from '../../lib/utils';
 
 interface ProfileDropdownProps {

@@ -37,18 +37,7 @@ import {
   ScrollText,
   UserCog,
 } from 'lucide-react';
-
-/**
- * User roles matching the backend role enum
- */
-export type UserRole =
-  | 'super_admin'
-  | 'supervisor'
-  | 'enumerator'
-  | 'data_entry_clerk'
-  | 'verification_assessor'
-  | 'government_official'
-  | 'public_user';
+import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
 /**
  * Navigation item configuration
@@ -74,17 +63,9 @@ export const roleRouteMap: Record<UserRole, string> = {
 };
 
 /**
- * Role display names
+ * Role display names — re-exported from shared constants
  */
-export const roleDisplayNames: Record<UserRole, string> = {
-  super_admin: 'Super Admin',
-  supervisor: 'Supervisor',
-  enumerator: 'Enumerator',
-  data_entry_clerk: 'Data Entry Clerk',
-  verification_assessor: 'Verification Assessor',
-  government_official: 'Government Official',
-  public_user: 'Public User',
-};
+export { ROLE_DISPLAY_NAMES };
 
 /**
  * Sidebar configuration by role
@@ -171,21 +152,8 @@ export function getDashboardRoute(role: string): string {
 }
 
 /**
- * Get display name for a role
+ * All valid user roles — re-exported from shared constants
  */
-export function getRoleDisplayName(role: string): string {
-  return roleDisplayNames[role as UserRole] || 'User';
-}
+export const ALL_ROLES: readonly UserRole[] = SHARED_ALL_ROLES;
 
-/**
- * All valid user roles (for validation)
- */
-export const ALL_ROLES: UserRole[] = [
-  'super_admin',
-  'supervisor',
-  'enumerator',
-  'data_entry_clerk',
-  'verification_assessor',
-  'government_official',
-  'public_user',
-];
+export { getRoleDisplayName };

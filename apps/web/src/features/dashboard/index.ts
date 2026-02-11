@@ -12,11 +12,12 @@ export { DashboardRedirect } from './components/DashboardRedirect';
 export {
   sidebarConfig,
   roleRouteMap,
-  roleDisplayNames,
+  ROLE_DISPLAY_NAMES,
   getSidebarItems,
   getDashboardRoute,
   getRoleDisplayName,
   ALL_ROLES,
 } from './config/sidebarConfig';
 
-export type { UserRole, NavItem } from './config/sidebarConfig';
+export type { UserRole } from '@oslsr/types';
+export type { NavItem } from './config/sidebarConfig';

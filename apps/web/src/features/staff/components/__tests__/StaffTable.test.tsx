@@ -99,7 +99,7 @@ describe('StaffTable', () => {
       // First staff member
       expect(screen.getByText('John Doe')).toBeInTheDocument();
       expect(screen.getByText('john@example.com')).toBeInTheDocument();
-      expect(screen.getByText('enumerator')).toBeInTheDocument();
+      expect(screen.getByText('Enumerator')).toBeInTheDocument();
       expect(screen.getByText('Ibadan North')).toBeInTheDocument();
 
       // Second staff member

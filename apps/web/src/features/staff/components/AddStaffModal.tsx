@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, ChevronDown } from 'lucide-react';
+import { FIELD_ROLES, getRoleDisplayName } from '@oslsr/types';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -39,9 +40,6 @@ interface FormErrors {
   lgaId?: string;
 }
 
-// Roles that require LGA assignment
-const LGA_REQUIRED_ROLES = ['enumerator', 'supervisor'];
-
 export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps) {
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
@@ -59,7 +57,7 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
   const roles = rolesData?.data ?? [];
   const lgas = lgasData?.data ?? [];
   const selectedRole = roles.find((r) => r.id === formData.roleId);
-  const requiresLga = selectedRole && LGA_REQUIRED_ROLES.includes(selectedRole.name.toLowerCase());
+  const requiresLga = selectedRole && (FIELD_ROLES as readonly string[]).includes(selectedRole.name);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -246,7 +244,7 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
                         <option value="">Select a role</option>
                         {roles.map((role) => (
                           <option key={role.id} value={role.id}>
-                            {role.name.replace(/_/g, ' ')}
+                            {getRoleDisplayName(role.name)}
                           </option>
                         ))}
                       </select>
@@ -301,7 +299,7 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
                 )}
                 <p className="mt-1 text-xs text-neutral-500">
                   {requiresLga
-                    ? `Required for ${selectedRole?.name.replace(/_/g, ' ')} role`
+                    ? `Required for ${selectedRole ? getRoleDisplayName(selectedRole.name) : ''} role`
                     : 'Only required for Enumerator and Supervisor roles'}
                 </p>
               </div>

@@ -7,15 +7,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import type { UserRole } from '@oslsr/types';
 import {
   sidebarConfig,
   roleRouteMap,
-  roleDisplayNames,
+  ROLE_DISPLAY_NAMES,
   getSidebarItems,
   getDashboardRoute,
   getRoleDisplayName,
   ALL_ROLES,
-  type UserRole,
 } from '../config/sidebarConfig';
 
 describe('sidebarConfig', () => {
@@ -37,8 +37,8 @@ describe('sidebarConfig', () => {
 
     it('has display name for all roles', () => {
       ALL_ROLES.forEach((role) => {
-        expect(roleDisplayNames[role]).toBeDefined();
-        expect(roleDisplayNames[role].length).toBeGreaterThan(0);
+        expect(ROLE_DISPLAY_NAMES[role]).toBeDefined();
+        expect(ROLE_DISPLAY_NAMES[role].length).toBeGreaterThan(0);
       });
     });
   });
@@ -144,8 +144,8 @@ describe('sidebarConfig', () => {
         expect(getRoleDisplayName('data_entry_clerk')).toBe('Data Entry Clerk');
       });
 
-      it('returns "User" for invalid role', () => {
-        expect(getRoleDisplayName('invalid_role')).toBe('User');
+      it('returns sentence-cased fallback for invalid role', () => {
+        expect(getRoleDisplayName('invalid_role')).toBe('Invalid Role');
       });
     });
   });

@@ -4,6 +4,7 @@
  */
 
 import { Users } from 'lucide-react';
+import { getRoleDisplayName } from '@oslsr/types';
 import { SkeletonTable } from '../../../components/skeletons';
 import { StaffStatusBadge } from './StaffStatusBadge';
 import { StaffActionsMenu } from './StaffActionsMenu';
@@ -94,9 +95,7 @@ export function StaffTable({
                 </td>
                 <td className="py-3 px-4 text-sm text-neutral-600">
                   {staff.roleName ? (
-                    <span className="capitalize">
-                      {staff.roleName.replace(/_/g, ' ')}
-                    </span>
+                    <span>{getRoleDisplayName(staff.roleName)}</span>
                   ) : (
                     <span className="text-neutral-400 italic">Unassigned</span>
                   )}

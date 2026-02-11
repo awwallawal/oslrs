@@ -20,20 +20,8 @@ import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProtectedRoute } from '../../auth/components/ProtectedRoute';
 import { AuthContext } from '../../auth/context/AuthContext';
+import { UserRole, ALL_ROLES } from '@oslsr/types';
 import type { AuthUser } from '@oslsr/types';
-
-// All roles in the system
-const ALL_ROLES = [
-  'super_admin',
-  'supervisor',
-  'enumerator',
-  'data_entry_clerk',
-  'verification_assessor',
-  'government_official',
-  'public_user',
-] as const;
-
-type UserRole = typeof ALL_ROLES[number];
 
 // Route configuration matching App.tsx
 const ROLE_ROUTES: Record<UserRole, string> = {
@@ -212,7 +200,7 @@ describe('RBAC Route Protection Matrix (AC3)', () => {
 
 describe('RBAC Security Validation', () => {
   it('prevents privilege escalation from public_user to super_admin', async () => {
-    const publicUser = createMockUser('public_user');
+    const publicUser = createMockUser(UserRole.PUBLIC_USER);
 
     render(<RBACTestWrapper user={publicUser} initialPath="/dashboard/super-admin" />);
 
@@ -225,7 +213,7 @@ describe('RBAC Security Validation', () => {
   });
 
   it('prevents cross-role access between enumerator and supervisor', async () => {
-    const enumerator = createMockUser('enumerator');
+    const enumerator = createMockUser(UserRole.ENUMERATOR);
 
     render(<RBACTestWrapper user={enumerator} initialPath="/dashboard/supervisor" />);
 
@@ -236,7 +224,7 @@ describe('RBAC Security Validation', () => {
   });
 
   it('ensures clerk cannot access assessor routes', async () => {
-    const clerk = createMockUser('data_entry_clerk');
+    const clerk = createMockUser(UserRole.DATA_ENTRY_CLERK);
 
     render(<RBACTestWrapper user={clerk} initialPath="/dashboard/assessor" />);
 
@@ -247,7 +235,7 @@ describe('RBAC Security Validation', () => {
   });
 
   it('ensures official cannot access supervisor routes', async () => {
-    const official = createMockUser('government_official');
+    const official = createMockUser(UserRole.GOVERNMENT_OFFICIAL);
 
     render(<RBACTestWrapper user={official} initialPath="/dashboard/supervisor" />);
 

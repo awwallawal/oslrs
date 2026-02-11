@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { AppError } from '@oslsr/utils';
+import { getRoleDisplayName } from '@oslsr/types';
 
 interface IDCardData {
   fullName: string;
@@ -180,12 +181,8 @@ export class IDCardService {
           }
         };
 
-        // Sentence case helper: "enumerator" → "Enumerator", "super_admin" → "Super Admin"
-        const toSentenceCase = (str: string) =>
-          str.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
         drawField('Name:', data.fullName);
-        drawField('Role:', toSentenceCase(data.role));
+        drawField('Role:', getRoleDisplayName(data.role));
         drawField('Location:', data.lga);
         drawField('ID No:', staffIdFormatted);
         drawField('Date Issued:', issueDate);
