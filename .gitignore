@@ -44,6 +44,11 @@ vitest-report.json
 test-pipeline.html
 reporter*.log
 
+# Playwright
+playwright-report/
+test-results/
+apps/web/e2e/.auth/
+
 # Temp files
 tmpclaude-*
 new_error.txt

@@ -16,6 +16,7 @@
     "test:ui": "pnpm exec turbo run test:ui",
     "test:web": "pnpm exec turbo run test --filter @oslsr/web",
     "test:dashboard": "tsx packages/testing/src/cli.ts",
+    "test:e2e": "pnpm exec turbo run test:e2e",
     "lint": "pnpm exec turbo run lint",
     "services:up": "docker compose -f docker/docker-compose.dev.yml up -d",
     "services:down": "docker compose -f docker/docker-compose.dev.yml down",

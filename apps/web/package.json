@@ -11,6 +11,7 @@
     "test:security": "vitest run --test-name-pattern='Security'",
     "test:contract": "vitest run --test-name-pattern='Contract'",
     "test:ui": "vitest run --test-name-pattern='UI'",
+    "test:e2e": "playwright test",
     "lint": "eslint src",
     "preview": "vite preview"
   },
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.0.0-alpha.14",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",

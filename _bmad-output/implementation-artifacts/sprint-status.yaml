@@ -111,7 +111,7 @@ development_status:
   prep-1-odk-cleanup-story-2.5-2: done  # EP1 + T1: Remove dead ODK components from 2.5-2, wire Form Builder links
   prep-2-shared-role-constants: done  # T3: Create shared role constants in packages/types. Code review passed 2026-02-11: 8 findings (1H, 3M, 4L), 7 fixed, 1 accepted. 957 web tests pass, 0 regressions.
   prep-3-db-migration-workflow-fix: done  # T2 + EP5: Fix db:push interactive prompt, write migration workflow guide. Code review passed 2026-02-11: 8 findings (1H, 4M, 3L), all 8 resolved. Live UAT verified against PostgreSQL. 1,354 tests pass, 0 regressions.
-  prep-4-playwright-framework-setup: backlog  # EP3: Playwright setup + smoke tests + handholding guide for Awwal (incl. codegen)
+  prep-4-playwright-framework-setup: done  # EP3: Playwright setup + smoke tests + handholding guide. Code review passed 2026-02-11: 8 findings (5M, 3L), 7 fixed, 1 accepted (L2). 3 E2E + 957 web tests pass, 0 regressions.
   prep-5-service-worker-indexeddb-spike: backlog  # EP4: Research spike for offline storage — blocks Stories 3.2, 3.3
   prep-6-load-test-baseline: backlog  # EP6: k6/autocannon script for baseline performance metrics (traffic surge concern)
   prep-7-e2e-golden-path-spec: backlog  # EP7: Define E2E test spec — form → database → dashboard proof (validates after Story 3.4)
