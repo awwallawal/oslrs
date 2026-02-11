@@ -141,11 +141,9 @@ describe('MobileNav', () => {
     const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
     await user.click(menuButton);
 
-    // Click About to expand
-    await waitFor(async () => {
-      const aboutButton = screen.getByRole('button', { name: /about/i });
-      await user.click(aboutButton);
-    });
+    // Wait for drawer to open, then click About to expand
+    const aboutButton = await screen.findByRole('button', { name: /about/i });
+    await user.click(aboutButton);
 
     // Submenu items should be visible
     await waitFor(() => {
@@ -162,11 +160,9 @@ describe('MobileNav', () => {
     const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
     await user.click(menuButton);
 
-    // Click Support to expand
-    await waitFor(async () => {
-      const supportButton = screen.getByRole('button', { name: /support/i });
-      await user.click(supportButton);
-    });
+    // Wait for drawer to open, then click Support to expand
+    const supportButton = await screen.findByRole('button', { name: /support/i });
+    await user.click(supportButton);
 
     // Submenu items should be visible
     await waitFor(() => {
@@ -255,11 +251,9 @@ describe('MobileNav', () => {
       const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
       await user.click(menuButton);
 
-      // Click Insights to expand
-      await waitFor(async () => {
-        const insightsButton = screen.getByRole('button', { name: /insights/i });
-        await user.click(insightsButton);
-      });
+      // Wait for drawer to open, then click Insights to expand
+      const insightsButton = await screen.findByRole('button', { name: /insights/i });
+      await user.click(insightsButton);
 
       // Submenu items should be visible but disabled
       await waitFor(() => {

@@ -21,26 +21,28 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    // Auth setup - enable when full stack is available (Epic 3+)
-    // {
-    //   name: 'setup',
-    //   testMatch: /auth\.setup\.ts/,
-    // },
+    // Auth setup — runs sequentially before golden-path tests.
+    // All role setups are setup.skip() until full stack is available in CI.
+    {
+      name: 'auth-setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    // Smoke tests — independent, no auth dependency
     {
       name: 'smoke',
       testMatch: /smoke\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
-    // Future: authenticated tests that depend on setup project
-    // {
-    //   name: 'authenticated',
-    //   testMatch: /.*\.auth\.spec\.ts/,
-    //   dependencies: ['setup'],
-    //   use: {
-    //     ...devices['Desktop Chrome'],
-    //     storageState: './e2e/.auth/user.json',
-    //   },
-    // },
+    // Golden path tests — require authenticated state from auth-setup.
+    // Individual tests set their own storageState via test.use() for multi-role support.
+    {
+      name: 'golden-path',
+      testMatch: /golden-path\.spec\.ts/,
+      dependencies: ['auth-setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+    },
   ],
   webServer: {
     command: 'pnpm dev',

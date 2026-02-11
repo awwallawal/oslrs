@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // SPIKE: prep-5 — Offline-first PWA proof-of-concept page
 // Demonstrates: Dexie CRUD, useLiveQuery reactivity, persistent storage, SW registration
 // Route: /spike/offline (dev-only, not linked from navigation)
