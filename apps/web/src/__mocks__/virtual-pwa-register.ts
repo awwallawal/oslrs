@@ -1,5 +1,6 @@
 // Mock for virtual:pwa-register (Vite virtual module from vite-plugin-pwa)
 // Used in tests because the virtual module is only available during Vite build
+import { vi } from 'vitest';
 
 type RegisterSWOptions = {
   onNeedRefresh?: () => void;
