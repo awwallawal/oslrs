@@ -33,14 +33,16 @@
     <meta name="twitter:description" content="Register your skills and connect with employers across Oyo State." />
     <meta name="twitter:image" content="https://oyotradeministry.com.ng/og-image.png" />
 
-    <!-- Google Fonts — split for LCP optimization (PERF-1) -->
+    <!-- Self-hosted fonts — eliminates Google Fonts round-trips (PERF-1) -->
+    <!-- Preload Poppins latin (LCP font — used in H1 hero heading) -->
+    <link rel="preload" href="/fonts/poppins-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <!-- @font-face declarations for Inter + Poppins -->
+    <link rel="stylesheet" href="/fonts/fonts.css">
+    <!-- JetBrains Mono (code blocks only) — deferred from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Inter (primary UI font) — loaded eagerly, critical for LCP -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <!-- Poppins (brand headings) + JetBrains Mono (code) — deferred, not needed for initial paint -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
   </head>
   <body>
     <div id="root"></div>
