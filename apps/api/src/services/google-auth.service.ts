@@ -92,7 +92,7 @@ export class GoogleAuthService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
-    const { googleId, email, name } = googlePayload;
+    const { googleId, email } = googlePayload;
 
     // Check if user exists by Google ID first
     const existingByGoogleId = await db.query.users.findFirst({
@@ -239,8 +239,8 @@ export class GoogleAuthService {
    */
   private static async createGoogleSession(
     user: UserWithRole,
-    ipAddress?: string,
-    userAgent?: string
+    _ipAddress?: string,
+    _userAgent?: string
   ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
     const rememberMe = true; // Google users get 30-day sessions
 

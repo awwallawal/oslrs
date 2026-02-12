@@ -84,7 +84,6 @@ export function RegistrationForm() {
   const password = watch('password', '');
   const ninValue = watch('nin', '');
 
-  // Real-time NIN checksum validation (matches PersonalInfoStep pattern)
   const ninStatus = useMemo(() => {
     if (!ninValue || ninValue.length < 11) return 'incomplete';
     return modulus11Check(ninValue) ? 'valid' : 'invalid';
@@ -328,17 +327,33 @@ export function RegistrationForm() {
             disabled={isLoading}
             className={`
               w-full px-4 py-3 rounded-lg border transition-colors
-              ${errors.nin
+              ${errors.nin || ninStatus === 'invalid'
                 ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
-                : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
+                : ninStatus === 'valid'
+                  ? 'border-success-500 focus-visible:ring-success-500 focus:border-success-500'
+                  : 'border-neutral-300 focus-visible:ring-primary-500 focus:border-primary-500'
               }
               disabled:bg-neutral-100 disabled:cursor-not-allowed
               focus:outline-none focus-visible:ring-2
             `}
             placeholder="11-digit NIN"
           />
-          {errors.nin && (
+          {errors.nin ? (
             <p className="text-error-600 text-sm">{errors.nin.message}</p>
+          ) : ninStatus === 'valid' ? (
+            <p className="flex items-center gap-1 text-success-600 text-sm">
+              <CheckCircle2 className="w-4 h-4" />
+              Valid NIN
+            </p>
+          ) : ninStatus === 'invalid' ? (
+            <p className="flex items-center gap-1 text-error-600 text-sm">
+              <XCircle className="w-4 h-4" />
+              Invalid NIN — please check for typos
+            </p>
+          ) : (
+            <p className="text-neutral-500 text-xs">
+              Your 11-digit National Identification Number from NIMC
+            </p>
           )}
         </div>
 
