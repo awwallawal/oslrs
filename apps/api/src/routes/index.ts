@@ -6,6 +6,7 @@ import devRoutes from './dev.routes.js';
 import adminRoutes from './admin.routes.js';
 import questionnaireRoutes from './questionnaire.routes.js';
 import rolesRoutes from './roles.routes.js';
+import formRoutes from './form.routes.js';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use('/questionnaires', questionnaireRoutes);
 router.use('/roles', rolesRoutes);
+router.use('/forms', formRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

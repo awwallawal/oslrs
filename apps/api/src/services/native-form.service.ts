@@ -1,7 +1,7 @@
 import { db } from '../db/index.js';
 import { questionnaireForms } from '../db/schema/index.js';
 import { auditLogs } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
 import type { NativeFormSchema, Question, Choice } from '@oslsr/types';
@@ -30,6 +30,7 @@ export interface FlattenedForm {
   version: string;
   questions: FlattenedQuestion[];
   choiceLists: Record<string, Choice[]>;
+  sectionShowWhen: Record<string, Question['showWhen']>;
 }
 
 /**
@@ -313,7 +314,7 @@ export class NativeFormService {
   }
 
   /**
-   * Retrieve the form schema JSONB for a form.
+   * Retrieve the form schema JSONB for a form (any status — used by builder/admin).
    */
   static async getFormSchema(formId: string): Promise<NativeFormSchema> {
     const form = await db.query.questionnaireForms.findFirst({
@@ -328,13 +329,64 @@ export class NativeFormService {
   }
 
   /**
+   * Retrieve a PUBLISHED form schema for rendering. Rejects draft/archived forms.
+   */
+  static async getPublishedFormSchema(formId: string): Promise<NativeFormSchema> {
+    const form = await db.query.questionnaireForms.findFirst({
+      where: eq(questionnaireForms.id, formId),
+    });
+
+    if (!form) {
+      throw new AppError('FORM_NOT_FOUND', 'Form not found', 404);
+    }
+
+    if (form.status !== 'published') {
+      throw new AppError('FORM_NOT_PUBLISHED', 'Form is not available for data collection', 403);
+    }
+
+    return form.formSchema as NativeFormSchema;
+  }
+
+  /**
+   * List published forms with fields needed by the form renderer.
+   */
+  static async listPublished() {
+    const forms = await db.query.questionnaireForms.findMany({
+      where: eq(questionnaireForms.status, 'published'),
+      columns: {
+        id: true,
+        formId: true,
+        title: true,
+        version: true,
+        status: true,
+        nativePublishedAt: true,
+      },
+      orderBy: [desc(questionnaireForms.createdAt)],
+    });
+
+    return forms.map((f) => ({
+      id: f.id,
+      formId: f.formId,
+      title: f.title,
+      version: f.version,
+      status: f.status,
+      publishedAt: f.nativePublishedAt?.toISOString() ?? null,
+    }));
+  }
+
+  /**
    * Flatten the nested form schema into an ordered array of questions with section metadata.
    * Resolves choice list keys to actual Choice arrays.
    */
   static flattenForRender(schema: NativeFormSchema): FlattenedForm {
     const questions: FlattenedQuestion[] = [];
+    const sectionShowWhen: Record<string, Question['showWhen']> = {};
 
     for (const section of schema.sections) {
+      if (section.showWhen) {
+        sectionShowWhen[section.id] = section.showWhen;
+      }
+
       for (const question of section.questions) {
         const flattened: FlattenedQuestion = {
           id: question.id,
@@ -363,6 +415,7 @@ export class NativeFormService {
       version: schema.version,
       questions,
       choiceLists: schema.choiceLists,
+      sectionShowWhen,
     };
   }
 }

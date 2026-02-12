@@ -247,7 +247,11 @@ describe('FormBuilderPage', () => {
 
   // 9. Preview tab shows field summary table
   it('PreviewTab shows field summary table', () => {
-    render(<PreviewTab schema={MOCK_SCHEMA} />);
+    render(
+      <MemoryRouter>
+        <PreviewTab schema={MOCK_SCHEMA} />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Field Summary')).toBeInTheDocument();
     expect(screen.getByText('full_name')).toBeInTheDocument();

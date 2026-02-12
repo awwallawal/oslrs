@@ -3,14 +3,8 @@
  * EnumeratorHome Tests
  *
  * Story 2.5-5 AC1: Mobile-optimized dashboard
- * Story 2.5-5 AC3: "Coming in Epic 3" modal on Start Survey click
+ * Story 3.1: "Start Survey" navigates to surveys page
  * Story 2.5-5 AC5: Service worker registration
- *
- * Tests:
- * - Renders Start Survey CTA, Resume Draft section, Daily Progress card, Sync Status badge
- * - Shows skeleton cards during loading state branch
- * - "Coming in Epic 3" modal appears on Start Survey CTA click
- * - Service worker registration is called
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -23,6 +17,12 @@ import { MemoryRouter } from 'react-router-dom';
 import EnumeratorHome from '../EnumeratorHome';
 
 const mockRegister = vi.fn().mockResolvedValue(undefined);
+const mockNavigate = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 function renderComponent() {
   return render(
@@ -111,30 +111,12 @@ describe('EnumeratorHome', () => {
     });
   });
 
-  describe('AC3: Coming in Epic 3 Modal', () => {
-    it('shows "Coming in Epic 3" modal when Start Survey CTA is clicked', () => {
+  describe('Story 3.1: Start Survey Navigation', () => {
+    it('navigates to surveys page on Start Survey click', () => {
       renderComponent();
       const cta = screen.getByRole('button', { name: 'Start Survey' });
       fireEvent.click(cta);
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      expect(screen.getByText(/native form renderer/i)).toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Got it" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
-      // Modal title should no longer be visible
-      expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Cancel" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/enumerator/survey');
     });
   });
 

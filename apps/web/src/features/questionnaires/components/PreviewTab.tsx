@@ -1,10 +1,14 @@
+import { useNavigate } from 'react-router-dom';
+import { Eye } from 'lucide-react';
 import type { NativeFormSchema } from '@oslsr/types';
 
 interface PreviewTabProps {
   schema: NativeFormSchema;
+  formId?: string;
 }
 
-export function PreviewTab({ schema }: PreviewTabProps) {
+export function PreviewTab({ schema, formId }: PreviewTabProps) {
+  const navigate = useNavigate();
   const totalQuestions = schema.sections.reduce((sum, s) => sum + s.questions.length, 0);
   const totalChoiceLists = Object.keys(schema.choiceLists).length;
   const totalSkipLogic = schema.sections.reduce(
@@ -36,6 +40,18 @@ export function PreviewTab({ schema }: PreviewTabProps) {
           <p className="text-xs text-neutral-500">Skip Logic</p>
         </div>
       </div>
+
+      {/* Live Preview Button */}
+      {formId && totalQuestions > 0 && (
+        <button
+          onClick={() => navigate(`/dashboard/super-admin/questionnaires/${formId}/preview`)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#9C1E23] text-white rounded-lg font-medium hover:bg-[#7A171B] transition-colors"
+          data-testid="live-preview-btn"
+        >
+          <Eye className="w-4 h-4" />
+          Live Preview
+        </button>
+      )}
 
       {/* Field Summary Table */}
       <div>

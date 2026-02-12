@@ -6,7 +6,15 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
 import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
-import { PublicLayout, AuthLayout, DashboardLayout } from './layouts';
+import { PublicLayout } from './layouts';
+
+// Lazy-load layouts not needed for initial public page render (PERF-1)
+const AuthLayout = lazy(() =>
+  import('./layouts/AuthLayout').then(m => ({ default: m.AuthLayout }))
+);
+const DashboardLayout = lazy(() =>
+  import('./layouts/DashboardLayout').then(m => ({ default: m.DashboardLayout }))
+);
 import { DashboardRedirect } from './features/dashboard';
 
 // Lazy load page components for code splitting and loading indicators
@@ -67,6 +75,9 @@ const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManag
 
 // Lazy load GoogleOAuthWrapper — scoped to /login and /register routes only (PERF-1)
 const GoogleOAuthWrapper = lazy(() => import('./features/auth/components/GoogleOAuthWrapper'));
+
+// Story 3.1: Form Filler Page (Enumerator fill mode + Super Admin preview mode)
+const FormFillerPage = lazy(() => import('./features/forms/pages/FormFillerPage'));
 
 // SPIKE: prep-5 — Lazy load offline PoC page (dev-only, not linked from navigation)
 const SpikeOfflinePage = lazy(() => import('./features/spike/SpikeOfflinePage'));
@@ -410,7 +421,7 @@ function App() {
              * AUTH ROUTES - Wrapped in AuthLayout
              * GoogleOAuthWrapper scoped to /login and /register only (PERF-1)
              * ============================================ */}
-            <Route element={<AuthLayout />}>
+            <Route element={<Suspense fallback={<AuthLoadingFallback />}><AuthLayout /></Suspense>}>
               {/* Routes that need Google OAuth SDK */}
               <Route
                 element={
@@ -545,7 +556,7 @@ function App() {
               path="dashboard"
               element={
                 <ProtectedRoute redirectTo="/">
-                  <DashboardLayout />
+                  <Suspense fallback={<DashboardLoadingFallback />}><DashboardLayout /></Suspense>
                 </ProtectedRoute>
               }
             >
@@ -583,6 +594,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <FormBuilderPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 3.1: Super Admin Form Preview */}
+                <Route
+                  path="questionnaires/:formId/preview"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <FormFillerPage mode="preview" />
                     </Suspense>
                   }
                 />
@@ -689,6 +709,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <EnumeratorSurveysPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 3.1: Enumerator Form Filler */}
+                <Route
+                  path="survey/:formId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <FormFillerPage mode="fill" />
                     </Suspense>
                   }
                 />

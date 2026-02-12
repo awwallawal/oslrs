@@ -8,7 +8,7 @@ import Dexie, { type EntityTable } from 'dexie';
 export interface Draft {
   id: string; // UUIDv7 (client-generated)
   formId: string; // References form schema
-  formVersion: number; // Schema version when draft was started
+  formVersion: string; // Semver version string when draft was started
   responses: Record<string, unknown>; // Question answers
   questionPosition: number; // Current question index for resume
   status: 'in-progress' | 'completed' | 'submitted';
@@ -31,7 +31,7 @@ export interface SubmissionQueueItem {
 // SPIKE: prep-5 — Cached form schema for offline rendering
 export interface CachedFormSchema {
   formId: string; // Primary key
-  version: number;
+  version: string;
   schema: Record<string, unknown>; // Full JSONB schema
   cachedAt: string; // ISO timestamp
   etag: string | null; // For cache validation

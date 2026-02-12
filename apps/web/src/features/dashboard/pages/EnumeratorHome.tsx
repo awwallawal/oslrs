@@ -3,27 +3,18 @@
  *
  * Story 2.5-5 AC1: Mobile-optimized dashboard with Start Survey CTA,
  * Resume Draft, Daily Progress, Sync Status indicator.
- * Story 2.5-5 AC3: "Coming in Epic 3" modal on Start Survey click.
+ * Story 3.1: Start Survey navigates to surveys page.
  * Story 2.5-5 AC5: Service worker registration (no-op shell).
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Save, Clock, CheckCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '../../../components/ui/alert-dialog';
 
 export default function EnumeratorHome({ isLoading = false }: { isLoading?: boolean }) {
-  const [showEpic3Modal, setShowEpic3Modal] = useState(false);
+  const navigate = useNavigate();
 
   // AC5: Register service worker (no-op shell)
   useEffect(() => {
@@ -70,10 +61,10 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
         </div>
       ) : (
         <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-6">
-          {/* Start Survey CTA — AC1 */}
+          {/* Start Survey CTA — AC1, Story 3.1 */}
           <div className="md:col-span-2">
             <button
-              onClick={() => setShowEpic3Modal(true)}
+              onClick={() => navigate('/dashboard/enumerator/survey')}
               className="w-full md:w-auto min-h-[48px] px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-lg transition-colors"
             >
               Start Survey
@@ -126,26 +117,6 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
           </Card>
         </div>
       )}
-
-      {/* Coming in Epic 3 Modal — AC3 */}
-      <AlertDialog open={showEpic3Modal} onOpenChange={setShowEpic3Modal}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Coming in Epic 3</AlertDialogTitle>
-            <AlertDialogDescription>
-              The native form renderer is being built in Epic 3. Once complete,
-              you'll be able to start and submit surveys directly from this
-              dashboard — even while offline.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setShowEpic3Modal(false)}>
-              Got it
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

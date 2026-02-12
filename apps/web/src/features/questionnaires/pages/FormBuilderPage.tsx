@@ -253,7 +253,7 @@ export default function FormBuilderPage() {
         </TabsContent>
 
         <TabsContent value="preview" className="mt-4">
-          <PreviewTab schema={localSchema} />
+          <PreviewTab schema={localSchema} formId={formId} />
         </TabsContent>
       </Tabs>
 
