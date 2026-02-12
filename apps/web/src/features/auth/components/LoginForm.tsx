@@ -90,7 +90,6 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
                 shape="rectangular"
                 size="large"
                 width={320}
-                locale="en"
               />
             </div>
             {isGoogleLoading && (

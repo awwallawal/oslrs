@@ -198,7 +198,6 @@ export function RegistrationForm() {
             shape="rectangular"
             size="large"
             width={320}
-            locale="en"
           />
         </div>
         {isGoogleLoading && (
