@@ -22,7 +22,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 let mockHookReturn = {
-  data: undefined as { id: string; formId: string; title: string; version: number; status: string; publishedAt: string }[] | undefined,
+  data: undefined as { id: string; formId: string; title: string; version: string; status: string; publishedAt: string }[] | undefined,
   isLoading: false,
   error: null as Error | null,
 };
@@ -83,8 +83,8 @@ describe('EnumeratorSurveysPage', () => {
   it('renders survey cards when forms are available', () => {
     mockHookReturn = {
       data: [
-        { id: 'f1', formId: 'form-1', title: 'Labour Survey 2026', version: 1, status: 'published', publishedAt: '2026-01-01' },
-        { id: 'f2', formId: 'form-2', title: 'Skills Assessment', version: 2, status: 'published', publishedAt: '2026-01-15' },
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey 2026', version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+        { id: 'f2', formId: 'form-2', title: 'Skills Assessment', version: '2.0.0', status: 'published', publishedAt: '2026-01-15' },
       ],
       isLoading: false,
       error: null,
@@ -94,14 +94,14 @@ describe('EnumeratorSurveysPage', () => {
     expect(screen.getByTestId('surveys-grid')).toBeInTheDocument();
     expect(screen.getByText('Labour Survey 2026')).toBeInTheDocument();
     expect(screen.getByText('Skills Assessment')).toBeInTheDocument();
-    expect(screen.getByText('v1')).toBeInTheDocument();
-    expect(screen.getByText('v2')).toBeInTheDocument();
+    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+    expect(screen.getByText('v2.0.0')).toBeInTheDocument();
   });
 
   it('navigates to survey form on Start Survey click', () => {
     mockHookReturn = {
       data: [
-        { id: 'f1', formId: 'form-1', title: 'Labour Survey', version: 1, status: 'published', publishedAt: '2026-01-01' },
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
       ],
       isLoading: false,
       error: null,
@@ -116,8 +116,8 @@ describe('EnumeratorSurveysPage', () => {
     mockDraftMap = { f1: true };
     mockHookReturn = {
       data: [
-        { id: 'f1', formId: 'form-1', title: 'Labour Survey', version: 1, status: 'published', publishedAt: '2026-01-01' },
-        { id: 'f2', formId: 'form-2', title: 'Skills Assessment', version: 2, status: 'published', publishedAt: '2026-01-15' },
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+        { id: 'f2', formId: 'form-2', title: 'Skills Assessment', version: '2.0.0', status: 'published', publishedAt: '2026-01-15' },
       ],
       isLoading: false,
       error: null,

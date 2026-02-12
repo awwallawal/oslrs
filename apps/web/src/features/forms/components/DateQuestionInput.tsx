@@ -42,7 +42,7 @@ export function DateQuestionInput({
           {error}
         </p>
       )}
-      {!error && value && (
+      {!error && value != null && value !== '' && (
         <span className="text-green-600 text-sm" aria-label="Valid">
           ✓
         </span>

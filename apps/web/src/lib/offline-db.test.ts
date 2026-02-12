@@ -22,7 +22,7 @@ describe('offline-db (Dexie IndexedDB)', () => {
     const sampleDraft: Draft = {
       id: '019473a1-0000-7000-8000-000000000001',
       formId: 'form-001',
-      formVersion: 1,
+      formVersion: '1.0.0',
       responses: { q1: 'answer1', q2: 42 },
       questionPosition: 2,
       status: 'in-progress',
@@ -154,7 +154,7 @@ describe('offline-db (Dexie IndexedDB)', () => {
   describe('formSchemaCache table', () => {
     const sampleSchema: CachedFormSchema = {
       formId: 'form-001',
-      version: 1,
+      version: '1.0.0',
       schema: {
         title: 'Survey Form',
         questions: [{ id: 'q1', type: 'text', label: 'Name' }],
@@ -168,7 +168,7 @@ describe('offline-db (Dexie IndexedDB)', () => {
       const retrieved = await db.formSchemaCache.get('form-001');
 
       expect(retrieved).toBeDefined();
-      expect(retrieved!.version).toBe(1);
+      expect(retrieved!.version).toBe('1.0.0');
       expect(retrieved!.schema).toEqual(sampleSchema.schema);
     });
 
@@ -177,14 +177,14 @@ describe('offline-db (Dexie IndexedDB)', () => {
 
       await db.formSchemaCache.put({
         ...sampleSchema,
-        version: 2,
+        version: '2.0.0',
         schema: { ...sampleSchema.schema, title: 'Updated Survey' },
         cachedAt: '2026-02-11T11:00:00.000Z',
         etag: '"def456"',
       });
 
       const updated = await db.formSchemaCache.get('form-001');
-      expect(updated!.version).toBe(2);
+      expect(updated!.version).toBe('2.0.0');
       expect(updated!.etag).toBe('"def456"');
     });
   });

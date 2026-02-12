@@ -15,8 +15,11 @@ vi.mock('react-router-dom', async () => {
 });
 
 const mockSchema: NativeFormSchema = {
+  id: 'test-form-id',
   title: 'Test Form',
-  version: 1,
+  version: '1.0.0',
+  status: 'draft',
+  createdAt: '2026-02-10T00:00:00.000Z',
   sections: [
     {
       id: 's1',
@@ -36,8 +39,11 @@ const mockSchema: NativeFormSchema = {
 };
 
 const emptySchema: NativeFormSchema = {
+  id: 'empty-form-id',
   title: 'Empty Form',
-  version: 1,
+  version: '1.0.0',
+  status: 'draft',
+  createdAt: '2026-02-10T00:00:00.000Z',
   sections: [],
   choiceLists: {},
 };

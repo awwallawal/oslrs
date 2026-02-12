@@ -117,7 +117,7 @@ export default function SpikeOfflinePage() {
       const draft: Draft = {
         id: uuidv7(),
         formId: 'spike-form-001',
-        formVersion: 1,
+        formVersion: '1.0.0',
         responses: { q1: formData.q1, q2: formData.q2 },
         questionPosition: 0,
         status: 'in-progress',
