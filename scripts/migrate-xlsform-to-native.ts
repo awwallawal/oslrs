@@ -19,7 +19,7 @@ import { eq, and } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { XlsformParserService } from '../apps/api/src/services/xlsform-parser.service.js';
 import { nativeFormSchema } from '@oslsr/types';
-import { convertToNativeForm, getMigrationSummary } from './lib/xlsform-to-native-converter.js';
+import { convertToNativeForm, getMigrationSummary } from '../apps/api/src/services/xlsform-to-native-converter.js';
 
 // ── Setup ────────────────────────────────────────────────────────────────
 

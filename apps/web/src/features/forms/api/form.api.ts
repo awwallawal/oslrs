@@ -52,3 +52,8 @@ export async function fetchFormForRender(formId: string): Promise<FlattenedForm>
   const result = await apiClient(`/forms/${formId}/render`);
   return result.data;
 }
+
+export async function fetchFormForPreview(formId: string): Promise<FlattenedForm> {
+  const result = await apiClient(`/forms/${formId}/preview`);
+  return result.data;
+}

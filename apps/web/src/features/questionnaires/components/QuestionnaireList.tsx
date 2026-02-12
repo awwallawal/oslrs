@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit, Send, XCircle, AlertTriangle } from 'lucide-react';
+import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit, Send, XCircle, AlertTriangle, Eye } from 'lucide-react';
 import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
 import { SkeletonTable } from '../../../components/skeletons';
@@ -169,6 +169,15 @@ export function QuestionnaireList() {
                             title="Edit in Form Builder"
                           >
                             <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {form.isNative && (
+                          <button
+                            onClick={() => navigate(`/dashboard/super-admin/questionnaires/${form.id}/preview`)}
+                            className="p-1.5 text-neutral-400 hover:text-primary-600 rounded"
+                            title="Preview form"
+                          >
+                            <Eye className="w-4 h-4" />
                           </button>
                         )}
                         {!form.isNative && (

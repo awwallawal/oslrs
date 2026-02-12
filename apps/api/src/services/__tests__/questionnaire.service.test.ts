@@ -458,6 +458,112 @@ describe('QuestionnaireService', () => {
     });
   });
 
+  describe('auto-conversion to native format', () => {
+    it('should store uploaded form with isNative=true and formSchema', async () => {
+      const formId = `native_test_${Date.now()}`;
+      const buffer = createValidOslsrForm(formId, '1.0.0');
+      const file = {
+        buffer,
+        originalname: 'native-test.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: buffer.length,
+      };
+
+      const result = await QuestionnaireService.uploadForm(file, testUserId);
+      testFormIds.push(result.id);
+
+      // Verify the DB record has isNative and formSchema set
+      const form = await QuestionnaireService.getFormById(result.id);
+      expect(form).not.toBeNull();
+      expect(form!.isNative).toBe(true);
+    });
+
+    it('should produce a valid NativeFormSchema with sections from grouped form', async () => {
+      // Create a form WITH begin_group/end_group to verify full conversion
+      const survey: Partial<XlsformSurveyRow>[] = [
+        { type: 'start', name: 'start' },
+        { type: 'end', name: 'end' },
+        { type: 'begin_group', name: 'grp_intro', label: 'Introduction' },
+        { type: 'select_one yes_no', name: 'consent_marketplace', label: 'Consent MP', required: 'yes' },
+        { type: 'select_one yes_no', name: 'consent_enriched', label: 'Consent Enr', required: 'yes' },
+        { type: 'end_group', name: 'end_grp_intro' },
+        { type: 'begin_group', name: 'grp_bio', label: 'Biographical' },
+        { type: 'text', name: 'nin', label: 'NIN', required: 'yes', constraint: "string-length(.) = 11 and regex(., '^[0-9]+$')" },
+        { type: 'text', name: 'phone_number', label: 'Phone', required: 'yes', constraint: "regex(., '^[0][7-9][0-1][0-9]{8}$')" },
+        { type: 'select_one lga_list', name: 'lga_id', label: 'LGA', required: 'yes' },
+        { type: 'select_one experience_list', name: 'years_experience', label: 'Experience', required: 'yes' },
+        { type: 'select_multiple skill_list', name: 'skills_possessed', label: 'Skills', required: 'yes' },
+        { type: 'end_group', name: 'end_grp_bio' },
+      ];
+
+      // Create 33 LGAs
+      const lgaChoices: Partial<XlsformChoiceRow>[] = [];
+      for (let i = 1; i <= 33; i++) {
+        lgaChoices.push({ list_name: 'lga_list', name: `lga_${i}`, label: `LGA ${i}` });
+      }
+
+      // Create 50+ skills
+      const skillChoices: Partial<XlsformChoiceRow>[] = [];
+      for (let i = 1; i <= 50; i++) {
+        skillChoices.push({ list_name: 'skill_list', name: `skill_${i}`, label: `Skill ${i}` });
+      }
+
+      const experienceChoices: Partial<XlsformChoiceRow>[] = [
+        { list_name: 'experience_list', name: 'exp_0_1', label: 'Less than 1 year' },
+        { list_name: 'experience_list', name: 'exp_1_3', label: '1-3 years' },
+        { list_name: 'experience_list', name: 'exp_3_5', label: '3-5 years' },
+        { list_name: 'experience_list', name: 'exp_5_10', label: '5-10 years' },
+        { list_name: 'experience_list', name: 'exp_10_plus', label: 'More than 10 years' },
+      ];
+
+      const empTypeChoices: Partial<XlsformChoiceRow>[] = [
+        { list_name: 'emp_type', name: 'employed', label: 'Employed' },
+        { list_name: 'emp_type', name: 'self_employed', label: 'Self-Employed' },
+        { list_name: 'emp_type', name: 'unemployed', label: 'Unemployed' },
+        { list_name: 'emp_type', name: 'student', label: 'Student' },
+        { list_name: 'emp_type', name: 'retired', label: 'Retired' },
+        { list_name: 'emp_type', name: 'contractor', label: 'Contractor' },
+      ];
+
+      const yesNoChoices: Partial<XlsformChoiceRow>[] = [
+        { list_name: 'yes_no', name: 'yes', label: 'Yes' },
+        { list_name: 'yes_no', name: 'no', label: 'No' },
+      ];
+
+      const formId = `grouped_native_${Date.now()}`;
+      const choices = [...lgaChoices, ...skillChoices, ...experienceChoices, ...empTypeChoices, ...yesNoChoices];
+      const settings = [{ form_id: formId, version: '1.0.0', form_title: 'Grouped Test Form' }];
+      const buffer = createXlsxBuffer(survey, choices, settings);
+
+      const file = {
+        buffer,
+        originalname: 'grouped-native.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: buffer.length,
+      };
+
+      const result = await QuestionnaireService.uploadForm(file, testUserId);
+      testFormIds.push(result.id);
+
+      // Verify native conversion happened correctly
+      const dbRecord = await db.query.questionnaireForms.findFirst({
+        where: eq(questionnaireForms.id, result.id),
+      });
+
+      expect(dbRecord!.isNative).toBe(true);
+      expect(dbRecord!.formSchema).toBeDefined();
+
+      const schema = dbRecord!.formSchema as any;
+      expect(schema.sections).toHaveLength(2);
+      expect(schema.sections[0].title).toBe('Introduction');
+      expect(schema.sections[0].questions).toHaveLength(2);
+      expect(schema.sections[1].title).toBe('Biographical');
+      expect(schema.sections[1].questions).toHaveLength(5);
+      expect(schema.choiceLists).toBeDefined();
+      expect(Object.keys(schema.choiceLists).length).toBeGreaterThanOrEqual(4);
+    });
+  });
+
   describe('generateVersion', () => {
     it('should return requested version if no existing versions', () => {
       const result = QuestionnaireService.generateVersion('2.0.0', []);

@@ -9,7 +9,7 @@ import {
   extractSections,
   convertToNativeForm,
   getMigrationSummary,
-} from '../lib/xlsform-to-native-converter.js';
+} from '../../apps/api/src/services/xlsform-to-native-converter.js';
 
 // ── Type Mapping Tests (1–9) ─────────────────────────────────────────────
 

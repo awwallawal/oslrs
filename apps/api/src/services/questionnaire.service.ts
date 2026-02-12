@@ -9,11 +9,12 @@ import { eq, desc, count } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { AppError } from '@oslsr/utils';
 import { XlsformParserService } from './xlsform-parser.service.js';
+import { convertToNativeForm } from './xlsform-to-native-converter.js';
 import type {
   QuestionnaireFormStatus,
   XlsformValidationResult,
 } from '@oslsr/types';
-import { VALID_STATUS_TRANSITIONS } from '@oslsr/types';
+import { VALID_STATUS_TRANSITIONS, nativeFormSchema } from '@oslsr/types';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 
@@ -119,6 +120,33 @@ export class QuestionnaireService {
       );
     }
 
+    // Convert XLSForm to NativeFormSchema (auto-conversion at upload time)
+    let nativeSchema;
+    try {
+      nativeSchema = convertToNativeForm(formData);
+    } catch (error) {
+      throw new AppError(
+        'XLSFORM_CONVERSION_ERROR',
+        `Failed to convert XLSForm to native format: ${(error as Error).message}`,
+        400
+      );
+    }
+
+    // Validate the converted schema against Zod
+    const zodResult = nativeFormSchema.safeParse(nativeSchema);
+    if (!zodResult.success) {
+      const zodErrors = zodResult.error.issues.map(issue => ({
+        message: `${issue.path.join('.')}: ${issue.message}`,
+        severity: 'error' as const,
+      }));
+      throw new AppError(
+        'XLSFORM_CONVERSION_ERROR',
+        'Converted form schema failed validation',
+        400,
+        { errors: zodErrors, warnings: validation.warnings }
+      );
+    }
+
     // Compute file hash for duplicate detection
     const fileHash = this.computeFileHash(file.buffer);
 
@@ -153,7 +181,7 @@ export class QuestionnaireService {
     const versionId = uuidv7();
 
     await db.transaction(async (tx) => {
-      // Insert form record
+      // Insert form record (auto-converted to native format)
       await tx.insert(questionnaireForms).values({
         id: formId,
         formId: formData.settings.form_id,
@@ -164,6 +192,8 @@ export class QuestionnaireService {
         fileName: file.originalname,
         fileSize: file.size,
         mimeType: file.mimetype,
+        isNative: true,
+        formSchema: nativeSchema,
         validationWarnings: validation.warnings.length > 0
           ? JSON.stringify(validation.warnings)
           : null,

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useFormSchema } from '../hooks/useForms';
+import { useFormSchema, useFormPreview } from '../hooks/useForms';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { QuestionRenderer } from '../components/QuestionRenderer';
 import { ProgressBar } from '../components/ProgressBar';
@@ -68,7 +68,9 @@ function checkRule(
 export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   const { formId } = useParams<{ formId: string }>();
   const navigate = useNavigate();
-  const { data: form, isLoading, error: fetchError } = useFormSchema(formId ?? '');
+  const renderQuery = useFormSchema(mode === 'fill' ? (formId ?? '') : '');
+  const previewQuery = useFormPreview(mode === 'preview' ? (formId ?? '') : '');
+  const { data: form, isLoading, error: fetchError } = mode === 'preview' ? previewQuery : renderQuery;
 
   // currentIndex tracks position in the FULL form.questions array (not the visible subset)
   const [currentIndex, setCurrentIndex] = useState(0);

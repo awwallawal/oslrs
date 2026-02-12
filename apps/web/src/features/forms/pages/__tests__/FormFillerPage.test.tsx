@@ -72,6 +72,7 @@ let mockHookReturn = {
 
 vi.mock('../../hooks/useForms', () => ({
   useFormSchema: () => mockHookReturn,
+  useFormPreview: () => mockHookReturn,
 }));
 
 vi.mock('../../../../components/skeletons', () => ({

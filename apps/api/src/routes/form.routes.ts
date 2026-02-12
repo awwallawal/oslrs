@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { FormController } from '../controllers/form.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { authorize } from '../middleware/rbac.js';
+import { UserRole } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
 const router = Router();
@@ -22,5 +24,8 @@ router.get('/published', FormController.listPublishedForms);
 
 // Get flattened form for one-question-per-screen rendering
 router.get('/:id/render', FormController.getFormForRender);
+
+// Super Admin preview — renders any form regardless of status
+router.get('/:id/preview', authorize(UserRole.SUPER_ADMIN), FormController.previewForm);
 
 export default router;

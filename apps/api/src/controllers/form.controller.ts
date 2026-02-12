@@ -32,4 +32,21 @@ export class FormController {
       next(err);
     }
   }
+
+  /**
+   * GET /api/v1/forms/:id/preview
+   * Super Admin preview — returns flattened form regardless of status.
+   */
+  static async previewForm(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+
+      const schema = await NativeFormService.getFormSchema(id);
+      const flattened = NativeFormService.flattenForRender(schema);
+
+      res.json({ data: flattened });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
