@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { VitePWA } from 'vite-plugin-pwa'; // SPIKE: prep-5
+import { VitePWA } from 'vite-plugin-pwa';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -14,18 +14,16 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // SPIKE: prep-5 — vite-plugin-pwa with injectManifest for custom SW control
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',
-      filename: 'spike-sw.ts',
-      injectRegister: false, // Manual registration in spike route only
-      manifest: false, // Already have public/site.webmanifest
-      devOptions: {
-        enabled: false, // SW disabled in dev — test via build preview
-      },
+      filename: 'sw.ts',
+      injectRegister: 'auto',
+      manifest: false,
+      devOptions: { enabled: false },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        maximumFileSizeToCacheInBytes: 3_000_000,
       },
     }),
   ],

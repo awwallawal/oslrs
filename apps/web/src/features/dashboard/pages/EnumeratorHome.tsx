@@ -4,31 +4,27 @@
  * Story 2.5-5 AC1: Mobile-optimized dashboard with Start Survey CTA,
  * Resume Draft, Daily Progress, Sync Status indicator.
  * Story 3.1: Start Survey navigates to surveys page.
- * Story 2.5-5 AC5: Service worker registration (no-op shell).
+ * Story 3.2 AC3: Persistent storage request + warning banner.
  */
 
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Save, Clock, CheckCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
+import { StorageWarningBanner } from '../../../components/StorageWarningBanner';
+import { usePersistentStorage } from '../../../hooks/usePersistentStorage';
 
 export default function EnumeratorHome({ isLoading = false }: { isLoading?: boolean }) {
   const navigate = useNavigate();
-
-  // AC5: Register service worker (no-op shell)
-  useEffect(() => {
-    try {
-      navigator.serviceWorker?.register('/sw.js').catch(() => {
-        // Service worker registration failed — non-blocking
-      });
-    } catch {
-      // Service workers not supported — non-blocking
-    }
-  }, []);
+  const { showWarning } = usePersistentStorage();
 
   return (
     <div className="p-6">
+      {showWarning && (
+        <div className="mb-4">
+          <StorageWarningBanner />
+        </div>
+      )}
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-brand font-semibold text-neutral-900">
@@ -72,7 +68,7 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
           </div>
 
           {/* Resume Draft Card — AC1 */}
-          <Card>
+          <Card data-testid="dashboard-card">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-100 rounded-lg">
@@ -90,7 +86,7 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
           </Card>
 
           {/* Daily Progress Card — AC1 */}
-          <Card>
+          <Card data-testid="dashboard-card">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-emerald-100 rounded-lg">

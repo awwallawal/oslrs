@@ -20,10 +20,12 @@
  * - Mobile (<768px): Bottom navigation (56px height), hamburger menu
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { SWUpdateBanner } from '../components/SWUpdateBanner';
 import { useAuth } from '../features/auth/context/AuthContext';
+import { useServiceWorker } from '../hooks/useServiceWorker';
 import { getSidebarItems } from '../features/dashboard/config/sidebarConfig';
 import { DashboardHeader } from './components/DashboardHeader';
 import { DashboardSidebar } from './components/DashboardSidebar';
@@ -38,6 +40,7 @@ import {
 } from '../components/ui/sheet';
 import { cn } from '../lib/utils';
 import { LAYOUT } from '../lib/constants';
+import { toast } from 'sonner';
 
 /**
  * Skip to main content link for accessibility (WCAG 2.1 AA requirement)
@@ -75,7 +78,23 @@ function DashboardLoadingSkeleton() {
 
 export function DashboardLayout() {
   const { user, isLoading } = useAuth();
+  const { needRefresh, offlineReady, updateServiceWorker } = useServiceWorker();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const offlineToastShown = useRef(false);
+
+  useEffect(() => {
+    if (offlineReady && !offlineToastShown.current) {
+      offlineToastShown.current = true;
+      try {
+        if (sessionStorage.getItem('oslrs-offline-ready-shown') !== '1') {
+          toast.success('App ready for offline use!');
+          sessionStorage.setItem('oslrs-offline-ready-shown', '1');
+        }
+      } catch {
+        // sessionStorage unavailable
+      }
+    }
+  }, [offlineReady]);
 
   // Get sidebar items for mobile sheet
   const sidebarItems = user ? getSidebarItems(user.role) : [];
@@ -97,9 +116,12 @@ export function DashboardLayout() {
       }}
     >
       <div className="min-h-screen bg-neutral-50">
+        {needRefresh && (
+          <SWUpdateBanner onRefresh={updateServiceWorker} />
+        )}
         <DashboardSkipLink />
 
-        <div className="flex h-screen overflow-hidden">
+        <div className={cn('flex h-screen overflow-hidden', needRefresh && 'pt-12')}>
           {/* Desktop Sidebar */}
           <DashboardSidebar />
 

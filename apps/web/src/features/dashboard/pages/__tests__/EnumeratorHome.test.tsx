@@ -4,7 +4,7 @@
  *
  * Story 2.5-5 AC1: Mobile-optimized dashboard
  * Story 3.1: "Start Survey" navigates to surveys page
- * Story 2.5-5 AC5: Service worker registration
+ * Story 3.2 AC3: Persistent storage request + warning banner
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -14,9 +14,20 @@ import { render, screen, fireEvent } from '@testing-library/react';
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
 
+// Mock usePersistentStorage before importing component
+const mockUsePersistentStorage = vi.fn().mockReturnValue({
+  isPersisted: true,
+  storageQuota: null,
+  isSupported: true,
+  showWarning: false,
+});
+
+vi.mock('../../../../hooks/usePersistentStorage', () => ({
+  usePersistentStorage: () => mockUsePersistentStorage(),
+}));
+
 import EnumeratorHome from '../EnumeratorHome';
 
-const mockRegister = vi.fn().mockResolvedValue(undefined);
 const mockNavigate = vi.fn();
 
 vi.mock('react-router-dom', async () => {
@@ -24,10 +35,10 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-function renderComponent() {
+function renderComponent(props?: { isLoading?: boolean }) {
   return render(
     <MemoryRouter>
-      <EnumeratorHome />
+      <EnumeratorHome {...props} />
     </MemoryRouter>
   );
 }
@@ -35,10 +46,11 @@ function renderComponent() {
 describe('EnumeratorHome', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Mock navigator with serviceWorker support using vi.stubGlobal
-    vi.stubGlobal('navigator', {
-      ...window.navigator,
-      serviceWorker: { register: mockRegister },
+    mockUsePersistentStorage.mockReturnValue({
+      isPersisted: true,
+      storageQuota: null,
+      isSupported: true,
+      showWarning: false,
     });
   });
 
@@ -82,8 +94,8 @@ describe('EnumeratorHome', () => {
 
     it('renders exactly 2 dashboard cards (Resume Draft, Daily Progress)', () => {
       renderComponent();
-      const cardTitles = document.querySelectorAll('[data-slot="card-title"]');
-      expect(cardTitles).toHaveLength(2);
+      const cards = screen.getAllByTestId('dashboard-card');
+      expect(cards).toHaveLength(2);
     });
   });
 
@@ -97,16 +109,11 @@ describe('EnumeratorHome', () => {
     });
 
     it('renders skeleton cards and hides content when loading', () => {
-      render(
-        <MemoryRouter>
-          <EnumeratorHome isLoading />
-        </MemoryRouter>
-      );
+      renderComponent({ isLoading: true });
       const skeletons = screen.getAllByLabelText('Loading card');
       expect(skeletons).toHaveLength(3);
       expect(screen.queryByText('Resume Draft')).not.toBeInTheDocument();
       expect(screen.queryByText('Daily Progress')).not.toBeInTheDocument();
-      // Sync status badge should be hidden during loading
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
@@ -120,29 +127,34 @@ describe('EnumeratorHome', () => {
     });
   });
 
-  describe('AC5: Service Worker Registration', () => {
-    it('registers service worker on mount', () => {
+  describe('Story 3.2 AC3: Persistent Storage', () => {
+    it('does not show storage warning when persisted', () => {
       renderComponent();
-      expect(mockRegister).toHaveBeenCalledWith('/sw.js');
+      expect(
+        screen.queryByText(/Storage not secured/)
+      ).not.toBeInTheDocument();
     });
 
-    it('handles browsers without service worker support gracefully', () => {
-      // Stub navigator without serviceWorker — explicitly exclude it
-      const { serviceWorker: _sw, ...navWithoutSw } = navigator;
-      vi.stubGlobal('navigator', navWithoutSw);
-      // Should render without errors
-      expect(() => renderComponent()).not.toThrow();
-      expect(mockRegister).not.toHaveBeenCalled();
+    it('shows storage warning banner when persistent storage is denied', () => {
+      mockUsePersistentStorage.mockReturnValue({
+        isPersisted: false,
+        storageQuota: null,
+        isSupported: true,
+        showWarning: true,
+      });
+      renderComponent();
+      expect(
+        screen.getByText('Storage not secured. Avoid clearing browser data to prevent data loss.')
+      ).toBeInTheDocument();
     });
   });
 
-  describe('AC1: Icons', () => {
-    it('renders correct icons in dashboard cards', () => {
+  describe('AC1: Visual Elements', () => {
+    it('renders sync status and progress indicators', () => {
       renderComponent();
-      expect(document.querySelector('.lucide-save')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-trending-up')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-circle-check-big')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-clock')).toBeInTheDocument();
+      expect(screen.getByText('Synced')).toBeInTheDocument();
+      expect(screen.getByText('Last synced: just now')).toBeInTheDocument();
+      expect(screen.getByText('/ 25 surveys today')).toBeInTheDocument();
     });
   });
 });

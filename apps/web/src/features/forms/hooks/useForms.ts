@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchPublishedForms, fetchFormForRender } from '../api/form.api';
+import { fetchPublishedForms, fetchFormForRender, fetchFormForPreview, type FlattenedForm } from '../api/form.api';
 import { db } from '../../../lib/offline-db';
 
 export const formKeys = {
   all: ['forms'] as const,
   published: () => [...formKeys.all, 'published'] as const,
   render: (formId: string) => [...formKeys.all, 'render', formId] as const,
+  preview: (formId: string) => [...formKeys.all, 'preview', formId] as const,
 };
 
 export function usePublishedForms() {
@@ -19,7 +20,35 @@ export function usePublishedForms() {
 export function useFormSchema(formId: string) {
   return useQuery({
     queryKey: formKeys.render(formId),
-    queryFn: () => fetchFormForRender(formId),
+    queryFn: async () => {
+      try {
+        const schema = await fetchFormForRender(formId);
+        // Write-through to Dexie for offline fallback
+        await db.formSchemaCache.put({
+          formId,
+          version: schema.version,
+          schema: schema as unknown as Record<string, unknown>,
+          cachedAt: new Date().toISOString(),
+          etag: null,
+        });
+        return schema;
+      } catch (error) {
+        // Offline fallback: try Dexie
+        const cached = await db.formSchemaCache.get(formId);
+        if (cached) {
+          return cached.schema as unknown as FlattenedForm;
+        }
+        throw error;
+      }
+    },
+    enabled: !!formId,
+  });
+}
+
+export function useFormPreview(formId: string) {
+  return useQuery({
+    queryKey: formKeys.preview(formId),
+    queryFn: () => fetchFormForPreview(formId),
     enabled: !!formId,
   });
 }
