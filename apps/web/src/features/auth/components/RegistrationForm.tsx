@@ -197,7 +197,7 @@ export function RegistrationForm() {
             text="continue_with"
             shape="rectangular"
             size="large"
-            width="320"
+            width={320}
             locale="en"
           />
         </div>

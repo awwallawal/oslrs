@@ -28,6 +28,7 @@ const mockUseAuthNotAuthenticated = {
   reAuthAction: null,
   loginStaff: vi.fn(),
   loginPublic: vi.fn(),
+  loginWithGoogle: vi.fn(),
   logout: vi.fn(),
   reAuthenticate: vi.fn(),
   clearError: vi.fn(),

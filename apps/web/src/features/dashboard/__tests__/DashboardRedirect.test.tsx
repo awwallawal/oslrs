@@ -50,6 +50,7 @@ function TestWrapper({ user, isLoading = false, initialEntries = ['/dashboard'] 
     reAuthAction: null,
     loginStaff: vi.fn(),
     loginPublic: vi.fn(),
+      loginWithGoogle: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),

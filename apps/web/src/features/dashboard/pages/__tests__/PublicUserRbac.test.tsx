@@ -43,6 +43,7 @@ function createAuthValue(user: AuthUser) {
     reAuthAction: null,
     loginStaff: vi.fn(),
     loginPublic: vi.fn(),
+    loginWithGoogle: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),
