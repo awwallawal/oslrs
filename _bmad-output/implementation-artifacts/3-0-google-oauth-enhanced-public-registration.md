@@ -1,6 +1,6 @@
 # Story 3.0: Google OAuth & Enhanced Public Registration
 
-Status: review
+Status: done
 
 ## Story
 

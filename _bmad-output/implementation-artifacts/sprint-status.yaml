@@ -117,12 +117,16 @@ development_status:
   prep-7-e2e-golden-path-spec: done  # EP7: Golden path spec complete. 11 stubs + GP-1 active (4 passed, 17 skipped). Code review passed 2026-02-11: 9 findings (1H, 5M, 3L), 8 fixed, 1 acknowledged.
   prep-8-update-story-3.1-acs: done  # EP2: Add admin form preview AC to Story 3.1 (same FormFillerPage in read-only sandbox mode). Code review passed 2026-02-11: 7 findings (2H, 3M, 2L), all 7 fixed.
 
+  # Standalone: Performance & SEO
+  # Added: 2026-02-12 - Cross-cutting perf/SEO work not tied to a specific epic
+  perf-1-lcp-optimization-and-sitemap: done  # Code review passed 2026-02-12: 6 findings (1H, 2M, 3L), all 6 fixed. 978 web tests pass, 0 regressions.
+
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)
   # NOTE: Story 3.1 ACs to be updated per prep-8 (admin form preview from retro)
   epic-3: in-progress  # Started 2026-02-11: First story (3.0) created
-  3-0-google-oauth-enhanced-public-registration: review  # Dev complete 2026-02-11. All 12 tasks done, 280 API + 971 web tests pass. Ready for code review.
-  3-1-native-form-renderer-dashboard: backlog  # REWRITTEN: Was "Seamless Enketo Launch". Now native form renderer. Depends on Epic 2 Stories 2.7-2.10
+  3-0-google-oauth-enhanced-public-registration: done  # Completed 2026-02-12. All 12 tasks done, 280 API + 971 web tests pass. Code review passed.
+  3-1-native-form-renderer-dashboard: in-progress  # Dev started 2026-02-12. 9 tasks, 45 subtasks. Blocks: 3.2, 3.3, 3.5, 3.6
   3-2-pwa-service-worker-offline-assets: backlog  # Updated: Enketo assets → native form assets
   3-3-offline-queue-sync-status-ui: backlog  # Updated: IndexedDB for native forms
   3-4-idempotent-submission-ingestion-bullmq: backlog  # REPURPOSED: Was ODK webhook ingestion. Now native form submission API

@@ -21,6 +21,9 @@ function TrustSection() {
             src="/images/oyo-coat-of-arms.png"
             alt="Oyo State Seal"
             className="h-20 w-auto"
+            loading="lazy"
+            width={80}
+            height={80}
           />
 
           {/* Ministry Logo */}
@@ -28,6 +31,9 @@ function TrustSection() {
             src="/images/oyo-state-logo.svg"
             alt="Ministry of Trade, Investment, Cooperatives & Industry"
             className="h-16 w-auto"
+            loading="lazy"
+            width={64}
+            height={64}
           />
 
           {/* NDPA Compliance Badge */}

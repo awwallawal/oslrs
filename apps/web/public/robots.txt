@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /activate
+Disallow: /verify-email
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /resend-verification
+Disallow: /unauthorized
+Disallow: /spike
+Disallow: /profile-completion
+
+Sitemap: https://oyotradeministry.com.ng/sitemap.xml

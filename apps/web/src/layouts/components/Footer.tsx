@@ -74,6 +74,9 @@ function Footer() {
               src="/images/oyo-state-logo-white.png"
               alt="Oyo State Labour & Skills Registry"
               className="h-10 w-auto"
+              loading="lazy"
+              width={120}
+              height={40}
             />
           </Link>
           <p className="text-neutral-400 text-sm leading-relaxed max-w-md">
@@ -224,6 +227,9 @@ function Footer() {
                   src="/images/oyo-coat-of-arms.png"
                   alt="Oyo State Seal"
                   className="h-8 w-auto opacity-70 hover:opacity-100 transition-opacity"
+                  loading="lazy"
+                  width={32}
+                  height={32}
                 />
               </a>
 

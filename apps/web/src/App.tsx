@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
@@ -9,8 +8,6 @@ import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
 import { PublicLayout, AuthLayout, DashboardLayout } from './layouts';
 import { DashboardRedirect } from './features/dashboard';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 // Lazy load page components for code splitting and loading indicators
 const ActivationPage = lazy(() => import('./features/auth/pages/ActivationPage'));
@@ -67,6 +64,9 @@ const FormBuilderPage = lazy(() => import('./features/questionnaires/pages/FormB
 
 // Lazy load Staff Management page (Story 2.5-3)
 const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManagementPage'));
+
+// Lazy load GoogleOAuthWrapper — scoped to /login and /register routes only (PERF-1)
+const GoogleOAuthWrapper = lazy(() => import('./features/auth/components/GoogleOAuthWrapper'));
 
 // SPIKE: prep-5 — Lazy load offline PoC page (dev-only, not linked from navigation)
 const SpikeOfflinePage = lazy(() => import('./features/spike/SpikeOfflinePage'));
@@ -176,7 +176,6 @@ function App() {
       }}
     >
       <QueryClientProvider client={queryClient}>
-      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Routes>
@@ -409,34 +408,46 @@ function App() {
 
             {/* ============================================
              * AUTH ROUTES - Wrapped in AuthLayout
+             * GoogleOAuthWrapper scoped to /login and /register only (PERF-1)
              * ============================================ */}
             <Route element={<AuthLayout />}>
+              {/* Routes that need Google OAuth SDK */}
               <Route
-                path="login"
                 element={
-                  <PublicOnlyRoute redirectTo="/dashboard">
-                    <Suspense fallback={<AuthLoadingFallback />}>
-                      <LoginPage />
-                    </Suspense>
-                  </PublicOnlyRoute>
+                  <Suspense fallback={<AuthLoadingFallback />}>
+                    <GoogleOAuthWrapper />
+                  </Suspense>
                 }
-              />
+              >
+                <Route
+                  path="login"
+                  element={
+                    <PublicOnlyRoute redirectTo="/dashboard">
+                      <Suspense fallback={<AuthLoadingFallback />}>
+                        <LoginPage />
+                      </Suspense>
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route
+                  path="register"
+                  element={
+                    <PublicOnlyRoute redirectTo="/dashboard">
+                      <Suspense fallback={<AuthLoadingFallback />}>
+                        <RegistrationPage />
+                      </Suspense>
+                    </PublicOnlyRoute>
+                  }
+                />
+              </Route>
+
+              {/* Routes that do NOT need Google OAuth SDK */}
               <Route
                 path="staff/login"
                 element={
                   <PublicOnlyRoute redirectTo="/admin">
                     <Suspense fallback={<AuthLoadingFallback />}>
                       <StaffLoginPage />
-                    </Suspense>
-                  </PublicOnlyRoute>
-                }
-              />
-              <Route
-                path="register"
-                element={
-                  <PublicOnlyRoute redirectTo="/dashboard">
-                    <Suspense fallback={<AuthLoadingFallback />}>
-                      <RegistrationPage />
                     </Suspense>
                   </PublicOnlyRoute>
                 }
@@ -927,7 +938,6 @@ function App() {
           <ReAuthModal />
         </AuthProvider>
       </BrowserRouter>
-      </GoogleOAuthProvider>
       </QueryClientProvider>
 
       {/* Toast notifications - positioned top-right with Oyo State theme */}

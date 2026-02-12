@@ -27,6 +27,8 @@ function Header() {
               src="/images/oyo-coat-of-arms.png"
               alt="Oyo State Labour & Skills Registry"
               className="h-10 w-auto"
+              width={40}
+              height={40}
             />
           </Link>
 

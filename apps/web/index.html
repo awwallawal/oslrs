@@ -16,27 +16,31 @@
 
     <!-- SEO Meta Tags -->
     <meta name="description" content="Oyo State Labour & Skills Registry - Register your skills and connect with employers across Oyo State" />
-    <link rel="canonical" href="https://oslsr.oyostate.gov.ng" />
+    <link rel="canonical" href="https://oyotradeministry.com.ng" />
     <meta name="robots" content="index, follow" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://oslsr.oyostate.gov.ng" />
+    <meta property="og:url" content="https://oyotradeministry.com.ng" />
     <meta property="og:title" content="OSLSR - Oyo State Labour & Skills Registry" />
     <meta property="og:description" content="Register your skills and connect with employers across Oyo State. Join thousands of residents in building a comprehensive workforce database." />
-    <meta property="og:image" content="https://oslsr.oyostate.gov.ng/og-image.png" />
+    <meta property="og:image" content="https://oyotradeministry.com.ng/og-image.png" />
     <meta property="og:locale" content="en_NG" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="OSLSR - Oyo State Labour & Skills Registry" />
     <meta name="twitter:description" content="Register your skills and connect with employers across Oyo State." />
-    <meta name="twitter:image" content="https://oslsr.oyostate.gov.ng/og-image.png" />
+    <meta name="twitter:image" content="https://oyotradeministry.com.ng/og-image.png" />
 
-    <!-- Google Fonts - Poppins (brand), Inter (UI), JetBrains Mono (code) -->
+    <!-- Google Fonts — split for LCP optimization (PERF-1) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Inter (primary UI font) — loaded eagerly, critical for LCP -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Poppins (brand headings) + JetBrains Mono (code) — deferred, not needed for initial paint -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
   </head>
   <body>
     <div id="root"></div>
