@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Loader2, CheckCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { GoogleLogin } from '@react-oauth/google';
 import { HCaptcha } from './HCaptcha';
 import { PasswordRequirements } from './PasswordRequirements';
 import { publicRegister, AuthApiError } from '../api/auth.api';
+import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 
 // Registration form validation schema
@@ -63,6 +65,12 @@ export function RegistrationForm() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
 
+  // Google OAuth hook (Story 3.0)
+  const { handleGoogleSuccess, isLoading: isGoogleLoading, error: googleError } = useGoogleAuth({
+    redirectTo: '/dashboard',
+    onError: (message) => setApiError(message),
+  });
+
   const {
     register,
     handleSubmit,
@@ -74,6 +82,13 @@ export function RegistrationForm() {
   });
 
   const password = watch('password', '');
+  const ninValue = watch('nin', '');
+
+  // Real-time NIN checksum validation (matches PersonalInfoStep pattern)
+  const ninStatus = useMemo(() => {
+    if (!ninValue || ninValue.length < 11) return 'incomplete';
+    return modulus11Check(ninValue) ? 'valid' : 'invalid';
+  }, [ninValue]);
 
   const onSubmit = async (data: RegistrationFormData) => {
     if (!captchaToken) {
@@ -174,13 +189,44 @@ export function RegistrationForm() {
         <p className="text-neutral-600">Register for the Oyo State Labour & Skills Registry</p>
       </div>
 
+      {/* Google Sign-In (Primary CTA - Story 3.0) */}
+      <div className="mb-6">
+        <div className="flex justify-center">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setApiError('Google sign-in failed. Please try again or use email registration.')}
+            text="continue_with"
+            shape="rectangular"
+            size="large"
+            width="320"
+            locale="en"
+          />
+        </div>
+        {isGoogleLoading && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm text-neutral-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Signing in with Google...
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-neutral-300" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-white px-4 text-neutral-500">Or register with email</span>
+        </div>
+      </div>
+
       {/* Error Alert */}
-      {apiError && (
+      {(apiError || googleError) && (
         <div className="mb-6 p-4 bg-error-100 border border-error-600/20 rounded-lg flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-error-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-error-600 font-medium">Registration Failed</p>
-            <p className="text-error-600/80 text-sm">{apiError}</p>
+            <p className="text-error-600/80 text-sm">{apiError || googleError}</p>
           </div>
         </div>
       )}

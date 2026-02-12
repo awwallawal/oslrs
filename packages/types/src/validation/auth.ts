@@ -85,3 +85,10 @@ export type ReAuthRequestInput = z.infer<typeof reAuthRequestSchema>;
 export const refreshTokenRequestSchema = z.object({});
 
 export type RefreshTokenRequestInput = z.infer<typeof refreshTokenRequestSchema>;
+
+// Google OAuth verification schema (Story 3.0)
+export const googleAuthRequestSchema = z.object({
+  idToken: z.string().min(1, 'Google ID token is required'),
+});
+
+export type GoogleAuthRequestInput = z.infer<typeof googleAuthRequestSchema>;

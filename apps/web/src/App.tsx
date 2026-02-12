@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
@@ -8,6 +9,8 @@ import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
 import { PublicLayout, AuthLayout, DashboardLayout } from './layouts';
 import { DashboardRedirect } from './features/dashboard';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 // Lazy load page components for code splitting and loading indicators
 const ActivationPage = lazy(() => import('./features/auth/pages/ActivationPage'));
@@ -173,6 +176,7 @@ function App() {
       }}
     >
       <QueryClientProvider client={queryClient}>
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Routes>
@@ -923,6 +927,7 @@ function App() {
           <ReAuthModal />
         </AuthProvider>
       </BrowserRouter>
+      </GoogleOAuthProvider>
       </QueryClientProvider>
 
       {/* Toast notifications - positioned top-right with Oyo State theme */}

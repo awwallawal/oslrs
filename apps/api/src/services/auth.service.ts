@@ -406,6 +406,23 @@ export class AuthService {
       );
     }
 
+    // Check if user registered via Google OAuth BEFORE password validation (Story 3.0)
+    // Google users have null passwordHash, so this must come first to return the correct error
+    if (user.authProvider === 'google') {
+      logger.warn({
+        event: 'auth.login_failed',
+        reason: 'google_only_account',
+        userId: user.id,
+        ipAddress,
+        loginType: 'public',
+      });
+      throw new AppError(
+        'AUTH_GOOGLE_ONLY',
+        "This account uses Google Sign-In. Please use 'Continue with Google' to access your account.",
+        400
+      );
+    }
+
     if (!user.passwordHash) {
       throw genericError;
     }

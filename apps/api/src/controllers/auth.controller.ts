@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service.js';
+import { GoogleAuthService } from '../services/google-auth.service.js';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { RegistrationService } from '../services/registration.service.js';
 import { EmailService } from '../services/email.service.js';
@@ -13,6 +14,7 @@ import {
   publicRegistrationRequestSchema,
   resendVerificationRequestSchema,
   verifyOtpRequestSchema,
+  googleAuthRequestSchema,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -357,6 +359,51 @@ export class AuthController {
       res.status(200).json({
         data: {
           verified: result.verified,
+          expiresIn: result.expiresIn,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/google/verify
+   * Verify Google ID token, register or login user (Story 3.0)
+   */
+  static async googleVerify(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = googleAuthRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
+      }
+
+      const { idToken } = validation.data;
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.get('user-agent');
+
+      // Verify the Google ID token
+      const googlePayload = await GoogleAuthService.verifyGoogleToken(idToken);
+
+      // Register or login
+      const result = await GoogleAuthService.registerOrLoginWithGoogle(
+        googlePayload,
+        ipAddress,
+        userAgent
+      );
+
+      // Set refresh token as httpOnly cookie (30-day for Google users)
+      const refreshCookieMaxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+      res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: refreshCookieMaxAge,
+      });
+
+      res.status(200).json({
+        data: {
+          accessToken: result.accessToken,
+          user: result.user,
           expiresIn: result.expiresIn,
         },
       });

@@ -5,6 +5,7 @@ import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
 import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit } from '../middleware/registration-rate-limit.js';
+import { googleAuthRateLimit } from '../middleware/google-auth-rate-limit.js';
 
 const router = Router();
 
@@ -30,6 +31,12 @@ router.post('/public/login',
   loginRateLimit,
   verifyCaptcha,
   AuthController.publicLogin
+);
+
+// Google OAuth verification - rate limited, no CAPTCHA needed (Story 3.0)
+router.post('/google/verify',
+  googleAuthRateLimit,
+  AuthController.googleVerify
 );
 
 // Public user registration - rate limited + CAPTCHA protected (Story 1.8)

@@ -25,6 +25,17 @@ vi.mock('../../api/auth.api', () => ({
   },
 }));
 
+// Mock Google OAuth
+vi.mock('@react-oauth/google', () => ({
+  GoogleLogin: () => <div data-testid="google-login-mock">Google Sign-In</div>,
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+// Mock Google auth API
+vi.mock('../../api/google-auth.api', () => ({
+  verifyGoogleToken: vi.fn(),
+}));
+
 // Mock HCaptcha component
 vi.mock('../HCaptcha', () => ({
   HCaptcha: ({ onVerify }: { onVerify: (token: string) => void }) => (
@@ -170,6 +181,44 @@ describe('LoginForm', () => {
         const submitButton = screen.getByRole('button', { name: /sign in/i });
         expect(submitButton).not.toBeDisabled();
       });
+    });
+  });
+
+  describe('Google OAuth Integration', () => {
+    it('renders Google Sign-In button for public login', async () => {
+      renderWithProviders(<LoginForm type="public" />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('google-login-mock')).toBeInTheDocument();
+      });
+    });
+
+    it('does NOT render Google Sign-In button for staff login', async () => {
+      renderWithProviders(<LoginForm type="staff" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('google-login-mock')).not.toBeInTheDocument();
+    });
+
+    it('shows "Or sign in with email" divider for public login', async () => {
+      renderWithProviders(<LoginForm type="public" />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/or sign in with email/i)).toBeInTheDocument();
+      });
+    });
+
+    it('does NOT show divider for staff login', async () => {
+      renderWithProviders(<LoginForm type="staff" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText(/or sign in with email/i)).not.toBeInTheDocument();
     });
   });
 

@@ -107,7 +107,7 @@ development_status:
   # Prep Phase: Epic 3 Readiness (from Combined Epic 2+2.5 Retrospective 2026-02-10)
   # Source: epic-2-2.5-retrospective-2026-02-10.md Action Items
   # Must complete before Epic 3 begins. Incorporates tech debt (T1-T3) and prep tasks (EP1-EP7).
-  prep-epic-3: in-progress
+  prep-epic-3: done  # All 8 prep tasks completed 2026-02-11
   prep-1-odk-cleanup-story-2.5-2: done  # EP1 + T1: Remove dead ODK components from 2.5-2, wire Form Builder links
   prep-2-shared-role-constants: done  # T3: Create shared role constants in packages/types. Code review passed 2026-02-11: 8 findings (1H, 3M, 4L), 7 fixed, 1 accepted. 957 web tests pass, 0 regressions.
   prep-3-db-migration-workflow-fix: done  # T2 + EP5: Fix db:push interactive prompt, write migration workflow guide. Code review passed 2026-02-11: 8 findings (1H, 4M, 3L), all 8 resolved. Live UAT verified against PostgreSQL. 1,354 tests pass, 0 regressions.
@@ -120,8 +120,8 @@ development_status:
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)
   # NOTE: Story 3.1 ACs to be updated per prep-8 (admin form preview from retro)
-  epic-3: backlog
-  3-0-google-oauth-enhanced-public-registration: backlog  # ADR-015: Blocks Story 3.5
+  epic-3: in-progress  # Started 2026-02-11: First story (3.0) created
+  3-0-google-oauth-enhanced-public-registration: review  # Dev complete 2026-02-11. All 12 tasks done, 280 API + 971 web tests pass. Ready for code review.
   3-1-native-form-renderer-dashboard: backlog  # REWRITTEN: Was "Seamless Enketo Launch". Now native form renderer. Depends on Epic 2 Stories 2.7-2.10
   3-2-pwa-service-worker-offline-assets: backlog  # Updated: Enketo assets → native form assets
   3-3-offline-queue-sync-status-ui: backlog  # Updated: IndexedDB for native forms

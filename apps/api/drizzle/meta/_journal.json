@@ -8,6 +8,13 @@
       "when": 1770799318941,
       "tag": "0000_solid_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1770846544289,
+      "tag": "0001_greedy_wasp",
+      "breakpoints": true
     }
   ]
 }

@@ -5,12 +5,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import RegistrationPage from '../RegistrationPage';
+import { AuthProvider } from '../../context/AuthContext';
 
 expect.extend(matchers);
 
-// Mock the auth API
+// Mock the auth API (needs all methods for AuthProvider + RegistrationForm)
 vi.mock('../../api/auth.api', () => ({
   publicRegister: vi.fn(),
+  staffLogin: vi.fn(),
+  publicLogin: vi.fn(),
+  logout: vi.fn(),
+  refreshToken: vi.fn().mockRejectedValue(new Error('No session')),
+  getCurrentUser: vi.fn(),
   AuthApiError: class AuthApiError extends Error {
     code: string;
     constructor(message: string, code: string) {
@@ -18,6 +24,17 @@ vi.mock('../../api/auth.api', () => ({
       this.code = code;
     }
   },
+}));
+
+// Mock Google OAuth
+vi.mock('@react-oauth/google', () => ({
+  GoogleLogin: () => <div data-testid="google-login-mock">Google Sign-In</div>,
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+// Mock Google auth API
+vi.mock('../../api/google-auth.api', () => ({
+  verifyGoogleToken: vi.fn(),
 }));
 
 // Mock HCaptcha component
@@ -50,7 +67,9 @@ const mockAuthApi = authApi as unknown as {
 function renderWithRouter(ui: React.ReactElement) {
   return render(
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      {ui}
+      <AuthProvider>
+        {ui}
+      </AuthProvider>
     </BrowserRouter>
   );
 }
@@ -241,6 +260,39 @@ describe('RegistrationPage', () => {
       expect(ninInput).toHaveValue('12345678901');
       expect(passwordInput).toHaveValue('Password123!');
       expect(confirmPasswordInput).toHaveValue('Password123!');
+    });
+  });
+
+  describe('Google OAuth Integration', () => {
+    it('renders Google Sign-In button', async () => {
+      renderWithRouter(<RegistrationPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('google-login-mock')).toBeInTheDocument();
+      });
+    });
+
+    it('shows "Or register with email" divider', async () => {
+      renderWithRouter(<RegistrationPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/or register with email/i)).toBeInTheDocument();
+      });
+    });
+
+    it('renders Google button above email form', async () => {
+      renderWithRouter(<RegistrationPage />);
+
+      await waitFor(() => {
+        const googleButton = screen.getByTestId('google-login-mock');
+        const emailInput = screen.getByLabelText(/email address/i);
+
+        // Google button should appear before email input in DOM order
+        const allElements = document.querySelectorAll('[data-testid="google-login-mock"], [id="email"]');
+        const positions = Array.from(allElements);
+        expect(positions[0]).toBe(googleButton);
+        expect(positions[1]).toBe(emailInput);
+      });
     });
   });
 

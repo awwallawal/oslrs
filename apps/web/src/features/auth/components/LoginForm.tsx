@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 import { HCaptcha } from './HCaptcha';
 import { useLogin } from '../hooks/useLogin';
+import { useGoogleAuth } from '../hooks/useGoogleAuth';
 
 interface LoginFormProps {
   type: 'staff' | 'public';
@@ -18,6 +20,13 @@ interface LoginFormProps {
 export function LoginForm({ type, redirectTo }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [captchaReset, setCaptchaReset] = useState(false);
+  const [googleApiError, setGoogleApiError] = useState<string | null>(null);
+
+  // Google OAuth (Story 3.0) - only shown for public login
+  const { handleGoogleSuccess, isLoading: isGoogleLoading } = useGoogleAuth({
+    redirectTo: redirectTo || '/dashboard',
+    onError: (message) => setGoogleApiError(message),
+  });
 
   const {
     formData,
@@ -69,13 +78,48 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
         <p className="text-neutral-600">{subtitle}</p>
       </div>
 
+      {/* Google Sign-In (Primary CTA - Story 3.0) - public login only */}
+      {!isStaff && (
+        <>
+          <div className="mb-6">
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setGoogleApiError('Google sign-in failed. Please try again or use email login.')}
+                text="continue_with"
+                shape="rectangular"
+                size="large"
+                width="320"
+                locale="en"
+              />
+            </div>
+            {isGoogleLoading && (
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-neutral-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Signing in with Google...
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-neutral-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-white px-4 text-neutral-500">Or sign in with email</span>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Error Alert */}
-      {apiError && (
+      {(apiError || googleApiError) && (
         <div className="mb-6 p-4 bg-error-100 border border-error-600/20 rounded-lg flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-error-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-error-600 font-medium">Login Failed</p>
-            <p className="text-error-600/80 text-sm">{apiError}</p>
+            <p className="text-error-600/80 text-sm">{apiError || googleApiError}</p>
             {isRateLimited && rateLimitReset && (
               <p className="text-error-600/80 text-sm mt-1">
                 Please try again in {formatRateLimitTime(rateLimitReset)}.

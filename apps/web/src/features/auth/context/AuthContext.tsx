@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import type { AuthUser, LoginRequest, UserRole } from '@oslsr/types';
+import type { AuthUser, LoginRequest, LoginResponse, UserRole } from '@oslsr/types';
 import * as authApi from '../api/auth.api';
 import { AuthApiError } from '../api/auth.api';
 
@@ -111,6 +111,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 interface AuthContextValue extends AuthState {
   loginStaff: (request: LoginRequest) => Promise<void>;
   loginPublic: (request: LoginRequest) => Promise<void>;
+  loginWithGoogle: (response: LoginResponse) => void;
   logout: () => Promise<void>;
   reAuthenticate: (password: string) => Promise<boolean>;
   clearError: () => void;
@@ -292,6 +293,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [saveToken, updateActivity, scheduleTokenRefresh]);
 
+  // Google OAuth login (Story 3.0) — called after backend verification is complete
+  const loginWithGoogle = useCallback((response: LoginResponse) => {
+    saveToken(response.accessToken);
+    updateActivity();
+
+    dispatch({
+      type: 'AUTH_SUCCESS',
+      payload: {
+        user: response.user,
+        accessToken: response.accessToken,
+        rememberMe: true, // Google users always get 30-day sessions
+      },
+    });
+
+    scheduleTokenRefresh(response.expiresIn);
+  }, [saveToken, updateActivity, scheduleTokenRefresh]);
+
   // Logout
   const logout = useCallback(async () => {
     try {
@@ -413,6 +431,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ...state,
     loginStaff,
     loginPublic,
+    loginWithGoogle,
     logout,
     reAuthenticate,
     clearError,

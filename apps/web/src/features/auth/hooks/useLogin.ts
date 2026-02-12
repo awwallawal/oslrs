@@ -149,6 +149,12 @@ export function useLogin({ type, redirectTo = '/' }: UseLoginOptions): UseLoginR
             setApiError('Your account has been suspended. Please contact support.');
             break;
 
+          case 'AUTH_GOOGLE_ONLY':
+            setApiError("This account uses Google Sign-In. Please use the 'Continue with Google' button above.");
+            setFormData(prev => ({ ...prev, password: '' }));
+            resetCaptcha();
+            break;
+
           default:
             setApiError(error.message);
         }

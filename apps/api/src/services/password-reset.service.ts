@@ -138,6 +138,13 @@ export class PasswordResetService {
       return { token: null, userId: null };
     }
 
+    // Google OAuth users cannot reset password — return null to preserve
+    // anti-enumeration (same response as non-existent email). Story 3.0, AC7.
+    // The frontend shows a generic "check your email" message regardless.
+    if (user.authProvider === 'google') {
+      return { token: null, userId: null };
+    }
+
     // Check if user is in a valid state for password reset
     if (user.status === 'suspended' || user.status === 'deactivated') {
       // Still return null to prevent enumeration

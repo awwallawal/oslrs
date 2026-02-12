@@ -25,6 +25,17 @@ vi.mock('../../api/auth.api', () => ({
   },
 }));
 
+// Mock Google OAuth
+vi.mock('@react-oauth/google', () => ({
+  GoogleLogin: () => <div data-testid="google-login-mock">Google Sign-In</div>,
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+// Mock Google auth API
+vi.mock('../../api/google-auth.api', () => ({
+  verifyGoogleToken: vi.fn(),
+}));
+
 // Mock HCaptcha component - needs to match the import path from LoginForm
 vi.mock('../../components/HCaptcha', () => ({
   HCaptcha: ({ onVerify }: { onVerify: (token: string) => void }) => (

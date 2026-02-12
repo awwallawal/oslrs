@@ -1,5 +1,8 @@
 import { UserRole } from './constants.js';
 
+// Auth provider types (Story 3.0)
+export type AuthProvider = 'email' | 'google';
+
 // JWT Payload structure
 export interface JwtPayload {
   sub: string;        // userId (UUIDv7)
@@ -44,6 +47,7 @@ export interface AuthUser {
   role: UserRole;
   lgaId?: string;
   status: string;
+  authProvider?: AuthProvider;
 }
 
 // Token refresh
@@ -102,6 +106,11 @@ export interface SessionInfo {
   absoluteExpiresAt: string; // ISO timestamp (24h or 30d)
 }
 
+// Google OAuth request type (Story 3.0)
+export interface GoogleAuthRequest {
+  idToken: string;
+}
+
 // Auth error codes
 export type AuthErrorCode =
   | 'AUTH_INVALID_CREDENTIALS'
@@ -116,4 +125,8 @@ export type AuthErrorCode =
   | 'AUTH_ACCOUNT_LOCKED'
   | 'AUTH_ACCOUNT_SUSPENDED'
   | 'AUTH_INVALID_TOKEN'
-  | 'AUTH_REQUIRED';
+  | 'AUTH_REQUIRED'
+  | 'AUTH_GOOGLE_TOKEN_INVALID'
+  | 'AUTH_GOOGLE_ONLY'
+  | 'AUTH_EMAIL_ONLY'
+  | 'AUTH_PROVIDER_CONFLICT';

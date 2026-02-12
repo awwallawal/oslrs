@@ -27,6 +27,11 @@ export const users = pgTable('users', {
   invitationToken: text('invitation_token').unique(),
   invitedAt: timestamp('invited_at', { withTimezone: true }),
 
+  // OAuth columns (Story 3.0)
+  authProvider: text('auth_provider').notNull().default('email'), // 'email' | 'google'
+  googleId: text('google_id').unique(),
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+
   // Email verification columns (Story 1.8)
   emailVerificationToken: text('email_verification_token').unique(),
   emailVerificationExpiresAt: timestamp('email_verification_expires_at', { withTimezone: true }),
