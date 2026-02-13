@@ -152,7 +152,84 @@ describe('useDraftPersistence', () => {
         id: 'existing-draft-id',
         formId: 'form-1',
         status: 'pending',
+        payload: expect.objectContaining({
+          responses: { name: 'Test', age: 30 },
+          formVersion: '1.0.0',
+          submittedAt: expect.any(String),
+        }),
       })
     );
+  });
+
+  it('includes GPS coordinates in enriched payload when present', async () => {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'draft-gps',
+      formId: 'form-1',
+      responses: { q1: 'answer' },
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '2.0.0',
+        formData: { q1: 'answer', gps_latitude: 7.3775, gps_longitude: 3.947 },
+        currentIndex: 1,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          responses: { q1: 'answer', gps_latitude: 7.3775, gps_longitude: 3.947 },
+          formVersion: '2.0.0',
+          submittedAt: expect.any(String),
+          gpsLatitude: 7.3775,
+          gpsLongitude: 3.947,
+        }),
+      })
+    );
+  });
+
+  it('omits GPS from enriched payload when not present in form data', async () => {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'draft-no-gps',
+      formId: 'form-1',
+      responses: { q1: 'answer' },
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { q1: 'answer' },
+        currentIndex: 1,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    const addedItem = mockSubmissionQueueAdd.mock.calls[0][0];
+    expect(addedItem.payload).not.toHaveProperty('gpsLatitude');
+    expect(addedItem.payload).not.toHaveProperty('gpsLongitude');
   });
 });

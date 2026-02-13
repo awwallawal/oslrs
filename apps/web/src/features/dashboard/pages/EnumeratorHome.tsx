@@ -5,24 +5,42 @@
  * Resume Draft, Daily Progress, Sync Status indicator.
  * Story 3.1: Start Survey navigates to surveys page.
  * Story 3.2 AC3: Persistent storage request + warning banner.
+ * Story 3.3: Dynamic sync status badge + pending sync banner.
  */
 
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Save, Clock, CheckCircle } from 'lucide-react';
+import { TrendingUp, Save } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { StorageWarningBanner } from '../../../components/StorageWarningBanner';
+import { SyncStatusBadge } from '../../../components/SyncStatusBadge';
+import { PendingSyncBanner } from '../../../components/PendingSyncBanner';
 import { usePersistentStorage } from '../../../hooks/usePersistentStorage';
+import { useSyncStatus } from '../../forms/hooks/useSyncStatus';
+import { syncManager } from '../../../services/sync-manager';
 
 export default function EnumeratorHome({ isLoading = false }: { isLoading?: boolean }) {
   const navigate = useNavigate();
   const { showWarning } = usePersistentStorage();
+  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
 
   return (
     <div className="p-6">
       {showWarning && (
         <div className="mb-4">
           <StorageWarningBanner />
+        </div>
+      )}
+      {/* Pending Sync Banner — Story 3.3 AC2, AC8 */}
+      {(pendingCount > 0 || failedCount > 0) && (
+        <div className="mb-4">
+          <PendingSyncBanner
+            pendingCount={pendingCount}
+            failedCount={failedCount}
+            onSyncNow={() => syncManager.syncNow()}
+            onRetryFailed={() => syncManager.retryFailed()}
+            isSyncing={syncingCount > 0}
+          />
         </div>
       )}
       {/* Page Header */}
@@ -35,17 +53,10 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
         </p>
       </div>
 
-      {/* Sync Status Badge — AC1 (header area) */}
+      {/* Sync Status Badge — Story 3.3 AC1, AC7 (header area, hidden when empty) */}
       {!isLoading && (
-        <div className="mb-4 flex items-center gap-2" role="status" aria-live="polite">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-600 rounded-full text-sm font-medium">
-            <CheckCircle className="w-4 h-4" />
-            <span>Synced</span>
-          </div>
-          <span className="text-xs text-neutral-400 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            Last synced: just now
-          </span>
+        <div className="mb-4">
+          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
         </div>
       )}
 

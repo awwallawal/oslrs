@@ -128,11 +128,24 @@ export function useDraftPersistence({
       updatedAt: now,
     });
 
-    // Add to submission queue
+    // Add to submission queue with enriched payload
+    const enrichedPayload: Record<string, unknown> = {
+      responses: formData,
+      formVersion,
+      submittedAt: now,
+    };
+    // Include GPS if available in form data
+    if (formData.gps_latitude != null) {
+      enrichedPayload.gpsLatitude = formData.gps_latitude;
+    }
+    if (formData.gps_longitude != null) {
+      enrichedPayload.gpsLongitude = formData.gps_longitude;
+    }
+
     const queueItem: SubmissionQueueItem = {
       id: draftIdRef.current,
       formId,
-      payload: formData,
+      payload: enrichedPayload,
       status: 'pending',
       retryCount: 0,
       lastAttempt: null,
@@ -140,7 +153,7 @@ export function useDraftPersistence({
       error: null,
     };
     await db.submissionQueue.add(queueItem);
-  }, [formId, formData, enabled]);
+  }, [formId, formVersion, formData, enabled]);
 
   return {
     draftId,

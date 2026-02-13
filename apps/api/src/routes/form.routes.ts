@@ -28,4 +28,7 @@ router.get('/:id/render', FormController.getFormForRender);
 // Super Admin preview — renders any form regardless of status
 router.get('/:id/preview', authorize(UserRole.SUPER_ADMIN), FormController.previewForm);
 
+// Submit a completed form (any authenticated user)
+router.post('/submissions', FormController.submitForm);
+
 export default router;

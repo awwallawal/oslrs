@@ -1,0 +1,71 @@
+// @vitest-environment jsdom
+import * as matchers from '@testing-library/jest-dom/matchers';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+
+expect.extend(matchers);
+
+import { SyncStatusBadge } from '../SyncStatusBadge';
+
+describe('SyncStatusBadge', () => {
+  it('renders "Synced" state with correct data-state', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} />);
+
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByTestId('sync-badge')).toHaveAttribute('data-state', 'synced');
+  });
+
+  it('renders "Syncing" state with correct data-state', () => {
+    render(<SyncStatusBadge status="syncing" pendingCount={3} failedCount={0} />);
+
+    expect(screen.getByText('Syncing')).toBeInTheDocument();
+    expect(screen.getByTestId('sync-badge')).toHaveAttribute('data-state', 'syncing');
+  });
+
+  it('renders "Attention" state with correct data-state', () => {
+    render(<SyncStatusBadge status="attention" pendingCount={0} failedCount={2} />);
+
+    expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByTestId('sync-badge')).toHaveAttribute('data-state', 'attention');
+  });
+
+  it('renders "Offline" state with correct data-state', () => {
+    render(<SyncStatusBadge status="offline" pendingCount={0} failedCount={0} />);
+
+    expect(screen.getByText('Offline')).toBeInTheDocument();
+    expect(screen.getByTestId('sync-badge')).toHaveAttribute('data-state', 'offline');
+  });
+
+  it('renders null for "empty" state (badge hidden)', () => {
+    const { container } = render(<SyncStatusBadge status="empty" pendingCount={0} failedCount={0} />);
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('has role="status" and aria-live="polite" for accessibility', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} />);
+
+    const badge = screen.getByRole('status');
+    expect(badge).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('shows pending count when syncing and count > 0', () => {
+    render(<SyncStatusBadge status="syncing" pendingCount={5} failedCount={0} />);
+
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('shows failed count when attention and failedCount > 0', () => {
+    render(<SyncStatusBadge status="attention" pendingCount={0} failedCount={3} />);
+
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('does not show count badge when synced', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} />);
+
+    expect(screen.queryByTestId('pending-count')).not.toBeInTheDocument();
+  });
+});

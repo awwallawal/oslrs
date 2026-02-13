@@ -5,6 +5,7 @@
  * Story 2.5-5 AC1: Mobile-optimized dashboard
  * Story 3.1: "Start Survey" navigates to surveys page
  * Story 3.2 AC3: Persistent storage request + warning banner
+ * Story 3.3: Dynamic sync status badge + pending sync banner
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -24,6 +25,28 @@ const mockUsePersistentStorage = vi.fn().mockReturnValue({
 
 vi.mock('../../../../hooks/usePersistentStorage', () => ({
   usePersistentStorage: () => mockUsePersistentStorage(),
+}));
+
+// Mock useSyncStatus
+const mockUseSyncStatus = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    status: 'synced',
+    pendingCount: 0,
+    failedCount: 0,
+    syncingCount: 0,
+    totalCount: 2,
+  }),
+);
+
+vi.mock('../../../forms/hooks/useSyncStatus', () => ({
+  useSyncStatus: mockUseSyncStatus,
+}));
+
+// Mock syncManager
+const mockSyncNow = vi.hoisted(() => vi.fn());
+const mockRetryFailed = vi.hoisted(() => vi.fn());
+vi.mock('../../../../services/sync-manager', () => ({
+  syncManager: { syncNow: mockSyncNow, retryFailed: mockRetryFailed },
 }));
 
 import EnumeratorHome from '../EnumeratorHome';
@@ -51,6 +74,13 @@ describe('EnumeratorHome', () => {
       storageQuota: null,
       isSupported: true,
       showWarning: false,
+    });
+    mockUseSyncStatus.mockReturnValue({
+      status: 'synced',
+      pendingCount: 0,
+      failedCount: 0,
+      syncingCount: 0,
+      totalCount: 2,
     });
   });
 
@@ -84,12 +114,11 @@ describe('EnumeratorHome', () => {
       expect(screen.getByText('/ 25 surveys today')).toBeInTheDocument();
     });
 
-    it('renders Sync Status badge with green Synced state and status role', () => {
+    it('renders Sync Status badge with Synced state and status role', () => {
       renderComponent();
       const statusBadge = screen.getByRole('status');
       expect(statusBadge).toBeInTheDocument();
       expect(screen.getByText('Synced')).toBeInTheDocument();
-      expect(screen.getByText('Last synced: just now')).toBeInTheDocument();
     });
 
     it('renders exactly 2 dashboard cards (Resume Draft, Daily Progress)', () => {
@@ -149,12 +178,114 @@ describe('EnumeratorHome', () => {
     });
   });
 
-  describe('AC1: Visual Elements', () => {
-    it('renders sync status and progress indicators', () => {
+  describe('Story 3.3: Dynamic Sync Status', () => {
+    it('shows Synced badge when all synced', () => {
       renderComponent();
       expect(screen.getByText('Synced')).toBeInTheDocument();
-      expect(screen.getByText('Last synced: just now')).toBeInTheDocument();
-      expect(screen.getByText('/ 25 surveys today')).toBeInTheDocument();
+    });
+
+    it('shows Syncing badge when items are syncing', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'syncing',
+        pendingCount: 2,
+        failedCount: 0,
+        syncingCount: 1,
+        totalCount: 3,
+      });
+      renderComponent();
+      expect(screen.getByText('Syncing')).toBeInTheDocument();
+    });
+
+    it('shows Offline badge when offline', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'offline',
+        pendingCount: 0,
+        failedCount: 0,
+        syncingCount: 0,
+        totalCount: 1,
+      });
+      renderComponent();
+      expect(screen.getByText('Offline')).toBeInTheDocument();
+    });
+
+    it('shows Attention badge when failed items exist', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'attention',
+        pendingCount: 0,
+        failedCount: 2,
+        syncingCount: 0,
+        totalCount: 3,
+      });
+      renderComponent();
+      expect(screen.getByText('Attention')).toBeInTheDocument();
+    });
+
+    it('hides badge when status is empty (no submissions)', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'empty',
+        pendingCount: 0,
+        failedCount: 0,
+        syncingCount: 0,
+        totalCount: 0,
+      });
+      renderComponent();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('shows PendingSyncBanner when pendingCount > 0', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'syncing',
+        pendingCount: 3,
+        failedCount: 0,
+        syncingCount: 1,
+        totalCount: 4,
+      });
+      renderComponent();
+      expect(screen.getByText(/3 pending survey/)).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    it('shows failed banner when failedCount > 0', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'attention',
+        pendingCount: 0,
+        failedCount: 2,
+        syncingCount: 0,
+        totalCount: 3,
+      });
+      renderComponent();
+      expect(screen.getByText(/2 survey\(s\) failed to sync/)).toBeInTheDocument();
+    });
+
+    it('does not show PendingSyncBanner when pendingCount and failedCount are 0', () => {
+      renderComponent();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('calls syncManager.syncNow on Upload Now click', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'synced',
+        pendingCount: 2,
+        failedCount: 0,
+        syncingCount: 0,
+        totalCount: 3,
+      });
+      renderComponent();
+      fireEvent.click(screen.getByRole('button', { name: /upload now/i }));
+      expect(mockSyncNow).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls syncManager.retryFailed on Retry click', () => {
+      mockUseSyncStatus.mockReturnValue({
+        status: 'attention',
+        pendingCount: 0,
+        failedCount: 2,
+        syncingCount: 0,
+        totalCount: 3,
+      });
+      renderComponent();
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+      expect(mockRetryFailed).toHaveBeenCalledTimes(1);
     });
   });
 });
