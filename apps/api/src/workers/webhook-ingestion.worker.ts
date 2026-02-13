@@ -2,20 +2,15 @@
  * Submission Ingestion Worker
  *
  * BullMQ worker that processes form submissions from the native form system.
- * Foundation created in Story 2-5, repurposed for native forms.
+ * Foundation created in Story 2-5, enhanced in Story 3.4.
  *
  * Current capabilities:
  * - Deduplication by submission_uid
  * - Save to submissions table
- * - Basic error handling
- *
- * To be added in Story 3.4:
- * - Extract respondent data
- * - Link to enumerator
- *
- * To be added in Story 4.3:
- * - Trigger fraud detection
- * - Update fraud_score and fraud_flags
+ * - Extract respondent data and link to submission
+ * - Enumerator linking (source='enumerator')
+ * - Fraud detection queue trigger (if GPS present)
+ * - Permanent vs transient error handling
  */
 
 import { Worker, Job } from 'bullmq';
@@ -26,6 +21,10 @@ import { submissions } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import type { WebhookIngestionJobData } from '../queues/webhook-ingestion.queue.js';
+import {
+  SubmissionProcessingService,
+  PermanentProcessingError,
+} from '../services/submission-processing.service.js';
 
 const logger = pino({ name: 'webhook-ingestion-worker' });
 
@@ -47,31 +46,51 @@ interface IngestionResult {
 /**
  * Process a single submission job
  */
-async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<IngestionResult> {
-  const { submissionUid, formXmlId, source, submittedAt, submitterId, rawData } = job.data;
+async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<IngestionResult> {
+  const { submissionUid, questionnaireFormId, source, submittedAt, submitterId, rawData } = job.data;
 
   logger.info({
     event: 'webhook_ingestion.processing',
     jobId: job.id,
     submissionUid,
-    formXmlId,
+    questionnaireFormId,
     source,
   });
 
   // Check if submission already exists (idempotency)
   const existing = await db.query.submissions.findFirst({
     where: eq(submissions.submissionUid, submissionUid),
-    columns: { id: true },
+    columns: { id: true, processed: true },
   });
 
   if (existing) {
+    // Already exists AND already processed → skip entirely (AC 3.4.2)
+    if (existing.processed) {
+      logger.info({
+        event: 'webhook_ingestion.skipped',
+        jobId: job.id,
+        submissionUid,
+        reason: 'already_processed',
+        existingId: existing.id,
+      });
+
+      return {
+        success: true,
+        submissionId: existing.id,
+        action: 'skipped',
+        submissionUid,
+      };
+    }
+
+    // Exists but NOT processed → retry processing only (re-run case)
     logger.info({
-      event: 'webhook_ingestion.skipped',
+      event: 'webhook_ingestion.reprocessing',
       jobId: job.id,
       submissionUid,
-      reason: 'already_exists',
       existingId: existing.id,
     });
+
+    await runProcessing(existing.id, submissionUid, job);
 
     return {
       success: true,
@@ -84,15 +103,21 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
   // Create new submission record
   const submissionId = uuidv7();
 
+  // Extract GPS coordinates from rawData (controller stores as _gpsLatitude/_gpsLongitude)
+  const gpsLatitude = rawData?._gpsLatitude != null ? Number(rawData._gpsLatitude) : null;
+  const gpsLongitude = rawData?._gpsLongitude != null ? Number(rawData._gpsLongitude) : null;
+
   await db.insert(submissions).values({
     id: submissionId,
     submissionUid,
-    formXmlId,
+    questionnaireFormId,
     submitterId: submitterId ?? null,
     rawData: rawData ?? null,
+    gpsLatitude: gpsLatitude != null && !isNaN(gpsLatitude) ? gpsLatitude : null,
+    gpsLongitude: gpsLongitude != null && !isNaN(gpsLongitude) ? gpsLongitude : null,
     submittedAt: new Date(submittedAt),
     source,
-    processed: false, // Will be set to true after Story 3.4 processing
+    processed: false,
   });
 
   logger.info({
@@ -100,9 +125,22 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
     jobId: job.id,
     submissionId,
     submissionUid,
-    formXmlId,
+    questionnaireFormId,
     source,
   });
+
+  // Run respondent extraction + linking
+  const processingError = await runProcessing(submissionId, submissionUid, job);
+
+  if (processingError) {
+    return {
+      success: false,
+      submissionId,
+      action: 'failed',
+      submissionUid,
+      error: processingError,
+    };
+  }
 
   return {
     success: true,
@@ -113,13 +151,62 @@ async function processSubmission(job: Job<WebhookIngestionJobData>): Promise<Ing
 }
 
 /**
+ * Run submission processing (respondent extraction, linking, fraud queue).
+ * Returns null on success, or error message string for permanent failures.
+ * Transient errors are re-thrown for BullMQ retry.
+ */
+async function runProcessing(
+  submissionId: string,
+  submissionUid: string,
+  job: Job<WebhookIngestionJobData>
+): Promise<string | null> {
+  try {
+    const result = await SubmissionProcessingService.processSubmission(submissionId);
+
+    logger.info({
+      event: 'webhook_ingestion.processed',
+      jobId: job.id,
+      submissionId,
+      submissionUid,
+      respondentId: result.respondentId,
+      action: result.action,
+    });
+
+    return null;
+  } catch (error: unknown) {
+    if (error instanceof PermanentProcessingError) {
+      // Permanent error — store and do NOT re-throw (prevent BullMQ retry)
+      const errorMessage = error.message;
+
+      logger.error({
+        event: 'webhook_ingestion.permanent_error',
+        jobId: job.id,
+        submissionId,
+        submissionUid,
+        error: errorMessage,
+      });
+
+      await db.update(submissions).set({
+        processingError: errorMessage,
+        updatedAt: new Date(),
+      }).where(eq(submissions.id, submissionId));
+
+      return errorMessage;
+    }
+
+    // Transient error — re-throw for BullMQ retry
+    throw error;
+  }
+}
+
+/**
  * Webhook Ingestion Worker
  */
 export const webhookIngestionWorker = new Worker<WebhookIngestionJobData, IngestionResult>(
   'webhook-ingestion',
   async (job: Job<WebhookIngestionJobData>) => {
     try {
-      return await processSubmission(job);
+      return await processSubmissionJob(job);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 

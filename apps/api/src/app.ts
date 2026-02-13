@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from './routes/index.js';
 import { AppError } from '@oslsr/utils';
-import { initializeWorkers } from './workers/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +51,9 @@ const validateEnvironment = () => {
 validateEnvironment();
 
 // Initialize BullMQ workers (email, import) - only in non-test mode
+// Dynamic import prevents worker modules from creating Redis connections during tests
 if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+  const { initializeWorkers } = await import('./workers/index.js');
   initializeWorkers();
 }
 

@@ -10,6 +10,15 @@ vi.mock('../middleware/google-auth-rate-limit.js', () => ({
   googleAuthRateLimit: mocks.rateLimitMock,
 }));
 
+// Mock Google auth service — verifyGoogleToken makes real HTTP calls to Google
+// which hang in test. We're testing rate limiting, not auth.
+vi.mock('../services/google-auth.service.js', () => ({
+  GoogleAuthService: {
+    verifyGoogleToken: vi.fn().mockRejectedValue(new Error('mock: token invalid')),
+    registerOrLoginWithGoogle: vi.fn(),
+  },
+}));
+
 import { app } from '../app.js';
 
 describe('Security: Google OAuth Rate Limiting', () => {

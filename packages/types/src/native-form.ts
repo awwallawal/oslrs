@@ -37,6 +37,7 @@ export const validationTypes = [
   'minLength',
   'maxLength',
   'lessThanField',
+  'modulus11',
 ] as const;
 export type ValidationType = (typeof validationTypes)[number];
 

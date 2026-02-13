@@ -121,6 +121,11 @@ export function convertConstraints(row: XlsformSurveyRow): ValidationRule[] | un
     rules.push({ type: 'lessThanField', value: ltFieldMatch[1], message: msg });
   }
 
+  // modulus11(.)
+  if (/modulus11\(\.\)/.test(c)) {
+    rules.push({ type: 'modulus11', value: 1, message: msg });
+  }
+
   return rules.length > 0 ? rules : undefined;
 }
 

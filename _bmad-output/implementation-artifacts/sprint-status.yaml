@@ -129,7 +129,7 @@ development_status:
   3-1-native-form-renderer-dashboard: review  # All 9 tasks complete 2026-02-12. 104 tests pass (98 web + 6 API). Ready for code review.
   3-2-pwa-service-worker-offline-assets: done  # Code review passed 2026-02-12: 8 findings (2H, 4M, 2L), all fixed. ML model CDN route, offline toast, A3 test violations, amber color. 1,096 web tests pass, 0 regressions.
   3-3-offline-queue-sync-status-ui: done  # Code review passed 2026-02-13: 13 findings (3C, 5H, 4M, 1L), all 13 fixed. 96 tests pass (84 web + 12 API), 0 regressions.
-  3-4-idempotent-submission-ingestion-bullmq: backlog  # REPURPOSED: Was ODK webhook ingestion. Now native form submission API
+  3-4-idempotent-submission-ingestion-bullmq: review  # Code review passed 2026-02-13: 12 findings (2C, 3H, 4M, 3L) all fixed + 3 extras (rate-limit fix, formXmlId rename, NIN E2E test). 337 API + 1,164 web tests pass, 0 regressions.
   3-5-public-self-registration-survey-access: backlog
   3-6-keyboard-optimized-data-entry-interface-clerks: backlog
   3-7-global-nin-uniqueness-enforcement: backlog

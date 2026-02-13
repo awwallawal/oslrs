@@ -27,8 +27,8 @@ export interface WebhookIngestionJobData {
   /** Unique submission ID for deduplication */
   submissionUid: string;
 
-  /** Form ID reference */
-  formXmlId: string;
+  /** Questionnaire form UUID (questionnaire_forms.id) */
+  questionnaireFormId: string;
 
   /** Submitter user ID */
   submitterId?: string;

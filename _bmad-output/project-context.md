@@ -818,10 +818,10 @@ await queue.add('send_email', { to });  // WRONG! snake_case
 **Retry Configuration (Exponential Backoff):**
 ```typescript
 queue.add('submission-ingestion', { submissionId }, {
-  attempts: 5,
+  attempts: 3,
   backoff: {
     type: 'exponential',
-    delay: 5000  // 5s, 10s, 20s, 40s, 80s
+    delay: 5000  // 5s, 10s, 20s
   }
 });
 ```

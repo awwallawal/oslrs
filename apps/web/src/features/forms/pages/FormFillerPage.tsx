@@ -12,6 +12,7 @@ import {
 } from '../utils/skipLogic';
 import type { FlattenedQuestion } from '../api/form.api';
 import type { ValidationRule } from '@oslsr/types';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 
 interface FormFillerPageProps {
@@ -60,6 +61,9 @@ function checkRule(
       break;
     case 'regex':
       if (!new RegExp(String(rule.value)).test(strVal)) return rule.message;
+      break;
+    case 'modulus11':
+      if (!modulus11Check(strVal)) return rule.message;
       break;
   }
   return undefined;

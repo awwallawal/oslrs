@@ -264,7 +264,7 @@ questionnaire_forms.form_schema = JSONB with sections + questions
 After **GP-5** (submission ingestion), verify in `submissions`:
 ```
 submissions.submission_uid  = client-generated UUIDv7
-submissions.form_xml_id    = published form's form_id
+submissions.questionnaire_form_id = published form's questionnaire_forms.id
 submissions.submitter_id   = enumerator's user.id
 submissions.raw_data       = JSONB with filled responses
 submissions.source         = 'webapp'

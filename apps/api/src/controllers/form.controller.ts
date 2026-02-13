@@ -88,7 +88,7 @@ export class FormController {
       const jobId = await queueSubmissionForIngestion({
         source: 'webapp',
         submissionUid: submissionId,
-        formXmlId: formId,
+        questionnaireFormId: formId,
         submitterId,
         submittedAt,
         rawData,

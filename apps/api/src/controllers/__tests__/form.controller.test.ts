@@ -217,7 +217,7 @@ describe('FormController', () => {
       expect(queueSubmissionForIngestion).toHaveBeenCalledWith({
         source: 'webapp',
         submissionUid: validBody.submissionId,
-        formXmlId: validBody.formId,
+        questionnaireFormId: validBody.formId,
         submitterId: 'user-123',
         submittedAt: validBody.submittedAt,
         rawData: validBody.responses,

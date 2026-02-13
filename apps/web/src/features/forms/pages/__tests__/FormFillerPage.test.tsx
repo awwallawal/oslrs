@@ -250,4 +250,69 @@ describe('FormFillerPage', () => {
       expect(screen.getByTestId('exit-preview-btn')).toBeInTheDocument();
     });
   });
+
+  describe('modulus11 NIN validation', () => {
+    const ninForm: FlattenedForm = {
+      formId: 'nin-form',
+      title: 'NIN Test',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q-nin',
+          type: 'text',
+          name: 'nin',
+          label: 'Enter NIN',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'Identity',
+          validation: [
+            { type: 'minLength', value: 11, message: 'NIN must be 11 digits' },
+            { type: 'maxLength', value: 11, message: 'NIN must be 11 digits' },
+            { type: 'modulus11', value: 1, message: 'Invalid NIN — please check for typos' },
+          ],
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+    };
+
+    it('shows modulus11 validation error for invalid NIN', () => {
+      mockHookReturn = { data: ninForm, isLoading: false, error: null };
+      renderPage();
+
+      fireEvent.change(screen.getByTestId('input-nin'), {
+        target: { value: '12345678902' },
+      });
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Invalid NIN');
+    });
+
+    it('passes modulus11 validation for valid NIN', async () => {
+      mockHookReturn = { data: ninForm, isLoading: false, error: null };
+      renderPage();
+
+      // 61961438053 is a known valid NIN (from project context)
+      fireEvent.change(screen.getByTestId('input-nin'), {
+        target: { value: '61961438053' },
+      });
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+      });
+    });
+
+    it('shows modulus11 error for non-11-digit string', () => {
+      mockHookReturn = { data: ninForm, isLoading: false, error: null };
+      renderPage();
+
+      fireEvent.change(screen.getByTestId('input-nin'), {
+        target: { value: '12345' },
+      });
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('NIN must be 11 digits');
+    });
+  });
 });

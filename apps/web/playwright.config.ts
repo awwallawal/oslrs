@@ -43,6 +43,13 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
+    // Validation tests — inline login, no auth-setup dependency.
+    // Requires full stack running (API + DB + Redis + Web) with seeded data.
+    {
+      name: 'validation',
+      testMatch: /nin-validation\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
   webServer: {
     command: 'pnpm dev',

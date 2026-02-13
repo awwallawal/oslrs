@@ -6,6 +6,8 @@
 
 import { importWorker } from './import.worker.js';
 import { emailWorker, closeEmailWorker } from './email.worker.js';
+import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
+import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'workers' });
@@ -13,6 +15,8 @@ const logger = pino({ name: 'workers' });
 // Re-export workers for direct access
 export { importWorker } from './import.worker.js';
 export { emailWorker, closeEmailWorker } from './email.worker.js';
+export { webhookIngestionWorker } from './webhook-ingestion.worker.js';
+export { fraudDetectionWorker } from './fraud-detection.worker.js';
 
 /**
  * Initialize all workers
@@ -24,9 +28,11 @@ export function initializeWorkers(): void {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
+    webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
+    fraudDetectionWorkerRunning: fraudDetectionWorker.isRunning(),
   });
 }
 
@@ -39,6 +45,8 @@ export async function closeAllWorkers(): Promise<void> {
   await Promise.all([
     importWorker.close(),
     closeEmailWorker(),
+    webhookIngestionWorker.close(),
+    fraudDetectionWorker.close(),
   ]);
 
   logger.info({ event: 'workers.closed' });

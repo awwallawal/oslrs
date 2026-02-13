@@ -8,6 +8,7 @@ import {
   choiceSchema,
   validationRuleSchema,
 } from '../native-form.js';
+import { validationTypes } from '../../native-form.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -256,5 +257,16 @@ describe('Native Form Zod Schemas', () => {
       const rule = { type: 'custom', value: '', message: 'nope' };
       expect(validationRuleSchema.safeParse(rule).success).toBe(false);
     });
+
+    it('should accept modulus11 validation rule', () => {
+      const rule = { type: 'modulus11', value: 1, message: 'Invalid NIN — please check for typos' };
+      expect(validationRuleSchema.safeParse(rule).success).toBe(true);
+    });
+  });
+});
+
+describe('validationTypes includes modulus11', () => {
+  it('should include modulus11 in the validationTypes array', () => {
+    expect(validationTypes).toContain('modulus11');
   });
 });

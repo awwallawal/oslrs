@@ -30,7 +30,7 @@ const survey = [
   ['select_one edu_list', 'education_level', 'Highest Education Completed', 'yes', '', '', '', ''],
   ['select_one yes_no', 'disability_status', 'Do you have any disability?', 'yes', '', '', '', ''],
   ['text', 'phone_number', 'Phone Number', 'yes', '', '', "regex(., '^[0][7-9][0-1][0-9]{8}$')", 'Enter a valid Nigerian mobile number'],
-  ['text', 'nin', 'National Identity Number (NIN)', 'yes', '', '', "string-length(.) = 11 and regex(., '^[0-9]+$')", 'NIN must be exactly 11 digits'],
+  ['text', 'nin', 'National Identity Number (NIN)', 'yes', '', '', "string-length(.) = 11 and regex(., '^[0-9]+$') and modulus11(.)", 'Invalid NIN — please check for typos'],
   ['select_one lga_list', 'lga_id', 'Local Government Area (LGA)', 'yes', '', '', '', ''],
   ['end_group', '', '', '', '', '', '', ''],
 

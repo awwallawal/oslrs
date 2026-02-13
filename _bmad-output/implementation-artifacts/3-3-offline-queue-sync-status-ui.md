@@ -114,7 +114,7 @@ so that I know if my data has been successfully uploaded or is pending.
   - [x]9.1 Add route to `apps/api/src/routes/form.routes.ts`: `router.post('/submissions', FormController.submitForm)`
   - [x]9.2 Add `submitForm` static method to `FormController`
   - [x]9.3 Validate request body with Zod: `{ submissionId: z.string().uuid(), formId: z.string().uuid(), formVersion: z.string(), responses: z.record(z.unknown()), gpsLatitude?: z.number(), gpsLongitude?: z.number(), submittedAt: z.string().datetime() }`
-  - [x]9.4 Call `queueSubmissionForIngestion()` from `webhook-ingestion.queue.ts` with `{ source: 'webapp', submissionUid: submissionId, formXmlId: formId, submitterId: req.user.id, submittedAt, rawData: responses }`
+  - [x]9.4 Call `queueSubmissionForIngestion()` from `webhook-ingestion.queue.ts` with `{ source: 'webapp', submissionUid: submissionId, questionnaireFormId: formId, submitterId: req.user.id, submittedAt, rawData: responses }`
   - [x]9.5 Return `201 { data: { id: jobId, status: 'queued' } }` or `200 { data: { id: null, status: 'duplicate' } }` if deduplicated
   - [x]9.6 Authenticated-only (`authenticate` middleware already on router)
   - [x]9.7 Write tests: `apps/api/src/controllers/__tests__/form.controller.test.ts` (add submission tests)

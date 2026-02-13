@@ -325,6 +325,34 @@ describe('convertConstraints', () => {
     };
     expect(convertConstraints(row)).toBeUndefined();
   });
+
+  it('converts modulus11(.) to modulus11 rule', () => {
+    const row: XlsformSurveyRow = {
+      type: 'text',
+      name: 'nin',
+      constraint: 'modulus11(.)',
+      constraint_message: 'Invalid NIN — please check for typos',
+    };
+    const rules = convertConstraints(row);
+    expect(rules).toHaveLength(1);
+    expect(rules![0]).toEqual({
+      type: 'modulus11',
+      value: 1,
+      message: 'Invalid NIN — please check for typos',
+    });
+  });
+
+  it('converts combined NIN constraint with modulus11 to 4 rules', () => {
+    const row: XlsformSurveyRow = {
+      type: 'text',
+      name: 'nin',
+      constraint: "string-length(.) = 11 and regex(., '^[0-9]+$') and modulus11(.)",
+      constraint_message: 'Invalid NIN — please check for typos',
+    };
+    const rules = convertConstraints(row);
+    expect(rules).toHaveLength(4);
+    expect(rules!.map(r => r.type)).toEqual(['regex', 'minLength', 'maxLength', 'modulus11']);
+  });
 });
 
 // ── Integration Test (21) ────────────────────────────────────────────────
