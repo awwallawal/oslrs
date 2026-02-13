@@ -240,8 +240,26 @@ describe('Auth Activation Integration', () => {
   describe('Activation with Selfie (S3 Integration)', () => {
     // Check if S3 credentials are available (for CI environments without S3 access)
     const hasS3Config = !!(process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY);
+    let s3Reachable = false;
 
-    it.skipIf(!hasS3Config)('should activate account with valid selfie and store S3 URLs in database', async () => {
+    // Lightweight connectivity pre-check: HEAD request to the S3 endpoint.
+    // If unreachable (network down, firewall, VPN), skip rather than wait 60s and timeout.
+    beforeAll(async () => {
+      if (!hasS3Config) return;
+      try {
+        const endpoint = process.env.S3_ENDPOINT || 'https://sfo3.digitaloceanspaces.com';
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        await fetch(endpoint, { method: 'HEAD', signal: controller.signal });
+        clearTimeout(timer);
+        s3Reachable = true;
+      } catch {
+        s3Reachable = false;
+      }
+    }, 10000);
+
+    it.skipIf(!hasS3Config)('should activate account with valid selfie and store S3 URLs in database', async (ctx) => {
+      if (!s3Reachable) ctx.skip();
       const newToken = generateInvitationToken();
       const email = `selfie-s3-${Date.now()}@example.com`;
       const nin = generateValidNin();
@@ -295,7 +313,7 @@ describe('Auth Activation Integration', () => {
         // livenessScore is stored as string in DB (decimal type)
         expect(Number(updatedUser.livenessScore)).toBeGreaterThan(0);
       }
-    }, 30000); // 30s timeout for S3 upload
+    }, 60000); // 60s timeout for image generation + S3 upload over slow connections
   });
 
   describe('GET /auth/activate/:token/validate', () => {

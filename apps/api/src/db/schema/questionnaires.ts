@@ -47,6 +47,7 @@ export const questionnaireForms = pgTable('questionnaire_forms', {
   formId: text('form_id').notNull(), // e.g., "oslsr_master_v3"
   version: text('version').notNull(), // semver: "1.0.0", "1.0.1", etc.
   title: text('title').notNull(), // e.g., "OSLSR Labour & Skills Registry Survey"
+  description: text('description'), // Optional form description shown on survey list cards
 
   // Status lifecycle
   status: text('status', { enum: questionnaireFormStatus }).notNull().default('draft'),

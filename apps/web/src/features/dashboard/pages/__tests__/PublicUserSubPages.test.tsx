@@ -2,8 +2,8 @@
 /**
  * Public User Sub-Pages Tests
  *
- * Story 2.5-8 AC3: Navigation shows Survey Status, Marketplace, Support sub-pages.
- * Each sub-page renders with correct empty state pattern.
+ * Story 2.5-8 AC3: Navigation shows Marketplace, Support sub-pages.
+ * PublicSurveysPage has its own dedicated test file: PublicSurveysPage.test.tsx.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -13,49 +13,8 @@ import { render, screen } from '@testing-library/react';
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
 
-import PublicSurveysPage from '../PublicSurveysPage';
 import PublicMarketplacePage from '../PublicMarketplacePage';
 import PublicSupportPage from '../PublicSupportPage';
-
-describe('PublicSurveysPage', () => {
-  it('renders page title', () => {
-    render(
-      <MemoryRouter>
-        <PublicSurveysPage />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Survey Status')).toBeInTheDocument();
-  });
-
-  it('renders empty state heading', () => {
-    render(
-      <MemoryRouter>
-        <PublicSurveysPage />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('No surveys yet')).toBeInTheDocument();
-  });
-
-  it('renders empty state description with Epic 3 reference', () => {
-    render(
-      <MemoryRouter>
-        <PublicSurveysPage />
-      </MemoryRouter>
-    );
-    expect(screen.getByText(/Coming in Epic 3/i)).toBeInTheDocument();
-  });
-
-  it('renders a decorative icon', () => {
-    render(
-      <MemoryRouter>
-        <PublicSurveysPage />
-      </MemoryRouter>
-    );
-    // Verify SVG icon renders without relying on fragile lucide CSS class names
-    const icon = document.querySelector('svg');
-    expect(icon).toBeInTheDocument();
-  });
-});
 
 describe('PublicMarketplacePage', () => {
   it('renders page title', () => {

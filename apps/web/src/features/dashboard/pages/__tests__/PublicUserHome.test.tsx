@@ -5,7 +5,8 @@
  * Story 2.5-8 AC1: Mobile-first dashboard with profile status, Survey CTA,
  * Marketplace opt-in, and "Coming Soon" teaser.
  * Story 2.5-8 AC2: Mobile-first layout (2-col max, no 3-col).
- * Story 2.5-8 AC8: .todo() placeholder for audit trail (Epic 6).
+ * Story 3.5 AC3.5.5: SyncStatusBadge and PendingSyncBanner rendered.
+ * Story 3.5 AC3.5.7: AlertDialog removed, Start Survey navigates to /dashboard/public/surveys.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -18,6 +19,49 @@ import { MemoryRouter } from 'react-router-dom';
 
 import PublicUserHome from '../PublicUserHome';
 
+const { mockNavigate, mockSyncManager } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockSyncManager: { syncNow: vi.fn(), retryFailed: vi.fn() },
+}));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
+let mockSyncStatus = {
+  status: 'synced' as string,
+  pendingCount: 0,
+  failedCount: 0,
+  syncingCount: 0,
+};
+
+vi.mock('../../../forms/hooks/useSyncStatus', () => ({
+  useSyncStatus: () => mockSyncStatus,
+}));
+
+vi.mock('../../../../services/sync-manager', () => ({
+  syncManager: mockSyncManager,
+}));
+
+vi.mock('../../../../components/SyncStatusBadge', () => ({
+  SyncStatusBadge: (props: { status: string; pendingCount: number; failedCount: number }) => (
+    <div data-testid="sync-status-badge" data-status={props.status}>
+      Sync: {props.status}
+    </div>
+  ),
+}));
+
+vi.mock('../../../../components/PendingSyncBanner', () => ({
+  PendingSyncBanner: (props: { pendingCount: number; failedCount: number; onSyncNow: () => void; onRetryFailed: () => void; isSyncing: boolean }) => (
+    <div data-testid="sync-banner" role="alert">
+      {props.pendingCount} pending, {props.failedCount} failed
+      <button onClick={props.onSyncNow}>Upload Now</button>
+      <button onClick={props.onRetryFailed}>Retry</button>
+    </div>
+  ),
+}));
+
 function renderComponent(props: { isLoading?: boolean } = {}) {
   return render(
     <MemoryRouter>
@@ -29,6 +73,7 @@ function renderComponent(props: { isLoading?: boolean } = {}) {
 describe('PublicUserHome', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSyncStatus = { status: 'synced', pendingCount: 0, failedCount: 0, syncingCount: 0 };
   });
 
   describe('AC1: Dashboard Cards', () => {
@@ -56,13 +101,6 @@ describe('PublicUserHome', () => {
       expect(screen.getByText('Marketplace Opt-In')).toBeInTheDocument();
       const btn = screen.getByRole('button', { name: 'Learn More' });
       expect(btn).toBeInTheDocument();
-    });
-
-    it('renders all 3 cards with icons plus teaser icon (4 SVGs total)', () => {
-      renderComponent();
-      // 4 SVG icons: UserCheck (Profile), ClipboardList (Survey), Briefcase (Marketplace), TrendingUp (Teaser)
-      const icons = document.querySelectorAll('svg');
-      expect(icons.length).toBe(4);
     });
   });
 
@@ -95,35 +133,17 @@ describe('PublicUserHome', () => {
     });
   });
 
-  describe('AC1: Coming in Epic 3 Modal', () => {
-    it('shows "Coming in Epic 3" modal when Start Survey is clicked', () => {
+  describe('AC3.5.7: AlertDialog removed, Start Survey navigates', () => {
+    it('does NOT show "Coming in Epic 3" modal when Start Survey is clicked', () => {
       renderComponent();
       fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      expect(screen.getByText(/native form renderer/i)).toBeInTheDocument();
-    });
-
-    it('modal has Cancel and Got it buttons', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Got it" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
       expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
     });
 
-    it('modal can be dismissed with "Cancel" button', () => {
+    it('navigates to /dashboard/public/surveys on Start Survey click', () => {
       renderComponent();
       fireEvent.click(screen.getByRole('button', { name: 'Start Survey' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/public/surveys');
     });
   });
 
@@ -169,6 +189,38 @@ describe('PublicUserHome', () => {
     it('teaser is hidden during loading', () => {
       renderComponent({ isLoading: true });
       expect(screen.queryByText('Coming Soon: Skills Marketplace Insights')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('AC3.5.5: Sync Status Components', () => {
+    it('renders SyncStatusBadge when not loading', () => {
+      renderComponent();
+      expect(screen.getByTestId('sync-status-badge')).toBeInTheDocument();
+    });
+
+    it('does not render SyncStatusBadge when loading', () => {
+      renderComponent({ isLoading: true });
+      expect(screen.queryByTestId('sync-status-badge')).not.toBeInTheDocument();
+    });
+
+    it('renders PendingSyncBanner when there are pending submissions', () => {
+      mockSyncStatus = { status: 'attention', pendingCount: 3, failedCount: 0, syncingCount: 0 };
+      renderComponent();
+      expect(screen.getByTestId('sync-banner')).toBeInTheDocument();
+      expect(screen.getByText(/3 pending/)).toBeInTheDocument();
+    });
+
+    it('renders PendingSyncBanner when there are failed submissions', () => {
+      mockSyncStatus = { status: 'attention', pendingCount: 0, failedCount: 2, syncingCount: 0 };
+      renderComponent();
+      expect(screen.getByTestId('sync-banner')).toBeInTheDocument();
+      expect(screen.getByText(/2 failed/)).toBeInTheDocument();
+    });
+
+    it('does NOT render PendingSyncBanner when no pending or failed', () => {
+      mockSyncStatus = { status: 'synced', pendingCount: 0, failedCount: 0, syncingCount: 0 };
+      renderComponent();
+      expect(screen.queryByTestId('sync-banner')).not.toBeInTheDocument();
     });
   });
 

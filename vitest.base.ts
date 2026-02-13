@@ -58,6 +58,7 @@ export const baseConfig = defineConfig({
     isolate: true,
     pool: 'threads',
     testTimeout: 10000,
+    hookTimeout: 15000,
     reporters: ['default', 'json', new LiveReporter({ outputDir: workspaceRoot })],
     outputFile: 'vitest-report.json',
   },

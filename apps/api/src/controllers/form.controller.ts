@@ -16,6 +16,16 @@ const submitFormSchema = z.object({
 
 export class FormController {
   /**
+   * Derive submission source from user role.
+   */
+  static getSubmissionSource(role?: string): 'public' | 'enumerator' | 'clerk' | 'webapp' {
+    if (role === 'public_user') return 'public';
+    if (role === 'enumerator') return 'enumerator';
+    if (role === 'data_entry_clerk') return 'clerk';
+    return 'webapp';
+  }
+
+  /**
    * GET /api/v1/forms/published
    * List all published questionnaire forms available for data collection.
    */
@@ -79,14 +89,15 @@ export class FormController {
       }
 
       const { submissionId, formId, responses, submittedAt, gpsLatitude, gpsLongitude } = parsed.data;
-      const submitterId = (req as Request & { user?: { sub: string } }).user?.sub;
+      const user = (req as Request & { user?: { sub: string; role?: string } }).user;
+      const submitterId = user?.sub;
 
       const rawData: Record<string, unknown> = { ...responses };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;
       if (gpsLongitude != null) rawData._gpsLongitude = gpsLongitude;
 
       const jobId = await queueSubmissionForIngestion({
-        source: 'webapp',
+        source: FormController.getSubmissionSource(user?.role),
         submissionUid: submissionId,
         questionnaireFormId: formId,
         submitterId,

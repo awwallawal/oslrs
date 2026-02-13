@@ -14,6 +14,7 @@ import type { FlattenedQuestion } from '../api/form.api';
 import type { ValidationRule } from '@oslsr/types';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
+import { useAuth } from '../../auth';
 
 interface FormFillerPageProps {
   mode?: 'fill' | 'preview';
@@ -72,6 +73,8 @@ function checkRule(
 export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   const { formId } = useParams<{ formId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPublicUser = user?.role === 'public_user';
   const renderQuery = useFormSchema(mode === 'fill' ? (formId ?? '') : '');
   const previewQuery = useFormPreview(mode === 'preview' ? (formId ?? '') : '');
   const { data: form, isLoading, error: fetchError } = mode === 'preview' ? previewQuery : renderQuery;
@@ -248,20 +251,49 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           </>
         ) : (
           <>
-            <div className="text-6xl" style={{ animation: 'scaleIn 0.6s ease-out' }}>
+            <div className="text-6xl animate-scale-in">
               ✓
             </div>
             <h2 className="text-xl font-semibold text-gray-900">Survey saved!</h2>
-            <p className="text-gray-600">
-              It will be uploaded when connected.
-            </p>
-            <button
-              onClick={() => navigate(-1)}
-              className="px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium hover:bg-[#7A171B] transition-colors"
-              data-testid="back-to-surveys-btn"
-            >
-              Back to Surveys
-            </button>
+            {isPublicUser ? (
+              <>
+                <p className="text-gray-600" data-testid="civic-message">
+                  Thank you for contributing to the Oyo State Labour Registry
+                </p>
+                <p className="text-sm text-gray-500">
+                  It will be uploaded when connected.
+                </p>
+                <div className="flex flex-col gap-3 pt-2">
+                  <button
+                    onClick={() => navigate('/dashboard/public')}
+                    className="px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium hover:bg-[#7A171B] transition-colors"
+                    data-testid="back-to-dashboard-btn"
+                  >
+                    Back to Dashboard
+                  </button>
+                  <button
+                    onClick={() => navigate('/dashboard/public/surveys')}
+                    className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                    data-testid="view-all-surveys-btn"
+                  >
+                    View All Surveys
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-600">
+                  It will be uploaded when connected.
+                </p>
+                <button
+                  onClick={() => navigate(-1)}
+                  className="px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium hover:bg-[#7A171B] transition-colors"
+                  data-testid="back-to-surveys-btn"
+                >
+                  Back to Surveys
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -334,13 +366,6 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         </div>
       </div>
 
-      <style>{`
-        @keyframes scaleIn {
-          0% { transform: scale(0.5); opacity: 0; }
-          60% { transform: scale(1.2); opacity: 1; }
-          100% { transform: scale(1); }
-        }
-      `}</style>
     </div>
   );
 }

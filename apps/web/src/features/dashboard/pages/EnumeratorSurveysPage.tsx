@@ -5,7 +5,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { FileText, PlayCircle, RotateCcw } from 'lucide-react';
+import { FileText, PlayCircle, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { usePublishedForms, useFormDrafts } from '../../forms/hooks/useForms';
@@ -68,16 +68,28 @@ export default function EnumeratorSurveysPage() {
                     <p className="text-xs text-neutral-400 mt-0.5">v{form.version}</p>
                   </div>
                 </div>
+                {form.description && (
+                  <p className="text-sm text-neutral-500 mb-4 line-clamp-2">{form.description}</p>
+                )}
+                {draftMap[form.id] === 'completed' ? (
+                  <div
+                    className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white"
+                    data-testid={`completed-survey-${form.id}`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Completed
+                  </div>
+                ) : (
                 <button
                   onClick={() => navigate(`/dashboard/enumerator/survey/${form.id}`)}
                   className={`w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    draftMap[form.id]
+                    draftMap[form.id] === 'in-progress'
                       ? 'bg-amber-600 text-white hover:bg-amber-700'
                       : 'bg-[#9C1E23] text-white hover:bg-[#7A171B]'
                   }`}
                   data-testid={`start-survey-${form.id}`}
                 >
-                  {draftMap[form.id] ? (
+                  {draftMap[form.id] === 'in-progress' ? (
                     <>
                       <RotateCcw className="w-4 h-4" />
                       Resume Draft
@@ -89,6 +101,7 @@ export default function EnumeratorSurveysPage() {
                     </>
                   )}
                 </button>
+                )}
               </CardContent>
             </Card>
           ))}

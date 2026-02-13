@@ -17,7 +17,7 @@ import { respondents } from './respondents.js';
 /**
  * Ingestion source type
  */
-export const ingestionSourceTypes = ['webapp', 'mobile', 'webhook', 'backfill', 'manual'] as const;
+export const ingestionSourceTypes = ['webapp', 'mobile', 'webhook', 'backfill', 'manual', 'public', 'enumerator', 'clerk'] as const;
 export type IngestionSource = typeof ingestionSourceTypes[number];
 
 /**

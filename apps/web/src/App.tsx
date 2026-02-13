@@ -914,6 +914,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 3.5: Public User Form Filler */}
+                <Route
+                  path="surveys/:formId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <FormFillerPage mode="fill" />
+                    </Suspense>
+                  }
+                />
                 <Route
                   path="marketplace"
                   element={

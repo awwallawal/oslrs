@@ -14,6 +14,7 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import pino from 'pino';
+import type { IngestionSource } from '../db/schema/submissions.js';
 
 const logger = pino({ name: 'webhook-ingestion-queue' });
 
@@ -21,8 +22,8 @@ const logger = pino({ name: 'webhook-ingestion-queue' });
  * Job data for submission ingestion
  */
 export interface WebhookIngestionJobData {
-  /** Source of the submission (webapp, mobile, backfill, manual) */
-  source: 'webapp' | 'mobile' | 'backfill' | 'manual';
+  /** Source of the submission */
+  source: IngestionSource;
 
   /** Unique submission ID for deduplication */
   submissionUid: string;

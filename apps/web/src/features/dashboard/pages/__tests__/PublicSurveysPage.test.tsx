@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 /**
- * EnumeratorSurveysPage Tests
+ * PublicSurveysPage Tests
  *
- * Story 3.1 AC1: Grid of published form cards with Start Survey action.
+ * Story 3.5 AC3.5.1: Grid of published survey form cards with Start Survey / Resume Draft.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { MemoryRouter } from 'react-router-dom';
-import EnumeratorSurveysPage from '../EnumeratorSurveysPage';
+import PublicSurveysPage from '../PublicSurveysPage';
 
 const mockNavigate = vi.fn();
 
@@ -41,12 +41,12 @@ vi.mock('../../../../components/skeletons', () => ({
 function renderComponent() {
   return render(
     <MemoryRouter>
-      <EnumeratorSurveysPage />
+      <PublicSurveysPage />
     </MemoryRouter>
   );
 }
 
-describe('EnumeratorSurveysPage', () => {
+describe('PublicSurveysPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockHookReturn = { data: undefined, isLoading: false, error: null };
@@ -57,10 +57,10 @@ describe('EnumeratorSurveysPage', () => {
     mockHookReturn = { data: [], isLoading: false, error: null };
     renderComponent();
     expect(screen.getByText('Surveys')).toBeInTheDocument();
-    expect(screen.getByText('Available questionnaires for data collection')).toBeInTheDocument();
+    expect(screen.getByText('Available surveys for you to complete')).toBeInTheDocument();
   });
 
-  it('shows loading skeletons when loading', () => {
+  it('shows loading skeleton cards when loading', () => {
     mockHookReturn = { data: undefined, isLoading: true, error: null };
     renderComponent();
     expect(screen.getByTestId('surveys-loading')).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('EnumeratorSurveysPage', () => {
     mockHookReturn = { data: [], isLoading: false, error: null };
     renderComponent();
     expect(screen.getByText('No surveys available yet')).toBeInTheDocument();
-    expect(screen.getByText('Contact your supervisor.')).toBeInTheDocument();
+    expect(screen.getByText('Check back soon.')).toBeInTheDocument();
   });
 
   it('shows error state on fetch failure', () => {
@@ -98,7 +98,36 @@ describe('EnumeratorSurveysPage', () => {
     expect(screen.getByText('v2.0.0')).toBeInTheDocument();
   });
 
-  it('navigates to survey form on Start Survey click', () => {
+  it('renders form description when available', () => {
+    mockHookReturn = {
+      data: [
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: 'Register your skills and experience', version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    renderComponent();
+
+    expect(screen.getByText('Register your skills and experience')).toBeInTheDocument();
+  });
+
+  it('does not render description when null', () => {
+    mockHookReturn = {
+      data: [
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    renderComponent();
+
+    expect(screen.getByText('Labour Survey')).toBeInTheDocument();
+    // Only the title area and button — no description paragraph
+    const card = screen.getByTestId('surveys-grid');
+    expect(card.querySelectorAll('.line-clamp-2')).toHaveLength(0);
+  });
+
+  it('navigates to public survey form on Start Survey click', () => {
     mockHookReturn = {
       data: [
         { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
@@ -109,7 +138,7 @@ describe('EnumeratorSurveysPage', () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('start-survey-f1'));
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard/enumerator/survey/f1');
+    expect(mockNavigate).toHaveBeenCalledWith('/dashboard/public/surveys/f1');
   });
 
   it('shows Resume Draft button when form has an in-progress draft', () => {
@@ -124,9 +153,34 @@ describe('EnumeratorSurveysPage', () => {
     };
     renderComponent();
 
-    // f1 has a draft — should show Resume
     expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Resume Draft');
-    // f2 has no draft — should show Start Survey
     expect(screen.getByTestId('start-survey-f2')).toHaveTextContent('Start Survey');
+  });
+
+  it('shows Completed badge when form draft is completed', () => {
+    mockDraftMap = { f1: 'completed' };
+    mockHookReturn = {
+      data: [
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    renderComponent();
+
+    expect(screen.getByTestId('completed-survey-f1')).toHaveTextContent('Completed');
+  });
+
+  it('shows Start Survey for forms without drafts', () => {
+    mockHookReturn = {
+      data: [
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    renderComponent();
+
+    expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Start Survey');
   });
 });

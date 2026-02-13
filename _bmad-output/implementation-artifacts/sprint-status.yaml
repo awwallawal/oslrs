@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-06 - SCP-2026-02-05-001: ODK removal, native form system stories added
+# updated: 2026-02-13 - Story 3.5 done, code review fixes committed
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -129,9 +129,9 @@ development_status:
   3-1-native-form-renderer-dashboard: review  # All 9 tasks complete 2026-02-12. 104 tests pass (98 web + 6 API). Ready for code review.
   3-2-pwa-service-worker-offline-assets: done  # Code review passed 2026-02-12: 8 findings (2H, 4M, 2L), all fixed. ML model CDN route, offline toast, A3 test violations, amber color. 1,096 web tests pass, 0 regressions.
   3-3-offline-queue-sync-status-ui: done  # Code review passed 2026-02-13: 13 findings (3C, 5H, 4M, 1L), all 13 fixed. 96 tests pass (84 web + 12 API), 0 regressions.
-  3-4-idempotent-submission-ingestion-bullmq: review  # Code review passed 2026-02-13: 12 findings (2C, 3H, 4M, 3L) all fixed + 3 extras (rate-limit fix, formXmlId rename, NIN E2E test). 337 API + 1,164 web tests pass, 0 regressions.
-  3-5-public-self-registration-survey-access: backlog
-  3-6-keyboard-optimized-data-entry-interface-clerks: backlog
+  3-4-idempotent-submission-ingestion-bullmq: done  # Code review passed 2026-02-13: 12 findings (2C, 3H, 4M, 3L) all fixed + 3 extras (rate-limit fix, formXmlId rename, NIN E2E test). 337 API + 1,164 web tests pass, 0 regressions.
+  3-5-public-self-registration-survey-access: done  # Code review passed 2026-02-13: 5 findings (3M, 2L), all fixed. Description field, 3-state drafts, role-based detection, test cleanup, CSS extraction. 81 tests pass, 0 regressions.
+  3-6-keyboard-optimized-data-entry-interface-clerks: ready-for-dev  # Story created 2026-02-13: keyboard-optimized all-fields form, session tracking, Tab/Enter/Ctrl shortcuts
   3-7-global-nin-uniqueness-enforcement: backlog
   epic-3-retrospective: optional
 

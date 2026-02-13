@@ -215,7 +215,7 @@ describe('FormController', () => {
       );
 
       expect(queueSubmissionForIngestion).toHaveBeenCalledWith({
-        source: 'webapp',
+        source: 'enumerator',
         submissionUid: validBody.submissionId,
         questionnaireFormId: validBody.formId,
         submitterId: 'user-123',
@@ -304,6 +304,96 @@ describe('FormController', () => {
       );
 
       expect(mockNext).toHaveBeenCalledWith(queueError);
+    });
+
+    it('sets source to "enumerator" for enumerator role', async () => {
+      mockReq.body = validBody;
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'enumerator' })
+      );
+    });
+
+    it('sets source to "public" for public_user role', async () => {
+      mockReq.body = validBody;
+      mockReq.user = { sub: 'user-456', role: 'public_user' };
+
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-def');
+
+      await FormController.submitForm(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'public' })
+      );
+    });
+
+    it('sets source to "clerk" for data_entry_clerk role', async () => {
+      mockReq.body = validBody;
+      mockReq.user = { sub: 'user-789', role: 'data_entry_clerk' };
+
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-ghi');
+
+      await FormController.submitForm(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'clerk' })
+      );
+    });
+
+    it('defaults source to "webapp" for unknown roles', async () => {
+      mockReq.body = validBody;
+      mockReq.user = { sub: 'user-000', role: 'super_admin' };
+
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-jkl');
+
+      await FormController.submitForm(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'webapp' })
+      );
+    });
+  });
+
+  describe('getSubmissionSource', () => {
+    it('maps public_user to "public"', () => {
+      expect(FormController.getSubmissionSource('public_user')).toBe('public');
+    });
+
+    it('maps enumerator to "enumerator"', () => {
+      expect(FormController.getSubmissionSource('enumerator')).toBe('enumerator');
+    });
+
+    it('maps data_entry_clerk to "clerk"', () => {
+      expect(FormController.getSubmissionSource('data_entry_clerk')).toBe('clerk');
+    });
+
+    it('returns "webapp" for undefined role', () => {
+      expect(FormController.getSubmissionSource(undefined)).toBe('webapp');
+    });
+
+    it('returns "webapp" for unknown role', () => {
+      expect(FormController.getSubmissionSource('super_admin')).toBe('webapp');
     });
   });
 });

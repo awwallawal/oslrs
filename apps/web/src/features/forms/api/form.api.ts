@@ -36,6 +36,7 @@ export interface PublishedFormSummary {
   id: string;
   formId: string;
   title: string;
+  description: string | null;
   version: string;
   status: string;
   publishedAt: string | null;

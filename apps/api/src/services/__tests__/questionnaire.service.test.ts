@@ -105,6 +105,8 @@ function createValidOslsrForm(formId: string = 'test_form', version: string = '1
 
 describe('QuestionnaireService', () => {
   beforeAll(async () => {
+    // Explicit 30s timeout: bcrypt hashing + DB inserts can exceed default
+    // hookTimeout under parallel thread-pool load
     // Ensure super_admin role exists
     await db.insert(roles).values([
       { name: 'super_admin', description: 'Super Admin' },
@@ -140,7 +142,7 @@ describe('QuestionnaireService', () => {
     });
 
     testUserId = userId;
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Clean up test data

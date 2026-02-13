@@ -80,11 +80,18 @@ vi.mock('../../../../components/skeletons', () => ({
   SkeletonText: () => <div data-testid="skeleton-text" />,
 }));
 
-function renderPage(mode: 'fill' | 'preview' = 'fill') {
+let mockUserRole = 'enumerator';
+
+vi.mock('../../../auth', () => ({
+  useAuth: () => ({ user: { role: mockUserRole } }),
+}));
+
+function renderPage(mode: 'fill' | 'preview' = 'fill', initialPath = '/survey/test-form-id') {
+  const routePath = initialPath.startsWith('/dashboard/public') ? '/dashboard/public/surveys/:formId' : '/survey/:formId';
   return render(
-    <MemoryRouter initialEntries={['/survey/test-form-id']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/survey/:formId" element={<FormFillerPage mode={mode} />} />
+        <Route path={routePath} element={<FormFillerPage mode={mode} />} />
       </Routes>
     </MemoryRouter>
   );
@@ -93,6 +100,7 @@ function renderPage(mode: 'fill' | 'preview' = 'fill') {
 describe('FormFillerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUserRole = 'enumerator';
     mockHookReturn = {
       data: mockForm,
       isLoading: false,
@@ -313,6 +321,82 @@ describe('FormFillerPage', () => {
       fireEvent.click(screen.getByTestId('continue-btn'));
 
       expect(screen.getByRole('alert')).toHaveTextContent('NIN must be 11 digits');
+    });
+  });
+
+  describe('Story 3.5 AC3.5.4: Public user completion screen', () => {
+    const singleQuestionForm: FlattenedForm = {
+      formId: 'test-form-id',
+      title: 'Public Survey',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q1',
+          type: 'text',
+          name: 'name',
+          label: 'Name',
+          required: false,
+          sectionId: 's1',
+          sectionTitle: 'Section 1',
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+    };
+
+    it('shows civic message on completion for public users', async () => {
+      mockUserRole = 'public_user';
+      mockHookReturn = { data: singleQuestionForm, isLoading: false, error: null };
+      renderPage('fill', '/dashboard/public/surveys/test-form-id');
+
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+        expect(screen.getByTestId('civic-message')).toHaveTextContent(
+          'Thank you for contributing to the Oyo State Labour Registry'
+        );
+      });
+    });
+
+    it('shows "Back to Dashboard" button for public users', async () => {
+      mockUserRole = 'public_user';
+      mockHookReturn = { data: singleQuestionForm, isLoading: false, error: null };
+      renderPage('fill', '/dashboard/public/surveys/test-form-id');
+
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('back-to-dashboard-btn')).toBeInTheDocument();
+        expect(screen.getByTestId('back-to-dashboard-btn')).toHaveTextContent('Back to Dashboard');
+      });
+    });
+
+    it('shows "View All Surveys" button for public users', async () => {
+      mockUserRole = 'public_user';
+      mockHookReturn = { data: singleQuestionForm, isLoading: false, error: null };
+      renderPage('fill', '/dashboard/public/surveys/test-form-id');
+
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('view-all-surveys-btn')).toBeInTheDocument();
+        expect(screen.getByTestId('view-all-surveys-btn')).toHaveTextContent('View All Surveys');
+      });
+    });
+
+    it('does NOT show civic message for non-public users', async () => {
+      mockUserRole = 'enumerator';
+      mockHookReturn = { data: singleQuestionForm, isLoading: false, error: null };
+      renderPage('fill');
+
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+        expect(screen.queryByTestId('civic-message')).not.toBeInTheDocument();
+        expect(screen.getByTestId('back-to-surveys-btn')).toBeInTheDocument();
+      });
     });
   });
 });
