@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-14 - Story 3.7 implementation complete, pending code review. Baselines: 359 API, 1234 web tests
+# updated: 2026-02-14 - Story 3.7 done with code review. Baselines: 362 API, 1240 web tests
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -126,13 +126,13 @@ development_status:
   # NOTE: Story 3.1 ACs to be updated per prep-8 (admin form preview from retro)
   epic-3: in-progress  # Started 2026-02-11: First story (3.0) created
   3-0-google-oauth-enhanced-public-registration: done  # Completed 2026-02-12. All 12 tasks done, 280 API + 971 web tests pass. Code review passed.
-  3-1-native-form-renderer-dashboard: review  # All 9 tasks complete 2026-02-12. 104 tests pass (98 web + 6 API). Ready for code review.
+  3-1-native-form-renderer-dashboard: done  # Code review passed 2026-02-12: 10 findings (3C, 4H, 3M), all fixed. 99+ tests pass (92 web + 7 API), 0 regressions.
   3-2-pwa-service-worker-offline-assets: done  # Code review passed 2026-02-12: 8 findings (2H, 4M, 2L), all fixed. ML model CDN route, offline toast, A3 test violations, amber color. 1,096 web tests pass, 0 regressions.
   3-3-offline-queue-sync-status-ui: done  # Code review passed 2026-02-13: 13 findings (3C, 5H, 4M, 1L), all 13 fixed. 96 tests pass (84 web + 12 API), 0 regressions.
   3-4-idempotent-submission-ingestion-bullmq: done  # Code review passed 2026-02-13: 12 findings (2C, 3H, 4M, 3L) all fixed + 3 extras (rate-limit fix, formXmlId rename, NIN E2E test). 337 API + 1,164 web tests pass, 0 regressions.
   3-5-public-self-registration-survey-access: done  # Code review passed 2026-02-13: 5 findings (3M, 2L), all fixed. Description field, 3-state drafts, role-based detection, test cleanup, CSS extraction. 81 tests pass, 0 regressions.
   3-6-keyboard-optimized-data-entry-interface-clerks: done  # Code review R2 passed 2026-02-14: R1 9 findings all fixed, R2 9 findings (3H, 4M, 2L) all fixed. 60 tests pass, 0 regressions
-  3-7-global-nin-uniqueness-enforcement: review  # Done 2026-02-14: 7 tasks, NIN rejection + pre-check API + frontend validation + polling
+  3-7-global-nin-uniqueness-enforcement: done  # Code review passed 2026-02-14: 13 findings (3C, 4H, 4M, 2L), all 13 fixed. 362 API + 1240 web tests pass, 0 regressions.
   epic-3-retrospective: optional
 
   # Epic 4: Supervisor Oversight & Field Management

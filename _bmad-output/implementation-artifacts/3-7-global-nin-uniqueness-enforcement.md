@@ -1,6 +1,6 @@
 # Story 3.7: Global NIN Uniqueness Enforcement
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -577,7 +577,8 @@ Claude Opus 4.6
 ### Completion Notes List
 
 - All 7 ACs verified: NIN duplicate rejection, cross-table check, pre-check API, FormFillerPage/ClerkDataEntryPage pre-validation, rejected submission visibility, race condition defense
-- Test baselines: API 359 (was 346, +13), Web 1234 (was 1215, +19), zero regressions
+- Test baselines: API 362 (was 346, +16), Web 1240 (was 1215, +25), zero regressions
+- Code review passed 2026-02-14: 13 findings (3C, 4H, 4M, 2L), all 13 fixed. Lint clean (0 warnings).
 - New files: nin-check.api.ts, useNinCheck.ts, useNinCheck.test.ts
 - Modified: submission-processing.service.ts, form.controller.ts, form.routes.ts, rate-limit.ts, sync-manager.ts, SyncStatusBadge.tsx, useSyncStatus.ts, FormFillerPage.tsx, ClerkDataEntryPage.tsx, submission.api.ts, 4 dashboard home pages, security.rate-limit.test.ts
 
