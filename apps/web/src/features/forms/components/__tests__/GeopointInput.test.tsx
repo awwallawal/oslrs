@@ -1,11 +1,15 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { GeopointInput } from '../GeopointInput';
 import type { FlattenedQuestion } from '../../api/form.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 const baseQuestion: FlattenedQuestion = {
   id: 'q1',

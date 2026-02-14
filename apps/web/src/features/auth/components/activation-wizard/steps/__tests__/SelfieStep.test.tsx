@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SelfieStep } from '../SelfieStep';
 import type { StepRenderProps } from '../../ActivationWizard';
 import { WIZARD_STEPS } from '../../useActivationWizard';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

@@ -7,11 +7,15 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import SupervisorMessagesPage from '../SupervisorMessagesPage';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('SupervisorMessagesPage', () => {
   it('renders page heading', () => {

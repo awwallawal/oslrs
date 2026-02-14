@@ -6,12 +6,16 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import ClerkCompletedPage from '../ClerkCompletedPage';
+
+afterEach(() => {
+  cleanup();
+});
 
 function renderComponent() {
   return render(<ClerkCompletedPage />);

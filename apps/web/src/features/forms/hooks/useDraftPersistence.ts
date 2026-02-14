@@ -15,6 +15,7 @@ interface UseDraftPersistenceReturn {
   resumeData: { formData: Record<string, unknown>; questionPosition: number } | null;
   saveDraft: () => Promise<void>;
   completeDraft: () => Promise<void>;
+  resetForNewEntry: () => void;
   loading: boolean;
 }
 
@@ -109,18 +110,55 @@ export function useDraftPersistence({
   }, [formData, currentIndex, formId, formVersion, enabled]);
 
   const saveDraft = useCallback(async () => {
-    if (!enabled || !draftIdRef.current) return;
+    if (!enabled) return;
     const now = new Date().toISOString();
-    await db.drafts.update(draftIdRef.current, {
-      responses: formData,
-      questionPosition: currentIndex,
-      updatedAt: now,
-    });
-  }, [formData, currentIndex, enabled]);
+
+    if (draftIdRef.current) {
+      await db.drafts.update(draftIdRef.current, {
+        responses: formData,
+        questionPosition: currentIndex,
+        updatedAt: now,
+      });
+    } else {
+      // Create draft on first explicit save if auto-save hasn't fired yet
+      const id = uuidv7();
+      const newDraft: Draft = {
+        id,
+        formId,
+        formVersion,
+        responses: formData,
+        questionPosition: currentIndex,
+        status: 'in-progress',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.drafts.add(newDraft);
+      draftIdRef.current = id;
+      setDraftId(id);
+    }
+  }, [formData, currentIndex, formId, formVersion, enabled]);
 
   const completeDraft = useCallback(async () => {
-    if (!enabled || !draftIdRef.current) return;
+    if (!enabled) return;
     const now = new Date().toISOString();
+
+    // Create draft if auto-save hasn't fired yet (e.g., fast Ctrl+Enter)
+    if (!draftIdRef.current) {
+      const id = uuidv7();
+      const newDraft: Draft = {
+        id,
+        formId,
+        formVersion,
+        responses: formData,
+        questionPosition: currentIndex,
+        status: 'in-progress',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.drafts.add(newDraft);
+      draftIdRef.current = id;
+      setDraftId(id);
+    }
 
     // Update draft status
     await db.drafts.update(draftIdRef.current, {
@@ -153,7 +191,13 @@ export function useDraftPersistence({
       error: null,
     };
     await db.submissionQueue.add(queueItem);
-  }, [formId, formVersion, formData, enabled]);
+  }, [formId, formVersion, formData, currentIndex, enabled]);
+
+  const resetForNewEntry = useCallback(() => {
+    draftIdRef.current = null;
+    setDraftId(null);
+    setResumeData(null);
+  }, []);
 
   return {
     draftId,
@@ -161,5 +205,6 @@ export function useDraftPersistence({
     loading,
     saveDraft,
     completeDraft,
+    resetForNewEntry,
   };
 }

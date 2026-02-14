@@ -1,11 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act, cleanup } from '@testing-library/react';
 import {
   useActivationWizard,
   WIZARD_STEPS,
   TOTAL_STEPS,
   type WizardFormData,
 } from '../useActivationWizard';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock fetch
 const mockFetch = vi.fn();

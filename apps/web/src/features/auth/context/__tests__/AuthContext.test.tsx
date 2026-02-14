@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
 import { AuthProvider, useAuth, useRequireRole } from '../AuthContext';
 import * as authApi from '../../api/auth.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

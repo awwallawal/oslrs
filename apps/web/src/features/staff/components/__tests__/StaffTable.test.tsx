@@ -6,13 +6,17 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { StaffTable } from '../StaffTable';
 import type { StaffMember, PaginationMeta } from '../../types';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockStaff: StaffMember[] = [
   {

@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { UserRole } from '@oslsr/types';
 
 import { SmartCta } from './SmartCta';
 import * as AuthContext from '../../features/auth/context/AuthContext';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

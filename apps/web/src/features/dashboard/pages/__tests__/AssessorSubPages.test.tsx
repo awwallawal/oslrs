@@ -7,8 +7,8 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
@@ -16,6 +16,10 @@ import { MemoryRouter } from 'react-router-dom';
 import AssessorQueuePage from '../AssessorQueuePage';
 import AssessorCompletedPage from '../AssessorCompletedPage';
 import AssessorEvidencePage from '../AssessorEvidencePage';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('Assessor Sub-Pages', () => {
   describe('AssessorQueuePage', () => {

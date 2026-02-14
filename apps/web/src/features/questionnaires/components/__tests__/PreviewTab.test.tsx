@@ -1,12 +1,16 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 expect.extend(matchers);
 
 import { PreviewTab } from '../PreviewTab';
 import type { NativeFormSchema } from '@oslsr/types';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {

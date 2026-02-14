@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import LoginPage from '../LoginPage';
 import { AuthProvider } from '../../context/AuthContext';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

@@ -12,14 +12,18 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 expect.extend(matchers);
 
 import * as AuthContext from '../../../../features/auth/context/AuthContext';
 import { ProtectedRoute } from '../../../../features/auth';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock useAuth hook
 vi.mock('../../../../features/auth/context/AuthContext', () => ({

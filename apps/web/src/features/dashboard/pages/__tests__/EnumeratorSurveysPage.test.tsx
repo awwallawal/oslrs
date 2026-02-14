@@ -6,13 +6,17 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { MemoryRouter } from 'react-router-dom';
 import EnumeratorSurveysPage from '../EnumeratorSurveysPage';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockNavigate = vi.fn();
 

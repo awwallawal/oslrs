@@ -4,16 +4,24 @@
  * Story 2.5-6 AC1: Desktop-optimized dashboard with Start Data Entry CTA,
  * Today's Progress card, Recent Entries card, keyboard shortcuts section.
  * Story 2.5-6 AC2: Auto-focus on first actionable element.
- * Story 2.5-6 AC3: "Coming in Epic 3" AlertDialog modal.
  * Story 2.5-6 AC4: Single-key shortcuts (N, ?, Esc).
  * Story 2.5-6 AC5: Keyboard shortcuts modal.
  * Story 2.5-6 AC9: Skeleton loading branch.
+ *
+ * Story 3.6 AC3.6.9: Removed "Coming in Epic 3" modal.
+ * Wired "Start Data Entry" to navigate to /dashboard/clerk/surveys.
+ * Added SyncStatusBadge and PendingSyncBanner.
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, ListOrdered, Keyboard } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
+import { SyncStatusBadge } from '../../../components/SyncStatusBadge';
+import { PendingSyncBanner } from '../../../components/PendingSyncBanner';
+import { useSyncStatus } from '../../forms/hooks/useSyncStatus';
+import { syncManager } from '../../../services/sync-manager';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -26,16 +34,17 @@ import {
 } from '../../../components/ui/alert-dialog';
 
 export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }) {
-  const [showEpic3Modal, setShowEpic3Modal] = useState(false);
+  const navigate = useNavigate();
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
+  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
 
   // AC2: Auto-focus the CTA button on mount
   useEffect(() => {
     ctaRef.current?.focus();
   }, []);
 
-  // AC4: Single-key shortcuts (N, ?, Esc) — only active when no input/textarea focused
+  // AC4 + AC3.6.9: Single-key shortcuts — N navigates to surveys, ?, Esc
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -44,24 +53,36 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
       switch (e.key.toLowerCase()) {
         case 'n':
           e.preventDefault();
-          setShowEpic3Modal(true);
+          navigate('/dashboard/clerk/surveys');
           break;
         case '?':
           e.preventDefault();
           setShowShortcutsModal(true);
           break;
         case 'escape':
-          setShowEpic3Modal(false);
           setShowShortcutsModal(false);
           break;
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="p-6">
+      {/* Sync banner (AC3.6.9 — following EnumeratorHome pattern) */}
+      {(pendingCount > 0 || failedCount > 0) && (
+        <div className="mb-4">
+          <PendingSyncBanner
+            pendingCount={pendingCount}
+            failedCount={failedCount}
+            onSyncNow={() => syncManager.syncNow()}
+            onRetryFailed={() => syncManager.retryFailed()}
+            isSyncing={syncingCount > 0}
+          />
+        </div>
+      )}
+
       {/* Page Header — AC1 */}
       <div className="mb-6">
         <h1 className="text-2xl font-brand font-semibold text-neutral-900">
@@ -71,6 +92,13 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
           Keyboard-optimized paper form digitization
         </p>
       </div>
+
+      {/* Sync status badge (AC3.6.9) */}
+      {!isLoading && (
+        <div className="mb-4">
+          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
+        </div>
+      )}
 
       {isLoading ? (
         /* AC9: Skeleton loading branch — mirrors actual layout: CTA + 2 cards */
@@ -83,12 +111,13 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
         </div>
       ) : (
         <>
-          {/* Start Data Entry CTA — AC1, AC2, AC3 */}
+          {/* Start Data Entry CTA — AC3.6.9: navigates to surveys */}
           <div className="mb-6">
             <button
               ref={ctaRef}
-              onClick={() => setShowEpic3Modal(true)}
+              onClick={() => navigate('/dashboard/clerk/surveys')}
               className="w-full md:w-auto min-h-[48px] px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-lg transition-colors"
+              data-testid="start-data-entry"
             >
               Start Data Entry
             </button>
@@ -155,24 +184,6 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
           </div>
         </>
       )}
-
-      {/* Coming in Epic 3 Modal — AC3 */}
-      <AlertDialog open={showEpic3Modal} onOpenChange={setShowEpic3Modal}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Coming in Epic 3</AlertDialogTitle>
-            <AlertDialogDescription>
-              The keyboard-optimized form entry interface is being built in Epic 3.
-              Once complete, you'll be able to digitize paper forms with full
-              keyboard navigation — Tab, Enter, and shortcut keys for maximum speed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setShowEpic3Modal(false)}>Got it</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Keyboard Shortcuts Modal — AC5 */}
       <AlertDialog open={showShortcutsModal} onOpenChange={setShowShortcutsModal}>

@@ -1,12 +1,16 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import FormFillerPage from '../FormFillerPage';
 import type { FlattenedForm } from '../../api/form.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock useDraftPersistence hook
 const mockCompleteDraft = vi.fn().mockResolvedValue(undefined);

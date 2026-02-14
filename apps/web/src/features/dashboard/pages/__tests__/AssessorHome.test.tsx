@@ -11,14 +11,18 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
 
 import AssessorHome from '../AssessorHome';
+
+afterEach(() => {
+  cleanup();
+});
 
 function renderComponent(props: { isLoading?: boolean } = {}) {
   return render(

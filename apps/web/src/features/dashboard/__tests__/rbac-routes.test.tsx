@@ -12,8 +12,8 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
@@ -22,6 +22,10 @@ import { ProtectedRoute } from '../../auth/components/ProtectedRoute';
 import { AuthContext } from '../../auth/context/AuthContext';
 import { UserRole, ALL_ROLES } from '@oslsr/types';
 import type { AuthUser } from '@oslsr/types';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Route configuration matching App.tsx
 const ROLE_ROUTES: Record<UserRole, string> = {

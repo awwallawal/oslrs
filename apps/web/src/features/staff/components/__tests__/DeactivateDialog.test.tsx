@@ -5,14 +5,18 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 expect.extend(matchers);
 
 import { renderWithRouter } from '../../../../test-utils';
 import { DeactivateDialog } from '../DeactivateDialog';
 import type { StaffMember } from '../../types';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockStaff: StaffMember = {
   id: 'user-1',

@@ -8,8 +8,8 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -17,6 +17,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardRedirect } from '../components/DashboardRedirect';
 import { AuthContext } from '../../auth/context/AuthContext';
 import type { AuthUser } from '@oslsr/types';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock user data for different roles
 const createMockUser = (role: string): AuthUser => ({

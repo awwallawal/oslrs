@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 
 import { UserRole } from '@oslsr/types';
 import { MobileNav } from './MobileNav';
 import * as AuthContext from '../../features/auth/context/AuthContext';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

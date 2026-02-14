@@ -12,14 +12,18 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardLayout } from '../DashboardLayout';
 import { AuthContext } from '../../features/auth/context/AuthContext';
 import type { AuthUser } from '@oslsr/types';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

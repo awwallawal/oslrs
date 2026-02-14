@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { ReAuthModal } from '../ReAuthModal';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

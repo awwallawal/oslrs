@@ -5,14 +5,18 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 expect.extend(matchers);
 
 import { renderWithRouter } from '../../../../test-utils';
 import { RoleChangeDialog } from '../RoleChangeDialog';
 import type { StaffMember } from '../../types';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock the hooks
 const mockUseRoles = vi.fn(() => ({

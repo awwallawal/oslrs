@@ -4,35 +4,85 @@
  *
  * Story 2.5-6 AC1: Desktop-optimized dashboard with CTA, cards, shortcuts
  * Story 2.5-6 AC2: Auto-focus on CTA button
- * Story 2.5-6 AC3: "Coming in Epic 3" modal on CTA click
  * Story 2.5-6 AC4: Single-key shortcuts (N, ?, Esc)
  * Story 2.5-6 AC5: Keyboard shortcuts modal
  * Story 2.5-6 AC9: Skeleton loading branch
  * Story 2.5-6 AC11: Tab navigation without focus traps
+ *
+ * Story 3.6 AC3.6.9: Removed "Coming in Epic 3" modal.
+ * CTA and N shortcut navigate to /dashboard/clerk/surveys.
+ * SyncStatusBadge and PendingSyncBanner added.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
 
 import ClerkHome from '../ClerkHome';
 
+// ── Mock state ──────────────────────────────────────────────────────────────
+
+const mockNavigate = vi.fn();
+
+let mockSyncStatus = {
+  status: 'empty' as string,
+  pendingCount: 0,
+  failedCount: 0,
+  syncingCount: 0,
+  totalCount: 0,
+};
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
+vi.mock('../../../forms/hooks/useSyncStatus', () => ({
+  useSyncStatus: () => mockSyncStatus,
+}));
+
+vi.mock('../../../../services/sync-manager', () => ({
+  syncManager: {
+    syncNow: vi.fn(),
+    retryFailed: vi.fn(),
+  },
+}));
+
+vi.mock('../../../../components/skeletons', () => ({
+  SkeletonCard: () => <div aria-label="Loading card" />,
+}));
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
 function renderComponent(props: { isLoading?: boolean } = {}) {
   return render(
     <MemoryRouter>
       <ClerkHome {...props} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
-describe('ClerkHome', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+afterEach(() => {
+  cleanup();
+});
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockSyncStatus = {
+    status: 'empty',
+    pendingCount: 0,
+    failedCount: 0,
+    syncingCount: 0,
+    totalCount: 0,
+  };
+});
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+describe('ClerkHome', () => {
   describe('AC1: Dashboard Layout', () => {
     it('renders page title and subtitle', () => {
       renderComponent();
@@ -75,55 +125,42 @@ describe('ClerkHome', () => {
     });
   });
 
-  describe('AC3: Coming in Epic 3 Modal', () => {
-    it('click CTA opens "Coming in Epic 3" modal', () => {
+  describe('AC3.6.9: CTA navigates to surveys (Epic 3 modal removed)', () => {
+    it('click CTA navigates to /dashboard/clerk/surveys', () => {
       renderComponent();
       const cta = screen.getByRole('button', { name: 'Start Data Entry' });
       fireEvent.click(cta);
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      expect(screen.getByText(/keyboard-optimized form entry interface/i)).toBeInTheDocument();
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
     });
 
-    it('modal can be dismissed with "Got it" button', () => {
+    it('"Coming in Epic 3" modal no longer exists', () => {
       renderComponent();
       fireEvent.click(screen.getByRole('button', { name: 'Start Data Entry' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
-      expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Cancel" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Data Entry' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
     });
   });
 
   describe('AC4: Keyboard Shortcuts', () => {
-    it('keyboard shortcut N triggers Epic 3 modal', () => {
+    it('keyboard shortcut N navigates to /dashboard/clerk/surveys', () => {
       renderComponent();
       fireEvent.keyDown(document, { key: 'n' });
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
     });
 
     it('keyboard shortcut ? opens shortcuts modal', () => {
       renderComponent();
       fireEvent.keyDown(document, { key: '?' });
-      // Both the inline section and the modal have "Keyboard Shortcuts" text
       const matches = screen.getAllByText('Keyboard Shortcuts');
       expect(matches.length).toBeGreaterThanOrEqual(2);
-      // Modal should be open — check for dialog content
       expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     });
 
-    it('keyboard shortcut Esc closes Epic 3 modal', () => {
+    it('keyboard shortcut Esc closes shortcuts modal', () => {
       renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Start Data Entry' }));
-      expect(screen.getByText('Coming in Epic 3')).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: '?' });
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
       fireEvent.keyDown(document, { key: 'Escape' });
-      expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
 
     it('keyboard shortcuts section is visible on dashboard', () => {
@@ -132,12 +169,50 @@ describe('ClerkHome', () => {
     });
   });
 
+  describe('AC3.6.9: Sync components', () => {
+    it('renders PendingSyncBanner when pending submissions exist', () => {
+      mockSyncStatus = {
+        status: 'synced',
+        pendingCount: 3,
+        failedCount: 0,
+        syncingCount: 0,
+        totalCount: 3,
+      };
+      renderComponent();
+      expect(screen.getByText(/3 pending survey/i)).toBeInTheDocument();
+    });
+
+    it('renders PendingSyncBanner when failed submissions exist', () => {
+      mockSyncStatus = {
+        status: 'attention',
+        pendingCount: 0,
+        failedCount: 2,
+        syncingCount: 0,
+        totalCount: 2,
+      };
+      renderComponent();
+      expect(screen.getByText(/2.*failed to sync/i)).toBeInTheDocument();
+    });
+
+    it('does not render PendingSyncBanner when no pending/failed', () => {
+      mockSyncStatus = {
+        status: 'empty',
+        pendingCount: 0,
+        failedCount: 0,
+        syncingCount: 0,
+        totalCount: 0,
+      };
+      renderComponent();
+      expect(screen.queryByText(/pending survey/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/failed to sync/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe('AC9: Skeleton Loading', () => {
     it('renders skeleton layout matching content shape when isLoading=true', () => {
       renderComponent({ isLoading: true });
       const skeletonCards = screen.getAllByLabelText('Loading card');
       expect(skeletonCards).toHaveLength(2);
-      // Also has a button skeleton
       const buttonSkeleton = screen.getByLabelText('Loading button');
       expect(buttonSkeleton).toBeInTheDocument();
     });
@@ -162,21 +237,16 @@ describe('ClerkHome', () => {
     it('no interactive elements have negative tabindex (no focus traps)', () => {
       renderComponent();
       const cta = screen.getByRole('button', { name: 'Start Data Entry' });
-      // CTA should be focused initially (auto-focus)
       expect(document.activeElement).toBe(cta);
-      // Verify no interactive element has tabindex="-1" (which would create a trap)
       expect(cta).not.toHaveAttribute('tabindex', '-1');
     });
 
     it('all interactive elements are tabbable in sequential order', () => {
       renderComponent();
-      // Collect all focusable elements in the dashboard
       const focusableElements = document.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
-      // Verify there are multiple focusable elements (CTA + any others)
       expect(focusableElements.length).toBeGreaterThanOrEqual(1);
-      // Verify none of them have tabindex="-1" (which blocks tab navigation)
       focusableElements.forEach((el) => {
         expect(el).not.toHaveAttribute('tabindex', '-1');
       });

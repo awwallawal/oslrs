@@ -6,12 +6,16 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import EnumeratorDraftsPage from '../EnumeratorDraftsPage';
+
+afterEach(() => {
+  cleanup();
+});
 
 function renderComponent() {
   return render(<EnumeratorDraftsPage />);

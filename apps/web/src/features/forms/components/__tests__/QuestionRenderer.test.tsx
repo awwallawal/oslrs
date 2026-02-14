@@ -1,11 +1,15 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { QuestionRenderer } from '../QuestionRenderer';
 import type { FlattenedQuestion } from '../../api/form.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 function makeQuestion(overrides: Partial<FlattenedQuestion> = {}): FlattenedQuestion {
   return {

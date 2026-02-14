@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import { Footer, aboutLinks, participateLinks, supportLinks, legalLinks, socialLinks } from './Footer';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

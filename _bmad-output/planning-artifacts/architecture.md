@@ -990,6 +990,7 @@ export const contactViews = pgTable('contact_views', {
   - shadcn/ui has built-in React Hook Form examples
   - Excellent DX with TypeScript
 - **Affects:** All forms, Story 3.2 (Form Components)
+- **Amendment (2026-02-14, Story 3.6):** The native form renderer (FormFillerPage, Story 3.1) and the clerk data entry interface (ClerkDataEntryPage, Story 3.6) use controlled `useState<Record<string, unknown>>` instead of React Hook Form. Rationale: (1) Dynamic form schemas built from server-defined `FlattenedQuestion[]` require runtime Zod schema generation with circular dependencies between `watch()` → skip logic → visible questions → schema rebuilds; (2) The existing `QuestionRenderer` component tree uses a `value`/`onChange` controlled pattern — migrating to RHF `Controller` wrappers adds complexity without functional benefit at the current field count (~20-30 fields); (3) Performance difference is negligible on desktop browsers at this scale. RHF + Zod remains the standard for static forms (auth, settings). A unified migration is tracked as tech-debt Story TD-4.1 in Epic 4.
 
 **Decision 4.4: Data Fetching**
 - **Choice:** TanStack Query

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 import VerifyEmailPage from '../VerifyEmailPage';
@@ -21,6 +21,10 @@ vi.mock('../../api/auth.api', () => ({
 }));
 
 import * as authApi from '../../api/auth.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockAuthApi = authApi as unknown as {
   verifyEmail: ReturnType<typeof vi.fn>;

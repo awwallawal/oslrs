@@ -96,7 +96,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
 
   data_entry_clerk: [
     { label: 'Home', href: '/dashboard/clerk', icon: Home },
-    { label: 'Entry Queue', href: '/dashboard/clerk/queue', icon: ListOrdered },
+    { label: 'Entry Queue', href: '/dashboard/clerk/surveys', icon: ListOrdered },
     { label: 'Completed', href: '/dashboard/clerk/completed', icon: CheckSquare },
     { label: 'My Stats', href: '/dashboard/clerk/stats', icon: BarChart },
   ],

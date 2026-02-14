@@ -1335,6 +1335,29 @@ So that I can efficiently handle legitimate community registration events.
 **Then** all submissions in that group must have their fraud flags cleared and status updated to "Verified"
 **And** I must provide a mandatory justification (e.g., "Trade Union Meeting").
 
+### Story TD-4.1: Migrate Survey Forms to React Hook Form + Zod (Tech Debt)
+
+As a Developer,
+I want a unified form state management approach using React Hook Form + Zod across all survey form components,
+So that validation logic is consistent, re-renders are minimized, and the codebase aligns with Architecture Decision 4.3.
+
+**Acceptance Criteria:**
+
+**Given** the FormFillerPage and ClerkDataEntryPage currently use controlled `useState` for form state,
+**When** this story is complete,
+**Then** both components use React Hook Form with dynamic Zod schemas generated from `FlattenedQuestion[]`,
+**And** all existing form tests pass without regression,
+**And** `QuestionRenderer` and child input components work with RHF `Controller` wrappers,
+**And** `useDraftPersistence` integrates with RHF `watch()` for auto-save,
+**And** skip logic re-evaluation works correctly with the dynamic schema rebuild cycle.
+
+**Notes:**
+- Estimated effort: 10-15 hours
+- Requires dynamic Zod schema builder (`FlattenedQuestion[]` → `z.object()`) handling all 7 validation types
+- Key challenge: circular dependency between `watch()` → skip logic → visible questions → schema rebuild — solve with `useMemo` and careful ordering
+- Auth forms (RegistrationForm, ActivationForm) already use RHF + Zod — use as reference pattern
+- Origin: Conscious deviation documented in Architecture Decision 4.3 amendment (2026-02-14)
+
 ---
 
 ## Epic 5: Back-Office Audit & Policy Reporting

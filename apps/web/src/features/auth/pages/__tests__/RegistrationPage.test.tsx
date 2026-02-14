@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import RegistrationPage from '../RegistrationPage';
@@ -58,6 +58,10 @@ vi.mock('@oslsr/utils', () => ({
 }));
 
 import * as authApi from '../../api/auth.api';
+
+afterEach(() => {
+  cleanup();
+});
 
 const mockAuthApi = authApi as unknown as {
   publicRegister: ReturnType<typeof vi.fn>;

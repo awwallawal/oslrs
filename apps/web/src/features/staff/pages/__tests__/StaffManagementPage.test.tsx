@@ -5,13 +5,17 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 expect.extend(matchers);
 
 import { renderWithRouter } from '../../../../test-utils';
 import StaffManagementPage from '../StaffManagementPage';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock the hooks
 const mockRefetch = vi.fn();

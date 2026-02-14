@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import { NavDropdown, aboutItems, participateItems, supportItems, insightsItems } from './NavDropdown';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

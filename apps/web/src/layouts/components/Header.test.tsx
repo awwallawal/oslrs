@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
 import { Header } from './Header';
+
+afterEach(() => {
+  cleanup();
+});
 
 expect.extend(matchers);
 

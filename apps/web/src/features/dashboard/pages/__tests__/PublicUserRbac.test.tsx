@@ -12,8 +12,8 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
@@ -22,6 +22,10 @@ import { ProtectedRoute } from '../../../auth/components/ProtectedRoute';
 import { AuthContext } from '../../../auth/context/AuthContext';
 import { UserRole } from '@oslsr/types';
 import type { AuthUser } from '@oslsr/types';
+
+afterEach(() => {
+  cleanup();
+});
 
 const createMockUser = (role: AuthUser['role']): AuthUser => ({
   id: `user-${role}`,
