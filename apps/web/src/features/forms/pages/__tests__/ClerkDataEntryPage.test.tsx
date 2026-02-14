@@ -88,6 +88,19 @@ vi.mock('@oslsr/utils/src/validation', () => ({
   modulus11Check: (val: string) => val === '61961438053',
 }));
 
+// Mock useNinCheck for NIN pre-check tests
+let mockNinCheckReturn = {
+  isChecking: false,
+  isDuplicate: false,
+  duplicateInfo: null as { reason: string; registeredAt?: string } | null,
+  checkNin: vi.fn(),
+  reset: vi.fn(),
+};
+
+vi.mock('../../hooks/useNinCheck', () => ({
+  useNinCheck: () => mockNinCheckReturn,
+}));
+
 // ── Test fixtures ───────────────────────────────────────────────────────────
 
 const mockForm = {
@@ -164,6 +177,15 @@ beforeEach(async () => {
     completeDraft: mockCompleteDraft,
     resetForNewEntry: mockResetForNewEntry,
     loading: false,
+  };
+
+  // Reset NIN check mock
+  mockNinCheckReturn = {
+    isChecking: false,
+    isDuplicate: false,
+    duplicateInfo: null,
+    checkNin: vi.fn(),
+    reset: vi.fn(),
   };
 
   // Mock scrollIntoView (not available in jsdom)
@@ -513,6 +535,73 @@ describe('ClerkDataEntryPage', () => {
           }),
         );
       });
+    });
+  });
+
+  describe('Story 3.7: NIN pre-check integration', () => {
+    const ninMockForm = {
+      formId: 'nin-form-id',
+      title: 'NIN Survey',
+      version: '1.0',
+      questions: [
+        {
+          id: 'q-nin',
+          type: 'text',
+          name: 'nin',
+          label: 'NIN',
+          required: true,
+          sectionId: 'sec1',
+          sectionTitle: 'Identity',
+        },
+        {
+          id: 'q-name',
+          type: 'text',
+          name: 'full_name',
+          label: 'Full Name',
+          required: true,
+          sectionId: 'sec1',
+          sectionTitle: 'Identity',
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+    };
+
+    it('shows inline NIN duplicate error when isDuplicate is true (AC 3.7.3)', () => {
+      mockFormReturn = { data: ninMockForm, isLoading: false, error: null };
+      mockNinCheckReturn = {
+        ...mockNinCheckReturn,
+        isDuplicate: true,
+        duplicateInfo: { reason: 'respondent', registeredAt: '2026-02-10T14:30:00.000Z' },
+      };
+      renderPage();
+
+      expect(screen.getByTestId('error-nin')).toHaveTextContent('This NIN is already registered');
+    });
+
+    it('blocks Ctrl+Enter submit when NIN duplicate detected (AC 3.7.3)', async () => {
+      mockFormReturn = { data: ninMockForm, isLoading: false, error: null };
+      mockNinCheckReturn = {
+        ...mockNinCheckReturn,
+        isDuplicate: true,
+        duplicateInfo: { reason: 'staff' },
+      };
+      renderPage();
+
+      // Fill required fields
+      fireEvent.change(screen.getByTestId('input-nin'), {
+        target: { value: '61961438053' },
+      });
+      fireEvent.change(screen.getByTestId('input-full_name'), {
+        target: { value: 'John Doe' },
+      });
+
+      // Attempt Ctrl+Enter submit
+      const form = document.querySelector('[data-clerk-form]')!;
+      fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
+
+      // Submit should be blocked
+      expect(mockCompleteDraft).not.toHaveBeenCalled();
     });
   });
 

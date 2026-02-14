@@ -56,7 +56,9 @@ vi.mock('../../db/index.js', () => ({
         }),
       },
       users: {
-        findFirst: vi.fn(() => ({ roleId: 'role-enumerator' })),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({ roleId: 'role-enumerator' }) // determineSubmitterRole
+          .mockResolvedValue(null), // cross-table NIN check (no staff match)
       },
       roles: {
         findFirst: vi.fn(() => ({ name: 'enumerator' })),
@@ -135,10 +137,11 @@ vi.mock('ioredis', () => {
   };
 });
 
-// Trigger module load
+// Trigger module load + capture mock db for per-test configuration
 await import('../../workers/webhook-ingestion.worker.js');
 if (!capturedProcessor) throw new Error('Worker processor not captured');
 const workerProcessor = capturedProcessor;
+const { db: mockDb } = await import('../../db/index.js') as any;
 
 // ── Test Helpers ───────────────────────────────────────────────────────────
 
@@ -204,18 +207,36 @@ describe('Submission Ingestion Pipeline (Integration)', () => {
     expect(result.action).toBe('skipped');
   });
 
-  it('should link to existing respondent on duplicate NIN', async () => {
+  it('should reject duplicate NIN submission with NIN_DUPLICATE error (AC 3.7.1)', async () => {
     // Pre-populate respondent with matching NIN
     respondentsStore['61961438053'] = {
       id: 'existing-resp',
       nin: '61961438053',
       source: 'public',
+      createdAt: new Date('2026-02-10T14:30:00.000Z'),
     };
 
     const result = await workerProcessor(makeJob()) as Record<string, unknown>;
 
-    expect(result.success).toBe(true);
-    expect(result.action).toBe('created');
+    // Submission should be rejected (permanent error, not retried)
+    expect(result.success).toBe(false);
+    expect(result.action).toBe('failed');
+    expect(result.error).toContain('NIN_DUPLICATE');
+  });
+
+  it('should reject when NIN exists in users table (staff) (AC 3.7.2)', async () => {
+    // Override users mock: first call for determineSubmitterRole, second returns staff match
+    vi.mocked(mockDb.query.users.findFirst)
+      .mockResolvedValueOnce({ roleId: 'role-enumerator' }) // determineSubmitterRole
+      .mockResolvedValueOnce({ id: 'staff-001' }); // cross-table NIN check: found staff member
+    vi.mocked(mockDb.query.roles.findFirst)
+      .mockResolvedValueOnce({ name: 'enumerator' });
+
+    const result = await workerProcessor(makeJob()) as Record<string, unknown>;
+
+    expect(result.success).toBe(false);
+    expect(result.action).toBe('failed');
+    expect(result.error).toContain('NIN_DUPLICATE_STAFF');
   });
 
   it('should handle missing NIN as permanent error (no retry)', async () => {

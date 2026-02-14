@@ -37,7 +37,7 @@ function formatTime(iso: string): string {
 }
 
 export default function EnumeratorSyncPage() {
-  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
+  const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
   const items = useLiveQuery(() =>
     db.submissionQueue.orderBy('createdAt').reverse().toArray(),
   ) ?? [];
@@ -55,7 +55,7 @@ export default function EnumeratorSyncPage() {
           <h1 className="text-2xl font-brand font-semibold text-neutral-900">Sync Status</h1>
           <p className="text-neutral-600 mt-1">Data synchronization and upload status</p>
         </div>
-        <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
+        <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} rejectedCount={rejectedCount} />
       </div>
 
       {/* Action buttons */}

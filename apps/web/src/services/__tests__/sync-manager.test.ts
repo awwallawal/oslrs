@@ -16,8 +16,10 @@ vi.mock('../../lib/offline-db', () => ({
 
 // Mock submission API
 const mockSubmitSurvey = vi.hoisted(() => vi.fn());
+const mockFetchSubmissionStatuses = vi.hoisted(() => vi.fn());
 vi.mock('../../features/forms/api/submission.api', () => ({
   submitSurvey: mockSubmitSurvey,
+  fetchSubmissionStatuses: mockFetchSubmissionStatuses,
 }));
 
 import { SyncManager } from '../sync-manager';
@@ -344,5 +346,184 @@ describe('SyncManager', () => {
     expect(removeSpy).toHaveBeenCalledWith('online', expect.any(Function));
 
     removeSpy.mockRestore();
+  });
+
+  // ── AC 3.7.6: Submission status polling & NIN_DUPLICATE handling ──────
+
+  it('polls submission status after successful sync and marks NIN_DUPLICATE as permanently failed', async () => {
+    setupWhereMock([
+      {
+        id: 'item-1',
+        formId: 'form-1',
+        payload: { responses: { nin: '61961438053' }, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+    mockFetchSubmissionStatuses.mockResolvedValue({
+      'item-1': {
+        processed: true,
+        processingError: 'NIN_DUPLICATE: This individual was already registered on 2026-02-10T14:30:00.000Z via enumerator',
+      },
+    });
+
+    await manager.syncAll();
+
+    // Advance past the first poll delay (5s)
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockFetchSubmissionStatuses).toHaveBeenCalledWith(['item-1']);
+    expect(mockUpdate).toHaveBeenCalledWith('item-1', expect.objectContaining({
+      status: 'failed',
+      error: expect.stringContaining('NIN_DUPLICATE'),
+      retryCount: 3, // MAX_RETRIES — prevents retry
+    }));
+  });
+
+  it('retryFailed skips permanently failed NIN_DUPLICATE items', async () => {
+    const failedItems = [
+      { id: 'fail-1', status: 'failed', retryCount: 3, error: 'NIN_DUPLICATE: already registered' },
+      { id: 'fail-2', status: 'failed', retryCount: 1, error: 'Network error' },
+    ];
+
+    let retryFailedCallCount = 0;
+    mockWhere.mockImplementation(({ status }: { status: string }) => {
+      if (status === 'failed') {
+        retryFailedCallCount++;
+        if (retryFailedCallCount === 1) {
+          return { toArray: vi.fn().mockResolvedValue(failedItems) };
+        }
+        return { toArray: vi.fn().mockResolvedValue([]) };
+      }
+      if (status === 'pending') return { toArray: vi.fn().mockResolvedValue([]) };
+      return { toArray: vi.fn().mockResolvedValue([]) };
+    });
+
+    await manager.retryFailed();
+
+    // NIN_DUPLICATE item should NOT be reset
+    expect(mockUpdate).not.toHaveBeenCalledWith('fail-1', expect.objectContaining({
+      status: 'pending',
+    }));
+    // Regular failure should be reset
+    expect(mockUpdate).toHaveBeenCalledWith('fail-2', {
+      status: 'pending',
+      retryCount: 0,
+      error: null,
+    });
+  });
+
+  it('syncAll skips NIN_DUPLICATE failed items from retry', async () => {
+    setupWhereMock([], [
+      {
+        id: 'item-nin',
+        formId: 'form-1',
+        payload: { responses: {}, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'failed',
+        retryCount: 1, // Under MAX_RETRIES but NIN_DUPLICATE error
+        lastAttempt: '2026-01-01T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: 'NIN_DUPLICATE: already registered',
+      },
+    ]);
+
+    await manager.syncAll();
+
+    // Should NOT attempt to sync NIN_DUPLICATE items
+    expect(mockSubmitSurvey).not.toHaveBeenCalled();
+  });
+
+  it('polling stops when all UIDs are processed', async () => {
+    setupWhereMock([
+      {
+        id: 'item-1',
+        formId: 'form-1',
+        payload: { responses: {}, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+    mockFetchSubmissionStatuses.mockResolvedValue({
+      'item-1': { processed: true, processingError: null },
+    });
+
+    await manager.syncAll();
+
+    // Advance past first poll delay
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockFetchSubmissionStatuses).toHaveBeenCalledTimes(1);
+
+    // Advance past second poll delay — should NOT poll again since item was processed
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(mockFetchSubmissionStatuses).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks NIN_DUPLICATE_STAFF as permanently failed (AC 3.7.6)', async () => {
+    setupWhereMock([
+      {
+        id: 'item-staff',
+        formId: 'form-1',
+        payload: { responses: { nin: '61961438053' }, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-staff', status: 'queued' } });
+    mockFetchSubmissionStatuses.mockResolvedValue({
+      'item-staff': {
+        processed: true,
+        processingError: 'NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member',
+      },
+    });
+
+    await manager.syncAll();
+
+    // Advance past the first poll delay (5s)
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockFetchSubmissionStatuses).toHaveBeenCalledWith(['item-staff']);
+    expect(mockUpdate).toHaveBeenCalledWith('item-staff', expect.objectContaining({
+      status: 'failed',
+      error: expect.stringContaining('NIN_DUPLICATE_STAFF'),
+      retryCount: 3, // MAX_RETRIES — prevents retry
+    }));
+  });
+
+  it('polling skips when offline mid-poll', async () => {
+    setupWhereMock([
+      {
+        id: 'item-1',
+        formId: 'form-1',
+        payload: { responses: {}, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    // Go offline before poll fires
+    vi.stubGlobal('navigator', { ...window.navigator, onLine: false });
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockFetchSubmissionStatuses).not.toHaveBeenCalled();
   });
 });

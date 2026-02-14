@@ -84,6 +84,19 @@ vi.mock('../../../../components/skeletons', () => ({
   SkeletonText: () => <div data-testid="skeleton-text" />,
 }));
 
+// Mock useNinCheck for NIN pre-check tests
+let mockNinCheckReturn = {
+  isChecking: false,
+  isDuplicate: false,
+  duplicateInfo: null as { reason: string; registeredAt?: string } | null,
+  checkNin: vi.fn(),
+  reset: vi.fn(),
+};
+
+vi.mock('../../hooks/useNinCheck', () => ({
+  useNinCheck: () => mockNinCheckReturn,
+}));
+
 let mockUserRole = 'enumerator';
 
 vi.mock('../../../auth', () => ({
@@ -109,6 +122,13 @@ describe('FormFillerPage', () => {
       data: mockForm,
       isLoading: false,
       error: null,
+    };
+    mockNinCheckReturn = {
+      isChecking: false,
+      isDuplicate: false,
+      duplicateInfo: null,
+      checkNin: vi.fn(),
+      reset: vi.fn(),
     };
   });
 
@@ -325,6 +345,51 @@ describe('FormFillerPage', () => {
       fireEvent.click(screen.getByTestId('continue-btn'));
 
       expect(screen.getByRole('alert')).toHaveTextContent('NIN must be 11 digits');
+    });
+  });
+
+  describe('Story 3.7: NIN pre-check integration', () => {
+    const ninForm: FlattenedForm = {
+      formId: 'nin-form',
+      title: 'NIN Test',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q-nin',
+          type: 'text',
+          name: 'nin',
+          label: 'Enter NIN',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'Identity',
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+    };
+
+    it('shows inline NIN duplicate error when isDuplicate is true (AC 3.7.3)', () => {
+      mockHookReturn = { data: ninForm, isLoading: false, error: null };
+      mockNinCheckReturn = {
+        ...mockNinCheckReturn,
+        isDuplicate: true,
+        duplicateInfo: { reason: 'respondent', registeredAt: '2026-02-10T14:30:00.000Z' },
+      };
+      renderPage();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('This NIN is already registered');
+    });
+
+    it('disables Continue button when NIN duplicate detected (AC 3.7.3)', () => {
+      mockHookReturn = { data: ninForm, isLoading: false, error: null };
+      mockNinCheckReturn = {
+        ...mockNinCheckReturn,
+        isDuplicate: true,
+        duplicateInfo: { reason: 'staff' },
+      };
+      renderPage();
+
+      expect(screen.getByTestId('continue-btn')).toBeDisabled();
     });
   });
 

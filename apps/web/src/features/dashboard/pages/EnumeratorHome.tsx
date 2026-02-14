@@ -22,7 +22,7 @@ import { syncManager } from '../../../services/sync-manager';
 export default function EnumeratorHome({ isLoading = false }: { isLoading?: boolean }) {
   const navigate = useNavigate();
   const { showWarning } = usePersistentStorage();
-  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
+  const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
 
   return (
     <div className="p-6">
@@ -56,7 +56,7 @@ export default function EnumeratorHome({ isLoading = false }: { isLoading?: bool
       {/* Sync Status Badge — Story 3.3 AC1, AC7 (header area, hidden when empty) */}
       {!isLoading && (
         <div className="mb-4">
-          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
+          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} rejectedCount={rejectedCount} />
         </div>
       )}
 

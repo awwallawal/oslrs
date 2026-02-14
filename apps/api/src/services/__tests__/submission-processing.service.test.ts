@@ -117,21 +117,24 @@ function makeSubmission(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Mock user + role lookup for enumerator */
+/** Mock user + role lookup for enumerator (+ cross-table NIN check returns null) */
 function mockEnumeratorRole() {
-  mockFindFirstUser.mockResolvedValue({ roleId: 'role-enum' });
+  mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-enum' }); // determineSubmitterRole
+  mockFindFirstUser.mockResolvedValueOnce(null); // cross-table NIN check (no staff match)
   mockFindFirstRole.mockResolvedValue({ name: 'enumerator' });
 }
 
-/** Mock user + role lookup for public_user */
+/** Mock user + role lookup for public_user (+ cross-table NIN check returns null) */
 function mockPublicUserRole() {
-  mockFindFirstUser.mockResolvedValue({ roleId: 'role-pub' });
+  mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-pub' }); // determineSubmitterRole
+  mockFindFirstUser.mockResolvedValueOnce(null); // cross-table NIN check (no staff match)
   mockFindFirstRole.mockResolvedValue({ name: 'public_user' });
 }
 
-/** Mock user + role lookup for data_entry_clerk */
+/** Mock user + role lookup for data_entry_clerk (+ cross-table NIN check returns null) */
 function mockClerkRole() {
-  mockFindFirstUser.mockResolvedValue({ roleId: 'role-clerk' });
+  mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-clerk' }); // determineSubmitterRole
+  mockFindFirstUser.mockResolvedValueOnce(null); // cross-table NIN check (no staff match)
   mockFindFirstRole.mockResolvedValue({ name: 'data_entry_clerk' });
 }
 
@@ -139,7 +142,7 @@ function mockClerkRole() {
 
 describe('SubmissionProcessingService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('processSubmission', () => {
@@ -171,18 +174,26 @@ describe('SubmissionProcessingService', () => {
       expect(mockUpdateSubmissionSet).not.toHaveBeenCalled();
     });
 
-    it('should link to existing respondent on duplicate NIN (not create duplicate)', async () => {
+    it('should reject submission on duplicate NIN with original registration date (AC 3.7.1)', async () => {
+      const registrationDate = new Date('2026-02-10T14:30:00.000Z');
       const submission = makeSubmission();
       mockFindFirstSubmission.mockResolvedValue(submission);
       mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
-      mockFindFirstRespondent.mockResolvedValue({ id: 'existing-resp', nin: '61961438053', source: 'public' });
+      mockFindFirstRespondent.mockResolvedValue({
+        id: 'existing-resp',
+        nin: '61961438053',
+        source: 'enumerator',
+        createdAt: registrationDate,
+      });
       mockEnumeratorRole();
 
-      const result = await SubmissionProcessingService.processSubmission('sub-001');
+      await expect(
+        SubmissionProcessingService.processSubmission('sub-001')
+      ).rejects.toThrow('NIN_DUPLICATE');
 
-      expect(result.action).toBe('processed');
-      expect(result.respondentId).toBe('existing-resp');
-      expect(mockInsertRespondent).not.toHaveBeenCalled(); // No new respondent created
+      // DB update is handled by the worker, not processSubmission (single-write fix)
+      expect(mockUpdateSubmissionSet).not.toHaveBeenCalled();
+      expect(mockInsertRespondent).not.toHaveBeenCalled();
     });
 
     it('should throw permanent error when NIN is missing from rawData', async () => {
@@ -204,7 +215,7 @@ describe('SubmissionProcessingService', () => {
 
       await expect(
         SubmissionProcessingService.processSubmission('sub-001')
-      ).rejects.toThrow();
+      ).rejects.toThrow('Form schema not found');
     });
 
     it('should throw when submission not found', async () => {
@@ -212,7 +223,7 @@ describe('SubmissionProcessingService', () => {
 
       await expect(
         SubmissionProcessingService.processSubmission('sub-nonexistent')
-      ).rejects.toThrow();
+      ).rejects.toThrow('Submission not found');
     });
 
     it('should set enumeratorId=submitterId when submitter role is enumerator', async () => {
@@ -272,19 +283,94 @@ describe('SubmissionProcessingService', () => {
       expect(mockQueueFraudDetection).not.toHaveBeenCalled();
     });
 
-    it('should preserve existing respondent source on duplicate NIN', async () => {
+    it('should reject with error containing original registration date and source (AC 3.7.1)', async () => {
+      const registrationDate = new Date('2026-01-15T08:00:00.000Z');
       const submission = makeSubmission();
       mockFindFirstSubmission.mockResolvedValue(submission);
       mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
-      // Existing respondent was created by public channel
-      mockFindFirstRespondent.mockResolvedValue({ id: 'existing-resp', nin: '61961438053', source: 'public' });
+      mockFindFirstRespondent.mockResolvedValue({
+        id: 'existing-resp',
+        nin: '61961438053',
+        source: 'public',
+        createdAt: registrationDate,
+      });
       mockEnumeratorRole();
 
-      const result = await SubmissionProcessingService.processSubmission('sub-001');
+      await expect(
+        SubmissionProcessingService.processSubmission('sub-001')
+      ).rejects.toThrow(
+        'NIN_DUPLICATE: This individual was already registered on 2026-01-15T08:00:00.000Z via public'
+      );
 
-      // Should link to existing respondent without creating new one
-      expect(result.respondentId).toBe('existing-resp');
       expect(mockInsertRespondent).not.toHaveBeenCalled();
+    });
+
+    it('should reject on race condition (unique constraint violation) with NIN_DUPLICATE (AC 3.7.7)', async () => {
+      const registrationDate = new Date('2026-02-12T10:00:00.000Z');
+      const submission = makeSubmission();
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      // First findFirst returns null (no existing respondent)
+      mockFindFirstRespondent.mockResolvedValueOnce(null);
+      mockEnumeratorRole();
+
+      // Insert throws unique constraint violation (race condition)
+      mockInsertRespondent.mockImplementationOnce(() => {
+        throw Object.assign(new Error('unique constraint'), { code: '23505' });
+      });
+
+      // Retry findFirst returns the respondent created by the other process
+      mockFindFirstRespondent.mockResolvedValueOnce({
+        id: 'race-resp',
+        nin: '61961438053',
+        source: 'enumerator',
+        createdAt: registrationDate,
+      });
+
+      await expect(
+        SubmissionProcessingService.processSubmission('sub-001')
+      ).rejects.toThrow('NIN_DUPLICATE');
+    });
+
+    it('should reject when NIN exists in users table (staff member) (AC 3.7.2)', async () => {
+      const submission = makeSubmission();
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null); // Not in respondents table
+      // determineSubmitterRole: user by ID + role lookup
+      mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-enum' });
+      mockFindFirstRole.mockResolvedValue({ name: 'enumerator' });
+      // Cross-table NIN check: NIN found in users table
+      mockFindFirstUser.mockResolvedValueOnce({ id: 'staff-user-001' });
+
+      await expect(
+        SubmissionProcessingService.processSubmission('sub-001')
+      ).rejects.toThrow('NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member');
+
+      expect(mockInsertRespondent).not.toHaveBeenCalled();
+    });
+
+    it('should check respondents table before users table — respondents takes priority (AC 3.7.2)', async () => {
+      const registrationDate = new Date('2026-02-10T14:30:00.000Z');
+      const submission = makeSubmission();
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      // NIN found in respondents table — takes priority
+      mockFindFirstRespondent.mockResolvedValue({
+        id: 'existing-resp',
+        nin: '61961438053',
+        source: 'enumerator',
+        createdAt: registrationDate,
+      });
+      mockEnumeratorRole();
+
+      await expect(
+        SubmissionProcessingService.processSubmission('sub-001')
+      ).rejects.toThrow('NIN_DUPLICATE:'); // NOT NIN_DUPLICATE_STAFF
+
+      // Users table should NOT be checked for NIN (respondents check fires first)
+      // determineSubmitterRole calls users.findFirst once (by ID), but the cross-table
+      // check should never be reached because respondent check throws first
     });
   });
 

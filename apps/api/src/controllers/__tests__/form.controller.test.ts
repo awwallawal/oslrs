@@ -2,6 +2,7 @@
  * Form Controller Tests
  * Story 3.1: Tests for form rendering endpoints
  * Story 3.3: Tests for submission endpoint
+ * Story 3.7: Tests for NIN check and submission status endpoints
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -11,8 +12,28 @@ import { NativeFormService } from '../../services/native-form.service.js';
 import { queueSubmissionForIngestion } from '../../queues/webhook-ingestion.queue.js';
 import { AppError } from '@oslsr/utils';
 
+const mockFindFirstRespondent = vi.fn();
+const mockFindFirstUser = vi.fn();
+const mockFindManySubmissions = vi.fn();
+
 vi.mock('../../services/native-form.service.js');
 vi.mock('../../queues/webhook-ingestion.queue.js');
+vi.mock('../../db/index.js', () => ({
+  db: {
+    query: {
+      respondents: { findFirst: (...args: unknown[]) => mockFindFirstRespondent(...args) },
+      users: { findFirst: (...args: unknown[]) => mockFindFirstUser(...args) },
+      submissions: { findMany: (...args: unknown[]) => mockFindManySubmissions(...args) },
+    },
+  },
+}));
+vi.mock('@oslsr/utils/src/validation', () => ({
+  modulus11Check: (nin: string) => {
+    // Known valid NINs for testing
+    const validNins = ['61961438053', '21647846180'];
+    return validNins.includes(nin);
+  },
+}));
 
 describe('FormController', () => {
   let mockReq: Partial<Request>;
@@ -394,6 +415,191 @@ describe('FormController', () => {
 
     it('returns "webapp" for unknown role', () => {
       expect(FormController.getSubmissionSource('super_admin')).toBe('webapp');
+    });
+  });
+
+  describe('checkNin (AC 3.7.3)', () => {
+    it('returns available: true when NIN is not registered', async () => {
+      mockReq.body = { nin: '61961438053' };
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: { available: true },
+      });
+    });
+
+    it('returns available: false with reason "respondent" when NIN exists in respondents', async () => {
+      mockReq.body = { nin: '61961438053' };
+      mockFindFirstRespondent.mockResolvedValue({
+        createdAt: new Date('2026-02-10T14:30:00.000Z'),
+      });
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: {
+          available: false,
+          reason: 'respondent',
+          registeredAt: '2026-02-10T14:30:00.000Z',
+        },
+      });
+      // Should NOT check users table when found in respondents
+      expect(mockFindFirstUser).not.toHaveBeenCalled();
+    });
+
+    it('returns available: false with reason "staff" when NIN exists in users (no date exposed)', async () => {
+      mockReq.body = { nin: '61961438053' };
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue({ id: 'staff-user-001' });
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: { available: false, reason: 'staff' },
+      });
+    });
+
+    it('returns 422 for invalid NIN format (fails Modulus 11)', async () => {
+      mockReq.body = { nin: '12345678901' }; // Invalid checksum
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(statusMock).toHaveBeenCalledWith(422);
+      expect(jsonMock).toHaveBeenCalledWith({
+        error: { code: 'INVALID_NIN_FORMAT', message: 'NIN failed Modulus 11 checksum validation' },
+      });
+    });
+
+    it('returns validation error for non-11-digit input', async () => {
+      mockReq.body = { nin: '123' };
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalled();
+      const passedError = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(passedError.statusCode).toBe(400);
+    });
+
+    it('calls next on database error', async () => {
+      mockReq.body = { nin: '61961438053' };
+      mockFindFirstRespondent.mockRejectedValue(new Error('DB connection lost'));
+
+      await FormController.checkNin(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('getSubmissionStatuses (AC 3.7.6)', () => {
+    it('returns statuses for valid UIDs belonging to the user', async () => {
+      mockReq.query = { uids: 'uid-1,uid-2' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      mockFindManySubmissions.mockResolvedValue([
+        { submissionUid: 'uid-1', processed: true, processingError: null },
+        { submissionUid: 'uid-2', processed: true, processingError: 'NIN_DUPLICATE: ...' },
+      ]);
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: {
+          'uid-1': { processed: true, processingError: null },
+          'uid-2': { processed: true, processingError: 'NIN_DUPLICATE: ...' },
+        },
+      });
+    });
+
+    it('returns 400 for empty UIDs', async () => {
+      mockReq.query = { uids: '' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalled();
+      const passedError = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(passedError.statusCode).toBe(400);
+      expect(passedError.code).toBe('INVALID_UIDS');
+    });
+
+    it('returns 400 when more than 50 UIDs provided', async () => {
+      const tooManyUids = Array.from({ length: 51 }, (_, i) => `uid-${i}`).join(',');
+      mockReq.query = { uids: tooManyUids };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalled();
+      const passedError = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(passedError.code).toBe('INVALID_UIDS');
+    });
+
+    it('returns empty data for UIDs belonging to other users', async () => {
+      mockReq.query = { uids: 'uid-other' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      mockFindManySubmissions.mockResolvedValue([]); // No matching submissions
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({ data: {} });
+    });
+
+    it('returns 401 when user is not authenticated (AC 3.7.6)', async () => {
+      mockReq.query = { uids: 'uid-1' };
+      mockReq.user = undefined;
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalled();
+      const passedError = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(passedError.statusCode).toBe(401);
+      expect(passedError.code).toBe('AUTH_REQUIRED');
     });
   });
 });

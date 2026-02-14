@@ -132,11 +132,26 @@ export class SubmissionProcessingService {
     const submitterRole = await this.determineSubmitterRole(submission.submitterId ?? null);
 
     // Find or create respondent by NIN
-    const respondent = await this.findOrCreateRespondent(
-      respondentData,
-      submitterRole,
-      submission.submitterId ?? undefined
-    );
+    let respondent: { id: string; _isNew: boolean };
+    try {
+      respondent = await this.findOrCreateRespondent(
+        respondentData,
+        submitterRole,
+        submission.submitterId ?? undefined
+      );
+    } catch (error) {
+      if (error instanceof PermanentProcessingError) {
+        // NIN duplicate rejection — log and re-throw; worker persists the error (AC 3.7.1)
+        logger.info({
+          event: 'submission_processing.nin_rejected',
+          submissionId,
+          error: error.message,
+        });
+
+        throw error;
+      }
+      throw error;
+    }
 
     // Determine enumeratorId: only set when submitter is an enumerator (AC 3.4.4)
     const enumeratorId = submitterRole === 'enumerator' ? (submission.submitterId ?? null) : null;
@@ -272,25 +287,35 @@ export class SubmissionProcessingService {
 
   /**
    * Find respondent by NIN, or create a new one.
-   * Handles race condition: if unique constraint violation on NIN, retry find.
+   * Rejects duplicate NINs with PermanentProcessingError (Story 3.7).
+   * Handles race condition: if unique constraint violation on NIN, reject.
    */
   static async findOrCreateRespondent(
     data: ExtractedRespondentData,
     source: RespondentSource,
     submitterId?: string
   ): Promise<{ id: string; _isNew: boolean }> {
-    // Try to find existing respondent by NIN
+    // Check respondents table for existing NIN — reject if found (AC 3.7.1)
     const existing = await db.query.respondents.findFirst({
       where: eq(respondents.nin, data.nin),
     });
 
     if (existing) {
-      logger.info({
-        event: 'respondent.duplicate_nin_linked',
-        existingRespondentId: existing.id,
-        source,
-      });
-      return { id: existing.id, _isNew: false };
+      throw new PermanentProcessingError(
+        `NIN_DUPLICATE: This individual was already registered on ${existing.createdAt.toISOString()} via ${existing.source}`
+      );
+    }
+
+    // Check users table for existing NIN — reject if staff member (AC 3.7.2)
+    const staffUser = await db.query.users.findFirst({
+      where: eq(users.nin, data.nin),
+      columns: { id: true },
+    });
+
+    if (staffUser) {
+      throw new PermanentProcessingError(
+        'NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member'
+      );
     }
 
     // Create new respondent
@@ -311,18 +336,16 @@ export class SubmissionProcessingService {
       return { id: created.id, _isNew: true };
     } catch (error: unknown) {
       // Handle race condition: PostgreSQL unique constraint violation (code 23505)
+      // Reject instead of linking (AC 3.7.7)
       const pgError = error as { code?: string };
       if (pgError.code === '23505') {
         const retried = await db.query.respondents.findFirst({
           where: eq(respondents.nin, data.nin),
         });
         if (retried) {
-          logger.info({
-            event: 'respondent.race_condition_resolved',
-            respondentId: retried.id,
-            nin: data.nin,
-          });
-          return { id: retried.id, _isNew: false };
+          throw new PermanentProcessingError(
+            `NIN_DUPLICATE: This individual was already registered on ${retried.createdAt.toISOString()} via ${retried.source}`
+          );
         }
       }
       throw error;

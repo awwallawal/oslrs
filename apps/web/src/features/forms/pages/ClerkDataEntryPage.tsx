@@ -20,6 +20,9 @@ import type { FlattenedQuestion } from '../api/form.api';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonForm } from '../../../components/skeletons';
 import { useToast } from '../../../hooks/useToast';
+import { useNinCheck } from '../hooks/useNinCheck';
+
+const NIN_QUESTION_NAMES = ['nin', 'national_id'];
 
 // ── Validation helpers (same logic as FormFillerPage) ──────────────────────
 
@@ -110,6 +113,7 @@ export default function ClerkDataEntryPage() {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const formStartRef = useRef(Date.now());
+  const ninCheck = useNinCheck();
 
   // Session tracking (persisted to sessionStorage)
   const [session, setSession] = useState(() => {
@@ -162,8 +166,30 @@ export default function ClerkDataEntryPage() {
     return Array.from(sectionMap.values());
   }, [visibleQuestions]);
 
+  // NIN duplicate error message
+  const ninDuplicateError = useMemo(() => {
+    if (!ninCheck.isDuplicate || !ninCheck.duplicateInfo) return undefined;
+    const { reason, registeredAt } = ninCheck.duplicateInfo;
+    if (reason === 'staff') {
+      return 'This NIN belongs to a registered staff member. This form cannot be submitted for a duplicate NIN.';
+    }
+    const date = registeredAt ? new Date(registeredAt).toLocaleDateString() : 'unknown date';
+    return `This NIN is already registered (since ${date}). This form cannot be submitted for a duplicate NIN.`;
+  }, [ninCheck.isDuplicate, ninCheck.duplicateInfo]);
+
+  // Find the NIN question name in this form (if any)
+  const ninQuestionName = useMemo(() => {
+    return allQuestions.find(q => NIN_QUESTION_NAMES.includes(q.name))?.name;
+  }, [allQuestions]);
+
+  // Merge NIN duplicate error into displayed validation errors
+  const displayErrors = useMemo(() => {
+    if (!ninDuplicateError || !ninQuestionName) return validationErrors;
+    return { ...validationErrors, [ninQuestionName]: ninDuplicateError };
+  }, [validationErrors, ninDuplicateError, ninQuestionName]);
+
   // Error count for header badge
-  const errorCount = Object.keys(validationErrors).length;
+  const errorCount = Object.keys(displayErrors).length;
 
   // ── Auto-focus first input on mount ────────────────────────────────────
 
@@ -192,7 +218,11 @@ export default function ClerkDataEntryPage() {
       }
       return prev;
     });
-  }, []);
+    // Reset NIN check when NIN field value changes
+    if (ninQuestionName && questionName === ninQuestionName) {
+      ninCheck.reset();
+    }
+  }, [ninQuestionName, ninCheck]);
 
   // ── Field blur validation ──────────────────────────────────────────────
 
@@ -209,7 +239,16 @@ export default function ClerkDataEntryPage() {
       }
       return prev;
     });
-  }, [allQuestions, formData]);
+    // Trigger NIN availability check on NIN field blur
+    if (ninQuestionName && questionName === ninQuestionName) {
+      const value = String(formData[questionName] ?? '');
+      if (value && value.length === 11) {
+        ninCheck.checkNin(value);
+      } else {
+        ninCheck.reset();
+      }
+    }
+  }, [allQuestions, formData, ninQuestionName, ninCheck]);
 
   // ── Full-form validation ───────────────────────────────────────────────
 
@@ -226,6 +265,9 @@ export default function ClerkDataEntryPage() {
   // ── Submit handler ─────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
+    // Block submit if NIN duplicate detected
+    if (ninCheck.isDuplicate) return;
+
     const newErrors = validateAllFields();
     setValidationErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
@@ -272,6 +314,7 @@ export default function ClerkDataEntryPage() {
     draft.resetForNewEntry();
     setFormData({});
     setValidationErrors({});
+    ninCheck.reset();
     formStartRef.current = Date.now();
 
     // Auto-focus first input after reset
@@ -281,7 +324,7 @@ export default function ClerkDataEntryPage() {
       );
       firstInput?.focus();
     }, 100);
-  }, [validateAllFields, draft, toast]);
+  }, [validateAllFields, draft, toast, ninCheck]);
 
   // ── Ctrl+S save draft ──────────────────────────────────────────────────
 
@@ -307,9 +350,10 @@ export default function ClerkDataEntryPage() {
   // ── Keyboard handler ───────────────────────────────────────────────────
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Ctrl+Enter → submit
+    // Ctrl+Enter → submit (blocked when NIN duplicate exists)
     if (e.ctrlKey && e.key === 'Enter') {
       e.preventDefault();
+      if (ninCheck.isDuplicate) return;
       handleSubmit();
       return;
     }
@@ -349,7 +393,7 @@ export default function ClerkDataEntryPage() {
         }
       }
     }
-  }, [handleSubmit, handleSaveDraft, jumpToFirstError]);
+  }, [handleSubmit, handleSaveDraft, jumpToFirstError, ninCheck.isDuplicate]);
 
   // ── Prevent browser default Ctrl+S ─────────────────────────────────────
 
@@ -467,24 +511,30 @@ export default function ClerkDataEntryPage() {
               {section.title}
             </legend>
             <div className="space-y-4 mt-2">
-              {section.questions.map(question => (
-                <div
-                  key={question.id}
-                  onBlur={(e) => {
-                    // Only validate when focus leaves this question entirely (M3 fix)
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                      handleFieldBlur(question.name);
-                    }
-                  }}
-                >
-                  <QuestionRenderer
-                    question={question}
-                    value={formData[question.name]}
-                    onChange={val => updateField(question.name, val)}
-                    error={validationErrors[question.name]}
-                  />
-                </div>
-              ))}
+              {section.questions.map(question => {
+                const isNinField = NIN_QUESTION_NAMES.includes(question.name);
+                return (
+                  <div
+                    key={question.id}
+                    onBlur={(e) => {
+                      // Only validate when focus leaves this question entirely (M3 fix)
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        handleFieldBlur(question.name);
+                      }
+                    }}
+                  >
+                    <QuestionRenderer
+                      question={question}
+                      value={formData[question.name]}
+                      onChange={val => updateField(question.name, val)}
+                      error={displayErrors[question.name]}
+                    />
+                    {isNinField && ninCheck.isChecking && (
+                      <p className="text-sm text-gray-500 mt-1" data-testid="nin-checking">Checking NIN availability...</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </fieldset>
         ))}

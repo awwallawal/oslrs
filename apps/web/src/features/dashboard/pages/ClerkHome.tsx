@@ -37,7 +37,7 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
   const navigate = useNavigate();
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
-  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
+  const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
 
   // AC2: Auto-focus the CTA button on mount
   useEffect(() => {
@@ -96,7 +96,7 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
       {/* Sync status badge (AC3.6.9) */}
       {!isLoading && (
         <div className="mb-4">
-          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
+          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} rejectedCount={rejectedCount} />
         </div>
       )}
 

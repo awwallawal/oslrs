@@ -25,3 +25,15 @@ export async function submitSurvey(
     body: JSON.stringify(payload),
   });
 }
+
+export interface SubmissionStatus {
+  processed: boolean;
+  processingError: string | null;
+}
+
+export async function fetchSubmissionStatuses(
+  uids: string[],
+): Promise<Record<string, SubmissionStatus>> {
+  const result = await apiClient(`/forms/submissions/status?uids=${uids.join(',')}`);
+  return result.data;
+}

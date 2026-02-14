@@ -8,6 +8,7 @@ interface UseSyncStatusReturn {
   status: SyncState;
   pendingCount: number;
   failedCount: number;
+  rejectedCount: number;
   syncingCount: number;
   totalCount: number;
 }
@@ -20,7 +21,8 @@ export function useSyncStatus(): UseSyncStatusReturn {
   const totalCount = items.length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const syncingCount = items.filter((i) => i.status === 'syncing').length;
-  const failedCount = items.filter((i) => i.status === 'failed').length;
+  const failedCount = items.filter((i) => i.status === 'failed' && !i.error?.includes('NIN_DUPLICATE')).length;
+  const rejectedCount = items.filter((i) => i.status === 'failed' && i.error?.includes('NIN_DUPLICATE')).length;
 
   // Priority: offline > syncing > attention > synced > empty
   let status: SyncState;
@@ -36,5 +38,5 @@ export function useSyncStatus(): UseSyncStatusReturn {
     status = 'synced';
   }
 
-  return { status, pendingCount, failedCount, syncingCount, totalCount };
+  return { status, pendingCount, failedCount, rejectedCount, syncingCount, totalCount };
 }

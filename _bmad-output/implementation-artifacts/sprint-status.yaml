@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-14 - Story 3.6 done, code review R2 fixes applied (18 findings total, 60 tests)
+# updated: 2026-02-14 - Story 3.7 implementation complete, pending code review. Baselines: 359 API, 1234 web tests
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -132,7 +132,7 @@ development_status:
   3-4-idempotent-submission-ingestion-bullmq: done  # Code review passed 2026-02-13: 12 findings (2C, 3H, 4M, 3L) all fixed + 3 extras (rate-limit fix, formXmlId rename, NIN E2E test). 337 API + 1,164 web tests pass, 0 regressions.
   3-5-public-self-registration-survey-access: done  # Code review passed 2026-02-13: 5 findings (3M, 2L), all fixed. Description field, 3-state drafts, role-based detection, test cleanup, CSS extraction. 81 tests pass, 0 regressions.
   3-6-keyboard-optimized-data-entry-interface-clerks: done  # Code review R2 passed 2026-02-14: R1 9 findings all fixed, R2 9 findings (3H, 4M, 2L) all fixed. 60 tests pass, 0 regressions
-  3-7-global-nin-uniqueness-enforcement: ready-for-dev  # Story created 2026-02-14: 7 tasks, comprehensive NIN rejection + pre-check API + frontend validation
+  3-7-global-nin-uniqueness-enforcement: review  # Done 2026-02-14: 7 tasks, NIN rejection + pre-check API + frontend validation + polling
   epic-3-retrospective: optional
 
   # Epic 4: Supervisor Oversight & Field Management

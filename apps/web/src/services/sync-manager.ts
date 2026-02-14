@@ -1,14 +1,19 @@
 import { db } from '../lib/offline-db';
-import { submitSurvey } from '../features/forms/api/submission.api';
+import { submitSurvey, fetchSubmissionStatuses } from '../features/forms/api/submission.api';
 
 const BACKOFF_BASE = 1000;
 const BACKOFF_MAX = 8000;
 const MAX_RETRIES = 3;
 const SUBMISSION_TIMEOUT = 60_000;
 const RECONNECT_DEBOUNCE = 1000;
+const POLL_DELAYS = [5_000, 15_000, 30_000]; // 5s, 15s, 30s escalating
 
 function getRetryDelay(retryCount: number): number {
   return Math.min(BACKOFF_BASE * Math.pow(2, retryCount), BACKOFF_MAX);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export class SyncManager {
@@ -45,11 +50,13 @@ export class SyncManager {
 
   async retryFailed(): Promise<void> {
     // Reset all failed items to pending with retryCount=0 and clear error
+    // Skip permanently failed items (NIN_DUPLICATE — not retryable)
     const failedItems = await db.submissionQueue
       .where({ status: 'failed' })
       .toArray();
 
     for (const item of failedItems) {
+      if (item.error?.includes('NIN_DUPLICATE')) continue;
       await db.submissionQueue.update(item.id, {
         status: 'pending',
         retryCount: 0,
@@ -65,6 +72,7 @@ export class SyncManager {
     if (!navigator.onLine) return;
 
     this._syncing = true;
+    const syncedIds: string[] = [];
 
     try {
       // Process pending items
@@ -74,7 +82,8 @@ export class SyncManager {
 
       for (const item of pendingItems) {
         if (item.retryCount >= MAX_RETRIES) continue;
-        await this._syncItem(item.id, item.formId, item.payload, item.retryCount);
+        const synced = await this._syncItem(item.id, item.formId, item.payload, item.retryCount);
+        if (synced) syncedIds.push(item.id);
       }
 
       // Process failed items eligible for retry
@@ -84,6 +93,7 @@ export class SyncManager {
 
       for (const item of failedItems) {
         if (item.retryCount >= MAX_RETRIES) continue;
+        if (item.error?.includes('NIN_DUPLICATE')) continue;
 
         // Check backoff delay
         if (item.lastAttempt) {
@@ -92,10 +102,18 @@ export class SyncManager {
           if (elapsed < delay) continue;
         }
 
-        await this._syncItem(item.id, item.formId, item.payload, item.retryCount);
+        const synced = await this._syncItem(item.id, item.formId, item.payload, item.retryCount);
+        if (synced) syncedIds.push(item.id);
       }
     } finally {
       this._syncing = false;
+    }
+
+    // Poll for processing results of newly synced submissions (fire-and-forget)
+    if (syncedIds.length > 0) {
+      this._pollSubmissionStatuses(syncedIds).catch(() => {
+        // Polling failure is non-critical — ingestion result discovered on next session
+      });
     }
   }
 
@@ -104,7 +122,7 @@ export class SyncManager {
     formId: string,
     payload: Record<string, unknown>,
     retryCount: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const now = new Date().toISOString();
 
     // Mark as syncing
@@ -135,6 +153,7 @@ export class SyncManager {
 
       // Both 'queued' and 'duplicate' mean success
       await db.submissionQueue.update(id, { status: 'synced', error: null });
+      return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       await db.submissionQueue.update(id, {
@@ -143,6 +162,43 @@ export class SyncManager {
         retryCount: retryCount + 1,
         lastAttempt: now,
       });
+      return false;
+    }
+  }
+
+  /**
+   * Poll submission processing status with escalating delays (AC 3.7.6).
+   * Discovers NIN_DUPLICATE rejections that happened during ingestion
+   * and marks local entries as permanently failed.
+   */
+  private async _pollSubmissionStatuses(uids: string[]): Promise<void> {
+    for (const delay of POLL_DELAYS) {
+      await sleep(delay);
+      if (!navigator.onLine) break;
+
+      try {
+        const statuses = await fetchSubmissionStatuses(uids);
+
+        for (const uid of [...uids]) {
+          const status = statuses[uid];
+          if (!status?.processed) continue;
+
+          if (status.processingError?.includes('NIN_DUPLICATE')) {
+            await db.submissionQueue.update(uid, {
+              status: 'failed',
+              error: status.processingError,
+              retryCount: MAX_RETRIES,
+            });
+          }
+          // Remove processed UIDs from future polls
+          uids = uids.filter(u => u !== uid);
+        }
+
+        // All UIDs processed — stop polling
+        if (uids.length === 0) break;
+      } catch {
+        // API error during polling — skip this attempt, try again next delay
+      }
     }
   }
 }

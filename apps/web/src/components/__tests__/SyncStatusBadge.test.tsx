@@ -72,4 +72,41 @@ describe('SyncStatusBadge', () => {
 
     expect(screen.queryByTestId('pending-count')).not.toBeInTheDocument();
   });
+
+  // ── AC 3.7.6: Rejected NIN badge ──────────────────────────────────────
+
+  it('shows "Duplicate NIN" rejected badge when rejectedCount > 0', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} rejectedCount={1} />);
+
+    expect(screen.getByTestId('rejected-badge')).toBeInTheDocument();
+    expect(screen.getByText('Duplicate NIN')).toBeInTheDocument();
+  });
+
+  it('shows rejected count when rejectedCount > 1', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} rejectedCount={3} />);
+
+    expect(screen.getByTestId('rejected-badge')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('hides rejected badge when rejectedCount is 0', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} rejectedCount={0} />);
+
+    expect(screen.queryByTestId('rejected-badge')).not.toBeInTheDocument();
+  });
+
+  it('hides rejected badge when rejectedCount is not provided', () => {
+    render(<SyncStatusBadge status="synced" pendingCount={0} failedCount={0} />);
+
+    expect(screen.queryByTestId('rejected-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows both attention state and rejected badge when failedCount > 0 and rejectedCount > 0', () => {
+    render(<SyncStatusBadge status="attention" pendingCount={0} failedCount={2} rejectedCount={1} />);
+
+    expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByTestId('sync-badge')).toHaveAttribute('data-state', 'attention');
+    expect(screen.getByTestId('rejected-badge')).toBeInTheDocument();
+    expect(screen.getByText('Duplicate NIN')).toBeInTheDocument();
+  });
 });

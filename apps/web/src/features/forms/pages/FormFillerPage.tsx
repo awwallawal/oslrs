@@ -15,6 +15,9 @@ import type { ValidationRule } from '@oslsr/types';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 import { useAuth } from '../../auth';
+import { useNinCheck } from '../hooks/useNinCheck';
+
+const NIN_QUESTION_NAMES = ['nin', 'national_id'];
 
 interface FormFillerPageProps {
   mode?: 'fill' | 'preview';
@@ -88,6 +91,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   const [draftLoaded, setDraftLoaded] = useState(false);
 
   const isPreview = mode === 'preview';
+  const ninCheck = useNinCheck();
 
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
@@ -116,6 +120,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
   // Current question from the FULL array
   const currentQuestion = form?.questions[currentIndex] ?? null;
+  const isCurrentNin = currentQuestion ? NIN_QUESTION_NAMES.includes(currentQuestion.name) : false;
 
   // Visible index for progress display
   const visibleIndex = useMemo(() => {
@@ -145,12 +150,39 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         [currentQuestion.name]: value,
       }));
       setValidationError(undefined);
+      if (isCurrentNin) ninCheck.reset();
     },
-    [currentQuestion, isPreview]
+    [currentQuestion, isPreview, isCurrentNin, ninCheck]
   );
+
+  const handleNinBlur = useCallback(() => {
+    if (!isCurrentNin || isPreview) return;
+    const value = String(formData[currentQuestion?.name ?? ''] ?? '');
+    if (value && value.length === 11) {
+      ninCheck.checkNin(value);
+    } else {
+      ninCheck.reset();
+    }
+  }, [isCurrentNin, isPreview, formData, currentQuestion, ninCheck]);
+
+  // Build display error: NIN duplicate takes priority over validation error
+  const ninDuplicateError = useMemo(() => {
+    if (!isCurrentNin || !ninCheck.isDuplicate || !ninCheck.duplicateInfo) return undefined;
+    const { reason, registeredAt } = ninCheck.duplicateInfo;
+    if (reason === 'staff') {
+      return 'This NIN belongs to a registered staff member. This form cannot be submitted for a duplicate NIN.';
+    }
+    const date = registeredAt ? new Date(registeredAt).toLocaleDateString() : 'unknown date';
+    return `This NIN is already registered (since ${date}). This form cannot be submitted for a duplicate NIN.`;
+  }, [isCurrentNin, ninCheck.isDuplicate, ninCheck.duplicateInfo]);
+
+  const displayError = ninDuplicateError ?? validationError;
 
   const handleContinue = useCallback(async () => {
     if (!currentQuestion || !form) return;
+
+    // Block continue if NIN duplicate detected
+    if (ninDuplicateError && !isPreview) return;
 
     // Validate current question before advancing
     const error = validateQuestion(currentQuestion, formData[currentQuestion.name]);
@@ -187,7 +219,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       setValidationError(undefined);
       setSlideDirection(null);
     }, 50);
-  }, [currentQuestion, currentIndex, formData, form, isPreview, draft]);
+  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError]);
 
   const handleBack = useCallback(() => {
     if (!form) return;
@@ -328,14 +360,18 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
             ${slideDirection === 'left' ? '-translate-x-2 opacity-95' : ''}
             ${slideDirection === 'right' ? 'translate-x-2 opacity-95' : ''}`}
           data-testid="question-card"
+          onBlur={isCurrentNin ? handleNinBlur : undefined}
         >
           <QuestionRenderer
             question={currentQuestion}
             value={formData[currentQuestion.name]}
             onChange={handleChange}
-            error={validationError}
+            error={displayError}
             disabled={isPreview}
           />
+          {isCurrentNin && ninCheck.isChecking && (
+            <p className="text-sm text-gray-500 mt-2" data-testid="nin-checking">Checking NIN availability...</p>
+          )}
         </div>
 
         {/* Navigation buttons */}
@@ -351,10 +387,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           )}
           <button
             onClick={handleContinue}
-            disabled={!!validationError}
+            disabled={!!displayError || ninCheck.isChecking}
             className={`min-h-[56px] md:min-h-[48px] px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium
               hover:bg-[#7A171B] transition-colors flex-1
-              ${validationError ? 'opacity-50 cursor-not-allowed' : ''}`}
+              ${displayError || ninCheck.isChecking ? 'opacity-50 cursor-not-allowed' : ''}`}
             data-testid="continue-btn"
           >
             {!hasNextQuestion

@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { Redis } from 'ioredis';
+import type { Request } from 'express';
 
 // Lazy-initialized Redis client to avoid connection during test imports
 let redisClient: Redis | null = null;
@@ -14,6 +15,26 @@ function getRedisClient(): Redis {
 
 // In test environment, use memory store to avoid Redis dependency
 const isTestEnv = process.env.NODE_ENV === 'test';
+
+export const ninCheckRateLimit = rateLimit({
+  store: isTestEnv ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient().call(...args),
+  }),
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 requests per minute per user (AC 3.7.3)
+  keyGenerator: (req) => (req as Request & { user?: { sub: string } }).user?.sub ?? req.ip ?? 'unknown',
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many NIN check requests, please try again later'
+  },
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export const publicVerificationRateLimit = rateLimit({
   store: isTestEnv ? undefined : new RedisStore({

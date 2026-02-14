@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { FormController } from '../controllers/form.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { ninCheckRateLimit } from '../middleware/rate-limit.js';
 import { UserRole } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -30,5 +31,11 @@ router.get('/:id/preview', authorize(UserRole.SUPER_ADMIN), FormController.previ
 
 // Submit a completed form (any authenticated user)
 router.post('/submissions', FormController.submitForm);
+
+// Pre-submission NIN availability check (AC 3.7.3)
+router.post('/check-nin', ninCheckRateLimit, FormController.checkNin);
+
+// Poll submission processing status (AC 3.7.6)
+router.get('/submissions/status', FormController.getSubmissionStatuses);
 
 export default router;

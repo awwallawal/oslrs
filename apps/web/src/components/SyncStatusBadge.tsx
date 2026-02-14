@@ -1,10 +1,11 @@
-import { AlertTriangle, CheckCircle, Loader2, WifiOff } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Loader2, WifiOff, XCircle } from 'lucide-react';
 import type { SyncState } from '../features/forms/hooks/useSyncStatus';
 
 interface SyncStatusBadgeProps {
   status: SyncState;
   pendingCount: number;
   failedCount: number;
+  rejectedCount?: number;
 }
 
 const stateConfig = {
@@ -38,7 +39,7 @@ const stateConfig = {
   },
 } as const;
 
-export function SyncStatusBadge({ status, pendingCount, failedCount }: SyncStatusBadgeProps) {
+export function SyncStatusBadge({ status, pendingCount, failedCount, rejectedCount = 0 }: SyncStatusBadgeProps) {
   // Hide badge when queue is empty (first-time user with no submissions)
   if (status === 'empty') return null;
 
@@ -48,20 +49,36 @@ export function SyncStatusBadge({ status, pendingCount, failedCount }: SyncStatu
 
   return (
     <div role="status" aria-live="polite">
-      <div
-        data-testid="sync-badge"
-        data-state={config.testState}
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${config.classes}`}
-      >
-        <Icon className={`w-4 h-4 ${config.animate ? 'animate-spin' : ''}`} />
-        <span>{config.label}</span>
-        {badgeCount > 0 && status !== 'synced' && (
-          <span
-            data-testid="pending-count"
-            className="ml-0.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-current/10"
+      <div className="flex items-center gap-2">
+        <div
+          data-testid="sync-badge"
+          data-state={config.testState}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${config.classes}`}
+        >
+          <Icon className={`w-4 h-4 ${config.animate ? 'animate-spin' : ''}`} />
+          <span>{config.label}</span>
+          {badgeCount > 0 && status !== 'synced' && (
+            <span
+              data-testid="pending-count"
+              className="ml-0.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-current/10"
+            >
+              {badgeCount}
+            </span>
+          )}
+        </div>
+        {rejectedCount > 0 && (
+          <div
+            data-testid="rejected-badge"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-700"
           >
-            {badgeCount}
-          </span>
+            <XCircle className="w-4 h-4" />
+            <span>Duplicate NIN</span>
+            {rejectedCount > 1 && (
+              <span className="ml-0.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-current/10">
+                {rejectedCount}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>

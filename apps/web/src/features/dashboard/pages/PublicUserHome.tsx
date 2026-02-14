@@ -32,7 +32,7 @@ import { syncManager } from '../../../services/sync-manager';
 export default function PublicUserHome({ isLoading = false }: { isLoading?: boolean }) {
   const navigate = useNavigate();
   const [showEpic7Modal, setShowEpic7Modal] = useState(false);
-  const { status, pendingCount, failedCount, syncingCount } = useSyncStatus();
+  const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
 
   return (
     <div className="p-6">
@@ -62,7 +62,7 @@ export default function PublicUserHome({ isLoading = false }: { isLoading?: bool
       {/* Sync Status Badge — Story 3.5 AC3.5.5 (hidden when empty) */}
       {!isLoading && (
         <div className="mb-4">
-          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} />
+          <SyncStatusBadge status={status} pendingCount={pendingCount} failedCount={failedCount} rejectedCount={rejectedCount} />
         </div>
       )}
 

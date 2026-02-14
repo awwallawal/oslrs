@@ -187,6 +187,8 @@ async function runProcessing(
       });
 
       await db.update(submissions).set({
+        processed: true,
+        processedAt: new Date(),
         processingError: errorMessage,
         updatedAt: new Date(),
       }).where(eq(submissions.id, submissionId));
