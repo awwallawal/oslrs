@@ -41,6 +41,7 @@ redis_data/
 # Test artifacts
 vitest-report.json
 .vitest-live*.json
+.vitest-config-loaded
 test-pipeline.html
 reporter*.log
 

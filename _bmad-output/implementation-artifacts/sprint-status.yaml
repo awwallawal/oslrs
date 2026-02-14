@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-14 - Story 3.7 done with code review. Baselines: 362 API, 1240 web tests
+# updated: 2026-02-14 - Epic 3 done, retrospective complete. Prep-epic-4 (10 tasks) added. Baselines: 362 API, 1240 web tests
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -124,7 +124,7 @@ development_status:
   # Epic 3: Mobile Data Collection & Ingestion Pipeline
   # Updated: 2026-02-06 - Story 3.1 rewritten (Enketo → Native), Story 3.4 repurposed (SCP-2026-02-05-001)
   # NOTE: Story 3.1 ACs to be updated per prep-8 (admin form preview from retro)
-  epic-3: in-progress  # Started 2026-02-11: First story (3.0) created
+  epic-3: done  # Completed 2026-02-14: All 8 stories done (3-0 through 3-7), retrospective complete. 362 API + 1,240 web tests.
   3-0-google-oauth-enhanced-public-registration: done  # Completed 2026-02-12. All 12 tasks done, 280 API + 971 web tests pass. Code review passed.
   3-1-native-form-renderer-dashboard: done  # Code review passed 2026-02-12: 10 findings (3C, 4H, 3M), all fixed. 99+ tests pass (92 web + 7 API), 0 regressions.
   3-2-pwa-service-worker-offline-assets: done  # Code review passed 2026-02-12: 8 findings (2H, 4M, 2L), all fixed. ML model CDN route, offline toast, A3 test violations, amber color. 1,096 web tests pass, 0 regressions.
@@ -133,7 +133,23 @@ development_status:
   3-5-public-self-registration-survey-access: done  # Code review passed 2026-02-13: 5 findings (3M, 2L), all fixed. Description field, 3-state drafts, role-based detection, test cleanup, CSS extraction. 81 tests pass, 0 regressions.
   3-6-keyboard-optimized-data-entry-interface-clerks: done  # Code review R2 passed 2026-02-14: R1 9 findings all fixed, R2 9 findings (3H, 4M, 2L) all fixed. 60 tests pass, 0 regressions
   3-7-global-nin-uniqueness-enforcement: done  # Code review passed 2026-02-14: 13 findings (3C, 4H, 4M, 2L), all 13 fixed. 362 API + 1240 web tests pass, 0 regressions.
-  epic-3-retrospective: optional
+  epic-3-retrospective: done  # Completed 2026-02-14: 16-story scope (8 prep + 8 epic). 149 CR findings, 93% retro follow-through, 10 prep tasks for Epic 4.
+
+  # Prep Phase: Epic 4 Readiness (from Epic 3 Retrospective 2026-02-14)
+  # Source: epic-3-retro-2026-02-14.md Action Items
+  # Must complete before Epic 4 begins. Includes bug fixes (B1-B2), PRD alignment (FR21),
+  # tech debt (T4-T6 carried), spikes (messaging, fraud), and schema prep.
+  prep-epic-4: backlog
+  prep-1-fix-permanently-completed-form-bug: backlog  # B1 CRITICAL: Allow new submissions for same form after previous ones complete
+  prep-2-dashboard-submission-counters: backlog  # B2 HIGH: Add persistent "Surveys completed: N" to Enumerator, Clerk, Public dashboards
+  prep-3-fr21-prd-alignment: backlog  # HIGH: Update PRD FR21 — change NIN duplicate behavior from "link" to "reject"
+  prep-4-react-hook-form-zod-migration: backlog  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
+  prep-5-a3-eslint-enforcement: backlog  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
+  prep-6-realtime-messaging-spike: backlog  # HIGH: WebSocket/SSE research for Story 4.2 — validate approach, choose library, create PoC
+  prep-7-fraud-detection-domain-research: backlog  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema.
+  prep-8-supervisor-team-assignment-schema: backlog  # HIGH: Verify/create DB schema for supervisor → enumerator team relationships (Story 4.1)
+  prep-9-fileblob-base64-to-bytea: backlog  # LOW: Carried from T5 (Epic 2+2.5 retro) — resolve or drop
+  prep-10-sub-path-exports-types: backlog  # LOW: Carried from T6 (Epic 2+2.5 retro) — resolve or drop
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: backlog
