@@ -85,6 +85,7 @@ We are adopting a **Lean Infrastructure Strategy** (Docker, Single high-performa
 | 2026-01-24   | 7.8     | **Story 3.0 - Google OAuth:** Added Story 3.0 (Google OAuth & Enhanced Public Registration) to Epic 3. This story implements ADR-015 which was documented in v7.6 but not assigned to a story. Story 3.0 is positioned before Story 3.5 as a prerequisite. Added story references to FR requirements (lines 625-627). | Awwal (PO) |
 | 2026-01-31   | 7.9     | **Epic 2.5 - Role-Based Dashboards:** Added Epic 2.5 (Role-Based Dashboards & Feature Integration) with 8 stories. Created during Epic 2 Retrospective to address visibility gap - backend features from Epic 1-2 need testable UI surfaces. Implements strict route isolation (`/dashboard/{role}`) where each role can ONLY access their own dashboard. Deferred View-As feature to Story 6-7 (requires audit infrastructure). References ADR-016, ux-design-specification.md. | Awwal (PO) |
 | 2026-02-06   | 8.0     | **SCP-2026-02-05-001: ODK Central Removed, Native Form System.** Removed all ODK Central/Enketo dependencies. Replaced with native form system (JSONB schemas, skip logic engine, Form Builder UI, IndexedDB offline sync). Single PostgreSQL database. Infrastructure simplified from 6 to 4 containers. Updated FR2, FR4, FR9, FR10, FR14, FR21, NFR1.3, NFR3.2, NFR3.3, NFR6.2. Architecture rewritten. Epic 2 Stories 2.2-2.6 superseded, new Stories 2.7-2.10 added. Epic 3 Story 3.1 rewritten. See sprint-change-proposal-2026-02-05.md for full details. | Awwal (PO) |
+| 2026-02-15   | 8.1     | **FR21 NIN Duplicate Behavior:** Changed from submission linking to rejection per Epic 3 Retrospective decision (2026-02-14). Rationale: prevents wasted field time on already-registered individuals. Three-layer defense: client pre-check, ingestion rejection, DB UNIQUE constraint. Cross-table check (respondents + users). Matches Story 3.7 implementation. | Awwal (PO) |
 
 ## Requirements
 
@@ -131,7 +132,7 @@ We are adopting a **Lean Infrastructure Strategy** (Docker, Single high-performa
 *   **FR18:** The system shall require Public Searchers to register and log in to view the unredacted contact details of skilled workers who have provided enriched consent.
 *   **FR19:** The system shall log every instance of a registered Public Searcher viewing a skilled worker's unredacted contact details, including Searcher ID, Worker ID, and timestamp.
 *   **FR20:** The system shall provide a dedicated, **High-Volume Data Entry Interface** for Clerks. This interface must be fully keyboard-optimized, ensuring all form navigation can be performed via 'Tab' and submissions triggered via 'Enter' (or similar hotkey) without requiring mouse interaction.
-*   **FR21:** The system shall enforce **Global NIN Uniqueness at the Respondent Record Level** via a UNIQUE constraint on `respondents.nin`. One respondent record exists per individual across all submission sources (Enumerator, Public Self-Registration, Paper Entry). When a submission contains a NIN matching an existing respondent, the system shall **link** the submission to that existing respondent (not reject it), supporting: (a) multi-channel registration — a respondent captured by an enumerator who later self-registers publicly is recognized as the same person; (b) multi-form participation — a respondent completing different surveys accumulates submissions under a single identity; (c) offline resilience — enumerators in low-connectivity areas cannot check NIN uniqueness in real-time, so the server reconciles silently on sync. **Duplicate detection audit:** When a NIN match occurs, the system logs `{ event: 'respondent.duplicate_nin_linked', existingRespondentId, newSubmissionId, source }` for supervisor review. **NIN format validation:** All submission channels (Enumerator native form, Public registration, Clerk data entry) must validate NIN format using the Modulus 11 checksum algorithm on the client side before submission, ensuring only structurally valid NINs enter the pipeline.
+*   **FR21:** The system shall enforce **Global NIN Uniqueness at the Respondent Record Level** via a UNIQUE constraint on `respondents.nin`. One respondent record exists per individual across all submission sources (Enumerator, Public Self-Registration, Paper Entry). When a submission contains a NIN matching an existing respondent, the system shall **reject** the submission with an error message including the original registration date (e.g., "This individual was already registered on 2026-02-10T14:30:00.000Z via enumerator"). Rejected submissions are preserved in the `submissions` table (not deleted) with `processed: true` and the error stored in `processingError`. **Cross-table uniqueness:** The system also checks the `users` table for staff NIN conflicts - if a submission NIN matches a staff member, it is rejected with error code `NIN_DUPLICATE_STAFF` (prevents staff from being double-registered as respondents). **Pre-submission NIN check:** All submission channels (Enumerator native form, Public registration, Clerk data entry) call `POST /api/v1/forms/check-nin` before submission to detect duplicates at the point of entry, disabling the Submit button when a duplicate is found. In offline mode, the pre-check is skipped and the ingestion worker catches the duplicate on sync. **Race condition defense:** If two simultaneous submissions with the same NIN arrive, the PostgreSQL UNIQUE constraint catches the conflict and the second submission is rejected. **Duplicate detection audit:** When a NIN duplicate is rejected, the system logs `{ event: 'respondent.duplicate_nin_rejected', existingRespondentId, rejectedSubmissionId, source, channel }` for supervisor review. **NIN format validation:** All submission channels must validate NIN format using the Modulus 11 checksum algorithm on the client side before submission, ensuring only structurally valid NINs enter the pipeline.
 
 #### Non-Functional
 *   **NFR1: Performance**
@@ -155,7 +156,7 @@ We are adopting a **Lean Infrastructure Strategy** (Docker, Single high-performa
         *   **Backup Testing:** Monthly restore drills in staging environment to validate backup integrity
     *   **NFR3.4:** **Disaster Recovery:** VPS must have automated snapshots every 6 hours with 1-hour Recovery Time Objective (RTO). Super Admin can initiate Point-in-Time Restore (PITR) via Admin panel for recovery up to 24 hours back. Dashboard must detect VPS connectivity issues and display "OFFLINE MODE - Data Will Sync When Server Returns" banner to enumerators.
 *   **NFR4: Security & Compliance (NDPA-Aligned)**
-    *   **NFR4.1 Data Minimization:** Collect NIN (validated via Verhoeff) but **explicitly DO NOT** collect or store BVN.
+    *   **NFR4.1 Data Minimization:** Collect NIN (validated via Modulus 11) but **explicitly DO NOT** collect or store BVN.
     *   **NFR4.2 Retention:** Raw survey data retained 7 years; Marketplace profiles retained until consent revoked.
     *   **NFR4.3 Logically Isolated Marketplace:** Public Search queries a separate **Read-Only Replica** of the marketplace table (logically isolated from operational database). This logical separation ensures marketplace traffic cannot impact data collection performance.
     *   **NFR4.4 Defense-in-Depth:** Rate Limiting (Redis), Honeypots, strict Content Security Policy (CSP), and IP Throttling with the following thresholds:
@@ -167,8 +168,8 @@ We are adopting a **Lean Infrastructure Strategy** (Docker, Single high-performa
         *   **Profile Edit Token Request:** 3 requests per NIN per day
     *   **NFR4.5 Input Validation & Sanitization (Defense-in-Depth Security):** All user input must undergo comprehensive validation and sanitization at both frontend (client-side) and backend (server-side) layers:
         *   **Frontend Validation:** HTML5 input constraints, zod schema validation, real-time error feedback, character count limits. Purpose: Immediate user feedback, reduce server load from malformed requests.
-        *   **Backend Validation (Source of Truth):** All API endpoints must re-validate using zod schemas, enforce database constraints (unique NIN, email format, Verhoeff checksum), sanitize against SQL injection (parameterized queries via Drizzle ORM), XSS attacks (DOMPurify for user-generated content), and command injection. Purpose: Security cannot rely on client-side validation alone.
-        *   **Specific Rules:** NIN (11 digits + Verhoeff check), Email (RFC 5322 compliant), Phone (Nigerian format validation), GPS coordinates (decimal degrees within Nigeria bounds), File uploads (type whitelist, size limits, virus scanning for profile photos).
+        *   **Backend Validation (Source of Truth):** All API endpoints must re-validate using zod schemas, enforce database constraints (unique NIN, email format, Modulus 11 checksum), sanitize against SQL injection (parameterized queries via Drizzle ORM), XSS attacks (DOMPurify for user-generated content), and command injection. Purpose: Security cannot rely on client-side validation alone.
+        *   **Specific Rules:** NIN (11 digits + Modulus 11 check), Email (RFC 5322 compliant), Phone (Nigerian format validation), GPS coordinates (decimal degrees within Nigeria bounds), File uploads (type whitelist, size limits, virus scanning for profile photos).
     *   **NFR4.6 Role Conflict:** A single user account cannot hold conflicting roles (e.g., A Supervisor cannot also be an Enumerator) to prevent fraud.
     *   **NFR4.7:** All data must be encrypted in transit (TLS 1.2+) and at rest (AES-256).
 *   **NFR5: Usability & Compatibility:**
@@ -338,7 +339,7 @@ so that I can access my designated features and my identity is verified for all 
 1.  **Bulk Import:** Super Admin can upload a CSV (`Name, Phone, Email, Role, LGA_ID`) to provision all 132 staff (33 Supervisors, 99 Enumerators) instantly.
 2.  **LGA Locking:** The system **Hard-Locks** the user to the LGA defined in the CSV. The user cannot change this during registration.
 3.  **Profile Completion:** On activation, users must provide: Password, Age, Home Address, Bank Details (for stipend payment), Next of Kin, and a **Live Selfie** (captured using device camera with liveness detection to prevent photo-of-photo fraud). This single photo serves dual purposes: identity verification and printed ID card portrait.
-4.  **NIN Verification:** National Identity Number (11 digits) must be validated locally using the **Verhoeff Checksum Algorithm** to prevent transcription errors.
+4.  **NIN Verification:** National Identity Number (11 digits) must be validated locally using the **Modulus 11 checksum algorithm** to prevent transcription errors.
 5.  **Edit Lock:** Users can edit their profile *only* until their account is "Verified" by an Admin. Once verified (and ID Card generated), profile edits are locked.
 6.  Public users can self-register via the public homepage with mandatory NIN/BVN verification.
 7.  Password hashing with salting is implemented. **Session Security Policy:**
@@ -637,7 +638,7 @@ so that data collected via traditional methods can be digitised.
 **Acceptance Criteria:**
 1.  Data Entry Clerks can log in to a dedicated web interface optimized for rapid data entry via the native form renderer.
 2.  **Keyboard-Optimized:** The interface is designed for high-speed transcription (minimal mouse usage).
-3.  The interface includes all smart checks and validation rules (e.g., Verhoeff checksum for NIN).
+3.  The interface includes all smart checks and validation rules (e.g., Modulus 11 checksum for NIN).
 4.  Clerks must select the relevant LGA and respondent details for each entry.
 5.  Mechanisms are included to track which paper forms have been digitised to prevent duplicates.
 
@@ -752,7 +753,7 @@ I want to **detect and manage various data quality issues such as inconsistent r
 so that the collected information is accurate and reliable.
 
 **Acceptance Criteria:**
-1.  **NIN Integrity:** The system shall utilize the **Verhoeff Checksum Algorithm** to validate respondent NINs in the field.
+1.  **NIN Integrity:** The system shall utilize the **Modulus 11 checksum algorithm** to validate respondent NINs in the field.
 2.  System flags forms with internally inconsistent data (e.g., employed but no job activity).
 3.  System flags statistically significant outlier data points for review.
 4.  Super Admin can configure sensitivity thresholds for outlier detection.
@@ -946,7 +947,7 @@ The following official documents are incorporated by reference as the definitive
   - Field Staff (Enumerators/Supervisors): LGA-restricted, limited READ, WRITE data
   - Back-Office (Assessors/Officials): State-wide, full PII READ, limited/no WRITE
   - Assessors: Can approve/reject. Officials: READ-ONLY.
-- **Data Security:** Global NIN uniqueness (DB-level UNIQUE constraint), Verhoeff validation, PII access controls
+- **Data Security:** Global NIN uniqueness (DB-level UNIQUE constraint), Modulus 11 validation, PII access controls
 - **Fraud Detection:** Configurable thresholds (cluster/speed/pattern) via Admin UI
 - **Marketplace:** 3-Route structure with Read-Only replica, enhanced bot protection (CAPTCHA, fingerprinting)
 - **Native Form System:** JSONB form schemas in PostgreSQL, skip-logic engine, Form Builder UI, one-question-per-screen renderer, IndexedDB offline sync with idempotent submission API
