@@ -32,26 +32,25 @@ vi.mock('@oslsr/utils/src/validation', () => ({
 }));
 
 // Mock drizzle-orm operators
+// Note: schema files import from 'drizzle-orm/pg-core' (unaffected by this mock)
 const mockEq = vi.fn((...args: unknown[]) => ({ _type: 'eq', args }));
 const mockAnd = vi.fn((...args: unknown[]) => ({ _type: 'and', args }));
 const mockCountFn = vi.fn(() => 'count_agg');
 const mockSql = vi.fn((...args: unknown[]) => ({ _type: 'sql', args, as: vi.fn() }));
 const mockGte = vi.fn((...args: unknown[]) => ({ _type: 'gte', args }));
 
-vi.mock('drizzle-orm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('drizzle-orm')>();
-  return {
-    ...actual,
-    eq: (...args: unknown[]) => mockEq(...args),
-    and: (...args: unknown[]) => mockAnd(...args),
-    count: (...args: unknown[]) => mockCountFn(...args),
-    sql: Object.assign(
-      (...args: unknown[]) => mockSql(...args),
-      { raw: (s: string) => s },
-    ),
-    gte: (...args: unknown[]) => mockGte(...args),
-  };
-});
+vi.mock('drizzle-orm', () => ({
+  eq: (...args: unknown[]) => mockEq(...args),
+  and: (...args: unknown[]) => mockAnd(...args),
+  count: (...args: unknown[]) => mockCountFn(...args),
+  sql: Object.assign(
+    (...args: unknown[]) => mockSql(...args),
+    { raw: (s: string) => s },
+  ),
+  gte: (...args: unknown[]) => mockGte(...args),
+  inArray: vi.fn(),
+  relations: (...args: unknown[]) => args,
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
