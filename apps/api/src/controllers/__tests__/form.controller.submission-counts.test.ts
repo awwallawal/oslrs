@@ -2,9 +2,9 @@
  * Form Controller — Submission Counts Tests
  * Story prep-2: Tests for getMySubmissionCounts endpoint
  *
- * Note: We do NOT mock 'drizzle-orm' — real eq/count/sql functions build
- * expression objects that flow through our mocked db chain. This avoids
- * cross-platform ESM mocking issues in CI (Linux thread isolation).
+ * Mock drizzle-orm with static factory (no importOriginal) to avoid
+ * cross-platform ESM thread-isolation issues in CI (Linux).
+ * Schema files import from 'drizzle-orm/pg-core' (unaffected by this mock).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -32,6 +32,21 @@ vi.mock('@oslsr/utils/src/validation', () => ({
   modulus11Check: () => true,
 }));
 
+// Mock drizzle-orm operators to verify WHERE clause arguments
+const mockEq = vi.fn((...args: unknown[]) => ({ _type: 'eq', args }));
+const mockAnd = vi.fn((...args: unknown[]) => ({ _type: 'and', args }));
+const mockCountFn = vi.fn(() => 'count_agg');
+
+vi.mock('drizzle-orm', () => ({
+  eq: (...args: unknown[]) => mockEq(...args),
+  and: (...args: unknown[]) => mockAnd(...args),
+  count: (...args: unknown[]) => mockCountFn(...args),
+  inArray: vi.fn(),
+  sql: Object.assign(vi.fn(), { raw: (s: string) => s }),
+  gte: vi.fn(),
+  relations: (...args: unknown[]) => args,
+}));
+
 describe('FormController.getMySubmissionCounts', () => {
   let mockReq: Partial<Request>;
   let mockRes: Partial<Response>;
@@ -46,7 +61,8 @@ describe('FormController.getMySubmissionCounts', () => {
     mockNext = vi.fn();
     mockReq = { user: { sub: 'user-123', role: 'enumerator' }, query: {} };
 
-    // Reset chain mocks
+    // Re-establish full chain (mockReset:true in config clears implementations)
+    mockSelect.mockReturnValue({ from: mockFrom });
     mockFrom.mockReturnValue({ where: mockWhere });
     mockWhere.mockReturnValue({ groupBy: mockGroupBy });
   });
@@ -84,7 +100,7 @@ describe('FormController.getMySubmissionCounts', () => {
     });
   });
 
-  it('applies WHERE filter for authenticated user (security)', async () => {
+  it('does NOT include other users\' submissions (security)', async () => {
     mockGroupBy.mockResolvedValue([
       { formId: 'form-aaa', count: 3 },
     ]);
@@ -95,14 +111,14 @@ describe('FormController.getMySubmissionCounts', () => {
       mockNext,
     );
 
-    // .where() must be called with a filter (not undefined/null)
-    expect(mockWhere).toHaveBeenCalledTimes(1);
-    const whereArg = mockWhere.mock.calls[0][0];
-    expect(whereArg).toBeDefined();
+    // Verify WHERE clause filters by the authenticated user's ID
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 'user-123');
     expect(jsonMock).toHaveBeenCalledWith({ data: { 'form-aaa': 3 } });
   });
 
   it('counts all submissions regardless of processed flag', async () => {
+    // processed flag tracks respondent-extraction pipeline status,
+    // not submission validity — all submissions should be counted
     mockGroupBy.mockResolvedValue([
       { formId: 'form-aaa', count: 7 },
     ]);
@@ -113,8 +129,11 @@ describe('FormController.getMySubmissionCounts', () => {
       mockNext,
     );
 
-    // Verify the query executes successfully and returns data
-    // (processed flag was removed — no filter should exclude submissions)
+    // Should NOT filter by processed = true
+    const processedCall = mockEq.mock.calls.find(
+      (call) => call[1] === true,
+    );
+    expect(processedCall).toBeUndefined();
     expect(jsonMock).toHaveBeenCalledWith({ data: { 'form-aaa': 7 } });
   });
 
