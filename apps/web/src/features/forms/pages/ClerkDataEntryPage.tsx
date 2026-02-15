@@ -289,7 +289,7 @@ export default function ClerkDataEntryPage() {
       return;
     }
 
-    // Post-submit: session tracking, toast, reset
+    // Post-submit: session tracking + toast
     const elapsed = Date.now() - formStartRef.current;
     const cur = sessionRef.current;
     const newSession = {
@@ -299,10 +299,8 @@ export default function ClerkDataEntryPage() {
     setSession(newSession);
     sessionStorage.setItem('clerk-session', JSON.stringify(newSession));
 
-    // Success toast with completion time
     toast.success({ message: `Form completed in ${Math.round(elapsed / 1000)}s` });
 
-    // Milestone toast every 10 forms
     if (newSession.count % 10 === 0) {
       const avg = Math.round(newSession.totalTimeMs / newSession.count / 1000);
       setTimeout(() => {
@@ -310,21 +308,9 @@ export default function ClerkDataEntryPage() {
       }, 500);
     }
 
-    // Reset for next entry
-    draft.resetForNewEntry();
-    setFormData({});
-    setValidationErrors({});
-    ninCheck.reset();
-    formStartRef.current = Date.now();
-
-    // Auto-focus first input after reset
-    setTimeout(() => {
-      const firstInput = document.querySelector<HTMLElement>(
-        '[data-clerk-form] input:not([type=hidden]), [data-clerk-form] select, [data-clerk-form] textarea',
-      );
-      firstInput?.focus();
-    }, 100);
-  }, [validateAllFields, draft, toast, ninCheck]);
+    // Navigate back to surveys — component unmounts cleanly, no phantom draft
+    navigate('/dashboard/clerk/surveys');
+  }, [validateAllFields, draft, toast, ninCheck, navigate]);
 
   // ── Ctrl+S save draft ──────────────────────────────────────────────────
 
@@ -538,6 +524,19 @@ export default function ClerkDataEntryPage() {
             </div>
           </fieldset>
         ))}
+
+        {/* Submit button */}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={ninCheck.isDuplicate || ninCheck.isChecking}
+          className={`w-full min-h-[48px] px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium hover:bg-[#7A171B] transition-colors ${
+            ninCheck.isDuplicate || ninCheck.isChecking ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          data-testid="submit-btn"
+        >
+          Submit Form
+        </button>
       </form>
     </div>
   );

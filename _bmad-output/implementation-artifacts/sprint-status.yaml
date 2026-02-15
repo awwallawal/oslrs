@@ -139,9 +139,9 @@ development_status:
   # Source: epic-3-retro-2026-02-14.md Action Items
   # Must complete before Epic 4 begins. Includes bug fixes (B1-B2), PRD alignment (FR21),
   # tech debt (T4-T6 carried), spikes (messaging, fraud), and schema prep.
-  prep-epic-4: backlog
-  prep-1-fix-permanently-completed-form-bug: backlog  # B1 CRITICAL: Allow new submissions for same form after previous ones complete
-  prep-2-dashboard-submission-counters: backlog  # B2 HIGH: Add persistent "Surveys completed: N" to Enumerator, Clerk, Public dashboards
+  prep-epic-4: in-progress
+  prep-1-fix-permanently-completed-form-bug: done  # B1 CRITICAL: Allow new submissions for same form after previous ones complete. Code review passed 2026-02-15: 7 findings (1H, 3M, 3L), all 7 fixed. 1,246 web tests pass, 0 regressions.
+  prep-2-dashboard-submission-counters: ready-for-dev  # B2 HIGH: Add persistent "Surveys completed: N" to Enumerator, Clerk, Public dashboards
   prep-3-fr21-prd-alignment: backlog  # HIGH: Update PRD FR21 — change NIN duplicate behavior from "link" to "reject"
   prep-4-react-hook-form-zod-migration: backlog  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
   prep-5-a3-eslint-enforcement: backlog  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)

@@ -18,7 +18,7 @@ let mockFormsReturn: {
   error: Error | null;
 };
 
-let mockDraftMap: Record<string, string>;
+let mockDraftMap: Record<string, 'in-progress'>;
 
 // ── Mock modules ────────────────────────────────────────────────────────────
 
@@ -129,17 +129,10 @@ describe('ClerkSurveysPage', () => {
       expect(screen.getByTestId('start-entry-f2')).toHaveTextContent('Start Entry');
     });
 
-    it('shows Completed badge for completed forms', () => {
-      mockDraftMap = { f1: 'completed' };
+    it('shows Start Entry for form with no draft (re-submission after completion)', () => {
+      mockDraftMap = {};
       renderPage();
-      expect(screen.getByTestId('completed-form-f1')).toHaveTextContent('Completed');
-    });
-
-    it('completed forms are not clickable buttons', () => {
-      mockDraftMap = { f1: 'completed' };
-      renderPage();
-      const completedBadge = screen.getByTestId('completed-form-f1');
-      expect(completedBadge.tagName).not.toBe('BUTTON');
+      expect(screen.getByTestId('start-entry-f1')).toHaveTextContent('Start Entry');
     });
   });
 });

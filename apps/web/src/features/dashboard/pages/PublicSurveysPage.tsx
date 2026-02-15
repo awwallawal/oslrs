@@ -6,7 +6,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { FileText, PlayCircle, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { FileText, PlayCircle, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { usePublishedForms, useFormDrafts } from '../../forms/hooks/useForms';
@@ -72,15 +72,6 @@ export default function PublicSurveysPage() {
                 {form.description && (
                   <p className="text-sm text-neutral-500 mb-4 line-clamp-2">{form.description}</p>
                 )}
-                {draftMap[form.id] === 'completed' ? (
-                  <div
-                    className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white"
-                    data-testid={`completed-survey-${form.id}`}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Completed
-                  </div>
-                ) : (
                 <button
                   onClick={() => navigate(`/dashboard/public/surveys/${form.id}`)}
                   className={`w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
@@ -102,7 +93,6 @@ export default function PublicSurveysPage() {
                     </>
                   )}
                 </button>
-                )}
               </CardContent>
             </Card>
           ))}

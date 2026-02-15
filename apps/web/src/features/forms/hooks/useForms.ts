@@ -54,24 +54,22 @@ export function useFormPreview(formId: string) {
 }
 
 /**
- * Returns a map of formId → draft status for forms with drafts in IndexedDB.
- * Values: 'in-progress' (active draft) or 'completed' (submitted, awaiting sync or synced).
- * Absent keys mean no draft exists (not started).
+ * Returns a map of formId → 'in-progress' for forms with active drafts in IndexedDB.
+ * Absent keys mean no draft exists (form available to start fresh).
  */
 export function useFormDrafts() {
-  const [draftMap, setDraftMap] = useState<Record<string, 'in-progress' | 'completed'>>({});
+  const [draftMap, setDraftMap] = useState<Record<string, 'in-progress'>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDrafts() {
       try {
-        const drafts = await db.drafts.where('status').anyOf('in-progress', 'completed').toArray();
-        const map: Record<string, 'in-progress' | 'completed'> = {};
+        const drafts = await db.drafts.where('status').equals('in-progress').toArray();
+        const map: Record<string, 'in-progress'> = {};
         for (const d of drafts) {
-          // If multiple drafts exist for the same form, prefer 'in-progress' over 'completed'
-          if (!map[d.formId] || d.status === 'in-progress') {
-            map[d.formId] = d.status as 'in-progress' | 'completed';
-          }
+          // Skip phantom drafts with no actual user data
+          if (!d.responses || Object.keys(d.responses).length === 0) continue;
+          map[d.formId] = 'in-progress';
         }
         setDraftMap(map);
       } finally {

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act, waitFor, cleanup } from '@testing-library/react';
 
 // Use vi.hoisted() for mock functions referenced inside vi.mock factory
 const {
@@ -7,12 +8,14 @@ const {
   mockDraftsFirst,
   mockDraftsUpdate,
   mockDraftsAdd,
+  mockDraftsDelete,
   mockSubmissionQueueAdd,
 } = vi.hoisted(() => ({
   mockDraftsWhere: vi.fn(),
   mockDraftsFirst: vi.fn(),
   mockDraftsUpdate: vi.fn(),
   mockDraftsAdd: vi.fn(),
+  mockDraftsDelete: vi.fn(),
   mockSubmissionQueueAdd: vi.fn(),
 }));
 
@@ -25,6 +28,7 @@ vi.mock('../../../../lib/offline-db', () => ({
       },
       update: mockDraftsUpdate,
       add: mockDraftsAdd,
+      delete: mockDraftsDelete,
     },
     submissionQueue: {
       add: mockSubmissionQueueAdd,
@@ -39,11 +43,16 @@ vi.mock('uuidv7', () => ({
 import { useDraftPersistence } from '../useDraftPersistence';
 
 describe('useDraftPersistence', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockDraftsFirst.mockResolvedValue(null);
     mockDraftsUpdate.mockResolvedValue(undefined);
     mockDraftsAdd.mockResolvedValue(undefined);
+    mockDraftsDelete.mockResolvedValue(undefined);
     mockSubmissionQueueAdd.mockResolvedValue(undefined);
   });
 
@@ -85,6 +94,23 @@ describe('useDraftPersistence', () => {
 
     expect(mockDraftsAdd).not.toHaveBeenCalled();
     expect(mockDraftsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not create a draft when formData is empty (no user input)', async () => {
+    renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: {},
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    // Wait past debounce
+    await new Promise((r) => setTimeout(r, 700));
+
+    expect(mockDraftsAdd).not.toHaveBeenCalled();
   });
 
   it('resumes from existing draft', async () => {
@@ -231,5 +257,106 @@ describe('useDraftPersistence', () => {
     const addedItem = mockSubmissionQueueAdd.mock.calls[0][0];
     expect(addedItem.payload).not.toHaveProperty('gpsLatitude');
     expect(addedItem.payload).not.toHaveProperty('gpsLongitude');
+  });
+
+  it('completeDraft() queues submission BEFORE deleting draft (correct order)', async () => {
+    const callOrder: string[] = [];
+    mockSubmissionQueueAdd.mockImplementation(async () => { callOrder.push('queue-add'); });
+    mockDraftsDelete.mockImplementation(async () => { callOrder.push('draft-delete'); });
+
+    mockDraftsFirst.mockResolvedValue({
+      id: 'existing-draft-id',
+      formId: 'form-1',
+      responses: { name: 'Test' },
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'Test' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    // Verify both called
+    expect(mockSubmissionQueueAdd).toHaveBeenCalled();
+    expect(mockDraftsDelete).toHaveBeenCalledWith('existing-draft-id');
+    // Verify order: queue add must happen before draft delete
+    expect(callOrder).toEqual(['queue-add', 'draft-delete']);
+  });
+
+  it('resetForNewEntry() clears draftId and resumeData', async () => {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'existing-draft-id',
+      formId: 'form-1',
+      responses: { name: 'Jane' },
+      questionPosition: 2,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: {},
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    // Wait for draft to load
+    await waitFor(() => {
+      expect(result.current.draftId).toBe('existing-draft-id');
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    // Reset
+    act(() => {
+      result.current.resetForNewEntry();
+    });
+
+    expect(result.current.draftId).toBeNull();
+    expect(result.current.resumeData).toBeNull();
+  });
+
+  it('completeDraft() creates draft then queues+deletes when no prior draft exists (fast Ctrl+Enter)', async () => {
+    mockDraftsFirst.mockResolvedValue(null);
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'Quick' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    // Draft should be created first
+    expect(mockDraftsAdd).toHaveBeenCalled();
+    // Then queued
+    expect(mockSubmissionQueueAdd).toHaveBeenCalled();
+    // Then deleted
+    expect(mockDraftsDelete).toHaveBeenCalledWith('mock-uuid-v7');
   });
 });

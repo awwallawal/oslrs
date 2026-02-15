@@ -31,7 +31,7 @@ let mockHookReturn = {
   error: null as Error | null,
 };
 
-let mockDraftMap: Record<string, 'in-progress' | 'completed'> = {};
+let mockDraftMap: Record<string, 'in-progress'> = {};
 
 vi.mock('../../../forms/hooks/useForms', () => ({
   usePublishedForms: () => mockHookReturn,
@@ -132,5 +132,19 @@ describe('EnumeratorSurveysPage', () => {
     expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Resume Draft');
     // f2 has no draft — should show Start Survey
     expect(screen.getByTestId('start-survey-f2')).toHaveTextContent('Start Survey');
+  });
+
+  it('shows Start Survey for form with no draft (re-submission after completion)', () => {
+    mockDraftMap = {};
+    mockHookReturn = {
+      data: [
+        { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    renderComponent();
+
+    expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Start Survey');
   });
 });

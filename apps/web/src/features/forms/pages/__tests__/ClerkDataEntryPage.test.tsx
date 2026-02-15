@@ -262,10 +262,9 @@ describe('ClerkDataEntryPage', () => {
     });
   });
 
-  describe('AC3.6.5: Auto-Reset After Submission', () => {
-    it('resets form data after successful submission', async () => {
+  describe('AC3.6.5: Submit and Navigate Back', () => {
+    it('navigates back to surveys after successful submission', async () => {
       renderPage();
-      // Fill required fields
       fireEvent.change(screen.getByTestId('input-full_name'), {
         target: { value: 'John Doe' },
       });
@@ -278,7 +277,7 @@ describe('ClerkDataEntryPage', () => {
 
       await waitFor(() => {
         expect(mockCompleteDraft).toHaveBeenCalled();
-        expect(mockResetForNewEntry).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
       });
     });
 
@@ -310,24 +309,7 @@ describe('ClerkDataEntryPage', () => {
       expect(screen.getByTestId('session-header')).toHaveTextContent('Forms completed: 0');
     });
 
-    it('increments session counter after submission', async () => {
-      renderPage();
-      fireEvent.change(screen.getByTestId('input-full_name'), {
-        target: { value: 'John Doe' },
-      });
-      fireEvent.change(screen.getByTestId('input-age'), {
-        target: { value: '30' },
-      });
-
-      const form = document.querySelector('[data-clerk-form]')!;
-      fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('session-header')).toHaveTextContent('Forms completed: 1');
-      });
-    });
-
-    it('persists session to sessionStorage', async () => {
+    it('persists session count to sessionStorage after submission', async () => {
       renderPage();
       fireEvent.change(screen.getByTestId('input-full_name'), {
         target: { value: 'John Doe' },
@@ -605,6 +587,61 @@ describe('ClerkDataEntryPage', () => {
     });
   });
 
+  describe('Submit Button', () => {
+    it('renders a visible Submit Form button', () => {
+      renderPage();
+      const btn = screen.getByTestId('submit-btn');
+      expect(btn).toBeInTheDocument();
+      expect(btn).toHaveTextContent('Submit Form');
+    });
+
+    it('validates and navigates back on Submit Form click with valid data', async () => {
+      renderPage();
+      fireEvent.change(screen.getByTestId('input-full_name'), {
+        target: { value: 'Jane Doe' },
+      });
+      fireEvent.change(screen.getByTestId('input-age'), {
+        target: { value: '28' },
+      });
+
+      fireEvent.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(mockCompleteDraft).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
+      });
+    });
+
+    it('shows validation errors on Submit Form click with empty required fields', async () => {
+      renderPage();
+
+      fireEvent.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('error-count-badge')).toBeInTheDocument();
+      });
+      expect(mockCompleteDraft).not.toHaveBeenCalled();
+    });
+
+    it('is disabled when NIN duplicate is detected', () => {
+      const ninForm = {
+        ...mockForm,
+        questions: [
+          { id: 'q-nin', type: 'text', name: 'nin', label: 'NIN', required: true, sectionId: 'sec1', sectionTitle: 'Identity' },
+        ],
+      };
+      mockFormReturn = { data: ninForm, isLoading: false, error: null };
+      mockNinCheckReturn = {
+        ...mockNinCheckReturn,
+        isDuplicate: true,
+        duplicateInfo: { reason: 'respondent', registeredAt: '2026-02-10T14:30:00.000Z' },
+      };
+      renderPage();
+
+      expect(screen.getByTestId('submit-btn')).toBeDisabled();
+    });
+  });
+
   describe('Navigation', () => {
     it('renders back button that navigates to surveys', () => {
       renderPage();
@@ -650,8 +687,8 @@ describe('ClerkDataEntryPage', () => {
           expect.objectContaining({ message: 'Failed to save submission. Please try again.' }),
         );
       });
-      // Form should NOT reset on failure
-      expect(mockResetForNewEntry).not.toHaveBeenCalled();
+      // Should NOT navigate on failure
+      expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard/clerk/surveys');
     });
 
     it('shows error toast when saveDraft fails', async () => {

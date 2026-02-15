@@ -84,6 +84,9 @@ export function useDraftPersistence({
           updatedAt: now,
         });
       } else {
+        // Don't create a draft until the user has actually entered data
+        if (Object.keys(formData).length === 0) return;
+
         // Create new draft
         const id = uuidv7();
         const draft: Draft = {
@@ -160,13 +163,7 @@ export function useDraftPersistence({
       setDraftId(id);
     }
 
-    // Update draft status
-    await db.drafts.update(draftIdRef.current, {
-      status: 'completed',
-      updatedAt: now,
-    });
-
-    // Add to submission queue with enriched payload
+    // Add to submission queue with enriched payload (FIRST — most critical operation)
     const enrichedPayload: Record<string, unknown> = {
       responses: formData,
       formVersion,
@@ -191,6 +188,22 @@ export function useDraftPersistence({
       error: null,
     };
     await db.submissionQueue.add(queueItem);
+
+    // Mark draft as completed (belt-and-suspenders — if delete fails, draft won't show as 'in-progress')
+    // Ordered AFTER queue add so a crash between queue add and status update
+    // leaves draft visible ('in-progress') rather than silently losing data
+    await db.drafts.update(draftIdRef.current, {
+      status: 'completed',
+      updatedAt: now,
+    });
+
+    // Delete draft from IndexedDB — queue item has all data needed for sync.
+    // Wrapped in try/catch: if delete fails, submission is already queued successfully.
+    try {
+      await db.drafts.delete(draftIdRef.current);
+    } catch {
+      // Best-effort cleanup — draft is 'completed' so useFormDrafts() won't show it
+    }
   }, [formId, formVersion, formData, currentIndex, enabled]);
 
   const resetForNewEntry = useCallback(() => {
