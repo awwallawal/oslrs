@@ -75,24 +75,20 @@ describe('Skeleton Components', () => {
     });
 
     it('renders image placeholder when withImage is true', () => {
-      const { container } = render(<SkeletonCard withImage />);
-      // Image skeleton is the first skeleton with h-40 class
-      const imageSkeleton = container.querySelector('.h-40');
-      expect(imageSkeleton).toBeInTheDocument();
+      render(<SkeletonCard withImage />);
+      expect(screen.getAllByRole('progressbar')).toHaveLength(7);
     });
 
     it('renders without image by default', () => {
-      const { container } = render(<SkeletonCard />);
-      const imageSkeleton = container.querySelector('.h-40');
-      expect(imageSkeleton).not.toBeInTheDocument();
+      render(<SkeletonCard />);
+      expect(screen.getAllByRole('progressbar')).toHaveLength(6);
     });
   });
 
   describe('SkeletonAvatar', () => {
     it('renders circular skeleton', () => {
-      const { container } = render(<SkeletonAvatar />);
-      const avatar = container.querySelector('.rounded-full');
-      expect(avatar).toBeInTheDocument();
+      render(<SkeletonAvatar />);
+      expect(screen.getByLabelText('Loading avatar')).toBeInTheDocument();
     });
 
     it('renders with text when withText is true', () => {
@@ -102,9 +98,10 @@ describe('Skeleton Components', () => {
     });
 
     it('applies size class', () => {
-      const { container } = render(<SkeletonAvatar size="lg" />);
-      const avatar = container.querySelector('.h-12.w-12');
+      render(<SkeletonAvatar size="lg" />);
+      const avatar = screen.getByLabelText('Loading avatar');
       expect(avatar).toBeInTheDocument();
+      expect(avatar).toHaveClass('h-12', 'w-12');
     });
   });
 
@@ -136,23 +133,18 @@ describe('Skeleton Components', () => {
 
   describe('SkeletonForm', () => {
     it('renders form with default field count', () => {
-      const { container } = render(<SkeletonForm />);
-      // Each field has a label skeleton (h-4 w-24) and input skeleton (h-10)
-      const inputSkeletons = container.querySelectorAll('.h-10.w-full');
-      expect(inputSkeletons.length).toBe(5); // 4 field inputs + 1 button
+      render(<SkeletonForm />);
+      expect(screen.getAllByRole('progressbar')).toHaveLength(9);
     });
 
     it('renders specified number of fields', () => {
-      const { container } = render(<SkeletonForm fields={2} />);
-      // 2 fields + button = 3 h-10 elements
-      const inputSkeletons = container.querySelectorAll('.h-10');
-      expect(inputSkeletons.length).toBe(3);
+      render(<SkeletonForm fields={2} />);
+      expect(screen.getAllByRole('progressbar')).toHaveLength(5);
     });
 
     it('can hide button', () => {
-      const { container } = render(<SkeletonForm fields={2} withButton={false} />);
-      const inputSkeletons = container.querySelectorAll('.h-10');
-      expect(inputSkeletons.length).toBe(2);
+      render(<SkeletonForm fields={2} withButton={false} />);
+      expect(screen.getAllByRole('progressbar')).toHaveLength(4);
     });
 
     it('has proper accessibility attributes', () => {

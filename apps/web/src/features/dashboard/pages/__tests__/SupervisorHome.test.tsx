@@ -287,8 +287,8 @@ describe('SupervisorHome', () => {
     });
   });
 
-  describe('AC1: Icons', () => {
-    it('renders correct icons', () => {
+  describe('AC1: Dashboard card content', () => {
+    it('renders expected interactive cards and controls', () => {
       mockTeamOverview = {
         data: { total: 5, active: 3, inactive: 2 },
         isLoading: false,
@@ -300,10 +300,9 @@ describe('SupervisorHome', () => {
         error: null,
       };
       renderComponent();
-      expect(document.querySelector('.lucide-users')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-triangle-alert')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-refresh-cw')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-chevron-right')).toBeInTheDocument();
+      expect(screen.getByTestId('team-overview-card')).toBeInTheDocument();
+      expect(screen.getByTestId('pending-alerts-card')).toBeInTheDocument();
+      expect(screen.getByLabelText('Refresh dashboard')).toBeInTheDocument();
     });
   });
 

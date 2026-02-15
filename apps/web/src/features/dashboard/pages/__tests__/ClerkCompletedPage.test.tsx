@@ -34,8 +34,8 @@ describe('ClerkCompletedPage', () => {
     expect(screen.getByText('Submitted forms will appear here')).toBeInTheDocument();
   });
 
-  it('renders CheckSquare icon', () => {
+  it('keeps the empty state guidance visible', () => {
     renderComponent();
-    expect(document.querySelector('.lucide-square-check-big')).toBeInTheDocument();
+    expect(screen.getByText('No completed entries yet')).toBeInTheDocument();
   });
 });

@@ -37,6 +37,7 @@ async function staffLogin(
   const captchaFrame = page.frameLocator(
     'iframe[title="Widget containing checkbox for hCaptcha security challenge"]',
   );
+  // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
   await captchaFrame.locator('#checkbox').click();
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
@@ -64,6 +65,7 @@ async function publicLogin(
   const captchaFrame = page.frameLocator(
     'iframe[title="Widget containing checkbox for hCaptcha security challenge"]',
   );
+  // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
   await captchaFrame.locator('#checkbox').click();
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 

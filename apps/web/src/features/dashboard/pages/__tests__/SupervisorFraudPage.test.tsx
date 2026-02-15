@@ -30,8 +30,8 @@ describe('SupervisorFraudPage', () => {
     expect(screen.getByText('Fraud detection will be available in a future update.')).toBeInTheDocument();
   });
 
-  it('renders Shield icon', () => {
+  it('keeps fraud placeholder message visible', () => {
     render(<SupervisorFraudPage />);
-    expect(document.querySelector('.lucide-shield')).toBeInTheDocument();
+    expect(screen.getByText('No fraud alerts')).toBeInTheDocument();
   });
 });

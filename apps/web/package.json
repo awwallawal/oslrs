@@ -12,7 +12,7 @@
     "test:contract": "vitest run --test-name-pattern='Contract'",
     "test:ui": "vitest run --test-name-pattern='UI'",
     "test:e2e": "playwright test",
-    "lint": "eslint src",
+    "lint": "eslint src e2e",
     "preview": "vite preview"
   },
   "dependencies": {

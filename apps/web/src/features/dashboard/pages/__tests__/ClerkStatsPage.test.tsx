@@ -34,8 +34,8 @@ describe('ClerkStatsPage', () => {
     expect(screen.getByText('Stats will populate as you complete entries')).toBeInTheDocument();
   });
 
-  it('renders BarChart icon', () => {
+  it('keeps stats placeholder message visible', () => {
     renderComponent();
-    expect(document.querySelector('.lucide-bar-chart')).toBeInTheDocument();
+    expect(screen.getByText('No stats available yet')).toBeInTheDocument();
   });
 });

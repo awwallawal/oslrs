@@ -178,12 +178,12 @@ describe('OfficialHome', () => {
     });
   });
 
-  describe('AC3: Icons', () => {
-    it('renders correct icons in dashboard cards', () => {
+  describe('AC3: Card content', () => {
+    it('renders expected dashboard card titles', () => {
       renderComponent();
-      expect(document.querySelector('.lucide-pie-chart')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-trending-up')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-download')).toBeInTheDocument();
+      expect(screen.getByText('State Overview')).toBeInTheDocument();
+      expect(screen.getByText('Collection Progress')).toBeInTheDocument();
+      expect(screen.getByText('Export Data')).toBeInTheDocument();
     });
   });
 });

@@ -30,8 +30,8 @@ describe('SupervisorTeamPage', () => {
     expect(screen.getByText('Team assignments will be available in a future update.')).toBeInTheDocument();
   });
 
-  it('renders Users icon', () => {
+  it('keeps team placeholder message visible', () => {
     render(<SupervisorTeamPage />);
-    expect(document.querySelector('.lucide-users')).toBeInTheDocument();
+    expect(screen.getByText('No enumerators assigned yet')).toBeInTheDocument();
   });
 });

@@ -34,8 +34,8 @@ describe('EnumeratorDraftsPage', () => {
     expect(screen.getByText('Start a survey to save drafts for later.')).toBeInTheDocument();
   });
 
-  it('renders Save icon', () => {
+  it('keeps the empty state guidance visible', () => {
     renderComponent();
-    expect(document.querySelector('.lucide-save')).toBeInTheDocument();
+    expect(screen.getByText('No drafts saved')).toBeInTheDocument();
   });
 });

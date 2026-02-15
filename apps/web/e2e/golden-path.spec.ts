@@ -69,6 +69,7 @@ test.describe('Golden Path: Admin Form Lifecycle', () => {
 
     // Complete hCaptcha verification (test keys auto-pass)
     const captchaFrame = page.frameLocator('iframe[title="Widget containing checkbox for hCaptcha security challenge"]');
+    // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
     await captchaFrame.locator('#checkbox').click();
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
@@ -159,7 +160,7 @@ test.describe('Golden Path: Admin Form Preview', () => {
    * - All question types render correctly
    */
   // Phase 2: Enable after Story 3.1 + prep-8
-  test.fixme('GP-2: Admin previews published form in read-only sandbox', async ({ page }) => {
+  test.fixme('GP-2: Admin previews published form in read-only sandbox', async () => {
     // Blocked: Requires Story 3.1 (form renderer) + prep-8 (preview AC)
   });
 });
@@ -189,7 +190,7 @@ test.describe('Golden Path: Enumerator Survey Flow', () => {
    * - Survey list matches forms assigned to enumerator's LGA
    */
   // Phase 2: Enable after Story 3.1
-  test.fixme('GP-3: Enumerator sees available surveys on dashboard', async ({ page }) => {
+  test.fixme('GP-3: Enumerator sees available surveys on dashboard', async () => {
     // Blocked: Requires Story 3.1 (form renderer + survey list on dashboard)
   });
 
@@ -222,7 +223,7 @@ test.describe('Golden Path: Enumerator Survey Flow', () => {
    * - Submission is persisted to database
    */
   // Phase 2: Enable after Story 3.1
-  test.fixme('GP-4: Enumerator fills form online with skip logic', async ({ page }) => {
+  test.fixme('GP-4: Enumerator fills form online with skip logic', async () => {
     // Blocked: Requires Story 3.1 (native form renderer with one-question-per-screen)
   });
 });
@@ -255,7 +256,7 @@ test.describe('Golden Path: Submission Pipeline', () => {
    * - submissions.processed = true (after BullMQ job completes)
    */
   // Phase 3: Enable after Story 3.4
-  test.fixme('GP-5: Submission persisted to database via ingestion pipeline', async ({ page }) => {
+  test.fixme('GP-5: Submission persisted to database via ingestion pipeline', async () => {
     // Blocked: Requires Story 3.4 (idempotent submission ingestion with BullMQ)
   });
 });
@@ -291,7 +292,7 @@ test.describe('Golden Path: Offline Capability', () => {
    * - Online sync processes queued submission
    */
   // Phase 3: Enable after Story 3.2 + 3.3
-  test.fixme('GP-6: Draft saved to IndexedDB and resume works offline', async ({ page }) => {
+  test.fixme('GP-6: Draft saved to IndexedDB and resume works offline', async () => {
     // Blocked: Requires Story 3.2 (PWA service worker) + Story 3.3 (offline queue + sync UI)
   });
 });
@@ -326,7 +327,7 @@ test.describe('Golden Path: Keyboard-Optimized Data Entry', () => {
    * - Submission works without any mouse interaction
    */
   // Phase 4: Enable after Story 3.6
-  test.fixme('GP-7: Clerk fills form via keyboard-only navigation', async ({ page }) => {
+  test.fixme('GP-7: Clerk fills form via keyboard-only navigation', async () => {
     // Blocked: Requires Story 3.6 (keyboard-optimized data entry interface)
   });
 });
@@ -358,7 +359,7 @@ test.describe('Golden Path: Cross-Role Data Visibility', () => {
    * - Cross-role data visibility works correctly
    */
   // Phase 4: Enable after Story 3.4 + 4.1
-  test.fixme('GP-8: Supervisor dashboard reflects enumerator submission', async ({ page }) => {
+  test.fixme('GP-8: Supervisor dashboard reflects enumerator submission', async () => {
     // Blocked: Requires Story 3.4 (submissions) + Story 4.1 (supervisor team dashboard)
   });
 });
@@ -405,7 +406,7 @@ test.describe('Golden Path: Public User Journey', () => {
    * Decision should be made before enabling this test in Phase 6.
    */
   // Phase 6: Enable after Story 3.1 + public registration flow + test email infrastructure
-  test.fixme('GP-9: Public user self-registers, verifies email, and fills questionnaire', async ({ page }) => {
+  test.fixme('GP-9: Public user self-registers, verifies email, and fills questionnaire', async () => {
     // Blocked: Requires Story 3.1 (form filling UI) + test email infrastructure for magic link capture
   });
 });
@@ -449,7 +450,7 @@ test.describe('Golden Path: Quality Assurance Pipeline', () => {
    * migration to add fraud_score, fraud_flags, verification_status columns.
    */
   // Phase 7: Enable after Story 4.3 + Epic 5
-  test.fixme('GP-10: Assessor reviews and resolves a flagged submission', async ({ page }) => {
+  test.fixme('GP-10: Assessor reviews and resolves a flagged submission', async () => {
     // Blocked: Requires Story 4.3 (fraud engine) + Epic 5 (assessor review UI)
   });
 });
@@ -489,7 +490,7 @@ test.describe('Golden Path: Read-Only RBAC Enforcement', () => {
    * (a) real data is visible, (b) mutation API calls return 403
    */
   // Phase 8: Enable after Epic 5
-  test.fixme('GP-11: Government Official views real data but cannot modify', async ({ page }) => {
+  test.fixme('GP-11: Government Official views real data but cannot modify', async () => {
     // Blocked: Requires Epic 5 (official dashboard data endpoints + export functionality)
   });
 });

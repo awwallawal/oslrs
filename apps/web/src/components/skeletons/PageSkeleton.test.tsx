@@ -57,10 +57,9 @@ describe('PageSkeleton', () => {
   });
 
   it('renders form variant with form fields', () => {
-    const { container } = render(<PageSkeleton variant="form" />);
-    // Form variant has multiple input-like skeletons (h-10)
-    const formFields = container.querySelectorAll('.h-10.w-full.rounded-md');
-    expect(formFields.length).toBe(4);
+    render(<PageSkeleton variant="form" showHeader={false} showFooter={false} />);
+    // Form variant should render title + 4 label/input rows + submit button skeleton
+    expect(screen.getAllByRole('progressbar')).toHaveLength(10);
   });
 
   it('has neutral-50 background', () => {
@@ -76,15 +75,13 @@ describe('PageSkeleton', () => {
   });
 
   it('uses shimmer animation', () => {
-    const { container } = render(<PageSkeleton />);
-    const shimmers = container.querySelectorAll('.animate-shimmer');
-    expect(shimmers.length).toBeGreaterThan(0);
+    render(<PageSkeleton />);
+    const firstSkeleton = screen.getAllByRole('progressbar')[0];
+    expect(firstSkeleton).toHaveClass('animate-shimmer');
   });
 
   it('renders mobile menu button in header', () => {
-    const { container } = render(<PageSkeleton />);
-    // Mobile menu skeleton is visible on mobile (md:hidden)
-    const mobileButton = container.querySelector('.md\\:hidden');
-    expect(mobileButton).toBeInTheDocument();
+    render(<PageSkeleton />);
+    expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 });

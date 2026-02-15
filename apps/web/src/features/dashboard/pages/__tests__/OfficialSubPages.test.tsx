@@ -28,10 +28,9 @@ describe('Official Sub-Pages', () => {
       expect(screen.getByText('Statistics')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-pie-chart')).toBeInTheDocument();
     });
 
     it('shows Epic 5 message', () => {
@@ -46,10 +45,9 @@ describe('Official Sub-Pages', () => {
       expect(screen.getByText('Trend Analysis')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><OfficialTrendsPage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-trending-up')).toBeInTheDocument();
     });
 
     it('shows Epic 5 message', () => {
@@ -64,10 +62,9 @@ describe('Official Sub-Pages', () => {
       expect(screen.getByText('Export Reports')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><OfficialExportPage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-download')).toBeInTheDocument();
     });
 
     it('shows Epic 5 message', () => {

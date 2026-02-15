@@ -153,15 +153,12 @@ describe('AssessorHome', () => {
     });
   });
 
-  describe('AC1: Icons', () => {
-    it('renders correct icons in dashboard cards', () => {
+  describe('AC1: Dashboard card content', () => {
+    it('renders key card labels and controls', () => {
       renderComponent();
-      expect(document.querySelector('.lucide-file-search')).toBeInTheDocument();
-      // Activity icon appears twice: card header + empty state illustration
-      const activityIcons = document.querySelectorAll('.lucide-activity');
-      expect(activityIcons).toHaveLength(2);
-      expect(document.querySelector('.lucide-shield')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-filter')).toBeInTheDocument();
+      expect(screen.getByText('Verification Queue')).toBeInTheDocument();
+      expect(screen.getByText('Recent Activity')).toBeInTheDocument();
+      expect(screen.getByLabelText('Filter by LGA')).toBeInTheDocument();
     });
   });
 });

@@ -273,11 +273,11 @@ describe('ClerkHome', () => {
     });
   });
 
-  describe('AC1: Icons', () => {
-    it('renders correct icons in dashboard cards', () => {
+  describe('AC1: Quick actions content', () => {
+    it('renders actionable shortcuts content', () => {
       renderComponent();
-      expect(document.querySelector('.lucide-list-ordered')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-keyboard')).toBeInTheDocument();
+      expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start Data Entry' })).toBeInTheDocument();
     });
   });
 

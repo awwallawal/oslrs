@@ -26,6 +26,7 @@ test.describe('NIN Modulus 11 Validation', () => {
     const captchaFrame = page.frameLocator(
       'iframe[title="Widget containing checkbox for hCaptcha security challenge"]',
     );
+    // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
     await captchaFrame.locator('#checkbox').click();
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
     await page.getByRole('button', { name: /sign in/i }).click();
@@ -55,11 +56,13 @@ test.describe('NIN Modulus 11 Validation', () => {
       if (await ninInput.isVisible().catch(() => false)) break;
 
       // Fill required fields to advance (consent questions need 'yes')
-      const currentInput = page.locator('input:visible, select:visible').first();
-      if (await currentInput.isVisible().catch(() => false)) {
-        const inputType = await currentInput.getAttribute('type');
-        if (inputType === 'text' || inputType === 'number') {
-          await currentInput.fill('test');
+      const currentTextbox = page.getByRole('textbox').first();
+      if (await currentTextbox.isVisible().catch(() => false)) {
+        await currentTextbox.fill('test');
+      } else {
+        const currentSelect = page.getByRole('combobox').first();
+        if (await currentSelect.isVisible().catch(() => false)) {
+          await currentSelect.selectOption({ index: 0 }).catch(() => {});
         }
       }
 

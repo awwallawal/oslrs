@@ -8,6 +8,43 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.property.name=/^(querySelector|querySelectorAll|closest|matches)$/][arguments.0.type='Literal'][arguments.0.value=/[.#]/]",
+          message:
+            'Team Agreement A3: avoid CSS class/id selectors in tests. Use getByRole/getByLabelText/getByText/getByTestId instead.',
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='toHaveClass'] > MemberExpression.object > CallExpression[callee.name='expect'] > :matches(CallExpression[callee.property.name=/^(querySelector|querySelectorAll|closest|matches)$/][arguments.0.type='Literal'][arguments.0.value=/[.#]/], MemberExpression[property.name=/^(querySelector|querySelectorAll|closest|matches)$/])",
+          message:
+            'Team Agreement A3: do not use toHaveClass() on nodes discovered via CSS/DOM selector chains. Use accessible queries (role/label/text/testid) instead.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['e2e/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.property.name='locator'][arguments.0.type='Literal']",
+          message:
+            'Team Agreement A3: avoid locator("...") CSS/string selectors in Playwright tests. Use getByRole/getByLabel/getByText/getByTestId. For hCaptcha iframe checkbox only, use a narrow eslint-disable with rationale.',
+        },
+      ],
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**'],
     plugins: {

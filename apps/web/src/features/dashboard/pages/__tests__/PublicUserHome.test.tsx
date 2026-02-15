@@ -148,7 +148,7 @@ describe('PublicUserHome', () => {
 
     it('skeleton grid matches bento layout (2-col md, 3-col lg)', () => {
       renderComponent({ isLoading: true });
-      const skeletonGrid = screen.getAllByLabelText('Loading card')[0].closest('.grid');
+      const skeletonGrid = screen.getAllByLabelText('Loading card')[0].parentElement;
       expect(skeletonGrid).toHaveClass('md:grid-cols-2');
       expect(skeletonGrid).toHaveClass('lg:grid-cols-3');
     });

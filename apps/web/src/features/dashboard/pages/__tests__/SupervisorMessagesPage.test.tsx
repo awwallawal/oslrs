@@ -30,8 +30,8 @@ describe('SupervisorMessagesPage', () => {
     expect(screen.getByText('Team messaging will be available in a future update.')).toBeInTheDocument();
   });
 
-  it('renders MessageSquare icon', () => {
+  it('keeps messaging placeholder text visible', () => {
     render(<SupervisorMessagesPage />);
-    expect(document.querySelector('.lucide-message-square')).toBeInTheDocument();
+    expect(screen.getByText('No messages yet')).toBeInTheDocument();
   });
 });

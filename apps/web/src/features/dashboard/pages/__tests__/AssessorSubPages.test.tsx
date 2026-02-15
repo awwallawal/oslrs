@@ -28,10 +28,9 @@ describe('Assessor Sub-Pages', () => {
       expect(screen.getByText('Verification Queue')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><AssessorQueuePage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-file-search')).toBeInTheDocument();
     });
 
     it('shows Epic 5 message', () => {
@@ -46,10 +45,9 @@ describe('Assessor Sub-Pages', () => {
       expect(screen.getByText('Completed Reviews')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><AssessorCompletedPage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-circle-check-big')).toBeInTheDocument();
     });
 
     it('shows placeholder message', () => {
@@ -64,10 +62,9 @@ describe('Assessor Sub-Pages', () => {
       expect(screen.getByText('Evidence Panel')).toBeInTheDocument();
     });
 
-    it('renders empty state with correct icon', () => {
+    it('renders empty state copy', () => {
       render(<MemoryRouter><AssessorEvidencePage /></MemoryRouter>);
       expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-      expect(document.querySelector('.lucide-shield')).toBeInTheDocument();
     });
 
     it('shows Epic 5 message', () => {
