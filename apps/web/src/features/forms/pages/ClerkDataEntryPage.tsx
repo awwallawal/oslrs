@@ -1,5 +1,5 @@
 /**
- * Clerk Data Entry Page — Keyboard-optimized all-fields form
+ * Clerk Data Entry Page - Keyboard-optimized all-fields form
  *
  * Story 3.6: AC3.6.1 (all-fields layout), AC3.6.2 (Tab/Shift+Tab),
  * AC3.6.3 (Enter-to-advance), AC3.6.4 (Ctrl+Enter submit),
@@ -8,10 +8,10 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Controller, useForm, useWatch, type ResolverOptions } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
-import { modulus11Check } from '@oslsr/utils/src/validation';
-import type { ValidationRule } from '@oslsr/types';
 import { useFormSchema } from '../hooks/useForms';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { getVisibleQuestions } from '../utils/skipLogic';
@@ -21,77 +21,9 @@ import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonForm } from '../../../components/skeletons';
 import { useToast } from '../../../hooks/useToast';
 import { useNinCheck } from '../hooks/useNinCheck';
+import { getCachedDynamicFormSchema } from '../utils/formSchema';
 
 const NIN_QUESTION_NAMES = ['nin', 'national_id'];
-
-// ── Validation helpers (same logic as FormFillerPage) ──────────────────────
-
-const regexCache = new Map<string, RegExp>();
-function getCachedRegex(pattern: string): RegExp | null {
-  let regex = regexCache.get(pattern);
-  if (!regex) {
-    try {
-      regex = new RegExp(pattern);
-    } catch {
-      return null;
-    }
-    regexCache.set(pattern, regex);
-  }
-  return regex;
-}
-
-function checkRule(
-  rule: ValidationRule,
-  value: unknown,
-): string | undefined {
-  const strVal = String(value);
-  const numVal = Number(value);
-
-  switch (rule.type) {
-    case 'minLength':
-      if (strVal.length < Number(rule.value)) return rule.message;
-      break;
-    case 'maxLength':
-      if (strVal.length > Number(rule.value)) return rule.message;
-      break;
-    case 'min':
-      if (isNaN(numVal) || numVal < Number(rule.value)) return rule.message;
-      break;
-    case 'max':
-      if (isNaN(numVal) || numVal > Number(rule.value)) return rule.message;
-      break;
-    case 'regex': {
-      const regex = getCachedRegex(String(rule.value));
-      if (regex && !regex.test(strVal)) return rule.message;
-      break;
-    }
-    case 'modulus11':
-      if (!modulus11Check(strVal)) return rule.message;
-      break;
-  }
-  return undefined;
-}
-
-function validateQuestion(
-  question: FlattenedQuestion,
-  value: unknown,
-): string | undefined {
-  if (question.required) {
-    if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) {
-      return 'This field is required';
-    }
-  }
-
-  if (!question.validation || value == null || value === '') return undefined;
-
-  for (const rule of question.validation) {
-    const error = checkRule(rule, value);
-    if (error) return error;
-  }
-  return undefined;
-}
-
-// ── Section type for grouping ──────────────────────────────────────────────
 
 interface Section {
   id: string;
@@ -99,7 +31,9 @@ interface Section {
   questions: FlattenedQuestion[];
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
+function isEmptyValue(value: unknown): boolean {
+  return value == null || value === '' || (Array.isArray(value) && value.length === 0);
+}
 
 export default function ClerkDataEntryPage() {
   const { formId } = useParams<{ formId: string }>();
@@ -108,19 +42,47 @@ export default function ClerkDataEntryPage() {
 
   // Form schema
   const { data: form, isLoading, error: fetchError } = useFormSchema(formId ?? '');
-
-  // Form state
-  const [formData, setFormData] = useState<Record<string, unknown>>({});
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const formStartRef = useRef(Date.now());
   const ninCheck = useNinCheck();
+
+  const resolver = useCallback(
+    (values: Record<string, unknown>, context: unknown, options: ResolverOptions<Record<string, unknown>>) => {
+      if (!form) {
+        return { values, errors: {} };
+      }
+      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen);
+      return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
+    },
+    [form]
+  );
+
+  const {
+    control,
+    trigger,
+    reset,
+    clearErrors,
+    formState: { errors },
+  } = useForm<Record<string, unknown>>({
+    resolver,
+    mode: 'onChange',
+    defaultValues: {},
+  });
+
+  const watchedFormData = useWatch({ control }) as Record<string, unknown> | undefined;
+  const formData = useMemo<Record<string, unknown>>(
+    () => watchedFormData ?? {},
+    [watchedFormData]
+  );
 
   // Session tracking (persisted to sessionStorage)
   const [session, setSession] = useState(() => {
     const stored = sessionStorage.getItem('clerk-session');
     if (stored) {
-      try { return JSON.parse(stored) as { count: number; totalTimeMs: number }; }
-      catch { /* fall through */ }
+      try {
+        return JSON.parse(stored) as { count: number; totalTimeMs: number };
+      } catch {
+        // fall through
+      }
     }
     return { count: 0, totalTimeMs: 0 };
   });
@@ -139,15 +101,15 @@ export default function ClerkDataEntryPage() {
   // Resume from existing draft if available
   useEffect(() => {
     if (draft.resumeData && Object.keys(draft.resumeData.formData).length > 0) {
-      setFormData(draft.resumeData.formData as Record<string, unknown>);
+      reset(draft.resumeData.formData as Record<string, unknown>);
     }
-  }, [draft.resumeData]);
+  }, [draft.resumeData, reset]);
 
   // Skip logic: get visible questions
   const allQuestions = useMemo(() => form?.questions ?? [], [form?.questions]);
   const visibleQuestions = useMemo(
     () => getVisibleQuestions(allQuestions, formData, form?.sectionShowWhen),
-    [allQuestions, formData, form?.sectionShowWhen],
+    [allQuestions, formData, form?.sectionShowWhen]
   );
 
   // Group visible questions by section
@@ -179,8 +141,23 @@ export default function ClerkDataEntryPage() {
 
   // Find the NIN question name in this form (if any)
   const ninQuestionName = useMemo(() => {
-    return allQuestions.find(q => NIN_QUESTION_NAMES.includes(q.name))?.name;
+    return allQuestions.find((q) => NIN_QUESTION_NAMES.includes(q.name))?.name;
   }, [allQuestions]);
+
+  const validationErrors = useMemo(() => {
+    const nextErrors: Record<string, string> = {};
+    for (const q of visibleQuestions) {
+      const fieldError = errors[q.name]?.message as string | undefined;
+      const fieldValue = formData[q.name];
+      const isStaleRequiredError =
+        fieldError === 'This field is required' && !isEmptyValue(fieldValue);
+
+      if (fieldError && !isStaleRequiredError) {
+        nextErrors[q.name] = fieldError;
+      }
+    }
+    return nextErrors;
+  }, [visibleQuestions, errors, formData]);
 
   // Merge NIN duplicate error into displayed validation errors
   const displayErrors = useMemo(() => {
@@ -191,13 +168,12 @@ export default function ClerkDataEntryPage() {
   // Error count for header badge
   const errorCount = Object.keys(displayErrors).length;
 
-  // ── Auto-focus first input on mount ────────────────────────────────────
-
+  // Auto-focus first input on mount
   useEffect(() => {
     if (!isLoading && form && !draft.loading) {
       const timer = setTimeout(() => {
         const firstInput = document.querySelector<HTMLElement>(
-          '[data-clerk-form] input:not([type=hidden]), [data-clerk-form] select, [data-clerk-form] textarea',
+          '[data-clerk-form] input:not([type=hidden]), [data-clerk-form] select, [data-clerk-form] textarea'
         );
         firstInput?.focus();
       }, 150);
@@ -205,72 +181,33 @@ export default function ClerkDataEntryPage() {
     }
   }, [isLoading, form, draft.loading]);
 
-  // ── Field update handler ───────────────────────────────────────────────
+  const handleFieldBlur = useCallback(
+    async (questionName: string) => {
+      await trigger(questionName);
 
-  const updateField = useCallback((questionName: string, value: unknown) => {
-    setFormData(prev => ({ ...prev, [questionName]: value }));
-    // Clear validation error for this field when user changes it
-    setValidationErrors(prev => {
-      if (prev[questionName]) {
-        const next = { ...prev };
-        delete next[questionName];
-        return next;
+      if (ninQuestionName && questionName === ninQuestionName) {
+        const value = String(formData[questionName] ?? '');
+        if (value && value.length === 11) {
+          ninCheck.checkNin(value);
+        } else {
+          ninCheck.reset();
+        }
       }
-      return prev;
-    });
-    // Reset NIN check when NIN field value changes
-    if (ninQuestionName && questionName === ninQuestionName) {
-      ninCheck.reset();
-    }
-  }, [ninQuestionName, ninCheck]);
+    },
+    [trigger, ninQuestionName, formData, ninCheck]
+  );
 
-  // ── Field blur validation ──────────────────────────────────────────────
-
-  const handleFieldBlur = useCallback((questionName: string) => {
-    const question = allQuestions.find(q => q.name === questionName);
-    if (!question) return;
-    const error = validateQuestion(question, formData[questionName]);
-    setValidationErrors(prev => {
-      if (error) return { ...prev, [questionName]: error };
-      if (prev[questionName]) {
-        const next = { ...prev };
-        delete next[questionName];
-        return next;
-      }
-      return prev;
-    });
-    // Trigger NIN availability check on NIN field blur
-    if (ninQuestionName && questionName === ninQuestionName) {
-      const value = String(formData[questionName] ?? '');
-      if (value && value.length === 11) {
-        ninCheck.checkNin(value);
-      } else {
-        ninCheck.reset();
-      }
-    }
-  }, [allQuestions, formData, ninQuestionName, ninCheck]);
-
-  // ── Full-form validation ───────────────────────────────────────────────
-
-  const validateAllFields = useCallback((): Record<string, string> => {
-    const errors: Record<string, string> = {};
-    for (const q of visibleQuestions) {
-      if (q.type === 'note') continue;
-      const error = validateQuestion(q, formData[q.name]);
-      if (error) errors[q.name] = error;
-    }
-    return errors;
-  }, [visibleQuestions, formData]);
-
-  // ── Submit handler ─────────────────────────────────────────────────────
-
+  // Submit handler
   const handleSubmit = useCallback(async () => {
     // Block submit if NIN duplicate detected
     if (ninCheck.isDuplicate) return;
 
-    const newErrors = validateAllFields();
-    setValidationErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
+    const fieldNames = visibleQuestions
+      .filter((q) => q.type !== 'note')
+      .map((q) => q.name);
+
+    const isValid = await trigger(fieldNames);
+    if (!isValid) {
       // Focus first error field
       setTimeout(() => {
         const firstError = document.querySelector<HTMLElement>('[aria-invalid="true"]');
@@ -308,12 +245,10 @@ export default function ClerkDataEntryPage() {
       }, 500);
     }
 
-    // Navigate back to surveys — component unmounts cleanly, no phantom draft
     navigate('/dashboard/clerk/surveys');
-  }, [validateAllFields, draft, toast, ninCheck, navigate]);
+  }, [trigger, visibleQuestions, draft, toast, ninCheck, navigate]);
 
-  // ── Ctrl+S save draft ──────────────────────────────────────────────────
-
+  // Ctrl+S save draft
   const handleSaveDraft = useCallback(async () => {
     try {
       await draft.saveDraft();
@@ -323,8 +258,7 @@ export default function ClerkDataEntryPage() {
     }
   }, [draft, toast]);
 
-  // ── Ctrl+E jump to first error ─────────────────────────────────────────
-
+  // Ctrl+E jump to first error
   const jumpToFirstError = useCallback(() => {
     const firstError = document.querySelector<HTMLElement>('[aria-invalid="true"]');
     if (firstError) {
@@ -333,56 +267,57 @@ export default function ClerkDataEntryPage() {
     }
   }, []);
 
-  // ── Keyboard handler ───────────────────────────────────────────────────
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Ctrl+Enter → submit (blocked when NIN duplicate exists)
-    if (e.ctrlKey && e.key === 'Enter') {
-      e.preventDefault();
-      if (ninCheck.isDuplicate) return;
-      handleSubmit();
-      return;
-    }
-
-    // Ctrl+S → save draft
-    if (e.ctrlKey && e.key === 's') {
-      e.preventDefault();
-      handleSaveDraft();
-      return;
-    }
-
-    // Ctrl+E → jump to first error
-    if (e.ctrlKey && e.key === 'e') {
-      e.preventDefault();
-      jumpToFirstError();
-      return;
-    }
-
-    // Enter on text/number/date input → advance to next input
-    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-      const target = e.target as HTMLElement;
-      const tagName = target.tagName.toLowerCase();
-      const type = target.getAttribute('type');
-      // Only advance on single-line inputs (not textarea, not select, not checkbox/radio)
-      if (tagName === 'input' && type !== 'checkbox' && type !== 'radio') {
+  // Keyboard handler
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Ctrl+Enter -> submit (blocked when NIN duplicate exists)
+      if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        const formContainer = document.querySelector('[data-clerk-form]');
-        if (!formContainer) return;
-        const inputs = Array.from(
-          formContainer.querySelectorAll<HTMLElement>(
-            'input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])',
-          ),
-        ).filter(el => el.tabIndex !== -1);
-        const idx = inputs.indexOf(target);
-        if (idx >= 0 && idx < inputs.length - 1) {
-          inputs[idx + 1].focus();
+        if (ninCheck.isDuplicate) return;
+        handleSubmit();
+        return;
+      }
+
+      // Ctrl+S -> save draft
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        handleSaveDraft();
+        return;
+      }
+
+      // Ctrl+E -> jump to first error
+      if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        jumpToFirstError();
+        return;
+      }
+
+      // Enter on text/number/date input -> advance to next input
+      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+        const target = e.target as HTMLElement;
+        const tagName = target.tagName.toLowerCase();
+        const type = target.getAttribute('type');
+        // Only advance on single-line inputs (not textarea, not select, not checkbox/radio)
+        if (tagName === 'input' && type !== 'checkbox' && type !== 'radio') {
+          e.preventDefault();
+          const formContainer = document.querySelector('[data-clerk-form]');
+          if (!formContainer) return;
+          const inputs = Array.from(
+            formContainer.querySelectorAll<HTMLElement>(
+              'input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+            )
+          ).filter((el) => el.tabIndex !== -1);
+          const idx = inputs.indexOf(target);
+          if (idx >= 0 && idx < inputs.length - 1) {
+            inputs[idx + 1].focus();
+          }
         }
       }
-    }
-  }, [handleSubmit, handleSaveDraft, jumpToFirstError, ninCheck.isDuplicate]);
+    },
+    [handleSubmit, handleSaveDraft, jumpToFirstError, ninCheck.isDuplicate]
+  );
 
-  // ── Prevent browser default Ctrl+S ─────────────────────────────────────
-
+  // Prevent browser default Ctrl+S
   useEffect(() => {
     const preventBrowserSave = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
@@ -393,8 +328,7 @@ export default function ClerkDataEntryPage() {
     return () => document.removeEventListener('keydown', preventBrowserSave);
   }, []);
 
-  // ── Loading state ──────────────────────────────────────────────────────
-
+  // Loading state
   if (isLoading || draft.loading) {
     return (
       <div className="p-6 max-w-4xl mx-auto">
@@ -407,8 +341,7 @@ export default function ClerkDataEntryPage() {
     );
   }
 
-  // ── Error state ────────────────────────────────────────────────────────
-
+  // Error state
   if (fetchError) {
     return (
       <div className="p-6 max-w-4xl mx-auto">
@@ -435,8 +368,6 @@ export default function ClerkDataEntryPage() {
     ? Math.round(session.totalTimeMs / session.count / 1000)
     : 0;
 
-  // ── Render ─────────────────────────────────────────────────────────────
-
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Back navigation */}
@@ -461,7 +392,7 @@ export default function ClerkDataEntryPage() {
         )}
       </div>
 
-      {/* Keyboard shortcuts bar (AC3.6.2, 3.6.3, 3.6.4, 3.6.7, 3.6.8) */}
+      {/* Keyboard shortcuts bar */}
       <div
         className="flex flex-wrap gap-3 text-xs text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-lg px-4 py-2 mb-6"
         data-testid="shortcuts-bar"
@@ -473,7 +404,7 @@ export default function ClerkDataEntryPage() {
         <span><kbd className="px-1 py-0.5 bg-white border border-neutral-300 rounded font-mono">Ctrl+E</kbd> Jump to error</span>
       </div>
 
-      {/* Error count badge (AC3.6.8) */}
+      {/* Error count badge */}
       {errorCount > 0 && (
         <div
           className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4"
@@ -484,36 +415,48 @@ export default function ClerkDataEntryPage() {
         </div>
       )}
 
-      {/* All-fields form (AC3.6.1) */}
+      {/* All-fields form */}
       <form
         onKeyDown={handleKeyDown}
-        onSubmit={e => e.preventDefault()}
+        onSubmit={(e) => e.preventDefault()}
         data-clerk-form
         className="space-y-8"
       >
-        {sections.map(section => (
+        {sections.map((section) => (
           <fieldset key={section.id} className="border border-neutral-200 rounded-lg p-4">
             <legend className="text-sm font-semibold text-neutral-700 px-2">
               {section.title}
             </legend>
             <div className="space-y-4 mt-2">
-              {section.questions.map(question => {
+              {section.questions.map((question) => {
                 const isNinField = NIN_QUESTION_NAMES.includes(question.name);
                 return (
                   <div
                     key={question.id}
                     onBlur={(e) => {
-                      // Only validate when focus leaves this question entirely (M3 fix)
+                      // Only validate when focus leaves this question entirely
                       if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                        handleFieldBlur(question.name);
+                        void handleFieldBlur(question.name);
                       }
                     }}
                   >
-                    <QuestionRenderer
-                      question={question}
-                      value={formData[question.name]}
-                      onChange={val => updateField(question.name, val)}
-                      error={displayErrors[question.name]}
+                    <Controller
+                      name={question.name}
+                      control={control}
+                      render={({ field }) => (
+                        <QuestionRenderer
+                          question={question}
+                          value={field.value}
+                          onChange={(value) => {
+                            field.onChange(value);
+                            clearErrors(question.name);
+                            if (ninQuestionName && question.name === ninQuestionName) {
+                              ninCheck.reset();
+                            }
+                          }}
+                          error={displayErrors[question.name]}
+                        />
+                      )}
                     />
                     {isNinField && ninCheck.isChecking && (
                       <p className="text-sm text-gray-500 mt-1" data-testid="nin-checking">Checking NIN availability...</p>

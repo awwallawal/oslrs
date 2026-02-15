@@ -143,7 +143,7 @@ development_status:
   prep-1-fix-permanently-completed-form-bug: done  # B1 CRITICAL: Allow new submissions for same form after previous ones complete. Code review passed 2026-02-15: 7 findings (1H, 3M, 3L), all 7 fixed. 1,246 web tests pass, 0 regressions.
   prep-2-dashboard-submission-counters: done  # B2 HIGH: Dashboard productivity upgrade. R1: 6 findings all fixed. R2 (Tasks 10-20): 7 findings (2H, 1M, 4L), 5 fixed + 1 noted. 1,303 web + 394 API tests pass, 0 regressions.
   prep-3-fr21-prd-alignment: done  # HIGH: Update PRD FR21 — change NIN duplicate behavior from "link" to "reject"
-  prep-4-react-hook-form-zod-migration: backlog  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
+  prep-4-react-hook-form-zod-migration: done  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
   prep-5-a3-eslint-enforcement: backlog  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
   prep-6-realtime-messaging-spike: backlog  # HIGH: WebSocket/SSE research for Story 4.2 — validate approach, choose library, create PoC
   prep-7-fraud-detection-domain-research: backlog  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema.
@@ -153,8 +153,8 @@ development_status:
   prep-11-offline-queue-user-isolation: backlog  # MEDIUM: SubmissionQueueItem lacks userId — switching accounts in same browser without clearing IndexedDB causes submissions to be attributed to wrong user. Add userId to queue items, validate at sync time, clear/partition queue on logout.
 
   # Epic 4: Supervisor Oversight & Field Management
-  epic-4: backlog
-  4-1-supervisor-team-dashboard: backlog
+  epic-4: in-progress
+  4-1-supervisor-team-dashboard: ready-for-dev
   4-2-in-app-team-messaging: backlog
   4-3-fraud-engine-configurable-thresholds: backlog
   4-4-flagged-submission-review-evidence-panel: backlog
@@ -190,3 +190,5 @@ development_status:
   7-5-profile-enrichment-via-edit-token: backlog
   7-6-contact-view-logging-rate-limiting: backlog
   epic-7-retrospective: optional
+
+

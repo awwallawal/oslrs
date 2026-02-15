@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Controller, useForm, useWatch, type ResolverOptions } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useFormSchema, useFormPreview } from '../hooks/useForms';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { QuestionRenderer } from '../components/QuestionRenderer';
@@ -10,9 +12,7 @@ import {
   getNextVisibleIndex,
   getPrevVisibleIndex,
 } from '../utils/skipLogic';
-import type { FlattenedQuestion } from '../api/form.api';
-import type { ValidationRule } from '@oslsr/types';
-import { modulus11Check } from '@oslsr/utils/src/validation';
+import { getCachedDynamicFormSchema, validateQuestionValue } from '../utils/formSchema';
 import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
@@ -21,56 +21,6 @@ const NIN_QUESTION_NAMES = ['nin', 'national_id'];
 
 interface FormFillerPageProps {
   mode?: 'fill' | 'preview';
-}
-
-function validateQuestion(
-  question: FlattenedQuestion,
-  value: unknown
-): string | undefined {
-  if (question.required) {
-    if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) {
-      return 'This field is required';
-    }
-  }
-
-  if (!question.validation || value == null || value === '') return undefined;
-
-  for (const rule of question.validation) {
-    const error = checkRule(rule, value, question);
-    if (error) return error;
-  }
-  return undefined;
-}
-
-function checkRule(
-  rule: ValidationRule,
-  value: unknown,
-  _question: FlattenedQuestion
-): string | undefined {
-  const strVal = String(value);
-  const numVal = Number(value);
-
-  switch (rule.type) {
-    case 'minLength':
-      if (strVal.length < Number(rule.value)) return rule.message;
-      break;
-    case 'maxLength':
-      if (strVal.length > Number(rule.value)) return rule.message;
-      break;
-    case 'min':
-      if (isNaN(numVal) || numVal < Number(rule.value)) return rule.message;
-      break;
-    case 'max':
-      if (isNaN(numVal) || numVal > Number(rule.value)) return rule.message;
-      break;
-    case 'regex':
-      if (!new RegExp(String(rule.value)).test(strVal)) return rule.message;
-      break;
-    case 'modulus11':
-      if (!modulus11Check(strVal)) return rule.message;
-      break;
-  }
-  return undefined;
 }
 
 export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
@@ -84,14 +34,42 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
   // currentIndex tracks position in the FULL form.questions array (not the visible subset)
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [formData, setFormData] = useState<Record<string, unknown>>({});
-  const [validationError, setValidationError] = useState<string | undefined>();
   const [completed, setCompleted] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
 
   const isPreview = mode === 'preview';
   const ninCheck = useNinCheck();
+
+  const resolver = useCallback(
+    (values: Record<string, unknown>, context: unknown, options: ResolverOptions<Record<string, unknown>>) => {
+      if (!form) {
+        return { values, errors: {} };
+      }
+      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen);
+      return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
+    },
+    [form]
+  );
+
+  const {
+    control,
+    trigger,
+    reset,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useForm<Record<string, unknown>>({
+    resolver,
+    mode: 'onChange',
+    defaultValues: {},
+  });
+
+  const watchedFormData = useWatch({ control }) as Record<string, unknown> | undefined;
+  const formData = useMemo<Record<string, unknown>>(
+    () => watchedFormData ?? {},
+    [watchedFormData]
+  );
 
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
@@ -105,13 +83,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   // Resume from existing draft on first load
   useEffect(() => {
     if (!draftLoaded && draft.resumeData && !draft.loading) {
-      setFormData(draft.resumeData.formData);
+      reset(draft.resumeData.formData);
       setCurrentIndex(draft.resumeData.questionPosition);
       setDraftLoaded(true);
     } else if (!draft.loading && !draft.resumeData) {
       setDraftLoaded(true);
     }
-  }, [draft.resumeData, draft.loading, draftLoaded]);
+  }, [draft.resumeData, draft.loading, draftLoaded, reset]);
 
   const visibleQuestions = useMemo(() => {
     if (!form) return [];
@@ -142,19 +120,6 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     return result;
   }, [form]);
 
-  const handleChange = useCallback(
-    (value: unknown) => {
-      if (isPreview || !currentQuestion) return;
-      setFormData((prev) => ({
-        ...prev,
-        [currentQuestion.name]: value,
-      }));
-      setValidationError(undefined);
-      if (isCurrentNin) ninCheck.reset();
-    },
-    [currentQuestion, isPreview, isCurrentNin, ninCheck]
-  );
-
   const handleNinBlur = useCallback(() => {
     if (!isCurrentNin || isPreview) return;
     const value = String(formData[currentQuestion?.name ?? ''] ?? '');
@@ -176,7 +141,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     return `This NIN is already registered (since ${date}). This form cannot be submitted for a duplicate NIN.`;
   }, [isCurrentNin, ninCheck.isDuplicate, ninCheck.duplicateInfo]);
 
-  const displayError = ninDuplicateError ?? validationError;
+  const currentFieldError = currentQuestion
+    ? (errors[currentQuestion.name]?.message as string | undefined)
+    : undefined;
+  const displayError = ninDuplicateError ?? currentFieldError;
 
   const handleContinue = useCallback(async () => {
     if (!currentQuestion || !form) return;
@@ -184,21 +152,31 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // Block continue if NIN duplicate detected
     if (ninDuplicateError && !isPreview) return;
 
-    // Validate current question before advancing
-    const error = validateQuestion(currentQuestion, formData[currentQuestion.name]);
-    if (error && !isPreview) {
-      setValidationError(error);
-      return;
+    // Validate current question before advancing.
+    if (!isPreview) {
+      const localError = validateQuestionValue(currentQuestion, formData[currentQuestion.name]);
+      if (localError) {
+        setError(currentQuestion.name, {
+          type: 'manual',
+          message: localError,
+        });
+        return;
+      }
+
+      const valid = await trigger(currentQuestion.name);
+      if (!valid) return;
     }
 
-    // Check if marketplace consent is first question and was declined
     if (
       currentIndex === 0 &&
       currentQuestion.name === 'consent_marketplace' &&
       formData[currentQuestion.name] !== 'yes' &&
       !isPreview
     ) {
-      setValidationError('Marketplace consent is required to continue');
+      setError(currentQuestion.name, {
+        type: 'manual',
+        message: 'Marketplace consent is required to continue',
+      });
       return;
     }
 
@@ -216,10 +194,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     setSlideDirection('left');
     setTimeout(() => {
       setCurrentIndex(nextIdx);
-      setValidationError(undefined);
+      clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError]);
+  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError, trigger, setError, clearErrors]);
 
   const handleBack = useCallback(() => {
     if (!form) return;
@@ -231,10 +209,12 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     setSlideDirection('right');
     setTimeout(() => {
       setCurrentIndex(prevIdx);
-      setValidationError(undefined);
+      if (currentQuestion) {
+        clearErrors(currentQuestion.name);
+      }
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, formData, form]);
+  }, [currentIndex, currentQuestion, formData, form, clearErrors]);
 
   // Determine if there's a next visible question (for button label)
   const hasNextQuestion = useMemo(() => {
@@ -362,12 +342,24 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           data-testid="question-card"
           onBlur={isCurrentNin ? handleNinBlur : undefined}
         >
-          <QuestionRenderer
-            question={currentQuestion}
-            value={formData[currentQuestion.name]}
-            onChange={handleChange}
-            error={displayError}
-            disabled={isPreview}
+          <Controller
+            name={currentQuestion.name}
+            control={control}
+            render={({ field }) => (
+              <QuestionRenderer
+                question={currentQuestion}
+                value={field.value}
+                onChange={(value) => {
+                  field.onChange(value);
+                  clearErrors(currentQuestion.name);
+                  if (isCurrentNin) {
+                    ninCheck.reset();
+                  }
+                }}
+                error={displayError}
+                disabled={isPreview}
+              />
+            )}
           />
           {isCurrentNin && ninCheck.isChecking && (
             <p className="text-sm text-gray-500 mt-2" data-testid="nin-checking">Checking NIN availability...</p>

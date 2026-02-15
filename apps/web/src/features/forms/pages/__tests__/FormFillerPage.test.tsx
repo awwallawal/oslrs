@@ -15,15 +15,19 @@ afterEach(() => {
 // Mock useDraftPersistence hook
 const mockCompleteDraft = vi.fn().mockResolvedValue(undefined);
 const mockSaveDraft = vi.fn().mockResolvedValue(undefined);
+const mockUseDraftPersistence = vi.fn();
 
 vi.mock('../../hooks/useDraftPersistence', () => ({
-  useDraftPersistence: () => ({
+  useDraftPersistence: (options: unknown) => {
+    mockUseDraftPersistence(options);
+    return {
     draftId: null,
     resumeData: null,
     loading: false,
     saveDraft: mockSaveDraft,
     completeDraft: mockCompleteDraft,
-  }),
+    };
+  },
 }));
 
 // Mock useFormSchema hook
@@ -188,6 +192,22 @@ describe('FormFillerPage', () => {
     expect(screen.getByText(/Question 1 of 3/)).toBeInTheDocument();
   });
 
+  it('passes RHF watch-driven formData to draft persistence hook', async () => {
+    renderPage();
+
+    fireEvent.change(screen.getByTestId('input-full_name'), {
+      target: { value: 'John Watcher' },
+    });
+
+    await waitFor(() => {
+      expect(mockUseDraftPersistence).toHaveBeenCalledWith(
+        expect.objectContaining({
+          formData: expect.objectContaining({ full_name: 'John Watcher' }),
+        })
+      );
+    });
+  });
+
   it('shows preview banner in preview mode', () => {
     renderPage('preview');
     expect(screen.getByTestId('preview-banner')).toBeInTheDocument();
@@ -345,6 +365,56 @@ describe('FormFillerPage', () => {
       fireEvent.click(screen.getByTestId('continue-btn'));
 
       expect(screen.getByRole('alert')).toHaveTextContent('NIN must be 11 digits');
+    });
+  });
+
+  describe('watch-driven skip logic', () => {
+    const skipLogicForm: FlattenedForm = {
+      formId: 'skip-logic-form',
+      title: 'Skip Logic Form',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q1',
+          type: 'text',
+          name: 'wants_followup',
+          label: 'Type yes to answer a follow-up',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'Section 1',
+        },
+        {
+          id: 'q2',
+          type: 'text',
+          name: 'follow_up',
+          label: 'Follow-up question',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'Section 1',
+          showWhen: {
+            field: 'wants_followup',
+            operator: 'equals',
+            value: 'yes',
+          },
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+    };
+
+    it('skips hidden follow-up question when showWhen condition is false', async () => {
+      mockHookReturn = { data: skipLogicForm, isLoading: false, error: null };
+      renderPage();
+
+      fireEvent.change(screen.getByTestId('input-wants_followup'), {
+        target: { value: 'no' },
+      });
+      fireEvent.click(screen.getByTestId('continue-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Follow-up question')).not.toBeInTheDocument();
     });
   });
 
