@@ -10,6 +10,7 @@ import { FileText, PlayCircle, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { usePublishedForms, useFormDrafts } from '../../forms/hooks/useForms';
+import { SubmissionCounter } from '../components/SubmissionCounter';
 
 export default function PublicSurveysPage() {
   const navigate = useNavigate();
@@ -22,6 +23,9 @@ export default function PublicSurveysPage() {
         <h1 className="text-2xl font-brand font-semibold text-neutral-900">Surveys</h1>
         <p className="text-neutral-600 mt-1">Available surveys for you to complete</p>
       </div>
+
+      {/* Submission counter */}
+      <SubmissionCounter label="Surveys completed" />
 
       {/* Loading state — skeleton cards matching final card shape */}
       {isLoading && (

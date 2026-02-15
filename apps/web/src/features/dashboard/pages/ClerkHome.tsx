@@ -11,17 +11,23 @@
  * Story 3.6 AC3.6.9: Removed "Coming in Epic 3" modal.
  * Wired "Start Data Entry" to navigate to /dashboard/clerk/surveys.
  * Added SyncStatusBadge and PendingSyncBanner.
+ * prep-2: Live TotalSubmissionsCard, TodayProgressCard, SubmissionActivityChart.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, ListOrdered, Keyboard } from 'lucide-react';
+import { ListOrdered, Keyboard } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { SyncStatusBadge } from '../../../components/SyncStatusBadge';
 import { PendingSyncBanner } from '../../../components/PendingSyncBanner';
 import { useSyncStatus } from '../../forms/hooks/useSyncStatus';
 import { syncManager } from '../../../services/sync-manager';
+import { useMySubmissionCounts, useDailyCounts } from '../../forms/hooks/useForms';
+import { TotalSubmissionsCard } from '../components/TotalSubmissionsCard';
+import { TodayProgressCard } from '../components/TodayProgressCard';
+import { SubmissionActivityChart } from '../components/SubmissionActivityChart';
+import { DAILY_TARGETS, fillDateGaps, getTodayCount } from '../hooks/useDashboardStats';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -38,6 +44,14 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
   const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
+  const [chartDays, setChartDays] = useState(7);
+
+  const { data: counts, isLoading: countsLoading, error: countsError } = useMySubmissionCounts();
+  const { data: dailyData, isLoading: dailyLoading, error: dailyError } = useDailyCounts(chartDays);
+
+  const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : 0;
+  const filledData = dailyData ? fillDateGaps(dailyData, chartDays) : [];
+  const todayCount = getTodayCount(filledData);
 
   // AC2: Auto-focus the CTA button on mount
   useEffect(() => {
@@ -101,12 +115,14 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
       )}
 
       {isLoading ? (
-        /* AC9: Skeleton loading branch — mirrors actual layout: CTA + 2 cards */
+        /* AC9: Skeleton loading branch — mirrors bento layout: CTA + 4 cards */
         <div className="space-y-6">
           <div className="h-12 w-48 bg-neutral-200 rounded-lg animate-pulse" aria-label="Loading button" />
-          <div className="grid gap-6 md:grid-cols-2">
-            <SkeletonCard />
-            <SkeletonCard />
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <SkeletonCard className="h-full" />
+            <SkeletonCard className="h-full lg:col-span-2" />
+            <SkeletonCard className="h-full" />
+            <SkeletonCard className="h-full lg:col-span-2" />
           </div>
         </div>
       ) : (
@@ -123,36 +139,27 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
             </button>
           </div>
 
-          {/* Dashboard Cards — AC1 (desktop-first grid) */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Today's Progress Card */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-emerald-100 rounded-lg">
-                    <BarChart className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <CardTitle className="text-base">Today's Progress</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold text-neutral-900">0</span>
-                    <span className="text-sm text-neutral-500">/ 100 forms today</span>
-                  </div>
-                  <div className="w-full bg-neutral-200 rounded-full h-2">
-                    <div
-                      className="bg-emerald-500 h-2 rounded-full"
-                      style={{ width: '0%' }}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Dashboard Cards — AC1 (bento grid) */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Live data cards — prep-2 (bento: 1:2 ratio) */}
+            <TotalSubmissionsCard
+              total={total}
+              label="Total Entries"
+              isLoading={countsLoading}
+              error={countsError}
+              className="h-full"
+            />
+            <TodayProgressCard
+              todayCount={todayCount}
+              target={DAILY_TARGETS.clerk}
+              label="forms today"
+              isLoading={dailyLoading}
+              error={dailyError}
+              className="h-full lg:col-span-2"
+            />
 
-            {/* Recent Entries Card */}
-            <Card>
+            {/* Recent Entries Card (bento: 1:2 ratio) */}
+            <Card className="h-full">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-blue-100 rounded-lg">
@@ -168,6 +175,18 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
                 </div>
               </CardContent>
             </Card>
+
+            {/* Submission Activity Chart — prep-2 */}
+            <SubmissionActivityChart
+              data={filledData}
+              target={DAILY_TARGETS.clerk}
+              days={chartDays}
+              onDaysChange={setChartDays}
+              isLoading={dailyLoading}
+              error={dailyError}
+              roleLabel="Entry"
+              className="h-full lg:col-span-2"
+            />
           </div>
 
           {/* Keyboard Shortcuts Reference — AC4 */}

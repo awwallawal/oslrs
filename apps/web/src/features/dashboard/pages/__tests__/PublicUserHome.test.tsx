@@ -66,6 +66,22 @@ vi.mock('../../../../components/PendingSyncBanner', () => ({
   ),
 }));
 
+// Mock useForms (for SurveyCompletionCard)
+let mockCountsReturn = {
+  data: undefined as Record<string, number> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../../forms/hooks/useForms', () => ({
+  useMySubmissionCounts: () => mockCountsReturn,
+}));
+
+vi.mock('../../../../components/skeletons', () => ({
+  SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
+}));
+
 function renderComponent(props: { isLoading?: boolean } = {}) {
   return render(
     <MemoryRouter>
@@ -78,6 +94,7 @@ describe('PublicUserHome', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSyncStatus = { status: 'synced', pendingCount: 0, failedCount: 0, syncingCount: 0 };
+    mockCountsReturn = { data: undefined, isLoading: false, error: null };
   });
 
   describe('AC1: Dashboard Cards', () => {
@@ -109,10 +126,10 @@ describe('PublicUserHome', () => {
   });
 
   describe('AC1: Skeleton Loading', () => {
-    it('renders 3 skeleton cards when isLoading=true', () => {
+    it('renders 4 skeleton cards when isLoading=true', () => {
       renderComponent({ isLoading: true });
       const skeletonCards = screen.getAllByLabelText('Loading card');
-      expect(skeletonCards).toHaveLength(3);
+      expect(skeletonCards).toHaveLength(4);
     });
 
     it('hides content when loading', () => {
@@ -129,11 +146,11 @@ describe('PublicUserHome', () => {
       expect(screen.getByText('Profile Completion')).toBeInTheDocument();
     });
 
-    it('skeleton grid matches content grid layout (2-col on md)', () => {
+    it('skeleton grid matches bento layout (2-col md, 3-col lg)', () => {
       renderComponent({ isLoading: true });
       const skeletonGrid = screen.getAllByLabelText('Loading card')[0].closest('.grid');
       expect(skeletonGrid).toHaveClass('md:grid-cols-2');
-      expect(skeletonGrid).not.toHaveClass('lg:grid-cols-3');
+      expect(skeletonGrid).toHaveClass('lg:grid-cols-3');
     });
   });
 
@@ -225,6 +242,35 @@ describe('PublicUserHome', () => {
       mockSyncStatus = { status: 'synced', pendingCount: 0, failedCount: 0, syncingCount: 0 };
       renderComponent();
       expect(screen.queryByTestId('sync-banner')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('prep-2: SurveyCompletionCard', () => {
+    it('shows "Survey Completed" when user has submissions', () => {
+      mockCountsReturn = { data: { form1: 1 }, isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('survey-completion-card')).toBeInTheDocument();
+      expect(screen.getByTestId('survey-completed')).toHaveTextContent('Survey Completed');
+    });
+
+    it('shows "Not yet submitted" when no submissions', () => {
+      mockCountsReturn = { data: {}, isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('survey-completion-card')).toBeInTheDocument();
+      expect(screen.getByTestId('survey-pending')).toHaveTextContent('Not yet submitted');
+    });
+
+    it('shows "Not yet submitted" when counts undefined (no data yet)', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('survey-completion-card')).toBeInTheDocument();
+      expect(screen.getByTestId('survey-pending')).toHaveTextContent('Not yet submitted');
+    });
+
+    it('gracefully degrades on error', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      renderComponent();
+      expect(screen.queryByTestId('survey-completion-card')).not.toBeInTheDocument();
     });
   });
 

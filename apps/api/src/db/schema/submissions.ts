@@ -85,6 +85,8 @@ export const submissions = pgTable('submissions', {
   processedIdx: index('submissions_processed_idx').on(table.processed),
   // Index for time-based queries
   submittedAtIdx: index('submissions_submitted_at_idx').on(table.submittedAt),
+  // Submitter index — supports getMySubmissionCounts and getSubmissionStatuses queries
+  submitterIdIdx: index('idx_submissions_submitter_id').on(table.submitterId),
   // Story 3.4: Respondent + Enumerator indexes
   respondentIdIdx: index('idx_submissions_respondent_id').on(table.respondentId),
   enumeratorIdIdx: index('idx_submissions_enumerator_id').on(table.enumeratorId),

@@ -141,7 +141,7 @@ development_status:
   # tech debt (T4-T6 carried), spikes (messaging, fraud), and schema prep.
   prep-epic-4: in-progress
   prep-1-fix-permanently-completed-form-bug: done  # B1 CRITICAL: Allow new submissions for same form after previous ones complete. Code review passed 2026-02-15: 7 findings (1H, 3M, 3L), all 7 fixed. 1,246 web tests pass, 0 regressions.
-  prep-2-dashboard-submission-counters: ready-for-dev  # B2 HIGH: Add persistent "Surveys completed: N" to Enumerator, Clerk, Public dashboards
+  prep-2-dashboard-submission-counters: done  # B2 HIGH: Dashboard productivity upgrade. R1: 6 findings all fixed. R2 (Tasks 10-20): 7 findings (2H, 1M, 4L), 5 fixed + 1 noted. 1,303 web + 394 API tests pass, 0 regressions.
   prep-3-fr21-prd-alignment: backlog  # HIGH: Update PRD FR21 — change NIN duplicate behavior from "link" to "reject"
   prep-4-react-hook-form-zod-migration: backlog  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
   prep-5-a3-eslint-enforcement: backlog  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
@@ -150,6 +150,7 @@ development_status:
   prep-8-supervisor-team-assignment-schema: backlog  # HIGH: Verify/create DB schema for supervisor → enumerator team relationships (Story 4.1)
   prep-9-fileblob-base64-to-bytea: backlog  # LOW: Carried from T5 (Epic 2+2.5 retro) — resolve or drop
   prep-10-sub-path-exports-types: backlog  # LOW: Carried from T6 (Epic 2+2.5 retro) — resolve or drop
+  prep-11-offline-queue-user-isolation: backlog  # MEDIUM: SubmissionQueueItem lacks userId — switching accounts in same browser without clearing IndexedDB causes submissions to be attributed to wrong user. Add userId to queue items, validate at sync time, clear/partition queue on logout.
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: backlog

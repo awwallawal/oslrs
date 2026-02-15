@@ -13,6 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { UserCheck, ClipboardList, Briefcase, TrendingUp } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
+import { SurveyCompletionCard } from '../components/SurveyCompletionCard';
+import { useMySubmissionCounts } from '../../forms/hooks/useForms';
 import { Button } from '../../../components/ui/button';
 import {
   AlertDialog,
@@ -33,6 +35,8 @@ export default function PublicUserHome({ isLoading = false }: { isLoading?: bool
   const navigate = useNavigate();
   const [showEpic7Modal, setShowEpic7Modal] = useState(false);
   const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
+  const { data: counts, isLoading: countsLoading, error: countsError } = useMySubmissionCounts();
+  const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : 0;
 
   return (
     <div className="p-6">
@@ -67,18 +71,27 @@ export default function PublicUserHome({ isLoading = false }: { isLoading?: bool
       )}
 
       {isLoading ? (
-        /* Skeleton loading — mirrors actual 2-col card grid */
-        <div className="grid gap-6 md:grid-cols-2">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+        /* Skeleton loading — mirrors bento card grid */
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <SkeletonCard className="h-full" />
+          <SkeletonCard className="h-full lg:col-span-2" />
+          <SkeletonCard className="h-full lg:col-span-2" />
+          <SkeletonCard className="h-full" />
         </div>
       ) : (
         <>
-          {/* Dashboard Cards — AC1, AC2: 2-col max on tablet, single col mobile */}
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* Dashboard Cards — AC1, AC2: Bento grid (1:2 then 2:1 pattern) */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Survey Completion Status — prep-2 (bento: 1:2 ratio) */}
+            <SurveyCompletionCard
+              total={total}
+              isLoading={countsLoading}
+              error={countsError}
+              className="h-full"
+            />
+
             {/* Profile Completion Card — AC1 */}
-            <Card>
+            <Card className="h-full lg:col-span-2">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-green-100 rounded-lg">
@@ -97,8 +110,8 @@ export default function PublicUserHome({ isLoading = false }: { isLoading?: bool
               </CardContent>
             </Card>
 
-            {/* Complete Survey CTA Card — AC1, Story 3.5 AC3.5.7 */}
-            <Card>
+            {/* Complete Survey CTA Card — AC1, Story 3.5 AC3.5.7 (bento: 2:1 ratio) */}
+            <Card className="h-full lg:col-span-2">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-blue-100 rounded-lg">
@@ -122,7 +135,7 @@ export default function PublicUserHome({ isLoading = false }: { isLoading?: bool
             </Card>
 
             {/* Marketplace Opt-In Card — AC1 */}
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-purple-100 rounded-lg">

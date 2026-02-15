@@ -11,6 +11,7 @@ import { FileText, PlayCircle, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { usePublishedForms, useFormDrafts } from '../../forms/hooks/useForms';
+import { SubmissionCounter } from '../components/SubmissionCounter';
 
 export default function ClerkSurveysPage() {
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ export default function ClerkSurveysPage() {
         <h1 className="text-2xl font-brand font-semibold text-neutral-900">Entry Queue</h1>
         <p className="text-neutral-600 mt-1">Select a form to begin data entry</p>
       </div>
+
+      {/* Submission counter */}
+      <SubmissionCounter label="Entries completed" />
 
       {/* Loading state — skeleton cards matching final card shape */}
       {isLoading && (

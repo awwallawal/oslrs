@@ -8,7 +8,8 @@ import { db } from '../db/index.js';
 import { respondents } from '../db/schema/respondents.js';
 import { users } from '../db/schema/users.js';
 import { submissions } from '../db/schema/submissions.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, count, sql, gte } from 'drizzle-orm';
+import { UserRole } from '@oslsr/types';
 
 const checkNinBodySchema = z.object({
   nin: z.string().length(11).regex(/^\d{11}$/, 'NIN must be 11 digits'),
@@ -176,6 +177,113 @@ export class FormController {
       }
 
       res.json({ data: { available: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/forms/submissions/my-counts
+   * Return per-form submission counts for the authenticated user.
+   * Optional ?scope=team for supervisors — returns LGA-filtered team totals.
+   */
+  static async getMySubmissionCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as Request & { user?: { sub: string; role?: string; lgaId?: string } }).user;
+      if (!user?.sub) {
+        throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+      }
+
+      const scope = req.query.scope as string | undefined;
+
+      // scope=team requires SUPERVISOR role with lgaId
+      if (scope === 'team') {
+        if (user.role !== UserRole.SUPERVISOR) {
+          throw new AppError('FORBIDDEN', 'Team scope requires supervisor role', 403);
+        }
+        if (!user.lgaId) {
+          throw new AppError('LGA_REQUIRED', 'Supervisor must be assigned to an LGA', 403);
+        }
+      }
+
+      const isTeamScope = scope === 'team' && user.role === UserRole.SUPERVISOR && user.lgaId;
+
+      const submitterFilter = isTeamScope
+        ? sql`${submissions.submitterId}::uuid IN (SELECT id FROM users WHERE lga_id = ${user.lgaId})`
+        : eq(submissions.submitterId, user.sub);
+
+      // Count all submissions — processed flag tracks respondent-extraction
+      // pipeline status, not submission validity (deduped by submissionUid)
+      const rows = await db
+        .select({
+          formId: submissions.questionnaireFormId,
+          count: count(),
+        })
+        .from(submissions)
+        .where(submitterFilter)
+        .groupBy(submissions.questionnaireFormId);
+
+      const countsMap: Record<string, number> = {};
+      for (const row of rows) {
+        countsMap[row.formId] = Number(row.count);
+      }
+
+      res.json({ data: countsMap });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/forms/submissions/daily-counts
+   * Return daily submission counts for the last N days.
+   * Supervisor role gets LGA-filtered team aggregates; others get personal counts.
+   */
+  static async getDailySubmissionCounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as Request & { user?: { sub: string; role?: string; lgaId?: string } }).user;
+      if (!user?.sub) {
+        throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+      }
+
+      // Whitelist days param to 7 or 30
+      const daysParam = parseInt(req.query.days as string, 10);
+      const days = daysParam === 30 ? 30 : 7;
+
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setUTCHours(0, 0, 0, 0);
+
+      // Supervisor with lgaId gets team-level data
+      const isSupervisor = user.role === UserRole.SUPERVISOR && user.lgaId;
+
+      const submitterFilter = isSupervisor
+        ? sql`${submissions.submitterId}::uuid IN (SELECT id FROM users WHERE lga_id = ${user.lgaId})`
+        : eq(submissions.submitterId, user.sub);
+
+      // Count all submissions in range — processed flag tracks pipeline
+      // status, not validity (deduped by submissionUid)
+      const rows = await db
+        .select({
+          date: sql<string>`DATE(${submissions.submittedAt})`.as('date'),
+          count: count(),
+        })
+        .from(submissions)
+        .where(
+          and(
+            submitterFilter,
+            gte(submissions.submittedAt, startDate),
+          ),
+        )
+        .groupBy(sql`DATE(${submissions.submittedAt})`)
+        .orderBy(sql`DATE(${submissions.submittedAt})`);
+
+      const data = rows.map((row) => ({
+        date: String(row.date),
+        count: Number(row.count),
+      }));
+
+      res.json({ data });
     } catch (err) {
       next(err);
     }

@@ -33,13 +33,21 @@ let mockHookReturn = {
 
 let mockDraftMap: Record<string, 'in-progress'> = {};
 
+let mockCountsReturn = {
+  data: undefined as Record<string, number> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
 vi.mock('../../../forms/hooks/useForms', () => ({
   usePublishedForms: () => mockHookReturn,
   useFormDrafts: () => ({ draftMap: mockDraftMap, loading: false }),
+  useMySubmissionCounts: () => mockCountsReturn,
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
 }));
 
 function renderComponent() {
@@ -55,6 +63,7 @@ describe('PublicSurveysPage', () => {
     vi.clearAllMocks();
     mockHookReturn = { data: undefined, isLoading: false, error: null };
     mockDraftMap = {};
+    mockCountsReturn = { data: undefined, isLoading: false, error: null };
   });
 
   it('renders page heading', () => {
@@ -125,10 +134,9 @@ describe('PublicSurveysPage', () => {
     };
     renderComponent();
 
+    // Card renders title and version but no description text (A3: no CSS class selectors)
     expect(screen.getByText('Labour Survey')).toBeInTheDocument();
-    // Only the title area and button — no description paragraph
-    const card = screen.getByTestId('surveys-grid');
-    expect(card.querySelectorAll('.line-clamp-2')).toHaveLength(0);
+    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
   });
 
   it('navigates to public survey form on Start Survey click', () => {
@@ -173,5 +181,49 @@ describe('PublicSurveysPage', () => {
     renderComponent();
 
     expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Start Survey');
+  });
+
+  describe('Submission counter', () => {
+    it('displays correct total when counts are returned', () => {
+      mockCountsReturn = { data: { 'form-a': 2, 'form-b': 4 }, isLoading: false, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Surveys completed: 6');
+    });
+
+    it('displays "0" when no submissions exist', () => {
+      mockCountsReturn = { data: {}, isLoading: false, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Surveys completed: 0');
+    });
+
+    it('shows skeleton while counts loading', () => {
+      mockCountsReturn = { data: undefined, isLoading: true, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('counter-loading')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading text')).toBeInTheDocument();
+    });
+
+    it('renders form cards grid normally when counts query errors', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('Failed') };
+      mockHookReturn = {
+        data: [
+          { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+        ],
+        isLoading: false,
+        error: null,
+      };
+      renderComponent();
+
+      expect(screen.queryByTestId('submission-counter')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('counter-loading')).not.toBeInTheDocument();
+      expect(screen.getByTestId('surveys-grid')).toBeInTheDocument();
+      expect(screen.getByText('Labour Survey')).toBeInTheDocument();
+    });
   });
 });

@@ -20,6 +20,12 @@ let mockFormsReturn: {
 
 let mockDraftMap: Record<string, 'in-progress'>;
 
+let mockCountsReturn: {
+  data: Record<string, number> | undefined;
+  isLoading: boolean;
+  error: Error | null;
+};
+
 // ── Mock modules ────────────────────────────────────────────────────────────
 
 vi.mock('react-router-dom', async () => {
@@ -30,10 +36,12 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../../../forms/hooks/useForms', () => ({
   usePublishedForms: () => mockFormsReturn,
   useFormDrafts: () => ({ draftMap: mockDraftMap, loading: false }),
+  useMySubmissionCounts: () => mockCountsReturn,
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -59,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFormsReturn = { data: mockForms, isLoading: false, error: null };
   mockDraftMap = {};
+  mockCountsReturn = { data: undefined, isLoading: false, error: null };
 });
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -133,6 +142,40 @@ describe('ClerkSurveysPage', () => {
       mockDraftMap = {};
       renderPage();
       expect(screen.getByTestId('start-entry-f1')).toHaveTextContent('Start Entry');
+    });
+  });
+
+  describe('Submission counter', () => {
+    it('displays correct total when counts are returned', () => {
+      mockCountsReturn = { data: { 'form-a': 5, 'form-b': 3 }, isLoading: false, error: null };
+      renderPage();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Entries completed: 8');
+    });
+
+    it('displays "0" when no submissions exist', () => {
+      mockCountsReturn = { data: {}, isLoading: false, error: null };
+      renderPage();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Entries completed: 0');
+    });
+
+    it('shows skeleton while counts loading', () => {
+      mockCountsReturn = { data: undefined, isLoading: true, error: null };
+      renderPage();
+
+      expect(screen.getByTestId('counter-loading')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading text')).toBeInTheDocument();
+    });
+
+    it('renders form cards grid normally when counts query errors', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('Failed') };
+      renderPage();
+
+      expect(screen.queryByTestId('submission-counter')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('counter-loading')).not.toBeInTheDocument();
+      expect(screen.getByTestId('surveys-grid')).toBeInTheDocument();
+      expect(screen.getByText('Labour Survey')).toBeInTheDocument();
     });
   });
 });

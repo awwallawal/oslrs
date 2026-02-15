@@ -12,6 +12,7 @@
  * Story 3.6 AC3.6.9: Removed "Coming in Epic 3" modal.
  * CTA and N shortcut navigate to /dashboard/clerk/surveys.
  * SyncStatusBadge and PendingSyncBanner added.
+ * prep-2: TotalSubmissionsCard, TodayProgressCard, SubmissionActivityChart.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -53,6 +54,38 @@ vi.mock('../../../../services/sync-manager', () => ({
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
+}));
+
+// Mock useForms hooks
+let mockCountsReturn = {
+  data: undefined as Record<string, number> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+let mockDailyReturn = {
+  data: undefined as Array<{ date: string; count: number }> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../../forms/hooks/useForms', () => ({
+  useMySubmissionCounts: () => mockCountsReturn,
+  useDailyCounts: () => mockDailyReturn,
+}));
+
+// Mock recharts
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
+  BarChart: ({ children }: { children: React.ReactNode }) => <div data-testid="bar-chart">{children}</div>,
+  Bar: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  ReferenceLine: () => <div />,
+  Cell: () => <div />,
+  CartesianGrid: () => <div />,
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -78,6 +111,8 @@ beforeEach(() => {
     syncingCount: 0,
     totalCount: 0,
   };
+  mockCountsReturn = { data: undefined, isLoading: false, error: null };
+  mockDailyReturn = { data: undefined, isLoading: false, error: null };
 });
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -90,14 +125,6 @@ describe('ClerkHome', () => {
       expect(screen.getByText('Keyboard-optimized paper form digitization')).toBeInTheDocument();
     });
 
-    it('renders 2 dashboard cards with correct titles', () => {
-      renderComponent();
-      const cardTitles = document.querySelectorAll('[data-slot="card-title"]');
-      expect(cardTitles).toHaveLength(2);
-      expect(screen.getByText("Today's Progress")).toBeInTheDocument();
-      expect(screen.getByText('Recent Entries')).toBeInTheDocument();
-    });
-
     it('renders "Start Data Entry" CTA button', () => {
       renderComponent();
       const cta = screen.getByRole('button', { name: 'Start Data Entry' });
@@ -105,14 +132,9 @@ describe('ClerkHome', () => {
       expect(cta).toHaveClass('min-h-[48px]');
     });
 
-    it('renders Today\'s Progress card with 0/100 counter and progress bar', () => {
-      renderComponent();
-      expect(screen.getByText('0')).toBeInTheDocument();
-      expect(screen.getByText('/ 100 forms today')).toBeInTheDocument();
-    });
-
     it('renders Recent Entries card with empty state', () => {
       renderComponent();
+      expect(screen.getByText('Recent Entries')).toBeInTheDocument();
       expect(screen.getByText('No entries yet')).toBeInTheDocument();
     });
   });
@@ -212,7 +234,7 @@ describe('ClerkHome', () => {
     it('renders skeleton layout matching content shape when isLoading=true', () => {
       renderComponent({ isLoading: true });
       const skeletonCards = screen.getAllByLabelText('Loading card');
-      expect(skeletonCards).toHaveLength(2);
+      expect(skeletonCards).toHaveLength(4);
       const buttonSkeleton = screen.getByLabelText('Loading button');
       expect(buttonSkeleton).toBeInTheDocument();
     });
@@ -220,7 +242,6 @@ describe('ClerkHome', () => {
     it('hides content when loading', () => {
       renderComponent({ isLoading: true });
       expect(screen.queryByText('Start Data Entry')).not.toBeInTheDocument();
-      expect(screen.queryByText("Today's Progress")).not.toBeInTheDocument();
       expect(screen.queryByText('Recent Entries')).not.toBeInTheDocument();
     });
 
@@ -228,7 +249,6 @@ describe('ClerkHome', () => {
       renderComponent();
       const skeletons = screen.queryAllByLabelText('Loading card');
       expect(skeletons).toHaveLength(0);
-      expect(screen.getByText("Today's Progress")).toBeInTheDocument();
       expect(screen.getByText('Recent Entries')).toBeInTheDocument();
     });
   });
@@ -256,9 +276,44 @@ describe('ClerkHome', () => {
   describe('AC1: Icons', () => {
     it('renders correct icons in dashboard cards', () => {
       renderComponent();
-      expect(document.querySelector('.lucide-bar-chart')).toBeInTheDocument();
       expect(document.querySelector('.lucide-list-ordered')).toBeInTheDocument();
       expect(document.querySelector('.lucide-keyboard')).toBeInTheDocument();
+    });
+  });
+
+  describe('prep-2: Live Dashboard Cards', () => {
+    it('renders TotalSubmissionsCard with correct total', () => {
+      mockCountsReturn = { data: { form1: 5, form2: 3 }, isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('total-submissions-card')).toBeInTheDocument();
+      expect(screen.getByText('8')).toBeInTheDocument();
+      expect(screen.getByText('Total Entries')).toBeInTheDocument();
+    });
+
+    it('renders TodayProgressCard', () => {
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('today-progress-card')).toBeInTheDocument();
+      expect(screen.getByText(/forms today/)).toBeInTheDocument();
+    });
+
+    it('renders SubmissionActivityChart', () => {
+      mockDailyReturn = {
+        data: [{ date: '2026-02-15', count: 5 }],
+        isLoading: false,
+        error: null,
+      };
+      renderComponent();
+      expect(screen.getByTestId('submission-activity-chart')).toBeInTheDocument();
+    });
+
+    it('cards gracefully degrade on error', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      mockDailyReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      renderComponent();
+      expect(screen.queryByTestId('total-submissions-card')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('today-progress-card')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('submission-activity-chart')).not.toBeInTheDocument();
     });
   });
 });

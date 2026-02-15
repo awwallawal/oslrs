@@ -33,13 +33,21 @@ let mockHookReturn = {
 
 let mockDraftMap: Record<string, 'in-progress'> = {};
 
+let mockCountsReturn = {
+  data: undefined as Record<string, number> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
 vi.mock('../../../forms/hooks/useForms', () => ({
   usePublishedForms: () => mockHookReturn,
   useFormDrafts: () => ({ draftMap: mockDraftMap, loading: false }),
+  useMySubmissionCounts: () => mockCountsReturn,
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
 }));
 
 function renderComponent() {
@@ -55,6 +63,7 @@ describe('EnumeratorSurveysPage', () => {
     vi.clearAllMocks();
     mockHookReturn = { data: undefined, isLoading: false, error: null };
     mockDraftMap = {};
+    mockCountsReturn = { data: undefined, isLoading: false, error: null };
   });
 
   it('renders page heading', () => {
@@ -146,5 +155,51 @@ describe('EnumeratorSurveysPage', () => {
     renderComponent();
 
     expect(screen.getByTestId('start-survey-f1')).toHaveTextContent('Start Survey');
+  });
+
+  describe('Submission counter', () => {
+    it('displays correct total when counts are returned', () => {
+      mockCountsReturn = { data: { 'form-a': 3, 'form-b': 7 }, isLoading: false, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Surveys completed: 10');
+    });
+
+    it('displays "0" when no submissions exist', () => {
+      mockCountsReturn = { data: {}, isLoading: false, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('submission-counter')).toHaveTextContent('Surveys completed: 0');
+    });
+
+    it('shows skeleton while counts loading', () => {
+      mockCountsReturn = { data: undefined, isLoading: true, error: null };
+      mockHookReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+
+      expect(screen.getByTestId('counter-loading')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading text')).toBeInTheDocument();
+    });
+
+    it('renders form cards grid normally when counts query errors', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('Failed') };
+      mockHookReturn = {
+        data: [
+          { id: 'f1', formId: 'form-1', title: 'Labour Survey', description: null, version: '1.0.0', status: 'published', publishedAt: '2026-01-01' },
+        ],
+        isLoading: false,
+        error: null,
+      };
+      renderComponent();
+
+      // Counter should not be visible
+      expect(screen.queryByTestId('submission-counter')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('counter-loading')).not.toBeInTheDocument();
+      // Form grid still renders
+      expect(screen.getByTestId('surveys-grid')).toBeInTheDocument();
+      expect(screen.getByText('Labour Survey')).toBeInTheDocument();
+    });
   });
 });

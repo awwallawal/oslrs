@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPublishedForms, fetchFormForRender, fetchFormForPreview, type FlattenedForm } from '../api/form.api';
+import { fetchMySubmissionCounts, fetchTeamSubmissionCounts, fetchDailySubmissionCounts } from '../api/submission.api';
 import { db } from '../../../lib/offline-db';
 
 export const formKeys = {
@@ -8,6 +9,9 @@ export const formKeys = {
   published: () => [...formKeys.all, 'published'] as const,
   render: (formId: string) => [...formKeys.all, 'render', formId] as const,
   preview: (formId: string) => [...formKeys.all, 'preview', formId] as const,
+  submissionCounts: () => [...formKeys.all, 'submissionCounts'] as const,
+  teamSubmissionCounts: () => [...formKeys.all, 'teamSubmissionCounts'] as const,
+  dailyCounts: (days: number) => [...formKeys.all, 'dailyCounts', days] as const,
 };
 
 export function usePublishedForms() {
@@ -42,6 +46,27 @@ export function useFormSchema(formId: string) {
       }
     },
     enabled: !!formId,
+  });
+}
+
+export function useMySubmissionCounts() {
+  return useQuery({
+    queryKey: formKeys.submissionCounts(),
+    queryFn: fetchMySubmissionCounts,
+  });
+}
+
+export function useTeamSubmissionCounts() {
+  return useQuery({
+    queryKey: formKeys.teamSubmissionCounts(),
+    queryFn: fetchTeamSubmissionCounts,
+  });
+}
+
+export function useDailyCounts(days: number = 7) {
+  return useQuery({
+    queryKey: formKeys.dailyCounts(days),
+    queryFn: () => fetchDailySubmissionCounts(days),
   });
 }
 

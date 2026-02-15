@@ -6,6 +6,7 @@
  * Story 3.1: "Start Survey" navigates to surveys page
  * Story 3.2 AC3: Persistent storage request + warning banner
  * Story 3.3: Dynamic sync status badge + pending sync banner
+ * prep-2: TotalSubmissionsCard, TodayProgressCard, SubmissionActivityChart
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -49,6 +50,42 @@ vi.mock('../../../../services/sync-manager', () => ({
   syncManager: { syncNow: mockSyncNow, retryFailed: mockRetryFailed },
 }));
 
+// Mock useForms hooks
+let mockCountsReturn = {
+  data: undefined as Record<string, number> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+let mockDailyReturn = {
+  data: undefined as Array<{ date: string; count: number }> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../../forms/hooks/useForms', () => ({
+  useMySubmissionCounts: () => mockCountsReturn,
+  useDailyCounts: () => mockDailyReturn,
+}));
+
+vi.mock('../../../../components/skeletons', () => ({
+  SkeletonCard: () => <div aria-label="Loading card" />,
+  SkeletonText: ({ width }: { width?: string }) => <div aria-label="Loading text" style={{ width }} />,
+}));
+
+// Mock recharts (jsdom can't render SVG)
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
+  BarChart: ({ children }: { children: React.ReactNode }) => <div data-testid="bar-chart">{children}</div>,
+  Bar: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  ReferenceLine: () => <div />,
+  Cell: () => <div />,
+  CartesianGrid: () => <div />,
+}));
+
 import EnumeratorHome from '../EnumeratorHome';
 
 afterEach(() => {
@@ -86,6 +123,8 @@ describe('EnumeratorHome', () => {
       syncingCount: 0,
       totalCount: 2,
     });
+    mockCountsReturn = { data: undefined, isLoading: false, error: null };
+    mockDailyReturn = { data: undefined, isLoading: false, error: null };
   });
 
   afterEach(() => {
@@ -112,23 +151,11 @@ describe('EnumeratorHome', () => {
       expect(screen.getByText('No drafts yet')).toBeInTheDocument();
     });
 
-    it('renders Daily Progress card with placeholder count', () => {
-      renderComponent();
-      expect(screen.getByText('Daily Progress')).toBeInTheDocument();
-      expect(screen.getByText('/ 25 surveys today')).toBeInTheDocument();
-    });
-
     it('renders Sync Status badge with Synced state and status role', () => {
       renderComponent();
       const statusBadge = screen.getByRole('status');
       expect(statusBadge).toBeInTheDocument();
       expect(screen.getByText('Synced')).toBeInTheDocument();
-    });
-
-    it('renders exactly 2 dashboard cards (Resume Draft, Daily Progress)', () => {
-      renderComponent();
-      const cards = screen.getAllByTestId('dashboard-card');
-      expect(cards).toHaveLength(2);
     });
   });
 
@@ -138,15 +165,13 @@ describe('EnumeratorHome', () => {
       const skeletons = screen.queryAllByLabelText('Loading card');
       expect(skeletons).toHaveLength(0);
       expect(screen.getByText('Resume Draft')).toBeInTheDocument();
-      expect(screen.getByText('Daily Progress')).toBeInTheDocument();
     });
 
     it('renders skeleton cards and hides content when loading', () => {
       renderComponent({ isLoading: true });
       const skeletons = screen.getAllByLabelText('Loading card');
-      expect(skeletons).toHaveLength(3);
+      expect(skeletons).toHaveLength(5);
       expect(screen.queryByText('Resume Draft')).not.toBeInTheDocument();
-      expect(screen.queryByText('Daily Progress')).not.toBeInTheDocument();
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
@@ -290,6 +315,49 @@ describe('EnumeratorHome', () => {
       renderComponent();
       fireEvent.click(screen.getByRole('button', { name: /retry/i }));
       expect(mockRetryFailed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('prep-2: Live Dashboard Cards', () => {
+    it('renders TotalSubmissionsCard with correct total', () => {
+      mockCountsReturn = { data: { form1: 5, form2: 3 }, isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('total-submissions-card')).toBeInTheDocument();
+      expect(screen.getByText('8')).toBeInTheDocument();
+      expect(screen.getByText('Total Submissions')).toBeInTheDocument();
+    });
+
+    it('renders TodayProgressCard', () => {
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByTestId('today-progress-card')).toBeInTheDocument();
+      expect(screen.getByText(/surveys today/)).toBeInTheDocument();
+    });
+
+    it('renders SubmissionActivityChart', () => {
+      mockDailyReturn = {
+        data: [{ date: '2026-02-15', count: 5 }],
+        isLoading: false,
+        error: null,
+      };
+      renderComponent();
+      expect(screen.getByTestId('submission-activity-chart')).toBeInTheDocument();
+    });
+
+    it('renders chart even with zero counts (gaps filled)', () => {
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      // fillDateGaps produces 7 zero-count entries so chart renders (not empty)
+      expect(screen.getByTestId('submission-activity-chart')).toBeInTheDocument();
+    });
+
+    it('cards gracefully degrade on error', () => {
+      mockCountsReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      mockDailyReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      renderComponent();
+      expect(screen.queryByTestId('total-submissions-card')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('today-progress-card')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('submission-activity-chart')).not.toBeInTheDocument();
     });
   });
 });

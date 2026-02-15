@@ -35,6 +35,12 @@ router.post('/submissions', FormController.submitForm);
 // Pre-submission NIN availability check (AC 3.7.3)
 router.post('/check-nin', ninCheckRateLimit, FormController.checkNin);
 
+// Per-form submission counts for the authenticated user (optional ?scope=team for supervisors)
+router.get('/submissions/my-counts', FormController.getMySubmissionCounts);
+
+// Daily submission counts for chart (optional ?days=7|30)
+router.get('/submissions/daily-counts', FormController.getDailySubmissionCounts);
+
 // Poll submission processing status (AC 3.7.6)
 router.get('/submissions/status', FormController.getSubmissionStatuses);
 
