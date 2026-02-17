@@ -144,18 +144,18 @@ development_status:
   prep-2-dashboard-submission-counters: done  # B2 HIGH: Dashboard productivity upgrade. R1: 6 findings all fixed. R2 (Tasks 10-20): 7 findings (2H, 1M, 4L), 5 fixed + 1 noted. 1,303 web + 394 API tests pass, 0 regressions.
   prep-3-fr21-prd-alignment: done  # HIGH: Update PRD FR21 — change NIN duplicate behavior from "link" to "reject"
   prep-4-react-hook-form-zod-migration: done  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
-  prep-5-a3-eslint-enforcement: backlog  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
-  prep-6-realtime-messaging-spike: backlog  # HIGH: WebSocket/SSE research for Story 4.2 — validate approach, choose library, create PoC
-  prep-7-fraud-detection-domain-research: backlog  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema.
-  prep-8-supervisor-team-assignment-schema: backlog  # HIGH: Verify/create DB schema for supervisor → enumerator team relationships (Story 4.1)
-  prep-9-fileblob-base64-to-bytea: backlog  # LOW: Carried from T5 (Epic 2+2.5 retro) — resolve or drop
-  prep-10-sub-path-exports-types: backlog  # LOW: Carried from T6 (Epic 2+2.5 retro) — resolve or drop
-  prep-11-offline-queue-user-isolation: backlog  # MEDIUM: SubmissionQueueItem lacks userId — switching accounts in same browser without clearing IndexedDB causes submissions to be attributed to wrong user. Add userId to queue items, validate at sync time, clear/partition queue on logout.
+  prep-5-a3-eslint-enforcement: done  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
+  prep-6-realtime-messaging-spike: done  # HIGH: WebSocket/SSE research for Story 4.2 — validate approach, choose library, create PoC. Socket.io 4.8.3 selected, PoC complete, 43 tests. Code review passed 2026-02-17: 10 findings (1C, 3H, 4M, 2L), 9 fixed, 1 deferred (L2 test dedup).
+  prep-7-fraud-detection-domain-research: ready-for-dev  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema.
+  prep-8-supervisor-team-assignment-schema: ready-for-dev  # HIGH: Verify/create DB schema for supervisor → enumerator team relationships (Story 4.1). Story created 2026-02-17.
+  prep-9-fileblob-base64-to-bytea: backlog  # LOW: Carried from T5 (Epic 2+2.5 retro) — resolve or drop. Story file deleted.
+  prep-10-sub-path-exports-types: backlog  # LOW: Carried from T6 (Epic 2+2.5 retro) — resolve or drop. Story file deleted.
+  prep-11-offline-queue-user-isolation: backlog  # MEDIUM: SubmissionQueueItem lacks userId — switching accounts in same browser without clearing IndexedDB causes submissions to be attributed to wrong user. Story file deleted.
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: in-progress
   4-1-supervisor-team-dashboard: ready-for-dev
-  4-2-in-app-team-messaging: backlog
+  4-2-in-app-team-messaging: ready-for-dev
   4-3-fraud-engine-configurable-thresholds: backlog
   4-4-flagged-submission-review-evidence-panel: backlog
   4-5-bulk-verification-of-mass-events: backlog

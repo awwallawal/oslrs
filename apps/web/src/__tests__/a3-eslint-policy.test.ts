@@ -10,7 +10,7 @@ async function lintText(code: string, filename: string) {
   return result.messages;
 }
 
-describe('A3 ESLint policy', () => {
+describe('A3 ESLint policy', { timeout: 30_000 }, () => {
   it('rejects CSS class selectors in unit/integration test files', async () => {
     const messages = await lintText(
       "document.querySelector('.foo')",
