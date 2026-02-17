@@ -30,8 +30,7 @@ const mockSocket = {
   id: 'mock-socket-id',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockIo = vi.fn((..._args: any[]) => mockSocket);
+const mockIo = vi.fn((..._args: unknown[]) => mockSocket);
 
 vi.mock('socket.io-client', () => ({
   io: (...args: unknown[]) => mockIo(...args),
