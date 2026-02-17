@@ -12,20 +12,21 @@
 
 import { pgTable, uuid, text, timestamp, numeric, integer, jsonb, index } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
-import { fraudResolutions, fraudSeverities } from '@oslsr/types';
 import { submissions } from './submissions.js';
 import { users } from './users.js';
 
 /**
- * Resolution outcome values — single source of truth in @oslsr/types
+ * Resolution outcome values — must match @oslsr/types fraudResolutions.
+ * Defined locally because drizzle-kit runs compiled JS and cannot resolve
+ * workspace TS packages (@oslsr/types has no dist/).
  */
-export const fraudResolutionTypes = fraudResolutions;
+export const fraudResolutionTypes = ['confirmed_fraud', 'false_positive', 'needs_investigation', 'dismissed', 'enumerator_warned', 'enumerator_suspended'] as const;
 export type FraudResolution = typeof fraudResolutionTypes[number];
 
 /**
- * Severity levels — single source of truth in @oslsr/types
+ * Severity levels — must match @oslsr/types fraudSeverities.
  */
-export const fraudSeverityTypes = fraudSeverities;
+export const fraudSeverityTypes = ['clean', 'low', 'medium', 'high', 'critical'] as const;
 export type FraudSeverityLevel = typeof fraudSeverityTypes[number];
 
 /**

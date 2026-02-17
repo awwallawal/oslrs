@@ -13,13 +13,14 @@
 
 import { pgTable, uuid, varchar, text, timestamp, numeric, integer, boolean, index, unique } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
-import { heuristicCategories } from '@oslsr/types';
 import { users } from './users.js';
 
 /**
- * Heuristic rule categories — single source of truth in @oslsr/types
+ * Heuristic rule categories — must match @oslsr/types heuristicCategories.
+ * Defined locally because drizzle-kit runs compiled JS and cannot resolve
+ * workspace TS packages (@oslsr/types has no dist/).
  */
-export const ruleCategoryTypes = heuristicCategories;
+export const ruleCategoryTypes = ['gps', 'speed', 'straightline', 'duplicate', 'timing', 'composite'] as const;
 export type RuleCategory = typeof ruleCategoryTypes[number];
 
 /**
