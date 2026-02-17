@@ -8,3 +8,4 @@ export * from './submissions.js';
 export * from './respondents.js';
 export * from './fraud-thresholds.js';
 export * from './fraud-detections.js';
+export * from './team-assignments.js';

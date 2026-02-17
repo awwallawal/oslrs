@@ -10,8 +10,8 @@
  */
 
 import { db, pool } from '../index.js';
-import { roles, lgas, users } from '../schema/index.js';
-import { eq } from 'drizzle-orm';
+import { roles, lgas, users, teamAssignments } from '../schema/index.js';
+import { eq, and, isNull } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { OYO_STATE_LGAS } from './lgas.seed.js';
 import { USER_ROLES } from './roles.seed.js';
@@ -130,6 +130,20 @@ async function seedDevelopmentUsers(
       lga: 'ibadan_north',
     },
     {
+      email: 'enumerator2@dev.local',
+      password: 'enum123',
+      fullName: 'Dev Enumerator 2',
+      role: 'enumerator',
+      lga: 'ibadan_north',
+    },
+    {
+      email: 'enumerator3@dev.local',
+      password: 'enum123',
+      fullName: 'Dev Enumerator 3',
+      role: 'enumerator',
+      lga: 'ibadan_north',
+    },
+    {
       email: 'clerk@dev.local',
       password: 'clerk123',
       fullName: 'Dev Data Entry Clerk',
@@ -200,6 +214,71 @@ async function seedDevelopmentUsers(
 }
 
 /**
+ * Seed team assignments — links supervisor to enumerators in ibadan_north
+ * Architecture: 1 Supervisor + 3 Enumerators per LGA
+ */
+async function seedTeamAssignments(): Promise<void> {
+  logger.info('Seeding team assignments...');
+
+  // Look up supervisor
+  const supervisor = await db.query.users.findFirst({
+    where: eq(users.email, 'supervisor@dev.local'),
+  });
+
+  if (!supervisor) {
+    logger.warn('Supervisor dev user not found, skipping team assignments');
+    return;
+  }
+
+  if (!supervisor.lgaId) {
+    logger.warn({ email: supervisor.email }, 'Supervisor has no LGA, skipping team assignments');
+    return;
+  }
+
+  const enumeratorEmails = [
+    'enumerator@dev.local',
+    'enumerator2@dev.local',
+    'enumerator3@dev.local',
+  ];
+
+  for (const email of enumeratorEmails) {
+    const enumerator = await db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+
+    if (!enumerator) {
+      logger.warn({ email }, 'Enumerator not found, skipping');
+      continue;
+    }
+
+    // Check if active assignment already exists
+    const existing = await db.query.teamAssignments.findFirst({
+      where: and(
+        eq(teamAssignments.supervisorId, supervisor.id),
+        eq(teamAssignments.enumeratorId, enumerator.id),
+        isNull(teamAssignments.unassignedAt),
+      ),
+    });
+
+    if (existing) {
+      logger.info({ email }, 'Team assignment already exists, skipping');
+      continue;
+    }
+
+    await db.insert(teamAssignments).values({
+      supervisorId: supervisor.id,
+      enumeratorId: enumerator.id,
+      lgaId: supervisor.lgaId,
+      isSeeded: true,
+    });
+
+    logger.info({ supervisor: supervisor.email, enumerator: email }, 'Team assignment created');
+  }
+
+  logger.info('Team assignments seeding complete');
+}
+
+/**
  * Production seed - creates Super Admin from environment variables
  */
 async function seedProductionAdmin(roleMap: Map<string, string>): Promise<void> {
@@ -250,7 +329,10 @@ async function seedProductionAdmin(roleMap: Map<string, string>): Promise<void> 
 async function cleanSeededData(): Promise<void> {
   logger.info('Cleaning seeded data...');
 
-  // Delete in order to respect foreign key constraints
+  // Delete in FK-safe order: team_assignments before users (no cascade)
+  const deletedAssignments = await db.delete(teamAssignments).where(eq(teamAssignments.isSeeded, true)).returning();
+  logger.info({ count: deletedAssignments.length }, 'Deleted seeded team assignments');
+
   const deletedUsers = await db.delete(users).where(eq(users.isSeeded, true)).returning();
   logger.info({ count: deletedUsers.length }, 'Deleted seeded users');
 
@@ -288,11 +370,15 @@ async function main(): Promise<void> {
     if (isDev) {
       // Development: seed test users with known passwords
       await seedDevelopmentUsers(roleMap, lgaMap);
+      // prep-8: Seed team assignments (supervisor → enumerators)
+      await seedTeamAssignments();
       logger.info('=== DEVELOPMENT SEED COMPLETE ===');
       logger.info('Test credentials:');
       logger.info('  admin@dev.local / admin123 (Super Admin)');
       logger.info('  supervisor@dev.local / super123 (Supervisor)');
       logger.info('  enumerator@dev.local / enum123 (Enumerator)');
+      logger.info('  enumerator2@dev.local / enum123 (Enumerator 2)');
+      logger.info('  enumerator3@dev.local / enum123 (Enumerator 3)');
       logger.info('  clerk@dev.local / clerk123 (Data Entry Clerk)');
       logger.info('  assessor@dev.local / assess123 (Verification Assessor)');
       logger.info('  official@dev.local / official123 (Government Official)');

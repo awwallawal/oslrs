@@ -5,6 +5,7 @@ import { lgas } from './lgas.js';
 import { questionnaireForms, questionnaireFiles, questionnaireVersions } from './questionnaires.js';
 import { submissions } from './submissions.js';
 import { respondents } from './respondents.js';
+import { teamAssignments } from './team-assignments.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -17,6 +18,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   uploadedQuestionnaires: many(questionnaireForms),
   createdVersions: many(questionnaireVersions),
+  // prep-8: Team assignments from supervisor perspective
+  supervisedTeamMembers: many(teamAssignments, { relationName: 'supervisorAssignments' }),
+  // prep-8: Team assignments from enumerator perspective
+  enumeratorAssignments: many(teamAssignments, { relationName: 'enumeratorAssignments' }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -25,6 +30,24 @@ export const rolesRelations = relations(roles, ({ many }) => ({
 
 export const lgasRelations = relations(lgas, ({ many }) => ({
   users: many(users),
+}));
+
+// Team assignment relations (prep-8)
+export const teamAssignmentsRelations = relations(teamAssignments, ({ one }) => ({
+  supervisor: one(users, {
+    fields: [teamAssignments.supervisorId],
+    references: [users.id],
+    relationName: 'supervisorAssignments',
+  }),
+  enumerator: one(users, {
+    fields: [teamAssignments.enumeratorId],
+    references: [users.id],
+    relationName: 'enumeratorAssignments',
+  }),
+  lga: one(lgas, {
+    fields: [teamAssignments.lgaId],
+    references: [lgas.id],
+  }),
 }));
 
 // Questionnaire relations
