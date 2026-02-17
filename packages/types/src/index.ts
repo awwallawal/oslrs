@@ -11,4 +11,6 @@ export * from './validation/auth.js';
 export * from './validation/registration.js';
 export * from './validation/questionnaire.js';
 export * from './validation/native-form.js';
+export * from './fraud.js';
+export * from './validation/fraud.js';
 export * from './error-codes.js';

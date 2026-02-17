@@ -146,17 +146,17 @@ development_status:
   prep-4-react-hook-form-zod-migration: done  # TD-4.1 MEDIUM: Migrate FormFillerPage and ClerkDataEntryPage to RHF+Zod per ADR-4.3
   prep-5-a3-eslint-enforcement: done  # MEDIUM: Add ESLint rule blocking CSS class selectors in test files (T4 carried)
   prep-6-realtime-messaging-spike: done  # HIGH: WebSocket/SSE research for Story 4.2 — validate approach, choose library, create PoC. Socket.io 4.8.3 selected, PoC complete, 43 tests. Code review passed 2026-02-17: 10 findings (1C, 3H, 4M, 2L), 9 fixed, 1 deferred (L2 test dedup).
-  prep-7-fraud-detection-domain-research: ready-for-dev  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema.
+  prep-7-fraud-detection-domain-research: done  # HIGH: GPS clustering, speed-run detection heuristics for Story 4.3. Define threshold schema. All 5 tasks + 8 review fixes complete, 67 tests, 0 regressions. Code review passed 2026-02-17: 8 findings (2H, 3M, 3L), all 8 fixed.
   prep-8-supervisor-team-assignment-schema: ready-for-dev  # HIGH: Verify/create DB schema for supervisor → enumerator team relationships (Story 4.1). Story created 2026-02-17.
-  prep-9-fileblob-base64-to-bytea: backlog  # LOW: Carried from T5 (Epic 2+2.5 retro) — resolve or drop. Story file deleted.
-  prep-10-sub-path-exports-types: backlog  # LOW: Carried from T6 (Epic 2+2.5 retro) — resolve or drop. Story file deleted.
-  prep-11-offline-queue-user-isolation: backlog  # MEDIUM: SubmissionQueueItem lacks userId — switching accounts in same browser without clearing IndexedDB causes submissions to be attributed to wrong user. Story file deleted.
+  prep-9-fileblob-base64-to-bytea: done  # Already resolved in Story 2.2 migration (ALTER COLUMN file_blob TYPE bytea). Custom Drizzle bytea type in questionnaires.ts. Retros carried forward without verifying. Closed 2026-02-17.
+  prep-10-sub-path-exports-types: done  # Dropped 2026-02-17 — cosmetic. All 106+ imports use root @oslsr/types with complete re-exports from index.ts. Zero developer friction.
+  prep-11-offline-queue-user-isolation: ready-for-dev  # MEDIUM: Security — shared-device user isolation for offline drafts/submissions. Story created 2026-02-17. 8 ACs, 9 tasks. Frontend-only.
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: in-progress
   4-1-supervisor-team-dashboard: ready-for-dev
   4-2-in-app-team-messaging: ready-for-dev
-  4-3-fraud-engine-configurable-thresholds: backlog
+  4-3-fraud-engine-configurable-thresholds: ready-for-dev  # Story created 2026-02-17. Depends on prep-7 completion. 15 tasks, 9 ACs.
   4-4-flagged-submission-review-evidence-panel: backlog
   4-5-bulk-verification-of-mass-events: backlog
   epic-4-retrospective: optional
