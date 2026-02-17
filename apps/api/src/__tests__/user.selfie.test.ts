@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
@@ -31,12 +31,12 @@ describe('User Selfie Upload', () => {
   let authToken: string;
   let userId: string;
 
-  beforeEach(async () => {
-    // Setup test user
+  beforeAll(async () => {
+    // Setup role (idempotent)
     const [role] = await db.insert(roles).values({ name: 'TEST_ROLE', description: 'Test' }).onConflictDoNothing().returning();
-    // If role wasn't returned (already existed), fetch it
     const roleId = role?.id || (await db.query.roles.findFirst({ where: eq(roles.name, 'TEST_ROLE') }))!.id;
 
+    // Setup test user
     const [user] = await db.insert(users).values({
       email: `selfie-${Date.now()}@test.com`,
       fullName: 'Selfie Test User',
@@ -46,13 +46,13 @@ describe('User Selfie Upload', () => {
 
     userId = user.id;
     authToken = jwt.sign(
-        { userId: user.id, role: 'TEST_ROLE', email: user.email }, 
-        process.env.JWT_SECRET || 'test-secret', 
+        { userId: user.id, role: 'TEST_ROLE', email: user.email },
+        process.env.JWT_SECRET || 'test-secret',
         { expiresIn: '1h' }
     );
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     if (userId) {
       await db.delete(users).where(eq(users.id, userId));
     }

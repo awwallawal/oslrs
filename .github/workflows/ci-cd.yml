@@ -207,7 +207,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup Database
-        run: pnpm --filter @oslsr/api db:push
+        run: pnpm --filter @oslsr/api db:push:force
 
       # Optimization 3: Skip unchanged packages on PRs
       - name: Run API tests

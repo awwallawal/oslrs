@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
 const request = supertest(app);
@@ -48,52 +48,48 @@ describe('User ID Card & Verification', () => {
   let userId: string;
   let roleId: string;
   let lgaId: string;
+  const createdUserIds: string[] = [];
 
-  beforeEach(async () => {
-    // Restore default mock implementations
-    mocks.generateIDCard.mockResolvedValue(Buffer.from('%PDF-MOCK'));
-    mocks.getPhotoBuffer.mockResolvedValue(Buffer.from('fake-photo'));
-    mocks.processLiveSelfie.mockResolvedValue({
-        originalUrl: 'https://s3/original.jpg',
-        idCardUrl: 'https://s3/cropped.jpg',
-        livenessScore: 0.95
-    });
-
-    // Setup Role
+  beforeAll(async () => {
+    // Setup Role (idempotent)
     const [role] = await db.insert(roles).values({ name: 'TEST_STAFF', description: 'Test Staff' }).onConflictDoNothing().returning();
     roleId = role?.id || (await db.query.roles.findFirst({ where: eq(roles.name, 'TEST_STAFF') }))!.id;
 
-    // Setup LGA
+    // Setup LGA (idempotent)
     const [lga] = await db.insert(lgas).values({ name: 'Test LGA', code: 'test_lga' }).onConflictDoNothing().returning();
     lgaId = lga?.id || (await db.query.lgas.findFirst({ where: eq(lgas.name, 'Test LGA') }))!.id;
 
-    // Setup User
+    // Setup User with photo
     const [user] = await db.insert(users).values({
       email: `staff-${Date.now()}@test.com`,
       fullName: 'Test Staff Member',
       roleId: roleId,
       lgaId: lgaId,
       status: 'active',
-      liveSelfieIdCardUrl: 'staff-photos/id-card/test.jpg', // key
+      liveSelfieIdCardUrl: 'staff-photos/id-card/test.jpg',
     }).returning();
 
     userId = user.id;
+    createdUserIds.push(user.id);
     authToken = jwt.sign(
-        { userId: user.id, role: 'TEST_STAFF', email: user.email }, 
-        process.env.JWT_SECRET || 'test-secret', 
+        { userId: user.id, role: 'TEST_STAFF', email: user.email },
+        process.env.JWT_SECRET || 'test-secret',
         { expiresIn: '1h' }
     );
   });
 
-  afterEach(async () => {
-    if (userId) {
-      await db.delete(users).where(eq(users.id, userId));
+  afterAll(async () => {
+    if (createdUserIds.length > 0) {
+      await db.delete(users).where(inArray(users.id, createdUserIds));
     }
-    // Cleanup LGA/Role if we want, but they are unique/reusable
   });
 
   describe('GET /api/v1/users/id-card', () => {
     it('should generate and download ID card PDF', async () => {
+      // Re-set mock implementations (mockReset may clear them between tests)
+      mocks.generateIDCard.mockResolvedValue(Buffer.from('%PDF-MOCK'));
+      mocks.getPhotoBuffer.mockResolvedValue(Buffer.from('fake-photo'));
+
       const res = await request
         .get('/api/v1/users/id-card')
         .set('Authorization', `Bearer ${authToken}`);
@@ -105,12 +101,15 @@ describe('User ID Card & Verification', () => {
       expect(res.header['content-type']).toBe('application/pdf');
       expect(res.header['content-disposition']).toContain('attachment');
       expect(mocks.generateIDCard).toHaveBeenCalled();
-      
+
       // We expect the controller to call getPhotoBuffer with the key
       expect(mocks.getPhotoBuffer).toHaveBeenCalledWith('staff-photos/id-card/test.jpg');
     });
 
     it('should fail if user has no photo', async () => {
+      mocks.generateIDCard.mockResolvedValue(Buffer.from('%PDF-MOCK'));
+      mocks.getPhotoBuffer.mockResolvedValue(Buffer.from('fake-photo'));
+
       // Create user without photo
        const [userNoPhoto] = await db.insert(users).values({
           email: `nophoto-${Date.now()}@test.com`,
@@ -118,14 +117,13 @@ describe('User ID Card & Verification', () => {
           roleId: roleId,
           status: 'active',
         }).returning();
-        
+        createdUserIds.push(userNoPhoto.id);
+
         const token = jwt.sign({ userId: userNoPhoto.id, role: 'TEST_STAFF' }, process.env.JWT_SECRET || 'test-secret');
 
         const res = await request
             .get('/api/v1/users/id-card')
             .set('Authorization', `Bearer ${token}`);
-            
-        await db.delete(users).where(eq(users.id, userNoPhoto.id));
 
         expect(res.status).toBe(400); // Or 404
         expect(res.body.code).toBe('VALIDATION_ERROR');
