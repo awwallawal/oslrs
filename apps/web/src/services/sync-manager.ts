@@ -20,6 +20,15 @@ export class SyncManager {
   private _syncing = false;
   private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private _onlineHandler: (() => void) | null = null;
+  private _userId: string | null = null;
+
+  setUserId(id: string | null): void {
+    this._userId = id;
+  }
+
+  getUserId(): string | null {
+    return this._userId;
+  }
 
   init(): void {
     this._onlineHandler = () => {
@@ -49,10 +58,12 @@ export class SyncManager {
   }
 
   async retryFailed(): Promise<void> {
+    if (!this._userId) return; // No user — skip
+
     // Reset all failed items to pending with retryCount=0 and clear error
     // Skip permanently failed items (NIN_DUPLICATE — not retryable)
     const failedItems = await db.submissionQueue
-      .where({ status: 'failed' })
+      .where({ status: 'failed', userId: this._userId })
       .toArray();
 
     for (const item of failedItems) {
@@ -70,28 +81,33 @@ export class SyncManager {
   async syncAll(): Promise<void> {
     if (this._syncing) return;
     if (!navigator.onLine) return;
+    if (!this._userId) return; // No user — skip sync
 
     this._syncing = true;
     const syncedIds: string[] = [];
 
     try {
-      // Process pending items
+      // Process pending items (scoped to current user)
       const pendingItems = await db.submissionQueue
-        .where({ status: 'pending' })
+        .where({ status: 'pending', userId: this._userId })
         .toArray();
 
       for (const item of pendingItems) {
+        if (!this._userId) break; // Mid-batch guard: user logged out
         if (item.retryCount >= MAX_RETRIES) continue;
         const synced = await this._syncItem(item.id, item.formId, item.payload, item.retryCount);
         if (synced) syncedIds.push(item.id);
       }
 
-      // Process failed items eligible for retry
-      const failedItems = await db.submissionQueue
-        .where({ status: 'failed' })
-        .toArray();
+      // Process failed items eligible for retry (scoped to current user)
+      const failedItems = this._userId
+        ? await db.submissionQueue
+            .where({ status: 'failed', userId: this._userId })
+            .toArray()
+        : [];
 
       for (const item of failedItems) {
+        if (!this._userId) break; // Mid-batch guard: user logged out
         if (item.retryCount >= MAX_RETRIES) continue;
         if (item.error?.includes('NIN_DUPLICATE')) continue;
 

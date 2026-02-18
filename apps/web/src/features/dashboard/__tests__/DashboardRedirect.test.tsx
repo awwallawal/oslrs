@@ -59,6 +59,10 @@ function TestWrapper({ user, isLoading = false, initialEntries = ['/dashboard'] 
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
+    confirmLogout: vi.fn().mockResolvedValue(undefined),
+    unsyncedCount: 0,
+    showLogoutWarning: false,
+    cancelLogout: vi.fn(),
   };
 
   return (

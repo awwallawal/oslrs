@@ -39,15 +39,22 @@ vi.mock('../../../../services/sync-manager', () => ({
   syncManager: { syncNow: mockSyncNow, retryFailed: mockRetryFailed },
 }));
 
-// Mock offline-db
+// Mock useAuth (prep-11: EnumeratorSyncPage now uses useAuth for userId)
+const mockUseAuth = vi.hoisted(() => vi.fn());
+vi.mock('../../../auth/context/AuthContext', () => ({
+  useAuth: mockUseAuth,
+}));
+
+// Mock offline-db (prep-11: hoisted where mock for userId verification)
+const mockSubmissionQueueWhere = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    sortBy: vi.fn().mockResolvedValue([]),
+  }),
+);
 vi.mock('../../../../lib/offline-db', () => ({
   db: {
     submissionQueue: {
-      orderBy: vi.fn().mockReturnValue({
-        reverse: vi.fn().mockReturnValue({
-          toArray: vi.fn().mockResolvedValue([]),
-        }),
-      }),
+      where: mockSubmissionQueueWhere,
     },
     formSchemaCache: {
       toArray: vi.fn().mockResolvedValue([]),
@@ -66,6 +73,7 @@ describe('EnumeratorSyncPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ user: { id: 'test-user-A' } });
     liveQueryCallIndex = 0;
     // Default: empty queue, empty form cache
     mockUseLiveQuery.mockImplementation(() => {
@@ -230,5 +238,19 @@ describe('EnumeratorSyncPage', () => {
   it('does not show Retry Failed button when failedCount is 0', () => {
     render(<EnumeratorSyncPage />);
     expect(screen.queryByTestId('retry-failed-button')).not.toBeInTheDocument();
+  });
+
+  it('passes userId to queue query for scoped filtering (prep-11: AC5, AC8)', () => {
+    mockSubmissionQueueWhere.mockReturnValue({
+      sortBy: vi.fn().mockResolvedValue([]),
+    });
+    mockUseLiveQuery.mockImplementation((fn: () => unknown) => {
+      fn();
+      return [];
+    });
+
+    render(<EnumeratorSyncPage />);
+
+    expect(mockSubmissionQueueWhere).toHaveBeenCalledWith({ userId: 'test-user-A' });
   });
 });

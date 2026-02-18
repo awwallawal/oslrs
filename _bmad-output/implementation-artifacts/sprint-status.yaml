@@ -150,7 +150,7 @@ development_status:
   prep-8-supervisor-team-assignment-schema: done  # HIGH: Schema + service + seeds + 15 tests. Code review passed 2026-02-17: 8 findings (3H, 3M, 2L), 7/8 fixed (L2 deferred). 482 API tests pass, 0 regressions.
   prep-9-fileblob-base64-to-bytea: done  # Already resolved in Story 2.2 migration (ALTER COLUMN file_blob TYPE bytea). Custom Drizzle bytea type in questionnaires.ts. Retros carried forward without verifying. Closed 2026-02-17.
   prep-10-sub-path-exports-types: done  # Dropped 2026-02-17 — cosmetic. All 106+ imports use root @oslsr/types with complete re-exports from index.ts. Zero developer friction.
-  prep-11-offline-queue-user-isolation: ready-for-dev  # MEDIUM: Security — shared-device user isolation for offline drafts/submissions. Story created 2026-02-17. PM validated: 9 ACs, 10 tasks. Frontend-only.
+  prep-11-offline-queue-user-isolation: done  # MEDIUM: Security — shared-device user isolation for offline drafts/submissions. Code review passed 2026-02-18: 9 findings (3C, 3M, 3L), 6 fixed (3C build-breaking type/mock errors, 1M async bug, 2M story doc gaps), 3 deferred (L1-L3 test coverage gaps).
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: in-progress
@@ -158,7 +158,7 @@ development_status:
   4-2-in-app-team-messaging: ready-for-dev  # Story rebuilt from scratch 2026-02-17 (original too thin — 0 subtasks, no schema, no architecture). 7 ACs, 13 tasks, 48 subtasks. Depends on prep-8.
   4-3-fraud-engine-configurable-thresholds: ready-for-dev  # PM validated 2026-02-17: 15 tasks, 9 ACs. 7 fixes applied (C1 completionTimeSeconds prerequisite, M1 questionnaireFormId, M2 FraudHeuristic interface, M3 quarantine derived state, M4 TEXT column docs, L1 test ref, L2 supervisor scope). Depends on prep-7.
   4-4-flagged-submission-review-evidence-panel: ready-for-dev  # PM validated 2026-02-17: 13 tasks, 8 ACs. 6 fixes applied (M1 dual-FK relationName, M2 TeamAssignmentService scope, M3 numeric parseFloat, M4 questionnaireFormId, L1 extend not create test, L2 null guard via M2). Depends on 4.3.
-  4-5-bulk-verification-of-mass-events: ready-for-dev  # Story created 2026-02-17. Depends on Stories 4.3 + 4.4. 12 tasks, 8 ACs. Bulk cluster verification + floating action bar.
+  4-5-bulk-verification-of-mass-events: ready-for-dev  # PM validated 2026-02-17: 12 tasks, 8 ACs. 5 fixes applied (M1 role-conditional scope, M2 cluster scope, M3 route ordering, M4 DB auditLogs insert, L1 numeric parseFloat). Depends on 4.3 + 4.4.
   epic-4-retrospective: optional
 
   # Epic 5: Back-Office Audit & Policy Reporting

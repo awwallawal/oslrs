@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import type { AuthUser, LoginRequest, LoginResponse, UserRole } from '@oslsr/types';
 import * as authApi from '../api/auth.api';
 import { AuthApiError } from '../api/auth.api';
+import { db } from '../../../lib/offline-db';
+import { syncManager } from '../../../services/sync-manager';
 
 // Token storage key
 const ACCESS_TOKEN_KEY = 'oslsr_access_token';
@@ -111,8 +113,12 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 interface AuthContextValue extends AuthState {
   loginStaff: (request: LoginRequest) => Promise<void>;
   loginPublic: (request: LoginRequest) => Promise<void>;
-  loginWithGoogle: (response: LoginResponse) => void;
+  loginWithGoogle: (response: LoginResponse) => Promise<void>;
   logout: () => Promise<void>;
+  confirmLogout: () => Promise<void>;
+  unsyncedCount: number;
+  showLogoutWarning: boolean;
+  cancelLogout: () => void;
   reAuthenticate: (password: string) => Promise<boolean>;
   clearError: () => void;
   updateActivity: () => void;
@@ -121,11 +127,35 @@ interface AuthContextValue extends AuthState {
 // Create context
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** Claim __legacy__ IndexedDB records for the authenticated user (prep-11: AC7) */
+async function claimLegacyRecords(userId: string): Promise<void> {
+  try {
+    const legacyDrafts = await db.drafts.where({ userId: '__legacy__' }).toArray();
+    const legacyQueue = await db.submissionQueue.where({ userId: '__legacy__' }).toArray();
+    const totalLegacy = legacyDrafts.length + legacyQueue.length;
+    if (totalLegacy === 0) return;
+
+    await Promise.all([
+      ...legacyDrafts.map((d) => db.drafts.update(d.id, { userId })),
+      ...legacyQueue.map((q) => db.submissionQueue.update(q.id, { userId })),
+    ]);
+
+    // eslint-disable-next-line no-console
+    console.info(`[offline] Claimed ${totalLegacy} legacy record(s) for user ${userId}`);
+  } catch (err) {
+    // Best-effort — migration will be retried on next login
+    // eslint-disable-next-line no-console
+    console.warn('[offline] Legacy record claiming failed:', err);
+  }
+}
+
 // Provider component
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showLogoutWarning, setShowLogoutWarning] = useState(false);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
 
   // Save access token to storage
   const saveToken = useCallback((token: string) => {
@@ -235,6 +265,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [updateActivity]);
 
+  // Initialize offline subsystem for a user (prep-11: AC7, AC9)
+  const initOfflineForUser = useCallback(async (userId: string) => {
+    syncManager.setUserId(userId);
+    syncManager.init();
+    await claimLegacyRecords(userId);
+  }, []);
+
   // Staff login
   const loginStaff = useCallback(async (request: LoginRequest) => {
     dispatch({ type: 'AUTH_START' });
@@ -255,6 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       scheduleTokenRefresh(response.expiresIn);
+      await initOfflineForUser(response.user.id);
     } catch (error) {
       const message = error instanceof AuthApiError
         ? error.message
@@ -262,7 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'AUTH_ERROR', payload: message });
       throw error;
     }
-  }, [saveToken, updateActivity, scheduleTokenRefresh]);
+  }, [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
   // Public login
   const loginPublic = useCallback(async (request: LoginRequest) => {
@@ -284,6 +322,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       scheduleTokenRefresh(response.expiresIn);
+      await initOfflineForUser(response.user.id);
     } catch (error) {
       const message = error instanceof AuthApiError
         ? error.message
@@ -291,10 +330,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'AUTH_ERROR', payload: message });
       throw error;
     }
-  }, [saveToken, updateActivity, scheduleTokenRefresh]);
+  }, [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
   // Google OAuth login (Story 3.0) — called after backend verification is complete
-  const loginWithGoogle = useCallback((response: LoginResponse) => {
+  const loginWithGoogle = useCallback(async (response: LoginResponse) => {
     saveToken(response.accessToken);
     updateActivity();
 
@@ -308,10 +347,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     scheduleTokenRefresh(response.expiresIn);
-  }, [saveToken, updateActivity, scheduleTokenRefresh]);
+    await initOfflineForUser(response.user.id);
+  }, [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
-  // Logout
-  const logout = useCallback(async () => {
+  // Internal logout that always proceeds (used by confirmLogout and inactivity timeout)
+  const performLogout = useCallback(async () => {
+    // Tear down sync lifecycle BEFORE clearing token (prep-11: AC9)
+    syncManager.destroy();
+    syncManager.setUserId(null);
+
     try {
       if (state.accessToken) {
         await authApi.logout(state.accessToken);
@@ -328,9 +372,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(activityTimeoutRef.current);
     }
 
+    setShowLogoutWarning(false);
+    setUnsyncedCount(0);
     clearToken();
     dispatch({ type: 'AUTH_LOGOUT' });
   }, [state.accessToken, clearToken]);
+
+  // Logout — checks for unsynced data before proceeding (prep-11: AC6)
+  const logout = useCallback(async () => {
+    if (!state.user?.id) {
+      await performLogout();
+      return;
+    }
+
+    try {
+      const pendingCount = await db.submissionQueue
+        .where({ userId: state.user.id, status: 'pending' })
+        .count();
+      const failedCount = await db.submissionQueue
+        .where({ userId: state.user.id, status: 'failed' })
+        .count();
+      const total = pendingCount + failedCount;
+
+      if (total > 0) {
+        setUnsyncedCount(total);
+        setShowLogoutWarning(true);
+        return; // Wait for user confirmation
+      }
+    } catch {
+      // If IndexedDB query fails, proceed with logout
+    }
+
+    await performLogout();
+  }, [state.user?.id, performLogout]);
+
+  // Confirm logout after seeing the unsynced data warning
+  const confirmLogout = useCallback(async () => {
+    await performLogout();
+  }, [performLogout]);
+
+  // Cancel logout warning
+  const cancelLogout = useCallback(() => {
+    setShowLogoutWarning(false);
+    setUnsyncedCount(0);
+  }, []);
 
   // Re-authenticate for sensitive actions
   const reAuthenticate = useCallback(async (password: string): Promise<boolean> => {
@@ -364,6 +449,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       // Check for inactivity timeout
       if (checkInactivityTimeout()) {
+        // Tear down sync lifecycle on inactivity timeout (prep-11: AC9)
+        syncManager.destroy();
+        syncManager.setUserId(null);
         clearToken();
         dispatch({ type: 'AUTH_LOGOUT' });
         return;
@@ -395,6 +483,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         scheduleTokenRefresh(response.expiresIn);
+        await initOfflineForUser(userInfo.id);
       } catch {
         // No valid session, clear any stored data
         clearToken();
@@ -403,7 +492,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initializeAuth();
-  }, [checkInactivityTimeout, clearToken, saveToken, updateActivity, scheduleTokenRefresh]);
+  }, [checkInactivityTimeout, clearToken, saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
   // Setup activity tracking when authenticated
   useEffect(() => {
@@ -433,6 +522,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginPublic,
     loginWithGoogle,
     logout,
+    confirmLogout,
+    unsyncedCount,
+    showLogoutWarning,
+    cancelLogout,
     reAuthenticate,
     clearError,
     updateActivity,

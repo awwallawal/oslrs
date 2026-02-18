@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 
 const mockUseOnlineStatus = vi.hoisted(() => vi.fn());
 const mockUseLiveQuery = vi.hoisted(() => vi.fn());
+const mockUseAuth = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../../hooks/useOnlineStatus', () => ({
   useOnlineStatus: mockUseOnlineStatus,
@@ -13,14 +14,32 @@ vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: mockUseLiveQuery,
 }));
 
+// Mock offline-db to verify userId-scoped queries (prep-11: AC8)
+const mockSubmissionQueueWhere = vi.hoisted(() => vi.fn());
+vi.mock('../../../../lib/offline-db', () => ({
+  db: {
+    submissionQueue: {
+      where: mockSubmissionQueueWhere,
+    },
+  },
+}));
+
+vi.mock('../../../../features/auth/context/AuthContext', () => ({
+  useAuth: mockUseAuth,
+}));
+
 import { useSyncStatus } from '../useSyncStatus';
 
 describe('useSyncStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ user: { id: 'test-user-A' } });
     mockUseOnlineStatus.mockReturnValue({ isOnline: true });
     // Default: empty queue
     mockUseLiveQuery.mockReturnValue([]);
+    mockSubmissionQueueWhere.mockReturnValue({
+      toArray: vi.fn().mockResolvedValue([]),
+    });
   });
 
   afterEach(() => {
@@ -156,5 +175,45 @@ describe('useSyncStatus', () => {
     expect(result.current.failedCount).toBe(0);
     expect(result.current.syncingCount).toBe(0);
     expect(result.current.totalCount).toBe(0);
+  });
+
+  it('counts rejectedCount correctly for NIN_DUPLICATE errors (prep-11)', () => {
+    mockUseOnlineStatus.mockReturnValue({ isOnline: true });
+    mockUseLiveQuery.mockReturnValue([
+      { id: '1', status: 'failed', error: 'NIN_DUPLICATE: already registered' },
+      { id: '2', status: 'failed', error: 'NIN_DUPLICATE_STAFF: belongs to staff' },
+      { id: '3', status: 'failed', error: 'Network error' },
+      { id: '4', status: 'pending', error: null },
+    ]);
+
+    const { result } = renderHook(() => useSyncStatus());
+
+    expect(result.current.rejectedCount).toBe(2); // NIN_DUPLICATE + NIN_DUPLICATE_STAFF
+    expect(result.current.failedCount).toBe(1); // Only non-NIN_DUPLICATE failures
+    expect(result.current.pendingCount).toBe(1);
+    expect(result.current.totalCount).toBe(4);
+  });
+
+  it('passes userId to query callback for scoped filtering (prep-11: AC4, AC8)', () => {
+    mockUseLiveQuery.mockImplementation((fn: () => unknown) => {
+      fn();
+      return [];
+    });
+
+    renderHook(() => useSyncStatus());
+
+    expect(mockSubmissionQueueWhere).toHaveBeenCalledWith({ userId: 'test-user-A' });
+  });
+
+  it('does not call db.where when userId is undefined', () => {
+    mockUseAuth.mockReturnValue({ user: null });
+    mockUseLiveQuery.mockImplementation((fn: () => unknown) => {
+      fn();
+      return [];
+    });
+
+    renderHook(() => useSyncStatus());
+
+    expect(mockSubmissionQueueWhere).not.toHaveBeenCalled();
   });
 });

@@ -1298,6 +1298,8 @@ So that I can provide real-time guidance and support.
 
 ### Story 4.3: Fraud Engine Configurable Thresholds
 
+> **Dependencies:** prep-7 (Fraud Detection Domain Research) — heuristic definitions, threshold schema, types, and scoring model
+
 As a Super Admin,
 I want to adjust the fraud detection thresholds via a UI,
 So that I can tune the system based on pilot results.
@@ -1311,6 +1313,8 @@ So that I can tune the system based on pilot results.
 
 ### Story 4.4: Flagged Submission Review (Evidence Panel)
 
+> **Dependencies:** prep-7 (Fraud Detection Domain Research) — fraud schema, severity levels, and detection result types
+
 As a Supervisor,
 I want to review the evidence for flagged submissions,
 So that I can decide whether to verify or reject them.
@@ -1323,6 +1327,8 @@ So that I can decide whether to verify or reject them.
 **And** I must have the option to mark the individual record as "Verified" or "Rejected".
 
 ### Story 4.5: Bulk Verification of Mass-Events
+
+> **Dependencies:** prep-7 (Fraud Detection Domain Research) — fraud schema, composite scoring model, and GPS clustering algorithm
 
 As a Supervisor,
 I want to verify a group of flagged submissions with one click,

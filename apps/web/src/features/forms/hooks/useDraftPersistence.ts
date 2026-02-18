@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, type Draft, type SubmissionQueueItem } from '../../../lib/offline-db';
+import { useAuth } from '../../auth/context/AuthContext';
 import { uuidv7 } from 'uuidv7';
 
 interface UseDraftPersistenceOptions {
@@ -26,6 +27,8 @@ export function useDraftPersistence({
   currentIndex,
   enabled,
 }: UseDraftPersistenceOptions): UseDraftPersistenceReturn {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [draftId, setDraftId] = useState<string | null>(null);
   const [resumeData, setResumeData] = useState<{
     formData: Record<string, unknown>;
@@ -38,7 +41,7 @@ export function useDraftPersistence({
 
   // Load existing draft on mount
   useEffect(() => {
-    if (!enabled || !formId) {
+    if (!enabled || !formId || !userId) {
       setLoading(false);
       return;
     }
@@ -46,7 +49,7 @@ export function useDraftPersistence({
     async function loadDraft() {
       try {
         const existingDraft = await db.drafts
-          .where({ formId, status: 'in-progress' })
+          .where({ userId, formId, status: 'in-progress' })
           .first();
 
         if (existingDraft) {
@@ -63,11 +66,11 @@ export function useDraftPersistence({
     }
 
     loadDraft();
-  }, [formId, enabled]);
+  }, [formId, enabled, userId]);
 
   // Auto-save on formData change (debounced 500ms)
   useEffect(() => {
-    if (!enabled || !formId) return;
+    if (!enabled || !formId || !userId) return;
 
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -96,6 +99,7 @@ export function useDraftPersistence({
           responses: formData,
           questionPosition: currentIndex,
           status: 'in-progress',
+          userId,
           createdAt: now,
           updatedAt: now,
         };
@@ -110,10 +114,10 @@ export function useDraftPersistence({
         clearTimeout(debounceRef.current);
       }
     };
-  }, [formData, currentIndex, formId, formVersion, enabled]);
+  }, [formData, currentIndex, formId, formVersion, enabled, userId]);
 
   const saveDraft = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || !userId) return;
     const now = new Date().toISOString();
 
     if (draftIdRef.current) {
@@ -132,6 +136,7 @@ export function useDraftPersistence({
         responses: formData,
         questionPosition: currentIndex,
         status: 'in-progress',
+        userId,
         createdAt: now,
         updatedAt: now,
       };
@@ -139,10 +144,10 @@ export function useDraftPersistence({
       draftIdRef.current = id;
       setDraftId(id);
     }
-  }, [formData, currentIndex, formId, formVersion, enabled]);
+  }, [formData, currentIndex, formId, formVersion, enabled, userId]);
 
   const completeDraft = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || !userId) return;
     const now = new Date().toISOString();
 
     // Create draft if auto-save hasn't fired yet (e.g., fast Ctrl+Enter)
@@ -155,6 +160,7 @@ export function useDraftPersistence({
         responses: formData,
         questionPosition: currentIndex,
         status: 'in-progress',
+        userId,
         createdAt: now,
         updatedAt: now,
       };
@@ -184,6 +190,7 @@ export function useDraftPersistence({
       status: 'pending',
       retryCount: 0,
       lastAttempt: null,
+      userId,
       createdAt: now,
       error: null,
     };
@@ -204,7 +211,7 @@ export function useDraftPersistence({
     } catch {
       // Best-effort cleanup — draft is 'completed' so useFormDrafts() won't show it
     }
-  }, [formId, formVersion, formData, currentIndex, enabled]);
+  }, [formId, formVersion, formData, currentIndex, enabled, userId]);
 
   const resetForNewEntry = useCallback(() => {
     draftIdRef.current = null;

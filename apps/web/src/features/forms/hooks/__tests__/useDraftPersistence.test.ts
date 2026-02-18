@@ -10,6 +10,7 @@ const {
   mockDraftsAdd,
   mockDraftsDelete,
   mockSubmissionQueueAdd,
+  mockUseAuth,
 } = vi.hoisted(() => ({
   mockDraftsWhere: vi.fn(),
   mockDraftsFirst: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockDraftsAdd: vi.fn(),
   mockDraftsDelete: vi.fn(),
   mockSubmissionQueueAdd: vi.fn(),
+  mockUseAuth: vi.fn(),
 }));
 
 vi.mock('../../../../lib/offline-db', () => ({
@@ -36,6 +38,10 @@ vi.mock('../../../../lib/offline-db', () => ({
   },
 }));
 
+vi.mock('../../../../features/auth/context/AuthContext', () => ({
+  useAuth: mockUseAuth,
+}));
+
 vi.mock('uuidv7', () => ({
   uuidv7: () => 'mock-uuid-v7',
 }));
@@ -49,6 +55,7 @@ describe('useDraftPersistence', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ user: { id: 'test-user-A' } });
     mockDraftsFirst.mockResolvedValue(null);
     mockDraftsUpdate.mockResolvedValue(undefined);
     mockDraftsAdd.mockResolvedValue(undefined);
@@ -329,6 +336,103 @@ describe('useDraftPersistence', () => {
 
     expect(result.current.draftId).toBeNull();
     expect(result.current.resumeData).toBeNull();
+  });
+
+  // ── prep-11: User isolation tests ──────────────────────────────────────
+
+  it('passes userId in where query (draft isolation)', async () => {
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'Test' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockDraftsWhere).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user-A', formId: 'form-1', status: 'in-progress' })
+    );
+  });
+
+  it('includes userId when creating new draft', async () => {
+    renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'John' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    await waitFor(
+      () => {
+        expect(mockDraftsAdd).toHaveBeenCalled();
+      },
+      { timeout: 1500 }
+    );
+
+    expect(mockDraftsAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user-A' })
+    );
+  });
+
+  it('includes userId when creating queue item via completeDraft', async () => {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'existing-draft-id',
+      formId: 'form-1',
+      responses: { name: 'Test' },
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'Test' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user-A' })
+    );
+  });
+
+  it('does not save or load when userId is null', async () => {
+    mockUseAuth.mockReturnValue({ user: null });
+
+    renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '1.0.0',
+        formData: { name: 'John' },
+        currentIndex: 0,
+        enabled: true,
+      })
+    );
+
+    // Wait past debounce
+    await new Promise((r) => setTimeout(r, 700));
+
+    expect(mockDraftsWhere).not.toHaveBeenCalled();
+    expect(mockDraftsAdd).not.toHaveBeenCalled();
   });
 
   it('completeDraft() creates draft then queues+deletes when no prior draft exists (fast Ctrl+Enter)', async () => {

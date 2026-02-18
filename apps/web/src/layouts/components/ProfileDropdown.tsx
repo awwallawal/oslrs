@@ -17,6 +17,16 @@ import { useAuth } from '../../features/auth/context/AuthContext';
 import { getRoleDisplayName } from '@oslsr/types';
 import { getDashboardRoute } from '../../features/dashboard/config/sidebarConfig';
 import { cn } from '../../lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 
 interface ProfileDropdownProps {
   className?: string;
@@ -33,7 +43,7 @@ function getInitials(name: string): string {
 }
 
 export function ProfileDropdown({ className }: ProfileDropdownProps) {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, confirmLogout, showLogoutWarning, unsyncedCount, cancelLogout, isLoading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -176,6 +186,27 @@ export function ProfileDropdown({ className }: ProfileDropdownProps) {
           </div>
         </div>
       )}
+
+      {/* Unsynced data logout warning (prep-11: AC6) */}
+      <AlertDialog open={showLogoutWarning} onOpenChange={(open) => { if (!open) cancelLogout(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsynced Submissions</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {unsyncedCount} unsynced submission{unsyncedCount !== 1 ? 's' : ''}. These will be uploaded when you log back in on this device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelLogout}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { await confirmLogout(); }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

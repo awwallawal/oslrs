@@ -24,14 +24,14 @@ vi.mock('../../features/forms/api/submission.api', () => ({
 
 import { SyncManager } from '../sync-manager';
 
-/** Helper: setup where mock to return specific items for pending/failed */
+/** Helper: setup where mock to return specific items for pending/failed (with optional userId) */
 function setupWhereMock(
   pending: Record<string, unknown>[] = [],
   failed: Record<string, unknown>[] = [],
 ) {
-  mockWhere.mockImplementation(({ status }: { status: string }) => {
-    if (status === 'pending') return { toArray: vi.fn().mockResolvedValue(pending) };
-    if (status === 'failed') return { toArray: vi.fn().mockResolvedValue(failed) };
+  mockWhere.mockImplementation((query: { status: string; userId?: string }) => {
+    if (query.status === 'pending') return { toArray: vi.fn().mockResolvedValue(pending) };
+    if (query.status === 'failed') return { toArray: vi.fn().mockResolvedValue(failed) };
     return { toArray: vi.fn().mockResolvedValue([]) };
   });
 }
@@ -43,6 +43,7 @@ describe('SyncManager', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     manager = new SyncManager();
+    manager.setUserId('test-user-A'); // prep-11: userId required for sync
 
     // Default: empty queues
     setupWhereMock();
@@ -284,8 +285,8 @@ describe('SyncManager', () => {
     // First call (retryFailed fetches failed) returns failed items
     // Then syncAll is called which fetches pending + failed
     let retryFailedCallCount = 0;
-    mockWhere.mockImplementation(({ status }: { status: string }) => {
-      if (status === 'failed') {
+    mockWhere.mockImplementation((query: { status: string; userId?: string }) => {
+      if (query.status === 'failed') {
         retryFailedCallCount++;
         if (retryFailedCallCount === 1) {
           // retryFailed() fetching failed items to reset
@@ -294,7 +295,7 @@ describe('SyncManager', () => {
         // syncAll() fetching failed items (already reset, so empty)
         return { toArray: vi.fn().mockResolvedValue([]) };
       }
-      if (status === 'pending') return { toArray: vi.fn().mockResolvedValue([]) };
+      if (query.status === 'pending') return { toArray: vi.fn().mockResolvedValue([]) };
       return { toArray: vi.fn().mockResolvedValue([]) };
     });
 
@@ -391,15 +392,15 @@ describe('SyncManager', () => {
     ];
 
     let retryFailedCallCount = 0;
-    mockWhere.mockImplementation(({ status }: { status: string }) => {
-      if (status === 'failed') {
+    mockWhere.mockImplementation((query: { status: string; userId?: string }) => {
+      if (query.status === 'failed') {
         retryFailedCallCount++;
         if (retryFailedCallCount === 1) {
           return { toArray: vi.fn().mockResolvedValue(failedItems) };
         }
         return { toArray: vi.fn().mockResolvedValue([]) };
       }
-      if (status === 'pending') return { toArray: vi.fn().mockResolvedValue([]) };
+      if (query.status === 'pending') return { toArray: vi.fn().mockResolvedValue([]) };
       return { toArray: vi.fn().mockResolvedValue([]) };
     });
 
@@ -500,6 +501,64 @@ describe('SyncManager', () => {
       error: expect.stringContaining('NIN_DUPLICATE_STAFF'),
       retryCount: 3, // MAX_RETRIES — prevents retry
     }));
+  });
+
+  // ── prep-11: User isolation tests ──────────────────────────────────────
+
+  it('syncAll does nothing when userId is not set', async () => {
+    manager.setUserId(null);
+
+    setupWhereMock([
+      {
+        id: 'item-1',
+        formId: 'form-1',
+        payload: { responses: {}, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+
+    await manager.syncAll();
+
+    expect(mockSubmitSurvey).not.toHaveBeenCalled();
+    expect(mockWhere).not.toHaveBeenCalled();
+  });
+
+  it('retryFailed does nothing when userId is not set', async () => {
+    manager.setUserId(null);
+
+    await manager.retryFailed();
+
+    expect(mockWhere).not.toHaveBeenCalled();
+  });
+
+  it('syncAll passes userId in where queries', async () => {
+    setupWhereMock([
+      {
+        id: 'item-1',
+        formId: 'form-1',
+        payload: { responses: {}, formVersion: '1.0.0', submittedAt: '2026-01-01T00:00:00.000Z' },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    // Verify that where was called with userId
+    expect(mockWhere).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user-A', status: 'pending' })
+    );
+    expect(mockWhere).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'test-user-A', status: 'failed' })
+    );
   });
 
   it('polling skips when offline mid-poll', async () => {

@@ -26,6 +26,7 @@ describe('offline-db (Dexie IndexedDB)', () => {
       responses: { q1: 'answer1', q2: 42 },
       questionPosition: 2,
       status: 'in-progress',
+      userId: 'user-A',
       createdAt: '2026-02-11T10:00:00.000Z',
       updatedAt: '2026-02-11T10:05:00.000Z',
     };
@@ -110,6 +111,7 @@ describe('offline-db (Dexie IndexedDB)', () => {
       status: 'pending',
       retryCount: 0,
       lastAttempt: null,
+      userId: 'user-A',
       createdAt: '2026-02-11T10:00:00.000Z',
       error: null,
     };
@@ -190,13 +192,14 @@ describe('offline-db (Dexie IndexedDB)', () => {
   });
 
   describe('schema versioning', () => {
-    it('should have version 1 with all three tables', () => {
+    it('should have version 2 with all three tables', () => {
       expect(db.tables.map((t) => t.name).sort()).toEqual(
         ['drafts', 'formSchemaCache', 'submissionQueue'].sort()
       );
+      expect(db.verno).toBe(2);
     });
 
-    it('should have correct indexes on drafts table', () => {
+    it('should have correct indexes on drafts table including userId', () => {
       const draftsSchema = db.tables.find((t) => t.name === 'drafts')!.schema;
       const indexNames = draftsSchema.indexes.map((i) => i.name);
 
@@ -204,9 +207,11 @@ describe('offline-db (Dexie IndexedDB)', () => {
       expect(indexNames).toContain('status');
       expect(indexNames).toContain('updatedAt');
       expect(indexNames).toContain('[formId+status]');
+      expect(indexNames).toContain('userId');
+      expect(indexNames).toContain('[userId+formId+status]');
     });
 
-    it('should have correct indexes on submissionQueue table', () => {
+    it('should have correct indexes on submissionQueue table including userId', () => {
       const queueSchema = db.tables.find((t) => t.name === 'submissionQueue')!.schema;
       const indexNames = queueSchema.indexes.map((i) => i.name);
 
@@ -214,6 +219,100 @@ describe('offline-db (Dexie IndexedDB)', () => {
       expect(indexNames).toContain('status');
       expect(indexNames).toContain('createdAt');
       expect(indexNames).toContain('[status+createdAt]');
+      expect(indexNames).toContain('userId');
+      expect(indexNames).toContain('[userId+status]');
+    });
+  });
+
+  describe('userId isolation (prep-11)', () => {
+    it('should store userId on draft records', async () => {
+      const draft: Draft = {
+        id: 'draft-iso-1',
+        formId: 'form-001',
+        formVersion: '1.0.0',
+        responses: { q1: 'answer' },
+        questionPosition: 0,
+        status: 'in-progress',
+        userId: 'user-A',
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z',
+      };
+      await db.drafts.add(draft);
+      const retrieved = await db.drafts.get('draft-iso-1');
+      expect(retrieved!.userId).toBe('user-A');
+    });
+
+    it('should store userId on submission queue items', async () => {
+      const item: SubmissionQueueItem = {
+        id: 'sub-iso-1',
+        formId: 'form-001',
+        payload: { responses: {} },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        userId: 'user-B',
+        createdAt: '2026-02-17T10:00:00.000Z',
+        error: null,
+      };
+      await db.submissionQueue.add(item);
+      const retrieved = await db.submissionQueue.get('sub-iso-1');
+      expect(retrieved!.userId).toBe('user-B');
+    });
+
+    it('should query drafts by compound index [userId+formId+status]', async () => {
+      await db.drafts.bulkAdd([
+        {
+          id: 'draft-A1', formId: 'form-001', formVersion: '1.0.0',
+          responses: {}, questionPosition: 0, status: 'in-progress' as const,
+          userId: 'user-A', createdAt: '2026-02-17T10:00:00.000Z', updatedAt: '2026-02-17T10:00:00.000Z',
+        },
+        {
+          id: 'draft-B1', formId: 'form-001', formVersion: '1.0.0',
+          responses: {}, questionPosition: 0, status: 'in-progress' as const,
+          userId: 'user-B', createdAt: '2026-02-17T10:00:00.000Z', updatedAt: '2026-02-17T10:00:00.000Z',
+        },
+        {
+          id: 'draft-A2', formId: 'form-002', formVersion: '1.0.0',
+          responses: {}, questionPosition: 0, status: 'in-progress' as const,
+          userId: 'user-A', createdAt: '2026-02-17T10:00:00.000Z', updatedAt: '2026-02-17T10:00:00.000Z',
+        },
+      ]);
+
+      const userAForm001 = await db.drafts
+        .where('[userId+formId+status]')
+        .equals(['user-A', 'form-001', 'in-progress'])
+        .toArray();
+
+      expect(userAForm001).toHaveLength(1);
+      expect(userAForm001[0].id).toBe('draft-A1');
+    });
+
+    it('should query submissionQueue by compound index [userId+status]', async () => {
+      await db.submissionQueue.bulkAdd([
+        {
+          id: 'sub-A1', formId: 'form-001', payload: {}, status: 'pending' as const,
+          retryCount: 0, lastAttempt: null, userId: 'user-A',
+          createdAt: '2026-02-17T10:00:00.000Z', error: null,
+        },
+        {
+          id: 'sub-B1', formId: 'form-001', payload: {}, status: 'pending' as const,
+          retryCount: 0, lastAttempt: null, userId: 'user-B',
+          createdAt: '2026-02-17T10:00:00.000Z', error: null,
+        },
+        {
+          id: 'sub-A2', formId: 'form-002', payload: {}, status: 'failed' as const,
+          retryCount: 1, lastAttempt: null, userId: 'user-A',
+          createdAt: '2026-02-17T10:00:00.000Z', error: 'network',
+        },
+      ]);
+
+      const userAPending = await db.submissionQueue
+        .where('[userId+status]')
+        .equals(['user-A', 'pending'])
+        .toArray();
+
+      expect(userAPending).toHaveLength(1);
+      expect(userAPending[0].id).toBe('sub-A1');
     });
   });
 });

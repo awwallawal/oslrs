@@ -54,6 +54,10 @@ function createMockAuthValue(user: AuthUser | null, isLoading = false) {
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
+    confirmLogout: vi.fn().mockResolvedValue(undefined),
+    unsyncedCount: 0,
+    showLogoutWarning: false,
+    cancelLogout: vi.fn(),
   };
 }
 

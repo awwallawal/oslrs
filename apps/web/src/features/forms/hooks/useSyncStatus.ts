@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../../lib/offline-db';
+import { db, type SubmissionQueueItem } from '../../../lib/offline-db';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import { useAuth } from '../../auth/context/AuthContext';
 
 export type SyncState = 'synced' | 'syncing' | 'attention' | 'offline' | 'empty';
 
@@ -15,8 +16,16 @@ interface UseSyncStatusReturn {
 
 export function useSyncStatus(): UseSyncStatusReturn {
   const { isOnline } = useOnlineStatus();
+  const { user } = useAuth();
+  const userId = user?.id;
 
-  const items = useLiveQuery(() => db.submissionQueue.toArray()) ?? [];
+  const items = useLiveQuery(
+    () =>
+      userId
+        ? db.submissionQueue.where({ userId }).toArray()
+        : Promise.resolve([] as SubmissionQueueItem[]),
+    [userId],
+  ) ?? [];
 
   const totalCount = items.length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;

@@ -4,6 +4,7 @@ import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
+import { UserRole } from '@oslsr/types';
 import { AuthProvider, useAuth, useRequireRole } from '../AuthContext';
 import * as authApi from '../../api/auth.api';
 
@@ -12,6 +13,28 @@ afterEach(() => {
 });
 
 expect.extend(matchers);
+
+// Mock sync manager (prep-11: AC9)
+const mockSyncManager = vi.hoisted(() => ({
+  setUserId: vi.fn(),
+  init: vi.fn(),
+  destroy: vi.fn(),
+}));
+vi.mock('../../../../services/sync-manager', () => ({
+  syncManager: mockSyncManager,
+}));
+
+// Mock offline-db (prep-11: AC6, AC7)
+const mockDbDraftsWhere = vi.hoisted(() => vi.fn());
+const mockDbDraftsUpdate = vi.hoisted(() => vi.fn());
+const mockDbQueueWhere = vi.hoisted(() => vi.fn());
+const mockDbQueueUpdate = vi.hoisted(() => vi.fn());
+vi.mock('../../../../lib/offline-db', () => ({
+  db: {
+    drafts: { where: mockDbDraftsWhere, update: mockDbDraftsUpdate },
+    submissionQueue: { where: mockDbQueueWhere, update: mockDbQueueUpdate },
+  },
+}));
 
 // Mock the auth API module
 vi.mock('../../api/auth.api', () => ({
@@ -61,6 +84,14 @@ describe('AuthContext', () => {
     mockAuthApi.refreshToken.mockRejectedValue(new Error('No session'));
     // Clear session storage
     sessionStorage.clear();
+    // Default: no legacy records, no unsynced data (prep-11)
+    mockDbDraftsWhere.mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) });
+    mockDbQueueWhere.mockReturnValue({
+      toArray: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    });
+    mockDbDraftsUpdate.mockResolvedValue(1);
+    mockDbQueueUpdate.mockResolvedValue(1);
   });
 
   afterEach(() => {
@@ -362,6 +393,246 @@ describe('AuthContext', () => {
       expect(result.current.isRememberMe).toBe(true);
     });
   });
+
+  describe('Offline Queue User Isolation (prep-11)', () => {
+    const mockLoginResponse = {
+      accessToken: 'access-token-123',
+      user: {
+        id: 'user-123',
+        email: 'test@example.com',
+        fullName: 'Test User',
+        role: UserRole.ENUMERATOR,
+        status: 'active',
+      },
+      expiresIn: 900,
+    };
+
+    async function loginHelper(result: { current: ReturnType<typeof useAuth> }) {
+      await act(async () => {
+        await result.current.loginStaff({
+          email: 'test@example.com',
+          password: 'password123',
+          captchaToken: 'captcha-token',
+          rememberMe: false,
+        });
+      });
+    }
+
+    describe('AC9: Sync lifecycle on login/logout', () => {
+      it('calls syncManager.setUserId and init on successful login', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+
+        expect(mockSyncManager.setUserId).toHaveBeenCalledWith('user-123');
+        expect(mockSyncManager.init).toHaveBeenCalled();
+      });
+
+      it('calls syncManager.setUserId and init on successful publicLogin', async () => {
+        mockAuthApi.publicLogin.mockResolvedValueOnce(mockLoginResponse);
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        mockSyncManager.setUserId.mockClear();
+        mockSyncManager.init.mockClear();
+
+        await act(async () => {
+          await result.current.loginPublic({
+            email: 'test@example.com',
+            password: 'password123',
+            captchaToken: 'captcha-token',
+            rememberMe: false,
+          });
+        });
+
+        expect(mockSyncManager.setUserId).toHaveBeenCalledWith('user-123');
+        expect(mockSyncManager.init).toHaveBeenCalled();
+      });
+
+      it('calls syncManager.setUserId and init on loginWithGoogle', async () => {
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        mockSyncManager.setUserId.mockClear();
+        mockSyncManager.init.mockClear();
+
+        await act(async () => {
+          await result.current.loginWithGoogle({
+            accessToken: 'google-token-123',
+            user: mockLoginResponse.user,
+            expiresIn: 900,
+          });
+        });
+
+        expect(mockSyncManager.setUserId).toHaveBeenCalledWith('user-123');
+        expect(mockSyncManager.init).toHaveBeenCalled();
+      });
+
+      it('calls syncManager.destroy and setUserId(null) on logout', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+        mockAuthApi.logout.mockResolvedValueOnce({});
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+        mockSyncManager.destroy.mockClear();
+        mockSyncManager.setUserId.mockClear();
+
+        await act(async () => {
+          await result.current.logout();
+        });
+
+        expect(mockSyncManager.destroy).toHaveBeenCalled();
+        expect(mockSyncManager.setUserId).toHaveBeenCalledWith(null);
+      });
+    });
+
+    describe('AC6: Logout warning for unsynced data', () => {
+      it('shows logout warning when unsynced submissions exist', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+
+        // Clear mocks from login flow so we can assert on logout queries
+        mockDbQueueWhere.mockClear();
+
+        // Mock unsynced data for the logout query
+        mockDbQueueWhere.mockImplementation((criteria: Record<string, string>) => ({
+          count: vi.fn().mockResolvedValue(criteria.status === 'pending' ? 3 : 1),
+          toArray: vi.fn().mockResolvedValue([]),
+        }));
+
+        await act(async () => {
+          await result.current.logout();
+        });
+
+        expect(result.current.showLogoutWarning).toBe(true);
+        expect(result.current.unsyncedCount).toBe(4);
+        expect(result.current.isAuthenticated).toBe(true);
+        // Verify logout queries are userId-scoped (prep-11: AC6)
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'pending' });
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'failed' });
+      });
+
+      it('confirmLogout proceeds despite unsynced data', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+        mockAuthApi.logout.mockResolvedValueOnce({});
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+
+        // Clear mocks from login flow so we can assert on logout queries
+        mockDbQueueWhere.mockClear();
+
+        // Mock unsynced data
+        mockDbQueueWhere.mockImplementation((criteria: Record<string, string>) => ({
+          count: vi.fn().mockResolvedValue(criteria.status === 'pending' ? 2 : 0),
+          toArray: vi.fn().mockResolvedValue([]),
+        }));
+
+        await act(async () => {
+          await result.current.logout();
+        });
+
+        expect(result.current.showLogoutWarning).toBe(true);
+        // Verify logout queries are userId-scoped (prep-11: AC6)
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'pending' });
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'failed' });
+
+        await act(async () => {
+          await result.current.confirmLogout();
+        });
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.showLogoutWarning).toBe(false);
+      });
+
+      it('cancelLogout dismisses the warning without logging out', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+
+        // Clear mocks from login flow so we can assert on logout queries
+        mockDbQueueWhere.mockClear();
+
+        // Mock unsynced data
+        mockDbQueueWhere.mockImplementation((criteria: Record<string, string>) => ({
+          count: vi.fn().mockResolvedValue(criteria.status === 'pending' ? 1 : 0),
+          toArray: vi.fn().mockResolvedValue([]),
+        }));
+
+        await act(async () => {
+          await result.current.logout();
+        });
+
+        expect(result.current.showLogoutWarning).toBe(true);
+        // Verify logout queries are userId-scoped (prep-11: AC6)
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'pending' });
+        expect(mockDbQueueWhere).toHaveBeenCalledWith({ userId: 'user-123', status: 'failed' });
+
+        act(() => {
+          result.current.cancelLogout();
+        });
+
+        expect(result.current.showLogoutWarning).toBe(false);
+        expect(result.current.isAuthenticated).toBe(true);
+      });
+    });
+
+    describe('AC7: Legacy record claiming on login', () => {
+      it('claims legacy records for authenticated user on login', async () => {
+        mockAuthApi.staffLogin.mockResolvedValueOnce(mockLoginResponse);
+
+        // Mock legacy records
+        mockDbDraftsWhere.mockReturnValue({
+          toArray: vi.fn().mockResolvedValue([{ id: 'draft-1', userId: '__legacy__' }]),
+        });
+        mockDbQueueWhere.mockImplementation((criteria: Record<string, string>) => {
+          if (criteria.userId === '__legacy__') {
+            return { toArray: vi.fn().mockResolvedValue([{ id: 'queue-1', userId: '__legacy__' }]) };
+          }
+          return { toArray: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) };
+        });
+
+        const { result } = renderHook(() => useAuth(), {
+          wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        await loginHelper(result);
+
+        expect(mockDbDraftsUpdate).toHaveBeenCalledWith('draft-1', { userId: 'user-123' });
+        expect(mockDbQueueUpdate).toHaveBeenCalledWith('queue-1', { userId: 'user-123' });
+      });
+    });
+  });
 });
 
 describe('useRequireRole', () => {
@@ -369,6 +640,12 @@ describe('useRequireRole', () => {
     vi.clearAllMocks();
     mockAuthApi.refreshToken.mockRejectedValue(new Error('No session'));
     sessionStorage.clear();
+    // Default: no legacy records, no unsynced data (prep-11)
+    mockDbDraftsWhere.mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) });
+    mockDbQueueWhere.mockReturnValue({
+      toArray: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    });
   });
 
   it('returns false when user is not authenticated', async () => {

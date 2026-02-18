@@ -11,7 +11,11 @@ import { db, type SubmissionQueueItem } from '../../../lib/offline-db';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SyncStatusBadge } from '../../../components/SyncStatusBadge';
 import { useSyncStatus } from '../../forms/hooks/useSyncStatus';
+import { useAuth } from '../../auth/context/AuthContext';
 import { syncManager } from '../../../services/sync-manager';
+
+/** Cap queue items rendered to prevent unbounded DOM growth */
+const MAX_QUEUE_DISPLAY = 100;
 
 const statusConfig: Record<
   SubmissionQueueItem['status'],
@@ -37,9 +41,15 @@ function formatTime(iso: string): string {
 }
 
 export default function EnumeratorSyncPage() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const { status, pendingCount, failedCount, rejectedCount, syncingCount } = useSyncStatus();
-  const items = useLiveQuery(() =>
-    db.submissionQueue.orderBy('createdAt').reverse().toArray(),
+  const items = useLiveQuery(
+    () =>
+      userId
+        ? db.submissionQueue.where({ userId }).sortBy('createdAt').then((arr) => arr.reverse().slice(0, MAX_QUEUE_DISPLAY))
+        : Promise.resolve([] as SubmissionQueueItem[]),
+    [userId],
   ) ?? [];
 
   // Look up form names from cache

@@ -7,6 +7,7 @@ export interface Draft {
   responses: Record<string, unknown>; // Question answers
   questionPosition: number; // Current question index for resume
   status: 'in-progress' | 'completed' | 'submitted';
+  userId: string; // Owner's user ID (prep-11: shared-device isolation)
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
 }
@@ -18,6 +19,7 @@ export interface SubmissionQueueItem {
   status: 'pending' | 'syncing' | 'failed' | 'synced';
   retryCount: number;
   lastAttempt: string | null; // ISO timestamp
+  userId: string; // Owner's user ID (prep-11: shared-device isolation)
   createdAt: string;
   error: string | null; // Last error message
 }
@@ -41,5 +43,25 @@ db.version(1).stores({
   submissionQueue: 'id, formId, status, createdAt, [status+createdAt]',
   formSchemaCache: 'formId, cachedAt',
 });
+
+// prep-11: Add userId for shared-device user isolation
+db.version(2)
+  .stores({
+    drafts: 'id, formId, status, updatedAt, [formId+status], userId, [userId+formId+status]',
+    submissionQueue: 'id, formId, status, createdAt, [status+createdAt], userId, [userId+status]',
+    formSchemaCache: 'formId, cachedAt', // unchanged — schemas are public
+  })
+  .upgrade((tx) => {
+    return Promise.all([
+      tx
+        .table('drafts')
+        .toCollection()
+        .modify({ userId: '__legacy__' }),
+      tx
+        .table('submissionQueue')
+        .toCollection()
+        .modify({ userId: '__legacy__' }),
+    ]);
+  });
 
 export { db };

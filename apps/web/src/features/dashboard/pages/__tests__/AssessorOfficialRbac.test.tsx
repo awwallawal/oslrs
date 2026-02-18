@@ -53,6 +53,10 @@ function mockAuth(role: string) {
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
+    confirmLogout: vi.fn().mockResolvedValue(undefined),
+    unsyncedCount: 0,
+    showLogoutWarning: false,
+    cancelLogout: vi.fn(),
   } as unknown as ReturnType<typeof AuthContext.useAuth>);
 }
 
