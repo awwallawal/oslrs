@@ -154,7 +154,7 @@ development_status:
 
   # Epic 4: Supervisor Oversight & Field Management
   epic-4: in-progress
-  4-1-supervisor-team-dashboard: ready-for-dev  # PM validated 2026-02-17: 6 ACs, 8 tasks. Depends on prep-8. Map: leaflet@1.9.4 + react-leaflet@4.x.
+  4-1-supervisor-team-dashboard: done  # Code review passed 2026-02-19: 9 findings (1H, 3M, 5L), ALL 9 fixed. ErrorBoundary, local markers, 60s polling, WAT timezone, L1 migrated overview+alerts to TeamAssignmentService. 24 backend + 25 frontend supervisor tests, 0 regressions.
   4-2-in-app-team-messaging: ready-for-dev  # Story rebuilt from scratch 2026-02-17 (original too thin — 0 subtasks, no schema, no architecture). 7 ACs, 13 tasks, 48 subtasks. Depends on prep-8.
   4-3-fraud-engine-configurable-thresholds: ready-for-dev  # PM validated 2026-02-17: 15 tasks, 9 ACs. 7 fixes applied (C1 completionTimeSeconds prerequisite, M1 questionnaireFormId, M2 FraudHeuristic interface, M3 quarantine derived state, M4 TEXT column docs, L1 test ref, L2 supervisor scope). Depends on prep-7.
   4-4-flagged-submission-review-evidence-panel: ready-for-dev  # PM validated 2026-02-17: 13 tasks, 8 ACs. 6 fixes applied (M1 dual-FK relationName, M2 TeamAssignmentService scope, M3 numeric parseFloat, M4 questionnaireFormId, L1 extend not create test, L2 null guard via M2). Depends on 4.3.
