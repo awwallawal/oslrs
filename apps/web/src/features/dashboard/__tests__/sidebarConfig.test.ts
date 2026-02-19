@@ -44,10 +44,10 @@ describe('sidebarConfig', () => {
   });
 
   describe('AC5: Sidebar item counts per role', () => {
-    it('enumerator has 3-4 sidebar items (mobile-first)', () => {
+    it('enumerator has 4-5 sidebar items (mobile-first + messages)', () => {
       const items = sidebarConfig.enumerator;
-      expect(items.length).toBeGreaterThanOrEqual(3);
-      expect(items.length).toBeLessThanOrEqual(4);
+      expect(items.length).toBeGreaterThanOrEqual(4);
+      expect(items.length).toBeLessThanOrEqual(5);
     });
 
     it('public_user has 3-4 sidebar items (mobile-first)', () => {

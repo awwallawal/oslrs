@@ -89,6 +89,7 @@ const EnumeratorHome = lazy(() => import('./features/dashboard/pages/EnumeratorH
 const EnumeratorSurveysPage = lazy(() => import('./features/dashboard/pages/EnumeratorSurveysPage'));
 const EnumeratorDraftsPage = lazy(() => import('./features/dashboard/pages/EnumeratorDraftsPage'));
 const EnumeratorSyncPage = lazy(() => import('./features/dashboard/pages/EnumeratorSyncPage'));
+const EnumeratorMessagesPage = lazy(() => import('./features/dashboard/pages/EnumeratorMessagesPage'));
 const ClerkHome = lazy(() => import('./features/dashboard/pages/ClerkHome'));
 const ClerkSurveysPage = lazy(() => import('./features/dashboard/pages/ClerkSurveysPage'));
 const ClerkDataEntryPage = lazy(() => import('./features/forms/pages/ClerkDataEntryPage'));
@@ -720,6 +721,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <EnumeratorSyncPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 4.2: Enumerator Messages */}
+                <Route
+                  path="messages"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorMessagesPage />
                     </Suspense>
                   }
                 />

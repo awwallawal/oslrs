@@ -20,13 +20,14 @@
  * - Mobile (<768px): Bottom navigation (56px height), hamburger menu
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SWUpdateBanner } from '../components/SWUpdateBanner';
 import { useAuth } from '../features/auth/context/AuthContext';
 import { useServiceWorker } from '../hooks/useServiceWorker';
 import { getSidebarItems } from '../features/dashboard/config/sidebarConfig';
+import { useUnreadCount } from '../features/dashboard/hooks/useMessages';
 import { DashboardHeader } from './components/DashboardHeader';
 import { DashboardSidebar } from './components/DashboardSidebar';
 import { DashboardBottomNav } from './components/DashboardBottomNav';
@@ -96,8 +97,17 @@ export function DashboardLayout() {
     }
   }, [offlineReady]);
 
-  // Get sidebar items for mobile sheet
-  const sidebarItems = user ? getSidebarItems(user.role) : [];
+  // Get sidebar items for mobile sheet — inject unread badge for Messages
+  const hasMessaging = user?.role === 'supervisor' || user?.role === 'enumerator';
+  const { data: unreadData } = useUnreadCount(!!hasMessaging);
+  const unreadCount = unreadData?.count ?? 0;
+  const sidebarItems = useMemo(() => {
+    const base = user ? getSidebarItems(user.role) : [];
+    if (!hasMessaging || unreadCount === 0) return base;
+    return base.map((item) =>
+      item.label === 'Messages' ? { ...item, badge: unreadCount } : item,
+    );
+  }, [user, hasMessaging, unreadCount]);
 
   // Show loading skeleton while auth is loading
   if (isLoading) {

@@ -6,16 +6,18 @@ import { AppError } from '@oslsr/utils';
 import { verifySocketToken } from './auth.js';
 import { getRoomName, canJoinRoom } from './rooms.js';
 import { SessionService } from '../services/session.service.js';
+import { MessageService } from '../services/message.service.js';
 
 const logger = pino({
   name: 'realtime',
   level: process.env.NODE_ENV === 'test' ? 'silent' : (process.env.LOG_LEVEL || 'info'),
 });
 
-/** Zod schema for message:send event payload */
+/** Zod schema for message:send event payload (Story 4.2: persist-then-deliver) */
 const messageSendSchema = z.object({
-  targetLgaId: z.string().optional(),
-  content: z.string().min(1).max(5000),
+  recipientId: z.string().uuid().optional(),
+  content: z.string().min(1).max(2000),
+  type: z.enum(['direct', 'broadcast']).default('direct'),
 });
 
 /**
@@ -101,8 +103,11 @@ export function initializeRealtime(httpServer: HttpServer): SocketServer {
       }
     }
 
-    // ── Message relay with Zod validation ────────────────────────────────
-    socket.on('message:send', (data: unknown) => {
+    // Story 4.2: Join user-specific room for direct message delivery
+    socket.join(`user:${user.sub}`);
+
+    // ── Story 4.2: Persist-then-deliver message handler ──────────────────
+    socket.on('message:send', async (data: unknown) => {
       const parsed = messageSendSchema.safeParse(data);
       if (!parsed.success) {
         socket.emit('error', {
@@ -113,33 +118,96 @@ export function initializeRealtime(httpServer: HttpServer): SocketServer {
         return;
       }
 
-      const { targetLgaId, content } = parsed.data;
-      const senderRoom = user.lgaId ? getRoomName(user.lgaId) : null;
-      const targetRoom = targetLgaId ? getRoomName(targetLgaId) : senderRoom;
+      const { recipientId, content, type } = parsed.data;
 
-      if (!targetRoom || !canJoinRoom(user, targetRoom)) {
-        logger.warn({
-          event: 'realtime.boundary_violation',
+      try {
+        if (type === 'broadcast') {
+          // Supervisor broadcast — persist then deliver to LGA room
+          if (user.role !== 'supervisor') {
+            socket.emit('error', {
+              code: 'FORBIDDEN',
+              message: 'Only supervisors can send broadcast messages',
+              statusCode: 403,
+            });
+            return;
+          }
+
+          if (!user.lgaId) {
+            socket.emit('error', {
+              code: 'LGA_LOCK_REQUIRED',
+              message: 'Field staff must be assigned to an LGA',
+              statusCode: 403,
+            });
+            return;
+          }
+
+          const result = await MessageService.sendBroadcast(user.sub, content, user.lgaId);
+          // Emit to individual assigned enumerator rooms (not LGA room) to prevent
+          // non-assigned enumerators in the same LGA from receiving the event (AC4.2.2)
+          const broadcastPayload = {
+            id: result.message.id,
+            senderId: user.sub,
+            messageType: 'broadcast',
+            content,
+            sentAt: result.message.sentAt.toISOString(),
+          };
+          for (const enumeratorId of result.enumeratorIds) {
+            io.to(`user:${enumeratorId}`).emit('message:received', broadcastPayload);
+          }
+
+          logger.info({ event: 'message.broadcast', messageId: result.message.id, supervisorId: user.sub });
+        } else {
+          // Direct message — persist then deliver to user room
+          if (!recipientId) {
+            socket.emit('error', {
+              code: 'VALIDATION_ERROR',
+              message: 'recipientId is required for direct messages',
+              statusCode: 400,
+            });
+            return;
+          }
+
+          if (!user.lgaId) {
+            socket.emit('error', {
+              code: 'LGA_LOCK_REQUIRED',
+              message: 'Field staff must be assigned to an LGA',
+              statusCode: 403,
+            });
+            return;
+          }
+
+          const message = await MessageService.sendDirectMessage(
+            user.sub,
+            user.role,
+            recipientId,
+            content,
+            user.lgaId,
+          );
+
+          io.to(`user:${recipientId}`).emit('message:received', {
+            id: message.id,
+            senderId: user.sub,
+            messageType: 'direct',
+            content,
+            sentAt: message.sentAt.toISOString(),
+          });
+
+          logger.info({ event: 'message.sent', messageId: message.id, senderId: user.sub, recipientId });
+        }
+      } catch (err) {
+        const appError = err instanceof AppError ? err : null;
+        logger.error({
+          event: 'message.delivery_failed',
           userId: user.sub,
-          role: user.role,
-          userLga: user.lgaId,
-          targetRoom,
+          type,
+          error: (err as Error).message,
         });
         socket.emit('error', {
-          code: 'TEAM_BOUNDARY_VIOLATION',
-          message: 'Cannot send messages outside your assigned team',
-          statusCode: 403,
+          code: appError?.code ?? 'MESSAGE_SEND_FAILED',
+          message: appError?.message ?? 'Failed to send message',
+          statusCode: appError?.statusCode ?? 500,
         });
-        return;
       }
-
-      // Broadcast to the LGA room (excluding sender)
-      socket.to(targetRoom).emit('message:received', {
-        senderId: user.sub,
-        senderRole: user.role,
-        content,
-        timestamp: new Date().toISOString(),
-      });
     });
 
     socket.on('disconnect', (reason) => {

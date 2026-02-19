@@ -12,9 +12,11 @@
  * - > 1024px (desktop): Full sidebar with labels
  */
 
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/context/AuthContext';
 import { getSidebarItems, getDashboardRoute } from '../../features/dashboard/config/sidebarConfig';
+import { useUnreadCount } from '../../features/dashboard/hooks/useMessages';
 import { SidebarNav } from './SidebarNav';
 import { cn } from '../../lib/utils';
 import { APP_VERSION } from '../../lib/constants';
@@ -32,11 +34,24 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ className }: DashboardSidebarProps) {
   const { user } = useAuth();
 
+  // Story 4.2: Inject unread message count badge for supervisor/enumerator
+  const hasMessaging = user?.role === 'supervisor' || user?.role === 'enumerator';
+  const { data: unreadData } = useUnreadCount(hasMessaging);
+  const unreadCount = unreadData?.count ?? 0;
+
+  const sidebarItems = useMemo(() => {
+    if (!user) return [];
+    const base = getSidebarItems(user.role);
+    if (!hasMessaging || unreadCount === 0) return base;
+    return base.map((item) =>
+      item.label === 'Messages' ? { ...item, badge: unreadCount } : item,
+    );
+  }, [user, hasMessaging, unreadCount]);
+
   if (!user) {
     return null;
   }
 
-  const sidebarItems = getSidebarItems(user.role);
   const dashboardHome = getDashboardRoute(user.role);
 
   return (

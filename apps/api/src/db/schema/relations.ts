@@ -6,6 +6,7 @@ import { questionnaireForms, questionnaireFiles, questionnaireVersions } from '.
 import { submissions } from './submissions.js';
 import { respondents } from './respondents.js';
 import { teamAssignments } from './team-assignments.js';
+import { messages, messageReceipts } from './messages.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -22,6 +23,12 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   supervisedTeamMembers: many(teamAssignments, { relationName: 'supervisorAssignments' }),
   // prep-8: Team assignments from enumerator perspective
   enumeratorAssignments: many(teamAssignments, { relationName: 'enumeratorAssignments' }),
+  // Story 4.2: Messages sent by this user
+  sentMessages: many(messages, { relationName: 'messageSender' }),
+  // Story 4.2: Direct messages received by this user
+  receivedMessages: many(messages, { relationName: 'messageRecipient' }),
+  // Story 4.2: Message receipts for this user
+  messageReceipts: many(messageReceipts, { relationName: 'receiptRecipient' }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -89,4 +96,36 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
 // Respondents relations (Story 3.4)
 export const respondentsRelations = relations(respondents, ({ many }) => ({
   submissions: many(submissions),
+}));
+
+// Message relations (Story 4.2)
+export const messagesRelations = relations(messages, ({ one, many }) => ({
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+    relationName: 'messageSender',
+  }),
+  recipient: one(users, {
+    fields: [messages.recipientId],
+    references: [users.id],
+    relationName: 'messageRecipient',
+  }),
+  lga: one(lgas, {
+    fields: [messages.lgaId],
+    references: [lgas.id],
+  }),
+  receipts: many(messageReceipts),
+}));
+
+// Message receipt relations (Story 4.2)
+export const messageReceiptsRelations = relations(messageReceipts, ({ one }) => ({
+  message: one(messages, {
+    fields: [messageReceipts.messageId],
+    references: [messages.id],
+  }),
+  recipient: one(users, {
+    fields: [messageReceipts.recipientId],
+    references: [users.id],
+    relationName: 'receiptRecipient',
+  }),
 }));

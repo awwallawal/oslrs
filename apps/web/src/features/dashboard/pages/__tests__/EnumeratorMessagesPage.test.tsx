@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * SupervisorMessagesPage Tests
+ * EnumeratorMessagesPage Tests
  *
- * Story 4.2: Supervisor messaging interface tests.
- * Verifies inbox rendering, thread interaction, broadcast, loading/empty/error states,
- * and realtime event handling.
+ * Story 4.2: Enumerator messaging interface tests.
+ * Verifies inbox rendering, thread interaction, no broadcast button,
+ * loading/empty/error states.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
@@ -21,7 +21,6 @@ Element.prototype.scrollIntoView = vi.fn();
 // ── Hoisted mocks ───────────────────────────────────────────────────────
 
 const mockMutate = vi.fn();
-const mockBroadcastMutate = vi.fn();
 const mockMarkThreadAsReadMutate = vi.fn();
 
 const mockInboxData = vi.hoisted(() => ({
@@ -38,7 +37,7 @@ const mockThreadData = vi.hoisted(() => ({
 // Mock useAuth
 vi.mock('../../../auth/context/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'user-1', role: 'supervisor', fullName: 'Test Supervisor', email: 'sup@test.local', lgaId: 'lga-1', status: 'active' },
+    user: { id: 'enum-1', role: 'enumerator', fullName: 'Test Enumerator', email: 'enum@test.local', lgaId: 'lga-1', status: 'active' },
     isLoading: false,
   }),
 }));
@@ -59,13 +58,13 @@ vi.mock('../../hooks/useMessages', () => ({
   useInbox: () => mockInboxData,
   useThread: () => mockThreadData,
   useSendMessage: () => ({ mutate: mockMutate, isPending: false }),
-  useSendBroadcast: () => ({ mutate: mockBroadcastMutate, isPending: false }),
+  useSendBroadcast: () => ({ mutate: vi.fn(), isPending: false }),
   useMarkThreadAsRead: () => ({ mutate: mockMarkThreadAsReadMutate }),
   useUnreadCount: () => ({ data: { count: 0 } }),
   useMessageRealtime: vi.fn(),
 }));
 
-import SupervisorMessagesPage from '../SupervisorMessagesPage';
+import EnumeratorMessagesPage from '../EnumeratorMessagesPage';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -79,7 +78,7 @@ function renderPage() {
   return render(
     <QueryClientProvider client={createQueryClient()}>
       <MemoryRouter>
-        <SupervisorMessagesPage />
+        <EnumeratorMessagesPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -87,19 +86,11 @@ function renderPage() {
 
 const MOCK_THREADS = [
   {
-    partnerId: 'enum-1',
-    partnerName: 'John Doe',
-    lastMessage: 'When is the next survey?',
+    partnerId: 'sup-1',
+    partnerName: 'Supervisor Alpha',
+    lastMessage: 'Please complete your surveys by Friday',
     lastMessageAt: '2026-02-19T10:00:00Z',
-    unreadCount: 2,
-    messageType: 'direct' as const,
-  },
-  {
-    partnerId: 'enum-2',
-    partnerName: 'Jane Smith',
-    lastMessage: 'Completed all submissions',
-    lastMessageAt: '2026-02-19T09:00:00Z',
-    unreadCount: 0,
+    unreadCount: 1,
     messageType: 'direct' as const,
   },
 ];
@@ -107,27 +98,27 @@ const MOCK_THREADS = [
 const MOCK_MESSAGES = [
   {
     id: 'msg-1',
-    senderId: 'enum-1',
-    senderName: 'John Doe',
-    recipientId: 'user-1',
+    senderId: 'sup-1',
+    senderName: 'Supervisor Alpha',
+    recipientId: 'enum-1',
     messageType: 'direct' as const,
-    content: 'When is the next survey?',
+    content: 'Please complete your surveys by Friday',
     sentAt: '2026-02-19T10:00:00Z',
   },
   {
     id: 'msg-2',
-    senderId: 'user-1',
-    senderName: 'Test Supervisor',
-    recipientId: 'enum-1',
+    senderId: 'enum-1',
+    senderName: 'Test Enumerator',
+    recipientId: 'sup-1',
     messageType: 'direct' as const,
-    content: 'Tomorrow at 9am',
-    sentAt: '2026-02-19T10:01:00Z',
+    content: 'Will do, thank you!',
+    sentAt: '2026-02-19T10:05:00Z',
   },
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
-describe('SupervisorMessagesPage', () => {
+describe('EnumeratorMessagesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockInboxData.data = [];
@@ -140,10 +131,10 @@ describe('SupervisorMessagesPage', () => {
   afterEach(cleanup);
 
   describe('page heading', () => {
-    it('renders page title and subtitle', () => {
+    it('renders page title and enumerator-specific subtitle', () => {
       renderPage();
       expect(screen.getByText('Messages')).toBeInTheDocument();
-      expect(screen.getByText('Communicate with your team')).toBeInTheDocument();
+      expect(screen.getByText('Communicate with your supervisor')).toBeInTheDocument();
     });
   });
 
@@ -174,42 +165,43 @@ describe('SupervisorMessagesPage', () => {
     it('renders select conversation prompt in right panel', () => {
       mockInboxData.data = [];
       renderPage();
-      expect(screen.getByText('Select a conversation or broadcast to your team')).toBeInTheDocument();
+      expect(screen.getByText('Select a conversation to start messaging')).toBeInTheDocument();
+    });
+  });
+
+  describe('no broadcast button', () => {
+    it('does NOT show broadcast button for enumerator', () => {
+      mockInboxData.data = MOCK_THREADS;
+      renderPage();
+      expect(screen.queryByText('Broadcast to Team')).not.toBeInTheDocument();
     });
   });
 
   describe('inbox with threads', () => {
-    it('renders thread list with partner names', () => {
+    it('renders supervisor thread in inbox list', () => {
       mockInboxData.data = MOCK_THREADS;
       renderPage();
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
-      expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      expect(screen.getByText('Supervisor Alpha')).toBeInTheDocument();
+      expect(screen.getByText('Please complete your surveys by Friday')).toBeInTheDocument();
     });
 
-    it('shows message previews in thread list', () => {
+    it('shows unread count badge', () => {
       mockInboxData.data = MOCK_THREADS;
       renderPage();
-      expect(screen.getByText('When is the next survey?')).toBeInTheDocument();
-      expect(screen.getByText('Completed all submissions')).toBeInTheDocument();
-    });
-
-    it('shows unread count badge for threads with unread messages', () => {
-      mockInboxData.data = MOCK_THREADS;
-      renderPage();
-      expect(screen.getByText('2')).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
     });
   });
 
-  describe('thread selection', () => {
-    it('opens thread when clicking a conversation', () => {
+  describe('thread interaction', () => {
+    it('opens supervisor thread when clicked', () => {
       mockInboxData.data = MOCK_THREADS;
       mockThreadData.data = { messages: MOCK_MESSAGES };
       renderPage();
 
-      fireEvent.click(screen.getByText('John Doe'));
+      fireEvent.click(screen.getByText('Supervisor Alpha'));
 
       // Thread header should show partner name
-      const headerElements = screen.getAllByText('John Doe');
+      const headerElements = screen.getAllByText('Supervisor Alpha');
       expect(headerElements.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -218,59 +210,20 @@ describe('SupervisorMessagesPage', () => {
       mockThreadData.data = { messages: MOCK_MESSAGES };
       renderPage();
 
-      fireEvent.click(screen.getByText('John Doe'));
+      fireEvent.click(screen.getByText('Supervisor Alpha'));
 
       // Use role="log" (MessageThread's aria container) to scope within thread
       const threadLog = screen.getByRole('log');
-      expect(within(threadLog).getByText('When is the next survey?')).toBeInTheDocument();
-      expect(within(threadLog).getByText('Tomorrow at 9am')).toBeInTheDocument();
+      expect(within(threadLog).getByText('Please complete your surveys by Friday')).toBeInTheDocument();
+      expect(within(threadLog).getByText('Will do, thank you!')).toBeInTheDocument();
     });
 
-    it('shows thread loading skeleton while loading', () => {
-      mockInboxData.data = MOCK_THREADS;
-      mockThreadData.isLoading = true;
-      mockThreadData.data = null;
-      renderPage();
-
-      fireEvent.click(screen.getByText('John Doe'));
-
-      expect(screen.getByLabelText('Loading thread')).toBeInTheDocument();
-    });
-  });
-
-  describe('broadcast', () => {
-    it('renders broadcast button for supervisor', () => {
-      mockInboxData.data = [];
-      renderPage();
-      expect(screen.getByText('Broadcast to Team')).toBeInTheDocument();
-    });
-
-    it('opens broadcast composer when broadcast button is clicked', () => {
-      mockInboxData.data = MOCK_THREADS;
-      renderPage();
-
-      fireEvent.click(screen.getByText('Broadcast to Team'));
-
-      expect(screen.getByText('Send a message to all your assigned enumerators')).toBeInTheDocument();
-    });
-
-    it('shows broadcast composer with correct placeholder', () => {
-      mockInboxData.data = [];
-      renderPage();
-
-      fireEvent.click(screen.getByText('Broadcast to Team'));
-
-      expect(screen.getByPlaceholderText('Type a broadcast message...')).toBeInTheDocument();
-    });
-  });
-
-  describe('message composer', () => {
-    it('renders message input when thread is selected', () => {
+    it('shows message input when thread is open', () => {
       mockInboxData.data = MOCK_THREADS;
       mockThreadData.data = { messages: MOCK_MESSAGES };
       renderPage();
 
-      fireEvent.click(screen.getByText('John Doe'));
+      fireEvent.click(screen.getByText('Supervisor Alpha'));
 
       expect(screen.getByLabelText('Message input')).toBeInTheDocument();
       expect(screen.getByLabelText('Send message')).toBeInTheDocument();
@@ -281,10 +234,9 @@ describe('SupervisorMessagesPage', () => {
       mockThreadData.data = { messages: MOCK_MESSAGES };
       renderPage();
 
-      fireEvent.click(screen.getByText('John Doe'));
+      fireEvent.click(screen.getByText('Supervisor Alpha'));
 
-      const sendButton = screen.getByLabelText('Send message');
-      expect(sendButton).toBeDisabled();
+      expect(screen.getByLabelText('Send message')).toBeDisabled();
     });
   });
 
@@ -295,16 +247,20 @@ describe('SupervisorMessagesPage', () => {
       expect(screen.getByLabelText('Message threads')).toBeInTheDocument();
     });
 
-    it('thread items have correct ARIA labels with unread count', () => {
+    it('thread items have ARIA labels with unread count', () => {
       mockInboxData.data = MOCK_THREADS;
       renderPage();
-      expect(screen.getByLabelText('Conversation with John Doe, 2 unread')).toBeInTheDocument();
+      expect(screen.getByLabelText('Conversation with Supervisor Alpha, 1 unread')).toBeInTheDocument();
     });
 
-    it('broadcast button has ARIA label', () => {
-      mockInboxData.data = [];
+    it('back button has ARIA label when thread is open', () => {
+      mockInboxData.data = MOCK_THREADS;
+      mockThreadData.data = { messages: MOCK_MESSAGES };
       renderPage();
-      expect(screen.getByLabelText('Send broadcast message to all team members')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Supervisor Alpha'));
+
+      expect(screen.getByLabelText('Back to inbox')).toBeInTheDocument();
     });
   });
 });

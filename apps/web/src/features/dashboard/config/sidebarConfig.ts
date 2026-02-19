@@ -85,6 +85,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Surveys', href: '/dashboard/enumerator/survey', icon: FileText },
     { label: 'Drafts', href: '/dashboard/enumerator/drafts', icon: Save },
     { label: 'Sync Status', href: '/dashboard/enumerator/sync', icon: RefreshCw },
+    { label: 'Messages', href: '/dashboard/enumerator/messages', icon: MessageSquare },
   ],
 
   public_user: [

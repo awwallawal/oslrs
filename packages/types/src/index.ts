@@ -14,3 +14,5 @@ export * from './validation/native-form.js';
 export * from './fraud.js';
 export * from './validation/fraud.js';
 export * from './error-codes.js';
+export * from './message.js';
+export * from './validation/message.js';
