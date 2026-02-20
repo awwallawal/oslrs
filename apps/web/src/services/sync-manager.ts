@@ -151,6 +151,7 @@ export class SyncManager {
       const submittedAt = (payload.submittedAt as string) ?? now;
       const gpsLatitude = payload.gpsLatitude as number | undefined;
       const gpsLongitude = payload.gpsLongitude as number | undefined;
+      const completionTimeSeconds = payload.completionTimeSeconds as number | undefined;
 
       await Promise.race([
         submitSurvey({
@@ -161,6 +162,7 @@ export class SyncManager {
           submittedAt,
           ...(gpsLatitude != null && { gpsLatitude }),
           ...(gpsLongitude != null && { gpsLongitude }),
+          ...(completionTimeSeconds != null && { completionTimeSeconds }),
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Submission timeout')), SUBMISSION_TIMEOUT),

@@ -23,6 +23,7 @@ const submitFormSchema = z.object({
   gpsLatitude: z.number().optional(),
   gpsLongitude: z.number().optional(),
   submittedAt: z.string().datetime(),
+  completionTimeSeconds: z.number().int().nonnegative().optional(),
 });
 
 export class FormController {
@@ -99,13 +100,14 @@ export class FormController {
         );
       }
 
-      const { submissionId, formId, responses, submittedAt, gpsLatitude, gpsLongitude } = parsed.data;
+      const { submissionId, formId, responses, submittedAt, gpsLatitude, gpsLongitude, completionTimeSeconds } = parsed.data;
       const user = (req as Request & { user?: { sub: string; role?: string } }).user;
       const submitterId = user?.sub;
 
       const rawData: Record<string, unknown> = { ...responses };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;
       if (gpsLongitude != null) rawData._gpsLongitude = gpsLongitude;
+      if (completionTimeSeconds != null) rawData._completionTimeSeconds = completionTimeSeconds;
 
       const jobId = await queueSubmissionForIngestion({
         source: FormController.getSubmissionSource(user?.role),

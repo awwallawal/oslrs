@@ -36,6 +36,7 @@ import {
   Database,
   ScrollText,
   UserCog,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -135,6 +136,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'User Roles', href: '/dashboard/super-admin/roles', icon: UserCog },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
     { label: 'Settings', href: '/dashboard/super-admin/settings', icon: Settings },
+    { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
   ],
 };
 

@@ -9,6 +9,8 @@ import rolesRoutes from './roles.routes.js';
 import formRoutes from './form.routes.js';
 import supervisorRoutes from './supervisor.routes.js';
 import messageRoutes from './message.routes.js';
+import fraudThresholdsRoutes from './fraud-thresholds.routes.js';
+import fraudDetectionsRoutes from './fraud-detections.routes.js';
 
 const router = Router();
 
@@ -21,6 +23,8 @@ router.use('/roles', rolesRoutes);
 router.use('/forms', formRoutes);
 router.use('/supervisor', supervisorRoutes);
 router.use('/messages', messageRoutes);
+router.use('/fraud-thresholds', fraudThresholdsRoutes);
+router.use('/fraud-detections', fraudDetectionsRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

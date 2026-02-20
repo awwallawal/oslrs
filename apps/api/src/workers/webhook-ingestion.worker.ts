@@ -106,6 +106,8 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
   // Extract GPS coordinates from rawData (controller stores as _gpsLatitude/_gpsLongitude)
   const gpsLatitude = rawData?._gpsLatitude != null ? Number(rawData._gpsLatitude) : null;
   const gpsLongitude = rawData?._gpsLongitude != null ? Number(rawData._gpsLongitude) : null;
+  // Story 4.3: Extract completion time for speed-run fraud detection
+  const completionTimeSeconds = rawData?._completionTimeSeconds != null ? Number(rawData._completionTimeSeconds) : null;
 
   await db.insert(submissions).values({
     id: submissionId,
@@ -115,6 +117,7 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
     rawData: rawData ?? null,
     gpsLatitude: gpsLatitude != null && !isNaN(gpsLatitude) ? gpsLatitude : null,
     gpsLongitude: gpsLongitude != null && !isNaN(gpsLongitude) ? gpsLongitude : null,
+    completionTimeSeconds: completionTimeSeconds != null && !isNaN(completionTimeSeconds) ? completionTimeSeconds : null,
     submittedAt: new Date(submittedAt),
     source,
     processed: false,

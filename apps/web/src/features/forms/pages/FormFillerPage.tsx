@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Controller, useForm, useWatch, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +37,8 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   const [completed, setCompleted] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  // Track form start time for speed-run fraud detection (Story 4.3)
+  const formStartedAtRef = useRef<number>(Date.now());
 
   const isPreview = mode === 'preview';
   const ninCheck = useNinCheck();
@@ -78,6 +80,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     formData,
     currentIndex,
     enabled: !isPreview && !!formId,
+    formStartedAt: formStartedAtRef.current,
   });
 
   // Resume from existing draft on first load

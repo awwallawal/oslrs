@@ -9,6 +9,8 @@ interface UseDraftPersistenceOptions {
   formData: Record<string, unknown>;
   currentIndex: number;
   enabled: boolean; // false in preview mode
+  /** Form start timestamp (ms) for computing completionTimeSeconds (Story 4.3) */
+  formStartedAt?: number;
 }
 
 interface UseDraftPersistenceReturn {
@@ -26,6 +28,7 @@ export function useDraftPersistence({
   formData,
   currentIndex,
   enabled,
+  formStartedAt,
 }: UseDraftPersistenceOptions): UseDraftPersistenceReturn {
   const { user } = useAuth();
   const userId = user?.id;
@@ -182,6 +185,10 @@ export function useDraftPersistence({
     if (formData.gps_longitude != null) {
       enrichedPayload.gpsLongitude = formData.gps_longitude;
     }
+    // Story 4.3: Include completion time for speed-run fraud detection
+    if (formStartedAt) {
+      enrichedPayload.completionTimeSeconds = Math.round((Date.now() - formStartedAt) / 1000);
+    }
 
     const queueItem: SubmissionQueueItem = {
       id: draftIdRef.current,
@@ -211,7 +218,7 @@ export function useDraftPersistence({
     } catch {
       // Best-effort cleanup — draft is 'completed' so useFormDrafts() won't show it
     }
-  }, [formId, formVersion, formData, currentIndex, enabled, userId]);
+  }, [formId, formVersion, formData, currentIndex, enabled, userId, formStartedAt]);
 
   const resetForNewEntry = useCallback(() => {
     draftIdRef.current = null;

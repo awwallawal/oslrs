@@ -42,6 +42,50 @@ export type FraudResolution = typeof fraudResolutions[number];
 // ── Interfaces ──────────────────────────────────────────────────────────
 
 /**
+ * Pre-loaded submission context passed to heuristics.
+ * FraudEngine loads all data once, then each heuristic receives this context
+ * instead of re-querying the DB independently.
+ */
+export interface SubmissionWithContext {
+  /** Submission ID */
+  submissionId: string;
+  /** Enumerator (submitter) ID */
+  enumeratorId: string;
+  /** Questionnaire form ID */
+  questionnaireFormId: string;
+  /** When the submission was submitted */
+  submittedAt: string; // ISO 8601
+  /** GPS coordinates (null if not captured) */
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+  /** Completion time in seconds (null if not captured) */
+  completionTimeSeconds: number | null;
+  /** Raw submission data (form responses) */
+  rawData: Record<string, unknown> | null;
+  /** Form schema (JSONB from questionnaire_forms) — for identifying question types */
+  formSchema: Record<string, unknown> | null;
+  /** Enumerator's recent submissions (for GPS clustering, speed median, duplicate detection) */
+  recentSubmissions: Array<{
+    id: string;
+    submittedAt: string;
+    gpsLatitude: number | null;
+    gpsLongitude: number | null;
+    completionTimeSeconds: number | null;
+    rawData: Record<string, unknown> | null;
+    enumeratorId: string;
+    questionnaireFormId: string;
+  }>;
+  /** Other enumerators' recent submissions in the same area (for duplicate coordinate detection) */
+  nearbySubmissions: Array<{
+    id: string;
+    enumeratorId: string;
+    submittedAt: string;
+    gpsLatitude: number | null;
+    gpsLongitude: number | null;
+  }>;
+}
+
+/**
  * Threshold configuration — mirrors fraud_thresholds DB table.
  * Used by ConfigService to load active thresholds.
  */
@@ -97,6 +141,9 @@ export interface FraudDetectionResult {
 /**
  * Pluggable heuristic contract.
  * Each heuristic implements this interface and is registered with HeuristicRegistry.
+ *
+ * Updated in Story 4.3: evaluate() now accepts SubmissionWithContext
+ * so heuristics receive pre-loaded context instead of each re-querying the DB.
  */
 export interface FraudHeuristic {
   /** Unique machine-readable key (e.g., 'gps_cluster') */
@@ -107,12 +154,12 @@ export interface FraudHeuristic {
 
   /**
    * Evaluate a submission and return a score with details.
-   * @param submissionId - The submission to evaluate
+   * @param submission - Pre-loaded submission with context
    * @param config - Active thresholds for this heuristic's category
    * @returns Score (0 to category max) and detail breakdown
    */
   evaluate(
-    submissionId: string,
+    submission: SubmissionWithContext,
     config: FraudThresholdConfig[],
   ): Promise<{ score: number; details: Record<string, unknown> }>;
 }

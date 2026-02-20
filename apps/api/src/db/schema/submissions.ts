@@ -10,7 +10,7 @@
  * 3. Fraud engine processes (Story 4.3)
  */
 
-import { pgTable, uuid, text, timestamp, jsonb, index, boolean, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, index, boolean, doublePrecision, integer } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 import { respondents } from './respondents.js';
 
@@ -60,6 +60,11 @@ export const submissions = pgTable('submissions', {
   // GPS coordinates (for fraud detection - cluster analysis)
   gpsLatitude: doublePrecision('gps_latitude'),
   gpsLongitude: doublePrecision('gps_longitude'),
+
+  // Story 4.3: Completion time for speed-run fraud detection
+  // Computed as (submittedAt - formStartedAt) in seconds on the client
+  // Nullable — legacy submissions won't have this; heuristic uses bootstrap fallback
+  completionTimeSeconds: integer('completion_time_seconds'),
 
   // Timestamps
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),

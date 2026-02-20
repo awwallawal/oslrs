@@ -81,6 +81,7 @@ const FormFillerPage = lazy(() => import('./features/forms/pages/FormFillerPage'
 
 // Lazy load Dashboard pages (Story 2.5-1)
 const SuperAdminHome = lazy(() => import('./features/dashboard/pages/SuperAdminHome'));
+const SuperAdminFraudThresholdsPage = lazy(() => import('./features/dashboard/pages/SuperAdminFraudThresholdsPage'));
 const SupervisorHome = lazy(() => import('./features/dashboard/pages/SupervisorHome'));
 const SupervisorTeamPage = lazy(() => import('./features/dashboard/pages/SupervisorTeamPage'));
 const SupervisorFraudPage = lazy(() => import('./features/dashboard/pages/SupervisorFraudPage'));
@@ -607,6 +608,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <ProfilePage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 4.3: Fraud Thresholds Configuration */}
+                <Route
+                  path="settings/fraud-thresholds"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SuperAdminFraudThresholdsPage />
                     </Suspense>
                   }
                 />

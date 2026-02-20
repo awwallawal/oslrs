@@ -8,6 +8,7 @@ export interface SubmitSurveyPayload {
   gpsLatitude?: number;
   gpsLongitude?: number;
   submittedAt: string;
+  completionTimeSeconds?: number;
 }
 
 export interface SubmitSurveyResponse {
