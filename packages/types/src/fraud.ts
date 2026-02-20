@@ -39,6 +39,53 @@ export const fraudResolutions = [
 ] as const;
 export type FraudResolution = typeof fraudResolutions[number];
 
+// ── JSONB Detail Shapes (stored in fraud_detections detail columns) ────
+
+export interface GpsDetails {
+  clusterCount: number;
+  clusterMembers: Array<{ submissionId: string; lat: number; lng: number; submittedAt: string }>;
+  accuracy: number | null;
+  teleportationFlag: boolean;
+  teleportationSpeed?: number;
+  duplicateCoords: boolean;
+  nearestNeighborDistance?: number;
+}
+
+export interface SpeedDetails {
+  completionTimeSeconds: number;
+  medianTimeSeconds: number | null;
+  ratio: number;
+  tier: 'superspeceder' | 'speeder' | null;
+  historicalCount: number;
+  theoreticalMinimum?: number;
+  perSectionBreakdown?: Array<{ section: string; timeSeconds: number }>;
+}
+
+export interface StraightlineDetails {
+  batteries: Array<{
+    sectionName: string;
+    questionCount: number;
+    pir: number;
+    entropy: number;
+    lis: number;
+    flagged: boolean;
+  }>;
+  flaggedBatteryCount: number;
+}
+
+export interface DuplicateDetails {
+  matchType: 'exact' | 'partial' | null;
+  matchedSubmissions: Array<{ submissionId: string; matchRatio: number }>;
+  matchingFields: string[];
+}
+
+export interface TimingDetails {
+  submissionHour: number;
+  isWeekend: boolean;
+  localTime: string;
+  isOffHours: boolean;
+}
+
 // ── Interfaces ──────────────────────────────────────────────────────────
 
 /**

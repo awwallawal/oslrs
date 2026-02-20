@@ -13,8 +13,8 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { fraudDetections, submissions } from '../db/schema/index.js';
-import { eq, and, gte, lte, inArray, isNull, desc, sql } from 'drizzle-orm';
+import { fraudDetections, submissions, users, questionnaireForms } from '../db/schema/index.js';
+import { eq, and, gte, lte, inArray, isNull, isNotNull, desc, sql, not } from 'drizzle-orm';
 import { reviewFraudDetectionSchema, fraudSeverities, fraudResolutions } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 import { TeamAssignmentService } from '../services/team-assignment.service.js';
@@ -22,12 +22,30 @@ import pino from 'pino';
 
 const logger = pino({ name: 'fraud-detections-controller' });
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Helper to cast numeric(5,2) string values to numbers.
+ * Drizzle returns numeric columns as strings — we must parseFloat before sending to frontend.
+ */
+function castScores<T extends Record<string, unknown>>(row: T): T {
+  const scoreKeys = ['gpsScore', 'speedScore', 'straightlineScore', 'duplicateScore', 'timingScore', 'totalScore'] as const;
+  const result = { ...row };
+  for (const key of scoreKeys) {
+    if (key in result && typeof result[key] === 'string') {
+      (result as Record<string, unknown>)[key] = parseFloat(result[key] as string);
+    }
+  }
+  return result;
+}
+
 export class FraudDetectionsController {
   /**
    * GET /api/v1/fraud-detections
-   * Filtered list with pagination. Supervisor scope restricted.
+   * Filtered list with pagination and enriched JOINs. Supervisor scope restricted.
    *
-   * Query params: severity, resolution, enumeratorId, dateFrom, dateTo, page, pageSize
+   * Story 4.4: Extended to include enumerator name, submission timestamp, form title.
+   * Query params: severity (comma-separated), reviewed (boolean), page, pageSize
    */
   static async listDetections(req: Request, res: Response, next: NextFunction) {
     try {
@@ -36,7 +54,7 @@ export class FraudDetectionsController {
 
       const {
         severity,
-        resolution,
+        reviewed,
         enumeratorId,
         dateFrom,
         dateTo,
@@ -55,28 +73,36 @@ export class FraudDetectionsController {
       if (user.role === 'supervisor') {
         const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
         if (enumeratorIds.length === 0) {
-          // Supervisor has no assigned enumerators — return empty
-          res.json({ data: [], total: 0, page: pageNum, pageSize: pageSizeNum });
+          res.json({ data: [], page: pageNum, pageSize: pageSizeNum, totalPages: 0, totalItems: 0 });
           return;
         }
         conditions.push(inArray(fraudDetections.enumeratorId, enumeratorIds));
       }
 
-      // Filters (validate enum values to prevent DB errors)
+      // Severity filter — supports comma-separated multi-select (e.g., "high,critical")
       if (severity) {
-        if (!(fraudSeverities as readonly string[]).includes(severity)) {
-          throw new AppError('VALIDATION_ERROR', `Invalid severity: ${severity}. Must be one of: ${fraudSeverities.join(', ')}`, 400);
+        const severityValues = severity.split(',').map(s => s.trim()).filter(Boolean);
+        for (const sv of severityValues) {
+          if (!(fraudSeverities as readonly string[]).includes(sv)) {
+            throw new AppError('VALIDATION_ERROR', `Invalid severity: ${sv}. Must be one of: ${fraudSeverities.join(', ')}`, 400);
+          }
         }
-        conditions.push(eq(fraudDetections.severity, severity as typeof fraudDetections.severity.enumValues[number]));
+        type SeverityEnum = typeof fraudDetections.severity.enumValues[number];
+        if (severityValues.length === 1) {
+          conditions.push(eq(fraudDetections.severity, severityValues[0] as SeverityEnum));
+        } else if (severityValues.length > 1) {
+          conditions.push(inArray(fraudDetections.severity, severityValues as SeverityEnum[]));
+        }
+      } else {
+        // Default: exclude 'clean' severity (AC4.4.2)
+        conditions.push(not(eq(fraudDetections.severity, 'clean')));
       }
 
-      if (resolution === 'unreviewed') {
+      // Resolution filter — "true" = reviewed (any resolution), "false" = unreviewed (null)
+      if (reviewed === 'true') {
+        conditions.push(isNotNull(fraudDetections.resolution));
+      } else if (reviewed === 'false') {
         conditions.push(isNull(fraudDetections.resolution));
-      } else if (resolution) {
-        if (!(fraudResolutions as readonly string[]).includes(resolution)) {
-          throw new AppError('VALIDATION_ERROR', `Invalid resolution: ${resolution}. Must be one of: unreviewed, ${fraudResolutions.join(', ')}`, 400);
-        }
-        conditions.push(eq(fraudDetections.resolution, resolution as typeof fraudDetections.resolution.enumValues[number]));
       }
 
       if (enumeratorId) {
@@ -93,27 +119,131 @@ export class FraudDetectionsController {
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-      // Count total
+      // Count total (with JOINs for scope filtering)
       const [countResult] = await db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(fraudDetections)
+        .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
+        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
         .where(whereClause);
 
-      // Fetch page
+      const totalItems = countResult?.count ?? 0;
+
+      // Fetch enriched page with JOINs (Story 4.4: enumerator name, submission timestamp, form title)
       const rows = await db
-        .select()
+        .select({
+          id: fraudDetections.id,
+          submissionId: fraudDetections.submissionId,
+          enumeratorId: fraudDetections.enumeratorId,
+          computedAt: fraudDetections.computedAt,
+          totalScore: fraudDetections.totalScore,
+          severity: fraudDetections.severity,
+          resolution: fraudDetections.resolution,
+          resolutionNotes: fraudDetections.resolutionNotes,
+          reviewedAt: fraudDetections.reviewedAt,
+          reviewedBy: fraudDetections.reviewedBy,
+          enumeratorName: users.fullName,
+          submittedAt: submissions.submittedAt,
+        })
         .from(fraudDetections)
+        .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
+        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
         .where(whereClause)
         .orderBy(desc(fraudDetections.computedAt))
         .limit(pageSizeNum)
         .offset(offset);
 
+      // Cast numeric scores to numbers
+      const data = rows.map(row => ({
+        ...row,
+        totalScore: parseFloat(row.totalScore),
+      }));
+
       res.json({
-        data: rows,
-        total: countResult?.count ?? 0,
+        data,
         page: pageNum,
         pageSize: pageSizeNum,
+        totalPages: Math.ceil(totalItems / pageSizeNum),
+        totalItems,
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/fraud-detections/:id
+   * Detail endpoint with enriched JOINs for evidence panel.
+   * Story 4.4 Task 1: Returns full detection with submission GPS, enumerator info, form title.
+   */
+  static async getDetection(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as Request & { user?: { sub: string; role?: string } }).user;
+      if (!user?.sub) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      const { id } = req.params;
+      if (!UUID_REGEX.test(id)) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid detection ID format', 400);
+      }
+
+      const [detection] = await db
+        .select({
+          // fraud_detections fields
+          id: fraudDetections.id,
+          submissionId: fraudDetections.submissionId,
+          enumeratorId: fraudDetections.enumeratorId,
+          computedAt: fraudDetections.computedAt,
+          configSnapshotVersion: fraudDetections.configSnapshotVersion,
+          // Component scores
+          gpsScore: fraudDetections.gpsScore,
+          speedScore: fraudDetections.speedScore,
+          straightlineScore: fraudDetections.straightlineScore,
+          duplicateScore: fraudDetections.duplicateScore,
+          timingScore: fraudDetections.timingScore,
+          totalScore: fraudDetections.totalScore,
+          severity: fraudDetections.severity,
+          // Detail breakdowns
+          gpsDetails: fraudDetections.gpsDetails,
+          speedDetails: fraudDetections.speedDetails,
+          straightlineDetails: fraudDetections.straightlineDetails,
+          duplicateDetails: fraudDetections.duplicateDetails,
+          timingDetails: fraudDetections.timingDetails,
+          // Resolution
+          resolution: fraudDetections.resolution,
+          resolutionNotes: fraudDetections.resolutionNotes,
+          reviewedAt: fraudDetections.reviewedAt,
+          reviewedBy: fraudDetections.reviewedBy,
+          // JOINed submission data
+          gpsLatitude: submissions.gpsLatitude,
+          gpsLongitude: submissions.gpsLongitude,
+          submittedAt: submissions.submittedAt,
+          // JOINed enumerator data
+          enumeratorName: users.fullName,
+          enumeratorLgaId: users.lgaId,
+          // JOINed form data
+          formName: questionnaireForms.title,
+        })
+        .from(fraudDetections)
+        .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
+        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .leftJoin(questionnaireForms, sql`${submissions.questionnaireFormId}::uuid = ${questionnaireForms.id}`)
+        .where(eq(fraudDetections.id, id))
+        .limit(1);
+
+      if (!detection) {
+        throw new AppError('NOT_FOUND', 'Fraud detection not found', 404);
+      }
+
+      // Supervisor scope check
+      if (user.role === 'supervisor') {
+        const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
+        if (!enumeratorIds.includes(detection.enumeratorId)) {
+          throw new AppError('FORBIDDEN', 'Not authorized to view this detection', 403);
+        }
+      }
+
+      // Cast numeric scores to numbers
+      res.json({ data: castScores(detection) });
     } catch (err) {
       next(err);
     }
@@ -129,6 +259,9 @@ export class FraudDetectionsController {
       if (!user?.sub) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
 
       const { id } = req.params;
+      if (!UUID_REGEX.test(id)) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid detection ID format', 400);
+      }
 
       const parsed = reviewFraudDetectionSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -178,7 +311,7 @@ export class FraudDetectionsController {
         resolution,
       });
 
-      res.json({ data: updated });
+      res.json({ data: castScores(updated) });
     } catch (err) {
       next(err);
     }

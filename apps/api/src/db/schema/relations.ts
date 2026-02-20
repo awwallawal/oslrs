@@ -7,6 +7,7 @@ import { submissions } from './submissions.js';
 import { respondents } from './respondents.js';
 import { teamAssignments } from './team-assignments.js';
 import { messages, messageReceipts } from './messages.js';
+import { fraudDetections } from './fraud-detections.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -29,6 +30,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   receivedMessages: many(messages, { relationName: 'messageRecipient' }),
   // Story 4.2: Message receipts for this user
   messageReceipts: many(messageReceipts, { relationName: 'receiptRecipient' }),
+  // Story 4.4: Fraud detections where this user is the enumerator
+  fraudDetectionsAsEnumerator: many(fraudDetections, { relationName: 'detectionEnumerator' }),
+  // Story 4.4: Fraud detections reviewed by this user
+  fraudDetectionsAsReviewer: many(fraudDetections, { relationName: 'detectionReviewer' }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -127,5 +132,24 @@ export const messageReceiptsRelations = relations(messageReceipts, ({ one }) => 
     fields: [messageReceipts.recipientId],
     references: [users.id],
     relationName: 'receiptRecipient',
+  }),
+}));
+
+// Fraud detection relations (Story 4.4)
+// Dual-FK pattern: enumeratorId + reviewedBy both reference users
+export const fraudDetectionsRelations = relations(fraudDetections, ({ one }) => ({
+  enumerator: one(users, {
+    fields: [fraudDetections.enumeratorId],
+    references: [users.id],
+    relationName: 'detectionEnumerator',
+  }),
+  reviewer: one(users, {
+    fields: [fraudDetections.reviewedBy],
+    references: [users.id],
+    relationName: 'detectionReviewer',
+  }),
+  submission: one(submissions, {
+    fields: [fraudDetections.submissionId],
+    references: [submissions.id],
   }),
 }));

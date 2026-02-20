@@ -22,6 +22,9 @@ router.use(authorize(UserRole.SUPERVISOR, UserRole.VERIFICATION_ASSESSOR, UserRo
 // GET /api/v1/fraud-detections — filtered list with pagination
 router.get('/', FraudDetectionsController.listDetections);
 
+// GET /api/v1/fraud-detections/:id — detail with enriched JOINs (Story 4.4)
+router.get('/:id', FraudDetectionsController.getDetection);
+
 // PATCH /api/v1/fraud-detections/:id/review — resolve a detection
 router.patch('/:id/review', FraudDetectionsController.reviewDetection);
 

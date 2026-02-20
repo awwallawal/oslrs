@@ -11,7 +11,7 @@ vi.mock('../../db/index.js', () => {
   // When awaited, resolves via mockDbQuery(). The returning() terminal uses mockDbUpdate().
   function makeChain(): Record<string, unknown> {
     const chain: Record<string, unknown> = {};
-    for (const m of ['from', 'where', 'orderBy', 'limit', 'offset', 'set']) {
+    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'orderBy', 'limit', 'offset', 'set']) {
       chain[m] = () => makeChain();
     }
     chain.returning = () => mockDbUpdate();
@@ -51,26 +51,61 @@ function makeMocks() {
   return { jsonMock, statusMock, mockRes, mockNext };
 }
 
-const sampleDetection = {
-  id: 'det-1',
+// Valid UUID for tests (H3: controller now validates UUID format)
+const TEST_DET_ID = '00000000-0000-4000-8000-000000000001';
+const TEST_DET_ID_2 = '00000000-0000-4000-8000-000000000002';
+
+const sampleListItem = {
+  id: TEST_DET_ID,
   submissionId: 'sub-1',
   enumeratorId: 'enum-1',
   severity: 'medium',
-  totalScore: 55,
-  componentScores: { gps: 15, speed: 20, straightline: 10, duplicate: 5, timing: 5 },
-  details: {},
+  totalScore: '55.00',
   resolution: null,
+  resolutionNotes: null,
   reviewedBy: null,
   reviewedAt: null,
-  resolutionNotes: null,
-  configVersion: 1,
   computedAt: new Date('2026-02-20T10:00:00Z'),
+  enumeratorName: 'Test Enumerator',
+  submittedAt: new Date('2026-02-20T09:00:00Z'),
+};
+
+const sampleDetectionDetail = {
+  id: TEST_DET_ID,
+  submissionId: 'sub-1',
+  enumeratorId: 'enum-1',
+  severity: 'medium',
+  gpsScore: '15.00',
+  speedScore: '20.00',
+  straightlineScore: '10.00',
+  duplicateScore: '5.00',
+  timingScore: '5.00',
+  totalScore: '55.00',
+  configSnapshotVersion: 1,
+  gpsDetails: { clusterCount: 3 },
+  speedDetails: { completionTimeSeconds: 30 },
+  straightlineDetails: { flaggedBatteryCount: 1, batteries: [] },
+  duplicateDetails: null,
+  timingDetails: null,
+  resolution: null,
+  resolutionNotes: null,
+  reviewedBy: null,
+  reviewedAt: null,
+  computedAt: new Date('2026-02-20T10:00:00Z'),
+  gpsLatitude: 7.3775,
+  gpsLongitude: 3.947,
+  submittedAt: new Date('2026-02-20T09:00:00Z'),
+  enumeratorName: 'Test Enumerator',
+  enumeratorLgaId: 'lga-ib-north',
+  formName: 'OSLSR Survey v1',
 };
 
 describe('FraudDetectionsController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  // ── listDetections ──────────────────────────────────────────────────
 
   describe('listDetections', () => {
     it('calls next with 401 when no user', async () => {
@@ -95,15 +130,14 @@ describe('FraudDetectionsController', () => {
       await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
 
       expect(jsonMock).toHaveBeenCalledWith(
-        expect.objectContaining({ data: [], total: 0 }),
+        expect.objectContaining({ data: [], totalItems: 0, totalPages: 0 }),
       );
     });
 
-    it('returns paginated results for super_admin', async () => {
-      // First await = count query, second await = rows query
+    it('returns paginated results with enriched JOINs for super_admin', async () => {
       mockDbQuery
         .mockResolvedValueOnce([{ count: 1 }])
-        .mockResolvedValueOnce([sampleDetection]);
+        .mockResolvedValueOnce([sampleListItem]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
@@ -114,19 +148,20 @@ describe('FraudDetectionsController', () => {
       await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
-      expect(jsonMock).toHaveBeenCalledWith({
-        data: [sampleDetection],
-        total: 1,
-        page: 1,
-        pageSize: 10,
-      });
+      const result = jsonMock.mock.calls[0][0];
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(10);
+      expect(result.totalItems).toBe(1);
+      expect(result.totalPages).toBe(1);
+      expect(result.data[0].totalScore).toBe(55); // parseFloat applied
+      expect(result.data[0].enumeratorName).toBe('Test Enumerator');
     });
 
     it('returns results scoped to supervisor enumerators', async () => {
       mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']);
       mockDbQuery
         .mockResolvedValueOnce([{ count: 2 }])
-        .mockResolvedValueOnce([sampleDetection, { ...sampleDetection, id: 'det-2', enumeratorId: 'enum-2' }]);
+        .mockResolvedValueOnce([sampleListItem, { ...sampleListItem, id: TEST_DET_ID_2, enumeratorId: 'enum-2' }]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
@@ -139,11 +174,11 @@ describe('FraudDetectionsController', () => {
       expect(mockGetEnumeratorIds).toHaveBeenCalledWith('supervisor-1');
       expect(mockNext).not.toHaveBeenCalled();
       expect(jsonMock).toHaveBeenCalledWith(
-        expect.objectContaining({ total: 2, data: expect.arrayContaining([expect.objectContaining({ id: 'det-1' })]) }),
+        expect.objectContaining({ totalItems: 2, data: expect.arrayContaining([expect.objectContaining({ id: TEST_DET_ID })]) }),
       );
     });
 
-    it('calls next with 400 for invalid severity filter (M3)', async () => {
+    it('calls next with 400 for invalid severity filter', async () => {
       const { mockRes, mockNext } = makeMocks();
       const mockReq = {
         query: { severity: 'bogus_severity' },
@@ -157,56 +192,55 @@ describe('FraudDetectionsController', () => {
       expect(error.message).toContain('Invalid severity');
     });
 
-    it('calls next with 400 for invalid resolution filter (M3)', async () => {
-      const { mockRes, mockNext } = makeMocks();
-      const mockReq = {
-        query: { resolution: 'bogus_resolution' },
-        user: { sub: 'admin-1', role: 'super_admin' },
-      } as unknown as Request;
-
-      await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
-
-      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(error.statusCode).toBe(400);
-      expect(error.message).toContain('Invalid resolution');
-    });
-
-    it('accepts valid severity and resolution filters', async () => {
+    it('supports comma-separated severity filter (AC4.4.2)', async () => {
       mockDbQuery
         .mockResolvedValueOnce([{ count: 0 }])
         .mockResolvedValueOnce([]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
-        query: { severity: 'high', resolution: 'confirmed_fraud' },
+        query: { severity: 'high,critical' },
         user: { sub: 'admin-1', role: 'super_admin' },
       } as unknown as Request;
 
       await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
-      expect(jsonMock).toHaveBeenCalledWith(
-        expect.objectContaining({ data: [], total: 0 }),
-      );
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ totalItems: 0 }));
     });
 
-    it('accepts "unreviewed" resolution filter', async () => {
+    it('supports reviewed=true filter (AC4.4.2)', async () => {
       mockDbQuery
         .mockResolvedValueOnce([{ count: 0 }])
         .mockResolvedValueOnce([]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
-        query: { resolution: 'unreviewed' },
+        query: { reviewed: 'true' },
         user: { sub: 'admin-1', role: 'super_admin' },
       } as unknown as Request;
 
       await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
-      expect(jsonMock).toHaveBeenCalledWith(
-        expect.objectContaining({ data: [], total: 0 }),
-      );
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ totalItems: 0 }));
+    });
+
+    it('supports reviewed=false filter for unreviewed (AC4.4.2)', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce([{ count: 0 }])
+        .mockResolvedValueOnce([]);
+
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        query: { reviewed: 'false' },
+        user: { sub: 'admin-1', role: 'super_admin' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.listDetections(mockReq, mockRes as Response, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ totalItems: 0 }));
     });
 
     it('clamps pageSize to max 100', async () => {
@@ -228,11 +262,115 @@ describe('FraudDetectionsController', () => {
     });
   });
 
+  // ── getDetection ────────────────────────────────────────────────────
+
+  describe('getDetection', () => {
+    it('calls next with 401 when no user', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = { params: { id: TEST_DET_ID } } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(401);
+    });
+
+    it('calls next with 400 for invalid UUID format (H3 fix)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: 'not-a-valid-uuid' },
+        user: { sub: 'admin-1', role: 'super_admin' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(400);
+      expect(error.message).toContain('Invalid detection ID');
+    });
+
+    it('calls next with 404 when detection not found', async () => {
+      mockDbQuery.mockResolvedValueOnce([]);
+
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: '01234567-89ab-cdef-0123-456789abcdef' },
+        user: { sub: 'admin-1', role: 'super_admin' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(404);
+    });
+
+    it('returns enriched detection detail with JOINs for super_admin', async () => {
+      mockDbQuery.mockResolvedValueOnce([sampleDetectionDetail]);
+
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: TEST_DET_ID },
+        user: { sub: 'admin-1', role: 'super_admin' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      const result = jsonMock.mock.calls[0][0];
+      expect(result.data.enumeratorName).toBe('Test Enumerator');
+      expect(result.data.formName).toBe('OSLSR Survey v1');
+      // Numeric scores cast to numbers
+      expect(result.data.totalScore).toBe(55);
+      expect(result.data.gpsScore).toBe(15);
+      expect(result.data.speedScore).toBe(20);
+      expect(result.data.straightlineScore).toBe(10);
+      expect(result.data.duplicateScore).toBe(5);
+      expect(result.data.timingScore).toBe(5);
+    });
+
+    it('allows supervisor to view detection for their enumerator', async () => {
+      mockDbQuery.mockResolvedValueOnce([sampleDetectionDetail]);
+      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']);
+
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: TEST_DET_ID },
+        user: { sub: 'supervisor-1', role: 'supervisor' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      expect(mockGetEnumeratorIds).toHaveBeenCalledWith('supervisor-1');
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ id: TEST_DET_ID }) }),
+      );
+    });
+
+    it('blocks supervisor from viewing detection outside their scope (403)', async () => {
+      mockDbQuery.mockResolvedValueOnce([{ ...sampleDetectionDetail, enumeratorId: 'enum-99' }]);
+      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']);
+
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: TEST_DET_ID },
+        user: { sub: 'supervisor-1', role: 'supervisor' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.getDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(403);
+    });
+  });
+
+  // ── reviewDetection ─────────────────────────────────────────────────
+
   describe('reviewDetection', () => {
     it('calls next with 401 when no user', async () => {
       const { mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-1' },
+        params: { id: TEST_DET_ID },
         body: { resolution: 'confirmed_fraud' },
       } as unknown as Request;
 
@@ -242,10 +380,25 @@ describe('FraudDetectionsController', () => {
       expect(error.statusCode).toBe(401);
     });
 
+    it('calls next with 400 for invalid UUID format (H3 fix)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: 'not-a-uuid' },
+        body: { resolution: 'confirmed_fraud' },
+        user: { sub: 'admin-1', role: 'super_admin' },
+      } as unknown as Request;
+
+      await FraudDetectionsController.reviewDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(400);
+      expect(error.message).toContain('Invalid detection ID');
+    });
+
     it('calls next with 400 for invalid resolution', async () => {
       const { mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-1' },
+        params: { id: TEST_DET_ID },
         body: { resolution: 'invalid_value' },
         user: { sub: 'admin-1', role: 'super_admin' },
       } as unknown as Request;
@@ -257,11 +410,11 @@ describe('FraudDetectionsController', () => {
     });
 
     it('calls next with 404 when detection not found', async () => {
-      mockDbQuery.mockResolvedValueOnce([]); // Empty lookup
+      mockDbQuery.mockResolvedValueOnce([]);
 
       const { mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-nonexistent' },
+        params: { id: '01234567-89ab-cdef-0123-456789abcdef' },
         body: { resolution: 'confirmed_fraud' },
         user: { sub: 'admin-1', role: 'super_admin' },
       } as unknown as Request;
@@ -275,19 +428,19 @@ describe('FraudDetectionsController', () => {
 
     it('successfully reviews a detection', async () => {
       const updatedDetection = {
-        ...sampleDetection,
+        ...sampleDetectionDetail,
         resolution: 'confirmed_fraud',
         reviewedBy: 'admin-1',
         reviewedAt: new Date(),
         resolutionNotes: 'Verified duplicate GPS coords',
       };
 
-      mockDbQuery.mockResolvedValueOnce([{ id: 'det-1', enumeratorId: 'enum-1' }]); // lookup
-      mockDbUpdate.mockResolvedValueOnce([updatedDetection]); // update returning
+      mockDbQuery.mockResolvedValueOnce([{ id: TEST_DET_ID, enumeratorId: 'enum-1' }]);
+      mockDbUpdate.mockResolvedValueOnce([updatedDetection]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-1' },
+        params: { id: TEST_DET_ID },
         body: { resolution: 'confirmed_fraud', resolutionNotes: 'Verified duplicate GPS coords' },
         user: { sub: 'admin-1', role: 'super_admin' },
       } as unknown as Request;
@@ -295,16 +448,21 @@ describe('FraudDetectionsController', () => {
       await FraudDetectionsController.reviewDetection(mockReq, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
-      expect(jsonMock).toHaveBeenCalledWith({ data: updatedDetection });
+      // L2 fix: castScores() now applied — numeric scores returned as numbers
+      const result = jsonMock.mock.calls[0][0];
+      expect(result.data.resolution).toBe('confirmed_fraud');
+      expect(result.data.reviewedBy).toBe('admin-1');
+      expect(result.data.totalScore).toBe(55);
+      expect(typeof result.data.gpsScore).toBe('number');
     });
 
     it('blocks supervisor from reviewing detection outside their scope', async () => {
-      mockDbQuery.mockResolvedValueOnce([{ id: 'det-1', enumeratorId: 'enum-99' }]); // lookup
-      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']); // supervisor's enumerators
+      mockDbQuery.mockResolvedValueOnce([{ id: TEST_DET_ID, enumeratorId: 'enum-99' }]);
+      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']);
 
       const { mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-1' },
+        params: { id: TEST_DET_ID },
         body: { resolution: 'false_positive' },
         user: { sub: 'supervisor-1', role: 'supervisor' },
       } as unknown as Request;
@@ -316,15 +474,15 @@ describe('FraudDetectionsController', () => {
     });
 
     it('allows supervisor to review detection within their scope', async () => {
-      const updatedDetection = { ...sampleDetection, resolution: 'false_positive', reviewedBy: 'supervisor-1' };
+      const updatedDetection = { ...sampleDetectionDetail, resolution: 'false_positive', reviewedBy: 'supervisor-1' };
 
-      mockDbQuery.mockResolvedValueOnce([{ id: 'det-1', enumeratorId: 'enum-1' }]); // lookup
-      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']); // supervisor's enumerators
-      mockDbUpdate.mockResolvedValueOnce([updatedDetection]); // update returning
+      mockDbQuery.mockResolvedValueOnce([{ id: TEST_DET_ID, enumeratorId: 'enum-1' }]);
+      mockGetEnumeratorIds.mockResolvedValue(['enum-1', 'enum-2']);
+      mockDbUpdate.mockResolvedValueOnce([updatedDetection]);
 
       const { jsonMock, mockRes, mockNext } = makeMocks();
       const mockReq = {
-        params: { id: 'det-1' },
+        params: { id: TEST_DET_ID },
         body: { resolution: 'false_positive' },
         user: { sub: 'supervisor-1', role: 'supervisor' },
       } as unknown as Request;
@@ -332,7 +490,27 @@ describe('FraudDetectionsController', () => {
       await FraudDetectionsController.reviewDetection(mockReq, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
-      expect(jsonMock).toHaveBeenCalledWith({ data: updatedDetection });
+      // L2 fix: castScores() now applied — verify numeric scores
+      const result = jsonMock.mock.calls[0][0];
+      expect(result.data.resolution).toBe('false_positive');
+      expect(result.data.reviewedBy).toBe('supervisor-1');
+      expect(typeof result.data.totalScore).toBe('number');
+    });
+
+    it('denies enumerator role access (via RBAC middleware, tested conceptually)', async () => {
+      // RBAC middleware blocks enumerator before controller — test that controller
+      // still validates auth if somehow reached
+      const { mockRes, mockNext } = makeMocks();
+      const mockReq = {
+        params: { id: TEST_DET_ID },
+        body: { resolution: 'confirmed_fraud' },
+        // Enumerator should never reach here (RBAC blocks), but controller still checks auth
+      } as unknown as Request;
+
+      await FraudDetectionsController.reviewDetection(mockReq, mockRes as Response, mockNext);
+
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.statusCode).toBe(401);
     });
   });
 });
