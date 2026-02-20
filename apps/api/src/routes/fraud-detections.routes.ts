@@ -22,6 +22,15 @@ router.use(authorize(UserRole.SUPERVISOR, UserRole.VERIFICATION_ASSESSOR, UserRo
 // GET /api/v1/fraud-detections — filtered list with pagination
 router.get('/', FraudDetectionsController.listDetections);
 
+// CRITICAL: Static segment routes MUST come before /:id parameterized routes.
+// Express matches top-down — if /:id comes first, /clusters matches as id='clusters' and fails.
+
+// GET /api/v1/fraud-detections/clusters — cluster summaries by GPS proximity (Story 4.5)
+router.get('/clusters', FraudDetectionsController.getClusters);
+
+// PATCH /api/v1/fraud-detections/bulk-review — bulk resolve detections (Story 4.5)
+router.patch('/bulk-review', FraudDetectionsController.bulkReviewDetections);
+
 // GET /api/v1/fraud-detections/:id — detail with enriched JOINs (Story 4.4)
 router.get('/:id', FraudDetectionsController.getDetection);
 

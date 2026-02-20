@@ -51,6 +51,6 @@ export const messageRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  validate: isTestMode() ? false : { xForwardedForHeader: false },
+  validate: isTestMode() ? false : { xForwardedForHeader: false, keyGeneratorIpFallback: false },
   skip: shouldSkipRateLimit,
 });

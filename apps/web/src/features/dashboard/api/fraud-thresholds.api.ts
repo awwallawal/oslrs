@@ -6,7 +6,7 @@
  */
 
 import { apiClient } from '../../../lib/api-client';
-import type { FraudThresholdConfig, HeuristicCategory } from '@oslsr/types';
+import type { FraudThresholdConfig } from '@oslsr/types';
 
 export type ThresholdsByCategory = Record<string, FraudThresholdConfig[]>;
 

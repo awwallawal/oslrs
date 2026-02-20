@@ -87,3 +87,49 @@ export async function submitFraudReview(id: string, body: ReviewBody): Promise<{
     body: JSON.stringify(body),
   });
 }
+
+// ── Story 4.5: Bulk Verification of Mass-Events ──────────────────────────
+
+export interface ClusterMemberItem {
+  id: string;
+  submissionId: string;
+  enumeratorId: string;
+  enumeratorName: string;
+  computedAt: string;
+  submittedAt: string;
+  totalScore: number;
+  severity: string;
+  resolution: string | null;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+}
+
+export interface FraudClusterSummary {
+  clusterId: string;
+  center: { lat: number; lng: number };
+  radiusMeters: number;
+  detectionCount: number;
+  detectionIds: string[];
+  timeRange: { earliest: string | null; latest: string | null };
+  severityRange: { min: string; max: string };
+  enumerators: Array<{ id: string; name: string }>;
+  totalScoreAvg: number;
+  members: ClusterMemberItem[];
+}
+
+export interface BulkReviewBody {
+  ids: string[];
+  resolution: string;
+  resolutionNotes: string;
+}
+
+export async function fetchFraudClusters(): Promise<{ data: FraudClusterSummary[] }> {
+  return apiClient('/fraud-detections/clusters');
+}
+
+export async function submitBulkFraudReview(body: BulkReviewBody): Promise<{ data: { count: number; resolution: string } }> {
+  return apiClient('/fraud-detections/bulk-review', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}

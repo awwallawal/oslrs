@@ -85,3 +85,16 @@ export const reviewFraudDetectionSchema = z.object({
   resolution: z.enum(fraudResolutions),
   resolutionNotes: z.string().max(1000).optional(),
 });
+
+/**
+ * Schema for bulk-reviewing fraud detections (PATCH /api/v1/fraud-detections/bulk-review).
+ * Used for mass-event verification — min 2, max 50 detections per batch.
+ * Story 4.5: Bulk Verification of Mass-Events.
+ */
+export const bulkReviewFraudDetectionsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(2, 'At least 2 detections required').max(50, 'Maximum 50 detections per batch'),
+  resolution: z.enum(fraudResolutions),
+  resolutionNotes: z.string()
+    .min(10, 'Event context must be at least 10 characters')
+    .max(500, 'Event context must not exceed 500 characters'),
+});

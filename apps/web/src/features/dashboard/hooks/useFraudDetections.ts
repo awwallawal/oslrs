@@ -4,8 +4,11 @@ import {
   fetchFraudDetections,
   fetchFraudDetectionDetail,
   submitFraudReview,
+  fetchFraudClusters,
+  submitBulkFraudReview,
   type FraudFilterParams,
   type ReviewBody,
+  type BulkReviewBody,
 } from '../api/fraud.api';
 
 export const fraudKeys = {
@@ -14,6 +17,7 @@ export const fraudKeys = {
   list: (params: FraudFilterParams) => [...fraudKeys.lists(), params] as const,
   details: () => [...fraudKeys.all, 'detail'] as const,
   detail: (id: string) => [...fraudKeys.details(), id] as const,
+  clusters: () => [...fraudKeys.all, 'clusters'] as const,
 };
 
 export function useFraudDetections(params: FraudFilterParams) {
@@ -39,5 +43,24 @@ export function useReviewFraudDetection() {
     invalidateKeys: [[...fraudKeys.all]],
     successMessage: 'Review submitted successfully',
     errorMessage: 'Failed to submit review',
+  });
+}
+
+// ── Story 4.5: Bulk Verification of Mass-Events ──────────────────────────
+
+export function useFraudClusters() {
+  return useQuery({
+    queryKey: fraudKeys.clusters(),
+    queryFn: () => fetchFraudClusters(),
+    select: (response) => response.data,
+  });
+}
+
+export function useBulkReviewFraudDetections() {
+  return useOptimisticMutation({
+    mutationFn: (body: BulkReviewBody) => submitBulkFraudReview(body),
+    invalidateKeys: [[...fraudKeys.all]],
+    successMessage: false,
+    errorMessage: 'Failed to submit bulk review',
   });
 }

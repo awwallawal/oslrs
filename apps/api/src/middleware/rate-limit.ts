@@ -34,6 +34,7 @@ export const ninCheckRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
 });
 
 export const publicVerificationRateLimit = rateLimit({

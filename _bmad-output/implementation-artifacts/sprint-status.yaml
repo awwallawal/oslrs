@@ -158,7 +158,7 @@ development_status:
   4-2-in-app-team-messaging: done  # Code review R2 passed 2026-02-19: R1 11 findings (9 fixed, 2 deferred). R2 9 findings (2C, 2H, 3M, 2L) all 9 fixed. Chat order reversal, cursor parsing, O(n²) inbox, markThreadAsRead tests, content-shaped skeletons, client Zod validation, broadcast targeting. 519 API + 1416 web tests pass, 0 regressions.
   4-3-fraud-engine-configurable-thresholds: review-complete  # Code review passed 2026-02-20: 12 findings (4H, 5M, 3L), all 12 fixed. H3 speed-run form filter, M2 DBSCAN O(n²), M3 query validation, M4-M5 test expansion (111→118 tests), L1 getThreshold DRY extraction. 118 fraud-specific tests pass, 0 regressions.
   4-4-flagged-submission-review-evidence-panel: done  # Code review passed 2026-02-20: 10 findings (3H, 4M, 3L), 9 fixed, 1 deferred (L3). 23 backend + 40 frontend tests, 1,462 total pass, 0 regressions.
-  4-5-bulk-verification-of-mass-events: in-progress  # Dev started 2026-02-20. PM validated 2026-02-17: 12 tasks, 8 ACs. 5 fixes applied (M1 role-conditional scope, M2 cluster scope, M3 route ordering, M4 DB auditLogs insert, L1 numeric parseFloat). Depends on 4.3 + 4.4.
+  4-5-bulk-verification-of-mass-events: done  # Code review passed 2026-02-20: 8 findings (2H, 5M, 1L), all 8 fixed. H1+H2 cluster members endpoint enriched, M1 dynamic toast count, M3 shared leaflet-icons, M4 radius from DB config, M5 ClusterDetailView tests (12), L1 audit action name. 667 API + 1512 web tests pass, 0 regressions.
   epic-4-retrospective: optional
 
   # Epic 5: Back-Office Audit & Policy Reporting

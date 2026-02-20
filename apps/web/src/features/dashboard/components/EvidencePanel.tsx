@@ -62,7 +62,7 @@ function EvidenceSection({ title, icon, score, maxWeight, defaultOpen, children 
   );
 }
 
-function GpsEvidenceSection({ details, score, gpsLat, gpsLng }: { details: GpsDetails | null; score: number; gpsLat: number | null; gpsLng: number | null }) {
+function GpsEvidenceSection({ details, score: _score, gpsLat, gpsLng }: { details: GpsDetails | null; score: number; gpsLat: number | null; gpsLng: number | null }) {
   if (!details) return <p className="text-sm text-neutral-500 py-2">No GPS data available</p>;
 
   return (

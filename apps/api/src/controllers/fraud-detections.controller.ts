@@ -13,9 +13,10 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { fraudDetections, submissions, users, questionnaireForms } from '../db/schema/index.js';
-import { eq, and, gte, lte, inArray, isNull, isNotNull, desc, sql, not } from 'drizzle-orm';
-import { reviewFraudDetectionSchema, fraudSeverities, fraudResolutions } from '@oslsr/types';
+import { fraudDetections, submissions, users, questionnaireForms, auditLogs, fraudThresholds } from '../db/schema/index.js';
+import { eq, and, gte, lte, inArray, isNull, isNotNull, desc, sql, not, gt } from 'drizzle-orm';
+import { reviewFraudDetectionSchema, bulkReviewFraudDetectionsSchema, fraudSeverities } from '@oslsr/types';
+import type { GpsDetails } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 import { TeamAssignmentService } from '../services/team-assignment.service.js';
 import pino from 'pino';
@@ -312,6 +313,297 @@ export class FraudDetectionsController {
       });
 
       res.json({ data: castScores(updated) });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/fraud-detections/clusters
+   * Returns cluster summaries grouped by GPS proximity from gpsDetails.clusterMembers.
+   * Story 4.5 Task 2: Cluster grouping via union-find on clusterMembers overlap.
+   */
+  static async getClusters(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as Request & { user?: { sub: string; role?: string } }).user;
+      if (!user?.sub) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      // Build scope-restricted conditions
+      const conditions = [
+        isNull(fraudDetections.resolution),       // unreviewed only
+        isNotNull(fraudDetections.gpsDetails),     // has GPS data
+        gt(fraudDetections.gpsScore, '0'),         // flagged by GPS heuristic
+      ];
+
+      // Supervisor scope: only their team's detections
+      if (user.role === 'supervisor') {
+        const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
+        if (enumeratorIds.length === 0) {
+          res.json({ data: [] });
+          return;
+        }
+        conditions.push(inArray(fraudDetections.enumeratorId, enumeratorIds));
+      }
+
+      // Query GPS cluster radius from threshold config (M4 fix)
+      const [radiusConfig] = await db
+        .select({ thresholdValue: fraudThresholds.thresholdValue })
+        .from(fraudThresholds)
+        .where(and(
+          eq(fraudThresholds.ruleKey, 'gps_cluster_radius_m'),
+          eq(fraudThresholds.isActive, true),
+        ))
+        .limit(1);
+      const clusterRadiusMeters = radiusConfig?.thresholdValue ?? 50;
+
+      const rows = await db
+        .select({
+          id: fraudDetections.id,
+          submissionId: fraudDetections.submissionId,
+          enumeratorId: fraudDetections.enumeratorId,
+          computedAt: fraudDetections.computedAt,
+          totalScore: fraudDetections.totalScore,
+          severity: fraudDetections.severity,
+          gpsDetails: fraudDetections.gpsDetails,
+          enumeratorName: users.fullName,
+          submittedAt: submissions.submittedAt,
+          gpsLatitude: submissions.gpsLatitude,
+          gpsLongitude: submissions.gpsLongitude,
+        })
+        .from(fraudDetections)
+        .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
+        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .where(and(...conditions));
+
+      // Build union-find graph from clusterMembers overlap
+      // Two detections belong to the same cluster if they share submission IDs in clusterMembers
+      const submissionToDetectionId = new Map<string, string>();
+      for (const row of rows) {
+        submissionToDetectionId.set(row.submissionId, row.id);
+      }
+
+      // Union-Find data structure
+      const parent = new Map<string, string>();
+      const rank = new Map<string, number>();
+
+      function find(x: string): string {
+        if (!parent.has(x)) {
+          parent.set(x, x);
+          rank.set(x, 0);
+        }
+        if (parent.get(x) !== x) {
+          parent.set(x, find(parent.get(x)!));
+        }
+        return parent.get(x)!;
+      }
+
+      function union(a: string, b: string) {
+        const ra = find(a);
+        const rb = find(b);
+        if (ra === rb) return;
+        const rankA = rank.get(ra) ?? 0;
+        const rankB = rank.get(rb) ?? 0;
+        if (rankA < rankB) { parent.set(ra, rb); }
+        else if (rankA > rankB) { parent.set(rb, ra); }
+        else { parent.set(rb, ra); rank.set(ra, rankA + 1); }
+      }
+
+      // Build adjacency from clusterMembers
+      for (const row of rows) {
+        const gps = row.gpsDetails as GpsDetails | null;
+        const members = gps?.clusterMembers ?? [];
+        for (const member of members) {
+          const neighborDetectionId = submissionToDetectionId.get(member.submissionId);
+          if (neighborDetectionId && neighborDetectionId !== row.id) {
+            union(row.id, neighborDetectionId);
+          }
+        }
+      }
+
+      // Group detections by connected component
+      const components = new Map<string, string[]>();
+      for (const row of rows) {
+        const root = find(row.id);
+        if (!components.has(root)) components.set(root, []);
+        components.get(root)!.push(row.id);
+      }
+
+      // Only return groups with 2+ members (single detections are not clusters)
+      const rowById = new Map(rows.map(r => [r.id, r]));
+      const clusters = [];
+
+      for (const [, memberIds] of components) {
+        if (memberIds.length < 2) continue;
+
+        const members = memberIds.map(id => rowById.get(id)!);
+        const lats: number[] = [];
+        const lngs: number[] = [];
+        const scores: number[] = [];
+        const timestamps: Date[] = [];
+        const enumeratorMap = new Map<string, string>();
+        const severities: string[] = [];
+
+        for (const m of members) {
+          if (m.gpsLatitude != null) lats.push(m.gpsLatitude);
+          if (m.gpsLongitude != null) lngs.push(m.gpsLongitude);
+          scores.push(parseFloat(m.totalScore));
+          if (m.computedAt) timestamps.push(new Date(m.computedAt));
+          enumeratorMap.set(m.enumeratorId, m.enumeratorName);
+          severities.push(m.severity);
+        }
+
+        // Compute cluster center (average lat/lng)
+        const avgLat = lats.length > 0 ? lats.reduce((a, b) => a + b, 0) / lats.length : 0;
+        const avgLng = lngs.length > 0 ? lngs.reduce((a, b) => a + b, 0) / lngs.length : 0;
+
+        const radiusMeters = clusterRadiusMeters;
+
+        // Sort timestamps for time range
+        timestamps.sort((a, b) => a.getTime() - b.getTime());
+
+        // Severity ordering for range
+        const severityOrder = ['clean', 'low', 'medium', 'high', 'critical'];
+        const sortedSeverities = [...new Set(severities)].sort(
+          (a, b) => severityOrder.indexOf(a) - severityOrder.indexOf(b),
+        );
+
+        // Generate stable cluster ID from sorted detection IDs
+        const sortedIds = [...memberIds].sort();
+        const clusterId = sortedIds[0]; // Use first sorted detection ID as cluster ID
+
+        clusters.push({
+          clusterId,
+          center: { lat: avgLat, lng: avgLng },
+          radiusMeters,
+          detectionCount: members.length,
+          detectionIds: sortedIds,
+          timeRange: {
+            earliest: timestamps[0]?.toISOString() ?? null,
+            latest: timestamps[timestamps.length - 1]?.toISOString() ?? null,
+          },
+          severityRange: {
+            min: sortedSeverities[0] ?? 'clean',
+            max: sortedSeverities[sortedSeverities.length - 1] ?? 'clean',
+          },
+          enumerators: Array.from(enumeratorMap.entries()).map(([id, name]) => ({ id, name })),
+          totalScoreAvg: scores.length > 0
+            ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) / 100
+            : 0,
+          members: members.map(m => ({
+            id: m.id,
+            submissionId: m.submissionId,
+            enumeratorId: m.enumeratorId,
+            enumeratorName: m.enumeratorName,
+            computedAt: m.computedAt instanceof Date ? m.computedAt.toISOString() : m.computedAt,
+            submittedAt: m.submittedAt instanceof Date ? m.submittedAt.toISOString() : m.submittedAt,
+            totalScore: parseFloat(m.totalScore),
+            severity: m.severity,
+            resolution: null,
+            gpsLatitude: m.gpsLatitude,
+            gpsLongitude: m.gpsLongitude,
+          })),
+        });
+      }
+
+      // Sort clusters by detection count descending (largest first)
+      clusters.sort((a, b) => b.detectionCount - a.detectionCount);
+
+      res.json({ data: clusters });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/fraud-detections/bulk-review
+   * Bulk resolve detections in a single transaction.
+   * Story 4.5 Task 3: Transactional bulk review with LGA scope enforcement.
+   */
+  static async bulkReviewDetections(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as Request & { user?: { sub: string; role?: string } }).user;
+      if (!user?.sub) throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+
+      const parsed = bulkReviewFraudDetectionsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          parsed.error.issues.map((i) => i.message).join(', '),
+          400,
+        );
+      }
+
+      const { ids, resolution, resolutionNotes } = parsed.data;
+
+      // Supervisor scope pre-check
+      let allowedEnumeratorIds: string[] | null = null;
+      if (user.role === 'supervisor') {
+        allowedEnumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
+        if (allowedEnumeratorIds.length === 0) {
+          throw new AppError('SCOPE_VIOLATION', 'No enumerators assigned to your team', 403);
+        }
+      }
+
+      await db.transaction(async (tx) => {
+        // 1. Verify all IDs exist
+        const detections = await tx
+          .select({
+            id: fraudDetections.id,
+            enumeratorId: fraudDetections.enumeratorId,
+          })
+          .from(fraudDetections)
+          .where(inArray(fraudDetections.id, ids));
+
+        if (detections.length !== ids.length) {
+          throw new AppError('DETECTION_NOT_FOUND', 'One or more detection IDs not found', 404);
+        }
+
+        // 2. Supervisor scope enforcement (all-or-nothing)
+        if (allowedEnumeratorIds !== null) {
+          const outOfScope = detections.filter(d => !allowedEnumeratorIds!.includes(d.enumeratorId));
+          if (outOfScope.length > 0) {
+            throw new AppError('SCOPE_VIOLATION', 'Cannot review detections outside your team', 403);
+          }
+        }
+
+        // 3. Bulk update
+        await tx
+          .update(fraudDetections)
+          .set({
+            resolution,
+            resolutionNotes,
+            reviewedBy: user.sub,
+            reviewedAt: new Date(),
+          })
+          .where(inArray(fraudDetections.id, ids));
+
+        // 4. DB audit log entry (targetId null for bulk — IDs in details JSONB)
+        await tx.insert(auditLogs).values({
+          actorId: user.sub,
+          action: 'fraud.bulk_verification',
+          targetResource: 'fraud_detections',
+          targetId: null,
+          details: {
+            detectionIds: ids,
+            count: ids.length,
+            resolution,
+            resolutionNotes,
+          },
+          ipAddress: req.ip || 'unknown',
+          userAgent: req.get('user-agent') || 'unknown',
+        });
+      });
+
+      // 5. Structured Pino log (outside transaction)
+      logger.info({
+        event: 'fraud.bulk_verification',
+        actorId: user.sub,
+        count: ids.length,
+        resolution,
+        detectionIds: ids,
+      });
+
+      res.json({ data: { count: ids.length, resolution } });
     } catch (err) {
       next(err);
     }

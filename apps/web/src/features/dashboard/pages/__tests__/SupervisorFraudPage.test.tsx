@@ -13,10 +13,11 @@ expect.extend(matchers);
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────────
 
-const { mockUseFraudDetections, mockUseFraudDetectionDetail, mockReviewMutate } = vi.hoisted(() => ({
+const { mockUseFraudDetections, mockUseFraudDetectionDetail, mockReviewMutate, mockBulkReviewMutate } = vi.hoisted(() => ({
   mockUseFraudDetections: vi.fn(),
   mockUseFraudDetectionDetail: vi.fn(),
   mockReviewMutate: vi.fn(),
+  mockBulkReviewMutate: vi.fn(),
 }));
 
 vi.mock('../../hooks/useFraudDetections', () => ({
@@ -28,14 +29,25 @@ vi.mock('../../hooks/useFraudDetections', () => ({
     isError: false,
     isSuccess: false,
   }),
+  useFraudClusters: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
+  useBulkReviewFraudDetections: () => ({
+    mutateAsync: mockBulkReviewMutate,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+  }),
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonTable: ({ rows, columns }: { rows: number; columns: number }) => (
     <div aria-label="Loading fraud detections" data-testid="skeleton-table" data-rows={rows} data-columns={columns} />
   ),
-  SkeletonCard: ({ showHeader }: { showHeader?: boolean }) => (
-    <div data-testid="skeleton-card" data-show-header={showHeader} />
+  SkeletonCard: ({ lines }: { lines?: number }) => (
+    <div data-testid="skeleton-card" data-lines={lines} />
   ),
 }));
 
@@ -45,6 +57,39 @@ vi.mock('../../../../components/ErrorBoundary', () => ({
 
 vi.mock('../../components/GpsClusterMap', () => ({
   GpsClusterMap: () => <div data-testid="gps-cluster-map" />,
+}));
+
+// Story 4.5: Mock new components
+vi.mock('../../components/ClusterCard', () => ({
+  ClusterCard: () => <div data-testid="cluster-card" />,
+}));
+
+vi.mock('../../components/ClusterDetailView', () => ({
+  ClusterDetailView: ({ onBack }: { onBack: () => void }) => (
+    <div data-testid="cluster-detail-view">
+      <button onClick={onBack}>Back</button>
+    </div>
+  ),
+}));
+
+vi.mock('../../components/FloatingActionBar', () => ({
+  FloatingActionBar: ({ selectedCount }: { selectedCount: number }) =>
+    selectedCount >= 2 ? <div data-testid="floating-action-bar" /> : null,
+}));
+
+vi.mock('../../components/BulkVerificationModal', () => ({
+  BulkVerificationModal: () => null,
+}));
+
+vi.mock('../../hooks/useSelectionState', () => ({
+  useSelectionState: () => ({
+    selectedIds: new Set<string>(),
+    selectedCount: 0,
+    toggle: vi.fn(),
+    selectAll: vi.fn(),
+    clearAll: vi.fn(),
+    isSelected: () => false,
+  }),
 }));
 
 import SupervisorFraudPage from '../SupervisorFraudPage';
