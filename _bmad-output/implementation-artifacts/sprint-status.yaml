@@ -168,7 +168,7 @@ development_status:
   # workflow design (prep-6), E2E expansion (prep-7), and role-based activation (prep-8).
   prep-epic-5: in-progress
   prep-1-fix-supervisor-direct-messaging-ux: done  # HIGH: Add "New Conversation" flow with team roster selection to SupervisorMessagesPage. Code review passed 2026-02-21: 8 findings (1H, 3M, 4L), all 8 fixed. 51 messaging tests, 558 dashboard tests pass, 0 regressions.
-  prep-2-lightweight-audit-logging-pii-access: ready-for-dev  # HIGH: Required by Stories 5.3, 5.4, 5.5. Decide: build lightweight audit logger now, or pull Story 6.1 forward partially.
+  prep-2-lightweight-audit-logging-pii-access: done  # HIGH: Required by Stories 5.3, 5.4, 5.5. AuditService with fire-and-forget + transactional modes. Code review passed 2026-02-21: 7 findings (2H, 3M, 2L), all 7 fixed. 13 tests pass, 0 regressions.
   prep-3-export-infrastructure-spike: ready-for-dev  # HIGH: CSV/PDF generation with security controls (logged, role-authorized). Evaluate PDFKit (already installed) + CSV library.
   prep-4-define-story-5.5-in-epics: done  # HIGH: Story 5.5 fully defined in epics.md with access control matrix, 9 filters, column visibility matrix, technical requirements. Uncommitted — needs commit.
   prep-5-cross-lga-query-performance-validation: ready-for-dev  # MEDIUM: Run state-wide aggregation queries at scale. Ensure Official/Assessor views don't degrade.
