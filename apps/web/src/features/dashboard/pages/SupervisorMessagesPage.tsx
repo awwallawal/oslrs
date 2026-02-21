@@ -7,25 +7,31 @@
  * Mobile: inbox list first, tap to navigate to thread.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { RealtimeStatusBanner } from '../../../components/RealtimeStatusBanner';
 import { useRealtimeConnection } from '../../../hooks/useRealtimeConnection';
 import { useAuth } from '../../auth/context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useInbox, useThread, useSendMessage, useSendBroadcast, useMarkThreadAsRead, useMessageRealtime } from '../hooks/useMessages';
+import { useTeamMetrics } from '../hooks/useSupervisor';
 import MessageInbox from '../components/MessageInbox';
 import MessageThread from '../components/MessageThread';
 import ChatComposer from '../components/ChatComposer';
+import TeamRosterPicker from '../components/TeamRosterPicker';
 
 export default function SupervisorMessagesPage() {
   const { connectionState } = useRealtimeConnection();
   const { user } = useAuth();
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [showBroadcastComposer, setShowBroadcastComposer] = useState(false);
+  const [showRosterPicker, setShowRosterPicker] = useState(false);
 
   const { data: inbox, isLoading: inboxLoading, error: inboxError } = useInbox();
   const { data: threadData, isLoading: threadLoading } = useThread(selectedPartnerId || '');
+  const { data: teamMetrics, isLoading: teamMetricsLoading, isError: teamMetricsError } = useTeamMetrics(
+    showRosterPicker || !!selectedPartnerId,
+  );
   const sendMessage = useSendMessage();
   const sendBroadcastMutation = useSendBroadcast();
   const markThreadAsRead = useMarkThreadAsRead();
@@ -33,8 +39,27 @@ export default function SupervisorMessagesPage() {
   // Register realtime event listener
   useMessageRealtime();
 
+  // Build set of partner IDs that already have inbox threads (for dedup marking)
+  const existingThreadPartnerIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (inbox) {
+      for (const thread of inbox) {
+        ids.add(thread.partnerId);
+      }
+    }
+    return ids;
+  }, [inbox]);
+
   const handleSelectThread = useCallback((partnerId: string) => {
     setSelectedPartnerId(partnerId);
+    setShowBroadcastComposer(false);
+    setShowRosterPicker(false);
+  }, []);
+
+  const handleSelectFromRoster = useCallback((enumeratorId: string) => {
+    // AC #2 & #3: Set selectedPartnerId — if existing thread, navigates to it; if new, opens composer
+    setSelectedPartnerId(enumeratorId);
+    setShowRosterPicker(false);
     setShowBroadcastComposer(false);
   }, []);
 
@@ -56,6 +81,7 @@ export default function SupervisorMessagesPage() {
   const handleBack = useCallback(() => {
     setSelectedPartnerId(null);
     setShowBroadcastComposer(false);
+    setShowRosterPicker(false);
   }, []);
 
   const currentUserId = user?.id || '';
@@ -124,13 +150,25 @@ export default function SupervisorMessagesPage() {
         <div className="flex h-full">
           {/* Inbox panel - hidden on mobile when thread is open */}
           <div className={`w-full md:w-80 md:border-r flex-shrink-0 ${showThread ? 'hidden md:block' : ''}`}>
-            <MessageInbox
-              threads={threads}
-              selectedPartnerId={selectedPartnerId}
-              onSelectThread={handleSelectThread}
-              showBroadcastButton
-              onBroadcast={() => { setShowBroadcastComposer(true); setSelectedPartnerId(null); }}
-            />
+            {showRosterPicker ? (
+              <TeamRosterPicker
+                enumerators={teamMetrics?.enumerators || []}
+                isLoading={teamMetricsLoading}
+                isError={teamMetricsError}
+                existingThreadPartnerIds={existingThreadPartnerIds}
+                onSelectEnumerator={handleSelectFromRoster}
+                onClose={() => setShowRosterPicker(false)}
+              />
+            ) : (
+              <MessageInbox
+                threads={threads}
+                selectedPartnerId={selectedPartnerId}
+                onSelectThread={handleSelectThread}
+                showBroadcastButton
+                onBroadcast={() => { setShowBroadcastComposer(true); setSelectedPartnerId(null); }}
+                onNewConversation={() => setShowRosterPicker(true)}
+              />
+            )}
           </div>
 
           {/* Thread panel */}
@@ -171,7 +209,9 @@ export default function SupervisorMessagesPage() {
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="font-medium text-sm">
-                    {threads.find((t) => t.partnerId === selectedPartnerId)?.partnerName || 'Conversation'}
+                    {threads.find((t) => t.partnerId === selectedPartnerId)?.partnerName
+                      || teamMetrics?.enumerators.find((e) => e.id === selectedPartnerId)?.fullName
+                      || 'Conversation'}
                   </h2>
                 </div>
                 {threadLoading ? (

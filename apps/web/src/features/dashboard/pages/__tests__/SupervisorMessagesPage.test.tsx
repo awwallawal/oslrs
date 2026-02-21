@@ -35,6 +35,12 @@ const mockThreadData = vi.hoisted(() => ({
   isLoading: false,
 }));
 
+const mockTeamMetricsData = vi.hoisted(() => ({
+  data: null as any,
+  isLoading: false,
+  isError: false,
+}));
+
 // Mock useAuth
 vi.mock('../../../auth/context/AuthContext', () => ({
   useAuth: () => ({
@@ -63,6 +69,14 @@ vi.mock('../../hooks/useMessages', () => ({
   useMarkThreadAsRead: () => ({ mutate: mockMarkThreadAsReadMutate }),
   useUnreadCount: () => ({ data: { count: 0 } }),
   useMessageRealtime: vi.fn(),
+}));
+
+// Mock supervisor hooks
+vi.mock('../../hooks/useSupervisor', () => ({
+  useTeamMetrics: () => mockTeamMetricsData,
+  useTeamOverview: () => ({ data: null, isLoading: false }),
+  usePendingAlerts: () => ({ data: null, isLoading: false }),
+  useTeamGps: () => ({ data: null, isLoading: false }),
 }));
 
 import SupervisorMessagesPage from '../SupervisorMessagesPage';
@@ -125,6 +139,12 @@ const MOCK_MESSAGES = [
   },
 ];
 
+const MOCK_TEAM_ENUMERATORS = [
+  { id: 'enum-1', fullName: 'John Doe', status: 'active', lastLoginAt: '2026-02-21T09:00:00Z', dailyCount: 5, weeklyCount: 20, lastSubmittedAt: '2026-02-21T08:00:00Z' },
+  { id: 'enum-2', fullName: 'Jane Smith', status: 'active', lastLoginAt: '2026-02-20T15:00:00Z', dailyCount: 3, weeklyCount: 12, lastSubmittedAt: '2026-02-20T14:00:00Z' },
+  { id: 'enum-3', fullName: 'Ibrahim Okafor', status: 'inactive', lastLoginAt: null, dailyCount: 0, weeklyCount: 0, lastSubmittedAt: null },
+];
+
 // ── Tests ───────────────────────────────────────────────────────────────
 
 describe('SupervisorMessagesPage', () => {
@@ -135,6 +155,9 @@ describe('SupervisorMessagesPage', () => {
     mockInboxData.error = null;
     mockThreadData.data = { messages: [] };
     mockThreadData.isLoading = false;
+    mockTeamMetricsData.data = { enumerators: MOCK_TEAM_ENUMERATORS };
+    mockTeamMetricsData.isLoading = false;
+    mockTeamMetricsData.isError = false;
   });
 
   afterEach(cleanup);
@@ -305,6 +328,121 @@ describe('SupervisorMessagesPage', () => {
       mockInboxData.data = [];
       renderPage();
       expect(screen.getByLabelText('Send broadcast message to all team members')).toBeInTheDocument();
+    });
+  });
+
+  describe('new conversation (AC #1-#5)', () => {
+    it('renders "New Conversation" button in inbox (AC #1)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      renderPage();
+      expect(screen.getByText('New Conversation')).toBeInTheDocument();
+    });
+
+    it('"New Conversation" button visible in empty inbox (AC #4)', () => {
+      mockInboxData.data = [];
+      renderPage();
+      expect(screen.getByText('New Conversation')).toBeInTheDocument();
+    });
+
+    it('"New Conversation" button has ARIA label', () => {
+      mockInboxData.data = [];
+      renderPage();
+      expect(screen.getByLabelText('Start a new conversation')).toBeInTheDocument();
+    });
+
+    it('opens roster picker when "New Conversation" clicked (AC #1)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+
+      // Roster picker should show team members
+      expect(screen.getByLabelText('Team members')).toBeInTheDocument();
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+      expect(screen.getByText('Ibrahim Okafor')).toBeInTheDocument();
+    });
+
+    it('roster picker shows search input', () => {
+      mockInboxData.data = [];
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+
+      expect(screen.getByLabelText('Search team members')).toBeInTheDocument();
+    });
+
+    it('marks enumerators with existing threads in roster (AC #5)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+
+      // enum-1 (John Doe) and enum-2 (Jane Smith) have existing threads
+      const existingLabels = screen.getAllByText('Existing thread');
+      expect(existingLabels.length).toBe(2);
+    });
+
+    it('selecting enumerator from roster opens thread (AC #2)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      mockThreadData.data = { messages: MOCK_MESSAGES };
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+
+      // Select an enumerator
+      fireEvent.click(screen.getByLabelText('Start conversation with John Doe (existing thread)'));
+
+      // Roster picker should be closed and thread should be open
+      expect(screen.queryByLabelText('Team members')).not.toBeInTheDocument();
+    });
+
+    it('selecting enumerator with existing thread shows existing messages (AC #3)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      mockThreadData.data = { messages: MOCK_MESSAGES };
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+      fireEvent.click(screen.getByLabelText('Start conversation with John Doe (existing thread)'));
+
+      // Thread should show existing messages
+      const threadLog = screen.getByRole('log');
+      expect(within(threadLog).getByText('When is the next survey?')).toBeInTheDocument();
+    });
+
+    it('selecting enumerator without existing thread shows thread header with name', () => {
+      mockInboxData.data = MOCK_THREADS;
+      mockThreadData.data = { messages: [] };
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+      fireEvent.click(screen.getByLabelText('Start conversation with Ibrahim Okafor'));
+
+      // Thread header should show enumerator name from team metrics
+      expect(screen.getByText('Ibrahim Okafor')).toBeInTheDocument();
+    });
+
+    it('closing roster picker returns to inbox', () => {
+      mockInboxData.data = MOCK_THREADS;
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+      expect(screen.getByLabelText('Team members')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Close roster picker'));
+      expect(screen.queryByLabelText('Team members')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Message threads')).toBeInTheDocument();
+    });
+
+    it('shows error state in roster picker when team metrics fails (M1)', () => {
+      mockInboxData.data = MOCK_THREADS;
+      mockTeamMetricsData.data = null;
+      mockTeamMetricsData.isError = true;
+      renderPage();
+
+      fireEvent.click(screen.getByText('New Conversation'));
+
+      expect(screen.getByText('Failed to load team members')).toBeInTheDocument();
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-17 - Epic 4 stories validated + rebuilt (4-2 full rewrite). Prep-epic-4 (10 tasks) added. Baselines: 427 API, 1338 web tests
+# updated: 2026-02-20 - Epic 4 complete (5 stories + 9 prep). Prep-epic-5 (7 tasks) added. Story 5.5 added. Baselines: 667 API, 1512 web tests
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -153,20 +153,36 @@ development_status:
   prep-11-offline-queue-user-isolation: done  # MEDIUM: Security — shared-device user isolation for offline drafts/submissions. Code review passed 2026-02-18: 9 findings (3C, 3M, 3L), 6 fixed (3C build-breaking type/mock errors, 1M async bug, 2M story doc gaps), 3 deferred (L1-L3 test coverage gaps).
 
   # Epic 4: Supervisor Oversight & Field Management
-  epic-4: in-progress
+  epic-4: done  # Completed 2026-02-20: All 5 stories done, retrospective complete
   4-1-supervisor-team-dashboard: done  # Code review passed 2026-02-19: 9 findings (1H, 3M, 5L), ALL 9 fixed. ErrorBoundary, local markers, 60s polling, WAT timezone, L1 migrated overview+alerts to TeamAssignmentService. 24 backend + 25 frontend supervisor tests, 0 regressions.
   4-2-in-app-team-messaging: done  # Code review R2 passed 2026-02-19: R1 11 findings (9 fixed, 2 deferred). R2 9 findings (2C, 2H, 3M, 2L) all 9 fixed. Chat order reversal, cursor parsing, O(n²) inbox, markThreadAsRead tests, content-shaped skeletons, client Zod validation, broadcast targeting. 519 API + 1416 web tests pass, 0 regressions.
-  4-3-fraud-engine-configurable-thresholds: review-complete  # Code review passed 2026-02-20: 12 findings (4H, 5M, 3L), all 12 fixed. H3 speed-run form filter, M2 DBSCAN O(n²), M3 query validation, M4-M5 test expansion (111→118 tests), L1 getThreshold DRY extraction. 118 fraud-specific tests pass, 0 regressions.
+  4-3-fraud-engine-configurable-thresholds: done  # Code review passed 2026-02-20: 12 findings (4H, 5M, 3L), all 12 fixed. H3 speed-run form filter, M2 DBSCAN O(n²), M3 query validation, M4-M5 test expansion (111→118 tests), L1 getThreshold DRY extraction. 118 fraud-specific tests pass, 0 regressions.
   4-4-flagged-submission-review-evidence-panel: done  # Code review passed 2026-02-20: 10 findings (3H, 4M, 3L), 9 fixed, 1 deferred (L3). 23 backend + 40 frontend tests, 1,462 total pass, 0 regressions.
   4-5-bulk-verification-of-mass-events: done  # Code review passed 2026-02-20: 8 findings (2H, 5M, 1L), all 8 fixed. H1+H2 cluster members endpoint enriched, M1 dynamic toast count, M3 shared leaflet-icons, M4 radius from DB config, M5 ClusterDetailView tests (12), L1 audit action name. 667 API + 1512 web tests pass, 0 regressions.
-  epic-4-retrospective: optional
+  epic-4-retrospective: done  # Completed 2026-02-20: 14-story scope (9 prep + 5 epic). 133 CR findings, 100% retro follow-through, 7 prep tasks for Epic 5. Story 5.5 (Respondent Data Registry Table) added.
+
+  # Prep Phase: Epic 5 Readiness (from Epic 4 Retrospective 2026-02-20)
+  # Source: epic-4-retro-2026-02-20.md Action Items + Prep Tasks
+  # Must complete before Epic 5 begins. Includes bug fix (prep-1), audit logging (prep-2),
+  # export spike (prep-3), story definition (prep-4), performance validation (prep-5),
+  # workflow design (prep-6), E2E expansion (prep-7), and role-based activation (prep-8).
+  prep-epic-5: in-progress
+  prep-1-fix-supervisor-direct-messaging-ux: done  # HIGH: Add "New Conversation" flow with team roster selection to SupervisorMessagesPage. Code review passed 2026-02-21: 8 findings (1H, 3M, 4L), all 8 fixed. 51 messaging tests, 558 dashboard tests pass, 0 regressions.
+  prep-2-lightweight-audit-logging-pii-access: ready-for-dev  # HIGH: Required by Stories 5.3, 5.4, 5.5. Decide: build lightweight audit logger now, or pull Story 6.1 forward partially.
+  prep-3-export-infrastructure-spike: ready-for-dev  # HIGH: CSV/PDF generation with security controls (logged, role-authorized). Evaluate PDFKit (already installed) + CSV library.
+  prep-4-define-story-5.5-in-epics: done  # HIGH: Story 5.5 fully defined in epics.md with access control matrix, 9 filters, column visibility matrix, technical requirements. Uncommitted — needs commit.
+  prep-5-cross-lga-query-performance-validation: ready-for-dev  # MEDIUM: Run state-wide aggregation queries at scale. Ensure Official/Assessor views don't degrade.
+  prep-6-assessor-workflow-state-machine-design: ready-for-dev  # MEDIUM: Document submission lifecycle: submission -> fraud scoring -> supervisor review -> assessor audit -> final status.
+  prep-7-e2e-test-expansion: ready-for-dev  # NICE-TO-HAVE: Playwright tests for fraud threshold UI, messaging inbox, supervisor team dashboard.
+  prep-8-role-based-activation-wizard: ready-for-dev  # MEDIUM: Simplify onboarding for back-office roles (Official, Assessor, Super Admin) — password-only activation instead of full 5-step wizard. Field roles (Enumerator, Supervisor, Clerk) keep all 5 steps. Bank data already captured for Epic 6 reuse.
 
   # Epic 5: Back-Office Audit & Policy Reporting
-  epic-5: backlog
-  5-1-high-level-policy-dashboard: backlog
-  5-2-verification-assessor-audit-queue: backlog
+  epic-5: in-progress
+  5-1-high-level-policy-dashboard: ready-for-dev
+  5-2-verification-assessor-audit-queue: ready-for-dev
   5-3-individual-record-pii-view-authorized-roles: backlog
   5-4-pii-rich-csv-pdf-exports: backlog
+  5-5-respondent-data-registry-table: backlog  # NEW from Epic 4 retro: Server-paginated, filterable table of all respondent records for authorized roles
   epic-5-retrospective: optional
 
   # Epic 6: System Integrity, Accountability & Remuneration

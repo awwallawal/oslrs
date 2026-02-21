@@ -28,12 +28,13 @@ export function usePendingAlerts() {
   });
 }
 
-export function useTeamMetrics() {
+export function useTeamMetrics(enabled = true) {
   return useQuery({
     queryKey: supervisorKeys.teamMetrics(),
     queryFn: fetchTeamMetrics,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: enabled ? 60_000 : false,
+    enabled,
   });
 }
 
