@@ -11,6 +11,7 @@ import supervisorRoutes from './supervisor.routes.js';
 import messageRoutes from './message.routes.js';
 import fraudThresholdsRoutes from './fraud-thresholds.routes.js';
 import fraudDetectionsRoutes from './fraud-detections.routes.js';
+import reportRoutes from './report.routes.js';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.use('/supervisor', supervisorRoutes);
 router.use('/messages', messageRoutes);
 router.use('/fraud-thresholds', fraudThresholdsRoutes);
 router.use('/fraud-detections', fraudDetectionsRoutes);
+router.use('/reports', reportRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

@@ -2,21 +2,33 @@
 /**
  * OfficialHome Tests
  *
- * Story 2.5-7 AC3: Read-only Reports Dashboard with State Overview,
- * Collection Progress, Export Data cards.
- * Story 2.5-7 AC4: ALL elements read-only (no edit/action buttons except Export).
- * Story 2.5-7 AC5: Direction 08 formal government styling.
- * Story 2.5-7 AC8: SkeletonCard loading branch.
- * Story 2.5-7 AC10: Tab navigation without focus traps.
+ * Story 5.1 AC1: Live data rendering, AC5: skeleton states,
+ * AC6: read-only assertion, AC7: Direction 08 styling.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
+
+// ── Hoisted mocks ───────────────────────────────────────────────────────────
+
+let mockOverviewReturn = {
+  data: undefined as any,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../hooks/useOfficial', () => ({
+  useOverviewStats: () => mockOverviewReturn,
+  officialKeys: { all: ['official'], overview: () => ['official', 'overview'] },
+}));
+
+vi.mock('../../../../components/skeletons', () => ({
+  SkeletonCard: () => <div aria-label="Loading card" />,
+}));
 
 import OfficialHome from '../OfficialHome';
 
@@ -24,166 +36,153 @@ afterEach(() => {
   cleanup();
 });
 
-function renderComponent(props: { isLoading?: boolean } = {}) {
+function renderComponent() {
   return render(
     <MemoryRouter>
-      <OfficialHome {...props} />
+      <OfficialHome />
     </MemoryRouter>
   );
 }
 
+const sampleStats = {
+  totalRespondents: 12500,
+  todayRegistrations: 45,
+  yesterdayRegistrations: 38,
+  lgasCovered: 18,
+  sourceBreakdown: {
+    enumerator: 8000,
+    public: 3000,
+    clerk: 1500,
+  },
+};
+
 describe('OfficialHome', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockOverviewReturn = {
+      data: sampleStats,
+      isLoading: false,
+      error: null,
+    };
   });
 
-  describe('AC3: Dashboard Layout', () => {
-    it('renders page title and subtitle', () => {
+  describe('AC1: Live Data Rendering', () => {
+    it('renders total respondents count', () => {
       renderComponent();
-      expect(screen.getByText('Reports Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('State-level overview and policy reporting')).toBeInTheDocument();
+      expect(screen.getByTestId('total-respondents')).toHaveTextContent('12,500');
     });
 
-    it('renders 3 dashboard cards with correct titles', () => {
+    it('renders today registration count', () => {
       renderComponent();
-      expect(screen.getByText('State Overview')).toBeInTheDocument();
-      expect(screen.getByText('Collection Progress')).toBeInTheDocument();
-      expect(screen.getByText('Export Data')).toBeInTheDocument();
+      expect(screen.getByTestId('today-count')).toHaveTextContent('45');
     });
 
-    it('renders State Overview card with read-only stat placeholders', () => {
+    it('renders delta indicator when today differs from yesterday', () => {
       renderComponent();
-      expect(screen.getByText('Registrations')).toBeInTheDocument();
-      expect(screen.getByText('Active Surveys')).toBeInTheDocument();
-      expect(screen.getByText('LGAs Covered')).toBeInTheDocument();
+      const delta = screen.getByTestId('delta-indicator');
+      expect(delta).toBeInTheDocument();
+      expect(delta).toHaveTextContent('7');
     });
 
-    it('renders Collection Progress card with 0/1,000,000 target', () => {
+    it('renders LGAs covered count', () => {
       renderComponent();
-      expect(screen.getByText('0')).toBeInTheDocument();
+      expect(screen.getByTestId('lgas-covered')).toHaveTextContent('18 / 33');
+    });
+
+    it('renders source channel breakdown', () => {
+      renderComponent();
+      expect(screen.getByTestId('source-enumerator')).toHaveTextContent('8,000');
+      expect(screen.getByTestId('source-public')).toHaveTextContent('3,000');
+      expect(screen.getByTestId('source-clerk')).toHaveTextContent('1,500');
+    });
+
+    it('renders collection progress with percentage', () => {
+      renderComponent();
+      expect(screen.getByTestId('progress-count')).toHaveTextContent('12,500');
       expect(screen.getByText('/ 1,000,000 target')).toBeInTheDocument();
     });
 
-    it('renders Export Data card with Export Report button', () => {
+    it('renders progress bar with correct width', () => {
       renderComponent();
-      const exportBtn = screen.getByRole('button', { name: 'Export Report' });
-      expect(exportBtn).toBeInTheDocument();
-    });
-
-    it('clicking Export Report opens "Coming in Epic 5" modal', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Export Report' }));
-      expect(screen.getByText('Coming in Epic 5')).toBeInTheDocument();
-      expect(screen.getByText(/export functionality/i)).toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Got it" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Export Report' }));
-      expect(screen.getByText('Coming in Epic 5')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
-      expect(screen.queryByText('Coming in Epic 5')).not.toBeInTheDocument();
-    });
-
-    it('modal can be dismissed with "Cancel" button', () => {
-      renderComponent();
-      fireEvent.click(screen.getByRole('button', { name: 'Export Report' }));
-      expect(screen.getByText('Coming in Epic 5')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.queryByText('Coming in Epic 5')).not.toBeInTheDocument();
+      const bar = screen.getByTestId('progress-bar');
+      expect(bar).toHaveStyle({ width: '1.25%' });
     });
   });
 
-  describe('AC4: Read-Only Enforcement', () => {
-    it('only has 1 action button (Export Report) — no edit/delete buttons', () => {
+  describe('AC5: Skeleton Loading', () => {
+    it('renders skeleton cards when loading', () => {
+      mockOverviewReturn = { data: undefined, isLoading: true, error: null };
       renderComponent();
-      const allButtons = screen.getAllByRole('button');
-      expect(allButtons).toHaveLength(1);
-      expect(allButtons[0]).toHaveTextContent('Export Report');
+      const skeletons = screen.getAllByLabelText('Loading card');
+      expect(skeletons.length).toBeGreaterThanOrEqual(6);
     });
 
-    it('no input fields exist on the dashboard', () => {
+    it('hides content when loading', () => {
+      mockOverviewReturn = { data: undefined, isLoading: true, error: null };
+      renderComponent();
+      expect(screen.queryByText('State Overview')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('AC6: Read-Only Enforcement', () => {
+    it('has Export Report button that is disabled', () => {
+      renderComponent();
+      const exportBtn = screen.getByRole('button', { name: 'Export Report' });
+      expect(exportBtn).toBeDisabled();
+    });
+
+    it('has no input fields', () => {
       renderComponent();
       const inputs = document.querySelectorAll('input, textarea');
       expect(inputs).toHaveLength(0);
     });
   });
 
-  describe('AC5: Direction 08 Styling', () => {
-    it('renders dark header accent strip with bg-gray-800', () => {
+  describe('Error State', () => {
+    it('renders error message when API fails', () => {
+      mockOverviewReturn = { data: undefined, isLoading: false, error: new Error('Network error') };
+      renderComponent();
+      expect(screen.getByTestId('error-state')).toBeInTheDocument();
+      expect(screen.getByText('Unable to load dashboard data')).toBeInTheDocument();
+    });
+
+    it('hides data cards when error occurs', () => {
+      mockOverviewReturn = { data: undefined, isLoading: false, error: new Error('fail') };
+      renderComponent();
+      expect(screen.queryByTestId('state-overview-card')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('AC7: Direction 08 Styling', () => {
+    it('renders dark header accent strip', () => {
       renderComponent();
       const header = screen.getByText('Reports Dashboard').closest('div');
       expect(header).toHaveClass('bg-gray-800', 'text-white');
     });
 
-    it('renders section header with left maroon border', () => {
+    it('renders section header with maroon border', () => {
       renderComponent();
-      const sectionHeader = screen.getByText('Overview').closest('div');
-      expect(sectionHeader).toHaveClass('border-l-4', 'border-[#9C1E23]', 'pl-4');
-    });
-
-    it('renders 3 Direction 08 field groups', () => {
-      renderComponent();
-      const fieldGroups = screen.getAllByTestId('field-group');
-      expect(fieldGroups).toHaveLength(3);
-    });
-
-    it('Export Report button uses maroon brand color', () => {
-      renderComponent();
-      const exportBtn = screen.getByRole('button', { name: 'Export Report' });
-      expect(exportBtn).toHaveClass('bg-[#9C1E23]');
+      const section = screen.getByText('Overview').closest('div');
+      expect(section).toHaveClass('border-l-4', 'border-[#9C1E23]');
     });
   });
 
-  describe('AC8: Skeleton Loading', () => {
-    it('renders 3 skeleton cards when isLoading=true', () => {
-      renderComponent({ isLoading: true });
-      const skeletonCards = screen.getAllByLabelText('Loading card');
-      expect(skeletonCards).toHaveLength(3);
-    });
-
-    it('hides content when loading', () => {
-      renderComponent({ isLoading: true });
-      expect(screen.queryByText('State Overview')).not.toBeInTheDocument();
-      expect(screen.queryByText('Collection Progress')).not.toBeInTheDocument();
-      expect(screen.queryByText('Export Data')).not.toBeInTheDocument();
-    });
-
-    it('does not render skeleton cards when not loading', () => {
+  describe('Empty State', () => {
+    it('renders zero values when no data exists', () => {
+      mockOverviewReturn = {
+        data: {
+          totalRespondents: 0,
+          todayRegistrations: 0,
+          yesterdayRegistrations: 0,
+          lgasCovered: 0,
+          sourceBreakdown: { enumerator: 0, public: 0, clerk: 0 },
+        },
+        isLoading: false,
+        error: null,
+      };
       renderComponent();
-      const skeletons = screen.queryAllByLabelText('Loading card');
-      expect(skeletons).toHaveLength(0);
-    });
-  });
-
-  describe('AC10: Tab Navigation', () => {
-    it('no interactive elements have negative tabindex (no focus traps)', () => {
-      renderComponent();
-      const focusableElements = document.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      expect(focusableElements.length).toBeGreaterThanOrEqual(1);
-      focusableElements.forEach((el) => {
-        expect(el).not.toHaveAttribute('tabindex', '-1');
-      });
-    });
-
-    it('tab reaches Export Report button and can move past it', async () => {
-      const user = userEvent.setup();
-      renderComponent();
-      await user.tab();
-      expect(screen.getByRole('button', { name: 'Export Report' })).toHaveFocus();
-      await user.tab();
-      expect(screen.getByRole('button', { name: 'Export Report' })).not.toHaveFocus();
-    });
-  });
-
-  describe('AC3: Card content', () => {
-    it('renders expected dashboard card titles', () => {
-      renderComponent();
-      expect(screen.getByText('State Overview')).toBeInTheDocument();
-      expect(screen.getByText('Collection Progress')).toBeInTheDocument();
-      expect(screen.getByText('Export Data')).toBeInTheDocument();
+      expect(screen.getByTestId('total-respondents')).toHaveTextContent('0');
+      expect(screen.getByTestId('today-count')).toHaveTextContent('0');
     });
   });
 });

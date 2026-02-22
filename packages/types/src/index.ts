@@ -16,3 +16,4 @@ export * from './validation/fraud.js';
 export * from './error-codes.js';
 export * from './message.js';
 export * from './validation/message.js';
+export * from './report.js';
