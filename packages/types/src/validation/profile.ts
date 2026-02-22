@@ -44,3 +44,15 @@ export const activationWithSelfieSchema = activationSchema.extend({
 });
 
 export type ActivationWithSelfiePayload = z.infer<typeof activationWithSelfieSchema>;
+
+/**
+ * Back-office activation schema — password only.
+ * Back-office roles (Super Admin, Government Official, Verification Assessor)
+ * use a simplified activation: just set password, skip profile fields.
+ * Bank details can be added later via profile editing (Epic 6).
+ */
+export const backOfficeActivationSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+export type BackOfficeActivationPayload = z.infer<typeof backOfficeActivationSchema>;

@@ -30,12 +30,13 @@ export interface StepRenderProps {
  */
 export function ActivationWizard({
   token,
+  roleName,
   onSuccess,
   onError,
   renderStep,
   className,
 }: ActivationWizardProps) {
-  const wizard = useActivationWizard({ token, onSuccess, onError });
+  const wizard = useActivationWizard({ token, roleName, onSuccess, onError });
 
   const handleStepClick = (step: WizardStep) => {
     wizard.goToStep(step);
@@ -60,21 +61,26 @@ export function ActivationWizard({
         {/* Header */}
         <div className="px-6 py-5 border-b border-neutral-200 bg-neutral-50">
           <h1 className="text-xl font-semibold text-neutral-900">
-            Complete Your Profile
+            {wizard.activeSteps.length === 1 ? 'Set Your Password' : 'Complete Your Profile'}
           </h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Please fill in the required information to activate your account.
+            {wizard.activeSteps.length === 1
+              ? 'Set a password to activate your account.'
+              : 'Please fill in the required information to activate your account.'}
           </p>
         </div>
 
-        {/* Progress bar */}
-        <div className="px-6 py-4 border-b border-neutral-100">
-          <WizardProgressBar
-            currentStep={wizard.currentStep}
-            completedSteps={wizard.completedSteps}
-            onStepClick={handleStepClick}
-          />
-        </div>
+        {/* Progress bar — only shown when more than 1 step */}
+        {wizard.activeSteps.length > 1 && (
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <WizardProgressBar
+              currentStep={wizard.currentStep}
+              completedSteps={wizard.completedSteps}
+              activeSteps={wizard.activeSteps}
+              onStepClick={handleStepClick}
+            />
+          </div>
+        )}
 
         {/* Error alert */}
         {wizard.submitError && (
@@ -144,6 +150,7 @@ export function ActivationWizard({
 interface ActivationWizardUIProps {
   currentStep: WizardStep;
   completedSteps: Set<WizardStep>;
+  activeSteps: WizardStep[];
   formData: ReturnType<typeof useActivationWizard>['formData'];
   updateFormData: ReturnType<typeof useActivationWizard>['updateFormData'];
   currentStepErrors: Record<string, string>;
@@ -164,6 +171,7 @@ interface ActivationWizardUIProps {
 export function ActivationWizardUI({
   currentStep,
   completedSteps,
+  activeSteps,
   formData,
   updateFormData,
   currentStepErrors,
@@ -187,21 +195,26 @@ export function ActivationWizardUI({
         {/* Header */}
         <div className="px-6 py-5 border-b border-neutral-200 bg-neutral-50">
           <h1 className="text-xl font-semibold text-neutral-900">
-            Complete Your Profile
+            {activeSteps.length === 1 ? 'Set Your Password' : 'Complete Your Profile'}
           </h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Please fill in the required information to activate your account.
+            {activeSteps.length === 1
+              ? 'Set a password to activate your account.'
+              : 'Please fill in the required information to activate your account.'}
           </p>
         </div>
 
-        {/* Progress bar */}
-        <div className="px-6 py-4 border-b border-neutral-100">
-          <WizardProgressBar
-            currentStep={currentStep}
-            completedSteps={completedSteps}
-            onStepClick={onStepClick}
-          />
-        </div>
+        {/* Progress bar — only shown when more than 1 step */}
+        {activeSteps.length > 1 && (
+          <div className="px-6 py-4 border-b border-neutral-100">
+            <WizardProgressBar
+              currentStep={currentStep}
+              completedSteps={completedSteps}
+              activeSteps={activeSteps}
+              onStepClick={onStepClick}
+            />
+          </div>
+        )}
 
         {/* Error alert */}
         {submitError && (

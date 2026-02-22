@@ -174,7 +174,7 @@ development_status:
   prep-5-cross-lga-query-performance-validation: done  # MEDIUM: All 13 queries validated at 500K scale, 4 indexes recommended. Code review passed 2026-02-22: 11 findings (1H, 5M, 5L), 9 fixed (H1 query mismatch, M1 doc distribution, M4 SQL injection, L1/L2/L4 code quality), 2 deferred (L: orphan FK informational, L: cleanup reminder).
   prep-6-assessor-workflow-state-machine-design: done  # MEDIUM: Document submission lifecycle: submission -> fraud scoring -> supervisor review -> assessor audit -> final status. Code review passed 2026-02-22: 9 findings (2H, 4M, 3L), all 9 fixed. Processing error state, concurrent review analysis, backward compat, definitive auto_clean decision.
   prep-7-e2e-test-expansion: done  # NICE-TO-HAVE: Playwright tests for fraud threshold UI, messaging inbox, supervisor team dashboard. 14 Playwright tests across 3 spec files. Code review passed 2026-02-22: 8 findings (3H, 4M, 1L), all fixed. A3 CSS selector violation, flaky thread ordering, shared login helper extracted. 1544 web tests pass, 0 regressions.
-  prep-8-role-based-activation-wizard: ready-for-dev  # MEDIUM: Simplify onboarding for back-office roles (Official, Assessor, Super Admin) — password-only activation instead of full 5-step wizard. Field roles (Enumerator, Supervisor, Clerk) keep all 5 steps. Bank data already captured for Epic 6 reuse.
+  prep-8-role-based-activation-wizard: done  # MEDIUM: Role-aware activation wizard. Back-office → 1-step password-only, Field → full 5-step. Code review passed 2026-02-22: 8 findings (1H, 4M, 3L), all 8 fixed. H1 any→typed return, M2 double-lookup elimination, M3 API rename, M4 component tests added. 24 API + 38 wizard tests pass, 0 regressions.
 
 
   # Epic 5: Back-Office Audit & Policy Reporting
@@ -185,7 +185,7 @@ development_status:
   5-4-pii-rich-csv-pdf-exports: ready-for-dev
   5-5-respondent-data-registry-table: ready-for-dev  # NEW from Epic 4 retro: Server-paginated, filterable table of all respondent records for authorized roles
   5-6a-supervisor-team-productivity-table: ready-for-dev  # Split from 5.6: Supervisor team table + API foundation, target tracking (25/day configurable), daily snapshots, CSV/PDF export. Builds on existing getTeamMetrics pattern.
-  5-6b-super-admin-cross-lga-analytics: backlog  # Split from 5.6: Super Admin individual staff tab + LGA comparison tab + supervisorless LGA monitoring + Government Official aggregate-only view (no names, no export). Depends on 5.6a.
+  5-6b-super-admin-cross-lga-analytics: ready-for-dev  # Split from 5.6: Super Admin individual staff tab + LGA comparison tab + supervisorless LGA monitoring + Government Official aggregate-only view (no names, no export). Depends on 5.6a.
   epic-5-retrospective: optional
 
   # Epic 6: System Integrity, Accountability & Remuneration

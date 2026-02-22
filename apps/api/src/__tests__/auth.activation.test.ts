@@ -7,6 +7,7 @@ import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { generateInvitationToken } from '@oslsr/utils';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
+import { BACK_OFFICE_ROLES, FIELD_ROLES, isBackOfficeRole, UserRole } from '@oslsr/types';
 
 /**
  * Generate a valid test image as base64
@@ -47,17 +48,24 @@ describe('Auth Activation Integration', () => {
   let testUserId: string;
   let testUserEmail: string;
   let validNin: string;
+  let fieldRoleId: string;
 
   beforeAll(async () => {
-      // Ensure roles exist
+      // Ensure roles exist (lowercase snake_case matches UserRole enum)
       await db.insert(roles).values([
-          { name: 'SUPER_ADMIN', description: 'Super Administrator' },
-          { name: 'ENUMERATOR', description: 'Field Enumerator' }
+          { name: 'super_admin', description: 'Super Administrator' },
+          { name: 'enumerator', description: 'Field Enumerator' },
+          { name: 'supervisor', description: 'Field Supervisor' },
+          { name: 'data_entry_clerk', description: 'Data Entry Clerk' },
+          { name: 'verification_assessor', description: 'Verification Assessor' },
+          { name: 'government_official', description: 'Government Official' },
       ]).onConflictDoNothing();
 
-      // Find a role
-      const [role] = await db.select().from(roles).limit(1);
-      
+      // Use enumerator (field role) for tests that validate full profile fields
+      const allRoles = await db.select().from(roles);
+      const enumeratorRole = allRoles.find(r => r.name === 'enumerator')!;
+      fieldRoleId = enumeratorRole.id;
+
       testUserToken = generateInvitationToken();
       validNin = generateValidNin();
       testUserEmail = `activate-${Date.now()}@example.com`;
@@ -65,12 +73,12 @@ describe('Auth Activation Integration', () => {
       const [user] = await db.insert(users).values({
           email: testUserEmail,
           fullName: 'Activate Test',
-          roleId: role.id,
+          roleId: fieldRoleId,
           status: 'invited',
           invitationToken: testUserToken,
           invitedAt: new Date(),
       }).returning();
-      
+
       testUserId = user.id;
   });
 
@@ -148,7 +156,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
           email,
           fullName: 'NIN Test',
-          roleId: (await db.select().from(roles).limit(1))[0].id,
+          roleId: fieldRoleId, // Must be field role to trigger NIN validation
           status: 'invited',
           invitationToken: newToken,
       });
@@ -179,7 +187,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
           email,
           fullName: 'No Selfie Test',
-          roleId: (await db.select().from(roles).limit(1))[0].id,
+          roleId: fieldRoleId, // Field role — selfie is optional, profile required
           status: 'invited',
           invitationToken: newToken,
           invitedAt: new Date(),
@@ -212,7 +220,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
           email,
           fullName: 'Bad Selfie Test',
-          roleId: (await db.select().from(roles).limit(1))[0].id,
+          roleId: fieldRoleId, // Field role — selfie validation applies
           status: 'invited',
           invitationToken: newToken,
           invitedAt: new Date(),
@@ -264,11 +272,11 @@ describe('Auth Activation Integration', () => {
       const email = `selfie-s3-${Date.now()}@example.com`;
       const nin = generateValidNin();
 
-      // Create invited user
+      // Create invited user with field role (selfie processing applies)
       const [user] = await db.insert(users).values({
         email,
         fullName: 'Selfie S3 Test',
-        roleId: (await db.select().from(roles).limit(1))[0].id,
+        roleId: fieldRoleId,
         status: 'invited',
         invitationToken: newToken,
         invitedAt: new Date(),
@@ -324,7 +332,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
         email,
         fullName: 'Validate Valid Test',
-        roleId: (await db.select().from(roles).limit(1))[0].id,
+        roleId: fieldRoleId,
         status: 'invited',
         invitationToken: newToken,
         invitedAt: new Date(),
@@ -357,7 +365,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
         email,
         fullName: 'Validate Expired Test',
-        roleId: (await db.select().from(roles).limit(1))[0].id,
+        roleId: fieldRoleId,
         status: 'invited',
         invitationToken: expiredToken,
         invitedAt: expiredDate,
@@ -377,7 +385,7 @@ describe('Auth Activation Integration', () => {
       await db.insert(users).values({
         email,
         fullName: 'Validate Activated Test',
-        roleId: (await db.select().from(roles).limit(1))[0].id,
+        roleId: fieldRoleId,
         status: 'active', // Already activated
         invitationToken: usedToken,
         invitedAt: new Date(),
@@ -387,6 +395,272 @@ describe('Auth Activation Integration', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data.valid).toBe(false);
+    });
+
+    it('should return roleName for valid token', async () => {
+      const newToken = generateInvitationToken();
+      const email = `validate-role-${Date.now()}@example.com`;
+
+      const allRoles = await db.select().from(roles);
+      const superAdminRole = allRoles.find(r => r.name === 'super_admin');
+      const roleId = superAdminRole ? superAdminRole.id : allRoles[0].id;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Validate Role Test',
+        roleId,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request.get(`/api/v1/auth/activate/${newToken}/validate`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.valid).toBe(true);
+      expect(res.body.data.roleName).toBeDefined();
+      expect(typeof res.body.data.roleName).toBe('string');
+    });
+  });
+
+  describe('Role-based activation (prep-8)', () => {
+    it('should activate back-office role with password only', async () => {
+      const allRoles = await db.select().from(roles);
+      const superAdminRole = allRoles.find(r => r.name === 'super_admin')!;
+
+      const newToken = generateInvitationToken();
+      const email = `backoffice-activate-${Date.now()}@example.com`;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Back Office User',
+        roleId: superAdminRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      // Back-office activation: password only
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({ password: 'password123' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+
+      // Verify DB: no profile fields set
+      const updatedUser = await db.query.users.findFirst({
+        where: eq(users.email, email),
+      });
+      expect(updatedUser?.status).toBe('active');
+      expect(updatedUser?.invitationToken).toBeNull();
+      expect(updatedUser?.nin).toBeNull();
+      expect(updatedUser?.bankName).toBeNull();
+    });
+
+    it('should activate assessor role with password only', async () => {
+      const allRoles = await db.select().from(roles);
+      const assessorRole = allRoles.find(r => r.name === 'verification_assessor')!;
+
+      const newToken = generateInvitationToken();
+      const email = `assessor-activate-${Date.now()}@example.com`;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Assessor User',
+        roleId: assessorRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({ password: 'securepassword' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+    });
+
+    it('should activate official role with password only', async () => {
+      const allRoles = await db.select().from(roles);
+      const officialRole = allRoles.find(r => r.name === 'government_official')!;
+
+      const newToken = generateInvitationToken();
+      const email = `official-activate-${Date.now()}@example.com`;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Official User',
+        roleId: officialRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({ password: 'officialpass123' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+    });
+
+    it('should activate supervisor role with all required fields (field role)', async () => {
+      const allRoles = await db.select().from(roles);
+      const supervisorRole = allRoles.find(r => r.name === 'supervisor')!;
+
+      const newToken = generateInvitationToken();
+      const email = `supervisor-activate-${Date.now()}@example.com`;
+      const nin = generateValidNin();
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Supervisor User',
+        roleId: supervisorRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+          password: 'password123',
+          nin,
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test St, Ibadan',
+          bankName: 'Test Bank',
+          accountNumber: '0123456789',
+          accountName: 'Supervisor User',
+          nextOfKinName: 'NOK Test',
+          nextOfKinPhone: '08012345678',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+    });
+
+    it('should activate data_entry_clerk role with all required fields (field role)', async () => {
+      const allRoles = await db.select().from(roles);
+      const clerkRole = allRoles.find(r => r.name === 'data_entry_clerk')!;
+
+      const newToken = generateInvitationToken();
+      const email = `clerk-activate-${Date.now()}@example.com`;
+      const nin = generateValidNin();
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Clerk User',
+        roleId: clerkRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+          password: 'password123',
+          nin,
+          dateOfBirth: '1992-05-15',
+          homeAddress: '456 Clerk Ave, Lagos',
+          bankName: 'Access Bank',
+          accountNumber: '9876543210',
+          accountName: 'Clerk User',
+          nextOfKinName: 'Clerk NOK',
+          nextOfKinPhone: '08098765432',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+    });
+
+    it('should reject field role activation without required profile fields', async () => {
+      const allRoles = await db.select().from(roles);
+      const enumeratorRole = allRoles.find(r => r.name === 'enumerator')!;
+
+      const newToken = generateInvitationToken();
+      const email = `field-reject-${Date.now()}@example.com`;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Field User',
+        roleId: enumeratorRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      // Field role with only password — should fail validation
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({ password: 'password123' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should still activate field role with all required fields', async () => {
+      const allRoles = await db.select().from(roles);
+      const enumeratorRole = allRoles.find(r => r.name === 'enumerator')!;
+
+      const newToken = generateInvitationToken();
+      const email = `field-full-${Date.now()}@example.com`;
+      const nin = generateValidNin();
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Field Full User',
+        roleId: enumeratorRole.id,
+        status: 'invited',
+        invitationToken: newToken,
+        invitedAt: new Date(),
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+          password: 'password123',
+          nin,
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test St, Ibadan',
+          bankName: 'Test Bank',
+          accountNumber: '0123456789',
+          accountName: 'Field Full User',
+          nextOfKinName: 'NOK Test',
+          nextOfKinPhone: '08012345678',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+    });
+  });
+
+  describe('Role classification constants', () => {
+    it('should classify back-office roles correctly', () => {
+      expect(isBackOfficeRole(UserRole.SUPER_ADMIN)).toBe(true);
+      expect(isBackOfficeRole(UserRole.GOVERNMENT_OFFICIAL)).toBe(true);
+      expect(isBackOfficeRole(UserRole.VERIFICATION_ASSESSOR)).toBe(true);
+    });
+
+    it('should classify field roles correctly', () => {
+      expect(isBackOfficeRole(UserRole.ENUMERATOR)).toBe(false);
+      expect(isBackOfficeRole(UserRole.SUPERVISOR)).toBe(false);
+      expect(isBackOfficeRole(UserRole.DATA_ENTRY_CLERK)).toBe(false);
+    });
+
+    it('should classify public user as non-back-office', () => {
+      expect(isBackOfficeRole(UserRole.PUBLIC_USER)).toBe(false);
+    });
+
+    it('should have DATA_ENTRY_CLERK in FIELD_ROLES', () => {
+      expect(FIELD_ROLES).toContain(UserRole.DATA_ENTRY_CLERK);
+    });
+
+    it('should have 3 back-office and 3 field roles', () => {
+      expect(BACK_OFFICE_ROLES).toHaveLength(3);
+      expect(FIELD_ROLES).toHaveLength(3);
     });
   });
 });

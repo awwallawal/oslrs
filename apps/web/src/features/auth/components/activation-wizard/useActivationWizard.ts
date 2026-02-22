@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { z } from 'zod';
-import { activationWithSelfieSchema, ninSchema } from '@oslsr/types';
-import { activateWithSelfie, AuthApiError } from '../../api/auth.api';
+import { activationWithSelfieSchema, backOfficeActivationSchema, ninSchema, isBackOfficeRole } from '@oslsr/types';
+import { activateAccount, AuthApiError } from '../../api/auth.api';
 
 /**
  * Wizard step definitions
@@ -14,9 +14,35 @@ export const WIZARD_STEPS = {
   SELFIE: 5,
 } as const;
 
-export const TOTAL_STEPS = 5;
+export const FIELD_ROLE_TOTAL_STEPS = 5;
 
 export type WizardStep = (typeof WIZARD_STEPS)[keyof typeof WIZARD_STEPS];
+
+/**
+ * All steps in order
+ */
+const ALL_STEPS: WizardStep[] = [
+  WIZARD_STEPS.PASSWORD,
+  WIZARD_STEPS.PERSONAL_INFO,
+  WIZARD_STEPS.BANK_DETAILS,
+  WIZARD_STEPS.NEXT_OF_KIN,
+  WIZARD_STEPS.SELFIE,
+];
+
+/**
+ * Back-office roles only see the password step
+ */
+const BACK_OFFICE_STEPS: WizardStep[] = [WIZARD_STEPS.PASSWORD];
+
+/**
+ * Get the filtered steps for a given role
+ */
+export function getStepsForRole(roleName?: string): WizardStep[] {
+  if (roleName && isBackOfficeRole(roleName)) {
+    return BACK_OFFICE_STEPS;
+  }
+  return ALL_STEPS;
+}
 
 /**
  * Step labels for UI display
@@ -123,10 +149,12 @@ export interface StepValidationResult {
  * State returned by the useActivationWizard hook
  */
 export interface ActivationWizardState {
-  // Current step (1-5)
+  // Current step
   currentStep: WizardStep;
-  // Total number of steps
+  // Total number of active steps
   totalSteps: number;
+  // Steps visible for this role
+  activeSteps: WizardStep[];
   // Accumulated form data across all steps
   formData: WizardFormData;
   // Whether we're on the first step
@@ -176,6 +204,7 @@ export type UseActivationWizardReturn = ActivationWizardState & ActivationWizard
  */
 export interface UseActivationWizardOptions {
   token: string;
+  roleName?: string;
   onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
 }
@@ -184,7 +213,11 @@ export interface UseActivationWizardOptions {
  * Hook for managing multi-step activation wizard state
  */
 export function useActivationWizard(options: UseActivationWizardOptions): UseActivationWizardReturn {
-  const { token, onSuccess, onError } = options;
+  const { token, roleName, onSuccess, onError } = options;
+
+  // Compute filtered steps based on role
+  const activeSteps = useMemo(() => getStepsForRole(roleName), [roleName]);
+  const isBackOffice = activeSteps.length === 1;
 
   // State
   const [currentStep, setCurrentStep] = useState<WizardStep>(WIZARD_STEPS.PASSWORD);
@@ -194,9 +227,11 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Derived state
-  const isFirstStep = currentStep === WIZARD_STEPS.PASSWORD;
-  const isLastStep = currentStep === WIZARD_STEPS.SELFIE;
-  const totalSteps = TOTAL_STEPS;
+  const firstStep = activeSteps[0];
+  const lastStep = activeSteps[activeSteps.length - 1];
+  const isFirstStep = currentStep === firstStep;
+  const isLastStep = currentStep === lastStep;
+  const totalSteps = activeSteps.length;
 
   /**
    * Validate a specific step
@@ -243,35 +278,39 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
     // Mark current step as completed
     setCompletedSteps((prev) => new Set(prev).add(currentStep));
 
-    if (currentStep < WIZARD_STEPS.SELFIE) {
-      setCurrentStep((prev) => (prev + 1) as WizardStep);
+    const currentIndex = activeSteps.indexOf(currentStep);
+    if (currentIndex < activeSteps.length - 1) {
+      setCurrentStep(activeSteps[currentIndex + 1]);
     }
 
     return true;
-  }, [currentStep, validateCurrentStep]);
+  }, [currentStep, validateCurrentStep, activeSteps]);
 
   /**
    * Navigate to previous step
    */
   const prevStep = useCallback((): void => {
-    if (currentStep > WIZARD_STEPS.PASSWORD) {
-      setCurrentStep((prev) => (prev - 1) as WizardStep);
+    const currentIndex = activeSteps.indexOf(currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(activeSteps[currentIndex - 1]);
     }
-  }, [currentStep]);
+  }, [currentStep, activeSteps]);
 
   /**
    * Jump to a specific step
    */
   const goToStep = useCallback((step: WizardStep): void => {
-    // Can only go to completed steps or the next incomplete step
+    // Can only go to steps in the active set
+    if (!activeSteps.includes(step)) return;
+
     const canNavigate = completedSteps.has(step) ||
       step === currentStep ||
-      (step === currentStep + 1 && isCurrentStepValid);
+      (activeSteps.indexOf(step) === activeSteps.indexOf(currentStep) + 1 && isCurrentStepValid);
 
-    if (canNavigate && step >= WIZARD_STEPS.PASSWORD && step <= WIZARD_STEPS.SELFIE) {
+    if (canNavigate) {
       setCurrentStep(step);
     }
-  }, [currentStep, completedSteps, isCurrentStepValid]);
+  }, [currentStep, completedSteps, isCurrentStepValid, activeSteps]);
 
   /**
    * Update form data
@@ -288,20 +327,23 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
    * Submit all data to the API
    */
   const submitAll = useCallback(async (): Promise<boolean> => {
-    // Validate all steps first
-    for (let step: number = WIZARD_STEPS.PASSWORD; step <= WIZARD_STEPS.SELFIE; step++) {
-      const validation = validateStep(step as WizardStep);
+    // Validate only active steps
+    for (const step of activeSteps) {
+      const validation = validateStep(step);
       if (!validation.isValid && step !== WIZARD_STEPS.SELFIE) {
-        // Selfie is optional, other steps are required
-        setCurrentStep(step as WizardStep);
+        // Selfie is optional, other active steps are required
+        setCurrentStep(step);
         return false;
       }
     }
 
-    // Validate the full schema (confirmPassword excluded from API submission)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...submissionData } = formData;
-    const fullValidation = activationWithSelfieSchema.safeParse(submissionData);
+
+    // Use appropriate schema based on role
+    const schema = isBackOffice ? backOfficeActivationSchema : activationWithSelfieSchema;
+    const dataToValidate = isBackOffice ? { password: submissionData.password } : submissionData;
+    const fullValidation = schema.safeParse(dataToValidate);
 
     if (!fullValidation.success) {
       setSubmitError('Please review your information and try again.');
@@ -312,7 +354,9 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
     setSubmitError(null);
 
     try {
-      const result = await activateWithSelfie(token, submissionData);
+      // For back-office, only send password; for field roles, send full data
+      const payload = isBackOffice ? { password: submissionData.password } : submissionData;
+      const result = await activateAccount(token, payload as typeof submissionData);
 
       onSuccess?.(result);
       return true;
@@ -336,7 +380,7 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, token, onSuccess, onError, validateStep]);
+  }, [formData, token, onSuccess, onError, validateStep, activeSteps, isBackOffice]);
 
   /**
    * Reset the wizard
@@ -360,6 +404,7 @@ export function useActivationWizard(options: UseActivationWizardOptions): UseAct
     // State
     currentStep,
     totalSteps,
+    activeSteps,
     formData,
     isFirstStep,
     isLastStep,

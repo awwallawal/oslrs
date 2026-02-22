@@ -7,6 +7,7 @@ import { EmailService } from '../services/email.service.js';
 import { setReAuthValid } from '../middleware/sensitive-action.js';
 import {
   activationWithSelfieSchema,
+  backOfficeActivationSchema,
   loginRequestSchema,
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
@@ -15,6 +16,7 @@ import {
   resendVerificationRequestSchema,
   verifyOtpRequestSchema,
   googleAuthRequestSchema,
+  isBackOfficeRole,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -55,14 +57,28 @@ export class AuthController {
 
   /**
    * POST /api/v1/auth/activate/:token
-   * Activates staff account with profile data and optional selfie
+   * Activates staff account with profile data and optional selfie.
+   * Back-office roles (Super Admin, Official, Assessor) only require password.
+   * Field roles (Enumerator, Supervisor, Clerk) require all 5 steps.
    */
   static async activate(req: Request, res: Response, next: NextFunction) {
     try {
       const { token } = req.params;
 
-      // Use extended schema that accepts optional selfieBase64
-      const validation = activationWithSelfieSchema.safeParse(req.body);
+      // Determine user's role to choose the correct validation schema
+      const tokenInfo = await AuthService.validateActivationToken(token);
+      if (!tokenInfo.valid) {
+        if (tokenInfo.expired) {
+          throw new AppError('AUTH_TOKEN_EXPIRED', 'Invitation token has expired.', 401);
+        }
+        throw new AppError('AUTH_INVALID_TOKEN', 'The invitation token is invalid or has already been used.', 401);
+      }
+
+      // Choose validation schema based on role
+      const backOffice = isBackOfficeRole(tokenInfo.roleName || '');
+      const schema = backOffice ? backOfficeActivationSchema : activationWithSelfieSchema;
+
+      const validation = schema.safeParse(req.body);
       if (!validation.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid profile data', 400, { errors: validation.error.errors });
       }
@@ -73,6 +89,7 @@ export class AuthController {
       const user = await AuthService.activateAccount(
         token,
         validation.data,
+        tokenInfo.roleName!,
         ipAddress,
         userAgent
       );

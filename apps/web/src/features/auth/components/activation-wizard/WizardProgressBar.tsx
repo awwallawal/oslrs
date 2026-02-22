@@ -1,10 +1,11 @@
 import { Check } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
-import { STEP_LABELS, TOTAL_STEPS, type WizardStep } from './useActivationWizard';
+import { STEP_LABELS, type WizardStep } from './useActivationWizard';
 
 interface WizardProgressBarProps {
   currentStep: WizardStep;
   completedSteps: Set<WizardStep>;
+  activeSteps: WizardStep[];
   onStepClick?: (step: WizardStep) => void;
   className?: string;
 }
@@ -12,14 +13,17 @@ interface WizardProgressBarProps {
 /**
  * Visual progress indicator for the activation wizard
  * Shows completed steps with checkmarks, current step highlighted, and upcoming steps grayed
+ * Renders only the steps relevant to the user's role
  */
 export function WizardProgressBar({
   currentStep,
   completedSteps,
+  activeSteps,
   onStepClick,
   className,
 }: WizardProgressBarProps) {
-  const steps = Array.from({ length: TOTAL_STEPS }, (_, i) => (i + 1) as WizardStep);
+  const steps = activeSteps;
+  const totalSteps = steps.length;
 
   return (
     <div className={cn('w-full', className)}>
@@ -89,7 +93,7 @@ export function WizardProgressBar({
       <div className="sm:hidden">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-neutral-700">
-            Step {currentStep} of {TOTAL_STEPS}
+            Step {steps.indexOf(currentStep) + 1} of {totalSteps}
           </span>
           <span className="text-sm font-medium text-primary-600">
             {STEP_LABELS[currentStep]}
@@ -99,11 +103,11 @@ export function WizardProgressBar({
         <div className="h-2 bg-neutral-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary-600 transition-all duration-300"
-            style={{ width: `${((currentStep - 1) / (TOTAL_STEPS - 1)) * 100}%` }}
+            style={{ width: `${totalSteps === 1 ? 100 : (steps.indexOf(currentStep) / (totalSteps - 1)) * 100}%` }}
             role="progressbar"
-            aria-valuenow={currentStep}
+            aria-valuenow={steps.indexOf(currentStep) + 1}
             aria-valuemin={1}
-            aria-valuemax={TOTAL_STEPS}
+            aria-valuemax={totalSteps}
           />
         </div>
         {/* Step dots */}

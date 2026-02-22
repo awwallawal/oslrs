@@ -2,8 +2,8 @@ import { db } from '../db/index.js';
 import { users, auditLogs } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
-import type { ActivationWithSelfiePayload, AuthUser, LoginResponse } from '@oslsr/types';
-import { UserRole } from '@oslsr/types';
+import type { ActivationWithSelfiePayload, BackOfficeActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
+import { UserRole, isBackOfficeRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
@@ -27,9 +27,13 @@ export class AuthService {
     email?: string;
     fullName?: string;
     expired?: boolean;
+    roleName?: string;
   }> {
     const user = await db.query.users.findFirst({
       where: eq(users.invitationToken, token),
+      with: {
+        role: true,
+      },
     });
 
     if (!user) {
@@ -54,6 +58,7 @@ export class AuthService {
       valid: true,
       email: user.email,
       fullName: user.fullName,
+      roleName: user.role.name,
     };
   }
 
@@ -66,17 +71,14 @@ export class AuthService {
    */
   static async activateAccount(
     token: string,
-    data: ActivationWithSelfiePayload,
+    data: ActivationWithSelfiePayload | BackOfficeActivationPayload,
+    roleName: string,
     ipAddress?: string,
     userAgent?: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<any> {
-    // 1. Find user by token with role included (AC1: need role to check if field role)
+  ): Promise<{ id: string; email: string; fullName: string; status: string }> {
+    // 1. Find user by token (role already known from prior validateActivationToken call)
     const user = await db.query.users.findFirst({
       where: eq(users.invitationToken, token),
-      with: {
-        role: true,
-      },
     });
 
     if (!user) {
@@ -96,17 +98,17 @@ export class AuthService {
       }
     }
 
+    // Determine if this is a back-office activation (password only)
+    const backOffice = isBackOfficeRole(roleName);
+
     // 2. Hash password
     const passwordHash = await hashPassword(data.password);
 
-    // 3. Process selfie if provided
+    // 3. Process selfie if provided (field roles only)
     let selfieData: { originalUrl: string; idCardUrl: string; livenessScore: number } | null = null;
-    if (data.selfieBase64) {
+    if (!backOffice && 'selfieBase64' in data && data.selfieBase64) {
       try {
-        // Decode base64 to buffer
         const imageBuffer = this.decodeBase64Image(data.selfieBase64);
-
-        // Process selfie using PhotoProcessingService
         const photoService = new PhotoProcessingService();
         selfieData = await photoService.processLiveSelfie(imageBuffer);
 
@@ -116,17 +118,14 @@ export class AuthService {
           livenessScore: selfieData.livenessScore,
         });
       } catch (err: unknown) {
-        // Log error but don't fail activation - selfie can be uploaded later
         logger.warn({
           event: 'activation.selfie_failed',
           userId: user.id,
           error: err instanceof Error ? err.message : 'Unknown error',
         });
-        // Re-throw validation errors so user knows to fix the image
         if (err instanceof AppError && err.code === 'VALIDATION_ERROR') {
           throw err;
         }
-        // For other errors (S3, etc.), allow activation to proceed without selfie
         selfieData = null;
       }
     }
@@ -135,36 +134,42 @@ export class AuthService {
     try {
       // 4. Update user and log audit in a transaction
       updatedUser = await db.transaction(async (tx) => {
-        // Double check NIN uniqueness within transaction
-        const existingNin = await tx.query.users.findFirst({
-            where: and(eq(users.nin, data.nin))
-        });
-
-        if (existingNin && existingNin.id !== user.id) {
-            throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered to another account.', 409);
-        }
-
-        // Build update object with optional selfie fields
+        // Build update object — back-office gets password only, field roles get full profile
         const updateData: Record<string, unknown> = {
           passwordHash,
-          nin: data.nin,
-          dateOfBirth: data.dateOfBirth,
-          homeAddress: data.homeAddress,
-          bankName: data.bankName,
-          accountNumber: data.accountNumber,
-          accountName: data.accountName,
-          nextOfKinName: data.nextOfKinName,
-          nextOfKinPhone: data.nextOfKinPhone,
           status: 'active',
           invitationToken: null, // Invalidate token
           updatedAt: new Date(),
         };
 
-        // Add selfie data if processed successfully
-        if (selfieData) {
-          updateData.liveSelfieOriginalUrl = selfieData.originalUrl;
-          updateData.liveSelfieIdCardUrl = selfieData.idCardUrl;
-          updateData.livenessScore = selfieData.livenessScore.toString();
+        if (!backOffice) {
+          // Field role: include all profile fields
+          const fullData = data as ActivationWithSelfiePayload;
+
+          // Double check NIN uniqueness within transaction
+          const existingNin = await tx.query.users.findFirst({
+              where: and(eq(users.nin, fullData.nin))
+          });
+
+          if (existingNin && existingNin.id !== user.id) {
+              throw new AppError('PROFILE_NIN_DUPLICATE', 'This NIN is already registered to another account.', 409);
+          }
+
+          updateData.nin = fullData.nin;
+          updateData.dateOfBirth = fullData.dateOfBirth;
+          updateData.homeAddress = fullData.homeAddress;
+          updateData.bankName = fullData.bankName;
+          updateData.accountNumber = fullData.accountNumber;
+          updateData.accountName = fullData.accountName;
+          updateData.nextOfKinName = fullData.nextOfKinName;
+          updateData.nextOfKinPhone = fullData.nextOfKinPhone;
+
+          // Add selfie data if processed successfully
+          if (selfieData) {
+            updateData.liveSelfieOriginalUrl = selfieData.originalUrl;
+            updateData.liveSelfieIdCardUrl = selfieData.idCardUrl;
+            updateData.livenessScore = selfieData.livenessScore.toString();
+          }
         }
 
         const [result] = await tx.update(users)
@@ -180,6 +185,7 @@ export class AuthService {
           details: {
             activatedAt: new Date().toISOString(),
             selfieUploaded: !!selfieData,
+            backOfficeActivation: backOffice,
           },
           ipAddress: ipAddress || 'unknown',
           userAgent: userAgent || 'unknown'
@@ -199,11 +205,17 @@ export class AuthService {
         if (dbError.constraint_name === 'users_email_unique') {
             throw new AppError('EMAIL_EXISTS', 'Email already exists.', 409);
         }
-        // Fallback for other unique constraints
         throw new AppError('CONFLICT', 'A conflict occurred with existing data.', 409);
       }
       throw err instanceof Error ? err : new Error(String(err));
     }
+
+    logger.info({
+      event: 'activation.complete',
+      userId: user.id,
+      role: roleName,
+      backOfficeActivation: backOffice,
+    });
 
     return updatedUser;
   }

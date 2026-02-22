@@ -18,6 +18,7 @@ type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'error' | 'activa
 interface TokenInfo {
   fullName?: string;
   email?: string;
+  roleName?: string;
 }
 
 /**
@@ -70,6 +71,7 @@ export default function ActivationPage() {
           setTokenInfo({
             fullName: result.fullName,
             email: result.email,
+            roleName: result.roleName,
           });
           setPageState('valid');
         } else if (result.expired) {
@@ -266,6 +268,7 @@ export default function ActivationPage() {
 
       <ActivationWizard
         token={token!}
+        roleName={tokenInfo?.roleName}
         onSuccess={handleSuccess}
         onError={handleError}
         renderStep={renderStep}

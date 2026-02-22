@@ -9,7 +9,7 @@ export {
   useActivationWizard,
   WIZARD_STEPS,
   STEP_LABELS,
-  TOTAL_STEPS,
+  FIELD_ROLE_TOTAL_STEPS,
   type WizardStep,
   type WizardFormData,
   type StepValidationResult,

@@ -3,7 +3,8 @@ import { renderHook, act, cleanup } from '@testing-library/react';
 import {
   useActivationWizard,
   WIZARD_STEPS,
-  TOTAL_STEPS,
+  FIELD_ROLE_TOTAL_STEPS,
+  getStepsForRole,
   type WizardFormData,
 } from '../useActivationWizard';
 
@@ -32,7 +33,7 @@ describe('useActivationWizard', () => {
       const { result } = renderHook(() => useActivationWizard(defaultOptions));
 
       expect(result.current.currentStep).toBe(WIZARD_STEPS.PASSWORD);
-      expect(result.current.totalSteps).toBe(TOTAL_STEPS);
+      expect(result.current.totalSteps).toBe(FIELD_ROLE_TOTAL_STEPS);
       expect(result.current.isFirstStep).toBe(true);
       expect(result.current.isLastStep).toBe(false);
       expect(result.current.isSubmitting).toBe(false);
@@ -478,6 +479,279 @@ describe('useActivationWizard', () => {
       expect(result.current.isFirstStep).toBe(false);
       expect(result.current.isLastStep).toBe(true);
       expect(result.current.currentStep).toBe(WIZARD_STEPS.SELFIE);
+    });
+  });
+
+  describe('getStepsForRole', () => {
+    it('should return all steps for field roles', () => {
+      expect(getStepsForRole('enumerator')).toHaveLength(5);
+      expect(getStepsForRole('supervisor')).toHaveLength(5);
+      expect(getStepsForRole('data_entry_clerk')).toHaveLength(5);
+    });
+
+    it('should return password-only step for back-office roles', () => {
+      const superAdminSteps = getStepsForRole('super_admin');
+      expect(superAdminSteps).toHaveLength(1);
+      expect(superAdminSteps[0]).toBe(WIZARD_STEPS.PASSWORD);
+
+      const officialSteps = getStepsForRole('government_official');
+      expect(officialSteps).toHaveLength(1);
+      expect(officialSteps[0]).toBe(WIZARD_STEPS.PASSWORD);
+
+      const assessorSteps = getStepsForRole('verification_assessor');
+      expect(assessorSteps).toHaveLength(1);
+      expect(assessorSteps[0]).toBe(WIZARD_STEPS.PASSWORD);
+    });
+
+    it('should return all steps when roleName is undefined', () => {
+      expect(getStepsForRole(undefined)).toHaveLength(5);
+      expect(getStepsForRole()).toHaveLength(5);
+    });
+  });
+
+  describe('Role-Based Wizard (Back-Office)', () => {
+    const backOfficeOptions = {
+      token: 'test-token-123',
+      roleName: 'super_admin',
+      onSuccess: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    it('should initialize with 1 step for back-office roles', () => {
+      const { result } = renderHook(() => useActivationWizard(backOfficeOptions));
+
+      expect(result.current.totalSteps).toBe(1);
+      expect(result.current.activeSteps).toHaveLength(1);
+      expect(result.current.activeSteps[0]).toBe(WIZARD_STEPS.PASSWORD);
+      expect(result.current.isFirstStep).toBe(true);
+      expect(result.current.isLastStep).toBe(true);
+    });
+
+    it('should have isFirstStep and isLastStep both true on password step', () => {
+      const { result } = renderHook(() => useActivationWizard(backOfficeOptions));
+
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.PASSWORD);
+      expect(result.current.isFirstStep).toBe(true);
+      expect(result.current.isLastStep).toBe(true);
+    });
+
+    it('should not navigate past the single step', () => {
+      const { result } = renderHook(() => useActivationWizard(backOfficeOptions));
+
+      act(() => {
+        result.current.updateFormData({
+          password: 'TestPass123!',
+          confirmPassword: 'TestPass123!',
+        });
+      });
+
+      act(() => {
+        result.current.nextStep();
+      });
+
+      // Should still be on password step (no next step to go to)
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.PASSWORD);
+    });
+
+    it('should submit with password only for back-office roles', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { id: '123', status: 'active' } }),
+      });
+
+      const { result } = renderHook(() => useActivationWizard(backOfficeOptions));
+
+      act(() => {
+        result.current.updateFormData({
+          password: 'TestPass123!',
+          confirmPassword: 'TestPass123!',
+        });
+      });
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submitAll();
+      });
+
+      expect(success).toBe(true);
+      expect(backOfficeOptions.onSuccess).toHaveBeenCalledWith({ id: '123', status: 'active' });
+
+      // Verify the API was called with password only (no profile fields)
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body).toHaveProperty('password', 'TestPass123!');
+      expect(body).not.toHaveProperty('nin');
+      expect(body).not.toHaveProperty('bankName');
+      expect(body).not.toHaveProperty('nextOfKinName');
+    });
+
+    it('should handle API errors on back-office submit', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          code: 'AUTH_ALREADY_ACTIVATED',
+          message: 'Already activated',
+        }),
+      });
+
+      const opts = { ...backOfficeOptions, onSuccess: vi.fn(), onError: vi.fn() };
+      const { result } = renderHook(() => useActivationWizard(opts));
+
+      act(() => {
+        result.current.updateFormData({
+          password: 'TestPass123!',
+          confirmPassword: 'TestPass123!',
+        });
+      });
+
+      let success = true;
+      await act(async () => {
+        success = await result.current.submitAll();
+      });
+
+      expect(success).toBe(false);
+      expect(result.current.submitError).toBe('This account has already been activated.');
+      expect(opts.onError).toHaveBeenCalled();
+    });
+  });
+
+  describe('Role-Based Wizard (Field Role)', () => {
+    const fieldOptions = {
+      token: 'test-token-123',
+      roleName: 'enumerator',
+      onSuccess: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    it('should initialize with 5 steps for field roles', () => {
+      const { result } = renderHook(() => useActivationWizard(fieldOptions));
+
+      expect(result.current.totalSteps).toBe(5);
+      expect(result.current.activeSteps).toHaveLength(5);
+      expect(result.current.activeSteps).toEqual([
+        WIZARD_STEPS.PASSWORD,
+        WIZARD_STEPS.PERSONAL_INFO,
+        WIZARD_STEPS.BANK_DETAILS,
+        WIZARD_STEPS.NEXT_OF_KIN,
+        WIZARD_STEPS.SELFIE,
+      ]);
+    });
+
+    it('should navigate through all 5 steps for field roles', () => {
+      const { result } = renderHook(() => useActivationWizard(fieldOptions));
+
+      // Step 1: Password
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.PASSWORD);
+      expect(result.current.isFirstStep).toBe(true);
+      expect(result.current.isLastStep).toBe(false);
+
+      act(() => {
+        result.current.updateFormData({
+          password: 'TestPass123!',
+          confirmPassword: 'TestPass123!',
+        });
+      });
+      act(() => {
+        result.current.nextStep();
+      });
+
+      // Step 2: Personal Info
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.PERSONAL_INFO);
+      expect(result.current.isFirstStep).toBe(false);
+      expect(result.current.isLastStep).toBe(false);
+
+      act(() => {
+        result.current.updateFormData({
+          nin: '12345678919',
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test Street, Lagos',
+        });
+      });
+      act(() => {
+        result.current.nextStep();
+      });
+
+      // Step 3: Bank Details
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.BANK_DETAILS);
+
+      act(() => {
+        result.current.updateFormData({
+          bankName: 'Test Bank',
+          accountNumber: '1234567890',
+          accountName: 'John Doe',
+        });
+      });
+      act(() => {
+        result.current.nextStep();
+      });
+
+      // Step 4: Next of Kin
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.NEXT_OF_KIN);
+
+      act(() => {
+        result.current.updateFormData({
+          nextOfKinName: 'Jane Doe',
+          nextOfKinPhone: '08012345678',
+        });
+      });
+      act(() => {
+        result.current.nextStep();
+      });
+
+      // Step 5: Selfie (last step)
+      expect(result.current.currentStep).toBe(WIZARD_STEPS.SELFIE);
+      expect(result.current.isFirstStep).toBe(false);
+      expect(result.current.isLastStep).toBe(true);
+    });
+
+    it('should submit full profile data for field roles', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { id: '456', status: 'active' } }),
+      });
+
+      const opts = { ...fieldOptions, onSuccess: vi.fn(), onError: vi.fn() };
+      const { result } = renderHook(() => useActivationWizard(opts));
+
+      act(() => {
+        result.current.updateFormData({
+          password: 'TestPass123!',
+          confirmPassword: 'TestPass123!',
+          nin: '12345678919',
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test Street, Lagos',
+          bankName: 'Test Bank',
+          accountNumber: '1234567890',
+          accountName: 'John Doe',
+          nextOfKinName: 'Jane Doe',
+          nextOfKinPhone: '08012345678',
+        });
+      });
+
+      // Navigate to last step
+      await act(async () => {
+        result.current.nextStep();
+        result.current.nextStep();
+        result.current.nextStep();
+        result.current.nextStep();
+      });
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submitAll();
+      });
+
+      expect(success).toBe(true);
+      expect(opts.onSuccess).toHaveBeenCalledWith({ id: '456', status: 'active' });
+
+      // Verify the API was called with full profile data
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body).toHaveProperty('password', 'TestPass123!');
+      expect(body).toHaveProperty('nin', '12345678919');
+      expect(body).toHaveProperty('bankName', 'Test Bank');
+      expect(body).toHaveProperty('nextOfKinName', 'Jane Doe');
+      expect(body).not.toHaveProperty('confirmPassword');
     });
   });
 });

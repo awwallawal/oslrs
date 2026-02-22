@@ -277,6 +277,7 @@ export interface ValidateTokenResponse {
   email?: string;
   fullName?: string;
   expired?: boolean;
+  roleName?: string;
 }
 
 /**
@@ -305,7 +306,7 @@ export async function validateActivationToken(token: string): Promise<ValidateTo
  * Activate staff account with profile data and optional selfie
  * Story 2.5-3, Tasks 19-20: Supports selfieBase64 for ID card generation
  */
-export async function activateWithSelfie(
+export async function activateAccount(
   token: string,
   request: ActivationWithSelfieRequest
 ): Promise<ActivationResponse> {
