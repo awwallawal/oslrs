@@ -19,6 +19,7 @@ export interface AuditQueueItem {
   resolution: string | null;
   resolutionNotes: string | null;
   reviewedAt: string | null;
+  reviewedBy: string | null;
   enumeratorName: string;
   submittedAt: string;
   lgaId: string | null;
