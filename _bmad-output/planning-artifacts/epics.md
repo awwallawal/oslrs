@@ -171,8 +171,9 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 
 ### Epic 5: Back-Office Audit & Policy Reporting
 **Goal:** Provide high-level stakeholders and state auditors with the tools to verify registry integrity and extract policy-driving insights.
-**User Outcome:** Assessors can audit the verification queue; Government officials can view state-wide trends and export PII-rich reports for planning.
+**User Outcome:** Assessors can audit the verification queue; Government officials can view state-wide trends, browse all respondent data, and export PII-rich reports for planning.
 **FRs covered:** FR15
+**Stories:** 5.1 (Policy Dashboard), 5.2 (Assessor Audit Queue), 5.3 (Individual Record PII View), 5.4 (PII-Rich Exports), 5.5 (Respondent Data Registry Table), 5.6a (Supervisor Team Productivity Table & API Foundation), 5.6b (Super Admin Staff Productivity Table)
 
 ### Epic 6: System Integrity, Accountability & Remuneration
 **Goal:** Ensure the absolute trustworthiness of the registry through immutable audit trails, system health monitoring, and transparent staff payment management.
@@ -1421,6 +1422,398 @@ So that I can perform offline analysis for authorized government use.
 **When** I click "Export with PII"
 **Then** the system should generate a secure CSV or PDF including Name and Contact info
 **And** the export action must be logged with the Official's ID and the filter parameters used.
+
+### Story 5.5: Respondent Data Registry Table
+
+> **Added:** Epic 4 Retrospective (2026-02-20) — identified gap: no existing Epic 5 story provides a browsable table of all respondent data.
+
+As an authorized back-office user,
+I want a server-paginated, filterable table of all respondent records,
+So that I can browse, search, and analyze registry data at scale.
+
+**Dependencies:**
+- Epic 4: `fraud_detections` table (severity scores, resolution status), `team_assignments` table (supervisor LGA scoping)
+- Story 5.4: Export integration — Story 5.4 exports should respect active filters from this table
+
+**Acceptance Criteria:**
+
+**AC5.5.1: Access Control**
+
+| Role | Scope | PII Visible | Audit Logged |
+|------|-------|:-----------:|:------------:|
+| Super Admin | All LGAs | Yes | Yes |
+| Verification Assessor | All LGAs | Yes | Yes (every row view) |
+| Government Official | All LGAs | Yes | Yes (every row view) |
+| Supervisor | Own LGA only | No (operational data only) | Yes |
+
+**AC5.5.2: Filter Controls**
+
+**Given** the registry table page, **when** the table loads, **then** the following filter controls must be available:
+- LGA (dropdown, pre-filtered for Supervisors to own LGA only)
+- Gender (male / female / other)
+- Collection channel (Public Self-Registration, Enumerator Field Collection, Data Entry Clerk)
+- Date range (from/to date picker)
+- Verification status (pending, verified, rejected, quarantined)
+- Fraud severity (clean, low, medium, high, critical)
+- Form/questionnaire type
+- Enumerator (who collected it)
+- Free text search (respondent name or NIN — PII roles only)
+
+**AC5.5.3: Column Visibility per Role**
+
+| Column | Super Admin | Assessor | Official | Supervisor |
+|--------|:-----------:|:--------:|:--------:|:----------:|
+| Respondent Name | Yes | Yes | Yes | No |
+| NIN | Yes | Yes | Yes | No |
+| Phone | Yes | Yes | Yes | No |
+| Gender | Yes | Yes | Yes | Yes |
+| LGA | Yes | Yes | Yes | Yes (own) |
+| Collection Channel | Yes | Yes | Yes | Yes |
+| Enumerator | Yes | Yes | Yes | Yes (own team) |
+| Submission Date | Yes | Yes | Yes | Yes |
+| Fraud Score | Yes | Yes | Read-only | Yes |
+| Verification Status | Yes | Yes | Read-only | Yes |
+| Form Responses | Yes | Yes | Yes | No |
+
+**AC5.5.4: Technical Requirements**
+
+**Given** the need to support 1M records at project end, **when** implementing the table, **then**:
+- Server-side pagination (cursor-based for performance)
+- Server-side filtering and sorting (query params to API)
+- TanStack Table in server-side mode
+- Designed to scale from pilot (thousands) to target (1M records)
+- Export integration: Story 5.4 exports should respect active filters from this table
+
+**AC5.5.5: Quick-Filter Presets**
+
+> **Added:** PM discussion (2026-02-22) — Super Admin needs to monitor incoming submissions in real-time, not just browse historical records. Quick-filter presets turn the same table into both a monitoring tool and a research tool.
+
+**Given** the registry table page, **when** the table loads, **then** a row of quick-filter preset buttons must appear above the filter controls:
+
+| Preset | Filters Applied | Default Sort | Purpose |
+|--------|----------------|:------------:|---------|
+| **Live Feed** | Date = Today | Newest first | "What's coming in right now?" — real-time operational monitoring |
+| **This Week** | Date = Mon–Sun (current week, WAT) | Newest first | Weekly progress check |
+| **Flagged** | Fraud severity = medium, high, critical | Severity desc | Submissions needing attention |
+| **Pending Review** | Verification status = pending | Oldest first | Backlog of unreviewed records (oldest first to prevent stale queue) |
+| **All Records** | No filters | Newest first | Full registry browse (default on page load) |
+
+- Clicking a preset sets the corresponding filters and sort order, replacing any currently active filters
+- The active preset button is visually highlighted (e.g., filled/primary variant)
+- User can further refine filters after selecting a preset — the preset button deselects to indicate "custom" state
+- Presets are available to all authorized roles (Super Admin, Assessor, Official, Supervisor) but filtered data respects role scope (e.g., Supervisor still sees own LGA only)
+
+**AC5.5.6: Live Monitoring Mode**
+
+**Given** the "Live Feed" preset is active, **when** the Super Admin is monitoring incoming submissions, **then**:
+- The table auto-refreshes every **60 seconds** (polling interval, consistent with Supervisor dashboard pattern from Story 4.1)
+- A subtle "Last updated: X seconds ago" indicator shows below the table header
+- When new submissions arrive since the last fetch, a notification bar appears above the table: **"N new submissions — Click to refresh"** (avoids jarring auto-scroll that disrupts reading)
+- Auto-refresh is **only active** when the Live Feed preset is selected — other presets and custom filters use standard manual pagination without polling
+- Auto-refresh pauses when the browser tab is not visible (Page Visibility API) to avoid unnecessary API load
+
+**AC5.5.7: Row Navigation to Detail View**
+
+**Given** an authorized user (Super Admin, Assessor, Official) viewing the registry table, **when** they click a row, **then**:
+- Navigate to the individual record PII view (Story 5.3) for that respondent
+- Supervisor row click navigates to an operational detail view (no PII — submission metadata, fraud score, verification status only)
+- Row hover shows a pointer cursor and subtle highlight to indicate clickability
+
+### Story 5.6a: Supervisor Team Productivity Table & API Foundation
+
+> **Added:** Epic 4 Retrospective & PM discussion (2026-02-22) — the existing supervisor dashboard shows summary cards but lacks a queryable, filterable, exportable productivity table with target tracking. Split from original 5.6 for scope management (Team Agreement A4).
+
+As a Supervisor,
+I want a filterable, sortable table showing my team's submission productivity against daily targets,
+So that I can track enumerator output, identify underperformers, and export the data for reporting.
+
+**Dependencies:**
+- Epic 4: `team_assignments` table (supervisor team scoping), `getTeamMetrics` query pattern in `supervisor.controller.ts`
+- prep-2 (Audit Logging): All table views audit-logged
+- prep-3 (Export Infrastructure): CSV/PDF export via `ExportService` (`generatePdfReport`, `generateCsvExport`)
+
+**Acceptance Criteria:**
+
+**AC5.6a.1: Access Control**
+
+| Role | Scope | View | Export |
+|------|-------|:----:|:------:|
+| Supervisor | Own assigned Enumerators only (via `team_assignments` / LGA fallback) | Yes | Yes (CSV/PDF) |
+| Super Admin | All staff — _but Super Admin view is Story 5.6b_ | — | — |
+
+- This story delivers the **Supervisor view only** plus the shared API foundation that 5.6b builds on
+- Verification Assessors, Government Officials, Data Entry Clerks, and Public Users do NOT have access
+
+**AC5.6a.2: Productivity Target System**
+
+**Given** the need to track output against quotas, **when** the system is configured, **then**:
+- System-wide default daily target: **25 submissions/day** (stored in system settings, editable by Super Admin)
+- Per-LGA target override: Optional — Super Admin can set a different target for specific LGAs (e.g., 20/day for difficult terrain)
+- Target applies to Enumerators and Data Entry Clerks (both produce submissions)
+- Targets stored in a `productivity_targets` config (JSONB in system settings or dedicated table — implementation decides)
+
+**AC5.6a.3: Table Columns**
+
+| Column | Description |
+|--------|-------------|
+| Enumerator | Full name of the assigned enumerator |
+| Today | Submissions collected today (WAT: UTC+1) |
+| Target | Daily target for this LGA (default 25, or per-LGA override) |
+| % | Today's progress as percentage of target |
+| Status | Derived indicator (see AC5.6a.4) |
+| Trend | Arrow indicator: ↑ improving, ↓ declining, → flat vs. previous equivalent period |
+| This Week | Submissions this week (Mon–Sun WAT) with target (e.g., "98/125") |
+| This Month | Submissions this calendar month with target (e.g., "420/500") |
+| Approved | Submissions with approved/verified status in selected period |
+| Rejected | Submissions rejected in selected period |
+| Rej. Rate | Rejected / Total as percentage — quality signal (high volume + high rejection = gaming) |
+| Days Active | Days with ≥1 submission / total working days in period |
+| Last Active | Timestamp of most recent submission (relative: "2 min ago", "3 hrs ago") |
+
+**AC5.6a.4: Status Indicator Logic**
+
+**Given** the current time of day and submissions count, **when** calculating status, **then**:
+
+| Status | Condition | Color |
+|--------|-----------|-------|
+| **Complete** | Today ≥ Target | Green |
+| **On Track** | Projected to hit target based on current pace and hours remaining in workday (8am–5pm WAT) | Blue |
+| **Behind** | Projected pace will NOT hit target | Amber |
+| **Inactive** | 0 submissions today AND last active > 24 hours | Red |
+
+Projection formula: `(submissions_so_far / hours_elapsed) * hours_remaining ≥ remaining_target`
+
+**AC5.6a.5: Filter & Sort Controls**
+
+**Given** the supervisor's team productivity page, **when** the table loads, **then**:
+- Time range picker: Today (default), This Week, This Month, Custom date range
+- Status filter: All, On Track, Behind, Inactive
+- Sort by any column (ascending/descending)
+- Free text search (enumerator name)
+- Summary row at bottom: team totals and averages across all visible enumerators
+
+**AC5.6a.6: Export (CSV/PDF)**
+
+**Given** the export button, **when** the Supervisor clicks export, **then**:
+- **CSV**: Generated via `ExportService.generateCsvExport()` with UTF-8 BOM (Excel-compatible). Downloads as `oslsr-team-productivity-{supervisor-lga}-{date}.csv`
+- **PDF**: Generated via `ExportService.generatePdfReport()` with Oyo State branded header, report title ("Team Productivity Report"), LGA name, date range, filters applied, and generated-by Supervisor name. Downloads as `oslsr-team-productivity-{supervisor-lga}-{date}.pdf`
+- Export respects all active filters and sort order
+- Export action audit-logged with Supervisor user ID, LGA, filters applied, record count, format, and timestamp
+- Staff counts are bounded (< 10 per LGA), so PDF is always viable (no row cap issue)
+
+**AC5.6a.7: Daily Productivity Snapshots**
+
+**Given** the need for historical trend data (weekly/monthly totals, trend arrows), **when** the system runs nightly, **then**:
+- A scheduled BullMQ job runs at **11:59 PM WAT daily** to snapshot each staff member's daily submission count
+- Snapshot stored in `daily_productivity_snapshots` table: `{ id, userId, lgaId, roleId, date, submissionCount, approvedCount, rejectedCount, createdAt }`
+- The table queries **live data** for "Today" and **snapshots** for historical periods (This Week, This Month, custom range)
+- This prevents expensive full-table scans for historical aggregation at scale
+
+**AC5.6a.8: API Endpoints (Shared Foundation)**
+
+New endpoints that serve both 5.6a (Supervisor) and 5.6b (Super Admin/Official):
+
+```
+GET /api/v1/productivity/team
+  - Supervisor: returns own team's productivity data
+  - Query params: period (today|week|month|custom), dateFrom, dateTo, status, search, sortBy, sortOrder, page, pageSize
+  - Response: { data: StaffProductivityRow[], pagination, summary: { totalSubmissions, avgPerDay, totalTarget, overallPercent } }
+
+GET /api/v1/productivity/targets
+  - Super Admin: get/set default target and per-LGA overrides
+  - Response: { defaultTarget: 25, lgaOverrides: [{ lgaId, lgaName, target }] }
+
+PUT /api/v1/productivity/targets
+  - Super Admin only: update default target or per-LGA overrides
+
+POST /api/v1/productivity/export
+  - Supervisor/Super Admin: export current filtered view
+  - Body: { format: "csv"|"pdf", filters: {...}, columns: [...] }
+  - Response: file download (Content-Disposition: attachment)
+```
+
+**AC5.6a.9: Technical Requirements**
+
+- Server-side pagination (offset-based — staff counts are bounded, not 1M+)
+- Server-side filtering and sorting (query params to API)
+- TanStack Table in server-side mode
+- Core query extends existing `getTeamMetrics` pattern using SQL `COUNT(*) FILTER (WHERE ...)`
+- WAT (UTC+1) timezone boundary calculations for day/week/month periods
+- Trend calculation: compare current period average vs. previous equivalent period (e.g., this week vs. last week)
+- Re-uses existing `TeamAssignmentService.getEnumeratorIdsForSupervisor()` for team scoping
+
+---
+
+### Story 5.6b: Super Admin Cross-LGA Analytics & Government Official View
+
+> **Added:** Epic 4 Retrospective & PM discussion (2026-02-22) — split from original 5.6. Builds on 5.6a's API foundation to deliver Super Admin cross-LGA analytics with comparison mode, supervisorless LGA monitoring, and a Government Official aggregate-only view.
+
+As a Super Admin,
+I want a cross-LGA staff productivity dashboard with individual staff tracking, LGA comparison, and supervisorless LGA monitoring,
+So that I can hold all teams accountable, identify systemic issues, and manage LGAs without on-ground supervisors.
+
+As a Government Official,
+I want a read-only LGA-level productivity summary (no individual staff names),
+So that I can track field operation progress without accessing personal staff data.
+
+**Dependencies:**
+- **Story 5.6a** (MUST complete first): API foundation, productivity targets, daily snapshots, export infrastructure integration
+- `team_assignments` table: determines staffing model per LGA
+- `users.lgaId` + `users.roleId`: determines which LGAs have supervisors vs. direct Super Admin monitoring
+
+**Acceptance Criteria:**
+
+**AC5.6b.1: Access Control**
+
+| Role | View | Scope | Individual Staff Names | Export |
+|------|------|-------|:---------------------:|:------:|
+| Super Admin | Individual Staff Tab + LGA Comparison Tab | All LGAs, all field roles | Yes | Yes (CSV/PDF) |
+| Government Official | LGA Aggregate Summary only | All LGAs | **No** — aggregates only | **No** — read-only |
+
+- Supervisors use their own view from Story 5.6a (no access to cross-LGA data)
+- Verification Assessors, Data Entry Clerks, Enumerators, Public Users do NOT have access
+
+**AC5.6b.2: Super Admin — Individual Staff Performance Tab**
+
+**Given** the Super Admin productivity page, **when** the "Staff Performance" tab is active, **then** display:
+
+| Column | Description |
+|--------|-------------|
+| Staff Name | Full name |
+| Role | Enumerator, Data Entry Clerk, or Supervisor |
+| LGA | Assigned Local Government Area |
+| Supervisor | Assigned supervisor name, or **"— Direct"** if LGA has no supervisor (Super Admin monitors directly) |
+| Today | Submissions today (WAT) |
+| Target | Daily target (system default or LGA override) |
+| % | Progress percentage |
+| Status | On Track / Behind / Inactive / Complete (same logic as AC5.6a.4) |
+| Trend | ↑ ↓ → vs. previous period |
+| This Week | Week total with target |
+| This Month | Month total with target |
+| Approved | Approved count in period |
+| Rej. Rate | Rejection rate percentage |
+| Days Active | Active days / total working days |
+| Last Active | Relative timestamp |
+
+**Supervisor productivity row**: When Role = Supervisor, the Today/Week/Month columns show **submissions reviewed** (approved + rejected), not collected. Target for supervisors = sum of their team's targets (e.g., 3 enumerators × 25 = 75 reviews/day).
+
+**AC5.6b.3: Super Admin — LGA Comparison Tab**
+
+**Given** the Super Admin productivity page, **when** the "LGA Comparison" tab is active, **then** display:
+
+| Column | Description |
+|--------|-------------|
+| LGA | Local Government Area name |
+| Staffing Model | Inferred from actual assignments: "Full (1+N)", "Lean (1+N)", or "No Supervisor (N)" where N = enumerator count |
+| Enumerator Count | Number of active enumerators in LGA |
+| Supervisor | Supervisor name, or **"— Super Admin"** if none assigned |
+| Today Total | Sum of all enumerator submissions today |
+| LGA Target | Sum of individual targets (count × per-staff target) |
+| % | LGA progress percentage |
+| Avg/Enumerator | Today total / enumerator count |
+| Best Performer | Name + count of highest-output enumerator |
+| Lowest Performer | Name + count of lowest-output enumerator |
+| Rej. Rate | LGA-wide rejection rate |
+| Trend | ↑ ↓ → vs. previous period |
+
+**Staffing model inference**: Derived from actual role assignments — no separate configuration needed:
+- Query users with `roleId = Supervisor` and `lgaId = X` → if found, "Full" or "Lean" based on enumerator count
+- If no supervisor found for LGA → "No Supervisor"
+- The model updates automatically when staff are added, removed, or roles changed
+
+**Supervisorless LGA highlighting**: LGAs with no assigned supervisor are visually highlighted (amber background or badge) and can be filtered to show "Direct monitoring" LGAs only — these are the ones that need Super Admin's closest attention.
+
+**Comparison mode**: Super Admin can select 2+ LGAs (checkbox) to view a side-by-side comparison card that shows both LGAs' key metrics together for easy visual comparison.
+
+**AC5.6b.4: Government Official — LGA Aggregate Summary**
+
+**Given** a Government Official accessing the productivity view, **when** the page loads, **then** display an **aggregate-only table** with NO individual staff names:
+
+| Column | Description |
+|--------|-------------|
+| LGA | Local Government Area name |
+| Active Staff | Count of active enumerators + clerks in LGA |
+| Today Total | Sum of all submissions today |
+| Daily Target | Sum of individual targets |
+| % | Progress percentage |
+| This Week | Total submissions this week |
+| Week Avg/Day | Average daily submissions this week |
+| This Month | Total submissions this month |
+| Completion Rate | Month total / month target as percentage |
+| Trend | ↑ ↓ → vs. previous period |
+
+- **No individual staff names, no staff-level rows** — only LGA-level aggregates
+- **No export button** — Government Officials view this data on-screen only
+- **No staffing model column** — Officials don't need to know internal team structure
+- Rationale: Providing staff-level data to Government Officials creates political pressure on individual field staff. Officials need to see "Is this LGA on track?" not "Is Adamu performing?"
+
+**AC5.6b.5: Filter & Sort Controls**
+
+**Super Admin (both tabs):**
+- Time range picker: Today (default), This Week, This Month, Custom date range
+- LGA dropdown (multi-select for comparison)
+- Role filter: Enumerator, Data Entry Clerk, Supervisor (Staff tab only)
+- Supervisor filter: dropdown of supervisors (Staff tab only)
+- Staffing model filter: Full, Lean, No Supervisor (LGA tab only)
+- Status filter: On Track, Behind, Inactive (Staff tab only)
+- Sort by any column (ascending/descending)
+- Free text search (staff name on Staff tab, LGA name on LGA tab)
+- Summary row: totals and averages across visible rows
+
+**Government Official:**
+- Time range picker: Today, This Week, This Month, Custom date range
+- LGA dropdown (single or multi-select)
+- Sort by any column (ascending/descending)
+
+**AC5.6b.6: Export (CSV/PDF) — Super Admin Only**
+
+**Given** the export button on Super Admin's view, **when** the Super Admin clicks export, **then**:
+- **CSV**: Via `ExportService.generateCsvExport()` with UTF-8 BOM. Downloads as `oslsr-productivity-{tab}-{date}.csv`
+- **PDF**: Via `ExportService.generatePdfReport()` with Oyo State branded header, report title (e.g., "Staff Productivity Report" or "LGA Comparison Report"), date range, filters applied, generated-by Super Admin name, and print-optimized layout. Downloads as `oslsr-productivity-{tab}-{date}.pdf`
+- Export respects all active filters and sort order
+- Export action audit-logged with Super Admin user ID, tab, filters applied, record count, format, and timestamp
+- **Government Official has NO export button** (read-only view only)
+
+**AC5.6b.7: Supervisorless LGA Workflow (Option A)**
+
+**Given** an LGA with no assigned Supervisor, **when** submissions are made by enumerators in that LGA, **then**:
+- Submissions follow the normal ingestion pipeline (fraud scoring, storage)
+- The Super Admin can see all submissions from supervisorless LGAs in their existing dashboard views (fraud review, data overview)
+- The productivity table marks these LGAs as "No Supervisor — Super Admin" in the Supervisor column
+- Super Admin can filter to show only supervisorless LGAs for focused monitoring
+- No separate approval workflow is needed — Super Admin uses existing fraud review and verification tools to review submissions from these LGAs
+- **Note**: This is a monitoring model, not a new workflow. The Super Admin's existing tools (fraud review, bulk verification, data overview) handle the review. The productivity table surfaces which LGAs need attention.
+
+**AC5.6b.8: API Endpoints**
+
+Extends the foundation from Story 5.6a:
+
+```
+GET /api/v1/productivity/staff
+  - Super Admin only: returns all staff productivity data across all LGAs
+  - Query params: period, dateFrom, dateTo, lgaId, roleId, supervisorId, status, search, sortBy, sortOrder, page, pageSize
+  - Response: { data: StaffProductivityRow[], pagination, summary }
+
+GET /api/v1/productivity/lga-comparison
+  - Super Admin only: returns LGA-level aggregated productivity data
+  - Query params: period, dateFrom, dateTo, lgaIds (multi), staffingModel, sortBy, sortOrder
+  - Response: { data: LgaProductivityRow[], summary }
+
+GET /api/v1/productivity/lga-summary
+  - Government Official: returns LGA aggregates only (no staff names)
+  - Query params: period, dateFrom, dateTo, lgaId, sortBy, sortOrder
+  - Response: { data: LgaAggregateSummaryRow[], summary }
+```
+
+**AC5.6b.9: Technical Requirements**
+
+- Builds on 5.6a's daily snapshot table — no duplicate infrastructure
+- LGA comparison queries use `GROUP BY lga_id` on snapshots + live data for today
+- Staffing model inferred at query time via `EXISTS (SELECT 1 FROM users WHERE lga_id = ? AND role = 'supervisor' AND status IN ('active','verified'))`
+- Supervisor review throughput: count rows in `fraud_detections` or submission status changes where `reviewed_by = supervisor_id`
+- TanStack Table with tab switching (Staff Performance / LGA Comparison) for Super Admin
+- Government Official view is a separate route/component with its own API endpoint (enforced at backend — cannot access staff-level endpoints)
+- All views respect existing RBAC middleware (`authorize()` + `requireLgaLock()` where applicable)
 
 ---
 
