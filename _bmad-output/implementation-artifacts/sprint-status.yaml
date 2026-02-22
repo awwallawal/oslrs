@@ -181,7 +181,7 @@ development_status:
   epic-5: in-progress
   5-1-high-level-policy-dashboard: done  # Completed 2026-02-22: All 9 tasks done. Code review passed: 10 findings (2H, 5M, 3L), all fixed. 30 API + 56 web tests pass (86 story tests), 0 regressions.
   5-2-verification-assessor-audit-queue: done  # Completed 2026-02-22: All 9 tasks done. Code review passed: 10 findings (1H, 6M, 3L), all 10 fixed. H1 URL param consumption, M6 LIKE injection escape, L1 AppError throw pattern. 43 backend + 78 frontend tests (121 story tests), 0 regressions.
-  5-3-individual-record-pii-view-authorized-roles: ready-for-dev
+  5-3-individual-record-pii-view-authorized-roles: done  # Code review passed 2026-02-22: 9 findings (2H, 4M, 3L), all 9 fixed. H1 fraud badge nav for super-admin/official, H2 misleading role tests. 45 tests (26 API + 19 web), 0 regressions.
   5-4-pii-rich-csv-pdf-exports: ready-for-dev
   5-5-respondent-data-registry-table: ready-for-dev  # NEW from Epic 4 retro: Server-paginated, filterable table of all respondent records for authorized roles
   5-6a-supervisor-team-productivity-table: ready-for-dev  # Split from 5.6: Supervisor team table + API foundation, target tracking (25/day configurable), daily snapshots, CSV/PDF export. Builds on existing getTeamMetrics pattern.

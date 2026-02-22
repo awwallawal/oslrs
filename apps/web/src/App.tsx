@@ -110,6 +110,9 @@ const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/Publ
 const PublicSupportPage = lazy(() => import('./features/dashboard/pages/PublicSupportPage'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
+// Story 5.3: Respondent Detail Page (shared across multiple roles)
+const RespondentDetailPage = lazy(() => import('./features/dashboard/pages/RespondentDetailPage'));
+
 /**
  * Page loading fallback - shows full page skeleton during route transitions
  */
@@ -627,6 +630,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.3: Respondent Detail */}
+                <Route
+                  path="respondent/:respondentId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentDetailPage />
+                    </Suspense>
+                  }
+                />
                 {/* Placeholder routes for future stories */}
                 <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
               </Route>
@@ -677,6 +689,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <SupervisorMessagesPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.3: Respondent Detail (operational view, no PII) */}
+                <Route
+                  path="respondent/:respondentId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentDetailPage />
                     </Suspense>
                   }
                 />
@@ -862,6 +883,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.3: Respondent Detail */}
+                <Route
+                  path="respondent/:respondentId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentDetailPage />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
               </Route>
 
@@ -911,6 +941,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <OfficialExportPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.3: Respondent Detail */}
+                <Route
+                  path="respondent/:respondentId"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentDetailPage />
                     </Suspense>
                   }
                 />

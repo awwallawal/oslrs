@@ -13,6 +13,7 @@ import fraudThresholdsRoutes from './fraud-thresholds.routes.js';
 import fraudDetectionsRoutes from './fraud-detections.routes.js';
 import reportRoutes from './report.routes.js';
 import assessorRoutes from './assessor.routes.js';
+import respondentRoutes from './respondent.routes.js';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use('/fraud-thresholds', fraudThresholdsRoutes);
 router.use('/fraud-detections', fraudDetectionsRoutes);
 router.use('/reports', reportRoutes);
 router.use('/assessor', assessorRoutes);
+router.use('/respondents', respondentRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {
