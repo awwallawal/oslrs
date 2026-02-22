@@ -17,6 +17,8 @@ interface HCaptchaProps {
  *
  * Uses test site key in development for easier testing.
  * Production key should be set via VITE_HCAPTCHA_SITE_KEY.
+ *
+ * When VITE_E2E=true, auto-bypasses the widget for headless CI.
  */
 export function HCaptcha({
   onVerify,
@@ -25,14 +27,24 @@ export function HCaptcha({
   error,
   reset,
 }: HCaptchaProps) {
+  const isE2E = import.meta.env.VITE_E2E === 'true';
   const captchaRef = useRef<HCaptchaComponent>(null);
+
+  // E2E bypass: auto-verify on mount so headless CI never loads the iframe
+  useEffect(() => {
+    if (isE2E) {
+      onVerify('test-captcha-bypass');
+    }
+  }, [isE2E]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset captcha when reset prop changes
   useEffect(() => {
-    if (reset && captchaRef.current) {
+    if (!isE2E && reset && captchaRef.current) {
       captchaRef.current.resetCaptcha();
     }
-  }, [reset]);
+  }, [isE2E, reset]);
+
+  if (isE2E) return null;
 
   const handleVerify = (token: string) => {
     onVerify(token);

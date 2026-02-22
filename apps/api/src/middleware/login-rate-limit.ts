@@ -6,7 +6,7 @@ import pino from 'pino';
 const logger = pino({ name: 'login-rate-limit' });
 
 // Check if we're in test mode (vitest sets VITEST env var)
-const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
 // Redis client (singleton) - only initialize if not in test mode
 let redisClient: Redis | null = null;

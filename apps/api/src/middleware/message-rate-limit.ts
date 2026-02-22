@@ -5,7 +5,7 @@ import pino from 'pino';
 
 const logger = pino({ name: 'message-rate-limit' });
 
-const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
 let redisClient: Redis | null = null;
 

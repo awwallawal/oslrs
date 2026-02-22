@@ -67,10 +67,7 @@ test.describe('Golden Path: Admin Form Lifecycle', () => {
       process.env.E2E_ADMIN_PASSWORD ?? 'admin123',
     );
 
-    // Complete hCaptcha verification (test keys auto-pass)
-    const captchaFrame = page.frameLocator('iframe[title="Widget containing checkbox for hCaptcha security challenge"]');
-    // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
-    await captchaFrame.locator('#checkbox').click();
+    // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
     await page.getByRole('button', { name: /sign in/i }).click();

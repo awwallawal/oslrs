@@ -27,12 +27,7 @@ export async function staffLogin(page: Page, role: StaffRole): Promise<void> {
   await page.getByLabel('Email Address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
 
-  // Complete hCaptcha verification (test keys auto-pass)
-  const captchaFrame = page.frameLocator(
-    'iframe[title="Widget containing checkbox for hCaptcha security challenge"]',
-  );
-  // eslint-disable-next-line no-restricted-syntax -- Team Agreement A3 exception: third-party hCaptcha iframe checkbox
-  await captchaFrame.locator('#checkbox').click();
+  // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
   await page.getByRole('button', { name: /sign in/i }).click();

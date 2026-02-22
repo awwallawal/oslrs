@@ -18,6 +18,41 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true  # Non-blocking during stabilization
 
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: development
+      DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci
+      REFRESH_TOKEN_SECRET: test-refresh-token-secret-for-ci
+      PUBLIC_APP_URL: http://localhost:5173
+      VITE_E2E: 'true'
+      E2E: 'true'
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +70,12 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+
+      - name: Push database schema
+        run: pnpm db:push:force
+
+      - name: Seed database
+        run: pnpm db:seed:dev
 
       # Cache Playwright browsers to avoid ~90s install on every run
       - name: Cache Playwright browsers
