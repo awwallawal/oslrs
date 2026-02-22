@@ -39,6 +39,12 @@ export const fraudResolutions = [
 ] as const;
 export type FraudResolution = typeof fraudResolutions[number];
 
+/**
+ * Assessor (second-tier) resolution outcomes.
+ */
+export const assessorResolutions = ['final_approved', 'final_rejected'] as const;
+export type AssessorResolution = typeof assessorResolutions[number];
+
 // ── JSONB Detail Shapes (stored in fraud_detections detail columns) ────
 
 export interface GpsDetails {

@@ -132,11 +132,11 @@ describe('fraud-detections schema', () => {
     expect(severityResolutionIdx).toBeDefined();
   });
 
-  it('should have 3 foreign key references (submissionId, enumeratorId, reviewedBy)', () => {
+  it('should have 4 foreign key references (submissionId, enumeratorId, reviewedBy, assessorReviewedBy)', () => {
     const config = getTableConfig(fraudDetections);
     const foreignKeys = config.foreignKeys;
-    // submissionId → submissions, enumeratorId → users, reviewedBy → users
-    expect(foreignKeys.length).toBe(3);
+    // submissionId → submissions, enumeratorId → users, reviewedBy → users, assessorReviewedBy → users
+    expect(foreignKeys.length).toBe(4);
   });
 
   it('should define severity levels as enum', () => {

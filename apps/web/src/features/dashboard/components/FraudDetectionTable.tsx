@@ -11,7 +11,7 @@ import { FraudResolutionBadge } from './FraudResolutionBadge';
 import type { FraudDetectionListItem } from '../api/fraud.api';
 
 interface FraudDetectionTableProps {
-  detections: FraudDetectionListItem[];
+  detections: (FraudDetectionListItem & { lgaId?: string | null })[];
   selectedId?: string | null;
   onSelectDetection: (id: string) => void;
   // Story 4.5: Multi-select props (optional for backwards compatibility)
@@ -21,6 +21,9 @@ interface FraudDetectionTableProps {
   onSelectAll?: () => void;
   allSelected?: boolean;
   verifiedIds?: Set<string>;
+  // Story 5.2: Optional columns for assessor queue
+  showLgaColumn?: boolean;
+  showSupervisorResolutionColumn?: boolean;
 }
 
 function formatDate(dateString: string): string {
@@ -41,6 +44,8 @@ export function FraudDetectionTable({
   onSelectAll,
   allSelected = false,
   verifiedIds,
+  showLgaColumn = false,
+  showSupervisorResolutionColumn = false,
 }: FraudDetectionTableProps) {
   return (
     <div className="overflow-x-auto">
@@ -63,10 +68,12 @@ export function FraudDetectionTable({
               </th>
             )}
             <th className="py-3 px-4 font-medium text-neutral-600">Enumerator</th>
+            {showLgaColumn && <th className="py-3 px-4 font-medium text-neutral-600">LGA</th>}
             <th className="py-3 px-4 font-medium text-neutral-600">Submitted</th>
             <th className="py-3 px-4 font-medium text-neutral-600">Score</th>
             <th className="py-3 px-4 font-medium text-neutral-600">Severity</th>
-            <th className="py-3 px-4 font-medium text-neutral-600">Status</th>
+            {showSupervisorResolutionColumn && <th className="py-3 px-4 font-medium text-neutral-600">Supervisor</th>}
+            {!showSupervisorResolutionColumn && <th className="py-3 px-4 font-medium text-neutral-600">Status</th>}
             <th className="py-3 px-4 font-medium text-neutral-600">Actions</th>
           </tr>
         </thead>
@@ -118,6 +125,11 @@ export function FraudDetectionTable({
                   {isVerified && <CheckCircle className="h-4 w-4 text-green-500 inline mr-1.5" />}
                   {detection.enumeratorName}
                 </td>
+                {showLgaColumn && (
+                  <td className="py-3 px-4 text-neutral-600 text-xs">
+                    {('lgaId' in detection && detection.lgaId) ? String(detection.lgaId).replace(/_/g, ' ') : '—'}
+                  </td>
+                )}
                 <td className="py-3 px-4 text-neutral-600">
                   {formatDate(detection.submittedAt)}
                 </td>

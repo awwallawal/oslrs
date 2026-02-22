@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { fraudSeverities, heuristicCategories, fraudResolutions } from '../fraud.js';
+import { fraudSeverities, heuristicCategories, fraudResolutions, assessorResolutions } from '../fraud.js';
 
 // ── Threshold Schemas ──────────────────────────────────────────────────
 
@@ -98,3 +98,18 @@ export const bulkReviewFraudDetectionsSchema = z.object({
     .min(10, 'Event context must be at least 10 characters')
     .max(500, 'Event context must not exceed 500 characters'),
 });
+
+/**
+ * Schema for assessor final review (PATCH /api/v1/assessor/review/:detectionId).
+ * Story 5.2: Verification Assessor Audit Queue.
+ */
+export const assessorReviewSchema = z.object({
+  assessorResolution: z.enum(assessorResolutions),
+  assessorNotes: z.string()
+    .min(10, 'Rejection notes must be at least 10 characters')
+    .max(1000, 'Notes must not exceed 1000 characters')
+    .optional(),
+}).refine(
+  (data) => data.assessorResolution !== 'final_rejected' || (data.assessorNotes && data.assessorNotes.length >= 10),
+  { message: 'Rejection notes are required (min 10 characters)', path: ['assessorNotes'] },
+);

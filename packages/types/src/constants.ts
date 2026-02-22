@@ -8,6 +8,9 @@ export enum UserRole {
   PUBLIC_USER = 'public_user',
 }
 
+// assessorResolutionTypes removed — canonical source is assessorResolutions in fraud.ts
+// Drizzle schema file (fraud-detections.ts) has its own local copy per the Drizzle pattern.
+
 export enum Lga {
   AFIJIO = 'afijio',
   AKINYELE = 'akinyele',

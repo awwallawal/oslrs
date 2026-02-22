@@ -30,6 +30,13 @@ export const fraudSeverityTypes = ['clean', 'low', 'medium', 'high', 'critical']
 export type FraudSeverityLevel = typeof fraudSeverityTypes[number];
 
 /**
+ * Assessor resolution outcome values — must match @oslsr/types assessorResolutions.
+ * Canonical source: packages/types/src/constants.ts
+ */
+export const assessorResolutionTypes = ['final_approved', 'final_rejected'] as const;
+export type AssessorResolution = typeof assessorResolutionTypes[number];
+
+/**
  * Fraud detections table — per-submission scoring results
  *
  * Stores the composite score and all component breakdowns.
@@ -65,11 +72,17 @@ export const fraudDetections = pgTable('fraud_detections', {
   duplicateDetails: jsonb('duplicate_details'),
   timingDetails: jsonb('timing_details'),
 
-  // Resolution workflow
+  // Resolution workflow (supervisor first-tier review)
   reviewedBy: uuid('reviewed_by').references(() => users.id),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   resolution: text('resolution', { enum: fraudResolutionTypes }),
   resolutionNotes: text('resolution_notes'),
+
+  // Assessor (second-tier) review fields
+  assessorReviewedBy: uuid('assessor_reviewed_by').references(() => users.id),
+  assessorReviewedAt: timestamp('assessor_reviewed_at', { withTimezone: true }),
+  assessorResolution: text('assessor_resolution', { enum: assessorResolutionTypes }),
+  assessorNotes: text('assessor_notes'),
 }, (table) => ({
   // Supervisor queue: filter by severity + unreviewed
   severityResolutionIdx: index('idx_fraud_detections_severity_resolution').on(table.severity, table.resolution),
@@ -77,6 +90,8 @@ export const fraudDetections = pgTable('fraud_detections', {
   enumeratorIdIdx: index('idx_fraud_detections_enumerator_id').on(table.enumeratorId),
   // Submission → fraud lookup
   submissionIdIdx: index('idx_fraud_detections_submission_id').on(table.submissionId),
+  // Assessor queue: filter by assessor resolution + severity
+  assessorResolutionSeverityIdx: index('idx_fraud_detections_assessor_resolution_severity').on(table.assessorResolution, table.severity),
 }));
 
 export type FraudDetection = typeof fraudDetections.$inferSelect;

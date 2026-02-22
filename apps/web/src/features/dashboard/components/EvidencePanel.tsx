@@ -23,6 +23,7 @@ import type {
 interface EvidencePanelProps {
   detection: FraudDetectionDetail;
   onReview: () => void;
+  renderActions?: () => React.ReactNode;
 }
 
 interface EvidenceSectionProps {
@@ -243,7 +244,7 @@ function TimingEvidenceSection({ details }: { details: TimingDetails | null }) {
   );
 }
 
-export function EvidencePanel({ detection, onReview }: EvidencePanelProps) {
+export function EvidencePanel({ detection, onReview, renderActions }: EvidencePanelProps) {
   return (
     <Card>
       <CardContent className="p-4 space-y-4">
@@ -342,15 +343,17 @@ export function EvidencePanel({ detection, onReview }: EvidencePanelProps) {
           </div>
         )}
 
-        {/* Review Action (L1 fix: removed conflicting inline style) */}
+        {/* Review Actions */}
         <div className="pt-2 border-t border-neutral-200">
-          <button
-            className="w-full px-4 py-2 text-white rounded-lg font-medium text-sm transition-colors"
-            style={{ backgroundColor: '#9C1E23' }}
-            onClick={onReview}
-          >
-            {detection.resolution ? 'Update Review' : 'Review This Detection'}
-          </button>
+          {renderActions ? renderActions() : (
+            <button
+              className="w-full px-4 py-2 text-white rounded-lg font-medium text-sm transition-colors"
+              style={{ backgroundColor: '#9C1E23' }}
+              onClick={onReview}
+            >
+              {detection.resolution ? 'Update Review' : 'Review This Detection'}
+            </button>
+          )}
         </div>
       </CardContent>
     </Card>
