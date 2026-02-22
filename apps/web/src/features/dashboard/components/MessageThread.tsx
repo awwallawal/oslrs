@@ -75,6 +75,7 @@ export default function MessageThread({
             )}
             <div className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
               <div
+                data-testid="message-bubble"
                 className={`max-w-[75%] rounded-lg px-3 py-2 ${
                   isSender
                     ? 'bg-blue-500 text-white'

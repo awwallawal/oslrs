@@ -50,6 +50,13 @@ export default defineConfig({
       testMatch: /nin-validation\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    // Epic 4 feature E2E tests — inline login, full stack required.
+    // Covers fraud threshold UI, messaging inbox, and supervisor team dashboard.
+    {
+      name: 'epic4-features',
+      testMatch: /(?:fraud-threshold|messaging|supervisor-dashboard)\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
   webServer: {
     command: 'pnpm dev',
