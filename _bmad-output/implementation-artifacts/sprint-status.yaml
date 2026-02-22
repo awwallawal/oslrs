@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-20 - Epic 4 complete (5 stories + 9 prep). Prep-epic-5 (7 tasks) added. Story 5.5 added. Baselines: 667 API, 1512 web tests
+# updated: 2026-02-22 - Epic 4 complete (5 stories + 9 prep). Prep-epic-5 (8 tasks) added. Stories 5.5 + 5.6a/5.6b added (split from 5.6). Baselines: 667 API, 1512 web tests
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -169,12 +169,13 @@ development_status:
   prep-epic-5: in-progress
   prep-1-fix-supervisor-direct-messaging-ux: done  # HIGH: Add "New Conversation" flow with team roster selection to SupervisorMessagesPage. Code review passed 2026-02-21: 8 findings (1H, 3M, 4L), all 8 fixed. 51 messaging tests, 558 dashboard tests pass, 0 regressions.
   prep-2-lightweight-audit-logging-pii-access: done  # HIGH: Required by Stories 5.3, 5.4, 5.5. AuditService with fire-and-forget + transactional modes. Code review passed 2026-02-21: 7 findings (2H, 3M, 2L), all 7 fixed. 13 tests pass, 0 regressions.
-  prep-3-export-infrastructure-spike: ready-for-dev  # HIGH: CSV/PDF generation with security controls (logged, role-authorized). Evaluate PDFKit (already installed) + CSV library.
+  prep-3-export-infrastructure-spike: done  # HIGH: CSV/PDF generation with security controls (logged, role-authorized). ExportService created, csv-stringify installed, spike summary with security architecture + performance benchmarks. R1 2026-02-21: 9 findings all fixed. R2 2026-02-22: 9 findings (2H, 5M, 2L) all fixed. 19 unit tests pass, 7 benchmarks gated, 0 regressions.
   prep-4-define-story-5.5-in-epics: done  # HIGH: Story 5.5 fully defined in epics.md with access control matrix, 9 filters, column visibility matrix, technical requirements. Uncommitted — needs commit.
   prep-5-cross-lga-query-performance-validation: ready-for-dev  # MEDIUM: Run state-wide aggregation queries at scale. Ensure Official/Assessor views don't degrade.
   prep-6-assessor-workflow-state-machine-design: ready-for-dev  # MEDIUM: Document submission lifecycle: submission -> fraud scoring -> supervisor review -> assessor audit -> final status.
   prep-7-e2e-test-expansion: ready-for-dev  # NICE-TO-HAVE: Playwright tests for fraud threshold UI, messaging inbox, supervisor team dashboard.
   prep-8-role-based-activation-wizard: ready-for-dev  # MEDIUM: Simplify onboarding for back-office roles (Official, Assessor, Super Admin) — password-only activation instead of full 5-step wizard. Field roles (Enumerator, Supervisor, Clerk) keep all 5 steps. Bank data already captured for Epic 6 reuse.
+
 
   # Epic 5: Back-Office Audit & Policy Reporting
   epic-5: in-progress
@@ -183,6 +184,8 @@ development_status:
   5-3-individual-record-pii-view-authorized-roles: backlog
   5-4-pii-rich-csv-pdf-exports: backlog
   5-5-respondent-data-registry-table: backlog  # NEW from Epic 4 retro: Server-paginated, filterable table of all respondent records for authorized roles
+  5-6a-supervisor-team-productivity-table: backlog  # Split from 5.6: Supervisor team table + API foundation, target tracking (25/day configurable), daily snapshots, CSV/PDF export. Builds on existing getTeamMetrics pattern.
+  5-6b-super-admin-cross-lga-analytics: backlog  # Split from 5.6: Super Admin individual staff tab + LGA comparison tab + supervisorless LGA monitoring + Government Official aggregate-only view (no names, no export). Depends on 5.6a.
   epic-5-retrospective: optional
 
   # Epic 6: System Integrity, Accountability & Remuneration
