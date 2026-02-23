@@ -565,8 +565,11 @@ jobs:
             # Install dependencies if package.json changed
             pnpm install --frozen-lockfile
 
+            # Push any schema changes to production DB
+            pnpm --filter @oslsr/api db:push
+
             # Build frontend
-            pnpm --filter @oslsr/web build
+            VITE_API_URL=https://oyotradeministry.com.ng/api/v1 pnpm --filter @oslsr/web build
 
             # Deploy frontend to NGINX
             sudo cp -r apps/web/dist/* /var/www/oslsr/
