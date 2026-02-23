@@ -19,7 +19,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } fro
 import { Button } from '../../../components/ui/button';
 import { SkeletonTable } from '../../../components/skeletons/SkeletonTable';
 import { FraudSeverityBadge } from './FraudSeverityBadge';
-import type { RespondentListItem, RespondentFilterParams } from '@oslsr/types';
+import type { RespondentListItem } from '@oslsr/types';
 
 // ── Verification Status Badge ────────────────────────────────────
 

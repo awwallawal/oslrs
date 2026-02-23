@@ -14,7 +14,7 @@ export function useLiveMonitoring(activePreset: string | null) {
   const [newCount, setNewCount] = useState(0);
 
   const isLiveMode = activePreset === 'live';
-  const refetchInterval = isLiveMode && isVisible ? 60_000 : false;
+  const refetchInterval: number | false = isLiveMode && isVisible ? 60_000 : false;
 
   return {
     refetchInterval,
