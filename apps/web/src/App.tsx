@@ -112,6 +112,8 @@ const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'))
 
 // Story 5.3: Respondent Detail Page (shared across multiple roles)
 const RespondentDetailPage = lazy(() => import('./features/dashboard/pages/RespondentDetailPage'));
+// Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
+const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 
 /**
  * Page loading fallback - shows full page skeleton during route transitions
@@ -648,6 +650,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.5: Respondent Registry */}
+                <Route
+                  path="registry"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentRegistryPage />
+                    </Suspense>
+                  }
+                />
                 {/* Placeholder routes for future stories */}
                 <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
               </Route>
@@ -707,6 +718,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RespondentDetailPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.5: Respondent Registry */}
+                <Route
+                  path="registry"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentRegistryPage />
                     </Suspense>
                   }
                 />
@@ -910,6 +930,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.5: Respondent Registry */}
+                <Route
+                  path="registry"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentRegistryPage />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
               </Route>
 
@@ -968,6 +997,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RespondentDetailPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.5: Respondent Registry */}
+                <Route
+                  path="registry"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RespondentRegistryPage />
                     </Suspense>
                   }
                 />

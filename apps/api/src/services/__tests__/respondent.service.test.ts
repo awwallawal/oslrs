@@ -9,6 +9,7 @@ const {
   mockOrderBy,
   mockLimit,
   mockGetEnumeratorIds,
+  mockExecute,
 } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
   mockFrom: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockOrderBy: vi.fn(),
   mockLimit: vi.fn(),
   mockGetEnumeratorIds: vi.fn(),
+  mockExecute: vi.fn(),
 }));
 
 // Chain builder that resolves to a configurable result
@@ -42,6 +44,7 @@ vi.mock('../../db/index.js', () => ({
       mockSelect(...args);
       return createChain();
     },
+    execute: (...args: any[]) => mockExecute(...args),
   },
 }));
 
@@ -90,7 +93,7 @@ const mockSubmission = {
 
 describe('RespondentService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     queryResult = [];
   });
 
@@ -309,6 +312,258 @@ describe('RespondentService', () => {
 
       expect(result.nin).toBe('61961438053');
       expect(result.firstName).toBe('Adewale');
+    });
+  });
+
+  // ── Story 5.5: listRespondents + getRespondentCount ───────────────
+
+  describe('listRespondents', () => {
+    const mockListRow = {
+      id: RESPONDENT_ID,
+      first_name: 'Adewale',
+      last_name: 'Johnson',
+      nin: '61961438053',
+      phone_number: '+2348012345678',
+      gender: 'male',
+      lga_id: 'ibadan_north',
+      lga_name: 'Ibadan North',
+      source: 'enumerator',
+      enumerator_id: '018e5f2a-1234-7890-abcd-444444444444',
+      enumerator_name: 'Bola Ige',
+      form_name: 'OSLSR Labour Survey',
+      registered_at: '2026-01-15T10:00:00.000Z',
+      fraud_severity: 'low',
+      fraud_total_score: '2.50',
+      verification_status: 'pending_review',
+    };
+
+    function setupExecute(dataRows: any[], countValue: number = 1) {
+      let callCount = 0;
+      mockExecute.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Data query
+          return Promise.resolve({ rows: dataRows });
+        } else {
+          // Count query
+          return Promise.resolve({ rows: [{ count: countValue }] });
+        }
+      });
+    }
+
+    it('returns paginated results with correct page size', async () => {
+      setupExecute([mockListRow], 1);
+
+      const result = await RespondentService.listRespondents(
+        { pageSize: 20 },
+        'super_admin',
+        USER_ID,
+      );
+
+      expect(result.data).toHaveLength(1);
+      expect(result.meta.pagination.pageSize).toBe(20);
+      expect(result.meta.pagination.totalItems).toBe(1);
+      expect(result.meta.pagination.hasNextPage).toBe(false);
+    });
+
+    it('returns PII fields for super_admin', async () => {
+      setupExecute([mockListRow], 1);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].firstName).toBe('Adewale');
+      expect(result.data[0].lastName).toBe('Johnson');
+      expect(result.data[0].nin).toBe('61961438053');
+      expect(result.data[0].phoneNumber).toBe('+2348012345678');
+    });
+
+    it('strips PII for supervisor role', async () => {
+      mockGetEnumeratorIds.mockResolvedValue(['018e5f2a-1234-7890-abcd-444444444444']);
+      setupExecute([mockListRow], 1);
+
+      const result = await RespondentService.listRespondents({}, 'supervisor', USER_ID);
+
+      expect(result.data[0].firstName).toBeNull();
+      expect(result.data[0].lastName).toBeNull();
+      expect(result.data[0].nin).toBeNull();
+      expect(result.data[0].phoneNumber).toBeNull();
+      // Operational fields still present
+      expect(result.data[0].gender).toBe('male');
+      expect(result.data[0].lgaName).toBe('Ibadan North');
+    });
+
+    it('returns empty page when supervisor has no team', async () => {
+      mockGetEnumeratorIds.mockResolvedValue([]);
+
+      const result = await RespondentService.listRespondents({}, 'supervisor', USER_ID);
+
+      expect(result.data).toHaveLength(0);
+      expect(result.meta.pagination.totalItems).toBe(0);
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it('detects hasNextPage when rows exceed pageSize', async () => {
+      const rows = Array.from({ length: 21 }, (_, i) => ({
+        ...mockListRow,
+        id: `id-${i}`,
+        registered_at: `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z`,
+      }));
+      setupExecute(rows, 50);
+
+      const result = await RespondentService.listRespondents(
+        { pageSize: 20 },
+        'super_admin',
+        USER_ID,
+      );
+
+      expect(result.data).toHaveLength(20);
+      expect(result.meta.pagination.hasNextPage).toBe(true);
+      expect(result.meta.pagination.nextCursor).not.toBeNull();
+    });
+
+    it('returns hasPreviousPage true when cursor is provided', async () => {
+      setupExecute([mockListRow], 1);
+
+      const result = await RespondentService.listRespondents(
+        { cursor: '2026-01-10T00:00:00.000Z|some-id' },
+        'super_admin',
+        USER_ID,
+      );
+
+      expect(result.meta.pagination.hasPreviousPage).toBe(true);
+    });
+
+    it('throws validation error for malformed cursor', async () => {
+      await expect(
+        RespondentService.listRespondents(
+          { cursor: 'invalid-no-pipe' },
+          'super_admin',
+          USER_ID,
+        ),
+      ).rejects.toThrow('Invalid cursor format');
+    });
+
+    it('throws validation error for cursor with invalid date', async () => {
+      await expect(
+        RespondentService.listRespondents(
+          { cursor: 'not-a-date|some-id' },
+          'super_admin',
+          USER_ID,
+        ),
+      ).rejects.toThrow('Invalid cursor date');
+    });
+
+    it('maps verification_status correctly from row data', async () => {
+      const rows = [
+        { ...mockListRow, verification_status: 'auto_clean' },
+        { ...mockListRow, id: 'id-2', verification_status: 'flagged' },
+        { ...mockListRow, id: 'id-3', verification_status: 'verified' },
+      ];
+      setupExecute(rows, 3);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].verificationStatus).toBe('auto_clean');
+      expect(result.data[1].verificationStatus).toBe('flagged');
+      expect(result.data[2].verificationStatus).toBe('verified');
+    });
+
+    it('extracts gender from row data', async () => {
+      setupExecute([{ ...mockListRow, gender: 'female' }], 1);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].gender).toBe('female');
+    });
+
+    it('handles empty result set', async () => {
+      setupExecute([], 0);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data).toHaveLength(0);
+      expect(result.meta.pagination.totalItems).toBe(0);
+      expect(result.meta.pagination.hasNextPage).toBe(false);
+      expect(result.meta.pagination.nextCursor).toBeNull();
+    });
+
+    it('parses fraud scores as floats', async () => {
+      setupExecute([{ ...mockListRow, fraud_total_score: '15.75' }], 1);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].fraudTotalScore).toBe(15.75);
+    });
+
+    it('handles null fraud_total_score', async () => {
+      setupExecute([{ ...mockListRow, fraud_total_score: null, fraud_severity: null }], 1);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].fraudTotalScore).toBeNull();
+      expect(result.data[0].fraudSeverity).toBeNull();
+    });
+
+    it('calls db.execute for data and count queries', async () => {
+      setupExecute([mockListRow], 1);
+
+      await RespondentService.listRespondents(
+        { lgaId: 'ibadan_north', gender: 'male', source: 'enumerator' },
+        'super_admin',
+        USER_ID,
+      );
+
+      // Should call execute twice: data query + count query
+      expect(mockExecute).toHaveBeenCalledTimes(2);
+    });
+
+    it('builds correct nextCursor format', async () => {
+      const rows = Array.from({ length: 21 }, (_, i) => ({
+        ...mockListRow,
+        id: `id-${i}`,
+        registered_at: `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z`,
+      }));
+      setupExecute(rows, 50);
+
+      const result = await RespondentService.listRespondents(
+        { pageSize: 20 },
+        'super_admin',
+        USER_ID,
+      );
+
+      // Cursor = "registeredAt_ISO|id"
+      expect(result.meta.pagination.nextCursor).toContain('|');
+      expect(result.meta.pagination.nextCursor).toContain('2026-01-20');
+      expect(result.meta.pagination.nextCursor).toContain('id-19');
+    });
+  });
+
+  describe('getRespondentCount', () => {
+    it('returns count from db', async () => {
+      mockExecute.mockResolvedValue({ rows: [{ count: 42 }] });
+
+      const count = await RespondentService.getRespondentCount({}, 'super_admin', USER_ID);
+
+      expect(count).toBe(42);
+    });
+
+    it('returns 0 when supervisor has no team', async () => {
+      mockGetEnumeratorIds.mockResolvedValue([]);
+
+      const count = await RespondentService.getRespondentCount({}, 'supervisor', USER_ID);
+
+      expect(count).toBe(0);
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it('executes count query for supervisor with team', async () => {
+      mockGetEnumeratorIds.mockResolvedValue(['enum-1']);
+      mockExecute.mockResolvedValue({ rows: [{ count: 5 }] });
+
+      const count = await RespondentService.getRespondentCount({}, 'supervisor', USER_ID);
+
+      expect(count).toBe(5);
+      expect(mockExecute).toHaveBeenCalledTimes(1);
     });
   });
 });

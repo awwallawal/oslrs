@@ -66,7 +66,7 @@ function makeChain(result: unknown) {
 
 describe('ReportService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('getOverviewStats', () => {

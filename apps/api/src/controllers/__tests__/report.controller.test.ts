@@ -61,7 +61,7 @@ const sampleTrends = [
 
 describe('ReportController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('getOverviewStats', () => {

@@ -73,7 +73,7 @@ function createMocks(userOverrides?: Record<string, unknown>) {
 
 describe('FormController.getDailySubmissionCounts', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     // Re-establish full chain (mockReset:true in config clears implementations)
     mockSelect.mockReturnValue({ from: mockFrom });
     mockFrom.mockReturnValue({ where: mockWhere });
@@ -248,7 +248,7 @@ describe('FormController.getDailySubmissionCounts', () => {
 
 describe('FormController.getMySubmissionCounts scope=team', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     // Re-establish full chain (mockReset:true in config clears implementations)
     mockSelect.mockReturnValue({ from: mockFrom });
     mockFrom.mockReturnValue({ where: mockWhere });

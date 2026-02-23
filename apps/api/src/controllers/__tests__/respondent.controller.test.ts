@@ -76,7 +76,7 @@ const mockDetailResponse = {
 
 describe('RespondentController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('getRespondentDetail', () => {

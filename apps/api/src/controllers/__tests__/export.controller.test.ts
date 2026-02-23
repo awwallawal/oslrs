@@ -91,7 +91,7 @@ const mockExportData = [
 
 describe('ExportController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockGetFilteredCount.mockResolvedValue(1);
     mockGetRespondentExportData.mockResolvedValue({ data: mockExportData, totalCount: 1 });
     mockGenerateCsvExport.mockResolvedValue(Buffer.from('csv-data'));

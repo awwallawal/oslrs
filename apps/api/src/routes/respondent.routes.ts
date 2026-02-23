@@ -2,7 +2,7 @@
  * Respondent Routes
  *
  * Story 5.3: Individual Record PII View (Authorized Roles).
- * Routes for respondent detail access.
+ * Story 5.5: Respondent Data Registry Table — paginated list with filters.
  */
 
 import { Router } from 'express';
@@ -16,17 +16,17 @@ const router = Router();
 // All routes require authentication
 router.use(authenticate);
 
-// GET /api/v1/respondents/:id — respondent detail
-// Accessible to: super_admin, verification_assessor, government_official, supervisor
-router.get(
-  '/:id',
-  authorize(
-    UserRole.SUPER_ADMIN,
-    UserRole.VERIFICATION_ASSESSOR,
-    UserRole.GOVERNMENT_OFFICIAL,
-    UserRole.SUPERVISOR,
-  ),
-  RespondentController.getRespondentDetail,
-);
+const AUTHORIZED_ROLES = [
+  UserRole.SUPER_ADMIN,
+  UserRole.VERIFICATION_ASSESSOR,
+  UserRole.GOVERNMENT_OFFICIAL,
+  UserRole.SUPERVISOR,
+];
+
+// GET /api/v1/respondents — paginated respondent registry list (Story 5.5)
+router.get('/', authorize(...AUTHORIZED_ROLES), RespondentController.listRespondents);
+
+// GET /api/v1/respondents/:id — respondent detail (Story 5.3)
+router.get('/:id', authorize(...AUTHORIZED_ROLES), RespondentController.getRespondentDetail);
 
 export default router;

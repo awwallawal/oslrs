@@ -67,7 +67,7 @@ function createMockTx(): any {
 
 describe('AuditService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('PII_ACTIONS constants', () => {

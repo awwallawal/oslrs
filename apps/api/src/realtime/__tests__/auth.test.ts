@@ -45,7 +45,7 @@ const validPayload: JwtPayload = {
 
 describe('verifySocketToken', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockVerifyAccessToken.mockReturnValue(validPayload);
     mockIsBlacklisted.mockResolvedValue(false);
     mockIsTokenRevokedByTimestamp.mockResolvedValue(false);

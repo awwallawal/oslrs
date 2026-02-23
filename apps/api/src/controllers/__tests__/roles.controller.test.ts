@@ -26,7 +26,7 @@ describe('RolesController', () => {
   let jsonMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
 
     jsonMock = vi.fn();
 

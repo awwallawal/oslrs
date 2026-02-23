@@ -43,7 +43,7 @@ describe('FormController', () => {
   let statusMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
 
     jsonMock = vi.fn();
     statusMock = vi.fn().mockReturnThis();

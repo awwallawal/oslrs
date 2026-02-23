@@ -176,7 +176,7 @@ function makeJob(overrides: Record<string, unknown> = {}) {
 
 describe('Submission Ingestion Pipeline (Integration)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     submissionsStore = {};
     respondentsStore = {};
   });

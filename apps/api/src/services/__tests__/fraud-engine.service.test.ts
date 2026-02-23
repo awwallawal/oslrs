@@ -71,7 +71,7 @@ const defaultThresholds: FraudThresholdConfig[] = [
 
 describe('FraudEngine', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockGetActiveThresholds.mockResolvedValue(defaultThresholds);
     mockGetCurrentConfigVersion.mockResolvedValue(1);
   });

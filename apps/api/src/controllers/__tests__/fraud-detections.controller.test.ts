@@ -102,7 +102,7 @@ const sampleDetectionDetail = {
 
 describe('FraudDetectionsController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   // ── listDetections ──────────────────────────────────────────────────

@@ -113,7 +113,7 @@ const processorFn = capturedProcessor;
 
 describe('webhook-ingestion worker', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('new submission (happy path)', () => {

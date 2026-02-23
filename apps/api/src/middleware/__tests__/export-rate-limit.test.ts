@@ -61,7 +61,7 @@ function runMiddleware(req: Request, res: Response, jsonMock: ReturnType<typeof 
 
 describe('exportRateLimit', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('allows first 5 requests', async () => {

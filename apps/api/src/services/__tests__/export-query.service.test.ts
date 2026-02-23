@@ -45,7 +45,7 @@ const mockRow2 = {
 
 describe('ExportQueryService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('getRespondentExportData', () => {

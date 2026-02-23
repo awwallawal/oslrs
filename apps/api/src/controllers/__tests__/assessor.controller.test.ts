@@ -53,7 +53,7 @@ function makeReq(overrides: Partial<Request> & Record<string, unknown> = {}): Re
 
 describe('AssessorController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('getAuditQueue', () => {

@@ -106,6 +106,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
   supervisor: [
     { label: 'Home', href: '/dashboard/supervisor', icon: Home },
     { label: 'Team Progress', href: '/dashboard/supervisor/team', icon: Users },
+    { label: 'Registry', href: '/dashboard/supervisor/registry', icon: Database },
     { label: 'Fraud Alerts', href: '/dashboard/supervisor/fraud', icon: AlertTriangle },
     { label: 'Messages', href: '/dashboard/supervisor/messages', icon: MessageSquare },
   ],
@@ -113,6 +114,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
   verification_assessor: [
     { label: 'Home', href: '/dashboard/assessor', icon: Home },
     { label: 'Audit Queue', href: '/dashboard/assessor/queue', icon: FileSearch },
+    { label: 'Registry', href: '/dashboard/assessor/registry', icon: Database },
     { label: 'Completed', href: '/dashboard/assessor/completed', icon: CheckCircle },
     { label: 'Evidence', href: '/dashboard/assessor/evidence', icon: Shield },
     { label: 'Export Data', href: '/dashboard/assessor/export', icon: Download },
@@ -120,6 +122,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
 
   government_official: [
     { label: 'Home', href: '/dashboard/official', icon: Home },
+    { label: 'Registry', href: '/dashboard/official/registry', icon: Database },
     { label: 'Statistics', href: '/dashboard/official/stats', icon: PieChart },
     { label: 'Trends', href: '/dashboard/official/trends', icon: TrendingUp },
     { label: 'Export', href: '/dashboard/official/export', icon: Download },
@@ -133,6 +136,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Audit Queue', href: '/dashboard/super-admin/audit', icon: FileSearch },
     { label: 'Data Overview', href: '/dashboard/super-admin/data', icon: Database },
     { label: 'Reports', href: '/dashboard/super-admin/reports', icon: BarChart },
+    { label: 'Registry', href: '/dashboard/super-admin/registry', icon: Database },
     { label: 'Export Data', href: '/dashboard/super-admin/export', icon: Download },
     { label: 'Audit Logs', href: '/dashboard/super-admin/logs', icon: ScrollText },
     { label: 'User Roles', href: '/dashboard/super-admin/roles', icon: UserCog },

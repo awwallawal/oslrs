@@ -85,7 +85,7 @@ function makeValidSchema(overrides?: Partial<NativeFormSchema>): NativeFormSchem
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   // Default transaction mock — provides tx with same interface as db
   mockTransaction.mockImplementation(async (fn: any) => {
     const tx = {

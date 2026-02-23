@@ -132,7 +132,7 @@ describe('Task 4.3: Enumerator cross-LGA subscription rejected', () => {
 
 describe('Task 4.4: Token validation for transport auth', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockVerifyAccessToken.mockReturnValue(makePayload());
     mockIsBlacklisted.mockResolvedValue(false);
     mockIsTokenRevokedByTimestamp.mockResolvedValue(false);

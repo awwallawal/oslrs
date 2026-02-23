@@ -54,7 +54,7 @@ describe('FormController.getMySubmissionCounts', () => {
   let jsonMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
 
     jsonMock = vi.fn();
     mockRes = { json: jsonMock, status: vi.fn().mockReturnThis() };

@@ -37,7 +37,7 @@ import { queueFraudDetection, closeFraudDetectionQueue } from '../fraud-detectio
 
 describe('fraud-detection queue', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('should add a fraud detection job with correct jobId', async () => {

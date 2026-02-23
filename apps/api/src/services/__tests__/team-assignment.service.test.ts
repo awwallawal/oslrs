@@ -84,7 +84,7 @@ const makeAssignment = (overrides = {}) => ({
 
 describe('TeamAssignmentService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   // ── getEnumeratorIdsForSupervisor ──────────────────────────────────────

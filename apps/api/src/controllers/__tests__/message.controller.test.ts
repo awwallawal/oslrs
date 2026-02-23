@@ -59,7 +59,7 @@ function createMocks(userOverrides?: Record<string, unknown>) {
 
 describe('MessageController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('sendDirect', () => {

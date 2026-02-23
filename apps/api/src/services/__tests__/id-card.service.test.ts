@@ -101,7 +101,7 @@ describe('IDCardService', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     service = new IDCardService();
     mocks.toBuffer.mockResolvedValue(Buffer.from('fake-qr-code'));
   });

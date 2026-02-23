@@ -85,7 +85,7 @@ vi.mock('node:fs', () => ({
 
 describe('ExportService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('generatePdfReport', () => {

@@ -68,7 +68,7 @@ const ID_OUT_OF_SCOPE = '00000000-0000-4000-8000-000000000099';
 
 describe('FraudDetectionsController — Bulk (Story 4.5)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   // ── getClusters ─────────────────────────────────────────────────────

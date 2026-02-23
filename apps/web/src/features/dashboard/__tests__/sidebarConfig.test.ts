@@ -56,9 +56,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(4);
     });
 
-    it('supervisor has exactly 4 sidebar items (AC3)', () => {
+    it('supervisor has exactly 5 sidebar items (AC3 + Registry)', () => {
       const items = sidebarConfig.supervisor;
-      expect(items.length).toBe(4);
+      expect(items.length).toBe(5);
     });
 
     it('data_entry_clerk has exactly 4 sidebar items', () => {
@@ -66,14 +66,14 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(4);
     });
 
-    it('verification_assessor has exactly 5 sidebar items', () => {
+    it('verification_assessor has exactly 6 sidebar items', () => {
       const items = sidebarConfig.verification_assessor;
-      expect(items.length).toBe(5);
+      expect(items.length).toBe(6);
     });
 
-    it('government_official has exactly 4 sidebar items', () => {
+    it('government_official has exactly 5 sidebar items', () => {
       const items = sidebarConfig.government_official;
-      expect(items.length).toBe(4);
+      expect(items.length).toBe(5);
     });
 
     it('super_admin has 11+ sidebar items', () => {

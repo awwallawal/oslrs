@@ -119,7 +119,7 @@ const makeMessage = (overrides = {}) => ({
 
 describe('MessageService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     insertCallCount = 0;
     selectResults.length = 0;
   });

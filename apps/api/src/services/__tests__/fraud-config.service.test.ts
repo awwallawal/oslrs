@@ -76,7 +76,7 @@ const mockDbRow = {
 
 describe('FraudConfigService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockSelectResult.mockReturnValue([]);
     process.env.VITEST = 'true';
   });

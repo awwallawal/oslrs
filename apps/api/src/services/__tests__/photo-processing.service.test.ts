@@ -64,7 +64,7 @@ describe('PhotoProcessingService', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     process.env = { ...originalEnv }; // Reset env vars
     service = new PhotoProcessingService();
     mocks.getSignedUrl.mockResolvedValue('https://mock-signed-url.com/image.jpg');

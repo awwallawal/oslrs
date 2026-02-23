@@ -161,7 +161,7 @@ import { AssessorService } from '../assessor.service.js';
 // ── Tests ─────────────────────────────────────────────────────────────
 describe('AssessorService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     queryResult = [];
   });
 

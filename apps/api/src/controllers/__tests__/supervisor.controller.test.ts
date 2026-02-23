@@ -80,7 +80,7 @@ function createMocks(userOverrides?: Record<string, unknown>) {
 
 describe('SupervisorController.getTeamOverview', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   afterEach(() => {
@@ -166,7 +166,7 @@ describe('SupervisorController.getTeamOverview', () => {
 
 describe('SupervisorController.getPendingAlerts', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockSelect.mockReturnValue({ from: mockFrom });
     mockFrom.mockReturnValue({ where: mockWhere });
   });
@@ -269,7 +269,7 @@ describe('SupervisorController.getPendingAlerts', () => {
 
 describe('SupervisorController.getTeamMetrics', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockSelect.mockReturnValue({ from: mockFrom });
     mockFrom.mockReturnValue({ where: mockWhere });
     mockWhere.mockReturnValue({ groupBy: mockGroupBy });
@@ -395,7 +395,7 @@ describe('SupervisorController.getTeamMetrics', () => {
 
 describe('SupervisorController.getTeamGps', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   afterEach(() => {

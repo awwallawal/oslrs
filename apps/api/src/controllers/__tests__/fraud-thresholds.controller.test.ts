@@ -29,7 +29,7 @@ function makeMocks() {
 
 describe('FraudThresholdsController', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('listThresholds', () => {
