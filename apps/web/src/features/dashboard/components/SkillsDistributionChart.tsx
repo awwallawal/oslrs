@@ -116,7 +116,7 @@ export function SkillsDistributionChart({ data, isLoading, error, className }: S
                 }}
               />
               <Legend
-                formatter={(value: string, entry: any) => {
+                formatter={(value: string, _entry: unknown) => {
                   const item = data.find((d) => d.skill === value);
                   const pct = item && total > 0 ? ((item.count / total) * 100).toFixed(1) : '0';
                   return <span className="text-sm">{value} ({pct}%)</span>;

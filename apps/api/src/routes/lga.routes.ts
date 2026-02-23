@@ -35,7 +35,7 @@ router.get(
       });
 
       _res.json({ data: lgasList });
-    } catch (error: unknown) {
+    } catch {
       next(new AppError(
         'LGA_LIST_ERROR',
         'Failed to retrieve LGAs list',

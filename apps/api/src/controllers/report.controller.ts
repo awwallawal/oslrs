@@ -9,7 +9,6 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '@oslsr/utils';
 import { ReportService } from '../services/report.service.js';
 
 export class ReportController {
