@@ -51,6 +51,36 @@ vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div aria-label="Loading card" />,
 }));
 
+// Mock export hooks for OfficialExportPage (which now renders ExportPage)
+vi.mock('../../hooks/useExport', () => ({
+  useExportPreviewCount: () => ({ data: 42, isLoading: false }),
+  useLgas: () => ({
+    data: [
+      { id: '1', name: 'Ibadan North', code: 'ibadan-north' },
+    ],
+    isLoading: false,
+  }),
+  useExportDownload: () => ({
+    download: vi.fn(),
+    isDownloading: false,
+    error: null,
+  }),
+  exportKeys: {
+    all: ['exports'],
+    previewCount: (f: unknown) => ['exports', 'count', f],
+    lgas: ['lgas'],
+  },
+}));
+
+vi.mock('../../../../hooks/useToast', () => ({
+  useToast: () => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  }),
+}));
+
 // Mock Recharts — they need a DOM container width > 0
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
@@ -219,7 +249,7 @@ describe('OfficialTrendsPage', () => {
   });
 });
 
-// ── Export Page Tests (Unchanged) ──────────────────────────────────────────
+// ── Export Page Tests (Story 5.4 — now renders full ExportPage) ───────────
 
 describe('OfficialExportPage', () => {
   it('renders page title', () => {
@@ -227,13 +257,15 @@ describe('OfficialExportPage', () => {
     expect(screen.getByText('Export Reports')).toBeInTheDocument();
   });
 
-  it('renders empty state copy', () => {
+  it('renders filter controls', () => {
     render(<MemoryRouter><OfficialExportPage /></MemoryRouter>);
-    expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
+    expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
+    expect(screen.getByTestId('source-filter')).toBeInTheDocument();
   });
 
-  it('shows Epic 5 message', () => {
+  it('renders export button and format toggle', () => {
     render(<MemoryRouter><OfficialExportPage /></MemoryRouter>);
-    expect(screen.getByText('Export functionality will be available in Epic 5.')).toBeInTheDocument();
+    expect(screen.getByTestId('export-button')).toBeInTheDocument();
+    expect(screen.getByTestId('format-toggle')).toBeInTheDocument();
   });
 });

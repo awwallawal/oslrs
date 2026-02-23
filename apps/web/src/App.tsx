@@ -103,7 +103,7 @@ const AssessorEvidencePage = lazy(() => import('./features/dashboard/pages/Asses
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
 const OfficialStatsPage = lazy(() => import('./features/dashboard/pages/OfficialStatsPage'));
 const OfficialTrendsPage = lazy(() => import('./features/dashboard/pages/OfficialTrendsPage'));
-const OfficialExportPage = lazy(() => import('./features/dashboard/pages/OfficialExportPage'));
+const ExportPage = lazy(() => import('./features/dashboard/pages/ExportPage'));
 const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
 const PublicSurveysPage = lazy(() => import('./features/dashboard/pages/PublicSurveysPage'));
 const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/PublicMarketplacePage'));
@@ -639,6 +639,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.4: Export Data */}
+                <Route
+                  path="export"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ExportPage />
+                    </Suspense>
+                  }
+                />
                 {/* Placeholder routes for future stories */}
                 <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
               </Route>
@@ -892,6 +901,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.4: Export Data */}
+                <Route
+                  path="export"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ExportPage />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
               </Route>
 
@@ -940,7 +958,7 @@ function App() {
                   path="export"
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
-                      <OfficialExportPage />
+                      <ExportPage />
                     </Suspense>
                   }
                 />

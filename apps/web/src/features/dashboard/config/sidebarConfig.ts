@@ -115,6 +115,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Audit Queue', href: '/dashboard/assessor/queue', icon: FileSearch },
     { label: 'Completed', href: '/dashboard/assessor/completed', icon: CheckCircle },
     { label: 'Evidence', href: '/dashboard/assessor/evidence', icon: Shield },
+    { label: 'Export Data', href: '/dashboard/assessor/export', icon: Download },
   ],
 
   government_official: [
@@ -132,6 +133,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Audit Queue', href: '/dashboard/super-admin/audit', icon: FileSearch },
     { label: 'Data Overview', href: '/dashboard/super-admin/data', icon: Database },
     { label: 'Reports', href: '/dashboard/super-admin/reports', icon: BarChart },
+    { label: 'Export Data', href: '/dashboard/super-admin/export', icon: Download },
     { label: 'Audit Logs', href: '/dashboard/super-admin/logs', icon: ScrollText },
     { label: 'User Roles', href: '/dashboard/super-admin/roles', icon: UserCog },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },

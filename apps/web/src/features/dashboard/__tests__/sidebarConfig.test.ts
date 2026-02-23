@@ -66,9 +66,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(4);
     });
 
-    it('verification_assessor has exactly 4 sidebar items', () => {
+    it('verification_assessor has exactly 5 sidebar items', () => {
       const items = sidebarConfig.verification_assessor;
-      expect(items.length).toBe(4);
+      expect(items.length).toBe(5);
     });
 
     it('government_official has exactly 4 sidebar items', () => {
