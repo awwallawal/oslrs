@@ -7,7 +7,7 @@
 import { useState, useCallback } from 'react';
 import { RefreshCw, Download, Users, Search, X, Calendar } from 'lucide-react';
 import type { SortingState } from '@tanstack/react-table';
-import type { ProductivityFilterParams, ProductivityStatus } from '@oslsr/types';
+import type { ProductivityFilterParams } from '@oslsr/types';
 import { useTeamProductivity, useProductivityExport, productivityKeys } from '../hooks/useProductivity';
 import ProductivityTable from '../components/ProductivityTable';
 import { Button } from '../../../components/ui/button';

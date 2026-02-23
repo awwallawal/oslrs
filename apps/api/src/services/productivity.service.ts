@@ -12,7 +12,7 @@ import { users } from '../db/schema/users.js';
 import { submissions } from '../db/schema/submissions.js';
 import { fraudDetections } from '../db/schema/fraud-detections.js';
 import { dailyProductivitySnapshots } from '../db/schema/daily-productivity-snapshots.js';
-import { sql, inArray, and, gte, lte, eq, isNull, or } from 'drizzle-orm';
+import { sql, inArray, and, gte, lte, eq } from 'drizzle-orm';
 import { TeamAssignmentService } from './team-assignment.service.js';
 import { ProductivityTargetService } from './productivity-target.service.js';
 import type {
@@ -22,9 +22,6 @@ import type {
   ProductivityStatus,
   ProductivityTrend,
 } from '@oslsr/types';
-import pino from 'pino';
-
-const logger = pino({ name: 'productivity-service' });
 
 /** WAT = UTC+1 offset in milliseconds */
 const WAT_OFFSET_MS = 1 * 60 * 60 * 1000;
@@ -161,7 +158,6 @@ export class ProductivityService {
     });
 
     const boundaries = getWatBoundaries();
-    const todayDateStr = getWatDateString(new Date());
 
     // Live "Today" query
     const liveCounts = await db
