@@ -79,8 +79,8 @@ describe('AuditService', () => {
       expect(PII_ACTIONS.SEARCH_PII).toBe('pii.search');
     });
 
-    it('should have exactly 5 action types', () => {
-      expect(Object.keys(PII_ACTIONS)).toHaveLength(5);
+    it('should have exactly 7 action types', () => {
+      expect(Object.keys(PII_ACTIONS)).toHaveLength(7);
     });
   });
 

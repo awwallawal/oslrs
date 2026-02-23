@@ -56,9 +56,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(4);
     });
 
-    it('supervisor has exactly 5 sidebar items (AC3 + Registry)', () => {
+    it('supervisor has exactly 6 sidebar items (AC3 + Registry + Productivity)', () => {
       const items = sidebarConfig.supervisor;
-      expect(items.length).toBe(5);
+      expect(items.length).toBe(6);
     });
 
     it('data_entry_clerk has exactly 4 sidebar items', () => {

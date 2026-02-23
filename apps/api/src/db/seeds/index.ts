@@ -10,7 +10,7 @@
  */
 
 import { db, pool } from '../index.js';
-import { roles, lgas, users, teamAssignments } from '../schema/index.js';
+import { roles, lgas, users, teamAssignments, productivityTargets } from '../schema/index.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { OYO_STATE_LGAS } from './lgas.seed.js';
@@ -279,6 +279,34 @@ async function seedTeamAssignments(): Promise<void> {
 }
 
 /**
+ * Seed system-wide default productivity target (Story 5.6a)
+ * Inserts { lgaId: null, dailyTarget: 25 } if no active default exists.
+ */
+async function seedProductivityTargets(): Promise<void> {
+  logger.info('Seeding productivity targets...');
+
+  // Check if an active system-wide default already exists
+  const existing = await db.query.productivityTargets.findFirst({
+    where: and(
+      isNull(productivityTargets.lgaId),
+      isNull(productivityTargets.effectiveUntil),
+    ),
+  });
+
+  if (existing) {
+    logger.info({ dailyTarget: existing.dailyTarget }, 'System-wide productivity target already exists, skipping');
+    return;
+  }
+
+  await db.insert(productivityTargets).values({
+    lgaId: null,
+    dailyTarget: 25,
+  });
+
+  logger.info({ dailyTarget: 25 }, 'System-wide default productivity target created');
+}
+
+/**
  * Production seed - creates Super Admin from environment variables
  */
 async function seedProductionAdmin(roleMap: Map<string, string>): Promise<void> {
@@ -366,6 +394,9 @@ async function main(): Promise<void> {
     const markAsSeeded = isDev;
     const roleMap = await seedRoles(markAsSeeded);
     const lgaMap = await seedLGAs(markAsSeeded);
+
+    // Always seed productivity targets (required for productivity feature)
+    await seedProductivityTargets();
 
     if (isDev) {
       // Development: seed test users with known passwords

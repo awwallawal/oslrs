@@ -18,3 +18,4 @@ export * from './message.js';
 export * from './validation/message.js';
 export * from './report.js';
 export * from './respondent.js';
+export * from './productivity.js';

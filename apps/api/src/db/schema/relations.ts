@@ -8,6 +8,8 @@ import { respondents } from './respondents.js';
 import { teamAssignments } from './team-assignments.js';
 import { messages, messageReceipts } from './messages.js';
 import { fraudDetections } from './fraud-detections.js';
+import { dailyProductivitySnapshots } from './daily-productivity-snapshots.js';
+import { productivityTargets } from './productivity-targets.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -134,6 +136,18 @@ export const messageReceiptsRelations = relations(messageReceipts, ({ one }) => 
     relationName: 'receiptRecipient',
   }),
 }));
+
+// Daily productivity snapshot relations (Story 5.6a)
+export const dailyProductivitySnapshotsRelations = relations(dailyProductivitySnapshots, ({ one }) => ({
+  user: one(users, {
+    fields: [dailyProductivitySnapshots.userId],
+    references: [users.id],
+  }),
+}));
+
+// Productivity target relations (Story 5.6a)
+// No FK constraints (lgaId is text code, createdBy is optional)
+export const productivityTargetsRelations = relations(productivityTargets, () => ({}));
 
 // Fraud detection relations (Story 4.4)
 // Dual-FK pattern: enumeratorId + reviewedBy both reference users

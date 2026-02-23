@@ -66,6 +66,7 @@ export interface ExportColumn {
 
 export interface PdfReportOptions {
   title: string;
+  subtitle?: string;
 }
 
 export class ExportService {
@@ -229,6 +230,16 @@ export class ExportService {
       width: CONTENT_WIDTH - HEADER_HEIGHT - 8,
     });
 
+    // Subtitle (optional — e.g., LGA name, date range, prepared by)
+    let nextY = MARGIN + 44;
+    if (options.subtitle) {
+      doc.fontSize(8).fillColor(LABEL_TEXT).font('Helvetica');
+      doc.text(options.subtitle, textX, nextY, {
+        width: CONTENT_WIDTH - HEADER_HEIGHT - 8,
+      });
+      nextY += 12;
+    }
+
     // Date
     const dateStr = new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -236,7 +247,7 @@ export class ExportService {
       year: 'numeric',
     });
     doc.fontSize(8).fillColor(LABEL_TEXT).font('Helvetica');
-    doc.text(`Generated: ${dateStr}`, textX, MARGIN + 44, {
+    doc.text(`Generated: ${dateStr}`, textX, nextY, {
       width: CONTENT_WIDTH - HEADER_HEIGHT - 8,
     });
   }

@@ -24,6 +24,8 @@ export const PII_ACTIONS = {
   EXPORT_CSV: 'pii.export_csv',
   EXPORT_PDF: 'pii.export_pdf',
   SEARCH_PII: 'pii.search',
+  VIEW_PRODUCTIVITY: 'pii.view_productivity',
+  EXPORT_PRODUCTIVITY: 'pii.export_productivity',
 } as const;
 
 export type PiiAction = (typeof PII_ACTIONS)[keyof typeof PII_ACTIONS];

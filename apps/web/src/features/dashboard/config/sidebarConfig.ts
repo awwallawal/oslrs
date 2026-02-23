@@ -106,6 +106,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
   supervisor: [
     { label: 'Home', href: '/dashboard/supervisor', icon: Home },
     { label: 'Team Progress', href: '/dashboard/supervisor/team', icon: Users },
+    { label: 'Productivity', href: '/dashboard/supervisor/productivity', icon: TrendingUp },
     { label: 'Registry', href: '/dashboard/supervisor/registry', icon: Database },
     { label: 'Fraud Alerts', href: '/dashboard/supervisor/fraud', icon: AlertTriangle },
     { label: 'Messages', href: '/dashboard/supervisor/messages', icon: MessageSquare },

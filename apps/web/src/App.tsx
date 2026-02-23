@@ -86,6 +86,7 @@ const SupervisorHome = lazy(() => import('./features/dashboard/pages/SupervisorH
 const SupervisorTeamPage = lazy(() => import('./features/dashboard/pages/SupervisorTeamPage'));
 const SupervisorFraudPage = lazy(() => import('./features/dashboard/pages/SupervisorFraudPage'));
 const SupervisorMessagesPage = lazy(() => import('./features/dashboard/pages/SupervisorMessagesPage'));
+const SupervisorProductivityPage = lazy(() => import('./features/dashboard/pages/SupervisorProductivityPage'));
 const EnumeratorHome = lazy(() => import('./features/dashboard/pages/EnumeratorHome'));
 const EnumeratorSurveysPage = lazy(() => import('./features/dashboard/pages/EnumeratorSurveysPage'));
 const EnumeratorDraftsPage = lazy(() => import('./features/dashboard/pages/EnumeratorDraftsPage'));
@@ -727,6 +728,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RespondentRegistryPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.6a: Team Productivity */}
+                <Route
+                  path="productivity"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorProductivityPage />
                     </Suspense>
                   }
                 />
