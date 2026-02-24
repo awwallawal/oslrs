@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-02-22 - Epic 4 complete (5 stories + 9 prep). Prep-epic-5 (8 tasks) added. Stories 5.5 + 5.6a/5.6b added (split from 5.6). Baselines: 667 API, 1512 web tests
+# updated: 2026-02-24 - Epic 5 complete (7 stories + 8 prep = 15 total). Retrospective done. 142 CR findings, ~97% fix rate, ~660 new tests. Remuneration scoped to record-keeping (not payment processing). 10 prep tasks + 3 bugs defined for Epic 6. Super Admin governance gap identified.
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -166,7 +166,7 @@ development_status:
   # Must complete before Epic 5 begins. Includes bug fix (prep-1), audit logging (prep-2),
   # export spike (prep-3), story definition (prep-4), performance validation (prep-5),
   # workflow design (prep-6), E2E expansion (prep-7), and role-based activation (prep-8).
-  prep-epic-5: in-progress
+  prep-epic-5: done  # All 8 prep tasks completed 2026-02-22
   prep-1-fix-supervisor-direct-messaging-ux: done  # HIGH: Add "New Conversation" flow with team roster selection to SupervisorMessagesPage. Code review passed 2026-02-21: 8 findings (1H, 3M, 4L), all 8 fixed. 51 messaging tests, 558 dashboard tests pass, 0 regressions.
   prep-2-lightweight-audit-logging-pii-access: done  # HIGH: Required by Stories 5.3, 5.4, 5.5. AuditService with fire-and-forget + transactional modes. Code review passed 2026-02-21: 7 findings (2H, 3M, 2L), all 7 fixed. 13 tests pass, 0 regressions.
   prep-3-export-infrastructure-spike: done  # HIGH: CSV/PDF generation with security controls (logged, role-authorized). ExportService created, csv-stringify installed, spike summary with security architecture + performance benchmarks. R1 2026-02-21: 9 findings all fixed. R2 2026-02-22: 9 findings (2H, 5M, 2L) all fixed. 19 unit tests pass, 7 benchmarks gated, 0 regressions.
@@ -178,7 +178,7 @@ development_status:
 
 
   # Epic 5: Back-Office Audit & Policy Reporting
-  epic-5: in-progress
+  epic-5: done  # Completed 2026-02-24: All 7 stories done, retrospective complete. 142 CR findings, ~97% fix rate, ~660 new tests.
   5-1-high-level-policy-dashboard: done  # Completed 2026-02-22: All 9 tasks done. Code review passed: 10 findings (2H, 5M, 3L), all fixed. 30 API + 56 web tests pass (86 story tests), 0 regressions.
   5-2-verification-assessor-audit-queue: done  # Completed 2026-02-22: All 9 tasks done. Code review passed: 10 findings (1H, 6M, 3L), all 10 fixed. H1 URL param consumption, M6 LIKE injection escape, L1 AppError throw pattern. 43 backend + 78 frontend tests (121 story tests), 0 regressions.
   5-3-individual-record-pii-view-authorized-roles: done  # Code review passed 2026-02-22: 9 findings (2H, 4M, 3L), all 9 fixed. H1 fraud badge nav for super-admin/official, H2 misleading role tests. 45 tests (26 API + 19 web), 0 regressions.
@@ -186,10 +186,27 @@ development_status:
   5-5-respondent-data-registry-table: done  # Code review passed 2026-02-23: 10 findings (1C, 4H, 3M, 2L), all 10 fixed. C1 missing service tests, H1 stale date presets, H2 severity multi-select, H3 stale timer, H4 missing 403 tests, M1 duplicated filter logic. 74 tests (45 API + 29 web), 0 regressions.
   5-6a-supervisor-team-productivity-table: done  # Code review passed 2026-02-23: 8 findings (1H, 4M, 3L), all 8 fixed. H1 period-aware approved/rejected, M1 custom date picker, M2 PDF metadata, M3 lgaName resolution, M4 N+1 elimination. 75 tests (41 API + 34 web), 0 regressions.
   5-6b-super-admin-cross-lga-analytics: done  # Code review passed 2026-02-24: 5 findings (1H, 3M, 1L), all 5 fixed. H1 /targets 403 for enumerator/clerk, M1 redundant useTeamProductivity fetch, M2 missing dynamic target tests, M3 dead DAILY_TARGETS constant, L1 wrong fallback value. 1795 web + 48 API tests pass, 0 regressions.
-  epic-5-retrospective: optional
+  epic-5-retrospective: done  # Completed 2026-02-24: 15-story scope (8 prep + 7 epic). 142 CR findings, mixed retro follow-through (1/5 complete, 2/5 partial). 3 bugs found in UAT. 10 prep tasks + Super Admin governance for Epic 6. Remuneration scoped to record-keeping.
+
+  # Prep Phase: Epic 6 Readiness (from Epic 5 Retrospective 2026-02-24)
+  # Source: epic-5-retro-2026-02-24.md Action Items + Prep Tasks
+  # Must complete before Epic 6 begins. Includes bug fixes (B1-B3), spikes (audit log,
+  # remuneration, view-as, monitoring, backup), governance (Super Admin), and test fixes.
+  prep-epic-6: backlog
+  prep-1-fix-export-lga-race-condition: backlog  # HIGH: Bug B1. /super-admin/export throws "lgas.map is not a function" on initial load.
+  prep-2-fix-dashboard-padding-consistency: backlog  # LOW: Bug B2. Add p-6 to questionnaires, registry, and other inconsistent pages.
+  prep-3-fix-fraud-thresholds-sidebar-data: backlog  # MEDIUM: Bug B3. Dual sidebar highlight + "No thresholds configured" on production.
+  prep-4-immutable-audit-log-spike: backlog  # HIGH: Write-once table, hash chaining, partitioning, retention. Feeds Story 6-1.
+  prep-5-remuneration-domain-modeling: backlog  # HIGH: Payment batch schema, PDF receipt storage, dispute state machine. Record-keeping model per Awwal's workflow.
+  prep-6-view-as-authentication-spike: backlog  # MEDIUM: Role impersonation design, audit trail, permission scoping. Feeds Story 6-7.
+  prep-7-monitoring-infrastructure-spike: backlog  # MEDIUM: prom-client + dashboard validation. Feeds Story 6-2. Can parallel with early stories.
+  prep-8-backup-orchestration-research: backlog  # MEDIUM: DigitalOcean snapshots vs pg_dump to object storage. Feeds Story 6-3. Can parallel with early stories.
+  prep-9-fix-pre-existing-test-failures: backlog  # LOW: 4 failing tests in fraud-detections-bulk.controller.test.ts. Clear the red.
+  prep-10-super-admin-governance-guards: backlog  # HIGH: Last-admin protection, self-deletion prevention, verify invitation flow for Super Admin role.
 
   # Epic 6: System Integrity, Accountability & Remuneration
   # Note: View-As feature (Super Admin debug capability) deferred here from Epic 2.5
+  # Note: Remuneration scoped to record-keeping (not payment processing) per Epic 5 retro decision.
   epic-6: backlog
   6-1-immutable-append-only-audit-logs: backlog
   6-2-system-health-performance-monitoring: backlog
