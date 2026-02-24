@@ -1,6 +1,6 @@
 # Story 5.6b: Super Admin Cross-LGA Analytics & Government Official View
 
-Status: review
+Status: done
 
 ## Story
 
@@ -877,3 +877,23 @@ N/A — no persistent debug logs for this story.
 **Shared types:**
 - `packages/types/src/productivity.ts` (modified — added cross-LGA types)
 - `packages/types/src/index.ts` (re-export verified)
+
+### Post-Review Follow-up: Dynamic Targets + Dashboard Padding
+
+**Findings during 5.6b review sweep:**
+
+1. **SupervisorProductivityPage missing `p-6` padding** — root `<div>` had `space-y-6` but no `p-6`, causing content to sit at the sidebar edge. Fixed: added `p-6` to match all other dashboard pages.
+
+2. **SupervisorHome hardcoded `DAILY_TARGETS.supervisor = 200`** — but actual team target is `teamSize * defaultTarget` (e.g., 3 enumerators × 25 = 75). Fixed: call `useTeamProductivity({ period: 'today' })` and use `summary.totalTarget` with static fallback.
+
+3. **EnumeratorHome hardcoded `DAILY_TARGETS.enumerator = 25`** — backend has configurable `defaultTarget` via `productivity_targets` table. Fixed: call `useProductivityTargets()` and use `targets.defaultTarget` with fallback to 25.
+
+4. **ClerkHome hardcoded `DAILY_TARGETS.clerk = 100`** — this was especially wrong since the backend has no role-specific targets; all roles share the same `defaultTarget` (25). Fixed: same pattern as enumerator, `useProductivityTargets()` with fallback to 25.
+
+### Review Follow-ups (AI) — Dynamic Targets Fix
+
+- [x] [AI-Review][HIGH] `/productivity/targets` route returns 403 for Enumerator/Clerk — add roles to authorize() [productivity.routes.ts:29]
+- [x] [AI-Review][MEDIUM] SupervisorHome fetches full `useTeamProductivity` just for totalTarget — switch to `useProductivityTargets` + derive from team size [SupervisorHome.tsx:34]
+- [x] [AI-Review][MEDIUM] No tests verify dynamic target behavior — mocks return static data, add tests varying mock target [*.test.tsx]
+- [x] [AI-Review][MEDIUM] `DAILY_TARGETS.enumerator` and `DAILY_TARGETS.clerk` are dead code after refactor [useDashboardStats.ts:3-7]
+- [x] [AI-Review][LOW] SupervisorHome fallback is still `DAILY_TARGETS.supervisor = 200` — derive from team size instead [SupervisorHome.tsx:37]

@@ -14,10 +14,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui
 import { SkeletonCard } from '../../../components/skeletons';
 import { useTeamOverview, usePendingAlerts, supervisorKeys } from '../hooks/useSupervisor';
 import { useTeamSubmissionCounts, useDailyCounts, formKeys } from '../../forms/hooks/useForms';
+import { useProductivityTargets } from '../hooks/useProductivity';
 import { TotalSubmissionsCard } from '../components/TotalSubmissionsCard';
 import { TodayProgressCard } from '../components/TodayProgressCard';
 import { SubmissionActivityChart } from '../components/SubmissionActivityChart';
-import { DAILY_TARGETS, fillDateGaps, getTodayCount } from '../hooks/useDashboardStats';
+import { fillDateGaps, getTodayCount } from '../hooks/useDashboardStats';
 
 export default function SupervisorHome() {
   const navigate = useNavigate();
@@ -30,8 +31,11 @@ export default function SupervisorHome() {
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = usePendingAlerts();
   const { data: teamCounts, isLoading: teamCountsLoading, error: teamCountsError } = useTeamSubmissionCounts();
   const { data: dailyData, isLoading: dailyLoading, error: dailyError } = useDailyCounts(chartDays);
+  const { data: targets } = useProductivityTargets();
 
   const teamTotal = teamCounts ? Object.values(teamCounts).reduce((sum, n) => sum + n, 0) : 0;
+  const dailyTarget = targets?.defaultTarget ?? 25;
+  const teamTarget = (teamOverview?.total ?? 0) * dailyTarget;
   const filledData = dailyData ? fillDateGaps(dailyData, chartDays) : [];
   const todayCount = getTodayCount(filledData);
 
@@ -91,7 +95,7 @@ export default function SupervisorHome() {
           {/* Today's Progress — prep-2 */}
           <TodayProgressCard
             todayCount={todayCount}
-            target={DAILY_TARGETS.supervisor}
+            target={teamTarget}
             label="team submissions today"
             isLoading={dailyLoading}
             error={dailyError}
@@ -174,7 +178,7 @@ export default function SupervisorHome() {
           {/* Submission Activity Chart — prep-2 */}
           <SubmissionActivityChart
             data={filledData}
-            target={DAILY_TARGETS.supervisor}
+            target={teamTarget}
             days={chartDays}
             onDaysChange={setChartDays}
             isLoading={dailyLoading}

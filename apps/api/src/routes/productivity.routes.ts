@@ -23,10 +23,10 @@ router.get(
   ProductivityController.getTeamProductivity,
 );
 
-// Get active targets — supervisor and super_admin
+// Get active targets — all field roles + admin (targets are not sensitive)
 router.get(
   '/targets',
-  authorize(UserRole.SUPERVISOR, UserRole.SUPER_ADMIN),
+  authorize(UserRole.ENUMERATOR, UserRole.DATA_ENTRY_CLERK, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN),
   ProductivityController.getTargets,
 );
 

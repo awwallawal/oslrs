@@ -1,11 +1,5 @@
 import type { DailyCount } from '../../forms/api/submission.api';
 
-export const DAILY_TARGETS = {
-  enumerator: 25,
-  clerk: 100,
-  supervisor: 200,
-} as const;
-
 /**
  * Fill missing dates with count: 0 for the full range.
  * Returns an array of length `days` with no gaps.

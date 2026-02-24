@@ -24,10 +24,11 @@ import { PendingSyncBanner } from '../../../components/PendingSyncBanner';
 import { useSyncStatus } from '../../forms/hooks/useSyncStatus';
 import { syncManager } from '../../../services/sync-manager';
 import { useMySubmissionCounts, useDailyCounts } from '../../forms/hooks/useForms';
+import { useProductivityTargets } from '../hooks/useProductivity';
 import { TotalSubmissionsCard } from '../components/TotalSubmissionsCard';
 import { TodayProgressCard } from '../components/TodayProgressCard';
 import { SubmissionActivityChart } from '../components/SubmissionActivityChart';
-import { DAILY_TARGETS, fillDateGaps, getTodayCount } from '../hooks/useDashboardStats';
+import { fillDateGaps, getTodayCount } from '../hooks/useDashboardStats';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -48,6 +49,8 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
 
   const { data: counts, isLoading: countsLoading, error: countsError } = useMySubmissionCounts();
   const { data: dailyData, isLoading: dailyLoading, error: dailyError } = useDailyCounts(chartDays);
+  const { data: targets } = useProductivityTargets();
+  const dailyTarget = targets?.defaultTarget ?? 25;
 
   const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : 0;
   const filledData = dailyData ? fillDateGaps(dailyData, chartDays) : [];
@@ -151,7 +154,7 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
             />
             <TodayProgressCard
               todayCount={todayCount}
-              target={DAILY_TARGETS.clerk}
+              target={dailyTarget}
               label="forms today"
               isLoading={dailyLoading}
               error={dailyError}
@@ -179,7 +182,7 @@ export default function ClerkHome({ isLoading = false }: { isLoading?: boolean }
             {/* Submission Activity Chart — prep-2 */}
             <SubmissionActivityChart
               data={filledData}
-              target={DAILY_TARGETS.clerk}
+              target={dailyTarget}
               days={chartDays}
               onDaysChange={setChartDays}
               isLoading={dailyLoading}

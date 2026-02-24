@@ -96,7 +96,7 @@ export default function SupervisorProductivityPage() {
   }, []);
 
   return (
-    <div className="space-y-6" data-testid="productivity-page">
+    <div className="p-6 space-y-6" data-testid="productivity-page">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

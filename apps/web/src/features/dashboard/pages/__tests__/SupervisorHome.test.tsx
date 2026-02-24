@@ -60,10 +60,20 @@ let mockDailyReturn = {
   error: null as Error | null,
 };
 
+let mockTargetsReturn = {
+  data: { defaultTarget: 25, lgaOverrides: [] } as { defaultTarget: number; lgaOverrides: Array<{ lgaId: string; lgaName: string; dailyTarget: number }> } | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
 vi.mock('../../hooks/useSupervisor', () => ({
   useTeamOverview: () => mockTeamOverview,
   usePendingAlerts: () => mockPendingAlerts,
   supervisorKeys: { all: ['supervisor'] },
+}));
+
+vi.mock('../../hooks/useProductivity', () => ({
+  useProductivityTargets: () => mockTargetsReturn,
 }));
 
 vi.mock('../../../forms/hooks/useForms', () => ({
@@ -115,6 +125,7 @@ beforeEach(() => {
   mockPendingAlerts = { data: undefined, isLoading: false, error: null };
   mockTeamCounts = { data: undefined, isLoading: false, error: null };
   mockDailyReturn = { data: undefined, isLoading: false, error: null };
+  mockTargetsReturn = { data: { defaultTarget: 25, lgaOverrides: [] }, isLoading: false, error: null };
 });
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -310,6 +321,26 @@ describe('SupervisorHome', () => {
     it('does not render "Coming in Epic 3" text', () => {
       renderComponent();
       expect(screen.queryByText('Coming in Epic 3')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Dynamic target from API', () => {
+    it('computes team target from teamOverview.total * defaultTarget', () => {
+      mockTeamOverview = { data: { total: 3, active: 3, inactive: 0 }, isLoading: false, error: null };
+      mockTargetsReturn = { data: { defaultTarget: 30, lgaOverrides: [] }, isLoading: false, error: null };
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      // 3 enumerators * 30 = 90
+      expect(screen.getByText(/\/ 90 team submissions today/)).toBeInTheDocument();
+    });
+
+    it('falls back to defaultTarget=25 when targets API is loading', () => {
+      mockTeamOverview = { data: { total: 4, active: 4, inactive: 0 }, isLoading: false, error: null };
+      mockTargetsReturn = { data: undefined, isLoading: true, error: null };
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      // 4 enumerators * 25 fallback = 100
+      expect(screen.getByText(/\/ 100 team submissions today/)).toBeInTheDocument();
     });
   });
 });

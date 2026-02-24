@@ -75,6 +75,16 @@ vi.mock('../../../forms/hooks/useForms', () => ({
   useDailyCounts: () => mockDailyReturn,
 }));
 
+let mockTargetsReturn = {
+  data: { defaultTarget: 25, lgaOverrides: [] } as { defaultTarget: number; lgaOverrides: Array<{ lgaId: string; lgaName: string; dailyTarget: number }> } | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../hooks/useProductivity', () => ({
+  useProductivityTargets: () => mockTargetsReturn,
+}));
+
 // Mock recharts
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
@@ -113,6 +123,7 @@ beforeEach(() => {
   };
   mockCountsReturn = { data: undefined, isLoading: false, error: null };
   mockDailyReturn = { data: undefined, isLoading: false, error: null };
+  mockTargetsReturn = { data: { defaultTarget: 25, lgaOverrides: [] }, isLoading: false, error: null };
 });
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -314,6 +325,22 @@ describe('ClerkHome', () => {
       expect(screen.queryByTestId('total-submissions-card')).not.toBeInTheDocument();
       expect(screen.queryByTestId('today-progress-card')).not.toBeInTheDocument();
       expect(screen.queryByTestId('submission-activity-chart')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Dynamic target from API', () => {
+    it('uses dynamic target from useProductivityTargets', () => {
+      mockTargetsReturn = { data: { defaultTarget: 40, lgaOverrides: [] }, isLoading: false, error: null };
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByText(/\/ 40 forms today/)).toBeInTheDocument();
+    });
+
+    it('falls back to 25 when targets API is loading', () => {
+      mockTargetsReturn = { data: undefined, isLoading: true, error: null };
+      mockDailyReturn = { data: [], isLoading: false, error: null };
+      renderComponent();
+      expect(screen.getByText(/\/ 25 forms today/)).toBeInTheDocument();
     });
   });
 });
