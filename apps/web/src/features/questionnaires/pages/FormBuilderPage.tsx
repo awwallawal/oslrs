@@ -132,7 +132,7 @@ export default function FormBuilderPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="p-6 space-y-6">
         <SkeletonForm fields={3} />
       </div>
     );
@@ -140,7 +140,7 @@ export default function FormBuilderPage() {
 
   if (isError || !localSchema) {
     return (
-      <div className="text-center py-16">
+      <div className="px-6 py-16 text-center">
         <p className="text-neutral-600">Failed to load form schema.</p>
         <button
           onClick={() => navigate('/dashboard/super-admin/questionnaires')}
@@ -157,7 +157,7 @@ export default function FormBuilderPage() {
   const isPublishing = publishForm.isPending;
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

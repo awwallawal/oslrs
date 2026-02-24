@@ -194,14 +194,14 @@ development_status:
   # remuneration, view-as, monitoring, backup), governance (Super Admin), and test fixes.
   prep-epic-6: in-progress
   prep-1-fix-export-lga-race-condition: done  # HIGH: Bug B1. /super-admin/export throws "lgas.map is not a function" on initial load. Fix: default empty array + isError handling + 5 tests. Code review: 7 findings all fixed.
-  prep-2-fix-dashboard-padding-consistency: ready-for-dev  # LOW: Bug B2. Add p-6 to questionnaires, registry, FormBuilder pages. Story created 2026-02-24.
+  prep-2-fix-dashboard-padding-consistency: done  # LOW: Bug B2. Add p-6 to questionnaires, registry, FormBuilder pages. 3 files, 5 edits. Code review: 6 findings (4 fixed, 2 systemic deferred). 1798 tests pass, 0 regressions.
   prep-3-fix-fraud-thresholds-sidebar-data: ready-for-dev  # MEDIUM: Bug B3. Dual sidebar highlight + missing seed data. Story created 2026-02-24. Fix: NavItem end prop + seedFraudThresholds().
-  prep-4-immutable-audit-log-spike: backlog  # HIGH: Write-once table, hash chaining, partitioning, retention. Feeds Story 6-1.
-  prep-5-remuneration-domain-modeling: backlog  # HIGH: Payment batch schema, PDF receipt storage, dispute state machine. Record-keeping model per Awwal's workflow.
-  prep-6-view-as-authentication-spike: backlog  # MEDIUM: Role impersonation design, audit trail, permission scoping. Feeds Story 6-7.
-  prep-7-monitoring-infrastructure-spike: backlog  # MEDIUM: prom-client + dashboard validation. Feeds Story 6-2. Can parallel with early stories.
-  prep-8-backup-orchestration-research: backlog  # MEDIUM: DigitalOcean snapshots vs pg_dump to object storage. Feeds Story 6-3. Can parallel with early stories.
-  prep-9-fix-pre-existing-test-failures: backlog  # LOW: 4 failing tests in fraud-detections-bulk.controller.test.ts. Clear the red.
+  prep-4-immutable-audit-log-spike: ready-for-dev  # HIGH: Research spike — write-once enforcement, hash chaining, partitioning, 7yr NDPA retention. Story created 2026-02-24. Feeds Story 6-1.
+  prep-5-remuneration-domain-modeling: ready-for-dev  # HIGH: Research spike — payment batch schema, PDF receipt storage, dispute state machine, notification triggers. Record-keeping model per Awwal's workflow. Story created 2026-02-24. Feeds Stories 6-4, 6-5, 6-6.
+  prep-6-view-as-authentication-spike: ready-for-dev  # MEDIUM: Research spike — auth context extension, permission scoping, read-only enforcement, audit trail, frontend rendering. Story created 2026-02-24. Feeds Story 6-7.
+  prep-7-monitoring-infrastructure-spike: ready-for-dev  # MEDIUM: Research spike — prom-client integration, metric definitions, dashboard design, alerting thresholds, enhanced health endpoint. Story created 2026-02-24. Feeds Story 6-2.
+  prep-8-backup-orchestration-research: ready-for-dev  # MEDIUM: Research spike — pg_dump vs VPS snapshots, S3 storage, encryption, 7yr NDPA retention, restore drills. Story created 2026-02-24. Feeds Story 6-3.
+  prep-9-fix-pre-existing-test-failures: done  # LOW: Already resolved in Story 5.5 (commit 8a7014f). Root cause: vi.clearAllMocks() → vi.resetAllMocks(). 19/19 tests pass. Closed 2026-02-24.
   prep-10-super-admin-governance-guards: backlog  # HIGH: Last-admin protection, self-deletion prevention, verify invitation flow for Super Admin role.
 
   # Epic 6: System Integrity, Accountability & Remuneration

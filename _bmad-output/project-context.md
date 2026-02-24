@@ -1095,6 +1095,7 @@ SUPER_ADMIN_PASSWORD=<secure-password>
 - Header with Logo + Role Badge + Notifications + Profile + Logout
 - Sidebar with role-specific navigation
 - NO public website header/footer (separate experience)
+- **CRITICAL: DashboardLayout does NOT provide content padding.** Every dashboard page must add `p-6` to its outermost wrapper div (e.g., `<div className="p-6 space-y-6">`). Reference: `StaffManagementPage.tsx`. Only full-bleed pages (e.g., FormFillerPage) are exempt.
 
 **Route Structure (Epic 2.5 - Strict Role Isolation):**
 ```

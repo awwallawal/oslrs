@@ -37,7 +37,7 @@ export default function QuestionnaireManagementPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Questionnaire Management</h1>
