@@ -168,7 +168,7 @@ describe('ExportPage', () => {
   });
 
   it('skeleton loading for filter area while LGA list loads', () => {
-    mockLgasReturn = { data: undefined, isLoading: true };
+    mockLgasReturn = { data: undefined, isLoading: true, isError: false };
     renderComponent();
 
     expect(screen.getByTestId('filter-skeleton')).toBeInTheDocument();
@@ -194,7 +194,7 @@ describe('ExportPage', () => {
   // ── Race condition / defensive guard tests (Prep-1 Bug B1) ────────
 
   it('renders gracefully when lgas data is undefined and isLoading is false (race condition)', () => {
-    mockLgasReturn = { data: undefined, isLoading: false };
+    mockLgasReturn = { data: undefined, isLoading: false, isError: false };
     renderComponent();
 
     // Should NOT crash — filter controls render with empty LGA dropdown
@@ -204,7 +204,7 @@ describe('ExportPage', () => {
   });
 
   it('renders gracefully when lgas data is an empty array', () => {
-    mockLgasReturn = { data: [], isLoading: false };
+    mockLgasReturn = { data: [], isLoading: false, isError: false };
     renderComponent();
 
     // Should render filter controls with empty LGA dropdown (no items)
@@ -213,7 +213,7 @@ describe('ExportPage', () => {
   });
 
   it('renders gracefully when lgas data is null (null safety)', () => {
-    mockLgasReturn = { data: null as unknown as undefined, isLoading: false };
+    mockLgasReturn = { data: null as unknown as undefined, isLoading: false, isError: false };
     renderComponent();
 
     // Should NOT crash — optional chaining lgas?.map() handles null (= [] default only applies to undefined)

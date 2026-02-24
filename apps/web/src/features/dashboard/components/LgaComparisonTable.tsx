@@ -176,7 +176,7 @@ export default function LgaComparisonTable({
       header: 'Trend',
       cell: ({ row }) => <TrendIndicator trend={row.original.trend} />,
     },
-  ], [selectedLgaIds]);
+  ], [selectedLgaIds, toggleSelection]);
 
   const table = useReactTable({
     data,

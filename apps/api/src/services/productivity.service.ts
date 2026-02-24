@@ -9,13 +9,12 @@
 
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
-import { roles } from '../db/schema/roles.js';
 import { lgas } from '../db/schema/lgas.js';
 import { submissions } from '../db/schema/submissions.js';
 import { fraudDetections } from '../db/schema/fraud-detections.js';
 import { dailyProductivitySnapshots } from '../db/schema/daily-productivity-snapshots.js';
 import { teamAssignments } from '../db/schema/team-assignments.js';
-import { sql, inArray, and, gte, lte, eq, isNull, or } from 'drizzle-orm';
+import { sql, inArray, and, gte, lte, eq, isNull } from 'drizzle-orm';
 import { TeamAssignmentService } from './team-assignment.service.js';
 import { ProductivityTargetService } from './productivity-target.service.js';
 import type {
@@ -867,7 +866,6 @@ export class ProductivityService {
 
     const boundaries = getWatBoundaries();
     const weekDateStr = getWatDateString(boundaries.weekStart);
-    const monthDateStr = getWatDateString(boundaries.monthStart);
     const activeTargets = await ProductivityTargetService.getActiveTargets();
 
     // Working days for trend

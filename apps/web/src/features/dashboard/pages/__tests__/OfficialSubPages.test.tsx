@@ -59,6 +59,7 @@ vi.mock('../../hooks/useExport', () => ({
       { id: '1', name: 'Ibadan North', code: 'ibadan-north' },
     ],
     isLoading: false,
+    isError: false,
   }),
   useExportDownload: () => ({
     download: vi.fn(),
