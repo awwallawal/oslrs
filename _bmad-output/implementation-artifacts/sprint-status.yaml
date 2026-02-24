@@ -185,7 +185,7 @@ development_status:
   5-4-pii-rich-csv-pdf-exports: done  # Code review passed 2026-02-23: 9 findings (3H, 4M, 2L), all 9 fixed. H1+H2 Zod validation gaps, H3 missing 403 tests, M1 A3 test violation, M2 LGA handler pattern, M3 JSON parse safety, M4 pending status filter, L1 rate-limiter typing, L2 filter debounce. 37 API + 65 web tests pass (+6 new), 0 regressions.
   5-5-respondent-data-registry-table: done  # Code review passed 2026-02-23: 10 findings (1C, 4H, 3M, 2L), all 10 fixed. C1 missing service tests, H1 stale date presets, H2 severity multi-select, H3 stale timer, H4 missing 403 tests, M1 duplicated filter logic. 74 tests (45 API + 29 web), 0 regressions.
   5-6a-supervisor-team-productivity-table: done  # Code review passed 2026-02-23: 8 findings (1H, 4M, 3L), all 8 fixed. H1 period-aware approved/rejected, M1 custom date picker, M2 PDF metadata, M3 lgaName resolution, M4 N+1 elimination. 75 tests (41 API + 34 web), 0 regressions.
-  5-6b-super-admin-cross-lga-analytics: ready-for-dev  # Split from 5.6: Super Admin individual staff tab + LGA comparison tab + supervisorless LGA monitoring + Government Official aggregate-only view (no names, no export). Depends on 5.6a.
+  5-6b-super-admin-cross-lga-analytics: review  # All 11 tasks done. Super Admin: individual staff tab (15 cols) + LGA comparison tab (12 cols + checkbox comparison) + supervisorless LGA monitoring. Government Official: aggregate-only 10-col table (no names, no export, Direction 08 styling). 55 tests (12 service + 23 controller + 13 SuperAdmin + 10 LgaComparison + 10 Official).
   epic-5-retrospective: optional
 
   # Epic 6: System Integrity, Accountability & Remuneration

@@ -71,9 +71,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('government_official has exactly 5 sidebar items', () => {
+    it('government_official has exactly 6 sidebar items', () => {
       const items = sidebarConfig.government_official;
-      expect(items.length).toBe(5);
+      expect(items.length).toBe(6);
     });
 
     it('super_admin has 11+ sidebar items', () => {

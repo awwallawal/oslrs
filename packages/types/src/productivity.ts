@@ -67,3 +67,101 @@ export interface TeamProductivityResponse {
     };
   };
 }
+
+/**
+ * Story 5.6b: Cross-LGA Productivity Types
+ */
+
+/** Super Admin all-staff row (extends StaffProductivityRow) */
+export interface StaffProductivityRowExtended extends StaffProductivityRow {
+  role: 'enumerator' | 'data_entry_clerk' | 'supervisor';
+  lgaId: string;
+  lgaName: string;
+  supervisorName: string | null; // null = supervisorless LGA → display "— Direct"
+}
+
+/** LGA Comparison row (Super Admin) */
+export interface LgaProductivityRow {
+  lgaId: string;
+  lgaName: string;
+  staffingModel: string; // "Full (1+5)", "Lean (1+1)", "No Supervisor (3)"
+  hasSupervisor: boolean;
+  enumeratorCount: number;
+  supervisorName: string | null;
+  todayTotal: number;
+  lgaTarget: number;
+  percent: number;
+  avgPerEnumerator: number;
+  bestPerformer: { name: string; count: number } | null;
+  lowestPerformer: { name: string; count: number } | null;
+  rejRate: number;
+  trend: ProductivityTrend;
+}
+
+/** Government Official aggregate row (no names) */
+export interface LgaAggregateSummaryRow {
+  lgaId: string;
+  lgaName: string;
+  activeStaff: number;
+  todayTotal: number;
+  dailyTarget: number;
+  percent: number;
+  weekTotal: number;
+  weekAvgPerDay: number;
+  monthTotal: number;
+  completionRate: number; // month total / month target
+  trend: ProductivityTrend;
+}
+
+/** Cross-LGA filter params (Super Admin) */
+export interface CrossLgaFilterParams {
+  period: 'today' | 'week' | 'month' | 'custom';
+  dateFrom?: string;
+  dateTo?: string;
+  lgaIds?: string[]; // Multi-select LGA filter
+  roleId?: string; // Filter by role (Staff tab)
+  supervisorId?: string; // Filter by supervisor (Staff tab)
+  staffingModel?: string; // Filter: 'all' | 'full' | 'lean' | 'no_supervisor' (LGA tab)
+  status?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+/** Response for cross-LGA staff productivity */
+export interface CrossLgaStaffResponse {
+  data: StaffProductivityRowExtended[];
+  summary: ProductivitySummary & { supervisorlessLgaCount: number };
+  meta: {
+    pagination: {
+      page: number;
+      pageSize: number;
+      totalPages: number;
+      totalItems: number;
+    };
+  };
+}
+
+/** Response for LGA comparison */
+export interface LgaComparisonResponse {
+  data: LgaProductivityRow[];
+  summary: {
+    totalLgas: number;
+    totalSubmissions: number;
+    overallPercent: number;
+    supervisorlessCount: number;
+  };
+}
+
+/** Response for LGA aggregate summary (Government Official) */
+export interface LgaSummaryResponse {
+  data: LgaAggregateSummaryRow[];
+  summary: {
+    totalLgas: number;
+    totalActiveStaff: number;
+    overallCompletionRate: number;
+    totalSubmissionsToday: number;
+  };
+}

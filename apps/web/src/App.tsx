@@ -101,7 +101,9 @@ const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'
 const AssessorQueuePage = lazy(() => import('./features/dashboard/pages/AssessorQueuePage'));
 const AssessorCompletedPage = lazy(() => import('./features/dashboard/pages/AssessorCompletedPage'));
 const AssessorEvidencePage = lazy(() => import('./features/dashboard/pages/AssessorEvidencePage'));
+const SuperAdminProductivityPage = lazy(() => import('./features/dashboard/pages/SuperAdminProductivityPage'));
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
+const OfficialProductivityPage = lazy(() => import('./features/dashboard/pages/OfficialProductivityPage'));
 const OfficialStatsPage = lazy(() => import('./features/dashboard/pages/OfficialStatsPage'));
 const OfficialTrendsPage = lazy(() => import('./features/dashboard/pages/OfficialTrendsPage'));
 const ExportPage = lazy(() => import('./features/dashboard/pages/ExportPage'));
@@ -660,6 +662,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 5.6b: Cross-LGA Productivity Analytics */}
+                <Route
+                  path="productivity"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SuperAdminProductivityPage />
+                    </Suspense>
+                  }
+                />
                 {/* Placeholder routes for future stories */}
                 <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
               </Route>
@@ -990,6 +1001,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <OfficialTrendsPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 5.6b: LGA Productivity Overview */}
+                <Route
+                  path="productivity"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OfficialProductivityPage />
                     </Suspense>
                   }
                 />

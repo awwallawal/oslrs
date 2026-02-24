@@ -123,6 +123,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
 
   government_official: [
     { label: 'Home', href: '/dashboard/official', icon: Home },
+    { label: 'Productivity', href: '/dashboard/official/productivity', icon: BarChart },
     { label: 'Registry', href: '/dashboard/official/registry', icon: Database },
     { label: 'Statistics', href: '/dashboard/official/stats', icon: PieChart },
     { label: 'Trends', href: '/dashboard/official/trends', icon: TrendingUp },
@@ -137,6 +138,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Audit Queue', href: '/dashboard/super-admin/audit', icon: FileSearch },
     { label: 'Data Overview', href: '/dashboard/super-admin/data', icon: Database },
     { label: 'Reports', href: '/dashboard/super-admin/reports', icon: BarChart },
+    { label: 'Staff Productivity', href: '/dashboard/super-admin/productivity', icon: TrendingUp },
     { label: 'Registry', href: '/dashboard/super-admin/registry', icon: Database },
     { label: 'Export Data', href: '/dashboard/super-admin/export', icon: Download },
     { label: 'Audit Logs', href: '/dashboard/super-admin/logs', icon: ScrollText },

@@ -45,4 +45,35 @@ router.post(
   ProductivityController.exportTeamProductivity,
 );
 
+// Story 5.6b: Cross-LGA endpoints
+
+// Super Admin: all staff across all LGAs
+router.get(
+  '/staff',
+  authorize(UserRole.SUPER_ADMIN),
+  ProductivityController.getAllStaffProductivity,
+);
+
+// Super Admin: LGA comparison data
+router.get(
+  '/lga-comparison',
+  authorize(UserRole.SUPER_ADMIN),
+  ProductivityController.getLgaComparison,
+);
+
+// Government Official + Super Admin: aggregate-only LGA summary (no staff names)
+router.get(
+  '/lga-summary',
+  authorize(UserRole.GOVERNMENT_OFFICIAL, UserRole.SUPER_ADMIN),
+  ProductivityController.getLgaSummary,
+);
+
+// Super Admin only: export cross-LGA data as CSV/PDF
+router.post(
+  '/cross-lga-export',
+  authorize(UserRole.SUPER_ADMIN),
+  exportRateLimit,
+  ProductivityController.exportCrossLgaData,
+);
+
 export default router;
