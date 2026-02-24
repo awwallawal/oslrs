@@ -1,7 +1,7 @@
 /**
  * Fraud Threshold Seed Data
  *
- * 21 default threshold records covering all heuristic categories.
+ * 27 default threshold records covering all heuristic categories.
  * All records have version 1 and are active.
  *
  * Created in prep-7 (Fraud Detection Domain Research).
@@ -24,14 +24,14 @@ export interface FraudThresholdSeedRecord {
 }
 
 /**
- * Default fraud threshold seed data — 21 records.
+ * Default fraud threshold seed data — 27 records.
  *
  * Categories:
  * - GPS (6 records): Clustering parameters + weight
  * - Speed (4 records): Tier thresholds + bootstrap + weight
  * - Straightline (5 records): PIR, battery size, entropy, min batteries, weight
- * - Duplicate (1 record): Weight
- * - Timing (1 record): Weight
+ * - Duplicate (4 records): Exact/partial thresholds, lookback window, weight
+ * - Timing (4 records): Night window, weekend penalty, weight
  * - Composite (4 records): Severity cutoffs
  */
 export const FRAUD_THRESHOLD_DEFAULTS: FraudThresholdSeedRecord[] = [

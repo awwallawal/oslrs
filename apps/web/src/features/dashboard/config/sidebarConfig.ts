@@ -48,6 +48,7 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   badge?: number;
+  end?: boolean;
 }
 
 /**
@@ -144,7 +145,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Audit Logs', href: '/dashboard/super-admin/logs', icon: ScrollText },
     { label: 'User Roles', href: '/dashboard/super-admin/roles', icon: UserCog },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
-    { label: 'Settings', href: '/dashboard/super-admin/settings', icon: Settings },
+    { label: 'Settings', href: '/dashboard/super-admin/settings', icon: Settings, end: true },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
   ],
 };

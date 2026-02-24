@@ -9,12 +9,14 @@
  *   pnpm db:reset           - Full reset (handled by drizzle)
  */
 
+import { fileURLToPath } from 'node:url';
 import { db, pool } from '../index.js';
-import { roles, lgas, users, teamAssignments, productivityTargets } from '../schema/index.js';
+import { roles, lgas, users, teamAssignments, productivityTargets, fraudThresholds } from '../schema/index.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { OYO_STATE_LGAS } from './lgas.seed.js';
 import { USER_ROLES } from './roles.seed.js';
+import { FRAUD_THRESHOLD_DEFAULTS } from './fraud-thresholds.seed.js';
 import pino from 'pino';
 
 const logger = pino({
@@ -307,6 +309,59 @@ async function seedProductivityTargets(): Promise<void> {
 }
 
 /**
+ * Seed default fraud thresholds (required for fraud detection system)
+ * Idempotent: skips if active thresholds already exist (preserves manual config)
+ * Requires a super_admin user for the createdBy audit column
+ */
+export async function seedFraudThresholds(roleMap: Map<string, string>): Promise<void> {
+  logger.info('Seeding fraud thresholds...');
+
+  // Idempotent guard: skip if active thresholds already exist
+  const existing = await db.query.fraudThresholds.findFirst({
+    where: eq(fraudThresholds.isActive, true),
+  });
+
+  if (existing) {
+    logger.info('Active fraud thresholds already exist, skipping');
+    return;
+  }
+
+  // Find a super_admin user for createdBy (NOT NULL column)
+  const superAdminRoleId = roleMap.get('super_admin');
+  if (!superAdminRoleId) {
+    logger.warn('super_admin role not found, skipping fraud threshold seeding');
+    return;
+  }
+
+  const adminUser = await db.query.users.findFirst({
+    where: eq(users.roleId, superAdminRoleId),
+  });
+
+  if (!adminUser) {
+    logger.warn('No super_admin user found, skipping fraud threshold seeding. Re-run seed after creating an admin user.');
+    return;
+  }
+
+  await db.insert(fraudThresholds).values(
+    FRAUD_THRESHOLD_DEFAULTS.map((threshold) => ({
+      ruleKey: threshold.ruleKey,
+      displayName: threshold.displayName,
+      ruleCategory: threshold.ruleCategory,
+      thresholdValue: threshold.thresholdValue,
+      weight: threshold.weight,
+      severityFloor: threshold.severityFloor,
+      version: 1,
+      isActive: true,
+      effectiveUntil: null,
+      createdBy: adminUser.id,
+      notes: threshold.notes,
+    }))
+  );
+
+  logger.info({ count: FRAUD_THRESHOLD_DEFAULTS.length }, 'Fraud thresholds seeding complete');
+}
+
+/**
  * Production seed - creates Super Admin from environment variables
  */
 async function seedProductionAdmin(roleMap: Map<string, string>): Promise<void> {
@@ -403,6 +458,15 @@ async function main(): Promise<void> {
       await seedDevelopmentUsers(roleMap, lgaMap);
       // prep-8: Seed team assignments (supervisor → enumerators)
       await seedTeamAssignments();
+    } else if (isAdminFromEnv) {
+      // Production: create Super Admin from environment variables
+      await seedProductionAdmin(roleMap);
+    }
+
+    // Fraud thresholds — needs super_admin user for createdBy, so runs after user creation
+    await seedFraudThresholds(roleMap);
+
+    if (isDev) {
       logger.info('=== DEVELOPMENT SEED COMPLETE ===');
       logger.info('Test credentials:');
       logger.info('  admin@dev.local / admin123 (Super Admin)');
@@ -415,8 +479,6 @@ async function main(): Promise<void> {
       logger.info('  official@dev.local / official123 (Government Official)');
       logger.info('  public@dev.local / public123 (Public User)');
     } else if (isAdminFromEnv) {
-      // Production: create Super Admin from environment variables
-      await seedProductionAdmin(roleMap);
       logger.info('=== PRODUCTION SEED COMPLETE ===');
     } else {
       // Default: just seed roles and LGAs
@@ -431,8 +493,11 @@ async function main(): Promise<void> {
   }
 }
 
-// Run if executed directly
-main().catch((error) => {
-  console.error('Seed error:', error);
-  process.exit(1);
-});
+// Run if executed directly (not when imported as a module by tests)
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] && process.argv[1].replace(/\\/g, '/') === __filename.replace(/\\/g, '/')) {
+  main().catch((error) => {
+    console.error('Seed error:', error);
+    process.exit(1);
+  });
+}

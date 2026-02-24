@@ -80,6 +80,12 @@ describe('sidebarConfig', () => {
       const items = sidebarConfig.super_admin;
       expect(items.length).toBeGreaterThanOrEqual(11);
     });
+
+    it('super_admin Settings item has end: true to prevent dual highlight with child routes', () => {
+      const settings = sidebarConfig.super_admin.find(i => i.label === 'Settings');
+      expect(settings).toBeDefined();
+      expect(settings?.end).toBe(true);
+    });
   });
 
   describe('Nav item structure', () => {

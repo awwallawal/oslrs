@@ -35,7 +35,7 @@ export function SidebarNav({ items, collapsed = false, responsiveCollapse = fals
           <NavLink
             key={item.href}
             to={item.href}
-            end={item.href.split('/').length <= 3}
+            end={item.end !== undefined ? item.end : item.href.split('/').length <= 3}
             onClick={onItemClick}
             className={({ isActive }) =>
               cn(

@@ -195,23 +195,23 @@ development_status:
   prep-epic-6: in-progress
   prep-1-fix-export-lga-race-condition: done  # HIGH: Bug B1. /super-admin/export throws "lgas.map is not a function" on initial load. Fix: default empty array + isError handling + 5 tests. Code review: 7 findings all fixed.
   prep-2-fix-dashboard-padding-consistency: done  # LOW: Bug B2. Add p-6 to questionnaires, registry, FormBuilder pages. 3 files, 5 edits. Code review: 6 findings (4 fixed, 2 systemic deferred). 1798 tests pass, 0 regressions.
-  prep-3-fix-fraud-thresholds-sidebar-data: ready-for-dev  # MEDIUM: Bug B3. Dual sidebar highlight + missing seed data. Story created 2026-02-24. Fix: NavItem end prop + seedFraudThresholds().
+  prep-3-fix-fraud-thresholds-sidebar-data: done  # MEDIUM: Bug B3. Dual sidebar highlight + missing seed data. Code review passed 2026-02-24: 6 findings (1H, 3M, 2L), all 6 fixed. H1 batch insert atomicity, M1 Settings end:true regression test, M2+M3 test safety/independence, L1 stale comments, L2 cleanup simplification. 1,799 web tests pass (+1 new), 0 regressions.
   prep-4-immutable-audit-log-spike: ready-for-dev  # HIGH: Research spike — write-once enforcement, hash chaining, partitioning, 7yr NDPA retention. Story created 2026-02-24. Feeds Story 6-1.
   prep-5-remuneration-domain-modeling: ready-for-dev  # HIGH: Research spike — payment batch schema, PDF receipt storage, dispute state machine, notification triggers. Record-keeping model per Awwal's workflow. Story created 2026-02-24. Feeds Stories 6-4, 6-5, 6-6.
   prep-6-view-as-authentication-spike: ready-for-dev  # MEDIUM: Research spike — auth context extension, permission scoping, read-only enforcement, audit trail, frontend rendering. Story created 2026-02-24. Feeds Story 6-7.
   prep-7-monitoring-infrastructure-spike: ready-for-dev  # MEDIUM: Research spike — prom-client integration, metric definitions, dashboard design, alerting thresholds, enhanced health endpoint. Story created 2026-02-24. Feeds Story 6-2.
   prep-8-backup-orchestration-research: ready-for-dev  # MEDIUM: Research spike — pg_dump vs VPS snapshots, S3 storage, encryption, 7yr NDPA retention, restore drills. Story created 2026-02-24. Feeds Story 6-3.
   prep-9-fix-pre-existing-test-failures: done  # LOW: Already resolved in Story 5.5 (commit 8a7014f). Root cause: vi.clearAllMocks() → vi.resetAllMocks(). 19/19 tests pass. Closed 2026-02-24.
-  prep-10-super-admin-governance-guards: backlog  # HIGH: Last-admin protection, self-deletion prevention, verify invitation flow for Super Admin role.
+  prep-10-super-admin-governance-guards: ready-for-dev  # HIGH: Last-admin protection (deactivate + role change), self-role-change prevention, invitation flow verification. Story created 2026-02-24. 3-4 files, ~5 new tests.
 
   # Epic 6: System Integrity, Accountability & Remuneration
   # Note: View-As feature (Super Admin debug capability) deferred here from Epic 2.5
   # Note: Remuneration scoped to record-keeping (not payment processing) per Epic 5 retro decision.
-  epic-6: backlog
-  6-1-immutable-append-only-audit-logs: backlog
-  6-2-system-health-performance-monitoring: backlog
-  6-3-automated-off-site-backup-orchestration: backlog
-  6-4-staff-remuneration-bulk-recording: backlog
+  epic-6: in-progress
+  6-1-immutable-append-only-audit-logs: ready-for-dev  # Story created 2026-02-24. Trigger-based append-only enforcement, SHA-256 hash chaining, expanded action types, verification endpoint. Backward compatible with 9 existing call sites.
+  6-2-system-health-performance-monitoring: ready-for-dev  # Story created 2026-02-24. prom-client integration, enhanced health endpoint, Super Admin dashboard, email alerting with state machine. 11 new files, 4 modified.
+  6-3-automated-off-site-backup-orchestration: ready-for-dev  # Story created 2026-02-24. pg_dump + S3 upload via BullMQ cron (2AM WAT), 7-day daily + 7-year monthly retention, restore script, email notifications. 5 new files, 1 modified.
+  6-4-staff-remuneration-bulk-recording: ready-for-dev  # Story created 2026-02-24. Greenfield: 3 new DB tables (payment_batches, payment_records, payment_files), bulk recording service, S3 receipt upload, email notifications, Super Admin Remuneration page. 13 new files, 6 modified.
   6-5-staff-payment-history-dispute-mechanism: backlog
   6-6-payment-dispute-resolution-queue: backlog
   6-7-super-admin-view-as-feature: backlog  # Deferred from Epic 2.5: Debug/demo capability with audit trail
