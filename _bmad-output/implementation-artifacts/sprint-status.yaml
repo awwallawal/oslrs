@@ -192,10 +192,10 @@ development_status:
   # Source: epic-5-retro-2026-02-24.md Action Items + Prep Tasks
   # Must complete before Epic 6 begins. Includes bug fixes (B1-B3), spikes (audit log,
   # remuneration, view-as, monitoring, backup), governance (Super Admin), and test fixes.
-  prep-epic-6: backlog
-  prep-1-fix-export-lga-race-condition: backlog  # HIGH: Bug B1. /super-admin/export throws "lgas.map is not a function" on initial load.
-  prep-2-fix-dashboard-padding-consistency: backlog  # LOW: Bug B2. Add p-6 to questionnaires, registry, and other inconsistent pages.
-  prep-3-fix-fraud-thresholds-sidebar-data: backlog  # MEDIUM: Bug B3. Dual sidebar highlight + "No thresholds configured" on production.
+  prep-epic-6: in-progress
+  prep-1-fix-export-lga-race-condition: done  # HIGH: Bug B1. /super-admin/export throws "lgas.map is not a function" on initial load. Fix: default empty array + isError handling + 5 tests. Code review: 7 findings all fixed.
+  prep-2-fix-dashboard-padding-consistency: ready-for-dev  # LOW: Bug B2. Add p-6 to questionnaires, registry, FormBuilder pages. Story created 2026-02-24.
+  prep-3-fix-fraud-thresholds-sidebar-data: ready-for-dev  # MEDIUM: Bug B3. Dual sidebar highlight + missing seed data. Story created 2026-02-24. Fix: NavItem end prop + seedFraudThresholds().
   prep-4-immutable-audit-log-spike: backlog  # HIGH: Write-once table, hash chaining, partitioning, retention. Feeds Story 6-1.
   prep-5-remuneration-domain-modeling: backlog  # HIGH: Payment batch schema, PDF receipt storage, dispute state machine. Record-keeping model per Awwal's workflow.
   prep-6-view-as-authentication-spike: backlog  # MEDIUM: Role impersonation design, audit trail, permission scoping. Feeds Story 6-7.

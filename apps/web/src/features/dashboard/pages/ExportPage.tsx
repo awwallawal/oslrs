@@ -63,7 +63,7 @@ export default function ExportPage() {
   }, [lgaId, source, dateFrom, dateTo, severity, verificationStatus]);
 
   // Queries
-  const { data: lgas, isLoading: lgasLoading } = useLgas();
+  const { data: lgas = [], isLoading: lgasLoading, isError: lgaError } = useLgas();
   const { data: previewCount, isLoading: countLoading } = useExportPreviewCount(debouncedFilters);
   const { download, isDownloading } = useExportDownload();
 
@@ -137,7 +137,7 @@ export default function ExportPage() {
                     <Label htmlFor="lga-filter" className="text-sm font-medium text-gray-600">LGA</Label>
                     <Select value={lgaId} onValueChange={setLgaId}>
                       <SelectTrigger data-testid="lga-filter">
-                        <SelectValue placeholder="All LGAs" />
+                        <SelectValue placeholder={lgaError ? "LGA unavailable" : "All LGAs"} />
                       </SelectTrigger>
                       <SelectContent>
                         {lgas?.map((lga) => (
@@ -147,6 +147,9 @@ export default function ExportPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {lgaError && (
+                      <p className="text-xs text-amber-600" data-testid="lga-error">Failed to load LGA list</p>
+                    )}
                   </div>
 
                   {/* Source Channel Filter */}

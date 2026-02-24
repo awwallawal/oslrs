@@ -26,6 +26,7 @@ let mockLgasReturn = {
     { id: '2', name: 'Ibadan South', code: 'ibadan-south' },
   ] as Array<{ id: string; name: string; code: string }> | undefined,
   isLoading: false,
+  isError: false,
 };
 
 const mockDownload = vi.fn().mockResolvedValue('oslsr-export-2026-02-22.csv');
@@ -80,6 +81,7 @@ describe('ExportPage', () => {
         { id: '2', name: 'Ibadan South', code: 'ibadan-south' },
       ],
       isLoading: false,
+      isError: false,
     };
   });
 
@@ -187,5 +189,52 @@ describe('ExportPage', () => {
     await waitFor(() => {
       expect(mockDownload).toHaveBeenCalled();
     });
+  });
+
+  // ── Race condition / defensive guard tests (Prep-1 Bug B1) ────────
+
+  it('renders gracefully when lgas data is undefined and isLoading is false (race condition)', () => {
+    mockLgasReturn = { data: undefined, isLoading: false };
+    renderComponent();
+
+    // Should NOT crash — filter controls render with empty LGA dropdown
+    expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
+    expect(screen.getByTestId('source-filter')).toBeInTheDocument();
+    expect(screen.queryByTestId('filter-skeleton')).not.toBeInTheDocument();
+  });
+
+  it('renders gracefully when lgas data is an empty array', () => {
+    mockLgasReturn = { data: [], isLoading: false };
+    renderComponent();
+
+    // Should render filter controls with empty LGA dropdown (no items)
+    expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
+    expect(screen.getByTestId('source-filter')).toBeInTheDocument();
+  });
+
+  it('renders gracefully when lgas data is null (null safety)', () => {
+    mockLgasReturn = { data: null as unknown as undefined, isLoading: false };
+    renderComponent();
+
+    // Should NOT crash — optional chaining lgas?.map() handles null (= [] default only applies to undefined)
+    expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
+  });
+
+  it('shows filter skeleton during initial loading with undefined data', () => {
+    mockLgasReturn = { data: undefined, isLoading: true, isError: false };
+    renderComponent();
+
+    expect(screen.getByTestId('filter-skeleton')).toBeInTheDocument();
+    expect(screen.queryByTestId('lga-filter')).not.toBeInTheDocument();
+  });
+
+  it('shows error indicator when lgas query fails (AC6: 403/error state)', () => {
+    mockLgasReturn = { data: undefined, isLoading: false, isError: true };
+    renderComponent();
+
+    // Should show error message, not crash. Other filters still render.
+    expect(screen.getByTestId('lga-error')).toBeInTheDocument();
+    expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
+    expect(screen.queryByTestId('filter-skeleton')).not.toBeInTheDocument();
   });
 });
