@@ -7,7 +7,7 @@ import {
   questionnaireVersions,
 } from '../../db/schema/index.js';
 import { users, roles, auditLogs } from '../../db/schema/index.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { QuestionnaireService } from '../questionnaire.service.js';
 import { hashPassword } from '@oslsr/utils';
 import { modulus11Generate } from '@oslsr/utils/src/validation';
@@ -145,20 +145,20 @@ describe('QuestionnaireService', () => {
   }, 30000);
 
   afterAll(async () => {
-    // Clean up test data
-    if (testFormIds.length > 0) {
-      // Delete audit logs for test forms
-      await db.delete(auditLogs).where(inArray(auditLogs.targetId, testFormIds));
-      // Delete version records
-      await db.delete(questionnaireVersions).where(inArray(questionnaireVersions.questionnaireFormId, testFormIds));
-      // Files are cascade deleted via FK
-      await db.delete(questionnaireForms).where(inArray(questionnaireForms.id, testFormIds));
-    }
-    // Delete test user
-    if (testUserId) {
-      await db.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
-      await db.delete(users).where(eq(users.id, testUserId));
-    }
+    // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      if (testFormIds.length > 0) {
+        await tx.delete(auditLogs).where(inArray(auditLogs.targetId, testFormIds));
+        await tx.delete(questionnaireVersions).where(inArray(questionnaireVersions.questionnaireFormId, testFormIds));
+        await tx.delete(questionnaireForms).where(inArray(questionnaireForms.id, testFormIds));
+      }
+      if (testUserId) {
+        await tx.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
+        await tx.delete(users).where(eq(users.id, testUserId));
+      }
+      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+    });
   });
 
   describe('uploadForm', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import { db } from '../../db/index.js';
 import { users, roles, auditLogs } from '../../db/schema/index.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { GoogleAuthService } from '../google-auth.service.js';
 import { randomInt } from 'crypto';
 
@@ -41,11 +41,15 @@ describe('GoogleAuthService', () => {
   });
 
   afterAll(async () => {
-    // Clean up test users
-    if (testUsers.length > 0) {
-      await db.delete(auditLogs).where(inArray(auditLogs.actorId, testUsers));
-      await db.delete(users).where(inArray(users.id, testUsers));
-    }
+    // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      if (testUsers.length > 0) {
+        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, testUsers));
+        await tx.delete(users).where(inArray(users.id, testUsers));
+      }
+      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+    });
     vi.restoreAllMocks();
   });
 

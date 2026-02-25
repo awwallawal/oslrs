@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 
 const request = supertest(app);
@@ -62,19 +62,22 @@ describe('Auth Login Integration', () => {
   });
 
   afterAll(async () => {
-    // Clean up audit logs first (FK constraint)
-    const userIds = [staffUserId, publicUserId].filter(Boolean);
-    if (userIds.length > 0) {
-      await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
-    }
-
-    // Clean up test users
-    if (staffUserId) {
-      await db.delete(users).where(eq(users.id, staffUserId));
-    }
-    if (publicUserId) {
-      await db.delete(users).where(eq(users.id, publicUserId));
-    }
+    // Wrap in transaction to prevent race conditions with parallel test files
+    // toggling the immutable trigger (Story 6-1 code review fix)
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      const userIds = [staffUserId, publicUserId].filter(Boolean);
+      if (userIds.length > 0) {
+        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
+      }
+      if (staffUserId) {
+        await tx.delete(users).where(eq(users.id, staffUserId));
+      }
+      if (publicUserId) {
+        await tx.delete(users).where(eq(users.id, publicUserId));
+      }
+      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+    });
   });
 
   describe('Staff Login - POST /api/v1/auth/staff/login', () => {
@@ -318,10 +321,14 @@ describe('Auth Login Integration', () => {
     });
 
     afterAll(async () => {
-      if (suspendedUserId) {
-        await db.delete(auditLogs).where(eq(auditLogs.actorId, suspendedUserId));
-        await db.delete(users).where(eq(users.id, suspendedUserId));
-      }
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+        if (suspendedUserId) {
+          await tx.delete(auditLogs).where(eq(auditLogs.actorId, suspendedUserId));
+          await tx.delete(users).where(eq(users.id, suspendedUserId));
+        }
+        await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+      });
     });
 
     it('should reject login for suspended user', async () => {

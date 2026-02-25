@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { Redis } from 'ioredis';
@@ -45,11 +45,15 @@ describe('Auth Password Reset Integration', () => {
   });
 
   afterAll(async () => {
-    // Clean up audit logs first (FK constraint)
-    if (testUserId) {
-      await db.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
-      await db.delete(users).where(eq(users.id, testUserId));
-    }
+    // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      if (testUserId) {
+        await tx.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
+        await tx.delete(users).where(eq(users.id, testUserId));
+      }
+      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+    });
     await testRedisClient.quit();
   });
 
@@ -245,10 +249,14 @@ describe('Auth Password Reset Integration', () => {
     });
 
     afterAll(async () => {
-      if (expiredUserId) {
-        await db.delete(auditLogs).where(eq(auditLogs.actorId, expiredUserId));
-        await db.delete(users).where(eq(users.id, expiredUserId));
-      }
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+        if (expiredUserId) {
+          await tx.delete(auditLogs).where(eq(auditLogs.actorId, expiredUserId));
+          await tx.delete(users).where(eq(users.id, expiredUserId));
+        }
+        await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+      });
       // Clean up Redis token
       await testRedisClient.del(`password_reset:${expiredToken}`);
     });
