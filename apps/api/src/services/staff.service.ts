@@ -8,7 +8,7 @@ import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type Crea
 import { AppError, generateInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users, auditLogs, roles, lgas } from '../db/schema/index.js';
-import { eq, ilike, or, count, and, SQL } from 'drizzle-orm';
+import { eq, ilike, or, count, and, SQL, notInArray } from 'drizzle-orm';
 import { queueStaffInvitationEmail } from '../queues/email.queue.js';
 import { EmailService } from './email.service.js';
 import { TokenService } from './token.service.js';
@@ -163,9 +163,10 @@ export class StaffService {
     newRoleId: string,
     actorId: string
   ): Promise<typeof users.$inferSelect> {
-    // Fetch user
+    // Fetch user with role info for governance checks
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
+      with: { role: true },
     });
 
     if (!user) {
@@ -181,6 +182,11 @@ export class StaffService {
       throw new AppError('ROLE_NOT_FOUND', 'Role not found', 404);
     }
 
+    // Prevent self-role-change
+    if (userId === actorId) {
+      throw new AppError('CANNOT_CHANGE_OWN_ROLE', 'Cannot change your own role', 400);
+    }
+
     // If role is unchanged, return user without modifications
     if (user.roleId === newRoleId) {
       logger.info({
@@ -190,6 +196,22 @@ export class StaffService {
         actorId,
       });
       return user;
+    }
+
+    // Prevent changing the role of the last Super Admin to a non-admin role
+    if (user.role?.name === 'super_admin' && role.name !== 'super_admin') {
+      const [result] = await db
+        .select({ count: count() })
+        .from(users)
+        .where(
+          and(
+            eq(users.roleId, user.roleId),
+            notInArray(users.status, ['deactivated', 'suspended'])
+          )
+        );
+      if (Number(result.count) <= 1) {
+        throw new AppError('CANNOT_CHANGE_LAST_ADMIN_ROLE', 'Cannot change the role of the last Super Admin', 400);
+      }
     }
 
     const previousRoleId = user.roleId;
@@ -249,9 +271,10 @@ export class StaffService {
     userId: string,
     actorId: string
   ): Promise<typeof users.$inferSelect> {
-    // Fetch user
+    // Fetch user with role info for governance checks
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
+      with: { role: true },
     });
 
     if (!user) {
@@ -266,6 +289,22 @@ export class StaffService {
     // Prevent self-deactivation
     if (userId === actorId) {
       throw new AppError('CANNOT_DEACTIVATE_SELF', 'Cannot deactivate your own account', 400);
+    }
+
+    // Prevent deactivating the last Super Admin
+    if (user.role?.name === 'super_admin') {
+      const [result] = await db
+        .select({ count: count() })
+        .from(users)
+        .where(
+          and(
+            eq(users.roleId, user.roleId),
+            notInArray(users.status, ['deactivated', 'suspended'])
+          )
+        );
+      if (Number(result.count) <= 1) {
+        throw new AppError('CANNOT_DEACTIVATE_LAST_ADMIN', 'Cannot deactivate the last Super Admin account', 400);
+      }
     }
 
     const previousStatus = user.status;

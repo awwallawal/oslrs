@@ -259,6 +259,52 @@ describe('StaffController', () => {
       const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(error.code).toBe('VALIDATION_ERROR');
     });
+
+    it('returns 400 when trying to change role of last Super Admin', async () => {
+      const error = new Error('Cannot change the role of the last Super Admin');
+      Object.assign(error, { code: 'CANNOT_CHANGE_LAST_ADMIN_ROLE', statusCode: 400 });
+      vi.mocked(StaffService.updateRole).mockRejectedValue(error);
+
+      mockReq.params = { userId: 'last-admin' };
+      mockReq.body = { roleId: 'enumerator-role' };
+
+      await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
+    });
+
+    it('changes Super Admin role successfully when 2+ admins exist', async () => {
+      const mockUser = {
+        id: 'admin-2',
+        fullName: 'Second Admin',
+        email: 'admin2@example.com',
+        roleId: 'enumerator-role',
+        status: 'active',
+      };
+
+      vi.mocked(StaffService.updateRole).mockResolvedValue(mockUser as never);
+
+      mockReq.params = { userId: 'admin-2' };
+      mockReq.body = { roleId: 'enumerator-role' };
+
+      await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(StaffService.updateRole).toHaveBeenCalledWith('admin-2', 'enumerator-role', 'actor-123');
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockUser });
+    });
+
+    it('returns 400 when trying to change own role (self-role-change)', async () => {
+      const error = new Error('Cannot change your own role');
+      Object.assign(error, { code: 'CANNOT_CHANGE_OWN_ROLE', statusCode: 400 });
+      vi.mocked(StaffService.updateRole).mockRejectedValue(error);
+
+      mockReq.params = { userId: 'actor-123' }; // Same as actor
+      mockReq.body = { roleId: 'enumerator-role' };
+
+      await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
+    });
   });
 
   describe('deactivate', () => {
@@ -318,11 +364,114 @@ describe('StaffController', () => {
       expect(mockNext).toHaveBeenCalledWith(error);
     });
 
+    it('returns 400 when trying to deactivate last Super Admin', async () => {
+      const error = new Error('Cannot deactivate the last Super Admin account');
+      Object.assign(error, { code: 'CANNOT_DEACTIVATE_LAST_ADMIN', statusCode: 400 });
+      vi.mocked(StaffService.deactivateUser).mockRejectedValue(error);
+
+      mockReq.params = { userId: 'admin-only' };
+
+      await StaffController.deactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
+    });
+
+    it('deactivates Super Admin successfully when 2+ exist', async () => {
+      const mockUser = {
+        id: 'admin-2',
+        fullName: 'Second Admin',
+        email: 'admin2@example.com',
+        status: 'deactivated',
+      };
+
+      vi.mocked(StaffService.deactivateUser).mockResolvedValue(mockUser as never);
+
+      mockReq.params = { userId: 'admin-2' };
+
+      await StaffController.deactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(StaffService.deactivateUser).toHaveBeenCalledWith('admin-2', 'actor-123');
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockUser });
+    });
+
     it('returns 401 if not authenticated', async () => {
       mockReq.user = undefined;
       mockReq.params = { userId: 'user-123' };
 
       await StaffController.deactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('createManual - Super Admin invitation flow', () => {
+    it('creates staff with Super Admin role and returns 201 with invited status', async () => {
+      const mockResult = {
+        user: {
+          id: 'new-admin-1',
+          fullName: 'New Admin',
+          email: 'newadmin@example.com',
+          status: 'invited',
+          roleId: 'super-admin-role-id',
+        },
+        emailStatus: 'pending',
+      };
+
+      vi.mocked(StaffService.createManual).mockResolvedValue(mockResult as never);
+
+      mockReq.body = {
+        fullName: 'New Admin',
+        email: 'newadmin@example.com',
+        phone: '+2348012345678',
+        roleId: 'super-admin-role-id',
+      };
+
+      await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(StaffService.createManual).toHaveBeenCalledWith(mockReq.body, 'actor-123');
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: {
+          ...mockResult.user,
+          emailStatus: 'pending',
+        },
+      });
+    });
+
+    it('returns created user with emailStatus indicating invitation was queued', async () => {
+      const mockResult = {
+        user: {
+          id: 'new-admin-2',
+          fullName: 'Another Admin',
+          email: 'another@example.com',
+          status: 'invited',
+          roleId: 'super-admin-role-id',
+        },
+        emailStatus: 'pending',
+      };
+
+      vi.mocked(StaffService.createManual).mockResolvedValue(mockResult as never);
+
+      mockReq.body = {
+        fullName: 'Another Admin',
+        email: 'another@example.com',
+        roleId: 'super-admin-role-id',
+      };
+
+      await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
+
+      const responseData = jsonMock.mock.calls[0][0];
+      expect(responseData.data.status).toBe('invited');
+      expect(responseData.data.emailStatus).toBe('pending');
+    });
+
+    it('returns 401 if not authenticated for createManual', async () => {
+      mockReq.user = undefined;
+      mockReq.body = { fullName: 'Test', email: 'test@example.com', roleId: 'some-role' };
+
+      await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];

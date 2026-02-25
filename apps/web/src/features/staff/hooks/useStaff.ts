@@ -95,8 +95,14 @@ export function useUpdateRole() {
       success({ message: 'Role updated successfully' });
       queryClient.invalidateQueries({ queryKey: staffKeys.all });
     },
-    onError: (err: Error) => {
-      showError({ message: err.message || 'Failed to update role' });
+    onError: (err: Error & { code?: string }) => {
+      if (err.code === 'CANNOT_CHANGE_LAST_ADMIN_ROLE') {
+        showError({ message: 'Cannot change the role of the last Super Admin. Create another Super Admin first.' });
+      } else if (err.code === 'CANNOT_CHANGE_OWN_ROLE') {
+        showError({ message: 'You cannot change your own role.' });
+      } else {
+        showError({ message: err.message || 'Failed to update role' });
+      }
     },
   });
 }
@@ -120,6 +126,8 @@ export function useDeactivateStaff() {
         showError({ message: 'You cannot deactivate your own account' });
       } else if (err.code === 'ALREADY_DEACTIVATED') {
         showError({ message: 'User is already deactivated' });
+      } else if (err.code === 'CANNOT_DEACTIVATE_LAST_ADMIN') {
+        showError({ message: 'Cannot deactivate the last Super Admin. Create another Super Admin first.' });
       } else {
         showError({ message: err.message || 'Failed to deactivate user' });
       }
