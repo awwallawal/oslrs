@@ -198,26 +198,18 @@ export class StaffService {
       return user;
     }
 
-    // Prevent changing the role of the last Super Admin to a non-admin role
-    if (user.role?.name === 'super_admin' && role.name !== 'super_admin') {
-      const [result] = await db
-        .select({ count: count() })
-        .from(users)
-        .where(
-          and(
-            eq(users.roleId, user.roleId),
-            notInArray(users.status, ['deactivated', 'suspended'])
-          )
-        );
-      if (Number(result.count) <= 1) {
-        throw new AppError('CANNOT_CHANGE_LAST_ADMIN_ROLE', 'Cannot change the role of the last Super Admin', 400);
-      }
-    }
-
     const previousRoleId = user.roleId;
 
     // Update role and create audit log in transaction
     await db.transaction(async (tx) => {
+      // Governance guard: prevent changing the role of the last Super Admin (inside tx to prevent race condition)
+      if (user.role?.name === 'super_admin' && role.name !== 'super_admin') {
+        const activeCount = await StaffService.countActiveSuperAdmins(user.roleId, tx);
+        if (activeCount <= 1) {
+          throw new AppError('CANNOT_CHANGE_LAST_ADMIN_ROLE', 'Cannot change the role of the last Super Admin', 400);
+        }
+      }
+
       await tx
         .update(users)
         .set({ roleId: newRoleId, updatedAt: new Date() })
@@ -291,26 +283,18 @@ export class StaffService {
       throw new AppError('CANNOT_DEACTIVATE_SELF', 'Cannot deactivate your own account', 400);
     }
 
-    // Prevent deactivating the last Super Admin
-    if (user.role?.name === 'super_admin') {
-      const [result] = await db
-        .select({ count: count() })
-        .from(users)
-        .where(
-          and(
-            eq(users.roleId, user.roleId),
-            notInArray(users.status, ['deactivated', 'suspended'])
-          )
-        );
-      if (Number(result.count) <= 1) {
-        throw new AppError('CANNOT_DEACTIVATE_LAST_ADMIN', 'Cannot deactivate the last Super Admin account', 400);
-      }
-    }
-
     const previousStatus = user.status;
 
     // Update status and create audit log in transaction
     await db.transaction(async (tx) => {
+      // Governance guard: prevent deactivating the last Super Admin (inside tx to prevent race condition)
+      if (user.role?.name === 'super_admin') {
+        const activeCount = await StaffService.countActiveSuperAdmins(user.roleId, tx);
+        if (activeCount <= 1) {
+          throw new AppError('CANNOT_DEACTIVATE_LAST_ADMIN', 'Cannot deactivate the last Super Admin account', 400);
+        }
+      }
+
       await tx
         .update(users)
         .set({ status: 'deactivated', updatedAt: new Date() })
@@ -848,5 +832,23 @@ export class StaffService {
       success: true,
       message: `Invitation resent to ${user.email}. ${MAX_RESENDS_PER_DAY - resendCount} resends remaining today.`,
     };
+  }
+
+  /**
+   * Count active Super Admins (not deactivated/suspended).
+   * Accepts db or transaction context to prevent TOCTOU race conditions.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private static async countActiveSuperAdmins(roleId: string, ctx: any = db): Promise<number> {
+    const [result] = await ctx
+      .select({ count: count() })
+      .from(users)
+      .where(
+        and(
+          eq(users.roleId, roleId),
+          notInArray(users.status, ['deactivated', 'suspended'])
+        )
+      );
+    return Number(result.count);
   }
 }

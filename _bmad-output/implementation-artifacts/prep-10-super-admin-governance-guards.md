@@ -1,6 +1,6 @@
 # Prep 10: Super Admin Governance Guards
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -71,6 +71,16 @@ The existing `StaffService.createManual()` and invitation flow fully support cre
   - [x] 5.1 Run API tests: `pnpm vitest run apps/api/src/`
   - [x] 5.2 Run web tests: `cd apps/web && pnpm vitest run`
 - [x] Task 6: Update story status and dev agent record
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][M1] Move governance guard count checks inside `db.transaction()` to prevent TOCTOU race condition [staff.service.ts:deactivateUser+updateRole] — FIXED
+- [x] [AI-Review][M2] Extract duplicated count query to `countActiveSuperAdmins()` private helper method [staff.service.ts] — FIXED
+- [ ] [AI-Review][M3] Commit attribution: prep-10 changes bundled in prep-6 commit `2916388` with no mention — address in next commit with proper message
+- [ ] [AI-Review][M4] Add service-level integration tests for governance guard count logic — controller tests only verify error propagation, not actual count query [staff.service.test.ts]
+- [x] [AI-Review][L1] Fix story documentation: corrected test counts (8 new tests, original was 21 not 22) — FIXED
+- [ ] [AI-Review][L2] Invitation flow controller tests don't verify Super Admin-specific behavior — mocked service makes them generic createManual tests
+- [ ] [AI-Review][L3] Extra `with: { role: true }` JOIN on every deactivateUser/updateRole call — won't fix, JOIN required for governance guard check
 
 ## Dev Notes
 
@@ -229,13 +239,15 @@ No issues encountered. All implementations were straightforward.
 - Added 7 new controller tests: 2 deactivation governance tests, 3 updateRole governance tests, 3 createManual invitation flow tests
 - Verified Super Admin invitation flow works via controller tests (createManual → status 'invited', emailStatus 'pending')
 - All 975 API tests pass, all 1,799 web tests pass — zero regressions
+- **Code review (AI):** 7 findings (0C, 4M, 3L). Fixed M1 (race condition — moved count guards inside transactions), M2 (extracted `countActiveSuperAdmins()` helper), L1 (corrected doc counts). Remaining M3 (commit attribution), M4 (service-level tests), L2 (invitation test specificity), L3 (won't fix — JOIN required)
 
 ### Change Log
 
-- 2026-02-25: Implemented Super Admin governance guards — last-admin protection for deactivate + role change, self-role-change prevention, invitation flow verification. 3 files modified, 7 new tests added.
+- 2026-02-25: Implemented Super Admin governance guards — last-admin protection for deactivate + role change, self-role-change prevention, invitation flow verification. 3 files modified, 8 new tests added.
+- 2026-02-25: Code review (AI) — 4M, 3L findings. Fixed M1 (race condition: moved count guards inside transactions), M2 (extracted `countActiveSuperAdmins()` helper), L1 (corrected test count docs). Action items created for M3, M4, L2, L3.
 
 ### File List
 
-- apps/api/src/services/staff.service.ts (modified) — Added `notInArray` import, last-admin guard to `deactivateUser()`, self-role-change + last-admin guard to `updateRole()`
+- apps/api/src/services/staff.service.ts (modified) — Added `notInArray` import, last-admin guard to `deactivateUser()`, self-role-change + last-admin guard to `updateRole()`. Review fix: moved guards inside transactions, extracted `countActiveSuperAdmins()` helper
 - apps/web/src/features/staff/hooks/useStaff.ts (modified) — Added error handlers for `CANNOT_DEACTIVATE_LAST_ADMIN`, `CANNOT_CHANGE_LAST_ADMIN_ROLE`, `CANNOT_CHANGE_OWN_ROLE`
-- apps/api/src/controllers/__tests__/staff.controller.test.ts (modified) — Added 7 new tests: 2 deactivation governance, 3 updateRole governance, 3 createManual invitation flow (29 total, was 22)
+- apps/api/src/controllers/__tests__/staff.controller.test.ts (modified) — Added 8 new tests: 2 deactivation governance, 3 updateRole governance, 3 createManual invitation flow (29 total, was 21)
