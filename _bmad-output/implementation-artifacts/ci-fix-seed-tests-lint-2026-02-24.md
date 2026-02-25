@@ -1,8 +1,10 @@
 # CI Fix: Seed Test Failures + ESLint Warning
 
+Status: done
+
 **Date:** 2026-02-24
 **Commit triggering failure:** `7943a93` (prep-3: fix sidebar dual highlight + seed fraud thresholds)
-**CI Status:** Failure — 2 test errors + 1 lint warning
+**CI Status:** Resolved — `8bce578` (ci-fix commit, code review: 6 findings all fixed)
 
 ---
 

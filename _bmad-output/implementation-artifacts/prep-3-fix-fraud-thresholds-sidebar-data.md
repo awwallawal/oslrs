@@ -72,7 +72,7 @@ Despite fraud thresholds being fully implemented in Story 4-3 (118 fraud-specifi
 ### Review Follow-ups (AI) — Code Review 2026-02-24
 - [x] [AI-Review][HIGH] H1: Replace sequential INSERT loop with batch insert for atomicity — partial seed leaves unrecoverable state [apps/api/src/db/seeds/index.ts:345-358]
 - [x] [AI-Review][MEDIUM] M1: Add test asserting Settings nav item has `end: true` to prevent dual-highlight regression [apps/web/src/features/dashboard/__tests__/sidebarConfig.test.ts]
-- [x] [AI-Review][MEDIUM] M2: Fix destructive `beforeAll` — scope cleanup to test-owned rows only, not all fraud thresholds [apps/api/src/db/seeds/__tests__/seed-orchestrator.test.ts:41-47]
+- [x] [AI-Review][MEDIUM] M2: Fix destructive `beforeAll` — scope cleanup to test-owned rows only, not all fraud thresholds [apps/api/src/db/seeds/__tests__/seed-orchestrator.test.ts:41-47] ⚠️ REVERTED in ci-fix — scoped cleanup was incorrect because seedFraudThresholds uses findFirst (non-deterministic createdBy). Global cleanup restored.
 - [x] [AI-Review][MEDIUM] M3: Remove test order dependency — each test self-seeds if needed instead of relying on test 1 state [apps/api/src/db/seeds/__tests__/seed-orchestrator.test.ts:88-102]
 - [x] [AI-Review][LOW] L1: Fix stale comments — "21 records" → "27 records", correct Duplicate/Timing category counts [apps/api/src/db/seeds/fraud-thresholds.seed.ts:4,27-35]
 - [x] [AI-Review][LOW] L2: Remove redundant `insertedThresholdIds` tracking — `createdBy` cleanup is sufficient [apps/api/src/db/seeds/__tests__/seed-orchestrator.test.ts:12,52-56]
