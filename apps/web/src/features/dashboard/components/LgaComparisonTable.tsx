@@ -6,7 +6,7 @@
  * staffing model badges, and sort indicators.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -70,7 +70,7 @@ export default function LgaComparisonTable({
   selectedLgaIds,
   onSelectionChange,
 }: LgaComparisonTableProps) {
-  const toggleSelection = (lgaId: string) => {
+  const toggleSelection = useCallback((lgaId: string) => {
     const next = new Set(selectedLgaIds);
     if (next.has(lgaId)) {
       next.delete(lgaId);
@@ -78,7 +78,7 @@ export default function LgaComparisonTable({
       next.add(lgaId);
     }
     onSelectionChange(next);
-  };
+  }, [selectedLgaIds, onSelectionChange]);
 
   const columns = useMemo<ColumnDef<LgaProductivityRow>[]>(() => [
     {

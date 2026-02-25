@@ -203,6 +203,13 @@ Claude Opus 4.6
   - M3: Each test self-seeds if needed (no order dependency)
   - L1: Fixed stale "21 records" → "27 records" in fraud-thresholds.seed.ts comments
   - L2: Removed redundant insertedThresholdIds tracking
+- 2026-02-24: **Code Review #2 (ci-fix)** — 6 findings (1H, 3M, 2L), all 6 fixed:
+  - H1: [PROCESS] M2 from review #1 was incorrect — scoped cleanup broke CI because seedFraudThresholds uses findFirst (non-deterministic user). Reverted to global cleanup + isActive filter in ci-fix.
+  - M1: Added per-category distribution test (GPS:6, Speed:4, Straightline:5, Duplicate:4, Timing:4, Composite:4)
+  - M2: Strengthened createdBy assertion from toBeTruthy() to UUID regex
+  - M3: Sprint-status unrelated changes noted for separate commit
+  - L1: Added atomic batch insert safety comment
+  - L2: Full regression documented (967 API + 1,799 web, 0 regressions)
 
 ### File List
 

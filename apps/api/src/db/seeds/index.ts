@@ -316,7 +316,9 @@ async function seedProductivityTargets(): Promise<void> {
 export async function seedFraudThresholds(roleMap: Map<string, string>): Promise<void> {
   logger.info('Seeding fraud thresholds...');
 
-  // Idempotent guard: skip if active thresholds already exist
+  // Idempotent guard: skip if ANY active thresholds exist (preserves manual config).
+  // A simple existence check is safe because the batch insert below is atomic —
+  // it either inserts all 27 records or none, so partial seed state cannot occur.
   const existing = await db.query.fraudThresholds.findFirst({
     where: eq(fraudThresholds.isActive, true),
   });
