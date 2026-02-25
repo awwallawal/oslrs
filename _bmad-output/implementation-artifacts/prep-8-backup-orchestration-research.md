@@ -1,6 +1,6 @@
 # Prep 8: Backup Orchestration Research
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -56,21 +56,21 @@ The OSLRS platform has partial backup infrastructure:
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Research and compare backup strategies (AC: #1)
-  - [ ] 1.1 Research `pg_dump` + S3 upload: execution via `docker exec postgres pg_dump`, compression (gzip/zstd), upload via `@aws-sdk/client-s3` PutObject, timing estimates for projected DB sizes
-  - [ ] 1.2 Research VPS provider snapshots: Hetzner API snapshots, DigitalOcean droplet snapshots, scheduling, cost, restore procedure, limitations (full-system only, not DB-specific)
-  - [ ] 1.3 Research PostgreSQL WAL archiving / PITR: `archive_command`, `wal_level=replica`, continuous archiving to S3, point-in-time recovery granularity, complexity vs benefit for single-VPS pilot
-  - [ ] 1.4 Research hybrid approach: VPS snapshots (every 6 hours per NFR) + pg_dump daily to S3 (portable, verifiable)
-  - [ ] 1.5 Document comparison table with: RPO, RTO, cost, complexity, portability, compliance suitability
-  - [ ] 1.6 Recommend approach for pilot phase and graduation path for post-pilot
-- [ ] Task 2: Design encryption strategy (AC: #2)
-  - [ ] 2.1 Evaluate S3 server-side encryption (SSE-S3): automatic, no key management, DigitalOcean Spaces support
-  - [ ] 2.2 Evaluate application-level encryption: AES-256-GCM via Node.js `crypto`, encrypt before upload, decrypt after download
-  - [ ] 2.3 Evaluate S3 server-side with customer key (SSE-C): balance of control and simplicity
-  - [ ] 2.4 Design key management: where to store encryption key (env var, Hetzner Vault, separate S3 bucket), rotation schedule (annual), disaster recovery (key escrow)
-  - [ ] 2.5 Document comparison table and recommend approach
-- [ ] Task 3: Design 7-year NDPA retention policy (AC: #3)
-  - [ ] 3.1 Design S3 directory structure:
+- [x] Task 1: Research and compare backup strategies (AC: #1)
+  - [x] 1.1 Research `pg_dump` + S3 upload: execution via `docker exec postgres pg_dump`, compression (gzip/zstd), upload via `@aws-sdk/client-s3` PutObject, timing estimates for projected DB sizes
+  - [x] 1.2 Research VPS provider snapshots: Hetzner API snapshots, DigitalOcean droplet snapshots, scheduling, cost, restore procedure, limitations (full-system only, not DB-specific)
+  - [x] 1.3 Research PostgreSQL WAL archiving / PITR: `archive_command`, `wal_level=replica`, continuous archiving to S3, point-in-time recovery granularity, complexity vs benefit for single-VPS pilot
+  - [x] 1.4 Research hybrid approach: VPS snapshots (every 6 hours per NFR) + pg_dump daily to S3 (portable, verifiable)
+  - [x] 1.5 Document comparison table with: RPO, RTO, cost, complexity, portability, compliance suitability
+  - [x] 1.6 Recommend approach for pilot phase and graduation path for post-pilot
+- [x] Task 2: Design encryption strategy (AC: #2)
+  - [x] 2.1 Evaluate S3 server-side encryption (SSE-S3): automatic, no key management, DigitalOcean Spaces support
+  - [x] 2.2 Evaluate application-level encryption: AES-256-GCM via Node.js `crypto`, encrypt before upload, decrypt after download
+  - [x] 2.3 Evaluate S3 server-side with customer key (SSE-C): balance of control and simplicity
+  - [x] 2.4 Design key management: where to store encryption key (env var, Hetzner Vault, separate S3 bucket), rotation schedule (annual), disaster recovery (key escrow)
+  - [x] 2.5 Document comparison table and recommend approach
+- [x] Task 3: Design 7-year NDPA retention policy (AC: #3)
+  - [x] 3.1 Design S3 directory structure:
     ```
     backups/
     ├── daily/          # 7-day rolling window
@@ -83,16 +83,16 @@ The OSLRS platform has partial backup infrastructure:
         ├── 2026-02-24-manifest.json
         └── ...
     ```
-  - [ ] 3.2 Design lifecycle rules: auto-delete daily backups after 7 days, promote first-of-month to monthly/, auto-delete monthly after 84 months
-  - [ ] 3.3 Calculate storage cost projections:
+  - [x] 3.2 Design lifecycle rules: auto-delete daily backups after 7 days, promote first-of-month to monthly/, auto-delete monthly after 84 months
+  - [x] 3.3 Calculate storage cost projections:
     - Estimate DB size growth: ~200 staff, ~100K respondents/year, ~15 audit records/day
     - Estimate compressed dump size at Year 1 (50MB?), Year 3 (200MB?), Year 7 (500MB?)
     - Calculate S3 storage cost: daily × 7 + monthly × 84 archives
-  - [ ] 3.4 Design purge automation: BullMQ scheduled job or S3 lifecycle policy (if supported by provider)
-  - [ ] 3.5 Design compliance verification: how to prove 7 years retained (manifest log, S3 object listing, auditor-friendly report)
-- [ ] Task 4: Design BullMQ backup job (AC: #4)
-  - [ ] 4.1 Design `backup.queue.ts`: queue name `database-backup`, cron `'00 01 * * *'` (1:00 UTC = 2:00 WAT), `upsertJobScheduler()` pattern
-  - [ ] 4.2 Design `backup.worker.ts`: job processing steps:
+  - [x] 3.4 Design purge automation: BullMQ scheduled job or S3 lifecycle policy (if supported by provider)
+  - [x] 3.5 Design compliance verification: how to prove 7 years retained (manifest log, S3 object listing, auditor-friendly report)
+- [x] Task 4: Design BullMQ backup job (AC: #4)
+  - [x] 4.1 Design `backup.queue.ts`: queue name `database-backup`, cron `'00 01 * * *'` (1:00 UTC = 2:00 WAT), `upsertJobScheduler()` pattern
+  - [x] 4.2 Design `backup.worker.ts`: job processing steps:
     1. Generate backup filename: `{date}-app_db.sql.gz`
     2. Execute pg_dump: `child_process.exec('docker exec postgres pg_dump -U user -d app_db | gzip')`
     3. Encrypt backup (if application-level)
@@ -102,35 +102,47 @@ The OSLRS platform has partial backup infrastructure:
     7. Clean old dailies: delete backups > 7 days
     8. Promote to monthly: if first day of month, copy to `monthly/`
     9. Send notification: success or failure email
-  - [ ] 4.3 Design error handling: retry 3 times with exponential backoff, alert on final failure
-  - [ ] 4.4 Design pg_dump execution: `docker exec` vs direct `pg_dump` (requires psql client on host), evaluate streaming vs temp file
-  - [ ] 4.5 Design temp file management: write to `/tmp/`, stream upload, delete after confirmation
-  - [ ] 4.6 Register in worker initialization: add to `initializeWorkers()` and `closeAllWorkers()` in `workers/index.ts`
-- [ ] Task 5: Design restore procedure (AC: #5)
-  - [ ] 5.1 Design manual restore script: download from S3 → decrypt → decompress → `psql` import
-  - [ ] 5.2 Design automated restore script: `scripts/restore-backup.ts` with CLI args (date, target environment)
-  - [ ] 5.3 Design integrity checks: record count comparison (respondents, users, audit_logs), schema version validation, checksum verification
-  - [ ] 5.4 Estimate restore times: projected DB sizes at Year 1/3/7, download speed from S3, pg_restore duration
-  - [ ] 5.5 Design staging restore procedure: separate Docker PostgreSQL instance, restore into fresh container, run validation queries
-  - [ ] 5.6 Document recovery scenarios: single table corruption, full DB loss, VPS hardware failure, accidental data deletion
-- [ ] Task 6: Design monthly restore drill procedure (AC: #6)
-  - [ ] 6.1 Design drill checklist: download latest backup → restore to staging → validate record counts → verify role-based access → verify audit log integrity → report results
-  - [ ] 6.2 Evaluate automation level: fully automated BullMQ job (monthly cron) vs semi-manual script triggered by Super Admin
-  - [ ] 6.3 Design success criteria: all record counts match within tolerance, all 7 roles can authenticate, latest audit log hash chain validates (if Story 6-1 implemented)
-  - [ ] 6.4 Design notification: email to Super Admin with drill results (pass/fail, duration, record counts, issues found)
-  - [ ] 6.5 Design compliance documentation: monthly drill report template for NDPA auditors
-- [ ] Task 7: Design backup monitoring and alerting (AC: #7)
-  - [ ] 7.1 Design success/failure tracking: `backup_jobs` table or extend audit_logs with `backup.started`, `backup.completed`, `backup.failed` actions
-  - [ ] 7.2 Design email notifications: success summary (size, duration, checksum) and failure alert (error details, retry count)
-  - [ ] 7.3 Design dashboard integration: "Last Backup" widget in System Health page (Story 6-2), status badge (green/amber/red), backup history chart
-  - [ ] 7.4 Design alert escalation: 1 failure → warning email, 2 consecutive → critical email, 3+ consecutive → SMS/phone (if available)
-  - [ ] 7.5 Design backup health metric for prep-7 monitoring: `backup_last_success_timestamp` gauge, `backup_duration_seconds` histogram
-- [ ] Task 8: Write spike summary document (all ACs)
-  - [ ] 8.1 Compile all research into `_bmad-output/implementation-artifacts/prep-8-backup-orchestration-research-summary.md`
-  - [ ] 8.2 Include comparison tables, S3 directory structure diagram, cost projections, and implementation roadmap
-  - [ ] 8.3 Include reference code snippets for BullMQ backup queue/worker, pg_dump command, S3 upload, restore script
-  - [ ] 8.4 Include Story 6-3 implementation checklist derived from spike findings
-- [ ] Task 9: Update story status and dev agent record
+  - [x] 4.3 Design error handling: retry 3 times with exponential backoff, alert on final failure
+  - [x] 4.4 Design pg_dump execution: `docker exec` vs direct `pg_dump` (requires psql client on host), evaluate streaming vs temp file
+  - [x] 4.5 Design temp file management: write to `/tmp/`, stream upload, delete after confirmation
+  - [x] 4.6 Register in worker initialization: add to `initializeWorkers()` and `closeAllWorkers()` in `workers/index.ts`
+- [x] Task 5: Design restore procedure (AC: #5)
+  - [x] 5.1 Design manual restore script: download from S3 → decrypt → decompress → `psql` import
+  - [x] 5.2 Design automated restore script: `scripts/restore-backup.ts` with CLI args (date, target environment)
+  - [x] 5.3 Design integrity checks: record count comparison (respondents, users, audit_logs), schema version validation, checksum verification
+  - [x] 5.4 Estimate restore times: projected DB sizes at Year 1/3/7, download speed from S3, pg_restore duration
+  - [x] 5.5 Design staging restore procedure: separate Docker PostgreSQL instance, restore into fresh container, run validation queries
+  - [x] 5.6 Document recovery scenarios: single table corruption, full DB loss, VPS hardware failure, accidental data deletion
+- [x] Task 6: Design monthly restore drill procedure (AC: #6)
+  - [x] 6.1 Design drill checklist: download latest backup → restore to staging → validate record counts → verify role-based access → verify audit log integrity → report results
+  - [x] 6.2 Evaluate automation level: fully automated BullMQ job (monthly cron) vs semi-manual script triggered by Super Admin
+  - [x] 6.3 Design success criteria: all record counts match within tolerance, all 7 roles can authenticate, latest audit log hash chain validates (if Story 6-1 implemented)
+  - [x] 6.4 Design notification: email to Super Admin with drill results (pass/fail, duration, record counts, issues found)
+  - [x] 6.5 Design compliance documentation: monthly drill report template for NDPA auditors
+- [x] Task 7: Design backup monitoring and alerting (AC: #7)
+  - [x] 7.1 Design success/failure tracking: `backup_jobs` table or extend audit_logs with `backup.started`, `backup.completed`, `backup.failed` actions
+  - [x] 7.2 Design email notifications: success summary (size, duration, checksum) and failure alert (error details, retry count)
+  - [x] 7.3 Design dashboard integration: "Last Backup" widget in System Health page (Story 6-2), status badge (green/amber/red), backup history chart
+  - [x] 7.4 Design alert escalation: 1 failure → warning email, 2 consecutive → critical email, 3+ consecutive → SMS/phone (if available)
+  - [x] 7.5 Design backup health metric for prep-7 monitoring: `backup_last_success_timestamp` gauge, `backup_duration_seconds` histogram
+- [x] Task 8: Write spike summary document (all ACs)
+  - [x] 8.1 Compile all research into `_bmad-output/implementation-artifacts/prep-8-backup-orchestration-research-summary.md`
+  - [x] 8.2 Include comparison tables, S3 directory structure diagram, cost projections, and implementation roadmap
+  - [x] 8.3 Include reference code snippets for BullMQ backup queue/worker, pg_dump command, S3 upload, restore script
+  - [x] 8.4 Include Story 6-3 implementation checklist derived from spike findings
+- [x] Task 9: Update story status and dev agent record
+
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] H1: Add `pg_dumpall --globals-only` step to worker design, manifest, and Story 6-3 checklist [spike-summary:Section 6, 5, 10]
+- [x] [AI-Review][MEDIUM] M1: Resolve redundant daily cleanup — document S3 lifecycle as primary, remove worker step 7 [spike-summary:Section 5, 6]
+- [x] [AI-Review][MEDIUM] M2: Add shell argument validation for pg_dump command to prevent injection [spike-summary:Section 6]
+- [x] [AI-Review][MEDIUM] M3: Add Data Residency Note addressing NFR4.2 Nigerian data center tension with DO Spaces [spike-summary:new subsection]
+- [x] [AI-Review][MEDIUM] M4: Fix missing `fs` module imports in encryption code snippets [spike-summary:Section 4]
+- [x] [AI-Review][MEDIUM] M5: Add `copyToMonthly()` implementation design using S3 CopyObjectCommand [spike-summary:Section 6]
+- [x] [AI-Review][LOW] L1: Document redundant IV in manifest as disaster recovery secondary lookup [spike-summary:Section 5]
+- [x] [AI-Review][LOW] L2: Add comment explaining `BACKUP_USE_DOCKER` opt-out default pattern [spike-summary:Section 6]
+- [x] [AI-Review][LOW] L3: Fix monthly promotion timing to use consistent `startDate` reference [spike-summary:Section 6]
 
 ## Dev Notes
 
@@ -342,12 +354,30 @@ Recent commits are Epic 5 completions and prep fixes:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+No debug issues encountered. Research spike — no production code changes.
+
 ### Completion Notes List
+
+- **Task 1 (Backup Strategy Comparison):** Researched 4 strategies: pg_dump+S3, VPS snapshots, WAL archiving/PITR, and hybrid. Recommended hybrid (pg_dump+S3 primary, VPS snapshots secondary). WAL archiving deferred as over-engineered for ~200-user scale. Included detailed RPO/RTO/cost comparison table.
+- **Task 2 (Encryption Design):** Discovered DO Spaces does NOT support SSE-S3. Recommended app-level AES-256-GCM with streaming encryption. Designed key management with env var + password manager escrow + annual rotation policy.
+- **Task 3 (NDPA Retention):** Designed S3 directory structure (daily/monthly/drills), lifecycle rules via S3 API (7-day daily, 2555-day monthly), cost projections through Year 7 (~34GB max, well within $5/mo base tier). Added compliance verification design with manifest logs and auditor-friendly reports.
+- **Task 4 (BullMQ Backup Job):** Designed queue+worker following productivity-snapshot.queue.ts pattern. Key decisions: 600s lock duration for long-running jobs, `docker exec` for pg_dump, temp file approach (retry-safe), zstd:3 compression (native PG15 support), 3 retries with exponential backoff.
+- **Task 5 (Restore Procedure):** Designed manual and automated restore scripts with integrity checks (record counts, schema version, audit hash chain, roles). Estimated restore times: 30s (Year 1) to 3min (Year 7), all well within 1-hour RTO. Documented 5 recovery scenarios.
+- **Task 6 (Monthly Drill):** Recommended semi-automated script (not fully automated BullMQ job) — safer for Docker container management. 13-step drill checklist with pass/fail criteria. Drill reports uploaded to S3 for NDPA compliance evidence.
+- **Task 7 (Monitoring & Alerting):** Designed audit_logs integration for tracking (leveraging Story 6-1 AUDIT_ACTIONS expansion). Progressive alert escalation (1→warn, 2→critical, 3+→emergency). Dashboard widget specs for Story 6-2 integration. 4 prom-client metrics for monitoring spike integration.
+- **Task 8 (Spike Document):** Compiled all research into comprehensive 11-section summary document with comparison tables, code snippets, and Story 6-3 implementation checklist (4 phases, ~15-20 tests estimated).
 
 ### Change Log
 
+- 2026-02-25: Research spike complete. All 7 ACs satisfied. Spike summary document created at `_bmad-output/implementation-artifacts/prep-8-backup-orchestration-research-summary.md`.
+- 2026-02-25: Code review passed. 9 findings (1H, 5M, 3L), all 9 fixed in spike summary. H1 globals backup added to worker+manifest+checklist, M1 redundant cleanup resolved, M2 shell injection validation, M3 data residency note, M4 fs imports, M5 copyToMonthly design, L1 IV manifest clarification, L2 env var comment, L3 timing consistency.
+
 ### File List
+
+- `_bmad-output/implementation-artifacts/prep-8-backup-orchestration-research-summary.md` (new) — Spike summary document with architecture decisions, comparison tables, code snippets, and Story 6-3 checklist
+- `_bmad-output/implementation-artifacts/prep-8-backup-orchestration-research.md` (modified) — Story file: tasks marked complete, dev agent record updated, status → review
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified) — prep-8 status: ready-for-dev → in-progress → review
