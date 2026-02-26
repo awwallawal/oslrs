@@ -568,6 +568,9 @@ jobs:
             # Push any schema changes to production DB
             pnpm --filter @oslsr/api db:push
 
+            # Run idempotent migration scripts (safe to re-run on every deploy)
+            cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
+
             # Build frontend
             VITE_API_URL=https://oyotradeministry.com.ng/api/v1 pnpm --filter @oslsr/web build
 

@@ -399,6 +399,7 @@ cd ~/oslrs
 git pull origin main
 pnpm install --frozen-lockfile
 pnpm --filter @oslsr/api db:push              # Push schema changes (added 2026-02-23)
+cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs  # Idempotent migration (added 2026-02-26)
 VITE_API_URL=https://<YOUR_DOMAIN>/api/v1 pnpm --filter @oslsr/web build  # VITE_ vars are build-time only
 sudo cp -r apps/web/dist/* /var/www/oslsr/
 pm2 restart oslsr-api
@@ -443,6 +444,7 @@ cd ~/oslrs
 git pull origin main
 pnpm install
 pnpm --filter @oslsr/api db:push
+cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 VITE_API_URL=https://<YOUR_DOMAIN>/api/v1 pnpm --filter @oslsr/web build
 sudo cp -r apps/web/dist/* /var/www/oslsr/
 pm2 restart oslsr-api
