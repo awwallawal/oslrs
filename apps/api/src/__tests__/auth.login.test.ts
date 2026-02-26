@@ -65,7 +65,7 @@ describe('Auth Login Integration', () => {
     // Wrap in transaction to prevent race conditions with parallel test files
     // toggling the immutable trigger (Story 6-1 code review fix)
     await db.transaction(async (tx) => {
-      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       const userIds = [staffUserId, publicUserId].filter(Boolean);
       if (userIds.length > 0) {
         await tx.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
@@ -76,7 +76,7 @@ describe('Auth Login Integration', () => {
       if (publicUserId) {
         await tx.delete(users).where(eq(users.id, publicUserId));
       }
-      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
     });
   });
 
@@ -322,12 +322,12 @@ describe('Auth Login Integration', () => {
 
     afterAll(async () => {
       await db.transaction(async (tx) => {
-        await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
         if (suspendedUserId) {
           await tx.delete(auditLogs).where(eq(auditLogs.actorId, suspendedUserId));
           await tx.delete(users).where(eq(users.id, suspendedUserId));
         }
-        await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       });
     });
 

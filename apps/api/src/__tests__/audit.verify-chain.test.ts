@@ -50,12 +50,12 @@ describe('Audit Routes - Authorization', () => {
   afterAll(async () => {
     // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
     await db.transaction(async (tx) => {
-      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       if (enumeratorUserId) {
         await tx.delete(auditLogs).where(eq(auditLogs.actorId, enumeratorUserId));
         await tx.delete(users).where(eq(users.id, enumeratorUserId));
       }
-      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
     });
   });
 

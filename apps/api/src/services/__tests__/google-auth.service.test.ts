@@ -43,12 +43,12 @@ describe('GoogleAuthService', () => {
   afterAll(async () => {
     // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
     await db.transaction(async (tx) => {
-      await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       if (testUsers.length > 0) {
         await tx.delete(auditLogs).where(inArray(auditLogs.actorId, testUsers));
         await tx.delete(users).where(inArray(users.id, testUsers));
       }
-      await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable`);
+      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
     });
     vi.restoreAllMocks();
   });
