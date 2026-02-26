@@ -13,7 +13,7 @@ import { RefreshCw, Activity, Database, Server, HardDrive, Clock, Gauge } from '
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
 import { useSystemHealth, systemHealthKeys } from '../hooks/useSystemHealth';
-import type { SystemHealthData, QueueStats } from '../api/system-health.api';
+import type { QueueStats } from '../api/system-health.api';
 
 // ── Status badge component ─────────────────────────────────────────────────
 function StatusBadge({ status }: { status: 'ok' | 'degraded' | 'critical' | 'warning' | 'error' }) {
