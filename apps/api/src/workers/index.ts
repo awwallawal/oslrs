@@ -10,6 +10,8 @@ import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
+import { MonitoringService } from '../services/monitoring.service.js';
+import { AlertService } from '../services/alert.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'workers' });
@@ -41,6 +43,38 @@ export async function initializeWorkers(): Promise<void> {
 
   // Schedule nightly productivity snapshot
   await scheduleNightlySnapshot();
+
+  // Start monitoring alert scheduler (every 30 seconds)
+  startMonitoringScheduler();
+}
+
+let monitoringInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Starts periodic health check evaluation for alerting.
+ * Calls MonitoringService.getSystemHealth() and passes results to AlertService.evaluateAlerts().
+ * Runs every 30 seconds via setInterval (MVP approach — no persistence needed for monitoring).
+ */
+function startMonitoringScheduler(): void {
+  if (monitoringInterval) return; // Prevent duplicate schedulers
+
+  const INTERVAL_MS = 30_000; // 30 seconds
+  monitoringInterval = setInterval(async () => {
+    try {
+      const health = await MonitoringService.getSystemHealth();
+      await AlertService.evaluateAlerts(health);
+    } catch (err) {
+      logger.error({
+        event: 'monitoring.scheduler_error',
+        error: (err as Error).message,
+      });
+    }
+  }, INTERVAL_MS);
+
+  // Don't prevent Node.js from exiting due to this interval
+  monitoringInterval.unref();
+
+  logger.info({ event: 'monitoring.scheduler_started', intervalMs: INTERVAL_MS });
 }
 
 /**
@@ -48,6 +82,12 @@ export async function initializeWorkers(): Promise<void> {
  */
 export async function closeAllWorkers(): Promise<void> {
   logger.info({ event: 'workers.closing' });
+
+  // Stop monitoring scheduler
+  if (monitoringInterval) {
+    clearInterval(monitoringInterval);
+    monitoringInterval = null;
+  }
 
   await Promise.all([
     importWorker.close(),

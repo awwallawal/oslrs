@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from './routes/index.js';
 import { AppError } from '@oslsr/utils';
+import { metricsMiddleware } from './middleware/metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +75,7 @@ app.use(cors({
 }));
 app.use(cookieParser());
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

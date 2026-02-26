@@ -522,4 +522,29 @@ Government of Oyo State
     return `${this.APP_URL}/activate/${token}`;
   }
 
+  // ==========================================================================
+  // Generic Email (for system alerts)
+  // ==========================================================================
+
+  /**
+   * Sends a generic email (used by AlertService for system health alerts).
+   */
+  static async sendGenericEmail(data: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<EmailResult> {
+    if (!this.isEnabled()) {
+      logger.warn({
+        event: 'email.generic.disabled',
+        to: data.to,
+        note: 'Email service is disabled',
+      });
+      return { success: false, error: 'Email service is disabled' };
+    }
+
+    return this.getProvider().send(data);
+  }
+
 }
