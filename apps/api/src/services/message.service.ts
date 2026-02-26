@@ -15,7 +15,7 @@
 
 import { db } from '../db/index.js';
 import { messages, messageReceipts } from '../db/schema/index.js';
-import { auditLogs } from '../db/schema/audit.js';
+import { AuditService } from './audit.service.js';
 import { users } from '../db/schema/users.js';
 import { eq, and, or, isNull, desc, sql, count } from 'drizzle-orm';
 import { TeamAssignmentService } from './team-assignment.service.js';
@@ -72,15 +72,13 @@ export class MessageService {
     });
 
     // Audit log (fire-and-forget)
-    db.insert(auditLogs)
-      .values({
-        actorId: senderId,
-        action: 'message.send',
-        targetResource: 'messages',
-        targetId: message.id,
-        details: { messageType: 'direct', recipientId },
-      })
-      .catch((err) => logger.error({ event: 'audit.write.failed', error: err.message, messageId: message.id }));
+    AuditService.logAction({
+      actorId: senderId,
+      action: 'message.send',
+      targetResource: 'messages',
+      targetId: message.id,
+      details: { messageType: 'direct', recipientId },
+    });
 
     logger.info({ event: 'message.sent', messageId: message.id, senderId, recipientId, messageType: 'direct' });
 
@@ -123,15 +121,13 @@ export class MessageService {
     await db.insert(messageReceipts).values(receiptValues);
 
     // Audit log (fire-and-forget)
-    db.insert(auditLogs)
-      .values({
-        actorId: supervisorId,
-        action: 'message.send',
-        targetResource: 'messages',
-        targetId: message.id,
-        details: { messageType: 'broadcast', recipientCount: enumeratorIds.length },
-      })
-      .catch((err) => logger.error({ event: 'audit.write.failed', error: err.message, messageId: message.id }));
+    AuditService.logAction({
+      actorId: supervisorId,
+      action: 'message.send',
+      targetResource: 'messages',
+      targetId: message.id,
+      details: { messageType: 'broadcast', recipientCount: enumeratorIds.length },
+    });
 
     logger.info({
       event: 'message.broadcast',
@@ -367,15 +363,13 @@ export class MessageService {
       // Note: targetId uses conversation partner ID (not individual messageId) because
       // this is a batch operation marking N messages at once. Individual message IDs
       // would require a separate audit row per message, which defeats the batch purpose.
-      db.insert(auditLogs)
-        .values({
-          actorId: userId,
-          action: 'message.read',
-          targetResource: 'messages',
-          targetId: otherUserId,
-          details: { readBy: userId, markedCount: result.length, type: 'batch_thread' },
-        })
-        .catch((err) => logger.error({ event: 'audit.write.failed', error: err.message }));
+      AuditService.logAction({
+        actorId: userId,
+        action: 'message.read',
+        targetResource: 'messages',
+        targetId: otherUserId,
+        details: { readBy: userId, markedCount: result.length, type: 'batch_thread' },
+      });
     }
 
     return result.length;
@@ -398,15 +392,13 @@ export class MessageService {
 
     if (updated) {
       // Audit log (fire-and-forget)
-      db.insert(auditLogs)
-        .values({
-          actorId: recipientId,
-          action: 'message.read',
-          targetResource: 'messages',
-          targetId: messageId,
-          details: { readBy: recipientId },
-        })
-        .catch((err) => logger.error({ event: 'audit.write.failed', error: err.message, messageId }));
+      AuditService.logAction({
+        actorId: recipientId,
+        action: 'message.read',
+        targetResource: 'messages',
+        targetId: messageId,
+        details: { readBy: recipientId },
+      });
     }
 
     return !!updated;

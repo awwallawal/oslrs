@@ -216,6 +216,87 @@ export class AuditService {
   }
 
   /**
+   * Generic fire-and-forget audit log with hash chain.
+   * Use for non-critical logging outside transactions. Never throws.
+   */
+  static logAction(params: {
+    actorId: string | null;
+    action: string;
+    targetResource: string;
+    targetId: string | null;
+    details?: Record<string, unknown>;
+    ipAddress?: string;
+    userAgent?: string;
+  }): void {
+    const id = uuidv7();
+    const createdAt = new Date();
+
+    db.transaction(async (tx) => {
+      const prevResult = await tx.execute(
+        sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
+      );
+      const previousHash = (prevResult.rows[0] as Record<string, string>)?.hash ?? GENESIS_HASH;
+      const hash = AuditService.computeHash(id, params.action, params.actorId, createdAt, params.details ?? null, previousHash);
+
+      await tx.insert(auditLogs).values({
+        id,
+        actorId: params.actorId,
+        action: params.action,
+        targetResource: params.targetResource,
+        targetId: params.targetId,
+        details: params.details ?? null,
+        ipAddress: params.ipAddress ?? 'unknown',
+        userAgent: params.userAgent ?? 'unknown',
+        hash,
+        previousHash,
+        createdAt,
+      });
+    }).catch((err) =>
+      logger.warn({ err, event: 'audit.log_action_failed', action: params.action }, 'Failed to write audit log'),
+    );
+  }
+
+  /**
+   * Generic transactional audit log with hash chain.
+   * Use within db.transaction() for critical operations. Throws on error.
+   */
+  static async logActionTx(
+    tx: DbTransaction,
+    params: {
+      actorId: string | null;
+      action: string;
+      targetResource: string;
+      targetId: string | null;
+      details?: Record<string, unknown>;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): Promise<void> {
+    const id = uuidv7();
+    const createdAt = new Date();
+
+    const prevResult = await tx.execute(
+      sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
+    );
+    const previousHash = (prevResult.rows[0] as Record<string, string>)?.hash ?? GENESIS_HASH;
+    const hash = AuditService.computeHash(id, params.action, params.actorId, createdAt, params.details ?? null, previousHash);
+
+    await tx.insert(auditLogs).values({
+      id,
+      actorId: params.actorId,
+      action: params.action,
+      targetResource: params.targetResource,
+      targetId: params.targetId,
+      details: params.details ?? null,
+      ipAddress: params.ipAddress ?? 'unknown',
+      userAgent: params.userAgent ?? 'unknown',
+      hash,
+      previousHash,
+      createdAt,
+    });
+  }
+
+  /**
    * Verify the integrity of the audit log hash chain (Task 4.1).
    * Walks records in chronological order, recomputes each hash, and compares
    * against stored values. Detects any tampered or modified records.

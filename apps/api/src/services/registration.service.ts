@@ -1,7 +1,8 @@
 import { Redis } from 'ioredis';
 import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
-import { users, roles, auditLogs } from '../db/schema/index.js';
+import { users, roles } from '../db/schema/index.js';
+import { AuditService } from './audit.service.js';
 import { eq } from 'drizzle-orm';
 import { AppError, hashPassword, generateVerificationToken, generateOtpCode } from '@oslsr/utils';
 import { UserRole } from '@oslsr/types';
@@ -153,7 +154,7 @@ export class RegistrationService {
         }).returning();
 
         // Create audit log
-        await tx.insert(auditLogs).values({
+        await AuditService.logActionTx(tx, {
           actorId: newUser.id,
           action: 'auth.registration_success',
           targetResource: 'users',
@@ -302,7 +303,7 @@ export class RegistrationService {
         })
         .where(eq(users.id, user.id));
 
-      await tx.insert(auditLogs).values({
+      await AuditService.logActionTx(tx, {
         actorId: user.id,
         action: 'auth.email_verification_success',
         targetResource: 'users',
@@ -521,7 +522,7 @@ export class RegistrationService {
         })
         .where(eq(users.id, user.id));
 
-      await tx.insert(auditLogs).values({
+      await AuditService.logActionTx(tx, {
         actorId: user.id,
         action: 'auth.email_verification_success',
         targetResource: 'users',

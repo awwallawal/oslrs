@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users, auditLogs } from '../db/schema/index.js';
+import { users } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
 import type { ActivationWithSelfiePayload, BackOfficeActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
@@ -7,6 +7,7 @@ import { UserRole, isBackOfficeRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
+import { AuditService } from './audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'auth-service' });
@@ -177,7 +178,7 @@ export class AuthService {
           .where(eq(users.id, user.id))
           .returning();
 
-        await tx.insert(auditLogs).values({
+        await AuditService.logActionTx(tx, {
           actorId: user.id,
           action: 'user.activated',
           targetResource: 'users',
@@ -188,7 +189,7 @@ export class AuthService {
             backOfficeActivation: backOffice,
           },
           ipAddress: ipAddress || 'unknown',
-          userAgent: userAgent || 'unknown'
+          userAgent: userAgent || 'unknown',
         });
 
         return result;
@@ -539,8 +540,8 @@ export class AuthService {
       ipAddress,
     });
 
-    // Audit log
-    await db.insert(auditLogs).values({
+    // Audit log (fire-and-forget — login succeeds even if audit fails)
+    AuditService.logAction({
       actorId: user.id,
       action: 'auth.login_success',
       targetResource: 'users',
@@ -594,8 +595,8 @@ export class AuthService {
       ipAddress,
     });
 
-    // Audit log
-    await db.insert(auditLogs).values({
+    // Audit log (fire-and-forget — logout succeeds even if audit fails)
+    AuditService.logAction({
       actorId: userId,
       action: 'auth.logout',
       targetResource: 'users',

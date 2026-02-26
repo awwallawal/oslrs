@@ -7,7 +7,8 @@ import pino from 'pino';
 import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type CreateStaffDto, type EmailStatus } from '@oslsr/types';
 import { AppError, generateInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { users, auditLogs, roles, lgas } from '../db/schema/index.js';
+import { users, roles, lgas } from '../db/schema/index.js';
+import { AuditService } from './audit.service.js';
 import { eq, ilike, or, count, and, SQL, notInArray } from 'drizzle-orm';
 import { queueStaffInvitationEmail } from '../queues/email.queue.js';
 import { EmailService } from './email.service.js';
@@ -215,7 +216,7 @@ export class StaffService {
         .set({ roleId: newRoleId, updatedAt: new Date() })
         .where(eq(users.id, userId));
 
-      await tx.insert(auditLogs).values({
+      await AuditService.logActionTx(tx, {
         actorId,
         action: 'user.role_change',
         targetResource: 'users',
@@ -300,7 +301,7 @@ export class StaffService {
         .set({ status: 'deactivated', updatedAt: new Date() })
         .where(eq(users.id, userId));
 
-      await tx.insert(auditLogs).values({
+      await AuditService.logActionTx(tx, {
         actorId,
         action: 'user.deactivate',
         targetResource: 'users',
@@ -385,7 +386,7 @@ export class StaffService {
           })
           .where(eq(users.id, userId));
 
-        await tx.insert(auditLogs).values({
+        await AuditService.logActionTx(tx, {
           actorId,
           action: 'user.reactivate',
           targetResource: 'users',
@@ -427,7 +428,7 @@ export class StaffService {
           .set({ status: newStatus, updatedAt: new Date() })
           .where(eq(users.id, userId));
 
-        await tx.insert(auditLogs).values({
+        await AuditService.logActionTx(tx, {
           actorId,
           action: 'user.reactivate',
           targetResource: 'users',
@@ -619,14 +620,14 @@ export class StaffService {
                 invitedAt: new Date(),
             }).returning();
 
-            await tx.insert(auditLogs).values({
+            await AuditService.logActionTx(tx, {
                 actorId: actorId,
                 action: 'user.create',
                 targetResource: 'users',
                 targetId: createdUser.id,
                 details: { roleName: roleRecord.name, lgaId },
-                ipAddress: 'system', // TODO: Pass from context if available
-                userAgent: 'system'
+                ipAddress: 'system',
+                userAgent: 'system',
             });
 
             return createdUser;
@@ -800,7 +801,7 @@ export class StaffService {
         .where(eq(users.id, userId));
 
       // Log audit entry
-      await tx.insert(auditLogs).values({
+      await AuditService.logActionTx(tx, {
         actorId,
         action: 'invitation.resend',
         targetResource: 'users',

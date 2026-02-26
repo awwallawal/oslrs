@@ -155,8 +155,16 @@ vi.mock('uuidv7', () => ({
   uuidv7: () => 'mock-uuid-v7',
 }));
 
+vi.mock('../audit.service.js', () => ({
+  AuditService: {
+    logAction: vi.fn(),
+    logActionTx: vi.fn(),
+  },
+}));
+
 // ── Import SUT ────────────────────────────────────────────────────────
 import { AssessorService } from '../assessor.service.js';
+import { AuditService } from '../audit.service.js';
 
 // ── Tests ─────────────────────────────────────────────────────────────
 describe('AssessorService', () => {
@@ -298,8 +306,9 @@ describe('AssessorService', () => {
 
       // Transaction should have been called
       expect(mockTransaction).toHaveBeenCalled();
-      // Audit log should have been inserted
-      expect(mockInsertValues).toHaveBeenCalledWith(
+      // Audit log should have been inserted via AuditService
+      expect(AuditService.logActionTx).toHaveBeenCalledWith(
+        expect.anything(), // tx
         expect.objectContaining({
           action: 'assessor.final_review',
           targetResource: 'fraud_detection',
@@ -336,7 +345,8 @@ describe('AssessorService', () => {
         userAgent: 'Mozilla/5.0',
       });
 
-      expect(mockInsertValues).toHaveBeenCalledWith(
+      expect(AuditService.logActionTx).toHaveBeenCalledWith(
+        expect.anything(), // tx
         expect.objectContaining({
           details: expect.objectContaining({
             assessorResolution: 'final_rejected',

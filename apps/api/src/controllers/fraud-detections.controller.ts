@@ -13,7 +13,8 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { fraudDetections, submissions, users, questionnaireForms, auditLogs, fraudThresholds } from '../db/schema/index.js';
+import { fraudDetections, submissions, users, questionnaireForms, fraudThresholds } from '../db/schema/index.js';
+import { AuditService } from '../services/audit.service.js';
 import { eq, and, gte, lte, inArray, isNull, isNotNull, desc, sql, not, gt } from 'drizzle-orm';
 import { reviewFraudDetectionSchema, bulkReviewFraudDetectionsSchema, fraudSeverities } from '@oslsr/types';
 import type { GpsDetails } from '@oslsr/types';
@@ -578,7 +579,7 @@ export class FraudDetectionsController {
           .where(inArray(fraudDetections.id, ids));
 
         // 4. DB audit log entry (targetId null for bulk — IDs in details JSONB)
-        await tx.insert(auditLogs).values({
+        await AuditService.logActionTx(tx, {
           actorId: user.sub,
           action: 'fraud.bulk_verification',
           targetResource: 'fraud_detections',

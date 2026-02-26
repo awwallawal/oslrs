@@ -17,8 +17,9 @@ import {
   submissions,
   users,
   respondents,
-  auditLogs,
 } from '../db/schema/index.js';
+import { auditLogs } from '../db/schema/audit.js';
+import { AuditService } from './audit.service.js';
 import {
   eq,
   and,
@@ -32,7 +33,6 @@ import {
   inArray,
   like,
 } from 'drizzle-orm';
-import { uuidv7 } from 'uuidv7';
 import { AppError } from '@oslsr/utils';
 import pino from 'pino';
 
@@ -385,8 +385,7 @@ export class AssessorService {
         .where(eq(fraudDetections.id, detectionId))
         .returning();
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId,
         action: 'assessor.final_review',
         targetResource: 'fraud_detection',

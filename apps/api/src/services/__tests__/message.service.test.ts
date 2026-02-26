@@ -80,8 +80,11 @@ vi.mock('../team-assignment.service.js', () => ({
   },
 }));
 
-vi.mock('../../db/schema/audit.js', () => ({
-  auditLogs: {},
+vi.mock('../audit.service.js', () => ({
+  AuditService: {
+    logAction: vi.fn(),
+    logActionTx: vi.fn(),
+  },
 }));
 
 vi.mock('pino', () => ({

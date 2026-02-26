@@ -7,9 +7,7 @@ import path from 'path';
 import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, EmailTier } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
-import { db } from '../db/index.js';
-import { auditLogs } from '../db/schema/index.js';
-import { uuidv7 } from 'uuidv7';
+import { AuditService } from '../services/audit.service.js';
 import { getBackoffDelay, pauseEmailQueue } from '../queues/email.queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -169,14 +167,12 @@ async function logEmailFailureToAudit(emailJob: EmailJob, errorMessage: string):
       // Intentionally NOT logging: activationUrl, verificationUrl, resetUrl, otpCode
     };
 
-    await db.insert(auditLogs).values({
-      id: uuidv7(),
+    AuditService.logAction({
       action: 'email.delivery.failed',
       targetResource: 'email',
       targetId: userId ?? 'system',
-      actorId: null, // System action
+      actorId: null,
       details: sanitizedData,
-      createdAt: new Date(),
     });
 
     logger.info({

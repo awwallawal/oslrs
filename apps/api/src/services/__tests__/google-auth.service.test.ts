@@ -277,6 +277,9 @@ describe('GoogleAuthService', () => {
       );
       testUsers.push(result.user.id);
 
+      // logAction is fire-and-forget — wait briefly for the async transaction to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Check audit log
       const auditLog = await db.query.auditLogs.findFirst({
         where: eq(auditLogs.targetId, result.user.id),

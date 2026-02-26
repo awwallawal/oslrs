@@ -53,6 +53,13 @@ vi.mock('uuidv7', () => ({
   uuidv7: () => '01234567-89ab-7cde-8000-000000000001',
 }));
 
+vi.mock('../audit.service.js', () => ({
+  AuditService: {
+    logAction: vi.fn(),
+    logActionTx: vi.fn(),
+  },
+}));
+
 // ── Test Helpers ───────────────────────────────────────────────────────────
 
 function makeValidSchema(overrides?: Partial<NativeFormSchema>): NativeFormSchema {

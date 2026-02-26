@@ -4,7 +4,7 @@ import {
   questionnaireFiles,
   questionnaireVersions,
 } from '../db/schema/index.js';
-import { auditLogs } from '../db/schema/index.js';
+import { AuditService } from './audit.service.js';
 import { eq, desc, count } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { AppError } from '@oslsr/utils';
@@ -218,8 +218,7 @@ export class QuestionnaireService {
       });
 
       // Create audit log
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'questionnaire.upload',
         targetResource: 'questionnaire_forms',
@@ -420,8 +419,7 @@ export class QuestionnaireService {
         .set({ status: newStatus, updatedAt: new Date() })
         .where(eq(questionnaireForms.id, id));
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'questionnaire.status_change',
         targetResource: 'questionnaire_forms',
@@ -475,8 +473,7 @@ export class QuestionnaireService {
       // Files are cascade deleted via FK
       await tx.delete(questionnaireForms).where(eq(questionnaireForms.id, id));
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'questionnaire.delete',
         targetResource: 'questionnaire_forms',

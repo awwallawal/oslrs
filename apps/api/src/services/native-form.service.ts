@@ -1,6 +1,6 @@
 import { db } from '../db/index.js';
 import { questionnaireForms } from '../db/schema/index.js';
-import { auditLogs } from '../db/schema/index.js';
+import { AuditService } from './audit.service.js';
 import { eq, desc } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
@@ -79,8 +79,7 @@ export class NativeFormService {
         })
         .returning();
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'native_form.created',
         targetResource: 'questionnaire_forms',
@@ -130,8 +129,7 @@ export class NativeFormService {
         })
         .where(eq(questionnaireForms.id, formId));
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'native_form.schema_updated',
         targetResource: 'questionnaire_forms',
@@ -298,8 +296,7 @@ export class NativeFormService {
         })
         .where(eq(questionnaireForms.id, formId));
 
-      await tx.insert(auditLogs).values({
-        id: uuidv7(),
+      await AuditService.logActionTx(tx, {
         actorId: userId,
         action: 'native_form.published',
         targetResource: 'questionnaire_forms',

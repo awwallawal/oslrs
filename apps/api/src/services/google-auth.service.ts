@@ -1,6 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '../db/index.js';
-import { users, auditLogs, roles } from '../db/schema/index.js';
+import { users, roles } from '../db/schema/index.js';
+import { AuditService } from './audit.service.js';
 import { eq } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
@@ -177,8 +178,8 @@ export class GoogleAuthService {
       ipAddress,
     });
 
-    // Audit log
-    await db.insert(auditLogs).values({
+    // Audit log (fire-and-forget)
+    AuditService.logAction({
       actorId: newUser.id,
       action: 'auth.google_registration_success',
       targetResource: 'users',
@@ -219,8 +220,8 @@ export class GoogleAuthService {
       ipAddress,
     });
 
-    // Audit log
-    await db.insert(auditLogs).values({
+    // Audit log (fire-and-forget)
+    AuditService.logAction({
       actorId: user.id,
       action: 'auth.google_login_success',
       targetResource: 'users',

@@ -47,6 +47,13 @@ vi.mock('../../services/team-assignment.service.js', () => ({
 
 vi.mock('pino', () => ({ default: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() }) }));
 
+vi.mock('../../services/audit.service.js', () => ({
+  AuditService: {
+    logAction: vi.fn(),
+    logActionTx: vi.fn(),
+  },
+}));
+
 // Import after mocks
 const { FraudDetectionsController } = await import('../fraud-detections.controller.js');
 
