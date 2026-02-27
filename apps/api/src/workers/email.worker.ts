@@ -4,7 +4,7 @@ import pino from 'pino';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, EmailTier } from '@oslsr/types';
+import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, BackupNotificationEmailData, EmailTier } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { AuditService } from '../services/audit.service.js';
@@ -91,6 +91,10 @@ export const emailWorker = new Worker<EmailJob>(
 
         case 'password-reset':
           result = await EmailService.sendPasswordResetEmail(data as PasswordResetEmailData);
+          break;
+
+        case 'backup-notification':
+          result = await EmailService.sendGenericEmail(data as BackupNotificationEmailData);
           break;
 
         default:

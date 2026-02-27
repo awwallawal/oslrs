@@ -147,6 +147,20 @@ export const duplicateRegistrationEmailDataSchema = z.object({
 });
 
 // ============================================================================
+// Backup Notification Email Types
+// ============================================================================
+
+/**
+ * Data required to send a backup notification email
+ */
+export interface BackupNotificationEmailData {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+// ============================================================================
 // Email Job Types (for BullMQ queue)
 // ============================================================================
 
@@ -186,9 +200,18 @@ export interface PasswordResetJob extends BaseEmailJob {
 }
 
 /**
+ * Backup notification email job payload
+ */
+export interface BackupNotificationJob extends BaseEmailJob {
+  type: 'backup-notification';
+  data: BackupNotificationEmailData;
+  userId: string;
+}
+
+/**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob;
+export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | BackupNotificationJob;
 
 // ============================================================================
 // Email Configuration Types

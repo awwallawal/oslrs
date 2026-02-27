@@ -8,6 +8,7 @@ import type {
   StaffInvitationEmailData,
   VerificationEmailData,
   PasswordResetEmailData,
+  BackupNotificationEmailData,
 } from '@oslsr/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -187,6 +188,25 @@ export async function queuePasswordResetEmail(
     type: 'password-reset',
     data,
     userId,
+  } as EmailJob);
+  return job.id || '';
+}
+
+/**
+ * Add a backup notification email to the queue.
+ * Queues one job per recipient email address.
+ */
+export async function queueBackupNotificationEmail(
+  data: BackupNotificationEmailData,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('backup-notification', {
+    type: 'backup-notification',
+    data,
+    userId: 'system',
   } as EmailJob);
   return job.id || '';
 }

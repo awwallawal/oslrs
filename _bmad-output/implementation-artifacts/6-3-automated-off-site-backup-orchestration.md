@@ -1,6 +1,6 @@
 # Story 6.3: Automated Off-site Backup Orchestration
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -72,22 +72,22 @@ The platform has partial backup infrastructure but no automated backup job:
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create backup queue with BullMQ scheduler (AC: #1, #5)
-  - [ ] 1.1 Create `apps/api/src/queues/backup.queue.ts` following `productivity-snapshot.queue.ts` pattern:
+- [x] Task 1: Create backup queue with BullMQ scheduler (AC: #1, #5)
+  - [x] 1.1 Create `apps/api/src/queues/backup.queue.ts` following `productivity-snapshot.queue.ts` pattern:
     - Lazy-init Redis connection (same `isTestMode()` guard)
     - Queue name: `database-backup`
     - Default job options: 24h completion cleanup, 7-day failure retention
-  - [ ] 1.2 Add `scheduleDailyBackup()` function using `upsertJobScheduler()`:
+  - [x] 1.2 Add `scheduleDailyBackup()` function using `upsertJobScheduler()`:
     - Scheduler ID: `daily-backup`
     - Cron pattern: `'00 01 * * *'` (1:00 UTC = 2:00 WAT)
     - Job name: `database-backup`
-  - [ ] 1.3 Add `getBackupQueue()` export for monitoring integration (Story 6-2)
-  - [ ] 1.4 Add `closeBackupQueue()` for graceful shutdown
-- [ ] Task 2: Create backup worker with pg_dump + S3 upload (AC: #1, #2)
-  - [ ] 2.1 Create `apps/api/src/workers/backup.worker.ts` following `productivity-snapshot.worker.ts` pattern:
+  - [x] 1.3 Add `getBackupQueue()` export for monitoring integration (Story 6-2)
+  - [x] 1.4 Add `closeBackupQueue()` for graceful shutdown
+- [x] Task 2: Create backup worker with pg_dump + S3 upload (AC: #1, #2)
+  - [x] 2.1 Create `apps/api/src/workers/backup.worker.ts` following `productivity-snapshot.worker.ts` pattern:
     - Worker concurrency: 1 (single backup at a time)
     - Structured Pino logging at each step
-  - [ ] 2.2 Implement `processBackup()` job handler with steps:
+  - [x] 2.2 Implement `processBackup()` job handler with steps:
     1. Generate filename: `{YYYY-MM-DD}-app_db.sql.gz`
     2. Execute pg_dump: `child_process.execSync('pg_dump -h ${host} -p ${port} -U ${user} -d ${db} | gzip > /tmp/${filename}')` — parse DATABASE_URL for connection params
     3. Read compressed file and compute SHA-256 checksum
@@ -96,26 +96,26 @@ The platform has partial backup infrastructure but no automated backup job:
     6. Build manifest: `{ filename, sizeBytes, checksum, durationMs, timestamp, tableCounts: { users, respondents, auditLogs } }`
     7. Upload manifest to `backups/manifests/{date}-manifest.json`
     8. Clean temp file from `/tmp/`
-  - [ ] 2.3 Implement table count collection: `SELECT COUNT(*) FROM users`, `respondents`, `audit_logs` — for manifest integrity reference
-  - [ ] 2.4 Create S3 client helper: reuse `PhotoProcessingService` S3 config pattern (endpoint, forcePathStyle, credentials from env)
-  - [ ] 2.5 Handle pg_dump execution:
+  - [x] 2.3 Implement table count collection: `SELECT COUNT(*) FROM users`, `respondents`, `audit_logs` — for manifest integrity reference
+  - [x] 2.4 Create S3 client helper: reuse `PhotoProcessingService` S3 config pattern (endpoint, forcePathStyle, credentials from env)
+  - [x] 2.5 Handle pg_dump execution:
     - Production (PM2 on VPS): Direct `pg_dump` via `child_process` — requires `postgresql-client` on host (already documented in playbook: `apt install -y postgresql-client`)
     - Development (Docker): `docker exec oslsr_postgres pg_dump -U user app_db`
     - Parse `DATABASE_URL` to extract host, port, user, database for direct mode
     - Set `PGPASSWORD` env var for non-interactive auth
-  - [ ] 2.6 Configure retry: 3 attempts, backoff delays [60000, 300000, 900000] (1min, 5min, 15min)
-- [ ] Task 3: Implement retention management (AC: #3)
-  - [ ] 3.1 Add `cleanupOldDailies()` method in backup worker:
+  - [x] 2.6 Configure retry: 3 attempts, backoff delays [60000, 300000, 900000] (1min, 5min, 15min)
+- [x] Task 3: Implement retention management (AC: #3)
+  - [x] 3.1 Add `cleanupOldDailies()` method in backup worker:
     - List objects with prefix `backups/daily/` via `ListObjectsV2Command`
     - Parse date from filename, delete any older than 7 days via `DeleteObjectCommand`
-  - [ ] 3.2 Add `promoteToMonthly()` method:
+  - [x] 3.2 Add `promoteToMonthly()` method:
     - If today is the 1st of the month, copy today's backup to `backups/monthly/{YYYY-MM}-app_db.sql.gz` via `CopyObjectCommand`
     - Also copy manifest to `backups/manifests/monthly/{YYYY-MM}-manifest.json`
-  - [ ] 3.3 Add `cleanupOldMonthlies()` method:
+  - [x] 3.3 Add `cleanupOldMonthlies()` method:
     - List objects with prefix `backups/monthly/`
     - Delete any older than 84 months (7 years)
-  - [ ] 3.4 Run retention cleanup AFTER successful backup upload (not as separate job — reduces complexity)
-  - [ ] 3.5 S3 directory structure:
+  - [x] 3.4 Run retention cleanup AFTER successful backup upload (not as separate job — reduces complexity)
+  - [x] 3.5 S3 directory structure:
     ```
     backups/
     ├── daily/              # 7-day rolling window
@@ -127,68 +127,78 @@ The platform has partial backup infrastructure but no automated backup job:
         └── monthly/
             └── 2026-02-manifest.json
     ```
-- [ ] Task 4: Implement backup notifications (AC: #4, #5)
-  - [ ] 4.1 Add backup notification methods to BackupService or inline in worker:
+- [x] Task 4: Implement backup notifications (AC: #4, #5)
+  - [x] 4.1 Add backup notification methods to BackupService or inline in worker:
     - `sendBackupSuccessEmail(manifest)`: queue email via a new `queueBackupNotificationEmail()` function (see 4.5) to all active Super Admins
     - `sendBackupFailureEmail(error, retryCount)`: queue critical failure alert
-  - [ ] 4.2 Query active Super Admins: `SELECT email FROM users u JOIN roles r ON u.roleId = r.id WHERE r.name = 'super_admin' AND u.status NOT IN ('deactivated', 'suspended')`
-  - [ ] 4.3 Email content — success:
+  - [x] 4.2 Query active Super Admins: `SELECT email FROM users u JOIN roles r ON u.roleId = r.id WHERE r.name = 'super_admin' AND u.status NOT IN ('deactivated', 'suspended')`
+  - [x] 4.3 Email content — success:
     - Subject: `[OSLRS] Daily Backup Completed Successfully`
     - Body: filename, compressed size, checksum, duration, table counts
-  - [ ] 4.4 Email content — failure:
+  - [x] 4.4 Email content — failure:
     - Subject: `[OSLRS] CRITICAL: Daily Backup Failed`
     - Body: error message, retry count, last successful backup date, action required
-  - [ ] 4.5 Create a new `queueBackupNotificationEmail()` export in `email.queue.ts` following the existing `queueStaffInvitationEmail()` pattern (L123). There is **no generic `queueEmail()`** — the file exports specialized functions per email type: `queueStaffInvitationEmail` (L123), `queueVerificationEmail` (L157), `queuePasswordResetEmail` (L177). Add `backup-notification` to the `EmailJob` union type.
-- [ ] Task 5: Register backup worker in worker lifecycle (AC: #1)
-  - [ ] 5.1 Add import in `apps/api/src/workers/index.ts`:
+  - [x] 4.5 Create a new `queueBackupNotificationEmail()` export in `email.queue.ts` following the existing `queueStaffInvitationEmail()` pattern (L123). There is **no generic `queueEmail()`** — the file exports specialized functions per email type: `queueStaffInvitationEmail` (L123), `queueVerificationEmail` (L157), `queuePasswordResetEmail` (L177). Add `backup-notification` to the `EmailJob` union type.
+- [x] Task 5: Register backup worker in worker lifecycle (AC: #1)
+  - [x] 5.1 Add import in `apps/api/src/workers/index.ts`:
     - Import `backupWorker` and `closeBackupWorker`
     - Import `scheduleDailyBackup` from `backup.queue.ts`
-  - [ ] 5.2 Add to `initializeWorkers()`:
+  - [x] 5.2 Add to `initializeWorkers()`:
     - Log backup worker status: `backupWorkerRunning: backupWorker.isRunning()`
     - Call `await scheduleDailyBackup()` (alongside existing `scheduleNightlySnapshot()`)
-  - [ ] 5.3 Add to `closeAllWorkers()`: `backupWorker.close()` in Promise.all
-  - [ ] 5.4 Re-export: `export { backupWorker } from './backup.worker.js'`
-- [ ] Task 6: Create restore script (AC: #6)
-  - [ ] 6.1 Create `apps/api/scripts/restore-backup.ts` (alongside existing `test-s3-connection.ts`):
+  - [x] 5.3 Add to `closeAllWorkers()`: `backupWorker.close()` in Promise.all
+  - [x] 5.4 Re-export: `export { backupWorker } from './backup.worker.js'`
+- [x] Task 6: Create restore script (AC: #6)
+  - [x] 6.1 Create `apps/api/scripts/restore-backup.ts` (alongside existing `test-s3-connection.ts`):
     - CLI args: `--date 2026-02-24` (specific daily) or `--monthly 2026-02` (monthly) or `--latest` (most recent)
     - `--target-db` optional (defaults to DATABASE_URL)
     - `--dry-run` flag for validation without restore
-  - [ ] 6.2 Implement restore flow:
+  - [x] 6.2 Implement restore flow:
     1. Download backup from S3 (`GetObjectCommand`)
     2. Download manifest (`GetObjectCommand`)
     3. Decompress: `gunzip` via `child_process` or `zlib.createGunzip()`
     4. Restore: `psql -h host -p port -U user -d target_db < dump.sql`
     5. Validate: compare restored table counts against manifest counts
     6. Report: print success/failure with counts comparison table
-  - [ ] 6.3 Add `--list` flag: list all available backups (daily + monthly) with sizes and dates
-  - [ ] 6.4 Safety guard: require `--confirm` flag for production DATABASE_URL (prevent accidental production restore)
-- [ ] Task 7: Add backend tests (AC: #7)
-  - [ ] 7.1 Create `apps/api/src/workers/__tests__/backup.worker.test.ts`:
+  - [x] 6.3 Add `--list` flag: list all available backups (daily + monthly) with sizes and dates
+  - [x] 6.4 Safety guard: require `--confirm` flag for production DATABASE_URL (prevent accidental production restore)
+- [x] Task 7: Add backend tests (AC: #7)
+  - [x] 7.1 Create `apps/api/src/workers/__tests__/backup.worker.test.ts`:
     - Test: backup worker executes pg_dump, compresses, uploads to S3 (all mocked)
     - Test: backup worker generates correct filename format
     - Test: backup worker computes SHA-256 checksum
     - Test: backup worker builds manifest with table counts
     - Test: backup worker sends success email on completion
     - Test: backup worker sends failure email after all retries exhausted
-  - [ ] 7.2 Create `apps/api/src/queues/__tests__/backup.queue.test.ts`:
+  - [x] 7.2 Create `apps/api/src/queues/__tests__/backup.queue.test.ts`:
     - Test: `scheduleDailyBackup()` creates scheduler with correct cron pattern
     - Test: `scheduleDailyBackup()` is no-op in test mode
     - Test: queue has correct default job options
-  - [ ] 7.3 Create retention tests in backup worker test file:
+  - [x] 7.3 Create retention tests in backup worker test file:
     - Test: daily cleanup deletes backups older than 7 days
     - Test: daily cleanup preserves backups within 7 days
     - Test: monthly promotion copies backup on 1st of month
     - Test: monthly promotion does NOT copy on other days
     - Test: monthly cleanup deletes backups older than 84 months
-  - [ ] 7.4 Create `apps/api/scripts/__tests__/restore-backup.test.ts` (or colocate):
+  - [x] 7.4 Create `apps/api/scripts/__tests__/restore-backup.test.ts` (or colocate):
     - Test: restore script downloads correct S3 key for given date
     - Test: restore script validates manifest counts after restore
     - Test: restore script rejects production target without --confirm flag
     - Test: `--list` flag lists available backups
-- [ ] Task 8: Run full test suites and verify zero regressions (AC: #7)
-  - [ ] 8.1 Run API tests: `pnpm vitest run apps/api/src/`
-  - [ ] 8.2 Run web tests: `cd apps/web && pnpm vitest run`
-- [ ] Task 9: Update story status and dev agent record
+- [x] Task 8: Run full test suites and verify zero regressions (AC: #7)
+  - [x] 8.1 Run API tests: `pnpm vitest run apps/api/src/` — 1059 passed, 0 failed
+  - [x] 8.2 Run web tests: `cd apps/web && pnpm vitest run` — 1812 passed, 0 failed
+- [x] Task 9: Update story status and dev agent record
+
+### Review Follow-ups (AI) — 2026-02-27
+
+- [x] [AI-Review][CRITICAL] C1: Add `attempts: 3` and `backoff: { type: 'custom' }` to backup queue defaultJobOptions — AC5 retries were non-functional, failure email never triggered [backup.queue.ts]
+- [x] [AI-Review][HIGH] H1: Shell-escape pg_dump command parameters to prevent command injection [backup.worker.ts:executePgDump]
+- [x] [AI-Review][HIGH] H2: Use streaming for checksum computation and S3 upload to avoid loading full backup into memory [backup.worker.ts:processBackup]
+- [x] [AI-Review][MEDIUM] M1: Replace hardcoded `/tmp/` with `os.tmpdir()` for cross-platform compatibility [backup.worker.ts, restore-backup.ts]
+- [x] [AI-Review][MEDIUM] M2: Handle S3 ListObjectsV2 pagination in retention cleanup functions [backup.worker.ts:cleanupOldDailies, cleanupOldMonthlies]
+- [x] [AI-Review][LOW] L1: Use explicit string parsing instead of Date constructor for day check in promoteToMonthly [backup.worker.ts:promoteToMonthly]
+- [x] [AI-Review][LOW] L2: Use table name mapping dictionary instead of inline ternary in restore validation [restore-backup.ts]
 
 ## Dev Notes
 
@@ -454,12 +464,41 @@ Recent commits are Epic 5 completions and prep fixes:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- Backup worker test "should send success notification email" initially failed because the db.select mock override for table counts clobbered the Super Admin query chain. Fixed by making the mock distinguish between COUNT queries (return array) and email queries (return innerJoin chain) based on select argument shape.
+- restore-backup.ts caused `process.exit(1)` during test import because `main()` ran unconditionally. Fixed by guarding with `isDirectRun` check comparing `import.meta.url` to `process.argv[1]`.
+
 ### Completion Notes List
+
+- **Task 1**: Created `backup.queue.ts` with lazy-init Redis, `getBackupQueue()`, `scheduleDailyBackup()` (01:00 UTC = 02:00 WAT cron), and `closeBackupQueue()`. Follows `productivity-snapshot.queue.ts` pattern exactly.
+- **Task 2**: Created `backup.worker.ts` with full backup pipeline: `executePgDump()` (parses DATABASE_URL, sets PGPASSWORD), SHA-256 checksum, S3 upload+verify via HeadObject, manifest generation with 4 table counts (users, respondents, auditLogs, submissions), temp file cleanup in finally block. Worker uses concurrency: 1 and custom backoff (1min, 5min, 15min).
+- **Task 3**: Implemented retention management inline in backup worker: `cleanupOldDailies()` deletes daily backups >7 days, `promoteToMonthly()` copies to monthly/ on 1st of month, `cleanupOldMonthlies()` deletes monthlies >84 months. All run after each successful backup.
+- **Task 4**: Added `BackupNotificationEmailData` + `BackupNotificationJob` types to `@oslsr/types`, `queueBackupNotificationEmail()` to `email.queue.ts`, `backup-notification` case in `email.worker.ts` using `sendGenericEmail`. Backup worker queues branded success/failure emails to all active Super Admins.
+- **Task 5**: Registered backup worker in `workers/index.ts`: import, log status, schedule, close, re-export.
+- **Task 6**: Created `restore-backup.ts` CLI with `--date`, `--monthly`, `--latest`, `--list`, `--dry-run`, `--target-db`, `--confirm` flags. Downloads from S3, verifies checksum, decompresses with gunzip, restores with psql, validates table counts against manifest. Production safety guard requires `--confirm`.
+- **Task 7**: 32 new tests across 3 test files: 15 backup worker tests (pg_dump, checksum, pipeline, notifications, retention), 5 queue tests (scheduler, test-mode, singleton), 12 restore script tests (S3 key resolution, manifest key, production detection, backup listing).
+- **Task 8**: Full regression suite — 1059 API tests + 1812 web tests = 2871 total, 0 failures.
 
 ### Change Log
 
+- 2026-02-27: Implemented Story 6-3 (Automated Off-site Backup Orchestration). Created BullMQ backup queue/worker for daily pg_dump + S3 upload at 02:00 WAT. Added 7-day daily / 7-year monthly retention management. Added branded email notifications to Super Admins on success/failure. Created CLI restore script with checksum verification and production safety guards. 32 new tests, 0 regressions across 2871 total tests.
+- 2026-02-27: **Code Review Fixes (7 issues)**: [CRITICAL] Added missing `attempts: 3` + `backoff` to backup queue (AC5 retries were non-functional). [HIGH] Shell-escaped pg_dump command params; switched to streaming checksum + S3 upload (no full-file buffer). [MEDIUM] Replaced hardcoded `/tmp/` with `os.tmpdir()`; added S3 ListObjects pagination. [LOW] Explicit string parsing for date; table name mapping dict in restore script. Updated 4 test mocks for streaming changes.
+
 ### File List
+
+**New files:**
+- `apps/api/src/queues/backup.queue.ts` — BullMQ queue + cron scheduler for daily backups
+- `apps/api/src/workers/backup.worker.ts` — Backup execution worker (pg_dump, S3, manifest, retention, notify)
+- `apps/api/scripts/restore-backup.ts` — CLI restore tool (download, decompress, psql restore, validate)
+- `apps/api/src/workers/__tests__/backup.worker.test.ts` — 15 worker unit tests
+- `apps/api/src/queues/__tests__/backup.queue.test.ts` — 5 queue unit tests
+- `apps/api/scripts/__tests__/restore-backup.test.ts` — 12 restore script tests
+
+**Modified files:**
+- `packages/types/src/email.ts` — Added BackupNotificationEmailData, BackupNotificationJob, updated EmailJob union
+- `apps/api/src/queues/email.queue.ts` — Added queueBackupNotificationEmail() export
+- `apps/api/src/workers/email.worker.ts` — Added backup-notification case using sendGenericEmail
+- `apps/api/src/workers/index.ts` — Registered backup worker (import, init, schedule, close, re-export)

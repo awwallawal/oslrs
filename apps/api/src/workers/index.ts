@@ -9,7 +9,9 @@ import { emailWorker, closeEmailWorker } from './email.worker.js';
 import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
+import { backupWorker, closeBackupWorker } from './backup.worker.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
+import { scheduleDailyBackup } from '../queues/backup.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
 import pino from 'pino';
@@ -22,6 +24,7 @@ export { emailWorker, closeEmailWorker } from './email.worker.js';
 export { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 export { fraudDetectionWorker } from './fraud-detection.worker.js';
 export { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
+export { backupWorker } from './backup.worker.js';
 
 /**
  * Initialize all workers
@@ -33,16 +36,20 @@ export async function initializeWorkers(): Promise<void> {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
     webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
     fraudDetectionWorkerRunning: fraudDetectionWorker.isRunning(),
     productivitySnapshotWorkerRunning: productivitySnapshotWorker?.isRunning() ?? false,
+    backupWorkerRunning: backupWorker?.isRunning() ?? false,
   });
 
   // Schedule nightly productivity snapshot
   await scheduleNightlySnapshot();
+
+  // Schedule daily backup
+  await scheduleDailyBackup();
 
   // Start monitoring alert scheduler (every 30 seconds)
   startMonitoringScheduler();
@@ -95,6 +102,7 @@ export async function closeAllWorkers(): Promise<void> {
     webhookIngestionWorker.close(),
     fraudDetectionWorker.close(),
     productivitySnapshotWorker?.close(),
+    closeBackupWorker(),
   ]);
 
   logger.info({ event: 'workers.closed' });
