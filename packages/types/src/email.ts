@@ -147,6 +147,22 @@ export const duplicateRegistrationEmailDataSchema = z.object({
 });
 
 // ============================================================================
+// Payment Notification Email Types
+// ============================================================================
+
+/**
+ * Data required to send a payment notification email
+ */
+export interface PaymentNotificationEmailData {
+  email: string;
+  staffName: string;
+  amount: number; // in kobo
+  trancheName: string;
+  date: string;
+  bankReference: string;
+}
+
+// ============================================================================
 // Backup Notification Email Types
 // ============================================================================
 
@@ -200,6 +216,15 @@ export interface PasswordResetJob extends BaseEmailJob {
 }
 
 /**
+ * Payment notification email job payload
+ */
+export interface PaymentNotificationJob extends BaseEmailJob {
+  type: 'payment-notification';
+  data: PaymentNotificationEmailData;
+  userId: string;
+}
+
+/**
  * Backup notification email job payload
  */
 export interface BackupNotificationJob extends BaseEmailJob {
@@ -211,7 +236,7 @@ export interface BackupNotificationJob extends BaseEmailJob {
 /**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | BackupNotificationJob;
+export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | BackupNotificationJob;
 
 // ============================================================================
 // Email Configuration Types

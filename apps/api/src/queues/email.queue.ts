@@ -8,6 +8,7 @@ import type {
   StaffInvitationEmailData,
   VerificationEmailData,
   PasswordResetEmailData,
+  PaymentNotificationEmailData,
   BackupNotificationEmailData,
 } from '@oslsr/types';
 
@@ -186,6 +187,26 @@ export async function queuePasswordResetEmail(
 
   const job = await getEmailQueue().add('password-reset', {
     type: 'password-reset',
+    data,
+    userId,
+  } as EmailJob);
+  return job.id || '';
+}
+
+/**
+ * Add a payment notification email to the queue.
+ * Queues one personalized email per affected staff member.
+ */
+export async function queuePaymentNotificationEmail(
+  data: PaymentNotificationEmailData,
+  userId: string,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('payment-notification', {
+    type: 'payment-notification',
     data,
     userId,
   } as EmailJob);

@@ -12,3 +12,4 @@ export * from './team-assignments.js';
 export * from './messages.js';
 export * from './daily-productivity-snapshots.js';
 export * from './productivity-targets.js';
+export * from './remuneration.js';

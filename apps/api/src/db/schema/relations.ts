@@ -10,6 +10,7 @@ import { messages, messageReceipts } from './messages.js';
 import { fraudDetections } from './fraud-detections.js';
 import { dailyProductivitySnapshots } from './daily-productivity-snapshots.js';
 import { productivityTargets } from './productivity-targets.js';
+import { paymentBatches, paymentRecords, paymentFiles } from './remuneration.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -36,6 +37,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   fraudDetectionsAsEnumerator: many(fraudDetections, { relationName: 'detectionEnumerator' }),
   // Story 4.4: Fraud detections reviewed by this user
   fraudDetectionsAsReviewer: many(fraudDetections, { relationName: 'detectionReviewer' }),
+  // Story 6.4: Payment records for this user
+  paymentRecords: many(paymentRecords, { relationName: 'paymentRecordUser' }),
+  // Story 6.4: Payment batches recorded by this user (admin)
+  recordedPaymentBatches: many(paymentBatches, { relationName: 'batchRecordedBy' }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -165,5 +170,37 @@ export const fraudDetectionsRelations = relations(fraudDetections, ({ one }) => 
   submission: one(submissions, {
     fields: [fraudDetections.submissionId],
     references: [submissions.id],
+  }),
+}));
+
+// Payment batch relations (Story 6.4)
+export const paymentBatchesRelations = relations(paymentBatches, ({ one, many }) => ({
+  recordedByUser: one(users, {
+    fields: [paymentBatches.recordedBy],
+    references: [users.id],
+    relationName: 'batchRecordedBy',
+  }),
+  records: many(paymentRecords),
+}));
+
+// Payment record relations (Story 6.4)
+export const paymentRecordsRelations = relations(paymentRecords, ({ one }) => ({
+  batch: one(paymentBatches, {
+    fields: [paymentRecords.batchId],
+    references: [paymentBatches.id],
+  }),
+  user: one(users, {
+    fields: [paymentRecords.userId],
+    references: [users.id],
+    relationName: 'paymentRecordUser',
+  }),
+}));
+
+// Payment file relations (Story 6.4)
+// entityId is polymorphic (batch or dispute) — no FK constraint
+export const paymentFilesRelations = relations(paymentFiles, ({ one }) => ({
+  uploadedByUser: one(users, {
+    fields: [paymentFiles.uploadedBy],
+    references: [users.id],
   }),
 }));

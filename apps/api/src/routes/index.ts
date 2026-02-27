@@ -19,6 +19,7 @@ import lgaRoutes from './lga.routes.js';
 import productivityRoutes from './productivity.routes.js';
 import auditRoutes from './audit.routes.js';
 import systemRoutes from './system.routes.js';
+import remunerationRoutes from './remuneration.routes.js';
 
 const router = Router();
 
@@ -41,6 +42,7 @@ router.use('/lgas', lgaRoutes);
 router.use('/productivity', productivityRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/system', systemRoutes);
+router.use('/remuneration', remunerationRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

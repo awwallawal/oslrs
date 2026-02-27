@@ -7,6 +7,7 @@ import type {
   VerificationEmailData,
   DuplicateRegistrationEmailData,
   StaffInvitationEmailData,
+  PaymentNotificationEmailData,
 } from '@oslsr/types';
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 
@@ -520,6 +521,71 @@ Government of Oyo State
    */
   static generateStaffActivationUrl(token: string): string {
     return `${this.APP_URL}/activate/${token}`;
+  }
+
+  // ==========================================================================
+  // Payment Notification Email (Story 6.4)
+  // ==========================================================================
+
+  /**
+   * Sends a payment notification email to a staff member.
+   */
+  static async sendPaymentNotificationEmail(data: PaymentNotificationEmailData): Promise<EmailResult> {
+    if (!this.isEnabled()) {
+      logger.warn({
+        event: 'email.payment_notification.disabled',
+        to: data.email,
+        note: 'Email service is disabled',
+      });
+      return { success: false, error: 'Email service is disabled' };
+    }
+
+    const subject = `[OSLRS] Payment Recorded — ${data.trancheName}`;
+    const amountFormatted = `₦${(data.amount / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+
+    return this.getProvider().send({
+      to: data.email,
+      subject,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Notification - OSLSR</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: ${this.BRAND_COLOR}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0;">OSLSR</h1>
+    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour & Skills Registry</p>
+  </div>
+
+  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <h2 style="color: #333; margin-top: 0;">Payment Recorded</h2>
+
+    <p>Hello ${data.staffName},</p>
+
+    <p>A stipend payment has been recorded for you in the Oyo State Labour & Skills Registry.</p>
+
+    <div style="background-color: #fff; padding: 15px; border-radius: 5px; border-left: 4px solid ${this.BRAND_COLOR}; margin: 20px 0;">
+      <p style="margin: 5px 0;"><strong>Tranche:</strong> ${data.trancheName}</p>
+      <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
+      <p style="margin: 5px 0;"><strong>Date:</strong> ${data.date}</p>
+      <p style="margin: 5px 0;"><strong>Bank Reference:</strong> ${data.bankReference}</p>
+    </div>
+
+    <p>If you have any questions about this payment, please contact your supervisor or the system administrator.</p>
+
+    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+
+    <p style="font-size: 12px; color: #999;">
+      This is an automated notification from the OSLSR system. Do not reply to this email.
+    </p>
+  </div>
+</body>
+</html>`,
+      text: `Payment Recorded — ${data.trancheName}\n\nHello ${data.staffName},\n\nA stipend payment has been recorded for you.\n\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nDate: ${data.date}\nBank Reference: ${data.bankReference}\n\nIf you have questions, contact your supervisor or administrator.`,
+    });
   }
 
   // ==========================================================================

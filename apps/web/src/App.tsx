@@ -116,6 +116,9 @@ const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'))
 
 // Story 5.3: Respondent Detail Page (shared across multiple roles)
 const RespondentDetailPage = lazy(() => import('./features/dashboard/pages/RespondentDetailPage'));
+
+// Story 6.4: Staff Remuneration Page
+const RemunerationPage = lazy(() => import('./features/remuneration/pages/RemunerationPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 
@@ -678,6 +681,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <SystemHealthPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 6-4: Staff Remuneration */}
+                <Route
+                  path="remuneration"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RemunerationPage />
                     </Suspense>
                   }
                 />
