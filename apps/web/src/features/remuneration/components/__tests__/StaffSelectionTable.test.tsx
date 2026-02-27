@@ -54,10 +54,10 @@ const mockStaff: EligibleStaff[] = [
 ];
 
 describe('StaffSelectionTable', () => {
-  let onSelectionChange: ReturnType<typeof vi.fn>;
+  let onSelectionChange: (ids: string[]) => void;
 
   beforeEach(() => {
-    onSelectionChange = vi.fn();
+    onSelectionChange = vi.fn<(ids: string[]) => void>();
   });
 
   it('renders loading state', () => {

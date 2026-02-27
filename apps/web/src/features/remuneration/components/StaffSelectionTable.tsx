@@ -3,7 +3,7 @@
  * Story 6.4 AC5: Filter by Role/LGA, select eligible staff for bulk payment.
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Checkbox } from '../../../components/ui/checkbox';
 import type { EligibleStaff } from '../api/remuneration.api';
 

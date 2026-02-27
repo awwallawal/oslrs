@@ -56,11 +56,11 @@ export function useCreatePaymentBatch() {
   return useMutation({
     mutationFn: createPaymentBatch,
     onSuccess: (data) => {
-      success(`Payment batch created — ${data.data.staffCount} staff members recorded`);
+      success({ message: `Payment batch created — ${data.data.staffCount} staff members recorded` });
       queryClient.invalidateQueries({ queryKey: remunerationKeys.lists() });
     },
     onError: (err: Error) => {
-      error(err.message || 'Failed to create payment batch');
+      error({ message: err.message || 'Failed to create payment batch' });
     },
   });
 }
@@ -74,11 +74,11 @@ export function useCorrectPaymentRecord() {
     mutationFn: ({ recordId, data }: { recordId: string; data: { newAmount: number; reason: string } }) =>
       correctPaymentRecord(recordId, data),
     onSuccess: () => {
-      success('Payment record corrected successfully');
+      success({ message: 'Payment record corrected successfully' });
       queryClient.invalidateQueries({ queryKey: remunerationKeys.all });
     },
     onError: (err: Error) => {
-      error(err.message || 'Failed to correct payment record');
+      error({ message: err.message || 'Failed to correct payment record' });
     },
   });
 }

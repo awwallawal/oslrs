@@ -53,12 +53,12 @@ const mockBatches: PaymentBatch[] = [
 const defaultPagination = { page: 1, limit: 10, total: 2, totalPages: 1 };
 
 describe('PaymentBatchTable', () => {
-  let onPageChange: ReturnType<typeof vi.fn>;
-  let onBatchClick: ReturnType<typeof vi.fn>;
+  let onPageChange: (page: number) => void;
+  let onBatchClick: (batchId: string) => void;
 
   beforeEach(() => {
-    onPageChange = vi.fn();
-    onBatchClick = vi.fn();
+    onPageChange = vi.fn<(page: number) => void>();
+    onBatchClick = vi.fn<(batchId: string) => void>();
   });
 
   it('renders loading state', () => {
