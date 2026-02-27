@@ -1,13 +1,22 @@
 /**
  * Alert Service
  *
- * Threshold alerting with state machine (OK → Warning → Critical → Resolved)
- * and email delivery to active Super Admins via BullMQ email queue.
+ * Threshold alerting with state machine (OK -> Warning -> Critical -> Resolved)
+ * and consolidated digest email delivery to active Super Admins.
  *
- * Created in Story 6-2.
+ * Alerts are queued per-metric during each evaluation cycle, then flushed as a
+ * single digest email at most every 15 minutes, with a daily cap of 20 emails.
+ * Digest send state is persisted to disk so PM2/server restarts don't reset
+ * cooldowns and re-trigger a burst of alerts.
+ *
+ * Created in Story 6-2. Refactored to digest-based delivery to prevent
+ * Resend email quota exhaustion from per-metric individual alerts.
  */
 
 import { eq, and } from 'drizzle-orm';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { EmailService } from './email.service.js';
@@ -16,8 +25,11 @@ import pino from 'pino';
 
 const logger = pino({ name: 'alert-service' });
 
-const isTestMode = () =>
-  process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const isNonProductionMode = () =>
+  process.env.VITEST === 'true' ||
+  process.env.NODE_ENV === 'test' ||
+  process.env.NODE_ENV === 'development' ||
+  !process.env.NODE_ENV;
 
 export type AlertLevel = 'ok' | 'warning' | 'critical' | 'resolved';
 
@@ -36,9 +48,21 @@ interface ThresholdConfig {
   direction: 'above' | 'below';
 }
 
-const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between repeat alerts
+interface PendingAlert {
+  level: AlertLevel;
+  value: number;
+  previousLevel?: AlertLevel;
+}
+
+// Per-metric gating
+const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between repeat alerts per metric
 const MAX_ALERTS_PER_HOUR = 3;
 const HYSTERESIS_CHECKS = 2; // Consecutive OK checks before resolving
+
+// Digest delivery
+const DIGEST_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between digest emails
+const MAX_DAILY_DIGEST_EMAILS = 20;
+const ALERT_STATE_PATH = join(tmpdir(), 'oslrs-alert-digest-state.json');
 
 // Threshold definitions
 const THRESHOLDS: Record<string, ThresholdConfig> = {
@@ -47,18 +71,49 @@ const THRESHOLDS: Record<string, ThresholdConfig> = {
   disk_free: { warningThreshold: 20, criticalThreshold: 10, direction: 'below' },
   queue_waiting: { warningThreshold: 50, criticalThreshold: 200, direction: 'above' },
   api_p95_latency: { warningThreshold: 250, criticalThreshold: 500, direction: 'above' },
-  db_status: { criticalThreshold: 0, direction: 'above' }, // value 1 = error, threshold 0 → 1 > 0 triggers
+  db_status: { criticalThreshold: 0, direction: 'above' }, // value 1 = error, threshold 0 -> 1 > 0 triggers
   redis_status: { criticalThreshold: 0, direction: 'above' },
 };
 
-// In-memory state map
+// In-memory per-metric state
 const alertStates = new Map<string, AlertState>();
-// Hourly alert count tracking
 const hourlyAlertCounts = new Map<string, { count: number; windowStart: number }>();
+
+// Digest accumulation state
+const pendingDigest = new Map<string, PendingAlert>();
+let lastDigestSent = 0;
+let dailyEmailCount = 0;
+let dailyWindowStart = 0;
+let digestStateLoaded = false;
+
+function loadDigestState(): void {
+  if (digestStateLoaded) return;
+  digestStateLoaded = true;
+  try {
+    const raw = readFileSync(ALERT_STATE_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    lastDigestSent = data.lastDigestSent || 0;
+    dailyEmailCount = data.dailyEmailCount || 0;
+    dailyWindowStart = data.dailyWindowStart || 0;
+  } catch {
+    // No persisted state or corrupt file — use defaults
+  }
+}
+
+function persistDigestState(): void {
+  try {
+    writeFileSync(
+      ALERT_STATE_PATH,
+      JSON.stringify({ lastDigestSent, dailyEmailCount, dailyWindowStart }),
+    );
+  } catch (err) {
+    logger.error({ event: 'alert.persist_state_failed', error: (err as Error).message });
+  }
+}
 
 export class AlertService {
   /**
-   * Evaluate health data against thresholds, transition state machine, send alerts
+   * Evaluate health data against thresholds, transition state machine, flush digest
    */
   static async evaluateAlerts(health: SystemHealthResponse): Promise<void> {
     const metrics: Array<{ key: string; value: number }> = [
@@ -81,14 +136,17 @@ export class AlertService {
     }
 
     for (const metric of metrics) {
-      await this.evaluateMetric(metric.key, metric.value);
+      this.evaluateMetric(metric.key, metric.value);
     }
+
+    // Flush accumulated alerts as a single consolidated digest email
+    await this.flushDigest();
   }
 
   /**
    * Evaluate a single metric against its threshold config
    */
-  private static async evaluateMetric(key: string, value: number): Promise<void> {
+  private static evaluateMetric(key: string, value: number): void {
     // Resolve threshold config (queue metrics share 'queue_waiting' config)
     const configKey = key.startsWith('queue_waiting:') ? 'queue_waiting' : key;
     const config = THRESHOLDS[configKey];
@@ -120,7 +178,7 @@ export class AlertService {
         state.notifyCount = 0;
         state.consecutiveOkChecks = 0;
 
-        await this.sendAlert(key, 'resolved', value, previousLevel);
+        this.queueAlert(key, 'resolved', value, previousLevel);
       }
     } else {
       // Threshold breached
@@ -133,10 +191,10 @@ export class AlertService {
       if (state.level === 'ok' || levelChanged || isEscalation) {
         state.level = newLevel;
         state.since = new Date();
-        await this.sendAlertWithCooldown(key, newLevel, value, state);
+        this.queueAlertWithCooldown(key, newLevel, value, state);
       } else if (state.level === newLevel) {
         // Same level — check cooldown for repeat alert
-        await this.sendAlertWithCooldown(key, newLevel, value, state);
+        this.queueAlertWithCooldown(key, newLevel, value, state);
       }
     }
 
@@ -158,14 +216,14 @@ export class AlertService {
   }
 
   /**
-   * Send alert respecting cooldown and hourly rate limit
+   * Gate alert queueing with per-metric cooldown and hourly rate limit
    */
-  private static async sendAlertWithCooldown(
+  private static queueAlertWithCooldown(
     key: string,
     level: AlertLevel,
     value: number,
     state: AlertState,
-  ): Promise<void> {
+  ): void {
     const now = Date.now();
 
     // Check cooldown
@@ -184,7 +242,7 @@ export class AlertService {
       return;
     }
 
-    await this.sendAlert(key, level, value);
+    this.queueAlert(key, level, value);
 
     state.lastNotified = new Date();
     state.notifyCount++;
@@ -193,16 +251,54 @@ export class AlertService {
   }
 
   /**
-   * Send alert email to all active Super Admins
+   * Add alert to pending digest batch (replaces immediate email sending)
    */
-  private static async sendAlert(
+  private static queueAlert(
     metricKey: string,
     level: AlertLevel,
     value: number,
     previousLevel?: AlertLevel,
-  ): Promise<void> {
-    if (isTestMode()) {
-      logger.info({ event: 'alert.test_mode', metricKey, level, value });
+  ): void {
+    pendingDigest.set(metricKey, { level, value, previousLevel });
+  }
+
+  /**
+   * Send accumulated alerts as a single consolidated digest email.
+   * Respects a 15-minute global cooldown and 20 emails/day cap.
+   * State is persisted to disk so server restarts don't reset counters.
+   */
+  private static async flushDigest(): Promise<void> {
+    if (isNonProductionMode()) {
+      if (pendingDigest.size > 0) {
+        logger.info({
+          event: 'alert.digest_suppressed_non_production',
+          alertCount: pendingDigest.size,
+        });
+        pendingDigest.clear();
+      }
+      return;
+    }
+
+    if (pendingDigest.size === 0) return;
+
+    loadDigestState();
+    const now = Date.now();
+
+    // Reset daily counter if 24h window expired
+    if (now - dailyWindowStart > 24 * 60 * 60 * 1000) {
+      dailyEmailCount = 0;
+      dailyWindowStart = now;
+    }
+
+    // Check daily cap
+    if (dailyEmailCount >= MAX_DAILY_DIGEST_EMAILS) {
+      logger.warn({ event: 'alert.daily_cap_reached', dailyEmailCount });
+      pendingDigest.clear();
+      return;
+    }
+
+    // Check global cooldown — keep pending alerts for next flush cycle
+    if (now - lastDigestSent < DIGEST_INTERVAL_MS) {
       return;
     }
 
@@ -210,36 +306,41 @@ export class AlertService {
       const superAdminEmails = await this.getActiveSuperAdminEmails();
       if (superAdminEmails.length === 0) {
         logger.warn({ event: 'alert.no_recipients' });
+        pendingDigest.clear();
         return;
       }
 
-      const subject = level === 'resolved'
-        ? `[RESOLVED] OSLRS Alert: ${metricKey} recovered`
-        : `[${level.toUpperCase()}] OSLRS Alert: ${metricKey}`;
+      const alerts = Array.from(pendingDigest.entries()).map(([key, data]) => ({
+        metricKey: key,
+        ...data,
+      }));
 
-      const body = this.formatAlertEmail(metricKey, level, value, previousLevel);
+      const hasCritical = alerts.some((a) => a.level === 'critical');
+      const hasWarning = alerts.some((a) => a.level === 'warning');
+      const severity = hasCritical ? 'CRITICAL' : hasWarning ? 'WARNING' : 'RESOLVED';
+      const subject = `[${severity}] OSLRS System Health Digest (${alerts.length} alert${alerts.length > 1 ? 's' : ''})`;
+
+      const html = this.formatDigestEmail(alerts);
+      const text = `OSLRS System Health Digest\n\n${alerts.map((a) => `${a.level.toUpperCase()}: ${a.metricKey} = ${a.value}`).join('\n')}\n\nPlease check the System Health dashboard.`;
 
       for (const email of superAdminEmails) {
-        await EmailService.sendGenericEmail({
-          to: email,
-          subject,
-          html: body,
-          text: `OSLRS System Alert\n\nMetric: ${metricKey}\nLevel: ${level}\nValue: ${value}\n\nPlease check the System Health dashboard.`,
-        });
+        await EmailService.sendGenericEmail({ to: email, subject, html, text });
       }
 
       logger.info({
-        event: 'alert.sent',
-        metricKey,
-        level,
-        value,
+        event: 'alert.digest_sent',
+        alertCount: alerts.length,
         recipientCount: superAdminEmails.length,
+        dailyEmailCount: dailyEmailCount + 1,
       });
+
+      pendingDigest.clear();
+      lastDigestSent = now;
+      dailyEmailCount++;
+      persistDigestState();
     } catch (err) {
       logger.error({
-        event: 'alert.send_failed',
-        metricKey,
-        level,
+        event: 'alert.digest_send_failed',
         error: (err as Error).message,
       });
     }
@@ -263,46 +364,55 @@ export class AlertService {
     }
   }
 
-  private static formatAlertEmail(
-    metricKey: string,
-    level: AlertLevel,
-    value: number,
-    previousLevel?: AlertLevel,
+  /**
+   * Format a digest email containing multiple alert rows
+   */
+  private static formatDigestEmail(
+    alerts: Array<{ metricKey: string; level: AlertLevel; value: number; previousLevel?: AlertLevel }>,
   ): string {
-    const levelColor = level === 'critical' ? '#dc2626' : level === 'warning' ? '#f59e0b' : '#22c55e';
-    const statusText = level === 'resolved'
-      ? `Resolved (was ${previousLevel})`
-      : level.charAt(0).toUpperCase() + level.slice(1);
+    const rows = alerts
+      .map((a) => {
+        const levelColor =
+          a.level === 'critical' ? '#dc2626' : a.level === 'warning' ? '#f59e0b' : '#22c55e';
+        const statusText =
+          a.level === 'resolved'
+            ? `Resolved (was ${a.previousLevel})`
+            : a.level.charAt(0).toUpperCase() + a.level.slice(1);
+        return `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${a.metricKey}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">
+                <span style="background: ${levelColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 13px;">
+                  ${statusText}
+                </span>
+              </td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${a.value}</td>
+            </tr>`;
+      })
+      .join('');
 
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #9C1E23; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0;">OSLRS System Alert</h2>
+          <h2 style="margin: 0;">OSLRS System Health Digest</h2>
+          <p style="margin: 4px 0 0; opacity: 0.9; font-size: 14px;">
+            ${alerts.length} alert${alerts.length > 1 ? 's' : ''} &middot; ${new Date().toISOString()}
+          </p>
         </div>
-        <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+        <div style="border: 1px solid #e5e7eb; border-top: none; padding: 0; border-radius: 0 0 8px 8px;">
           <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Metric:</td>
-              <td style="padding: 8px 0;">${metricKey}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Level:</td>
-              <td style="padding: 8px 0;">
-                <span style="background: ${levelColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 14px;">
-                  ${statusText}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Current Value:</td>
-              <td style="padding: 8px 0;">${value}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Time:</td>
-              <td style="padding: 8px 0;">${new Date().toISOString()}</td>
-            </tr>
+            <thead>
+              <tr style="background: #f9fafb;">
+                <th style="padding: 10px 12px; text-align: left; font-size: 13px; color: #6b7280;">Metric</th>
+                <th style="padding: 10px 12px; text-align: left; font-size: 13px; color: #6b7280;">Level</th>
+                <th style="padding: 10px 12px; text-align: left; font-size: 13px; color: #6b7280;">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
           </table>
-          <p style="margin-top: 16px; color: #6b7280; font-size: 14px;">
+          <p style="padding: 16px 12px; margin: 0; color: #6b7280; font-size: 14px;">
             Please check the <strong>System Health</strong> dashboard for full details.
           </p>
         </div>
@@ -319,5 +429,10 @@ export class AlertService {
   static clearStates(): void {
     alertStates.clear();
     hourlyAlertCounts.clear();
+    pendingDigest.clear();
+    lastDigestSent = 0;
+    dailyEmailCount = 0;
+    dailyWindowStart = 0;
+    digestStateLoaded = false;
   }
 }
