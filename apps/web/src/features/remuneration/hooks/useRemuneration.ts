@@ -11,6 +11,8 @@ import {
   createPaymentBatch,
   correctPaymentRecord,
   getEligibleStaff,
+  getStaffPaymentHistory,
+  openDispute,
 } from '../api/remuneration.api';
 
 /** Query key factory */
@@ -21,6 +23,8 @@ export const remunerationKeys = {
   details: () => [...remunerationKeys.all, 'detail'] as const,
   detail: (id: string) => [...remunerationKeys.details(), id] as const,
   eligibleStaff: (params: Record<string, unknown>) => [...remunerationKeys.all, 'eligible-staff', params] as const,
+  // Story 6.5
+  paymentHistory: (userId: string, params: Record<string, unknown>) => [...remunerationKeys.all, 'payment-history', userId, params] as const,
 };
 
 /** Fetch paginated payment batches */
@@ -79,6 +83,32 @@ export function useCorrectPaymentRecord() {
     },
     onError: (err: Error) => {
       error({ message: err.message || 'Failed to correct payment record' });
+    },
+  });
+}
+
+/** Fetch staff's own payment history (Story 6.5) */
+export function useMyPaymentHistory(userId: string, params: { page?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: remunerationKeys.paymentHistory(userId, params),
+    queryFn: () => getStaffPaymentHistory(userId, params),
+    enabled: !!userId,
+  });
+}
+
+/** Open a dispute on a payment record (Story 6.5) */
+export function useOpenDispute() {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: openDispute,
+    onSuccess: () => {
+      success({ message: 'Dispute submitted. You will be notified when it is reviewed.' });
+      queryClient.invalidateQueries({ queryKey: remunerationKeys.all });
+    },
+    onError: (err: Error) => {
+      error({ message: err.message || 'Failed to submit dispute' });
     },
   });
 }

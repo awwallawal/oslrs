@@ -44,10 +44,10 @@ describe('sidebarConfig', () => {
   });
 
   describe('AC5: Sidebar item counts per role', () => {
-    it('enumerator has 4-5 sidebar items (mobile-first + messages)', () => {
+    it('enumerator has 5-6 sidebar items (mobile-first + messages + payments)', () => {
       const items = sidebarConfig.enumerator;
-      expect(items.length).toBeGreaterThanOrEqual(4);
-      expect(items.length).toBeLessThanOrEqual(5);
+      expect(items.length).toBeGreaterThanOrEqual(5);
+      expect(items.length).toBeLessThanOrEqual(6);
     });
 
     it('public_user has 3-4 sidebar items (mobile-first)', () => {
@@ -56,9 +56,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(4);
     });
 
-    it('supervisor has exactly 6 sidebar items (AC3 + Registry + Productivity)', () => {
+    it('supervisor has exactly 7 sidebar items (AC3 + Registry + Productivity + Payments)', () => {
       const items = sidebarConfig.supervisor;
-      expect(items.length).toBe(6);
+      expect(items.length).toBe(7);
     });
 
     it('data_entry_clerk has exactly 4 sidebar items', () => {
@@ -79,6 +79,19 @@ describe('sidebarConfig', () => {
     it('super_admin has 11+ sidebar items', () => {
       const items = sidebarConfig.super_admin;
       expect(items.length).toBeGreaterThanOrEqual(11);
+    });
+
+    // Story 6.5: Payments sidebar item for enumerator and supervisor
+    it('enumerator has Payments sidebar item', () => {
+      const payments = sidebarConfig.enumerator.find(i => i.label === 'Payments');
+      expect(payments).toBeDefined();
+      expect(payments?.href).toBe('/dashboard/enumerator/payments');
+    });
+
+    it('supervisor has Payments sidebar item', () => {
+      const payments = sidebarConfig.supervisor.find(i => i.label === 'Payments');
+      expect(payments).toBeDefined();
+      expect(payments?.href).toBe('/dashboard/supervisor/payments');
     });
 
     it('super_admin Settings item has end: true to prevent dual highlight with child routes', () => {

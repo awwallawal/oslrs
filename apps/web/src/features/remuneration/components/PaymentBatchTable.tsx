@@ -6,6 +6,10 @@
 import type { PaymentBatch } from '../api/remuneration.api';
 import { Button } from '../../../components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatNaira } from '../utils/format';
+
+// Re-export for backwards compatibility with existing imports
+export { formatNaira };
 
 interface PaymentBatchTableProps {
   batches: PaymentBatch[];
@@ -18,11 +22,6 @@ interface PaymentBatchTableProps {
   onPageChange: (page: number) => void;
   onBatchClick: (batchId: string) => void;
   isLoading?: boolean;
-}
-
-/** Format kobo amount as Naira */
-export function formatNaira(kobo: number): string {
-  return `₦${(kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 }
 
 export default function PaymentBatchTable({

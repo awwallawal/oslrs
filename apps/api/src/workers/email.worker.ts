@@ -4,7 +4,7 @@ import pino from 'pino';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, BackupNotificationEmailData, EmailTier } from '@oslsr/types';
+import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, BackupNotificationEmailData, EmailTier } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { AuditService } from '../services/audit.service.js';
@@ -95,6 +95,10 @@ export const emailWorker = new Worker<EmailJob>(
 
         case 'payment-notification':
           result = await EmailService.sendPaymentNotificationEmail(data as PaymentNotificationEmailData);
+          break;
+
+        case 'dispute-notification':
+          result = await EmailService.sendDisputeNotificationEmail(data as DisputeNotificationEmailData);
           break;
 
         case 'backup-notification':

@@ -13,13 +13,13 @@ import { eq, and, isNull, desc, sql, inArray } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 import { db } from '../db/index.js';
-import { paymentBatches, paymentRecords, paymentFiles } from '../db/schema/remuneration.js';
+import { paymentBatches, paymentRecords, paymentFiles, paymentDisputes } from '../db/schema/remuneration.js';
 import { users } from '../db/schema/users.js';
 import { lgas } from '../db/schema/lgas.js';
 import { roles } from '../db/schema/roles.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import { AppError } from '@oslsr/utils';
-import { queuePaymentNotificationEmail } from '../queues/email.queue.js';
+import { queuePaymentNotificationEmail, queueDisputeNotificationEmail } from '../queues/email.queue.js';
 
 const logger = pino({ name: 'remuneration-service' });
 
@@ -428,6 +428,22 @@ export class RemunerationService {
       conditions.push(isNull(paymentRecords.effectiveUntil));
     }
 
+    // Subquery: get the latest (most recent) dispute per payment record
+    // This prevents duplicate rows when a record has multiple disputes (resolved + reopened).
+    const latestDisputeSq = db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+        status: paymentDisputes.status,
+        staffComment: paymentDisputes.staffComment,
+        adminResponse: paymentDisputes.adminResponse,
+        resolvedAt: paymentDisputes.resolvedAt,
+        createdAt: paymentDisputes.createdAt,
+        rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${paymentDisputes.paymentRecordId} ORDER BY ${paymentDisputes.createdAt} DESC)`.as('rn'),
+      })
+      .from(paymentDisputes)
+      .as('latest_dispute');
+
     const records = await db
       .select({
         id: paymentRecords.id,
@@ -440,9 +456,20 @@ export class RemunerationService {
         trancheName: paymentBatches.trancheName,
         trancheNumber: paymentBatches.trancheNumber,
         bankReference: paymentBatches.bankReference,
+        // Story 6.5: Latest dispute info via LEFT JOIN subquery
+        disputeId: latestDisputeSq.id,
+        disputeStatus: latestDisputeSq.status,
+        disputeComment: latestDisputeSq.staffComment,
+        disputeAdminResponse: latestDisputeSq.adminResponse,
+        disputeResolvedAt: latestDisputeSq.resolvedAt,
+        disputeCreatedAt: latestDisputeSq.createdAt,
       })
       .from(paymentRecords)
       .innerJoin(paymentBatches, eq(paymentRecords.batchId, paymentBatches.id))
+      .leftJoin(latestDisputeSq, and(
+        eq(paymentRecords.id, latestDisputeSq.paymentRecordId),
+        eq(latestDisputeSq.rn, 1),
+      ))
       .where(and(...conditions))
       .orderBy(desc(paymentRecords.createdAt))
       .limit(limit)
@@ -530,5 +557,235 @@ export class RemunerationService {
       .orderBy(users.fullName);
 
     return staffList;
+  }
+
+  /**
+   * Open a dispute on a payment record (staff-initiated).
+   * Story 6.5, AC3: Creates dispute, updates record status, queues notification.
+   */
+  static async openDispute(
+    paymentRecordId: string,
+    staffComment: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    // All validation inside transaction to prevent TOCTOU race conditions.
+    // SELECT FOR UPDATE locks the payment record row until commit.
+    const dispute = await db.transaction(async (tx) => {
+      // Fetch + lock the payment record
+      const [record] = await tx
+        .select({
+          id: paymentRecords.id,
+          userId: paymentRecords.userId,
+          status: paymentRecords.status,
+          amount: paymentRecords.amount,
+          batchId: paymentRecords.batchId,
+        })
+        .from(paymentRecords)
+        .where(eq(paymentRecords.id, paymentRecordId))
+        .for('update');
+
+      if (!record) {
+        throw new AppError('NOT_FOUND', 'Payment record not found', 404);
+      }
+
+      // Ownership guard: staff can only dispute their own records
+      if (record.userId !== actorId) {
+        throw new AppError('FORBIDDEN', 'Can only dispute your own payment records', 403);
+      }
+
+      // Status guard: only active records can be disputed
+      if (record.status !== 'active') {
+        throw new AppError('INVALID_STATUS', 'Only active payment records can be disputed', 400);
+      }
+
+      // Check for existing open dispute (inside transaction for consistency)
+      const [existingDispute] = await tx
+        .select({ id: paymentDisputes.id })
+        .from(paymentDisputes)
+        .where(and(
+          eq(paymentDisputes.paymentRecordId, paymentRecordId),
+          sql`${paymentDisputes.status} NOT IN ('resolved', 'closed')`,
+        ));
+
+      if (existingDispute) {
+        throw new AppError('DUPLICATE_DISPUTE', 'An open dispute already exists for this payment record', 409);
+      }
+
+      // Create dispute record
+      const [newDispute] = await tx.insert(paymentDisputes).values({
+        paymentRecordId,
+        status: 'disputed',
+        staffComment,
+        openedBy: actorId,
+      }).returning();
+
+      // Update payment record status (denormalized flag)
+      await tx
+        .update(paymentRecords)
+        .set({ status: 'disputed' })
+        .where(eq(paymentRecords.id, paymentRecordId));
+
+      await AuditService.logActionTx(tx, {
+        actorId,
+        action: AUDIT_ACTIONS.DATA_CREATE,
+        targetResource: 'payment_dispute',
+        targetId: newDispute.id,
+        details: {
+          paymentRecordId,
+          staffComment: staffComment.substring(0, 100),
+        },
+        ipAddress,
+        userAgent,
+      });
+
+      return { newDispute, record };
+    });
+
+    // Fire-and-forget: notification email to Super Admin
+    this.queueDisputeNotification(actorId, dispute.record.batchId, dispute.record.amount, staffComment).catch((err) => {
+      logger.warn({
+        event: 'dispute.notification_failed',
+        paymentRecordId,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    });
+
+    logger.info({
+      event: 'remuneration.dispute_opened',
+      disputeId: dispute.newDispute.id,
+      paymentRecordId,
+      actorId,
+    });
+
+    return dispute.newDispute;
+  }
+
+  /**
+   * Queue dispute notification email to Super Admin(s).
+   */
+  private static async queueDisputeNotification(
+    actorId: string,
+    batchId: string,
+    amount: number,
+    staffComment: string,
+  ) {
+    // Look up staff name
+    const [staff] = await db
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, actorId));
+
+    // Look up batch info
+    const [batch] = await db
+      .select({ trancheName: paymentBatches.trancheName })
+      .from(paymentBatches)
+      .where(eq(paymentBatches.id, batchId));
+
+    // Look up Super Admin emails
+    const admins = await db
+      .select({ email: users.email })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(roles.name, 'super_admin'),
+        inArray(users.status, ['active', 'verified']),
+      ));
+
+    const staffName = staff?.fullName || 'Staff Member';
+    const trancheName = batch?.trancheName || 'Unknown Tranche';
+
+    for (const admin of admins) {
+      if (!admin.email) continue;
+      try {
+        await queueDisputeNotificationEmail({
+          to: admin.email,
+          staffName,
+          trancheName,
+          amount,
+          commentExcerpt: staffComment.substring(0, 100),
+        }, actorId);
+      } catch (err) {
+        logger.warn({
+          event: 'dispute.email_queue_failed',
+          adminEmail: admin.email,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  }
+
+  /**
+   * Get dispute by payment record ID.
+   */
+  static async getDisputeByRecordId(paymentRecordId: string) {
+    const [dispute] = await db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+        status: paymentDisputes.status,
+        staffComment: paymentDisputes.staffComment,
+        adminResponse: paymentDisputes.adminResponse,
+        resolvedAt: paymentDisputes.resolvedAt,
+        reopenCount: paymentDisputes.reopenCount,
+        createdAt: paymentDisputes.createdAt,
+        updatedAt: paymentDisputes.updatedAt,
+        openedByName: users.fullName,
+      })
+      .from(paymentDisputes)
+      .leftJoin(users, eq(paymentDisputes.openedBy, users.id))
+      .where(eq(paymentDisputes.paymentRecordId, paymentRecordId))
+      .orderBy(desc(paymentDisputes.createdAt));
+
+    return dispute ?? null;
+  }
+
+  /**
+   * Get staff's own disputes with pagination.
+   */
+  static async getStaffDisputes(
+    userId: string,
+    filters?: { page?: number; limit?: number },
+  ) {
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const disputes = await db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+        status: paymentDisputes.status,
+        staffComment: paymentDisputes.staffComment,
+        adminResponse: paymentDisputes.adminResponse,
+        resolvedAt: paymentDisputes.resolvedAt,
+        reopenCount: paymentDisputes.reopenCount,
+        createdAt: paymentDisputes.createdAt,
+        trancheName: paymentBatches.trancheName,
+        amount: paymentRecords.amount,
+      })
+      .from(paymentDisputes)
+      .innerJoin(paymentRecords, eq(paymentDisputes.paymentRecordId, paymentRecords.id))
+      .innerJoin(paymentBatches, eq(paymentRecords.batchId, paymentBatches.id))
+      .where(eq(paymentDisputes.openedBy, userId))
+      .orderBy(desc(paymentDisputes.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(paymentDisputes)
+      .where(eq(paymentDisputes.openedBy, userId));
+
+    return {
+      data: disputes,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    };
   }
 }

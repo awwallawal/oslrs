@@ -8,6 +8,7 @@ import type {
   DuplicateRegistrationEmailData,
   StaffInvitationEmailData,
   PaymentNotificationEmailData,
+  DisputeNotificationEmailData,
 } from '@oslsr/types';
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 
@@ -585,6 +586,71 @@ Government of Oyo State
 </body>
 </html>`,
       text: `Payment Recorded — ${data.trancheName}\n\nHello ${data.staffName},\n\nA stipend payment has been recorded for you.\n\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nDate: ${data.date}\nBank Reference: ${data.bankReference}\n\nIf you have questions, contact your supervisor or administrator.`,
+    });
+  }
+
+  // ==========================================================================
+  // Dispute Notification Email (Story 6.5)
+  // ==========================================================================
+
+  /**
+   * Sends a dispute notification email to a Super Admin.
+   * Called by the email worker when processing dispute-notification jobs.
+   * Recipients are resolved by the caller (RemunerationService) and passed as `to`.
+   */
+  static async sendDisputeNotificationEmail(data: DisputeNotificationEmailData): Promise<EmailResult> {
+    if (!this.isEnabled()) {
+      logger.warn({
+        event: 'email.dispute_notification.disabled',
+        to: data.to,
+        note: 'Email service is disabled',
+      });
+      return { success: false, error: 'Email service is disabled' };
+    }
+
+    const subject = `[OSLRS] Payment Dispute Raised — ${data.staffName}`;
+    const amountFormatted = `₦${(data.amount / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+
+    return this.getProvider().send({
+      to: data.to,
+      subject,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Dispute - OSLSR</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: ${this.BRAND_COLOR}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0;">OSLSR</h1>
+    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour & Skills Registry</p>
+  </div>
+
+  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <h2 style="color: #333; margin-top: 0;">Payment Dispute Raised</h2>
+
+    <p>A staff member has raised a dispute regarding a payment record.</p>
+
+    <div style="background-color: #fff; padding: 15px; border-radius: 5px; border-left: 4px solid #d97706; margin: 20px 0;">
+      <p style="margin: 5px 0;"><strong>Staff:</strong> ${data.staffName}</p>
+      <p style="margin: 5px 0;"><strong>Tranche:</strong> ${data.trancheName}</p>
+      <p style="margin: 5px 0;"><strong>Amount:</strong> ${amountFormatted}</p>
+      <p style="margin: 5px 0;"><strong>Issue:</strong> ${data.commentExcerpt}</p>
+    </div>
+
+    <p>Please review this dispute in the OSLRS administration dashboard.</p>
+
+    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+
+    <p style="font-size: 12px; color: #999;">
+      This is an automated notification from the OSLSR system. Do not reply to this email.
+    </p>
+  </div>
+</body>
+</html>`,
+      text: `Payment Dispute Raised — ${data.staffName}\n\nA staff member has raised a dispute regarding a payment record.\n\nStaff: ${data.staffName}\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nIssue: ${data.commentExcerpt}\n\nPlease review this dispute in the OSLRS administration dashboard.`,
     });
   }
 

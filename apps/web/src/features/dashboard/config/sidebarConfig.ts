@@ -38,6 +38,7 @@ import {
   ScrollText,
   UserCog,
   SlidersHorizontal,
+  Wallet,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -89,6 +90,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Drafts', href: '/dashboard/enumerator/drafts', icon: Save },
     { label: 'Sync Status', href: '/dashboard/enumerator/sync', icon: RefreshCw },
     { label: 'Messages', href: '/dashboard/enumerator/messages', icon: MessageSquare },
+    { label: 'Payments', href: '/dashboard/enumerator/payments', icon: Wallet },
   ],
 
   public_user: [
@@ -112,6 +114,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Registry', href: '/dashboard/supervisor/registry', icon: Database },
     { label: 'Fraud Alerts', href: '/dashboard/supervisor/fraud', icon: AlertTriangle },
     { label: 'Messages', href: '/dashboard/supervisor/messages', icon: MessageSquare },
+    { label: 'Payments', href: '/dashboard/supervisor/payments', icon: Wallet },
   ],
 
   verification_assessor: [

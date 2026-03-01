@@ -16,6 +16,8 @@ const mockCorrectPaymentRecord = vi.fn();
 const mockGetStaffPaymentHistory = vi.fn();
 const mockGetFileStream = vi.fn();
 const mockGetEligibleStaff = vi.fn();
+const mockOpenDispute = vi.fn();
+const mockGetStaffDisputes = vi.fn();
 
 vi.mock('../../services/remuneration.service.js', () => ({
   RemunerationService: {
@@ -26,6 +28,8 @@ vi.mock('../../services/remuneration.service.js', () => ({
     getStaffPaymentHistory: (...args: unknown[]) => mockGetStaffPaymentHistory(...args),
     getFileStream: (...args: unknown[]) => mockGetFileStream(...args),
     getEligibleStaff: (...args: unknown[]) => mockGetEligibleStaff(...args),
+    openDispute: (...args: unknown[]) => mockOpenDispute(...args),
+    getStaffDisputes: (...args: unknown[]) => mockGetStaffDisputes(...args),
   },
 }));
 
@@ -448,6 +452,191 @@ describe('RemunerationController', () => {
       const { mockRes } = makeRes();
 
       await RemunerationController.downloadFile(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── Story 6.5: openDispute ─────────────────────────────────────
+
+  describe('openDispute', () => {
+    const RECORD_ID = '00000000-0000-0000-0000-000000000099';
+
+    it('should create dispute and return 201 (AC3)', async () => {
+      const disputeResult = { id: 'dispute-1', paymentRecordId: RECORD_ID, status: 'disputed' };
+      mockOpenDispute.mockResolvedValue(disputeResult);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'Payment amount is incorrect for this month' },
+      });
+      const { statusMock, jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(jsonMock).toHaveBeenCalledWith({
+        success: true,
+        data: disputeResult,
+      });
+      expect(mockOpenDispute).toHaveBeenCalledWith(
+        RECORD_ID,
+        'Payment amount is incorrect for this month',
+        STAFF_1_ID,
+        expect.any(String),
+        'test-agent',
+      );
+    });
+
+    it('should reject if payment record not found (404)', async () => {
+      const error = new Error('Payment record not found');
+      (error as any).statusCode = 404;
+      mockOpenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'This payment is missing from my records' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Payment record not found',
+      }));
+    });
+
+    it('should reject if record does not belong to actor (403)', async () => {
+      const error = new Error('Can only dispute your own payment records');
+      (error as any).statusCode = 403;
+      mockOpenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_2_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'Disputing someone else payment record' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Can only dispute your own payment records',
+      }));
+    });
+
+    it('should reject if record status is not active (400)', async () => {
+      const error = new Error('Only active payment records can be disputed');
+      (error as any).statusCode = 400;
+      mockOpenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'Trying to dispute already disputed record' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Only active payment records can be disputed',
+      }));
+    });
+
+    it('should reject if open dispute already exists (409)', async () => {
+      const error = new Error('An open dispute already exists for this payment record');
+      (error as any).statusCode = 409;
+      mockOpenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'Duplicate dispute attempt for same record' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'An open dispute already exists for this payment record',
+      }));
+    });
+
+    it('should reject if staffComment is less than 10 characters (400)', async () => {
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: RECORD_ID, staffComment: 'short' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('at least 10 characters'),
+      }));
+      expect(mockOpenDispute).not.toHaveBeenCalled();
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({
+        user: undefined,
+        body: { paymentRecordId: RECORD_ID, staffComment: 'Auth required to file dispute' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+
+    it('should reject paymentRecordId that is not a valid UUID', async () => {
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        body: { paymentRecordId: 'not-a-uuid', staffComment: 'Testing UUID validation on server side' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.openDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('valid UUID'),
+      }));
+      expect(mockOpenDispute).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Story 6.5: getMyDisputes ────────────────────────────────────
+
+  describe('getMyDisputes', () => {
+    it('should return own disputes', async () => {
+      const result = {
+        data: [{ id: 'dispute-1', status: 'disputed', staffComment: 'Missing payment for March' }],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      };
+      mockGetStaffDisputes.mockResolvedValue(result);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        query: {},
+      });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.getMyDisputes(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({
+        success: true,
+        ...result,
+      });
+      expect(mockGetStaffDisputes).toHaveBeenCalledWith(STAFF_1_ID, expect.objectContaining({ page: 1 }));
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({ user: undefined, query: {} });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.getMyDisputes(req, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
         message: 'Authentication required',

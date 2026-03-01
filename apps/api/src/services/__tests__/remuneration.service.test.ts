@@ -1,8 +1,9 @@
 /**
- * RemunerationService Tests — Story 6.4
+ * RemunerationService Tests — Story 6.4 + 6.5
  *
  * Tests: self-payment guard, batch creation with receipt S3 upload,
- * temporal versioning correction, staff payment history filtering.
+ * temporal versioning correction, staff payment history filtering,
+ * dispute creation with ownership/status/duplicate guards.
  */
 
 const mockInsert = vi.fn();
@@ -125,6 +126,7 @@ vi.mock('../../db/schema/remuneration.js', () => ({
   paymentBatches: { _table: 'payment_batches' },
   paymentRecords: { _table: 'payment_records' },
   paymentFiles: { _table: 'payment_files' },
+  paymentDisputes: { _table: 'payment_disputes' },
 }));
 
 vi.mock('../../db/schema/users.js', () => ({
@@ -162,8 +164,10 @@ vi.mock('../audit.service.js', () => ({
 }));
 
 const mockQueuePaymentEmail = vi.fn().mockResolvedValue('test-job-id');
+const mockQueueDisputeEmail = vi.fn().mockResolvedValue('test-job-id');
 vi.mock('../../queues/email.queue.js', () => ({
   queuePaymentNotificationEmail: (...args: unknown[]) => mockQueuePaymentEmail(...args),
+  queueDisputeNotificationEmail: (...args: unknown[]) => mockQueueDisputeEmail(...args),
 }));
 
 const mockS3Send = vi.fn().mockResolvedValue({});
@@ -194,7 +198,7 @@ vi.mock('drizzle-orm', () => ({
   isNull: vi.fn((...args: unknown[]) => ({ type: 'isNull', args })),
   inArray: vi.fn((...args: unknown[]) => ({ type: 'inArray', args })),
   desc: vi.fn((...args: unknown[]) => ({ type: 'desc', args })),
-  sql: Object.assign(vi.fn((...args: unknown[]) => ({ type: 'sql', args })), {
+  sql: Object.assign(vi.fn((...args: unknown[]) => ({ type: 'sql', args, as: (name: string) => ({ type: 'sql_alias', name }) })), {
     raw: vi.fn((...args: unknown[]) => ({ type: 'sql_raw', args })),
   }),
 }));
@@ -425,21 +429,37 @@ describe('RemunerationService', () => {
           trancheName: 'Tranche 1',
           trancheNumber: 1,
           bankReference: 'REF-001',
+          disputeId: null,
+          disputeStatus: null,
+          disputeComment: null,
+          disputeAdminResponse: null,
+          disputeResolvedAt: null,
+          disputeCreatedAt: null,
         },
       ];
 
       let callCount = 0;
-      mockSelect.mockImplementation((...args: unknown[]) => {
+      mockSelect.mockImplementation((..._args: unknown[]) => {
         callCount++;
         if (callCount === 1) {
-          // Data query
+          // Subquery: db.select(...).from(...).as(...)
+          return {
+            from: () => ({
+              as: () => ({ _subquery: true }),
+            }),
+          };
+        }
+        if (callCount === 2) {
+          // Main data query: innerJoin → leftJoin → where → orderBy → limit → offset
           return {
             from: () => ({
               innerJoin: () => ({
-                where: () => ({
-                  orderBy: () => ({
-                    limit: () => ({
-                      offset: () => Promise.resolve(mockRecords),
+                leftJoin: () => ({
+                  where: () => ({
+                    orderBy: () => ({
+                      limit: () => ({
+                        offset: () => Promise.resolve(mockRecords),
+                      }),
                     }),
                   }),
                 }),
@@ -447,7 +467,7 @@ describe('RemunerationService', () => {
             }),
           };
         }
-        // Count query (second select call)
+        // Count query (third select call)
         return {
           from: () => ({
             where: () => Promise.resolve([{ count: 1 }]),
@@ -459,6 +479,162 @@ describe('RemunerationService', () => {
 
       expect(result.data).toEqual(mockRecords);
       expect(result.pagination.total).toBe(1);
+      // Verify dispute fields are present in result
+      expect(result.data[0]).toHaveProperty('disputeId');
+      expect(result.data[0]).toHaveProperty('disputeStatus');
+    });
+  });
+
+  // ─── Story 6.5: openDispute ──────────────────────────────────────────
+
+  describe('openDispute', () => {
+    const RECORD_ID = 'record-001';
+    const ACTOR_ID = 'staff-actor-001';
+
+    function buildDisputeTx(options: {
+      recordResult?: unknown[];
+      disputeCheckResult?: unknown[];
+      insertResult?: unknown[];
+    }) {
+      const {
+        recordResult = [{ id: RECORD_ID, userId: ACTOR_ID, status: 'active', amount: 500000, batchId: 'batch-1' }],
+        disputeCheckResult = [],
+        insertResult = [{ id: 'dispute-new', paymentRecordId: RECORD_ID, status: 'disputed', staffComment: 'Test comment longer than 10', openedBy: ACTOR_ID }],
+      } = options;
+
+      let selectCallCount = 0;
+      return {
+        select: (..._args: unknown[]) => {
+          selectCallCount++;
+          if (selectCallCount === 1) {
+            // Payment record fetch (with FOR UPDATE)
+            return {
+              from: () => ({
+                where: () => ({
+                  for: () => Promise.resolve(recordResult),
+                }),
+              }),
+            };
+          }
+          // Dispute existence check
+          return {
+            from: () => ({
+              where: () => Promise.resolve(disputeCheckResult),
+            }),
+          };
+        },
+        insert: () => ({
+          values: (vals: unknown) => {
+            mockValues(vals);
+            return {
+              returning: () => Promise.resolve(insertResult),
+            };
+          },
+        }),
+        update: () => ({
+          set: (vals: unknown) => {
+            mockSet(vals);
+            return {
+              where: () => Promise.resolve(),
+            };
+          },
+        }),
+      };
+    }
+
+    it('should create dispute record with correct fields (AC3)', async () => {
+      const disputeResult = {
+        id: 'dispute-new',
+        paymentRecordId: RECORD_ID,
+        status: 'disputed',
+        staffComment: 'Payment amount is wrong for this period',
+        openedBy: ACTOR_ID,
+      };
+
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({
+        insertResult: [disputeResult],
+      })));
+
+      // Mock post-transaction notification queries (staff name, batch, admins)
+      let postTxSelectCount = 0;
+      mockSelect.mockImplementation(() => {
+        postTxSelectCount++;
+        if (postTxSelectCount === 1) {
+          return { from: () => ({ where: () => Promise.resolve([{ fullName: 'Test Staff' }]) }) };
+        }
+        if (postTxSelectCount === 2) {
+          return { from: () => ({ where: () => Promise.resolve([{ trancheName: 'Tranche 1' }]) }) };
+        }
+        return {
+          from: () => ({
+            innerJoin: () => ({
+              where: () => Promise.resolve([{ email: 'admin@test.com' }]),
+            }),
+          }),
+        };
+      });
+
+      const result = await RemunerationService.openDispute(
+        RECORD_ID,
+        'Payment amount is wrong for this period',
+        ACTOR_ID,
+      );
+
+      expect(result).toEqual(disputeResult);
+      expect(mockTransaction).toHaveBeenCalledOnce();
+      expect(mockLogActionTx).toHaveBeenCalledOnce();
+    });
+
+    it('should update payment record status to disputed', async () => {
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({})));
+      mockSelect.mockReturnValue({
+        from: () => ({ where: () => Promise.resolve([]) }),
+      });
+
+      await RemunerationService.openDispute(RECORD_ID, 'Testing status update on the record', ACTOR_ID);
+
+      // Verify update was called with status: 'disputed'
+      expect(mockSet).toHaveBeenCalledWith({ status: 'disputed' });
+    });
+
+    it('should throw NOT_FOUND when payment record does not exist', async () => {
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({
+        recordResult: [], // no record found
+      })));
+
+      await expect(
+        RemunerationService.openDispute(RECORD_ID, 'Record does not exist in the system', ACTOR_ID),
+      ).rejects.toThrow('Payment record not found');
+    });
+
+    it('should throw FORBIDDEN when record belongs to another user', async () => {
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({
+        recordResult: [{ id: RECORD_ID, userId: 'other-staff-999', status: 'active', amount: 500000, batchId: 'batch-1' }],
+      })));
+
+      await expect(
+        RemunerationService.openDispute(RECORD_ID, 'Attempting to dispute someone elses record', ACTOR_ID),
+      ).rejects.toThrow('Can only dispute your own payment records');
+    });
+
+    it('should throw INVALID_STATUS when record is not active', async () => {
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({
+        recordResult: [{ id: RECORD_ID, userId: ACTOR_ID, status: 'disputed', amount: 500000, batchId: 'batch-1' }],
+      })));
+
+      await expect(
+        RemunerationService.openDispute(RECORD_ID, 'Record is already disputed cannot dispute again', ACTOR_ID),
+      ).rejects.toThrow('Only active payment records can be disputed');
+    });
+
+    it('should throw DUPLICATE_DISPUTE when open dispute already exists', async () => {
+      mockTransaction.mockImplementation(async (fn) => fn(buildDisputeTx({
+        disputeCheckResult: [{ id: 'existing-dispute-1' }], // existing open dispute
+      })));
+
+      await expect(
+        RemunerationService.openDispute(RECORD_ID, 'Trying to create a duplicate open dispute', ACTOR_ID),
+      ).rejects.toThrow('An open dispute already exists for this payment record');
     });
   });
 });

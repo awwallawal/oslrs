@@ -119,6 +119,8 @@ const RespondentDetailPage = lazy(() => import('./features/dashboard/pages/Respo
 
 // Story 6.4: Staff Remuneration Page
 const RemunerationPage = lazy(() => import('./features/remuneration/pages/RemunerationPage'));
+// Story 6.5: Staff Payment History (Enumerator + Supervisor)
+const StaffPaymentHistoryPage = lazy(() => import('./features/remuneration/pages/StaffPaymentHistoryPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 
@@ -773,6 +775,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 6.5: Payment History */}
+                <Route
+                  path="payments"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <StaffPaymentHistoryPage />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<PlaceholderPage title="Supervisor Feature" />} />
               </Route>
 
@@ -840,6 +851,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <EnumeratorMessagesPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 6.5: Payment History */}
+                <Route
+                  path="payments"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <StaffPaymentHistoryPage />
                     </Suspense>
                   }
                 />

@@ -47,6 +47,12 @@ const eligibleStaffSchema = z.object({
   lgaId: z.string().uuid().optional(),
 });
 
+/** Zod schema for opening a dispute (Story 6.5) */
+const openDisputeSchema = z.object({
+  paymentRecordId: z.string().uuid('Payment record ID must be a valid UUID'),
+  staffComment: z.string().min(10, 'Please describe the issue in at least 10 characters'),
+});
+
 export class RemunerationController {
   /**
    * POST /api/v1/remuneration
@@ -256,6 +262,67 @@ export class RemunerationController {
       // Pipe S3 stream to response
       const body = file.stream as NodeJS.ReadableStream;
       body.pipe(res);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/remuneration/disputes
+   * Open a dispute on a payment record (Story 6.5, AC3).
+   */
+  static async openDispute(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const parseResult = openDisputeSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          parseResult.error.errors[0]?.message || 'Invalid dispute data',
+          400,
+          { errors: parseResult.error.flatten().fieldErrors },
+        );
+      }
+
+      const dispute = await RemunerationService.openDispute(
+        parseResult.data.paymentRecordId,
+        parseResult.data.staffComment,
+        user.sub,
+        req.ip || req.socket?.remoteAddress,
+        req.headers['user-agent'],
+      );
+
+      res.status(201).json({
+        success: true,
+        data: dispute,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/remuneration/disputes/mine
+   * Get the authenticated staff member's own disputes (Story 6.5).
+   */
+  static async getMyDisputes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const parseResult = listFiltersSchema.safeParse(req.query);
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', 400);
+      }
+
+      const result = await RemunerationService.getStaffDisputes(user.sub, parseResult.data);
+      res.json({ success: true, ...result });
     } catch (error) {
       next(error);
     }

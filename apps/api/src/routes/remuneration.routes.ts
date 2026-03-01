@@ -49,6 +49,23 @@ router.get(
   RemunerationController.listBatches,
 );
 
+// Story 6.5: Dispute routes (staff: enumerator + supervisor)
+const staffOnly = authorize(UserRole.ENUMERATOR, UserRole.SUPERVISOR);
+
+// POST /api/v1/remuneration/disputes — open a dispute (staff only)
+router.post(
+  '/disputes',
+  staffOnly,
+  RemunerationController.openDispute,
+);
+
+// GET /api/v1/remuneration/disputes/mine — list own disputes (staff only)
+router.get(
+  '/disputes/mine',
+  staffOnly,
+  RemunerationController.getMyDisputes,
+);
+
 // GET /api/v1/remuneration/eligible-staff — get eligible staff for selection
 router.get(
   '/eligible-staff',

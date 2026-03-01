@@ -10,7 +10,7 @@ import { messages, messageReceipts } from './messages.js';
 import { fraudDetections } from './fraud-detections.js';
 import { dailyProductivitySnapshots } from './daily-productivity-snapshots.js';
 import { productivityTargets } from './productivity-targets.js';
-import { paymentBatches, paymentRecords, paymentFiles } from './remuneration.js';
+import { paymentBatches, paymentRecords, paymentFiles, paymentDisputes } from './remuneration.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -41,6 +41,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   paymentRecords: many(paymentRecords, { relationName: 'paymentRecordUser' }),
   // Story 6.4: Payment batches recorded by this user (admin)
   recordedPaymentBatches: many(paymentBatches, { relationName: 'batchRecordedBy' }),
+  // Story 6.5: Disputes opened by this user (staff)
+  openedDisputes: many(paymentDisputes, { relationName: 'disputeOpenedBy' }),
+  // Story 6.5: Disputes resolved by this user (admin)
+  resolvedDisputes: many(paymentDisputes, { relationName: 'disputeResolvedBy' }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -183,8 +187,8 @@ export const paymentBatchesRelations = relations(paymentBatches, ({ one, many })
   records: many(paymentRecords),
 }));
 
-// Payment record relations (Story 6.4)
-export const paymentRecordsRelations = relations(paymentRecords, ({ one }) => ({
+// Payment record relations (Story 6.4, extended Story 6.5)
+export const paymentRecordsRelations = relations(paymentRecords, ({ one, many }) => ({
   batch: one(paymentBatches, {
     fields: [paymentRecords.batchId],
     references: [paymentBatches.id],
@@ -194,6 +198,8 @@ export const paymentRecordsRelations = relations(paymentRecords, ({ one }) => ({
     references: [users.id],
     relationName: 'paymentRecordUser',
   }),
+  // Story 6.5: Disputes on this payment record
+  disputes: many(paymentDisputes),
 }));
 
 // Payment file relations (Story 6.4)
@@ -202,5 +208,27 @@ export const paymentFilesRelations = relations(paymentFiles, ({ one }) => ({
   uploadedByUser: one(users, {
     fields: [paymentFiles.uploadedBy],
     references: [users.id],
+  }),
+}));
+
+// Payment dispute relations (Story 6.5)
+export const paymentDisputesRelations = relations(paymentDisputes, ({ one }) => ({
+  paymentRecord: one(paymentRecords, {
+    fields: [paymentDisputes.paymentRecordId],
+    references: [paymentRecords.id],
+  }),
+  openedByUser: one(users, {
+    fields: [paymentDisputes.openedBy],
+    references: [users.id],
+    relationName: 'disputeOpenedBy',
+  }),
+  resolvedByUser: one(users, {
+    fields: [paymentDisputes.resolvedBy],
+    references: [users.id],
+    relationName: 'disputeResolvedBy',
+  }),
+  evidenceFile: one(paymentFiles, {
+    fields: [paymentDisputes.evidenceFileId],
+    references: [paymentFiles.id],
   }),
 }));

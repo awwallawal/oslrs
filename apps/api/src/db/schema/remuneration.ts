@@ -87,3 +87,38 @@ export type PaymentRecord = typeof paymentRecords.$inferSelect;
 export type NewPaymentRecord = typeof paymentRecords.$inferInsert;
 export type PaymentFile = typeof paymentFiles.$inferSelect;
 export type NewPaymentFile = typeof paymentFiles.$inferInsert;
+
+// Inline enum values — Drizzle schema files must NOT import from @oslsr/types
+// Canonical source: Story 6-5 dispute state machine (prep-5)
+const PAYMENT_DISPUTE_STATUS = ['disputed', 'pending_resolution', 'resolved', 'reopened', 'closed'] as const;
+
+/**
+ * payment_disputes — dispute lifecycle per payment record
+ * Story 6.5: Staff-initiated dispute mechanism.
+ * Only one open dispute per payment record (enforced by partial unique index).
+ */
+export const paymentDisputes = pgTable('payment_disputes', {
+  id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
+  paymentRecordId: uuid('payment_record_id').notNull(), // FK → payment_records
+  status: text('status', { enum: PAYMENT_DISPUTE_STATUS }).notNull().default('disputed'),
+  staffComment: text('staff_comment').notNull(),
+  adminResponse: text('admin_response'),
+  evidenceFileId: uuid('evidence_file_id'), // FK → payment_files (dispute_evidence)
+  openedBy: uuid('opened_by').notNull(), // FK → users (staff)
+  resolvedBy: uuid('resolved_by'), // FK → users (admin)
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  reopenCount: integer('reopen_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+}, (table) => ({
+  paymentRecordIdx: index('idx_payment_disputes_payment_record_id').on(table.paymentRecordId),
+  statusIdx: index('idx_payment_disputes_status').on(table.status),
+  openedByIdx: index('idx_payment_disputes_opened_by').on(table.openedBy),
+  // Only one open dispute per payment record
+  uniqueOpenDispute: uniqueIndex('uq_payment_disputes_open_per_record')
+    .on(table.paymentRecordId)
+    .where(sql`status NOT IN ('resolved', 'closed')`),
+}));
+
+export type PaymentDispute = typeof paymentDisputes.$inferSelect;
+export type NewPaymentDispute = typeof paymentDisputes.$inferInsert;

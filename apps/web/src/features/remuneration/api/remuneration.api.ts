@@ -149,14 +149,61 @@ export async function getEligibleStaff(params: { roleFilter?: string; lgaId?: st
   return apiClient(`/remuneration/eligible-staff${query ? `?${query}` : ''}`) as Promise<{ success: boolean; data: EligibleStaff[] }>;
 }
 
+/** Staff payment history record with dispute info (Story 6.5) */
+export interface StaffPaymentRecord {
+  id: string;
+  batchId: string;
+  amount: number; // in kobo
+  status: string;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  createdAt: string;
+  trancheName: string;
+  trancheNumber: number;
+  bankReference: string | null;
+  // Dispute info (from LEFT JOIN)
+  disputeId: string | null;
+  disputeStatus: string | null;
+  disputeComment: string | null;
+  disputeAdminResponse: string | null;
+  disputeResolvedAt: string | null;
+  disputeCreatedAt: string | null;
+}
+
 /**
  * Get staff payment history.
  * GET /api/v1/remuneration/staff/:userId/history
  */
-export async function getStaffPaymentHistory(userId: string, params: { page?: number; limit?: number } = {}) {
+export async function getStaffPaymentHistory(
+  userId: string,
+  params: { page?: number; limit?: number } = {},
+) {
   const searchParams = new URLSearchParams();
   if (params.page) searchParams.set('page', String(params.page));
   if (params.limit) searchParams.set('limit', String(params.limit));
   const query = searchParams.toString();
-  return apiClient(`/remuneration/staff/${userId}/history${query ? `?${query}` : ''}`);
+  return apiClient(`/remuneration/staff/${userId}/history${query ? `?${query}` : ''}`) as Promise<PaginatedResponse<StaffPaymentRecord>>;
+}
+
+/**
+ * Open a dispute on a payment record (Story 6.5).
+ * POST /api/v1/remuneration/disputes
+ */
+export async function openDispute(data: { paymentRecordId: string; staffComment: string }) {
+  return apiClient('/remuneration/disputes', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }) as Promise<{ success: boolean; data: { id: string } }>;
+}
+
+/**
+ * Get own disputes (Story 6.5).
+ * GET /api/v1/remuneration/disputes/mine
+ */
+export async function getMyDisputes(params: { page?: number; limit?: number } = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return apiClient(`/remuneration/disputes/mine${query ? `?${query}` : ''}`);
 }

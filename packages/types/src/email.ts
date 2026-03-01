@@ -163,6 +163,22 @@ export interface PaymentNotificationEmailData {
 }
 
 // ============================================================================
+// Dispute Notification Email Types
+// ============================================================================
+
+/**
+ * Data required to send a dispute notification email to Super Admin
+ * Story 6.5: Staff-initiated payment dispute.
+ */
+export interface DisputeNotificationEmailData {
+  to: string; // Super Admin email address
+  staffName: string;
+  trancheName: string;
+  amount: number; // in kobo
+  commentExcerpt: string; // first 100 chars of staff comment
+}
+
+// ============================================================================
 // Backup Notification Email Types
 // ============================================================================
 
@@ -225,6 +241,15 @@ export interface PaymentNotificationJob extends BaseEmailJob {
 }
 
 /**
+ * Dispute notification email job payload (Story 6.5)
+ */
+export interface DisputeNotificationJob extends BaseEmailJob {
+  type: 'dispute-notification';
+  data: DisputeNotificationEmailData;
+  userId: string;
+}
+
+/**
  * Backup notification email job payload
  */
 export interface BackupNotificationJob extends BaseEmailJob {
@@ -236,7 +261,7 @@ export interface BackupNotificationJob extends BaseEmailJob {
 /**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | BackupNotificationJob;
+export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | BackupNotificationJob;
 
 // ============================================================================
 // Email Configuration Types
