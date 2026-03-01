@@ -223,7 +223,7 @@ development_status:
   # CSP not configured (NFR8.4 gap), mass assignment pattern, CORS fallback.
   # Must complete before Epic 7 introduces public unauthenticated marketplace routes.
   security-hardening: in-progress
-  sec-1-resolve-dependency-cves: ready-for-dev      # P0 CRITICAL: Update @aws-sdk/client-s3 (fast-xml-parser CVE), react-router-dom (XSS open redirect), xlsx (prototype pollution + ReDoS), multer (DoS). Target: pnpm audit zero critical/high in prod deps. Story created 2026-03-01.
+  sec-1-resolve-dependency-cves: done      # P0 CRITICAL: Done 2026-03-01. Reviewed + fixed: dynamic xlsx import, fast-xml-parser override (5.4.1), react-router-dom (6.30.3), multer (2.1.0), minimatch override. 0 critical, 0 high in prod. 3,104 tests pass.
   sec-2-configure-content-security-policy: ready-for-dev  # P1 HIGH: Helmet CSP with 11 directives, report-only mode, violation endpoint, NGINX doc. Covers Google OAuth, hCaptcha, OpenStreetMap, DigitalOcean S3, jsdelivr CDN, Socket.io WSS, webcam mediastream. Story created 2026-03-01.
   sec-3-harden-mass-assignment-input-validation: ready-for-dev  # P2 MEDIUM: 4 mass assignment fixes (remuneration+staff controllers), 4 AppError detail leaks (id-card/export/photo services), CORS_ORIGIN to requiredProdVars, audit.controller .parse()→.safeParse(). Story created 2026-03-01.
   sec-4-dependency-pinning-audit-ci-gate: ready-for-dev  # P3 LOW: CI pnpm audit gate, pin 9 security-critical deps to exact versions, .npmrc security settings, document accepted build-only risks, fix bcrypt version discrepancy. Story created 2026-03-01.

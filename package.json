@@ -38,7 +38,19 @@
     "tsx": "^4.10.5",
     "turbo": "^1.13.0",
     "typescript": "^5.6.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.16",
+    "xlsx": "^0.18.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.3.5",
+      "minimatch": ">=9.0.7",
+      "rollup": ">=4.59.0"
+    },
+    "comments": {
+      "overrides": "SEC-1: fast-xml-parser for AWS SDK CVEs (GHSA-m7jm, GHSA-fj3w, GHSA-4r6h, CVE-2026-27942). minimatch for ReDoS via google-auth-library->gaxios->rimraf->glob. rollup for path traversal (dev-only).",
+      "accepted-risks": "qs (LOW arrayLimit bypass, via express->body-parser — no fix without Express 5 major version change). xlsx (devDep only — one-time migration, CVE-2023-30533 prototype pollution). serialize-javascript (dev-only via workbox-build). esbuild (dev-only via tsx/vite). ajv (dev-only via eslint). phin (dev-only via potrace/jimp)."
+    }
   },
   "dependencies": {
     "@oslsr/types": "workspace:*",
@@ -46,7 +58,6 @@
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.30.10",
     "pg": "^8.11.5",
-    "uuidv7": "^1.0.2",
-    "xlsx": "^0.18.5"
+    "uuidv7": "^1.0.2"
   }
 }

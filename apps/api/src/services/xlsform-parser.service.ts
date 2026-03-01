@@ -1,5 +1,5 @@
-import * as XLSX from 'xlsx';
 import { AppError } from '@oslsr/utils';
+import type { WorkBook } from 'xlsx';
 import type {
   ParsedXlsform,
   XlsformSurveyRow,
@@ -15,6 +15,17 @@ import {
   OSLSR_REQUIRED_CHOICE_LISTS,
 } from '@oslsr/types';
 import pino from 'pino';
+
+// xlsx@0.18.5 has known prototype pollution (CVE-2023-30533) — no npm fix available.
+// Safe: only used for admin-initiated one-time XLSForm migration (Story 2-9), not exposed to public input.
+// Moved to devDependencies (SEC-1). Dynamic import prevents app crash if xlsx is not installed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let XLSX: any = null;
+try {
+  XLSX = await import('xlsx');
+} catch {
+  // xlsx not available — XLSForm parsing endpoints will return 503
+}
 
 const logger = pino({ name: 'xlsform-parser-service' });
 
@@ -71,9 +82,16 @@ export class XlsformParserService {
    * Parse an XLSX file buffer into structured form data
    */
   static parseXlsxFile(buffer: Buffer): ParsedXlsform {
+    if (!XLSX) {
+      throw new AppError(
+        'XLSFORM_UNAVAILABLE',
+        'XLSForm parsing is unavailable: xlsx library is not installed. This feature was a one-time migration (Story 2-9).',
+        503
+      );
+    }
     logger.info({ event: 'xlsform.parse_xlsx_started' });
 
-    let workbook: XLSX.WorkBook;
+    let workbook: WorkBook;
     try {
       workbook = XLSX.read(buffer, { type: 'buffer' });
     } catch (error) {
@@ -112,9 +130,9 @@ export class XlsformParserService {
     const choicesSheet = workbook.Sheets[findSheet('choices')];
     const settingsSheet = workbook.Sheets[findSheet('settings')];
 
-    const survey = XLSX.utils.sheet_to_json<XlsformSurveyRow>(surveySheet, { defval: '' });
-    const choices = XLSX.utils.sheet_to_json<XlsformChoiceRow>(choicesSheet, { defval: '' });
-    const settingsRows = XLSX.utils.sheet_to_json<Record<string, string>>(settingsSheet, { defval: '' });
+    const survey = XLSX.utils.sheet_to_json(surveySheet, { defval: '' }) as XlsformSurveyRow[];
+    const choices = XLSX.utils.sheet_to_json(choicesSheet, { defval: '' }) as XlsformChoiceRow[];
+    const settingsRows = XLSX.utils.sheet_to_json(settingsSheet, { defval: '' }) as Record<string, string>[];
 
     // Settings is typically a single row
     const settings: XlsformSettings = {
