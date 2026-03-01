@@ -165,9 +165,15 @@ vi.mock('../audit.service.js', () => ({
 
 const mockQueuePaymentEmail = vi.fn().mockResolvedValue('test-job-id');
 const mockQueueDisputeEmail = vi.fn().mockResolvedValue('test-job-id');
+const mockQueueDisputeResolutionEmail = vi.fn().mockResolvedValue('test-job-id');
 vi.mock('../../queues/email.queue.js', () => ({
   queuePaymentNotificationEmail: (...args: unknown[]) => mockQueuePaymentEmail(...args),
   queueDisputeNotificationEmail: (...args: unknown[]) => mockQueueDisputeEmail(...args),
+  queueDisputeResolutionEmail: (...args: unknown[]) => mockQueueDisputeResolutionEmail(...args),
+}));
+
+vi.mock('../../realtime/index.js', () => ({
+  getIO: () => null,
 }));
 
 const mockS3Send = vi.fn().mockResolvedValue({});
@@ -198,6 +204,11 @@ vi.mock('drizzle-orm', () => ({
   isNull: vi.fn((...args: unknown[]) => ({ type: 'isNull', args })),
   inArray: vi.fn((...args: unknown[]) => ({ type: 'inArray', args })),
   desc: vi.fn((...args: unknown[]) => ({ type: 'desc', args })),
+  gte: vi.fn((...args: unknown[]) => ({ type: 'gte', args })),
+  lte: vi.fn((...args: unknown[]) => ({ type: 'lte', args })),
+  or: vi.fn((...args: unknown[]) => ({ type: 'or', args })),
+  ilike: vi.fn((...args: unknown[]) => ({ type: 'ilike', args })),
+  count: vi.fn((...args: unknown[]) => ({ type: 'count', args })),
   sql: Object.assign(vi.fn((...args: unknown[]) => ({ type: 'sql', args, as: (name: string) => ({ type: 'sql_alias', name }) })), {
     raw: vi.fn((...args: unknown[]) => ({ type: 'sql_raw', args })),
   }),
@@ -635,6 +646,104 @@ describe('RemunerationService', () => {
       await expect(
         RemunerationService.openDispute(RECORD_ID, 'Trying to create a duplicate open dispute', ACTOR_ID),
       ).rejects.toThrow('An open dispute already exists for this payment record');
+    });
+  });
+
+  // ─── Story 6.6: autoCloseResolvedDisputes ─────────────────────────
+
+  describe('autoCloseResolvedDisputes', () => {
+    it('should close disputes resolved 30+ days ago', async () => {
+      const oldDisputes = [
+        { id: 'dispute-old-1' },
+        { id: 'dispute-old-2' },
+      ];
+
+      // Mock: select resolved disputes older than 30 days
+      mockSelect.mockReturnValue({
+        from: () => ({
+          where: () => Promise.resolve(oldDisputes),
+        }),
+      });
+
+      // Mock: batch update
+      mockUpdate.mockReturnValue({
+        set: (vals: unknown) => {
+          mockSet(vals);
+          return {
+            where: () => Promise.resolve(),
+          };
+        },
+      });
+
+      const result = await RemunerationService.autoCloseResolvedDisputes();
+
+      expect(result).toEqual({ closedCount: 2 });
+    });
+
+    it('should NOT close disputes resolved less than 30 days ago', async () => {
+      // Mock: no disputes found (all resolved < 30 days)
+      mockSelect.mockReturnValue({
+        from: () => ({
+          where: () => Promise.resolve([]),
+        }),
+      });
+
+      const result = await RemunerationService.autoCloseResolvedDisputes();
+
+      expect(result).toEqual({ closedCount: 0 });
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should log audit for each closed dispute', async () => {
+      const oldDisputes = [
+        { id: 'dispute-audit-1' },
+        { id: 'dispute-audit-2' },
+        { id: 'dispute-audit-3' },
+      ];
+
+      mockSelect.mockReturnValue({
+        from: () => ({
+          where: () => Promise.resolve(oldDisputes),
+        }),
+      });
+
+      mockUpdate.mockReturnValue({
+        set: (vals: unknown) => {
+          mockSet(vals);
+          return {
+            where: () => Promise.resolve(),
+          };
+        },
+      });
+
+      const result = await RemunerationService.autoCloseResolvedDisputes();
+
+      // Method returns the count of closed disputes
+      expect(result).toEqual({ closedCount: 3 });
+    });
+
+    it('should return closedCount of closed disputes', async () => {
+      const oldDisputes = [{ id: 'd-1' }];
+
+      mockSelect.mockReturnValue({
+        from: () => ({
+          where: () => Promise.resolve(oldDisputes),
+        }),
+      });
+
+      mockUpdate.mockReturnValue({
+        set: (vals: unknown) => {
+          mockSet(vals);
+          return {
+            where: () => Promise.resolve(),
+          };
+        },
+      });
+
+      const result = await RemunerationService.autoCloseResolvedDisputes();
+
+      expect(result).toEqual({ closedCount: 1 });
+      expect(result.closedCount).toBe(1);
     });
   });
 });

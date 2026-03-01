@@ -179,6 +179,24 @@ export interface DisputeNotificationEmailData {
 }
 
 // ============================================================================
+// Dispute Resolution Email Types
+// ============================================================================
+
+/**
+ * Data required to send a dispute resolution email to staff
+ * Story 6.6: Admin resolves/acknowledges payment dispute.
+ */
+export interface DisputeResolutionEmailData {
+  staffEmail: string;
+  staffName: string;
+  trancheName: string;
+  amount: number; // in kobo
+  adminResponse: string;
+  hasEvidence: boolean;
+  action: 'acknowledged' | 'resolved';
+}
+
+// ============================================================================
 // Backup Notification Email Types
 // ============================================================================
 
@@ -250,6 +268,15 @@ export interface DisputeNotificationJob extends BaseEmailJob {
 }
 
 /**
+ * Dispute resolution email job payload (Story 6.6)
+ */
+export interface DisputeResolutionJob extends BaseEmailJob {
+  type: 'dispute-resolution';
+  data: DisputeResolutionEmailData;
+  userId: string;
+}
+
+/**
  * Backup notification email job payload
  */
 export interface BackupNotificationJob extends BaseEmailJob {
@@ -261,7 +288,7 @@ export interface BackupNotificationJob extends BaseEmailJob {
 /**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | BackupNotificationJob;
+export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | DisputeResolutionJob | BackupNotificationJob;
 
 // ============================================================================
 // Email Configuration Types

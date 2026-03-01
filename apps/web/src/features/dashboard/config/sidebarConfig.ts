@@ -39,6 +39,7 @@ import {
   UserCog,
   SlidersHorizontal,
   Wallet,
+  Scale,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -147,6 +148,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Registry', href: '/dashboard/super-admin/registry', icon: Database },
     { label: 'Export Data', href: '/dashboard/super-admin/export', icon: Download },
     { label: 'Remuneration', href: '/dashboard/super-admin/remuneration', icon: DollarSign },
+    { label: 'Payment Disputes', href: '/dashboard/super-admin/disputes', icon: Scale },
     { label: 'Audit Logs', href: '/dashboard/super-admin/logs', icon: ScrollText },
     { label: 'User Roles', href: '/dashboard/super-admin/roles', icon: UserCog },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },

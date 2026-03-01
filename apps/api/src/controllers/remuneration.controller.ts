@@ -53,6 +53,30 @@ const openDisputeSchema = z.object({
   staffComment: z.string().min(10, 'Please describe the issue in at least 10 characters'),
 });
 
+/** Zod schema for dispute queue filters (Story 6.6) */
+const disputeQueueFiltersSchema = z.object({
+  status: z.union([z.string(), z.array(z.string())]).optional().transform((val) => {
+    if (!val) return undefined;
+    return Array.isArray(val) ? val : [val];
+  }),
+  lgaId: z.string().uuid().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  search: z.string().optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+});
+
+/** Zod schema for resolving a dispute (Story 6.6) */
+const resolveDisputeSchema = z.object({
+  adminResponse: z.string().min(1, 'Resolution response is required'),
+});
+
+/** Zod schema for reopening a dispute (Story 6.6) */
+const reopenDisputeSchema = z.object({
+  staffComment: z.string().min(10, 'Please describe why you are reopening (at least 10 characters)'),
+});
+
 export class RemunerationController {
   /**
    * POST /api/v1/remuneration
@@ -346,6 +370,199 @@ export class RemunerationController {
 
       const staff = await RemunerationService.getEligibleStaff(parseResult.data);
       res.json({ success: true, data: staff });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Story 6.6: Admin Dispute Resolution Queue
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * GET /api/v1/remuneration/disputes
+   * Get paginated dispute queue for Super Admin (AC1).
+   */
+  static async getDisputeQueue(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const parseResult = disputeQueueFiltersSchema.safeParse(req.query);
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', 400);
+      }
+
+      const result = await RemunerationService.getDisputeQueue(parseResult.data);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/remuneration/disputes/stats
+   * Get dispute queue statistics (AC1).
+   */
+  static async getDisputeStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const stats = await RemunerationService.getDisputeStats();
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/remuneration/disputes/:disputeId
+   * Get dispute detail with full context (AC2).
+   */
+  static async getDisputeDetail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const { disputeId } = req.params;
+      if (!disputeId) {
+        throw new AppError('VALIDATION_ERROR', 'Dispute ID is required', 400);
+      }
+
+      // Log PII access for viewing dispute detail
+      AuditService.logPiiAccess(
+        req as AuthenticatedRequest,
+        PII_ACTIONS.VIEW_RECORD,
+        'payment_dispute',
+        disputeId,
+      );
+
+      const detail = await RemunerationService.getDisputeDetail(disputeId);
+      res.json({ success: true, data: detail });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/remuneration/disputes/:disputeId/acknowledge
+   * Acknowledge a dispute (AC3).
+   */
+  static async acknowledgeDispute(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const { disputeId } = req.params;
+      if (!disputeId) {
+        throw new AppError('VALIDATION_ERROR', 'Dispute ID is required', 400);
+      }
+
+      const updated = await RemunerationService.acknowledgeDispute(
+        disputeId,
+        user.sub,
+        req.ip || req.socket?.remoteAddress,
+        req.headers['user-agent'],
+      );
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/remuneration/disputes/:disputeId/resolve
+   * Resolve a dispute with admin response and optional evidence (AC4).
+   */
+  static async resolveDispute(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const { disputeId } = req.params;
+      if (!disputeId) {
+        throw new AppError('VALIDATION_ERROR', 'Dispute ID is required', 400);
+      }
+
+      const parseResult = resolveDisputeSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          parseResult.error.errors[0]?.message || 'Invalid resolve data',
+          400,
+          { errors: parseResult.error.flatten().fieldErrors },
+        );
+      }
+
+      const evidenceFile = req.file ? {
+        buffer: req.file.buffer,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+      } : undefined;
+
+      const updated = await RemunerationService.resolveDispute(
+        disputeId,
+        parseResult.data.adminResponse,
+        evidenceFile,
+        user.sub,
+        req.ip || req.socket?.remoteAddress,
+        req.headers['user-agent'],
+      );
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/remuneration/disputes/:disputeId/reopen
+   * Reopen a resolved dispute (AC5). Staff-only.
+   */
+  static async reopenDispute(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const { disputeId } = req.params;
+      if (!disputeId) {
+        throw new AppError('VALIDATION_ERROR', 'Dispute ID is required', 400);
+      }
+
+      const parseResult = reopenDisputeSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          parseResult.error.errors[0]?.message || 'Invalid reopen data',
+          400,
+          { errors: parseResult.error.flatten().fieldErrors },
+        );
+      }
+
+      const updated = await RemunerationService.reopenDispute(
+        disputeId,
+        parseResult.data.staffComment,
+        user.sub,
+        req.ip || req.socket?.remoteAddress,
+        req.headers['user-agent'],
+      );
+
+      res.json({ success: true, data: updated });
     } catch (error) {
       next(error);
     }

@@ -10,8 +10,10 @@ import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 import { backupWorker, closeBackupWorker } from './backup.worker.js';
+import { disputeAutoCloseWorker, closeDisputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
 import { scheduleDailyBackup } from '../queues/backup.queue.js';
+import { scheduleDisputeAutoClose } from '../queues/dispute-autoclose.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
 import pino from 'pino';
@@ -25,6 +27,7 @@ export { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 export { fraudDetectionWorker } from './fraud-detection.worker.js';
 export { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 export { backupWorker } from './backup.worker.js';
+export { disputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 
 /**
  * Initialize all workers
@@ -36,13 +39,14 @@ export async function initializeWorkers(): Promise<void> {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
     webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
     fraudDetectionWorkerRunning: fraudDetectionWorker.isRunning(),
     productivitySnapshotWorkerRunning: productivitySnapshotWorker?.isRunning() ?? false,
     backupWorkerRunning: backupWorker?.isRunning() ?? false,
+    disputeAutoCloseWorkerRunning: disputeAutoCloseWorker?.isRunning() ?? false,
   });
 
   // Schedule nightly productivity snapshot
@@ -50,6 +54,9 @@ export async function initializeWorkers(): Promise<void> {
 
   // Schedule daily backup
   await scheduleDailyBackup();
+
+  // Schedule daily dispute auto-close
+  await scheduleDisputeAutoClose();
 
   // Start monitoring alert scheduler (every 30 seconds)
   startMonitoringScheduler();
@@ -103,6 +110,7 @@ export async function closeAllWorkers(): Promise<void> {
     fraudDetectionWorker.close(),
     productivitySnapshotWorker?.close(),
     closeBackupWorker(),
+    closeDisputeAutoCloseWorker(),
   ]);
 
   logger.info({ event: 'workers.closed' });

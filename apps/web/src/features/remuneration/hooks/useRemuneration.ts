@@ -13,7 +13,14 @@ import {
   getEligibleStaff,
   getStaffPaymentHistory,
   openDispute,
+  getDisputeQueue,
+  getDisputeStats,
+  getDisputeDetail,
+  acknowledgeDispute,
+  resolveDispute,
+  reopenDispute,
 } from '../api/remuneration.api';
+import type { DisputeQueueFilters } from '../api/remuneration.api';
 
 /** Query key factory */
 export const remunerationKeys = {
@@ -109,6 +116,99 @@ export function useOpenDispute() {
     },
     onError: (err: Error) => {
       error({ message: err.message || 'Failed to submit dispute' });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 6.6: Admin Dispute Resolution Queue
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Query key factory for disputes */
+export const disputeKeys = {
+  all: ['disputes'] as const,
+  queue: (filters: Record<string, unknown>) => [...disputeKeys.all, 'queue', filters] as const,
+  detail: (id: string) => [...disputeKeys.all, 'detail', id] as const,
+  stats: () => [...disputeKeys.all, 'stats'] as const,
+};
+
+/** Fetch dispute queue (Super Admin) */
+export function useDisputeQueue(filters: DisputeQueueFilters = {}) {
+  return useQuery({
+    queryKey: disputeKeys.queue(filters),
+    queryFn: () => getDisputeQueue(filters),
+    staleTime: 30_000,
+  });
+}
+
+/** Fetch dispute queue statistics */
+export function useDisputeStats() {
+  return useQuery({
+    queryKey: disputeKeys.stats(),
+    queryFn: getDisputeStats,
+    staleTime: 60_000,
+  });
+}
+
+/** Fetch single dispute detail */
+export function useDisputeDetail(disputeId: string | null) {
+  return useQuery({
+    queryKey: disputeKeys.detail(disputeId || ''),
+    queryFn: () => getDisputeDetail(disputeId!),
+    enabled: !!disputeId,
+  });
+}
+
+/** Acknowledge a dispute */
+export function useAcknowledgeDispute() {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: acknowledgeDispute,
+    onSuccess: () => {
+      success({ message: 'Dispute acknowledged. Staff member notified.' });
+      queryClient.invalidateQueries({ queryKey: disputeKeys.all });
+    },
+    onError: (err: Error) => {
+      error({ message: err.message || 'Failed to acknowledge dispute' });
+    },
+  });
+}
+
+/** Resolve a dispute */
+export function useResolveDispute() {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: ({ disputeId, data }: { disputeId: string; data: { adminResponse: string; evidence?: File } }) =>
+      resolveDispute(disputeId, data),
+    onSuccess: () => {
+      success({ message: 'Dispute resolved. Staff member notified.' });
+      queryClient.invalidateQueries({ queryKey: disputeKeys.all });
+    },
+    onError: (err: Error) => {
+      error({ message: err.message || 'Failed to resolve dispute' });
+    },
+  });
+}
+
+/** Reopen a dispute (Staff) */
+export function useReopenDispute() {
+  const queryClient = useQueryClient();
+  const { success, error } = useToast();
+
+  return useMutation({
+    mutationFn: ({ disputeId, data }: { disputeId: string; data: { staffComment: string } }) =>
+      reopenDispute(disputeId, data),
+    onSuccess: () => {
+      success({ message: 'Dispute reopened. Admin will be notified.' });
+      queryClient.invalidateQueries({ queryKey: disputeKeys.all });
+      queryClient.invalidateQueries({ queryKey: remunerationKeys.all });
+    },
+    onError: (err: Error) => {
+      error({ message: err.message || 'Failed to reopen dispute' });
     },
   });
 }

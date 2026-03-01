@@ -167,6 +167,7 @@ export interface StaffPaymentRecord {
   disputeComment: string | null;
   disputeAdminResponse: string | null;
   disputeResolvedAt: string | null;
+  disputeReopenCount: number | null;
   disputeCreatedAt: string | null;
 }
 
@@ -206,4 +207,146 @@ export async function getMyDisputes(params: { page?: number; limit?: number } = 
   if (params.limit) searchParams.set('limit', String(params.limit));
   const query = searchParams.toString();
   return apiClient(`/remuneration/disputes/mine${query ? `?${query}` : ''}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 6.6: Admin Dispute Resolution Queue
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Dispute queue filters */
+export interface DisputeQueueFilters {
+  status?: string[];
+  lgaId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+/** Dispute queue item */
+export interface DisputeQueueItem {
+  id: string;
+  paymentRecordId: string;
+  status: string;
+  staffComment: string;
+  adminResponse: string | null;
+  reopenCount: number;
+  createdAt: string;
+  resolvedAt: string | null;
+  amount: number; // in kobo
+  trancheName: string;
+  trancheNumber: number;
+  bankReference: string | null;
+  batchDate: string;
+  staffName: string | null;
+  staffEmail: string | null;
+  openedBy: string; // Staff user ID — used for ownership checks, not displayed in queue table
+}
+
+/** Dispute detail (full context) */
+export interface DisputeDetail extends DisputeQueueItem {
+  evidenceFileId: string | null;
+  updatedAt: string;
+  resolvedBy: string | null;
+  recordStatus: string;
+  staffLgaId: string | null;
+  staffRoleId: string | null;
+  staffLgaName: string | null;
+  staffRoleName: string | null;
+  resolvedByName: string | null;
+  evidenceFile: {
+    id: string;
+    originalFilename: string;
+    mimeType: string;
+    sizeBytes: number;
+    s3Key: string;
+  } | null;
+}
+
+/** Dispute queue statistics */
+export interface DisputeStats {
+  totalOpen: number;
+  pending: number;
+  resolvedThisMonth: number;
+  closed: number;
+}
+
+/**
+ * Get dispute queue for Super Admin.
+ * GET /api/v1/remuneration/disputes
+ */
+export async function getDisputeQueue(params: DisputeQueueFilters = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.status?.length) {
+    params.status.forEach((s) => searchParams.append('status', s));
+  }
+  if (params.lgaId) searchParams.set('lgaId', params.lgaId);
+  if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+  if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+  if (params.search) searchParams.set('search', params.search);
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return apiClient(`/remuneration/disputes${query ? `?${query}` : ''}`) as Promise<PaginatedResponse<DisputeQueueItem>>;
+}
+
+/**
+ * Get dispute queue statistics.
+ * GET /api/v1/remuneration/disputes/stats
+ */
+export async function getDisputeStats() {
+  return apiClient('/remuneration/disputes/stats') as Promise<{ success: boolean; data: DisputeStats }>;
+}
+
+/**
+ * Get dispute detail.
+ * GET /api/v1/remuneration/disputes/:disputeId
+ */
+export async function getDisputeDetail(disputeId: string) {
+  return apiClient(`/remuneration/disputes/${disputeId}`) as Promise<{ success: boolean; data: DisputeDetail }>;
+}
+
+/**
+ * Acknowledge a dispute.
+ * PATCH /api/v1/remuneration/disputes/:disputeId/acknowledge
+ */
+export async function acknowledgeDispute(disputeId: string) {
+  return apiClient(`/remuneration/disputes/${disputeId}/acknowledge`, {
+    method: 'PATCH',
+  }) as Promise<{ success: boolean }>;
+}
+
+/**
+ * Resolve a dispute with admin response and optional evidence.
+ * PATCH /api/v1/remuneration/disputes/:disputeId/resolve (multipart)
+ */
+export async function resolveDispute(disputeId: string, data: { adminResponse: string; evidence?: File }) {
+  const formData = new FormData();
+  formData.append('adminResponse', data.adminResponse);
+  if (data.evidence) formData.append('evidence', data.evidence);
+
+  const response = await fetch(`${API_BASE_URL}/remuneration/disputes/${disputeId}/resolve`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(error.message || `Request failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<{ success: boolean }>;
+}
+
+/**
+ * Reopen a dispute.
+ * PATCH /api/v1/remuneration/disputes/:disputeId/reopen
+ */
+export async function reopenDispute(disputeId: string, data: { staffComment: string }) {
+  return apiClient(`/remuneration/disputes/${disputeId}/reopen`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }) as Promise<{ success: boolean }>;
 }

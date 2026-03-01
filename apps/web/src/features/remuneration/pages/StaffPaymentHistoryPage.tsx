@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useAuth } from '../../auth/context/AuthContext';
 import { useMyPaymentHistory } from '../hooks/useRemuneration';
 import ReportIssueDialog from '../components/ReportIssueDialog';
+import { ReopenDisputeDialog } from '../components/ReopenDisputeDialog';
 import type { StaffPaymentRecord } from '../api/remuneration.api';
 import { ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import { formatNaira } from '../utils/format';
@@ -33,6 +34,7 @@ export default function StaffPaymentHistoryPage() {
   const [page, setPage] = useState(1);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [disputeRecord, setDisputeRecord] = useState<StaffPaymentRecord | null>(null);
+  const [reopenRecord, setReopenRecord] = useState<StaffPaymentRecord | null>(null);
 
   const { data, isLoading, isError } = useMyPaymentHistory(user?.id ?? '', { page, limit: 10 });
 
@@ -93,6 +95,7 @@ export default function StaffPaymentHistoryPage() {
                     isExpanded={expandedRowId === record.id}
                     onToggle={() => toggleRow(record.id)}
                     onReportIssue={() => setDisputeRecord(record)}
+                    onReopenIssue={() => setReopenRecord(record)}
                   />
                 ))
               )}
@@ -132,6 +135,14 @@ export default function StaffPaymentHistoryPage() {
         isOpen={!!disputeRecord}
         onClose={() => setDisputeRecord(null)}
       />
+
+      {/* Reopen Dispute Dialog (Story 6.6) */}
+      <ReopenDisputeDialog
+        disputeId={reopenRecord?.disputeId ?? null}
+        reopenCount={reopenRecord?.disputeReopenCount ?? 0}
+        isOpen={!!reopenRecord}
+        onClose={() => setReopenRecord(null)}
+      />
     </div>
   );
 }
@@ -142,11 +153,13 @@ function PaymentRow({
   isExpanded,
   onToggle,
   onReportIssue,
+  onReopenIssue,
 }: {
   record: StaffPaymentRecord;
   isExpanded: boolean;
   onToggle: () => void;
   onReportIssue: () => void;
+  onReopenIssue: () => void;
 }) {
   const date = new Date(record.effectiveFrom).toLocaleDateString('en-NG', {
     year: 'numeric',
@@ -182,7 +195,7 @@ function PaymentRow({
           </span>
         </td>
         <td className="px-3 py-3 text-muted-foreground">{record.bankReference || '—'}</td>
-        <td className="px-3 py-3 text-right">
+        <td className="px-3 py-3 text-right space-x-2">
           {record.status === 'active' && (
             <button
               onClick={(e) => {
@@ -193,6 +206,18 @@ function PaymentRow({
               data-testid="report-issue-button"
             >
               Report Issue
+            </button>
+          )}
+          {record.disputeStatus === 'resolved' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onReopenIssue();
+              }}
+              className="px-3 py-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors"
+              data-testid="reopen-dispute-button"
+            >
+              Reopen
             </button>
           )}
         </td>

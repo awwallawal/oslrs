@@ -20,6 +20,14 @@ const messageSendSchema = z.object({
   type: z.enum(['direct', 'broadcast']).default('direct'),
 });
 
+// Module-level singleton so services can emit events outside the connection handler
+let ioInstance: SocketServer | null = null;
+
+/** Returns the Socket.io server instance, or null if not yet initialized. */
+export function getIO(): SocketServer | null {
+  return ioInstance;
+}
+
 /**
  * Initializes Socket.io transport on the given HTTP server.
  * Handles: JWT auth handshake, LGA-scoped room joining, structured logging.
@@ -219,5 +227,6 @@ export function initializeRealtime(httpServer: HttpServer): SocketServer {
     });
   });
 
+  ioInstance = io;
   return io;
 }

@@ -10,6 +10,7 @@ import type {
   PasswordResetEmailData,
   PaymentNotificationEmailData,
   DisputeNotificationEmailData,
+  DisputeResolutionEmailData,
   BackupNotificationEmailData,
 } from '@oslsr/types';
 
@@ -230,6 +231,26 @@ export async function queueDisputeNotificationEmail(
     type: 'dispute-notification',
     data,
     userId: userId ?? 'system',
+  } as EmailJob);
+  return job.id || '';
+}
+
+/**
+ * Add a dispute resolution email to the queue.
+ * Story 6.6: Notifies staff when admin acknowledges/resolves their dispute.
+ */
+export async function queueDisputeResolutionEmail(
+  data: DisputeResolutionEmailData,
+  userId: string,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('dispute-resolution', {
+    type: 'dispute-resolution',
+    data,
+    userId,
   } as EmailJob);
   return job.id || '';
 }

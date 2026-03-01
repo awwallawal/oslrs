@@ -9,7 +9,7 @@
  */
 
 import { S3Client, PutObjectCommand, GetObjectCommand, S3ClientConfig } from '@aws-sdk/client-s3';
-import { eq, and, isNull, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, inArray, gte, lte, or, ilike, count as drizzleCount } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 import { db } from '../db/index.js';
@@ -19,7 +19,8 @@ import { lgas } from '../db/schema/lgas.js';
 import { roles } from '../db/schema/roles.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import { AppError } from '@oslsr/utils';
-import { queuePaymentNotificationEmail, queueDisputeNotificationEmail } from '../queues/email.queue.js';
+import { queuePaymentNotificationEmail, queueDisputeNotificationEmail, queueDisputeResolutionEmail } from '../queues/email.queue.js';
+import { getIO } from '../realtime/index.js';
 
 const logger = pino({ name: 'remuneration-service' });
 
@@ -438,6 +439,7 @@ export class RemunerationService {
         staffComment: paymentDisputes.staffComment,
         adminResponse: paymentDisputes.adminResponse,
         resolvedAt: paymentDisputes.resolvedAt,
+        reopenCount: paymentDisputes.reopenCount,
         createdAt: paymentDisputes.createdAt,
         rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${paymentDisputes.paymentRecordId} ORDER BY ${paymentDisputes.createdAt} DESC)`.as('rn'),
       })
@@ -462,6 +464,7 @@ export class RemunerationService {
         disputeComment: latestDisputeSq.staffComment,
         disputeAdminResponse: latestDisputeSq.adminResponse,
         disputeResolvedAt: latestDisputeSq.resolvedAt,
+        disputeReopenCount: latestDisputeSq.reopenCount,
         disputeCreatedAt: latestDisputeSq.createdAt,
       })
       .from(paymentRecords)
@@ -787,5 +790,713 @@ export class RemunerationService {
         totalPages: Math.ceil(count / limit),
       },
     };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Story 6.6: Admin Dispute Resolution Queue
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get paginated dispute queue for Super Admin (AC1).
+   * Joins payment_records → payment_batches → users for full context.
+   */
+  static async getDisputeQueue(filters?: {
+    status?: string[];
+    lgaId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const staffAlias = users;
+
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (filters?.status?.length) {
+      conditions.push(inArray(paymentDisputes.status, filters.status));
+    }
+    if (filters?.lgaId) {
+      conditions.push(eq(staffAlias.lgaId, filters.lgaId));
+    }
+    if (filters?.dateFrom) {
+      conditions.push(gte(paymentDisputes.createdAt, new Date(filters.dateFrom)));
+    }
+    if (filters?.dateTo) {
+      conditions.push(lte(paymentDisputes.createdAt, new Date(filters.dateTo)));
+    }
+    if (filters?.search) {
+      conditions.push(ilike(staffAlias.fullName, `%${filters.search}%`));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const disputes = await db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+        status: paymentDisputes.status,
+        staffComment: paymentDisputes.staffComment,
+        adminResponse: paymentDisputes.adminResponse,
+        reopenCount: paymentDisputes.reopenCount,
+        createdAt: paymentDisputes.createdAt,
+        resolvedAt: paymentDisputes.resolvedAt,
+        // Payment details
+        amount: paymentRecords.amount,
+        trancheName: paymentBatches.trancheName,
+        trancheNumber: paymentBatches.trancheNumber,
+        bankReference: paymentBatches.bankReference,
+        batchDate: paymentBatches.createdAt,
+        // Staff info
+        staffName: staffAlias.fullName,
+        staffEmail: staffAlias.email,
+        openedBy: paymentDisputes.openedBy,
+      })
+      .from(paymentDisputes)
+      .innerJoin(paymentRecords, eq(paymentDisputes.paymentRecordId, paymentRecords.id))
+      .innerJoin(paymentBatches, eq(paymentRecords.batchId, paymentBatches.id))
+      .innerJoin(staffAlias, eq(paymentDisputes.openedBy, staffAlias.id))
+      .where(whereClause)
+      .orderBy(desc(paymentDisputes.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Count query with same filters
+    const countQuery = db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(paymentDisputes)
+      .innerJoin(paymentRecords, eq(paymentDisputes.paymentRecordId, paymentRecords.id))
+      .innerJoin(paymentBatches, eq(paymentRecords.batchId, paymentBatches.id))
+      .innerJoin(staffAlias, eq(paymentDisputes.openedBy, staffAlias.id));
+
+    const [{ count }] = whereClause
+      ? await countQuery.where(whereClause)
+      : await countQuery;
+
+    return {
+      data: disputes,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    };
+  }
+
+  /**
+   * Get dispute detail with full relations (AC2).
+   */
+  static async getDisputeDetail(disputeId: string) {
+    // Single query with LEFT JOINs for lga, role, and scalar subquery for resolver name.
+    // Reduces from 5 queries (main + 4 sequential) to 1 + 1 conditional evidence query.
+    const [dispute] = await db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+        status: paymentDisputes.status,
+        staffComment: paymentDisputes.staffComment,
+        adminResponse: paymentDisputes.adminResponse,
+        evidenceFileId: paymentDisputes.evidenceFileId,
+        reopenCount: paymentDisputes.reopenCount,
+        createdAt: paymentDisputes.createdAt,
+        updatedAt: paymentDisputes.updatedAt,
+        resolvedAt: paymentDisputes.resolvedAt,
+        resolvedBy: paymentDisputes.resolvedBy,
+        openedBy: paymentDisputes.openedBy,
+        // Payment details
+        amount: paymentRecords.amount,
+        recordStatus: paymentRecords.status,
+        // Batch details
+        trancheName: paymentBatches.trancheName,
+        trancheNumber: paymentBatches.trancheNumber,
+        bankReference: paymentBatches.bankReference,
+        batchDate: paymentBatches.createdAt,
+        // Staff info
+        staffName: users.fullName,
+        staffEmail: users.email,
+        staffLgaId: users.lgaId,
+        staffRoleId: users.roleId,
+        // Resolved via LEFT JOINs (previously separate queries)
+        staffLgaName: lgas.name,
+        staffRoleName: roles.name,
+        // Resolver name via scalar subquery (avoids needing a table alias for users)
+        resolvedByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${paymentDisputes.resolvedBy})`,
+      })
+      .from(paymentDisputes)
+      .innerJoin(paymentRecords, eq(paymentDisputes.paymentRecordId, paymentRecords.id))
+      .innerJoin(paymentBatches, eq(paymentRecords.batchId, paymentBatches.id))
+      .innerJoin(users, eq(paymentDisputes.openedBy, users.id))
+      .leftJoin(lgas, eq(users.lgaId, lgas.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(paymentDisputes.id, disputeId));
+
+    if (!dispute) {
+      throw new AppError('NOT_FOUND', 'Dispute not found', 404);
+    }
+
+    // Fetch evidence file if exists (conditional — avoids unnecessary query)
+    let evidenceFile = null;
+    if (dispute.evidenceFileId) {
+      const [file] = await db
+        .select()
+        .from(paymentFiles)
+        .where(eq(paymentFiles.id, dispute.evidenceFileId));
+      evidenceFile = file ?? null;
+    }
+
+    return {
+      ...dispute,
+      evidenceFile,
+    };
+  }
+
+  /**
+   * Get dispute queue statistics (AC1).
+   * Returns aggregate counts: total open, pending, resolved this month, closed.
+   */
+  static async getDisputeStats() {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Single query with conditional COUNTs (replaces 4 separate queries)
+    const [stats] = await db
+      .select({
+        totalOpen: sql<number>`count(*) FILTER (WHERE ${paymentDisputes.status} IN ('disputed', 'pending_resolution', 'reopened'))::int`,
+        pending: sql<number>`count(*) FILTER (WHERE ${paymentDisputes.status} = 'pending_resolution')::int`,
+        resolvedThisMonth: sql<number>`count(*) FILTER (WHERE ${paymentDisputes.status} = 'resolved' AND ${paymentDisputes.resolvedAt} >= ${firstOfMonth})::int`,
+        closed: sql<number>`count(*) FILTER (WHERE ${paymentDisputes.status} = 'closed')::int`,
+      })
+      .from(paymentDisputes);
+
+    return {
+      totalOpen: stats.totalOpen,
+      pending: stats.pending,
+      resolvedThisMonth: stats.resolvedThisMonth,
+      closed: stats.closed,
+    };
+  }
+
+  /**
+   * Acknowledge a dispute (AC3).
+   * Transition: disputed → pending_resolution.
+   */
+  static async acknowledgeDispute(
+    disputeId: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const result = await db.transaction(async (tx) => {
+      // Lock dispute row
+      const [dispute] = await tx
+        .select({
+          id: paymentDisputes.id,
+          status: paymentDisputes.status,
+          openedBy: paymentDisputes.openedBy,
+          paymentRecordId: paymentDisputes.paymentRecordId,
+        })
+        .from(paymentDisputes)
+        .where(eq(paymentDisputes.id, disputeId))
+        .for('update');
+
+      if (!dispute) {
+        throw new AppError('NOT_FOUND', 'Dispute not found', 404);
+      }
+
+      if (dispute.status !== 'disputed') {
+        throw new AppError(
+          'INVALID_STATUS',
+          `Cannot acknowledge dispute with status '${dispute.status}'. Expected 'disputed'.`,
+          400,
+        );
+      }
+
+      // Transition to pending_resolution
+      const [updated] = await tx
+        .update(paymentDisputes)
+        .set({
+          status: 'pending_resolution',
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentDisputes.id, disputeId))
+        .returning();
+
+      await AuditService.logActionTx(tx, {
+        actorId,
+        action: 'payment.dispute_acknowledged',
+        targetResource: 'payment_dispute',
+        targetId: disputeId,
+        details: {
+          previousStatus: 'disputed',
+          newStatus: 'pending_resolution',
+        },
+        ipAddress,
+        userAgent,
+      });
+
+      return { updated, openedBy: dispute.openedBy, paymentRecordId: dispute.paymentRecordId };
+    });
+
+    // Fire-and-forget: notify staff that dispute is being reviewed
+    this.queueAcknowledgeNotification(result.openedBy, result.paymentRecordId).catch((err) => {
+      logger.warn({
+        event: 'dispute.acknowledge_notification_failed',
+        disputeId,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    });
+
+    // Real-time notification to staff via Socket.io
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`user:${result.openedBy}`).emit('dispute:acknowledged', {
+          disputeId,
+          status: 'pending_resolution',
+        });
+      }
+    } catch (err) {
+      logger.warn({ event: 'dispute.socket_emit_failed', disputeId, error: (err as Error).message });
+    }
+
+    logger.info({
+      event: 'remuneration.dispute_acknowledged',
+      disputeId,
+      actorId,
+    });
+
+    return result.updated;
+  }
+
+  /**
+   * Queue acknowledge notification email to staff.
+   */
+  private static async queueAcknowledgeNotification(staffId: string, paymentRecordId: string) {
+    const [staff] = await db
+      .select({ fullName: users.fullName, email: users.email })
+      .from(users)
+      .where(eq(users.id, staffId));
+
+    if (!staff?.email) return;
+
+    // Look up tranche info via payment record
+    const [record] = await db
+      .select({ batchId: paymentRecords.batchId, amount: paymentRecords.amount })
+      .from(paymentRecords)
+      .where(eq(paymentRecords.id, paymentRecordId));
+
+    let trancheName = 'Unknown Tranche';
+    if (record) {
+      const [batch] = await db
+        .select({ trancheName: paymentBatches.trancheName })
+        .from(paymentBatches)
+        .where(eq(paymentBatches.id, record.batchId));
+      trancheName = batch?.trancheName ?? trancheName;
+    }
+
+    await queueDisputeResolutionEmail({
+      staffEmail: staff.email,
+      staffName: staff.fullName || 'Staff Member',
+      trancheName,
+      amount: record?.amount ?? 0,
+      adminResponse: 'Your dispute has been acknowledged and is being reviewed.',
+      hasEvidence: false,
+      action: 'acknowledged',
+    }, staffId);
+  }
+
+  /**
+   * Resolve a dispute with admin response and optional evidence (AC4).
+   * Transition: pending_resolution|reopened → resolved.
+   */
+  static async resolveDispute(
+    disputeId: string,
+    adminResponse: string,
+    evidenceFile: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    let evidenceFileRecord: { id: string; s3Key: string } | null = null;
+
+    // Upload evidence to S3 before transaction (if provided)
+    if (evidenceFile) {
+      const { client, bucketName } = createS3Client();
+      const ext = evidenceFile.originalname.split('.').pop() || 'bin';
+      const fileId = uuidv7();
+      const s3Key = `dispute-evidence/${disputeId}/${fileId}.${ext}`;
+
+      await client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: s3Key,
+        Body: evidenceFile.buffer,
+        ContentType: evidenceFile.mimetype,
+      }));
+
+      evidenceFileRecord = { id: fileId, s3Key };
+    }
+
+    const result = await db.transaction(async (tx) => {
+      // Lock dispute row
+      const [dispute] = await tx
+        .select({
+          id: paymentDisputes.id,
+          status: paymentDisputes.status,
+          openedBy: paymentDisputes.openedBy,
+          paymentRecordId: paymentDisputes.paymentRecordId,
+        })
+        .from(paymentDisputes)
+        .where(eq(paymentDisputes.id, disputeId))
+        .for('update');
+
+      if (!dispute) {
+        throw new AppError('NOT_FOUND', 'Dispute not found', 404);
+      }
+
+      if (dispute.status !== 'pending_resolution' && dispute.status !== 'reopened') {
+        throw new AppError(
+          'INVALID_STATUS',
+          `Cannot resolve dispute with status '${dispute.status}'. Expected 'pending_resolution' or 'reopened'.`,
+          400,
+        );
+      }
+
+      // Create payment_files record for evidence if uploaded
+      let evidenceFileId: string | null = null;
+      if (evidenceFileRecord && evidenceFile) {
+        await tx.insert(paymentFiles).values({
+          id: evidenceFileRecord.id,
+          entityType: 'dispute_evidence',
+          entityId: disputeId,
+          originalFilename: evidenceFile.originalname,
+          s3Key: evidenceFileRecord.s3Key,
+          mimeType: evidenceFile.mimetype,
+          sizeBytes: evidenceFile.size,
+          uploadedBy: actorId,
+        });
+        evidenceFileId = evidenceFileRecord.id;
+      }
+
+      // Resolve dispute
+      const [updated] = await tx
+        .update(paymentDisputes)
+        .set({
+          status: 'resolved',
+          adminResponse,
+          resolvedBy: actorId,
+          resolvedAt: new Date(),
+          ...(evidenceFileId ? { evidenceFileId } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentDisputes.id, disputeId))
+        .returning();
+
+      await AuditService.logActionTx(tx, {
+        actorId,
+        action: 'payment.dispute_resolved',
+        targetResource: 'payment_dispute',
+        targetId: disputeId,
+        details: {
+          previousStatus: dispute.status,
+          newStatus: 'resolved',
+          hasEvidence: !!evidenceFileId,
+          adminResponse: adminResponse.substring(0, 100),
+        },
+        ipAddress,
+        userAgent,
+      });
+
+      return { updated, openedBy: dispute.openedBy, paymentRecordId: dispute.paymentRecordId };
+    });
+
+    // Fire-and-forget: notify staff of resolution
+    this.queueResolveNotification(result.openedBy, result.paymentRecordId, adminResponse, !!evidenceFileRecord).catch((err) => {
+      logger.warn({
+        event: 'dispute.resolution_notification_failed',
+        disputeId,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    });
+
+    // Real-time notification to staff via Socket.io
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`user:${result.openedBy}`).emit('dispute:resolved', {
+          disputeId,
+          status: 'resolved',
+          adminResponse: adminResponse.substring(0, 100),
+        });
+      }
+    } catch (err) {
+      logger.warn({ event: 'dispute.socket_emit_failed', disputeId, error: (err as Error).message });
+    }
+
+    logger.info({
+      event: 'remuneration.dispute_resolved',
+      disputeId,
+      actorId,
+      hasEvidence: !!evidenceFileRecord,
+    });
+
+    return result.updated;
+  }
+
+  /**
+   * Queue resolution notification email to staff.
+   */
+  private static async queueResolveNotification(
+    staffId: string,
+    paymentRecordId: string,
+    adminResponse: string,
+    hasEvidence: boolean,
+  ) {
+    const [staff] = await db
+      .select({ fullName: users.fullName, email: users.email })
+      .from(users)
+      .where(eq(users.id, staffId));
+
+    if (!staff?.email) return;
+
+    const [record] = await db
+      .select({ batchId: paymentRecords.batchId, amount: paymentRecords.amount })
+      .from(paymentRecords)
+      .where(eq(paymentRecords.id, paymentRecordId));
+
+    let trancheName = 'Unknown Tranche';
+    if (record) {
+      const [batch] = await db
+        .select({ trancheName: paymentBatches.trancheName })
+        .from(paymentBatches)
+        .where(eq(paymentBatches.id, record.batchId));
+      trancheName = batch?.trancheName ?? trancheName;
+    }
+
+    await queueDisputeResolutionEmail({
+      staffEmail: staff.email,
+      staffName: staff.fullName || 'Staff Member',
+      trancheName,
+      amount: record?.amount ?? 0,
+      adminResponse,
+      hasEvidence,
+      action: 'resolved',
+    }, staffId);
+  }
+
+  /**
+   * Reopen a dispute (AC5).
+   * Transition: resolved → reopened. Staff-only (original openedBy).
+   */
+  static async reopenDispute(
+    disputeId: string,
+    staffComment: string,
+    actorId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const result = await db.transaction(async (tx) => {
+      // Lock dispute row
+      const [dispute] = await tx
+        .select({
+          id: paymentDisputes.id,
+          status: paymentDisputes.status,
+          openedBy: paymentDisputes.openedBy,
+          staffComment: paymentDisputes.staffComment,
+          paymentRecordId: paymentDisputes.paymentRecordId,
+        })
+        .from(paymentDisputes)
+        .where(eq(paymentDisputes.id, disputeId))
+        .for('update');
+
+      if (!dispute) {
+        throw new AppError('NOT_FOUND', 'Dispute not found', 404);
+      }
+
+      if (dispute.status !== 'resolved') {
+        throw new AppError(
+          'INVALID_STATUS',
+          `Cannot reopen dispute with status '${dispute.status}'. Expected 'resolved'.`,
+          400,
+        );
+      }
+
+      // Only the original staff member can reopen
+      if (dispute.openedBy !== actorId) {
+        throw new AppError('FORBIDDEN', 'Only the staff member who opened the dispute can reopen it', 403);
+      }
+
+      // Append reopen comment with separator
+      const separator = '\n\n---\n';
+      const reopenEntry = `[Reopened ${new Date().toISOString()}]\n${staffComment}`;
+      const updatedComment = dispute.staffComment + separator + reopenEntry;
+
+      const [updated] = await tx
+        .update(paymentDisputes)
+        .set({
+          status: 'reopened',
+          staffComment: updatedComment,
+          reopenCount: sql`reopen_count + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentDisputes.id, disputeId))
+        .returning();
+
+      await AuditService.logActionTx(tx, {
+        actorId,
+        action: 'payment.dispute_reopened',
+        targetResource: 'payment_dispute',
+        targetId: disputeId,
+        details: {
+          previousStatus: 'resolved',
+          newStatus: 'reopened',
+          reopenCount: updated.reopenCount,
+          staffComment: staffComment.substring(0, 100),
+        },
+        ipAddress,
+        userAgent,
+      });
+
+      return { updated, paymentRecordId: dispute.paymentRecordId };
+    });
+
+    // Fire-and-forget: notify Super Admin(s) of reopened dispute
+    this.queueReopenNotification(actorId, result.paymentRecordId, staffComment).catch((err) => {
+      logger.warn({
+        event: 'dispute.reopen_notification_failed',
+        disputeId,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    });
+
+    logger.info({
+      event: 'remuneration.dispute_reopened',
+      disputeId,
+      actorId,
+    });
+
+    return result.updated;
+  }
+
+  /**
+   * Queue reopen notification to Super Admin(s).
+   * Reuses queueDisputeNotificationEmail from Story 6-5.
+   */
+  private static async queueReopenNotification(
+    staffId: string,
+    paymentRecordId: string,
+    staffComment: string,
+  ) {
+    const [staff] = await db
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, staffId));
+
+    const [record] = await db
+      .select({ batchId: paymentRecords.batchId, amount: paymentRecords.amount })
+      .from(paymentRecords)
+      .where(eq(paymentRecords.id, paymentRecordId));
+
+    let trancheName = 'Unknown Tranche';
+    if (record) {
+      const [batch] = await db
+        .select({ trancheName: paymentBatches.trancheName })
+        .from(paymentBatches)
+        .where(eq(paymentBatches.id, record.batchId));
+      trancheName = batch?.trancheName ?? trancheName;
+    }
+
+    // Reuse existing admin notification mechanism (notify all Super Admins)
+    const admins = await db
+      .select({ email: users.email })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(roles.name, 'super_admin'),
+        inArray(users.status, ['active', 'verified']),
+      ));
+
+    for (const admin of admins) {
+      if (!admin.email) continue;
+      try {
+        await queueDisputeNotificationEmail({
+          to: admin.email,
+          staffName: staff?.fullName || 'Staff Member',
+          trancheName,
+          amount: record?.amount ?? 0,
+          commentExcerpt: `[REOPENED] ${staffComment.substring(0, 90)}`,
+        }, staffId);
+      } catch (err) {
+        logger.warn({
+          event: 'dispute.reopen_email_failed',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  }
+
+  /**
+   * Auto-close resolved disputes older than 30 days (AC6).
+   * Transition: resolved (30+ days) → closed.
+   * Called by the dispute-autoclose cron job.
+   */
+  static async autoCloseResolvedDisputes() {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Find disputes eligible for auto-close
+    const eligible = await db
+      .select({
+        id: paymentDisputes.id,
+        paymentRecordId: paymentDisputes.paymentRecordId,
+      })
+      .from(paymentDisputes)
+      .where(and(
+        eq(paymentDisputes.status, 'resolved'),
+        lte(paymentDisputes.resolvedAt, thirtyDaysAgo),
+      ));
+
+    if (eligible.length === 0) {
+      return { closedCount: 0 };
+    }
+
+    const disputeIds = eligible.map((d) => d.id);
+
+    // Batch update in transaction with audit logging
+    await db.transaction(async (tx) => {
+      await tx
+        .update(paymentDisputes)
+        .set({
+          status: 'closed',
+          updatedAt: new Date(),
+        })
+        .where(inArray(paymentDisputes.id, disputeIds));
+
+      // Audit log for each closed dispute
+      for (const dispute of eligible) {
+        await AuditService.logActionTx(tx, {
+          actorId: null, // System actor — no user context for cron jobs
+          action: 'payment.dispute_auto_closed',
+          targetResource: 'payment_dispute',
+          targetId: dispute.id,
+          details: {
+            previousStatus: 'resolved',
+            newStatus: 'closed',
+            reason: 'Auto-closed after 30 days of resolution',
+          },
+        });
+      }
+    });
+
+    logger.info({
+      event: 'remuneration.disputes_auto_closed',
+      closedCount: eligible.length,
+      disputeIds,
+    });
+
+    return { closedCount: eligible.length };
   }
 }

@@ -121,6 +121,8 @@ const RespondentDetailPage = lazy(() => import('./features/dashboard/pages/Respo
 const RemunerationPage = lazy(() => import('./features/remuneration/pages/RemunerationPage'));
 // Story 6.5: Staff Payment History (Enumerator + Supervisor)
 const StaffPaymentHistoryPage = lazy(() => import('./features/remuneration/pages/StaffPaymentHistoryPage'));
+// Story 6.6: Payment Dispute Queue (Super Admin)
+const PaymentDisputeQueuePage = lazy(() => import('./features/remuneration/pages/PaymentDisputeQueuePage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 
@@ -692,6 +694,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RemunerationPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 6-6: Payment Dispute Queue */}
+                <Route
+                  path="disputes"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <PaymentDisputeQueuePage />
                     </Suspense>
                   }
                 />

@@ -213,9 +213,20 @@ development_status:
   6-3-automated-off-site-backup-orchestration: done  # Completed 2026-02-27. pg_dump + S3 upload via BullMQ cron (2AM WAT), 7-day daily + 7-year monthly retention, restore script, email notifications. 6 new files, 4 modified. 32 new tests, 0 regressions. Code review: 7 findings (1C, 2H, 2M, 2L), all 7 fixed. C1 missing retry attempts config, H1 shell injection, H2 in-memory file load, M1 hardcoded /tmp, M2 S3 pagination, L1+L2 date parsing + table mapping.
   6-4-staff-remuneration-bulk-recording: done  # Completed 2026-02-27. Greenfield: 3 new DB tables (payment_batches, payment_records, payment_files), bulk recording service, S3 receipt upload, email notifications, Super Admin Remuneration page. 18 new files, 10 modified. 59 story tests (22 API + 37 web), 1081 API + 1849 web pass, 0 regressions. Code review: 11 findings (3H, 5M, 3L), 10 fixed, 1 deferred. H1 "all" filter 400 error, H2 role filtering missing, H3 sql IN→inArray, M1 code duplication, M2 missing S3 assertion, M3+M4 missing endpoint tests, M5 unchecked tasks, L1 missing index, L2 deferred (Naira display), L3 file list.
   6-5-staff-payment-history-dispute-mechanism: done  # Completed 2026-02-28. Code review passed 2026-03-01: 10 findings (1C, 2H, 4M, 3L), all 10 fixed. C1 missing openDispute service tests (6 added), H1 TOCTOU race condition (SELECT FOR UPDATE), H2 AlertDialogAction auto-close, M1 formatNaira DRY extraction, M2 $onUpdateFn, M3 ROW_NUMBER subquery for latest dispute, M4 invalid UUID test, L1-L3 file list/sprint/userId param. 1096 API + 1867 web tests pass (2963 total), 0 regressions.
-  6-6-payment-dispute-resolution-queue: ready-for-dev  # Story created 2026-02-24. Admin dispute queue (split-panel AssessorQueuePage pattern), resolve with evidence upload, acknowledge/reopen transitions, auto-close cron (30 days), Socket.io + email notifications. 2 new backend + 10 new frontend files, 10 modified.
+  6-6-payment-dispute-resolution-queue: review  # Completed 2026-03-01. Admin dispute queue (split-panel AssessorQueuePage pattern), resolve with evidence upload, acknowledge/reopen transitions, auto-close cron (30 days), email notifications. 8 new files (4 backend, 4 frontend), 15 modified. 62 API + 104 web remuneration tests pass. 1121 API + 1918 web total tests pass, 0 regressions.
   6-7-super-admin-view-as-feature: ready-for-dev  # Story created 2026-02-24. Redis session metadata for View-As state, component import rendering under /super-admin/view-as/:role, read-only dual-layer enforcement (API middleware + frontend context), ViewAsBanner, role/LGA selector, audit trail. 8 new backend + 11 new frontend files, 3 modified. No schema changes.
   epic-6-retrospective: optional
+
+  # Security Hardening Phase (Post-Epic 6, Pre-Epic 7)
+  # Source: security-audit-report-2026-03-01.md
+  # Added: 2026-03-01 - Full OWASP Top 10 + NFR compliance audit. 31 dependency CVEs found,
+  # CSP not configured (NFR8.4 gap), mass assignment pattern, CORS fallback.
+  # Must complete before Epic 7 introduces public unauthenticated marketplace routes.
+  security-hardening: backlog
+  sec-1-resolve-dependency-cves: backlog            # P0 CRITICAL: Update @aws-sdk/client-s3 (fast-xml-parser CVE), react-router-dom (XSS open redirect), xlsx (prototype pollution + ReDoS). Target: pnpm audit zero critical/high in prod deps.
+  sec-2-configure-content-security-policy: backlog   # P1 HIGH: Helmet uses defaults — no custom CSP. Architecture requires strict-dynamic, no unsafe-inline (NFR8.4). Add CSP report-only first, then enforce. Covers script-src, connect-src (hCaptcha, Google, WSS), img-src (S3), frame-src (hCaptcha).
+  sec-3-harden-mass-assignment-input-validation: backlog  # P2 MEDIUM: Replace ...req.body spread with explicit field extraction (remuneration.controller.ts). Add CORS_ORIGIN to requiredProdVars. Audit AppError details for internal data leakage.
+  sec-4-dependency-pinning-audit-ci-gate: backlog    # P3 LOW: Add pnpm audit --audit-level=high to CI. Pin security-critical deps (bcrypt, jsonwebtoken, helmet, express). Document accepted build-only risks (minimatch, rollup).
 
   # Epic 7: Public Skills Marketplace & Search Security
   epic-7: backlog

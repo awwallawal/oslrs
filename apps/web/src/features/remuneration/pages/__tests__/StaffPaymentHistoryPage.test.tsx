@@ -24,6 +24,10 @@ vi.mock('../../hooks/useRemuneration', () => ({
     mutate: mockOpenDisputeMutate,
     isPending: false,
   }),
+  useReopenDispute: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
   remunerationKeys: {
     all: ['remuneration'],
     paymentHistory: (userId: string, params: Record<string, unknown>) => ['remuneration', 'payment-history', userId, params],

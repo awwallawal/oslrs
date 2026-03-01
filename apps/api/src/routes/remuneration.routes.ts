@@ -52,6 +52,35 @@ router.get(
 // Story 6.5: Dispute routes (staff: enumerator + supervisor)
 const staffOnly = authorize(UserRole.ENUMERATOR, UserRole.SUPERVISOR);
 
+// Story 6.6: Evidence upload config (same as receipt — memory storage, 10MB, PNG/JPEG/PDF)
+const evidenceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG, JPEG, and PDF files are allowed'));
+    }
+  },
+});
+
+// Story 6.6: Admin dispute queue routes (Super Admin only)
+// GET /api/v1/remuneration/disputes/stats — dispute queue statistics
+router.get(
+  '/disputes/stats',
+  superAdminOnly,
+  RemunerationController.getDisputeStats,
+);
+
+// GET /api/v1/remuneration/disputes — list dispute queue (Super Admin)
+router.get(
+  '/disputes',
+  superAdminOnly,
+  RemunerationController.getDisputeQueue,
+);
+
 // POST /api/v1/remuneration/disputes — open a dispute (staff only)
 router.post(
   '/disputes',
@@ -64,6 +93,35 @@ router.get(
   '/disputes/mine',
   staffOnly,
   RemunerationController.getMyDisputes,
+);
+
+// PATCH /api/v1/remuneration/disputes/:disputeId/acknowledge — Super Admin acknowledges
+router.patch(
+  '/disputes/:disputeId/acknowledge',
+  superAdminOnly,
+  RemunerationController.acknowledgeDispute,
+);
+
+// PATCH /api/v1/remuneration/disputes/:disputeId/resolve — Super Admin resolves (with optional evidence)
+router.patch(
+  '/disputes/:disputeId/resolve',
+  superAdminOnly,
+  evidenceUpload.single('evidence'),
+  RemunerationController.resolveDispute,
+);
+
+// PATCH /api/v1/remuneration/disputes/:disputeId/reopen — Staff reopens (owner only)
+router.patch(
+  '/disputes/:disputeId/reopen',
+  staffOnly,
+  RemunerationController.reopenDispute,
+);
+
+// GET /api/v1/remuneration/disputes/:disputeId — dispute detail (Super Admin only)
+router.get(
+  '/disputes/:disputeId',
+  superAdminOnly,
+  RemunerationController.getDisputeDetail,
 );
 
 // GET /api/v1/remuneration/eligible-staff — get eligible staff for selection

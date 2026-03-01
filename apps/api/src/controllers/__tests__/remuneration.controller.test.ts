@@ -18,6 +18,12 @@ const mockGetFileStream = vi.fn();
 const mockGetEligibleStaff = vi.fn();
 const mockOpenDispute = vi.fn();
 const mockGetStaffDisputes = vi.fn();
+const mockGetDisputeQueue = vi.fn();
+const mockGetDisputeStats = vi.fn();
+const mockGetDisputeDetail = vi.fn();
+const mockAcknowledgeDispute = vi.fn();
+const mockResolveDispute = vi.fn();
+const mockReopenDispute = vi.fn();
 
 vi.mock('../../services/remuneration.service.js', () => ({
   RemunerationService: {
@@ -30,6 +36,12 @@ vi.mock('../../services/remuneration.service.js', () => ({
     getEligibleStaff: (...args: unknown[]) => mockGetEligibleStaff(...args),
     openDispute: (...args: unknown[]) => mockOpenDispute(...args),
     getStaffDisputes: (...args: unknown[]) => mockGetStaffDisputes(...args),
+    getDisputeQueue: (...args: unknown[]) => mockGetDisputeQueue(...args),
+    getDisputeStats: (...args: unknown[]) => mockGetDisputeStats(...args),
+    getDisputeDetail: (...args: unknown[]) => mockGetDisputeDetail(...args),
+    acknowledgeDispute: (...args: unknown[]) => mockAcknowledgeDispute(...args),
+    resolveDispute: (...args: unknown[]) => mockResolveDispute(...args),
+    reopenDispute: (...args: unknown[]) => mockReopenDispute(...args),
   },
 }));
 
@@ -637,6 +649,369 @@ describe('RemunerationController', () => {
       const { mockRes } = makeRes();
 
       await RemunerationController.getMyDisputes(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Story 6.6: Admin Dispute Resolution Queue
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const DISPUTE_ID = '00000000-0000-0000-0000-000000000050';
+
+  // ─── getDisputeQueue ──────────────────────────────────────────────
+
+  describe('getDisputeQueue', () => {
+    it('should return paginated dispute queue (AC1)', async () => {
+      const result = {
+        data: [{ id: DISPUTE_ID, staffName: 'Alice', status: 'disputed' }],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      };
+      mockGetDisputeQueue.mockResolvedValue(result);
+
+      const req = makeReq({ query: { page: '1', limit: '20' } });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.getDisputeQueue(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, ...result });
+    });
+
+    it('should filter by status', async () => {
+      const result = {
+        data: [{ id: DISPUTE_ID, status: 'reopened' }],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      };
+      mockGetDisputeQueue.mockResolvedValue(result);
+
+      const req = makeReq({ query: { status: ['reopened', 'disputed'] } });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.getDisputeQueue(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, ...result });
+      expect(mockGetDisputeQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ status: ['reopened', 'disputed'] }),
+      );
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({ user: undefined, query: {} });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.getDisputeQueue(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── getDisputeStats ──────────────────────────────────────────────
+
+  describe('getDisputeStats', () => {
+    it('should return aggregate counts (AC1)', async () => {
+      const stats = { totalOpen: 5, pending: 2, resolvedThisMonth: 3, closed: 10 };
+      mockGetDisputeStats.mockResolvedValue(stats);
+
+      const req = makeReq();
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.getDisputeStats(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: stats });
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({ user: undefined });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.getDisputeStats(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── getDisputeDetail ─────────────────────────────────────────────
+
+  describe('getDisputeDetail', () => {
+    it('should return full dispute detail with joins (AC2)', async () => {
+      const detail = {
+        id: DISPUTE_ID,
+        staffName: 'Alice',
+        trancheName: 'Tranche 1',
+        amount: 500000,
+        status: 'disputed',
+        staffComment: 'Payment amount incorrect',
+      };
+      mockGetDisputeDetail.mockResolvedValue(detail);
+
+      const req = makeReq({ params: { disputeId: DISPUTE_ID } });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.getDisputeDetail(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: detail });
+      expect(mockLogPiiAccess).toHaveBeenCalledOnce();
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({ user: undefined, params: { disputeId: DISPUTE_ID } });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.getDisputeDetail(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── acknowledgeDispute ───────────────────────────────────────────
+
+  describe('acknowledgeDispute', () => {
+    it('should transition disputed → pending_resolution (AC3)', async () => {
+      const updated = { id: DISPUTE_ID, status: 'pending_resolution' };
+      mockAcknowledgeDispute.mockResolvedValue(updated);
+
+      const req = makeReq({ params: { disputeId: DISPUTE_ID } });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.acknowledgeDispute(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: updated });
+      expect(mockAcknowledgeDispute).toHaveBeenCalledWith(
+        DISPUTE_ID,
+        ADMIN_ID,
+        expect.any(String),
+        'test-agent',
+      );
+    });
+
+    it('should reject if status is not disputed → 400', async () => {
+      const error = new Error('Dispute must be in disputed status to acknowledge');
+      (error as any).statusCode = 400;
+      mockAcknowledgeDispute.mockRejectedValue(error);
+
+      const req = makeReq({ params: { disputeId: DISPUTE_ID } });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.acknowledgeDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('disputed'),
+      }));
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({ user: undefined, params: { disputeId: DISPUTE_ID } });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.acknowledgeDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── resolveDispute ───────────────────────────────────────────────
+
+  describe('resolveDispute', () => {
+    it('should resolve with adminResponse and no evidence (AC4)', async () => {
+      const updated = { id: DISPUTE_ID, status: 'resolved', adminResponse: 'Payment confirmed via bank records' };
+      mockResolveDispute.mockResolvedValue(updated);
+
+      const req = makeReq({
+        params: { disputeId: DISPUTE_ID },
+        body: { adminResponse: 'Payment confirmed via bank records' },
+        file: undefined,
+      });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.resolveDispute(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: updated });
+      expect(mockResolveDispute).toHaveBeenCalledWith(
+        DISPUTE_ID,
+        'Payment confirmed via bank records',
+        undefined,
+        ADMIN_ID,
+        expect.any(String),
+        'test-agent',
+      );
+    });
+
+    it('should resolve with evidence file upload (AC4)', async () => {
+      const updated = { id: DISPUTE_ID, status: 'resolved', evidenceFileId: 'file-1' };
+      mockResolveDispute.mockResolvedValue(updated);
+
+      const mockFile = {
+        buffer: Buffer.from('fake-image'),
+        originalname: 'proof.png',
+        mimetype: 'image/png',
+        size: 2048,
+      };
+
+      const req = makeReq({
+        params: { disputeId: DISPUTE_ID },
+        body: { adminResponse: 'See attached bank proof' },
+        file: mockFile,
+      });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.resolveDispute(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: updated });
+      expect(mockResolveDispute).toHaveBeenCalledWith(
+        DISPUTE_ID,
+        'See attached bank proof',
+        expect.objectContaining({ originalname: 'proof.png', mimetype: 'image/png' }),
+        ADMIN_ID,
+        expect.any(String),
+        'test-agent',
+      );
+    });
+
+    it('should reject if adminResponse is empty → 400', async () => {
+      const req = makeReq({
+        params: { disputeId: DISPUTE_ID },
+        body: { adminResponse: '' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.resolveDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockResolveDispute).not.toHaveBeenCalled();
+    });
+
+    it('should reject if status not pending_resolution or reopened → 400', async () => {
+      const error = new Error('Dispute must be in pending_resolution or reopened status');
+      (error as any).statusCode = 400;
+      mockResolveDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        params: { disputeId: DISPUTE_ID },
+        body: { adminResponse: 'Attempting to resolve a closed dispute' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.resolveDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('pending_resolution'),
+      }));
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({
+        user: undefined,
+        params: { disputeId: DISPUTE_ID },
+        body: { adminResponse: 'Test' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.resolveDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Authentication required',
+      }));
+    });
+  });
+
+  // ─── reopenDispute ────────────────────────────────────────────────
+
+  describe('reopenDispute', () => {
+    it('should transition resolved → reopened and increment reopenCount (AC5)', async () => {
+      const updated = { id: DISPUTE_ID, status: 'reopened', reopenCount: 1 };
+      mockReopenDispute.mockResolvedValue(updated);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        params: { disputeId: DISPUTE_ID },
+        body: { staffComment: 'Admin resolution did not match my bank statement records' },
+      });
+      const { jsonMock, mockRes } = makeRes();
+
+      await RemunerationController.reopenDispute(req, mockRes as Response, mockNext);
+
+      expect(jsonMock).toHaveBeenCalledWith({ success: true, data: updated });
+      expect(mockReopenDispute).toHaveBeenCalledWith(
+        DISPUTE_ID,
+        'Admin resolution did not match my bank statement records',
+        STAFF_1_ID,
+        expect.any(String),
+        'test-agent',
+      );
+    });
+
+    it('should reject if actor is not openedBy → 403', async () => {
+      const error = new Error('You can only reopen your own disputes');
+      (error as any).statusCode = 403;
+      mockReopenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_2_ID, role: 'enumerator' },
+        params: { disputeId: DISPUTE_ID },
+        body: { staffComment: 'Attempting to reopen someone elses dispute' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.reopenDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('own disputes'),
+      }));
+    });
+
+    it('should reject if status is closed → 400', async () => {
+      const error = new Error('Cannot reopen a closed dispute');
+      (error as any).statusCode = 400;
+      mockReopenDispute.mockRejectedValue(error);
+
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        params: { disputeId: DISPUTE_ID },
+        body: { staffComment: 'Trying to reopen a dispute that was auto-closed' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.reopenDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('closed'),
+      }));
+    });
+
+    it('should reject if staffComment < 10 chars → 400', async () => {
+      const req = makeReq({
+        user: { sub: STAFF_1_ID, role: 'enumerator' },
+        params: { disputeId: DISPUTE_ID },
+        body: { staffComment: 'short' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.reopenDispute(req, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockReopenDispute).not.toHaveBeenCalled();
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      const req = makeReq({
+        user: undefined,
+        params: { disputeId: DISPUTE_ID },
+        body: { staffComment: 'Auth required for reopen' },
+      });
+      const { mockRes } = makeRes();
+
+      await RemunerationController.reopenDispute(req, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
         message: 'Authentication required',
