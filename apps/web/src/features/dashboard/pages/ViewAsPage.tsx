@@ -128,7 +128,7 @@ export default function ViewAsPage() {
             className="mt-1 block w-full max-w-md rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="">Select LGA...</option>
-            {lgas.map((lga) => (
+            {lgas?.map((lga) => (
               <option key={lga.id} value={lga.id}>
                 {lga.name}
               </option>

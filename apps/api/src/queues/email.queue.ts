@@ -334,6 +334,25 @@ export async function resumeEmailQueue(): Promise<void> {
 }
 
 /**
+ * Drain the email queue — removes all waiting and delayed jobs.
+ * Used by admin to clear backed-up messages (e.g., during alert storms).
+ * Active jobs (currently being processed) are NOT affected.
+ */
+export async function drainEmailQueue(): Promise<{ removed: number }> {
+  if (isTestMode()) return { removed: 0 };
+
+  const queue = getEmailQueue();
+  const [waitingCount, delayedCount] = await Promise.all([
+    queue.getWaitingCount(),
+    queue.getDelayedCount(),
+  ]);
+
+  await queue.drain();
+
+  return { removed: waitingCount + delayedCount };
+}
+
+/**
  * Close the queue connection (for graceful shutdown)
  */
 export async function closeEmailQueue(): Promise<void> {

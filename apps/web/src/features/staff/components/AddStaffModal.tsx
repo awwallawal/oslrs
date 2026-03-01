@@ -284,7 +284,7 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
                         <option value="">
                           {requiresLga ? 'Select an LGA' : 'Not required for this role'}
                         </option>
-                        {lgas.map((lga) => (
+                        {lgas?.map((lga) => (
                           <option key={lga.id} value={lga.id}>
                             {lga.name}
                           </option>

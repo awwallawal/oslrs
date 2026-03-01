@@ -120,7 +120,7 @@ export default function BulkRecordingForm({ lgas }: BulkRecordingFormProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All LGAs</SelectItem>
-                    {lgas.map((lga) => (
+                    {lgas?.map((lga) => (
                       <SelectItem key={lga.id} value={lga.id}>{lga.name}</SelectItem>
                     ))}
                   </SelectContent>

@@ -141,7 +141,7 @@ export function RegistryFilters({
           data-testid="filter-lga"
         >
           <option value="">All LGAs</option>
-          {lgaList.map((lga) => (
+          {lgaList?.map((lga) => (
             <option key={lga.code} value={lga.code}>
               {lga.name}
             </option>

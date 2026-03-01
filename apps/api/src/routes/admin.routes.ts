@@ -162,6 +162,45 @@ router.post(
 
 
 /**
+ * POST /api/v1/admin/email-queue/drain
+ *
+ * Drain all waiting and delayed jobs from the email queue.
+ * Used to clear backed-up messages during alert storms or quota exhaustion.
+ * Active (in-progress) jobs are NOT affected.
+ */
+router.post(
+  '/email-queue/drain',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN),
+  async (_req: Request, res: Response) => {
+    try {
+      const { drainEmailQueue } = await import('../queues/email.queue.js');
+      const result = await drainEmailQueue();
+
+      logger.info({ event: 'admin.email_queue.drained', removed: result.removed });
+
+      res.json({
+        data: {
+          drained: true,
+          removed: result.removed,
+          message: `Email queue drained: ${result.removed} jobs removed`,
+        },
+      });
+    } catch (error: unknown) {
+      logger.error({
+        event: 'admin.email_queue.drain_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      res.status(500).json({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to drain email queue',
+      });
+    }
+  }
+);
+
+/**
  * GET /api/v1/admin/lgas
  *
  * Get list of all LGAs for dropdowns and filters.

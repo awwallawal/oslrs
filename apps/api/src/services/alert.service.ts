@@ -60,8 +60,8 @@ const MAX_ALERTS_PER_HOUR = 3;
 const HYSTERESIS_CHECKS = 2; // Consecutive OK checks before resolving
 
 // Digest delivery
-const DIGEST_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between digest emails
-const MAX_DAILY_DIGEST_EMAILS = 20;
+const DIGEST_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between digest emails (reduced from 15 to lower email volume)
+const MAX_DAILY_DIGEST_EMAILS = 10; // Reduced from 20 to prevent Resend quota exhaustion
 const ALERT_STATE_PATH = join(tmpdir(), 'oslrs-alert-digest-state.json');
 
 // Threshold definitions
@@ -324,7 +324,16 @@ export class AlertService {
       const text = `OSLRS System Health Digest\n\n${alerts.map((a) => `${a.level.toUpperCase()}: ${a.metricKey} = ${a.value}`).join('\n')}\n\nPlease check the System Health dashboard.`;
 
       for (const email of superAdminEmails) {
-        await EmailService.sendGenericEmail({ to: email, subject, html, text });
+        try {
+          await EmailService.sendGenericEmail({ to: email, subject, html, text });
+        } catch (emailErr) {
+          // Don't let a single recipient failure block the rest; log and continue
+          logger.warn({
+            event: 'alert.digest_recipient_failed',
+            recipient: email,
+            error: (emailErr as Error).message,
+          });
+        }
       }
 
       logger.info({

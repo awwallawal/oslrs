@@ -8,6 +8,7 @@
  * AC7: Direction 08 styling maintained throughout.
  */
 
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Download, Users, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { SkeletonCard } from '../../../components/skeletons';
@@ -16,6 +17,7 @@ import { useOverviewStats } from '../hooks/useOfficial';
 const TARGET = 1_000_000;
 
 export default function OfficialHome() {
+  const navigate = useNavigate();
   const { data: stats, isLoading, error } = useOverviewStats();
 
   const totalRespondents = stats?.totalRespondents ?? 0;
@@ -174,9 +176,8 @@ export default function OfficialHome() {
                     Download reports in CSV or PDF format.
                   </p>
                   <button
-                    disabled
-                    className="w-full px-4 py-2 bg-gray-300 text-gray-500 text-sm font-medium rounded-lg cursor-not-allowed"
-                    title="Coming soon — Story 5.4"
+                    onClick={() => navigate('/dashboard/official/export')}
+                    className="w-full px-4 py-2 bg-[#9C1E23] hover:bg-[#7A171B] text-white text-sm font-medium rounded-lg transition-colors"
                   >
                     Export Report
                   </button>

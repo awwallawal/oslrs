@@ -72,7 +72,7 @@ let monitoringInterval: ReturnType<typeof setInterval> | null = null;
 function startMonitoringScheduler(): void {
   if (monitoringInterval) return; // Prevent duplicate schedulers
 
-  const INTERVAL_MS = 30_000; // 30 seconds
+  const INTERVAL_MS = 120_000; // 120 seconds (reduced from 30s to lower CPU/RAM overhead on VPS)
   monitoringInterval = setInterval(async () => {
     try {
       const health = await MonitoringService.getSystemHealth();

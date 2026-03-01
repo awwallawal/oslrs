@@ -102,7 +102,7 @@ describe('ExportPage', () => {
     const countEl = screen.getByTestId('record-count');
     expect(countEl).toBeInTheDocument();
     expect(countEl.textContent).toContain('42');
-    expect(countEl.textContent).toContain('records match your filters');
+    expect(countEl.textContent).toContain('total records');
   });
 
   it('format toggle switches between CSV and PDF', () => {

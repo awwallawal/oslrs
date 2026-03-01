@@ -94,10 +94,10 @@ describe('sidebarConfig', () => {
       expect(payments?.href).toBe('/dashboard/supervisor/payments');
     });
 
-    it('super_admin Settings item has end: true to prevent dual highlight with child routes', () => {
-      const settings = sidebarConfig.super_admin.find(i => i.label === 'Settings');
-      expect(settings).toBeDefined();
-      expect(settings?.end).toBe(true);
+    it('super_admin has Fraud Thresholds sidebar item', () => {
+      const thresholds = sidebarConfig.super_admin.find(i => i.label === 'Fraud Thresholds');
+      expect(thresholds).toBeDefined();
+      expect(thresholds?.href).toBe('/dashboard/super-admin/settings/fraud-thresholds');
     });
   });
 

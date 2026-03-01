@@ -125,10 +125,10 @@ describe('OfficialHome', () => {
   });
 
   describe('AC6: Read-Only Enforcement', () => {
-    it('has Export Report button that is disabled', () => {
+    it('has Export Report button that navigates to export page', () => {
       renderComponent();
       const exportBtn = screen.getByRole('button', { name: 'Export Report' });
-      expect(exportBtn).toBeDisabled();
+      expect(exportBtn).toBeEnabled();
     });
 
     it('has no input fields', () => {
