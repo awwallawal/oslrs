@@ -16,6 +16,7 @@ const DashboardLayout = lazy(() =>
   import('./layouts/DashboardLayout').then(m => ({ default: m.DashboardLayout }))
 );
 import { DashboardRedirect } from './features/dashboard';
+import { ViewAsProvider } from './features/dashboard/context/ViewAsContext';
 
 // Lazy load page components for code splitting and loading indicators
 const ActivationPage = lazy(() => import('./features/auth/pages/ActivationPage'));
@@ -123,6 +124,9 @@ const RemunerationPage = lazy(() => import('./features/remuneration/pages/Remune
 const StaffPaymentHistoryPage = lazy(() => import('./features/remuneration/pages/StaffPaymentHistoryPage'));
 // Story 6.6: Payment Dispute Queue (Super Admin)
 const PaymentDisputeQueuePage = lazy(() => import('./features/remuneration/pages/PaymentDisputeQueuePage'));
+// Story 6.7: View-As Feature (Super Admin)
+const ViewAsPage = lazy(() => import('./features/dashboard/pages/ViewAsPage'));
+const ViewAsDashboardPage = lazy(() => import('./features/dashboard/pages/ViewAsDashboardPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 
@@ -704,6 +708,35 @@ function App() {
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <PaymentDisputeQueuePage />
                     </Suspense>
+                  }
+                />
+                {/* Story 6.7: View-As Feature */}
+                <Route
+                  path="view-as"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <ViewAsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="view-as/:role"
+                  element={
+                    <ViewAsProvider>
+                      <Suspense fallback={<DashboardLoadingFallback />}>
+                        <ViewAsDashboardPage />
+                      </Suspense>
+                    </ViewAsProvider>
+                  }
+                />
+                <Route
+                  path="view-as/:role/*"
+                  element={
+                    <ViewAsProvider>
+                      <Suspense fallback={<DashboardLoadingFallback />}>
+                        <ViewAsDashboardPage />
+                      </Suspense>
+                    </ViewAsProvider>
                   }
                 />
                 {/* Placeholder routes for future stories */}

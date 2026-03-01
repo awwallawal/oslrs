@@ -20,6 +20,8 @@ import productivityRoutes from './productivity.routes.js';
 import auditRoutes from './audit.routes.js';
 import systemRoutes from './system.routes.js';
 import remunerationRoutes from './remuneration.routes.js';
+import viewAsRoutes from './view-as.routes.js';
+import viewAsDataRoutes from './view-as-data.routes.js';
 
 const router = Router();
 
@@ -43,6 +45,8 @@ router.use('/productivity', productivityRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/system', systemRoutes);
 router.use('/remuneration', remunerationRoutes);
+router.use('/view-as', viewAsRoutes);
+router.use('/view-as/data', viewAsDataRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

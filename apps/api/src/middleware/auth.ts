@@ -91,6 +91,28 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     // Attach user to request
     req.user = decoded;
 
+    // Attach View-As state for Super Admins (Story 6-7 — server-side safety net)
+    // Only Super Admins can have View-As sessions; skip Redis lookup for all other roles
+    if (decoded.role === 'super_admin') {
+      try {
+        const { ViewAsService } = await import('../services/view-as.service.js');
+        const viewAsState = await ViewAsService.getViewAsState(decoded.sub);
+        if (viewAsState) {
+          req.viewAs = viewAsState;
+          // Block mutations in View-As mode (except view-as management routes)
+          const isViewAsMgmt = req.originalUrl?.includes('/view-as/start') ||
+                               req.originalUrl?.includes('/view-as/end') ||
+                               req.originalUrl?.includes('/view-as/current');
+          if (!isViewAsMgmt && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+            return next(new AppError('VIEW_AS_READ_ONLY', 'Actions disabled in View-As mode', 403));
+          }
+        }
+      } catch (viewAsErr) {
+        if (viewAsErr instanceof AppError) return next(viewAsErr);
+        logger.warn({ event: 'view_as.state_check_failed', userId: decoded.sub });
+      }
+    }
+
     next();
   } catch (error) {
     if (error instanceof AppError) {

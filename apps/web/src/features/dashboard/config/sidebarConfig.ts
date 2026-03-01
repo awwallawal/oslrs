@@ -40,6 +40,7 @@ import {
   SlidersHorizontal,
   Wallet,
   Scale,
+  Eye,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -138,6 +139,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
 
   super_admin: [
     { label: 'Home', href: '/dashboard/super-admin', icon: Home },
+    { label: 'View As', href: '/dashboard/super-admin/view-as', icon: Eye },
     { label: 'Staff Management', href: '/dashboard/super-admin/staff', icon: Users },
     { label: 'Questionnaires', href: '/dashboard/super-admin/questionnaires', icon: FileText },
     { label: 'Fraud Review', href: '/dashboard/super-admin/fraud', icon: AlertTriangle },

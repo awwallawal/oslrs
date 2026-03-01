@@ -6,6 +6,13 @@ declare global {
     interface Request {
       user?: JwtPayload;
       sessionId?: string;
+      viewAs?: {
+        targetRole: string;
+        targetLgaId: string | null;
+        reason: string | null;
+        startedAt: string;
+        expiresAt: string;
+      };
     }
   }
 }
