@@ -9,7 +9,7 @@
  */
 
 import { S3Client, PutObjectCommand, GetObjectCommand, S3ClientConfig } from '@aws-sdk/client-s3';
-import { eq, and, isNull, desc, sql, inArray, gte, lte, or, ilike, count as drizzleCount } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, inArray, gte, lte, ilike } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 import { db } from '../db/index.js';
@@ -817,7 +817,7 @@ export class RemunerationService {
 
     const conditions: ReturnType<typeof eq>[] = [];
     if (filters?.status?.length) {
-      conditions.push(inArray(paymentDisputes.status, filters.status));
+      conditions.push(inArray(paymentDisputes.status, filters.status as typeof paymentDisputes.status.enumValues));
     }
     if (filters?.lgaId) {
       conditions.push(eq(staffAlias.lgaId, filters.lgaId));
