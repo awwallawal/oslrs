@@ -11,6 +11,11 @@ import { StaffService } from '../../services/staff.service.js';
 // Mock StaffService
 vi.mock('../../services/staff.service.js');
 
+// Valid UUIDs for test data
+const ROLE_ID_A = '00000000-0000-0000-0000-000000000001';
+const ROLE_ID_B = '00000000-0000-0000-0000-000000000002';
+const ROLE_ID_C = '00000000-0000-0000-0000-000000000003';
+
 describe('StaffController', () => {
   let mockReq: Partial<Request>;
   let mockRes: Partial<Response>;
@@ -173,18 +178,18 @@ describe('StaffController', () => {
         id: 'user-123',
         fullName: 'John Doe',
         email: 'john@example.com',
-        roleId: 'new-role-id',
+        roleId: ROLE_ID_A,
         status: 'active',
       };
 
       vi.mocked(StaffService.updateRole).mockResolvedValue(mockUser as never);
 
       mockReq.params = { userId: 'user-123' };
-      mockReq.body = { roleId: 'new-role-id' };
+      mockReq.body = { roleId: ROLE_ID_A };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
-      expect(StaffService.updateRole).toHaveBeenCalledWith('user-123', 'new-role-id', 'actor-123');
+      expect(StaffService.updateRole).toHaveBeenCalledWith('user-123', ROLE_ID_A, 'actor-123');
       expect(jsonMock).toHaveBeenCalledWith({
         data: mockUser,
       });
@@ -196,7 +201,7 @@ describe('StaffController', () => {
       vi.mocked(StaffService.updateRole).mockRejectedValue(error);
 
       mockReq.params = { userId: 'non-existent' };
-      mockReq.body = { roleId: 'some-role' };
+      mockReq.body = { roleId: ROLE_ID_A };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -209,7 +214,7 @@ describe('StaffController', () => {
       vi.mocked(StaffService.updateRole).mockRejectedValue(error);
 
       mockReq.params = { userId: 'user-123' };
-      mockReq.body = { roleId: 'non-existent-role' };
+      mockReq.body = { roleId: ROLE_ID_B };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -221,14 +226,14 @@ describe('StaffController', () => {
         id: 'user-123',
         fullName: 'John Doe',
         email: 'john@example.com',
-        roleId: 'same-role-id',
+        roleId: ROLE_ID_A,
         status: 'active',
       };
 
       vi.mocked(StaffService.updateRole).mockResolvedValue(mockUser as never);
 
       mockReq.params = { userId: 'user-123' };
-      mockReq.body = { roleId: 'same-role-id' };
+      mockReq.body = { roleId: ROLE_ID_A };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -240,7 +245,7 @@ describe('StaffController', () => {
     it('returns 401 if not authenticated', async () => {
       mockReq.user = undefined;
       mockReq.params = { userId: 'user-123' };
-      mockReq.body = { roleId: 'new-role-id' };
+      mockReq.body = { roleId: ROLE_ID_A };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -260,13 +265,24 @@ describe('StaffController', () => {
       expect(error.code).toBe('VALIDATION_ERROR');
     });
 
+    it('returns 400 if roleId is not a valid UUID', async () => {
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = { roleId: 'not-a-uuid' };
+
+      await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('returns 400 when trying to change role of last Super Admin', async () => {
       const error = new Error('Cannot change the role of the last Super Admin');
       Object.assign(error, { code: 'CANNOT_CHANGE_LAST_ADMIN_ROLE', statusCode: 400 });
       vi.mocked(StaffService.updateRole).mockRejectedValue(error);
 
       mockReq.params = { userId: 'last-admin' };
-      mockReq.body = { roleId: 'enumerator-role' };
+      mockReq.body = { roleId: ROLE_ID_B };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -278,18 +294,18 @@ describe('StaffController', () => {
         id: 'admin-2',
         fullName: 'Second Admin',
         email: 'admin2@example.com',
-        roleId: 'enumerator-role',
+        roleId: ROLE_ID_B,
         status: 'active',
       };
 
       vi.mocked(StaffService.updateRole).mockResolvedValue(mockUser as never);
 
       mockReq.params = { userId: 'admin-2' };
-      mockReq.body = { roleId: 'enumerator-role' };
+      mockReq.body = { roleId: ROLE_ID_B };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
-      expect(StaffService.updateRole).toHaveBeenCalledWith('admin-2', 'enumerator-role', 'actor-123');
+      expect(StaffService.updateRole).toHaveBeenCalledWith('admin-2', ROLE_ID_B, 'actor-123');
       expect(jsonMock).toHaveBeenCalledWith({ data: mockUser });
     });
 
@@ -299,7 +315,7 @@ describe('StaffController', () => {
       vi.mocked(StaffService.updateRole).mockRejectedValue(error);
 
       mockReq.params = { userId: 'actor-123' }; // Same as actor
-      mockReq.body = { roleId: 'enumerator-role' };
+      mockReq.body = { roleId: ROLE_ID_B };
 
       await StaffController.updateRole(mockReq as Request, mockRes as Response, mockNext);
 
@@ -414,7 +430,7 @@ describe('StaffController', () => {
           fullName: 'New Admin',
           email: 'newadmin@example.com',
           status: 'invited',
-          roleId: 'super-admin-role-id',
+          roleId: ROLE_ID_C,
         },
         emailStatus: 'pending',
       };
@@ -425,12 +441,15 @@ describe('StaffController', () => {
         fullName: 'New Admin',
         email: 'newadmin@example.com',
         phone: '+2348012345678',
-        roleId: 'super-admin-role-id',
+        roleId: ROLE_ID_C,
       };
 
       await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
 
-      expect(StaffService.createManual).toHaveBeenCalledWith(mockReq.body, 'actor-123');
+      expect(StaffService.createManual).toHaveBeenCalledWith(
+        { fullName: 'New Admin', email: 'newadmin@example.com', phone: '+2348012345678', roleId: ROLE_ID_C },
+        'actor-123',
+      );
       expect(statusMock).toHaveBeenCalledWith(201);
       expect(jsonMock).toHaveBeenCalledWith({
         data: {
@@ -447,7 +466,7 @@ describe('StaffController', () => {
           fullName: 'Another Admin',
           email: 'another@example.com',
           status: 'invited',
-          roleId: 'super-admin-role-id',
+          roleId: ROLE_ID_C,
         },
         emailStatus: 'pending',
       };
@@ -457,7 +476,8 @@ describe('StaffController', () => {
       mockReq.body = {
         fullName: 'Another Admin',
         email: 'another@example.com',
-        roleId: 'super-admin-role-id',
+        phone: '+2349087654321',
+        roleId: ROLE_ID_C,
       };
 
       await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
@@ -467,15 +487,121 @@ describe('StaffController', () => {
       expect(responseData.data.emailStatus).toBe('pending');
     });
 
+    it('returns 400 if required fields are missing', async () => {
+      mockReq.body = { fullName: 'Test' }; // Missing email, phone, roleId
+
+      await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('returns 401 if not authenticated for createManual', async () => {
       mockReq.user = undefined;
-      mockReq.body = { fullName: 'Test', email: 'test@example.com', roleId: 'some-role' };
+      mockReq.body = { fullName: 'Test', email: 'test@example.com', phone: '+234123', roleId: ROLE_ID_A };
 
       await StaffController.createManual(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(error.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('reactivate', () => {
+    it('reactivates user successfully with default reOnboard=false', async () => {
+      const mockUser = {
+        id: 'user-123',
+        fullName: 'John Doe',
+        email: 'john@example.com',
+        status: 'active',
+      };
+
+      vi.mocked(StaffService.reactivateUser).mockResolvedValue(mockUser as never);
+
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = {};
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(StaffService.reactivateUser).toHaveBeenCalledWith('user-123', 'actor-123', false);
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockUser });
+    });
+
+    it('reactivates user with reOnboard=true', async () => {
+      const mockUser = {
+        id: 'user-123',
+        fullName: 'John Doe',
+        email: 'john@example.com',
+        status: 'invited',
+      };
+
+      vi.mocked(StaffService.reactivateUser).mockResolvedValue(mockUser as never);
+
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = { reOnboard: true };
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(StaffService.reactivateUser).toHaveBeenCalledWith('user-123', 'actor-123', true);
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockUser });
+    });
+
+    it('returns 400 for invalid reOnboard type', async () => {
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = { reOnboard: 'not-a-boolean' };
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('strips extra fields from body (mass assignment prevention)', async () => {
+      const mockUser = {
+        id: 'user-123',
+        fullName: 'John Doe',
+        email: 'john@example.com',
+        status: 'active',
+      };
+
+      vi.mocked(StaffService.reactivateUser).mockResolvedValue(mockUser as never);
+
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = { reOnboard: false, role: 'super_admin', isAdmin: true };
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      // Zod strips unknown fields — only reOnboard should reach the service
+      expect(StaffService.reactivateUser).toHaveBeenCalledWith('user-123', 'actor-123', false);
+    });
+
+    it('returns 401 if not authenticated', async () => {
+      mockReq.user = undefined;
+      mockReq.params = { userId: 'user-123' };
+      mockReq.body = {};
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      const error = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('calls next on service error', async () => {
+      const error = new Error('User not found');
+      Object.assign(error, { code: 'USER_NOT_FOUND', statusCode: 404 });
+      vi.mocked(StaffService.reactivateUser).mockRejectedValue(error);
+
+      mockReq.params = { userId: 'non-existent' };
+      mockReq.body = {};
+
+      await StaffController.reactivate(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
     });
   });
 

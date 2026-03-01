@@ -33,6 +33,7 @@ const validateEnvironment = () => {
       'REFRESH_TOKEN_SECRET',
       'DATABASE_URL',
       'HCAPTCHA_SECRET_KEY',
+      'CORS_ORIGIN',
     ];
 
     const missing = requiredProdVars.filter(v => !process.env[v]);

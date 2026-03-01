@@ -111,44 +111,56 @@ describe('AuditController', () => {
       expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
 
-    it('should reject invalid mode parameter', async () => {
+    it('should reject invalid mode parameter with 400 VALIDATION_ERROR', async () => {
       const req = { query: { mode: 'invalid' } } as any;
       const res = createMockRes();
       const next = vi.fn();
 
       await AuditController.verifyHashChain(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
     });
 
-    it('should reject limit=0 (below minimum)', async () => {
+    it('should reject limit=0 (below minimum) with 400 VALIDATION_ERROR', async () => {
       const req = { query: { mode: 'spot', limit: '0' } } as any;
       const res = createMockRes();
       const next = vi.fn();
 
       await AuditController.verifyHashChain(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
     });
 
-    it('should reject negative limit', async () => {
+    it('should reject negative limit with 400 VALIDATION_ERROR', async () => {
       const req = { query: { mode: 'spot', limit: '-5' } } as any;
       const res = createMockRes();
       const next = vi.fn();
 
       await AuditController.verifyHashChain(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
     });
 
-    it('should reject limit exceeding maximum (10000)', async () => {
+    it('should reject limit exceeding maximum (10000) with 400 VALIDATION_ERROR', async () => {
       const req = { query: { mode: 'spot', limit: '10001' } } as any;
       const res = createMockRes();
       const next = vi.fn();
 
       await AuditController.verifyHashChain(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
     });
   });
 });

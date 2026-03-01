@@ -1,6 +1,6 @@
 # Story sec.3: Harden Mass Assignment & Input Validation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Source: security-audit-report-2026-03-01.md — SEC-3 (P2 MEDIUM) -->
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
@@ -13,7 +13,7 @@ so that the codebase is resilient against mass assignment even if Zod schemas ch
 
 ## Acceptance Criteria
 
-1. **AC1:** The `...req.body` spread in `remuneration.controller.ts:94` is refactored to explicitly extract only the expected fields (`title`, `description`, `trancheNumber`, `amount`, `staffIds`, `paymentDate`) before Zod validation.
+1. **AC1:** The `...req.body` spread in `remuneration.controller.ts:94` is refactored to explicitly extract only the expected fields (`trancheName`, `trancheNumber`, `amount`, `staffIds`, `bankReference`, `description`, `lgaId`, `roleFilter`) before Zod validation.
 
 2. **AC2:** `staff.controller.ts` `createManual` (line 170) no longer passes raw `req.body` to the service. Add Zod validation at the controller level using `createStaffSchema.safeParse(req.body)` and pass `parseResult.data` to the service.
 
@@ -35,69 +35,57 @@ so that the codebase is resilient against mass assignment even if Zod schemas ch
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Refactor `remuneration.controller.ts` mass assignment** (AC: #1, #4)
-  - [ ] 1.1 Open `apps/api/src/controllers/remuneration.controller.ts` — lines 92-102
-  - [ ] 1.2 Replace `...req.body` spread with explicit field extraction:
-    ```typescript
-    // Safe JSON.parse — let Zod produce a clean 400 instead of unhandled 500
-    let staffIds = req.body.staffIds;
-    if (typeof staffIds === 'string') {
-      try { staffIds = JSON.parse(staffIds); } catch { /* let Zod reject it */ }
-    }
-    const body = {
-      title: req.body.title,
-      description: req.body.description,
-      trancheNumber: req.body.trancheNumber ? Number(req.body.trancheNumber) : undefined,
-      amount: req.body.amount ? Number(req.body.amount) : undefined,
-      paymentDate: req.body.paymentDate,
-      staffIds,
-    };
-    ```
-  - [ ] 1.3 Verify the `createPaymentBatchSchema` fields match the extracted fields (check the schema definition — it's local in the same file, lines ~16-78)
-  - [ ] 1.4 Run remuneration tests to verify no regressions
+- [x] **Task 1: Refactor `remuneration.controller.ts` mass assignment** (AC: #1, #4)
+  - [x] 1.1 Open `apps/api/src/controllers/remuneration.controller.ts` — lines 92-102
+  - [x] 1.2 Replace `...req.body` spread with explicit field extraction (trancheName, trancheNumber, amount, staffIds, bankReference, description, lgaId, roleFilter — matching actual schema fields)
+  - [x] 1.3 Verify the `createPaymentBatchSchema` fields match the extracted fields
+  - [x] 1.4 Run remuneration tests to verify no regressions
 
-- [ ] **Task 2: Add Zod validation to `staff.controller.ts` unvalidated routes** (AC: #2, #3)
-  - [ ] 2.1 `createManual` (line 170): Import `createStaffSchema` from `@oslsr/types`, add `safeParse(req.body)` with error handling, pass `parseResult.data` instead of `req.body` to `StaffService.createManual()`
-  - [ ] 2.2 `updateRole` (line 72): Create a small Zod schema (`z.object({ roleId: z.string().uuid() })`) and use `safeParse(req.body)` instead of direct destructuring with manual null check
-  - [ ] 2.3 `reactivate` (line 127): Create a small Zod schema (`z.object({ reOnboard: z.boolean().optional().default(false) })`) and use `safeParse(req.body)` instead of direct destructuring
-  - [ ] 2.4 Follow the existing controller pattern: `safeParse` → check `!result.success` → throw `AppError('VALIDATION_ERROR', ..., 400, { errors: ... })` → use `result.data`
-  - [ ] 2.5 Define the new schemas locally in `staff.controller.ts` (consistent with how newer controllers like remuneration and productivity define schemas locally)
-  - [ ] 2.6 Run staff controller tests to verify no regressions
+- [x] **Task 2: Add Zod validation to `staff.controller.ts` unvalidated routes** (AC: #2, #3)
+  - [x] 2.1 `createManual`: Import `createStaffSchema` from `@oslsr/types`, add `safeParse(req.body)` with error handling, pass `parseResult.data` instead of `req.body` to `StaffService.createManual()`
+  - [x] 2.2 `updateRole`: Created local `updateRoleSchema` (`z.object({ roleId: z.string().uuid() })`) and use `safeParse(req.body)`
+  - [x] 2.3 `reactivate`: Created local `reactivateSchema` (`z.object({ reOnboard: z.boolean().optional().default(false) })`) and use `safeParse(req.body)`
+  - [x] 2.4 Follow the existing controller pattern: `safeParse` → check `!result.success` → throw `AppError('VALIDATION_ERROR', ..., 400, { errors: ... })` → use `result.data`
+  - [x] 2.5 Define the new schemas locally in `staff.controller.ts`
+  - [x] 2.6 Run staff controller tests — 31 pass, updated test data to use valid UUIDs for roleId
 
-- [ ] **Task 3: Sanitize AppError `details` fields that leak internal errors** (AC: #6)
-  - [ ] 3.1 `apps/api/src/services/id-card.service.ts:59`:
-    - Change: `new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500, { error: err.message })`
-    - To: Log `err` at error level with pino, then `new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500)` (no details)
-  - [ ] 3.2 `apps/api/src/services/id-card.service.ts:265`: Same fix as 3.1
-  - [ ] 3.3 `apps/api/src/services/export.service.ts:95`:
-    - Change: `new AppError('PDF_GENERATION_ERROR', 'Failed to generate PDF report', 500, { error: (err as Error).message })`
-    - To: Log the error, return AppError without details
-  - [ ] 3.4 `apps/api/src/services/photo-processing.service.ts:173`:
-    - Change: `new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500, { error: err instanceof Error ? err.message : 'Unknown error' })`
-    - To: Log the full error (includes S3 bucket names, key paths, AWS errors), return AppError without details
-  - [ ] 3.5 **Pattern for all fixes:** Import pino logger, log `{ event: 'service.error', code: 'PDF_GENERATION_ERROR', error: err }` at error level, then throw AppError with only code + message + statusCode (no `details`)
-  - [ ] 3.6 Run id-card, export, and photo-processing tests to verify
+- [x] **Task 3: Sanitize AppError `details` fields that leak internal errors** (AC: #6)
+  - [x] 3.1 `id-card.service.ts` doc.on('error'): Added pino logger, removed `{ error: err.message }` from AppError details
+  - [x] 3.2 `id-card.service.ts` catch block: Added pino logger, removed `{ error: err.message }` from AppError details
+  - [x] 3.3 `export.service.ts` doc.on('error'): Added pino logger, removed `{ error: (err as Error).message }` from AppError details
+  - [x] 3.4 `photo-processing.service.ts` getPhotoBuffer catch: Added pino logger, removed `{ error: err.message }` from AppError details
+  - [x] 3.5 All fixes follow pattern: `logger.error({ event: '...', error: err }, 'message')` then `new AppError(code, msg, 500)` with no details
+  - [x] 3.6 Tests verified — no regressions
 
-- [ ] **Task 4: Fix `audit.controller.ts` `.parse()` → `.safeParse()`** (AC: #7)
-  - [ ] 4.1 Open `apps/api/src/controllers/audit.controller.ts:28`
-  - [ ] 4.2 Change `verifyQuerySchema.parse(req.query)` to `verifyQuerySchema.safeParse(req.query)` with the standard error pattern
-  - [ ] 4.3 This prevents a raw ZodError from reaching the global error handler (which would produce a 500 INTERNAL_ERROR instead of a 400 VALIDATION_ERROR)
-  - [ ] 4.4 Run audit tests to verify
+- [x] **Task 4: Fix `audit.controller.ts` `.parse()` → `.safeParse()`** (AC: #7)
+  - [x] 4.1 Open `apps/api/src/controllers/audit.controller.ts`
+  - [x] 4.2 Changed `verifyQuerySchema.parse(req.query)` to `verifyQuerySchema.safeParse(req.query)` with standard AppError pattern
+  - [x] 4.3 Imported `AppError` from `@oslsr/utils` (was missing)
+  - [x] 4.4 Tests verified
 
-- [ ] **Task 5: Add `CORS_ORIGIN` to `requiredProdVars`** (AC: #5)
-  - [ ] 5.1 Open `apps/api/src/app.ts` — lines 31-36
-  - [ ] 5.2 Add `'CORS_ORIGIN'` to the `requiredProdVars` array
-  - [ ] 5.3 Current array: `['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'DATABASE_URL', 'HCAPTCHA_SECRET_KEY']`
-  - [ ] 5.4 New array: `['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'DATABASE_URL', 'HCAPTCHA_SECRET_KEY', 'CORS_ORIGIN']`
-  - [ ] 5.5 Verify the env validation logic at startup (lines 37-42) will correctly fail if `CORS_ORIGIN` is missing in production
+- [x] **Task 5: Add `CORS_ORIGIN` to `requiredProdVars`** (AC: #5)
+  - [x] 5.1 Open `apps/api/src/app.ts`
+  - [x] 5.2 Add `'CORS_ORIGIN'` to the `requiredProdVars` array
+  - [x] 5.3 Previous: `['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'DATABASE_URL', 'HCAPTCHA_SECRET_KEY']`
+  - [x] 5.4 New: `['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'DATABASE_URL', 'HCAPTCHA_SECRET_KEY', 'CORS_ORIGIN']`
+  - [x] 5.5 Verified env validation logic will fail fast if `CORS_ORIGIN` missing in production
 
-- [ ] **Task 6: Verify no `...req.body` patterns remain** (AC: #4)
-  - [ ] 6.1 Run grep across all controllers: `grep -r "\.\.\.req\.body" apps/api/src/controllers/` — must return zero matches
-  - [ ] 6.2 Also check services for any remaining `...req.body` patterns (none expected, but confirm)
+- [x] **Task 6: Verify no `...req.body` patterns remain** (AC: #4)
+  - [x] 6.1 Grep across all controllers: 0 matches for `...req.body`
+  - [x] 6.2 Grep across all services: 0 matches for `...req.body`
 
-- [ ] **Task 7: Full regression test** (AC: #8)
-  - [ ] 7.1 Run `pnpm test` from project root — all tests must pass
-  - [ ] 7.2 Run `pnpm build` to verify TypeScript compilation succeeds
+- [x] **Task 7: Full regression test** (AC: #8)
+  - [x] 7.1 `pnpm test` — 1164 API tests + 1939 web tests = 3103 total, all pass
+  - [x] 7.2 `pnpm build` — TypeScript compilation succeeds, no errors
+
+### Review Follow-ups (AI) — All Fixed
+
+- [x] [AI-Review][MEDIUM] Add unit tests for `reactivate` endpoint — zero test coverage for new Zod validation [`staff.controller.test.ts`]
+- [x] [AI-Review][MEDIUM] Audit controller tests: assert `VALIDATION_ERROR` code + 400 status, not just `expect.any(Error)` [`audit.controller.test.ts:114-152`]
+- [x] [AI-Review][MEDIUM] Fix AC1 field names — story listed 6 wrong fields, actual schema has 8 [`sec-3 story AC1`]
+- [x] [AI-Review][MEDIUM] Fix fragile number coercion: `? Number(x) : undefined` → `!= null ? Number(x) : undefined` [`remuneration.controller.ts:100-101`]
+- [x] [AI-Review][LOW] Sanitize `healthCheck()` raw `err.message` leak — return generic message [`photo-processing.service.ts:72`]
+- [x] [AI-Review][LOW] Correct AC1 field list in story text [`sec-3 story`]
 
 ## Dev Notes
 
@@ -205,10 +193,36 @@ All other controllers (15/19) follow the correct pattern: `schema.safeParse(req.
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- Initial test run: 9 failures in `staff.controller.test.ts` — test mock data used non-UUID `roleId` values (e.g., `'new-role-id'`, `'some-role'`), incompatible with new Zod UUID validation. Fixed by using valid UUID constants in tests.
+- `createManual` test for "invitation queued" was missing `phone` field required by `createStaffSchema`. Added `phone` to test data.
+
 ### Completion Notes List
 
+- **Task 1:** Replaced `...req.body` spread in `remuneration.controller.ts:createBatch` with explicit extraction of all 8 schema fields (trancheName, trancheNumber, amount, staffIds, bankReference, description, lgaId, roleFilter). Safe JSON.parse for staffIds with try/catch (lets Zod reject malformed data).
+- **Task 2:** Added controller-level Zod validation to 3 `staff.controller.ts` methods: `createManual` (uses `createStaffSchema` from `@oslsr/types`), `updateRole` (new local `updateRoleSchema` with UUID validation), `reactivate` (new local `reactivateSchema` with boolean default). All follow the standard `safeParse` → `AppError` → `result.data` pattern. Added test for invalid UUID roleId validation.
+- **Task 3:** Sanitized 4 AppError instances that leaked internal `err.message` to clients. Added pino logger to `id-card.service.ts` (new import). All 4 now log errors server-side and throw AppError without `details`.
+- **Task 4:** Converted `audit.controller.ts` from `.parse()` to `.safeParse()` with `AppError('VALIDATION_ERROR', ...)` wrapping. Added missing `AppError` import.
+- **Task 5:** Added `'CORS_ORIGIN'` to `requiredProdVars` array in `app.ts`. Production will now fail fast with clear error if CORS_ORIGIN is not set.
+- **Task 6:** Verified 0 `...req.body` matches across all controllers and services.
+- **Task 7:** Full regression: 1164 API + 1939 web = 3103 tests pass. Build succeeds.
+
+### Change Log
+
+- 2026-03-01: Implemented SEC-3 security hardening — mass assignment prevention, input validation, error detail sanitization, CORS env validation. 7 files modified, 1 test file updated. 3103 tests pass, 0 regressions.
+- 2026-03-01: [Code Review] Fixed 6 issues (4 MEDIUM, 2 LOW): added reactivate endpoint tests (6 tests), strengthened audit controller test assertions (VALIDATION_ERROR + 400), fixed fragile number coercion, sanitized healthCheck error leak, corrected AC1 field names.
+
 ### File List
+
+- `apps/api/src/controllers/remuneration.controller.ts` — Replaced `...req.body` spread with explicit field extraction
+- `apps/api/src/controllers/staff.controller.ts` — Added Zod validation to `updateRole`, `reactivate`, `createManual`; added `z`, `createStaffSchema` imports and local schemas
+- `apps/api/src/controllers/audit.controller.ts` — Changed `.parse()` to `.safeParse()` with AppError wrapping; added `AppError` import
+- `apps/api/src/services/id-card.service.ts` — Removed `details.error` from 2 AppError instances; added pino logger
+- `apps/api/src/services/export.service.ts` — Removed `details.error` from AppError in PDF error handler
+- `apps/api/src/services/photo-processing.service.ts` — Removed `details.error` from AppError in S3 fetch error handler
+- `apps/api/src/app.ts` — Added `'CORS_ORIGIN'` to `requiredProdVars` array
+- `apps/api/src/controllers/__tests__/staff.controller.test.ts` — Updated test data: valid UUID roleId constants, added phone field, added UUID validation test; [Review] added 6 reactivate endpoint tests
+- `apps/api/src/controllers/__tests__/audit.controller.test.ts` — [Review] Strengthened validation error assertions: verify VALIDATION_ERROR code + 400 status

@@ -1,9 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { Redis } from 'ioredis';
+import { z } from 'zod';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
 import { AppError } from '@oslsr/utils';
+import { createStaffSchema } from '@oslsr/types';
 import type { AuthenticatedRequest } from '../types.js';
+
+/** Zod schema for role update */
+const updateRoleSchema = z.object({
+  roleId: z.string().uuid('roleId must be a valid UUID'),
+});
+
+/** Zod schema for reactivation */
+const reactivateSchema = z.object({
+  reOnboard: z.boolean().optional().default(false),
+});
 
 // Redis connection for rate limiting
 let redis: Redis | null = null;
@@ -69,13 +81,15 @@ export class StaffController {
       const actorId = req.user.sub;
 
       const { userId } = req.params;
-      const { roleId } = req.body;
 
-      if (!roleId) {
-        throw new AppError('VALIDATION_ERROR', 'roleId is required', 400);
+      const parseResult = updateRoleSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid role update data', 400, {
+          errors: parseResult.error.flatten().fieldErrors,
+        });
       }
 
-      const result = await StaffService.updateRole(userId, roleId, actorId);
+      const result = await StaffService.updateRole(userId, parseResult.data.roleId, actorId);
 
       res.json({
         data: result,
@@ -124,9 +138,15 @@ export class StaffController {
       const actorId = req.user.sub;
 
       const { userId } = req.params;
-      const { reOnboard = false } = req.body || {};
 
-      const result = await StaffService.reactivateUser(userId, actorId, !!reOnboard);
+      const parseResult = reactivateSchema.safeParse(req.body || {});
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid reactivation data', 400, {
+          errors: parseResult.error.flatten().fieldErrors,
+        });
+      }
+
+      const result = await StaffService.reactivateUser(userId, actorId, parseResult.data.reOnboard);
 
       res.json({
         data: result,
@@ -167,7 +187,14 @@ export class StaffController {
       }
       const actorId = req.user.sub;
 
-      const { user, emailStatus } = await StaffService.createManual(req.body, actorId);
+      const parseResult = createStaffSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid staff data', 400, {
+          errors: parseResult.error.flatten().fieldErrors,
+        });
+      }
+
+      const { user, emailStatus } = await StaffService.createManual(parseResult.data, actorId);
       res.status(201).json({
         data: {
           ...user,

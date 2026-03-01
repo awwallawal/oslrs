@@ -1,7 +1,10 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import pino from 'pino';
 import { AppError } from '@oslsr/utils';
 import { getRoleDisplayName } from '@oslsr/types';
+
+const logger = pino({ name: 'id-card-service' });
 
 interface IDCardData {
   fullName: string;
@@ -56,7 +59,8 @@ export class IDCardService {
         doc.on('data', (chunk) => buffers.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
         doc.on('error', (err) => {
-          reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500, { error: err.message }));
+          logger.error({ event: 'id_card.pdf_error', error: err }, 'PDF stream error during ID card generation');
+          reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500));
         });
 
         // Format staff ID: OSLSR-XXXXXXXX
@@ -262,7 +266,8 @@ export class IDCardService {
 
         doc.end();
       } catch (err: unknown) {
-        reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500, { error: err instanceof Error ? err.message : 'Unknown error' }));
+        logger.error({ event: 'id_card.generation_error', error: err }, 'Failed to generate ID card PDF');
+        reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500));
       }
     });
   }

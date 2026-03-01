@@ -90,13 +90,20 @@ export class RemunerationController {
       }
 
       // Parse body — multipart form data sends fields as strings
+      // Explicit field extraction to prevent mass assignment
+      let staffIds = req.body.staffIds;
+      if (typeof staffIds === 'string') {
+        try { staffIds = JSON.parse(staffIds); } catch { /* let Zod reject it */ }
+      }
       const body = {
-        ...req.body,
-        trancheNumber: req.body.trancheNumber ? Number(req.body.trancheNumber) : undefined,
-        amount: req.body.amount ? Number(req.body.amount) : undefined,
-        staffIds: typeof req.body.staffIds === 'string'
-          ? JSON.parse(req.body.staffIds)
-          : req.body.staffIds,
+        trancheName: req.body.trancheName,
+        trancheNumber: req.body.trancheNumber != null ? Number(req.body.trancheNumber) : undefined,
+        amount: req.body.amount != null ? Number(req.body.amount) : undefined,
+        staffIds,
+        bankReference: req.body.bankReference,
+        description: req.body.description,
+        lgaId: req.body.lgaId,
+        roleFilter: req.body.roleFilter,
       };
 
       const parseResult = createPaymentBatchSchema.safeParse(body);

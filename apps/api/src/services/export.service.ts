@@ -92,7 +92,8 @@ export class ExportService {
         doc.on('data', (chunk) => buffers.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
         doc.on('error', (err) => {
-          reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate PDF report', 500, { error: (err as Error).message }));
+          logger.error({ event: 'export.pdf_error', error: err }, 'PDF stream error during report generation');
+          reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate PDF report', 500));
         });
 
         const totalPages = ExportService.calculateTotalPages(data.length);

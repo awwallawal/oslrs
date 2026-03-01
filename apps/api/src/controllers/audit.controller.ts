@@ -7,6 +7,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { AppError } from '@oslsr/utils';
 import { AuditService } from '../services/audit.service.js';
 
 const verifyQuerySchema = z.object({
@@ -25,7 +26,13 @@ export class AuditController {
    */
   static async verifyHashChain(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const query = verifyQuerySchema.parse(req.query);
+      const parseResult = verifyQuerySchema.safeParse(req.query);
+      if (!parseResult.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', 400, {
+          errors: parseResult.error.flatten().fieldErrors,
+        });
+      }
+      const query = parseResult.data;
 
       if (query.mode === 'full') {
         const recordCount = await AuditService.getRecordCount();

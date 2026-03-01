@@ -69,9 +69,8 @@ export class PhotoProcessingService {
 
       return { healthy: true, bucket: this.bucketName };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      logger.error({ event: 'photo_service.health_check_failed', error: errorMessage });
-      return { healthy: false, bucket: this.bucketName, error: errorMessage };
+      logger.error({ event: 'photo_service.health_check_failed', error: err }, 'S3 health check failed');
+      return { healthy: false, bucket: this.bucketName, error: 'Storage connection failed' };
     }
   }
 
@@ -170,7 +169,8 @@ export class PhotoProcessingService {
         return Buffer.from(await response.Body.transformToByteArray());
       } catch (err: unknown) {
          if (err instanceof AppError) throw err;
-         throw new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500, { error: err instanceof Error ? err.message : 'Unknown error' });
+         logger.error({ event: 'photo_service.fetch_error', error: err }, 'Failed to fetch image from S3 storage');
+         throw new AppError('IMAGE_FETCH_ERROR', 'Failed to fetch image from storage', 500);
       }
   }
 
