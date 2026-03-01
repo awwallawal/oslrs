@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from './routes/index.js';
+import cspRoutes from './routes/csp.routes.js';
 import { AppError } from '@oslsr/utils';
 import { metricsMiddleware } from './middleware/metrics.js';
 
@@ -69,9 +70,81 @@ export const logger = pino({
 
 export const app = express();
 
-app.use(helmet());
+// Trust first proxy (NGINX) — required for accurate IP-based rate limiting (SEC-2 review fix)
+app.set('trust proxy', 1);
+
+// CSP violation report endpoint — registered BEFORE helmet so it's never blocked by CSP enforcement
+app.use('/api/v1', cspRoutes);
+
+// CSP configuration — report-only mode for initial deployment (SEC-2)
+const isProduction = process.env.NODE_ENV === 'production';
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const wsUrl = isProduction
+  ? corsOrigin.replace(/^https?:\/\//, 'wss://')
+  : 'ws://localhost:3000';
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    reportOnly: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://hcaptcha.com",
+        "https://*.hcaptcha.com",
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://fonts.googleapis.com",
+        "https://hcaptcha.com",
+        "https://*.hcaptcha.com",
+      ],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://*.tile.openstreetmap.org",
+        "https://*.digitaloceanspaces.com",
+      ],
+      fontSrc: [
+        "'self'",
+        "https://fonts.gstatic.com",
+      ],
+      connectSrc: [
+        "'self'",
+        wsUrl,
+        "https://accounts.google.com",
+        "https://hcaptcha.com",
+        "https://*.hcaptcha.com",
+        "https://cdn.jsdelivr.net",
+      ],
+      frameSrc: [
+        "https://accounts.google.com",
+        "https://hcaptcha.com",
+        "https://*.hcaptcha.com",
+      ],
+      workerSrc: ["'self'", "blob:"],
+      mediaSrc: ["'self'", "blob:", "mediastream:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      reportUri: ["/api/v1/csp-report"],
+      reportTo: "csp-endpoint",
+      ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
+    },
+  },
+}));
+
+// Reporting-Endpoints header for modern Reporting API (SEC-2)
+app.use((_req, res, next) => {
+  res.setHeader('Reporting-Endpoints', 'csp-endpoint="/api/v1/csp-report"');
+  next();
+});
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: corsOrigin,
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());

@@ -334,6 +334,65 @@ systemctl restart nginx
 
 ---
 
+## Part 5.1: Content Security Policy (CSP)
+
+**Added:** 2026-03-01 (Story SEC-2)
+
+### Architecture: Two-Layer CSP
+
+OSLRS uses a **two-layer CSP** because NGINX and Express serve different content:
+
+| Layer | Serves | CSP Source |
+|-------|--------|------------|
+| **NGINX** | SPA `index.html`, static JS/CSS/fonts | `add_header` directive in NGINX config |
+| **Express (Helmet)** | API JSON responses (`/api/v1/*`) | `helmet({ contentSecurityPolicy })` in `app.ts` |
+
+Both layers must have identical CSP directives. Helmet CSP only covers API responses — it does **not** protect the SPA HTML page (NGINX serves it directly).
+
+### NGINX CSP Header
+
+Add this inside the `server { listen 443 ... }` block, **after** the SSL directives:
+
+```nginx
+# Content Security Policy — Report-Only mode (switch to enforcing after validation)
+# Mirrors Helmet CSP config in apps/api/src/app.ts
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.digitaloceanspaces.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://oyotradeministry.com.ng https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com https://cdn.jsdelivr.net; frame-src https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com; worker-src 'self' blob:; media-src 'self' blob: mediastream:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; report-uri /api/v1/csp-report; report-to csp-endpoint; upgrade-insecure-requests;" always;
+```
+
+### `style-src 'unsafe-inline'` Justification
+
+`'unsafe-inline'` is required in `style-src` because:
+- shadcn/ui (Radix `react-style-singleton`) injects `<style>` tags for scroll locking
+- Recharts renders SVG with inline `style` attributes
+- Sonner toast uses inline styles for positioning
+- Google Identity Services SDK and hCaptcha widget inject inline styles
+- 25+ application components use `style={{}}` for dynamic widths/heights
+
+This is an accepted tradeoff — inline styles cannot execute code (unlike inline scripts). A nonce-based approach would require server-rendered HTML.
+
+### Switching from Report-Only to Enforcing
+
+After a 2-week monitoring period with zero violations in the CSP report endpoint logs:
+
+1. **NGINX:** Rename header from `Content-Security-Policy-Report-Only` to `Content-Security-Policy`
+2. **Helmet:** In `apps/api/src/app.ts`, change `reportOnly: true` to `reportOnly: false`
+3. **Deploy both changes together** — mismatched CSP modes between NGINX and Express would cause confusion in violation reports
+4. Keep the `report-uri` directive even in enforcing mode to catch future violations
+
+### Validating CSP is Active
+
+```bash
+# Check API responses (Helmet)
+curl -sI https://oyotradeministry.com.ng/api/v1/health | grep -i content-security
+
+# Check SPA page (NGINX)
+curl -sI https://oyotradeministry.com.ng/ | grep -i content-security
+```
+
+Both should return a `Content-Security-Policy-Report-Only` header.
+
+---
+
 ## Part 6: CI/CD Pipeline (GitHub Actions)
 
 **File:** `.github/workflows/ci-cd.yml`
