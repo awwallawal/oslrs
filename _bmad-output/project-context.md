@@ -53,7 +53,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **Data & Validation:**
 - **Zod 3.x** - Runtime validation + TypeScript types (shared between frontend/backend)
 - **uuidv7** package - Time-ordered UUIDs (NOT uuid v4 package)
-- **bcrypt 5.x** - Password hashing (10-12 rounds)
+- **bcrypt 6.x** - Password hashing (10-12 rounds)
 
 **Infrastructure:**
 - **Docker Compose** - Local development and production deployment
@@ -64,6 +64,27 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - React MUST be 18.3.x (NOT 19.x due to security vulnerabilities)
 - PostgreSQL MUST be 15.x (PostGIS required for GPS data)
 - Node.js MUST be 20.x LTS (not 21+, not <20)
+
+### Accepted Dependency Risks
+
+#### Build-Only (No Runtime Exposure)
+
+These vulnerabilities exist only in dev/build tooling and never execute in the production runtime:
+
+- `minimatch` (HIGH x12 — ReDoS): Transitive via eslint, drizzle-kit, workbox-build. Build tooling only, never runs in production.
+- `rollup` (HIGH x2 — path traversal): Transitive via vite. Build tooling only. Mitigated by pnpm.overrides where possible.
+- `serialize-javascript` (HIGH — RCE): Transitive via workbox-build -> @rollup/plugin-terser. Build-only.
+- `esbuild` (MODERATE — dev server cross-origin): Dev-only via tsx/vite. Not deployed to production.
+- `ajv` (MODERATE x2 — ReDoS): Dev-only via eslint -> @eslint/eslintrc. Not deployed.
+- `phin` (MODERATE — header leak on redirect): Dev-only via potrace -> jimp. Not deployed.
+
+#### Production (Accepted — Low Severity)
+
+These vulnerabilities exist in production dependencies but are accepted due to low severity and lack of available fix:
+
+- `qs` (LOW — arrayLimit bypass): Transitive via express -> body-parser. Low severity, no fix without Express 5 major version change. Caught by CI `pnpm audit` but below `--audit-level=high` threshold.
+
+Pinned security-critical deps should be reviewed quarterly for available patches. The CI `pnpm audit` gate catches known CVEs automatically, but non-CVE security improvements require manual review.
 
 ---
 

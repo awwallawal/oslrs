@@ -48,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Security audit (production dependencies)
+        run: pnpm audit --audit-level=high --prod
+
       - name: Lint
         run: pnpm lint
 

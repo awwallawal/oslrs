@@ -222,11 +222,11 @@ development_status:
   # Added: 2026-03-01 - Full OWASP Top 10 + NFR compliance audit. 31 dependency CVEs found,
   # CSP not configured (NFR8.4 gap), mass assignment pattern, CORS fallback.
   # Must complete before Epic 7 introduces public unauthenticated marketplace routes.
-  security-hardening: in-progress
+  security-hardening: done
   sec-1-resolve-dependency-cves: done      # P0 CRITICAL: Done 2026-03-01. Reviewed + fixed: dynamic xlsx import, fast-xml-parser override (5.4.1), react-router-dom (6.30.3), multer (2.1.0), minimatch override. 0 critical, 0 high in prod. 3,104 tests pass.
   sec-2-configure-content-security-policy: done    # P1 HIGH: Helmet CSP with 11 directives, report-only mode, violation endpoint, NGINX doc. Code review 2026-03-01: 8 findings (1H, 3M, 4L), all fixed. 1184 API + 1939 web tests pass, 0 regressions.
   sec-3-harden-mass-assignment-input-validation: done  # P2 MEDIUM: 4 mass assignment fixes (remuneration+staff controllers), 4 AppError detail leaks (id-card/export/photo services), CORS_ORIGIN to requiredProdVars, audit.controller .parse()→.safeParse(). Code review passed 2026-03-01: 6 findings (4M, 2L), all 6 fixed. Reactivate tests (6), audit assertion hardening, number coercion fix, healthCheck sanitization. 1172 API + 1939 web tests pass, 0 regressions.
-  sec-4-dependency-pinning-audit-ci-gate: ready-for-dev  # P3 LOW: CI pnpm audit gate, pin 9 security-critical deps to exact versions, .npmrc security settings, document accepted build-only risks, fix bcrypt version discrepancy. Story created 2026-03-01.
+  sec-4-dependency-pinning-audit-ci-gate: done  # P3 LOW: CI pnpm audit gate, pin 9 security-critical deps to exact versions, .npmrc security settings (save-exact=true), document accepted risks (build-only + production), fix bcrypt version discrepancy. Code review 2026-03-01: 6 findings (1H, 3M, 2L), all fixed.
 
   # Epic 7: Public Skills Marketplace & Search Security
   epic-7: backlog

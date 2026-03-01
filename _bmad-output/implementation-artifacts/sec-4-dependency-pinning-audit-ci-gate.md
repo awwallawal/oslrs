@@ -1,6 +1,6 @@
 # Story sec.4: Dependency Pinning & Audit CI Gate
 
-Status: ready-for-dev
+Status: done
 
 <!-- Source: security-audit-report-2026-03-01.md — SEC-4 (P3 LOW) -->
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
@@ -32,21 +32,21 @@ so that new vulnerabilities are caught before merge and dependency drift is cont
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Add `pnpm audit` step to CI pipeline** (AC: #1)
-  - [ ] 1.1 Open `.github/workflows/ci-cd.yml`
-  - [ ] 1.2 Add a new step in the `lint-and-build` job, AFTER `pnpm install` (line ~52) and BEFORE `pnpm lint`:
+- [x] **Task 1: Add `pnpm audit` step to CI pipeline** (AC: #1)
+  - [x] 1.1 Open `.github/workflows/ci-cd.yml`
+  - [x] 1.2 Add a new step in the `lint-and-build` job, AFTER `pnpm install` (line ~52) and BEFORE `pnpm lint`:
     ```yaml
     - name: Security audit (production dependencies)
       run: pnpm audit --audit-level=high --prod
     ```
-  - [ ] 1.3 The `--prod` flag ensures only production dependencies are audited — build/dev-only vulnerabilities (`minimatch`, `rollup`, `esbuild`, `ajv`) won't block the pipeline
-  - [ ] 1.4 Verify the step fails when a high/critical vuln exists and passes when clean
-  - [ ] 1.5 If `pnpm audit --prod` is not supported in the project's pnpm version, use `pnpm audit --audit-level=high` with `continue-on-error: false` and document accepted dev-only risks
+  - [x] 1.3 The `--prod` flag ensures only production dependencies are audited — build/dev-only vulnerabilities (`minimatch`, `rollup`, `esbuild`, `ajv`) won't block the pipeline
+  - [x] 1.4 Verify the step fails when a high/critical vuln exists and passes when clean
+  - [x] 1.5 If `pnpm audit --prod` is not supported in the project's pnpm version, use `pnpm audit --audit-level=high` with `continue-on-error: false` and document accepted dev-only risks
 
-- [ ] **Task 2: Create or extend `pnpm.overrides` in root `package.json`** (AC: #2)
-  - [ ] 2.1 Check if SEC-1 already created a `pnpm.overrides` section (it should have added `fast-xml-parser` and possibly `rollup` overrides)
-  - [ ] 2.2 If it exists: verify and extend as needed
-  - [ ] 2.3 If it doesn't exist: create the section:
+- [x] **Task 2: Create or extend `pnpm.overrides` in root `package.json`** (AC: #2)
+  - [x] 2.1 Check if SEC-1 already created a `pnpm.overrides` section (it should have added `fast-xml-parser` and possibly `rollup` overrides)
+  - [x] 2.2 If it exists: verify and extend as needed
+  - [x] 2.3 If it doesn't exist: create the section:
     ```json
     "pnpm": {
       "overrides": {
@@ -55,11 +55,11 @@ so that new vulnerabilities are caught before merge and dependency drift is cont
       }
     }
     ```
-  - [ ] 2.4 Run `pnpm install` to apply overrides and verify resolution
-  - [ ] 2.5 Run `pnpm audit` to confirm the overrides resolved the targeted CVEs
+  - [x] 2.4 Run `pnpm install` to apply overrides and verify resolution
+  - [x] 2.5 Run `pnpm audit` to confirm the overrides resolved the targeted CVEs
 
-- [ ] **Task 3: Pin security-critical dependencies to exact versions** (AC: #4)
-  - [ ] 3.1 In `apps/api/package.json`, remove `^` prefix from these dependencies:
+- [x] **Task 3: Pin security-critical dependencies to exact versions** (AC: #4)
+  - [x] 3.1 In `apps/api/package.json`, remove `^` prefix from these dependencies:
     | Package | Current | Pin To |
     |---------|---------|--------|
     | `express` | `^4.19.2` | Check current lockfile resolution → pin that exact version |
@@ -69,32 +69,32 @@ so that new vulnerabilities are caught before merge and dependency drift is cont
     | `multer` | `^2.0.2` (or `^2.1.0` if SEC-1 updated it) | Pin to resolved version |
     | `cors` | `^2.8.5` | Pin to resolved version |
     | `cookie-parser` | `^1.4.7` | Pin to resolved version |
-  - [ ] 3.2 In `packages/utils/package.json`, remove `^` from `bcrypt`:
+  - [x] 3.2 In `packages/utils/package.json`, remove `^` from `bcrypt`:
     | Package | Current | Pin To |
     |---------|---------|--------|
     | `bcrypt` | `^6.0.0` | Pin to resolved version |
-  - [ ] 3.3 In root `package.json`, remove `^` from `drizzle-orm`:
+  - [x] 3.3 In root `package.json`, remove `^` from `drizzle-orm`:
     | Package | Current | Pin To |
     |---------|---------|--------|
     | `drizzle-orm` | `^0.30.10` | Pin to resolved version |
-  - [ ] 3.4 To find exact resolved versions, run: `pnpm list <package> --depth=0` for each package
-  - [ ] 3.5 Run `pnpm install` and verify lockfile is consistent
-  - [ ] 3.6 Do NOT pin non-security packages (TanStack Query, Recharts, etc.) — only security-critical ones
+  - [x] 3.4 To find exact resolved versions, run: `pnpm list <package> --depth=0` for each package
+  - [x] 3.5 Run `pnpm install` and verify lockfile is consistent
+  - [x] 3.6 Do NOT pin non-security packages (TanStack Query, Recharts, etc.) — only security-critical ones
 
-- [ ] **Task 4: Create `.npmrc` with security settings** (AC: #5)
-  - [ ] 4.1 Create `.npmrc` at project root with:
+- [x] **Task 4: Create `.npmrc` with security settings** (AC: #5)
+  - [x] 4.1 Create `.npmrc` at project root with:
     ```ini
     # Security hardening
     audit-level=high
     engine-strict=true
     ```
-  - [ ] 4.2 Do NOT add `ignore-scripts=true` — bcrypt and sharp require native compilation scripts
-  - [ ] 4.3 Do NOT add `strict-peer-dependencies=true` — many packages have loose peer dep specs that would break install
-  - [ ] 4.4 Verify `pnpm install` still works correctly with the new `.npmrc`
+  - [x] 4.2 Do NOT add `ignore-scripts=true` — bcrypt and sharp require native compilation scripts
+  - [x] 4.3 Do NOT add `strict-peer-dependencies=true` — many packages have loose peer dep specs that would break install
+  - [x] 4.4 Verify `pnpm install` still works correctly with the new `.npmrc`
 
-- [ ] **Task 5: Document accepted risks in project-context.md** (AC: #3, #6)
-  - [ ] 5.1 Add a new section "### Accepted Dependency Risks" under the Technology Stack section
-  - [ ] 5.2 Document each accepted build-only vulnerability with justification:
+- [x] **Task 5: Document accepted risks in project-context.md** (AC: #3, #6)
+  - [x] 5.1 Add a new section "### Accepted Dependency Risks" under the Technology Stack section
+  - [x] 5.2 Document each accepted build-only vulnerability with justification:
     ```markdown
     ### Accepted Dependency Risks (Build-Only, No Runtime Exposure)
     - `minimatch` (HIGH x12 — ReDoS): Transitive via eslint, drizzle-kit, workbox-build. Build tooling only, never runs in production.
@@ -105,14 +105,23 @@ so that new vulnerabilities are caught before merge and dependency drift is cont
     - `phin` (MODERATE — header leak on redirect): Dev-only via potrace → jimp. Not deployed.
     - `qs` (LOW — arrayLimit bypass): Transitive via express → body-parser. Low severity, no fix without express major version change.
     ```
-  - [ ] 5.3 Fix the bcrypt version discrepancy: change `bcrypt 5.x` reference to `bcrypt 6.x` to match `packages/utils/package.json`
-  - [ ] 5.4 Add a review cadence note: "Pinned security-critical deps should be reviewed quarterly for available patches. The CI `pnpm audit` gate catches known CVEs automatically, but non-CVE security improvements require manual review."
+  - [x] 5.3 Fix the bcrypt version discrepancy: change `bcrypt 5.x` reference to `bcrypt 6.x` to match `packages/utils/package.json`
+  - [x] 5.4 Add a review cadence note: "Pinned security-critical deps should be reviewed quarterly for available patches. The CI `pnpm audit` gate catches known CVEs automatically, but non-CVE security improvements require manual review."
 
-- [ ] **Task 6: Full regression test** (AC: #7)
-  - [ ] 6.1 Run `pnpm install` to verify lockfile consistency after all changes
-  - [ ] 6.2 Run `pnpm test` from project root — all tests must pass
-  - [ ] 6.3 Run `pnpm build` to verify TypeScript compilation succeeds
-  - [ ] 6.4 Run `pnpm audit --audit-level=high --prod` and verify it passes (zero high/critical in production deps)
+- [x] **Task 6: Full regression test** (AC: #7)
+  - [x] 6.1 Run `pnpm install` to verify lockfile consistency after all changes
+  - [x] 6.2 Run `pnpm test` from project root — all tests must pass
+  - [x] 6.3 Run `pnpm build` to verify TypeScript compilation succeeds
+  - [x] 6.4 Run `pnpm audit --audit-level=high --prod` and verify it passes (zero high/critical in production deps)
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] `qs` misclassified as "Build-Only" in project-context.md — it's a production dep via express->body-parser. Split section into "Build-Only" and "Production (Accepted)" subsections. [_bmad-output/project-context.md:68-80]
+- [x] [AI-Review][MEDIUM] `pnpm-lock.yaml` modified but not documented in Dev Agent Record File List. Added entry. [sec-4 story File List]
+- [x] [AI-Review][MEDIUM] `sprint-status.yaml` modified but not documented in Dev Agent Record File List. Added entry. [sec-4 story File List]
+- [x] [AI-Review][MEDIUM] `.npmrc` missing `save-exact=true` — future `pnpm add` commands would default to `^version`, undermining pinning discipline. Added setting. [.npmrc]
+- [x] [AI-Review][LOW] Express version bump from specifier `^4.19.2` to pinned `4.22.1` (and helmet `^7.1.0` to `7.2.0`) not explicitly noted in completion notes. Documented. [sec-4 story completion notes]
+- [x] [AI-Review][LOW] `express-rate-limit` (`^8.2.1`) is security-adjacent (brute-force prevention) but not in AC4's pin list. Design gap noted — not a missed implementation. [sec-4 story Dev Notes]
 
 ## Dev Notes
 
@@ -150,6 +159,8 @@ Pin only **security-critical** packages where an unreviewed minor/patch bump cou
 | `cookie-parser` | Cookie handling — changes could affect session security | `apps/api` |
 
 Do NOT pin: `@aws-sdk/*` (too many sub-packages, better managed via overrides), `sharp` (native bindings, needs to track platform compat), `socket.io` (rapid iteration, security patches often in minor versions), `zod` (validation library, safe to auto-update).
+
+**Considered but deferred:** `express-rate-limit` (`^8.2.1`) is security-adjacent (brute-force prevention) but was not included in AC4's pin list. Future security reviews should evaluate whether to add it.
 
 ### `pnpm audit --prod` vs `pnpm audit`
 - `pnpm audit` scans ALL dependencies (dev + production) — will flag build-only vulns like minimatch/rollup
@@ -207,10 +218,33 @@ Do NOT pin: `@aws-sdk/*` (too many sub-packages, better managed via overrides), 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
+None — clean implementation with no blocking issues.
+
 ### Completion Notes List
 
+- **Task 1 (CI audit step):** Added `pnpm audit --audit-level=high --prod` step in `lint-and-build` job, positioned after `pnpm install` and before `pnpm lint`. Confirmed pnpm 9.15.0 supports `--prod` flag. The step exits 0 locally (only 1 LOW `qs` vulnerability, which is below the `--audit-level=high` threshold).
+- **Task 2 (pnpm.overrides):** SEC-1 had already created the `pnpm.overrides` section with `fast-xml-parser>=5.3.5`, `minimatch>=9.0.7`, `rollup>=4.59.0`. Verified and confirmed — no extension needed.
+- **Task 3 (pinning):** Pinned 9 security-critical packages to exact resolved versions across 3 files. Resolved versions via `pnpm list`: express@4.22.1 (was `^4.19.2` — lockfile had already resolved to 4.22.1), jsonwebtoken@9.0.3, helmet@7.2.0 (was `^7.1.0`), drizzle-orm@0.30.10, multer@2.1.0, cors@2.8.5, cookie-parser@1.4.7, bcrypt@6.0.0. Lockfile verified consistent after `pnpm install`.
+- **Task 4 (.npmrc):** Created `.npmrc` with `audit-level=high`, `engine-strict=true`, and `save-exact=true` (ensures future `pnpm add` defaults to exact versions, reinforcing pinning discipline). Verified `pnpm install` succeeds with the new settings. Did not add `ignore-scripts` (bcrypt/sharp need native compilation) or `strict-peer-dependencies` (would break install).
+- **Task 5 (documentation):** Added "Accepted Dependency Risks" section to project-context.md documenting 7 build-only vulnerabilities with justifications. Fixed bcrypt version from 5.x to 6.x. Added quarterly review cadence note.
+- **Task 6 (regression):** Full test suite passes — 1939 web + API + utils + testing tests. Build succeeds (2/2 turbo tasks). `pnpm audit --audit-level=high --prod` exits 0.
+
 ### File List
+
+- `.github/workflows/ci-cd.yml` — Added security audit step after pnpm install
+- `package.json` (root) — Pinned `drizzle-orm` to exact version `0.30.10`
+- `apps/api/package.json` — Pinned 7 security-critical deps to exact versions (express@4.22.1, jsonwebtoken@9.0.3, helmet@7.2.0, drizzle-orm@0.30.10, multer@2.1.0, cors@2.8.5, cookie-parser@1.4.7)
+- `packages/utils/package.json` — Pinned `bcrypt` to exact version `6.0.0`
+- `pnpm-lock.yaml` — Updated lockfile reflecting exact-pinned dependency versions
+- `.npmrc` — NEW: Security hardening settings (audit-level=high, engine-strict=true, save-exact=true)
+- `_bmad-output/project-context.md` — Added "Accepted Dependency Risks" section (split into Build-Only and Production subsections), fixed bcrypt 5.x -> 6.x, added quarterly review cadence note
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Updated sec-4 status to review
+
+## Change Log
+
+- **2026-03-01:** Implemented dependency pinning & audit CI gate (SEC-4). Added `pnpm audit --audit-level=high --prod` to CI pipeline, pinned 9 security-critical deps to exact versions, created `.npmrc` with security settings, documented accepted build-only risks in project-context.md, fixed bcrypt version discrepancy.
+- **2026-03-01 (Code Review):** Adversarial review found 6 issues (1H, 3M, 2L). All fixed: (H1) Split accepted risks into Build-Only and Production subsections — `qs` was misclassified as build-only. (M1/M2) Added `pnpm-lock.yaml` and `sprint-status.yaml` to File List. (M3) Added `save-exact=true` to `.npmrc`. (L1) Documented express/helmet version jumps in completion notes. (L2) Noted `express-rate-limit` as future pinning candidate.
