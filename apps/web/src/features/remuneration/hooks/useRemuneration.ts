@@ -127,7 +127,7 @@ export function useOpenDispute() {
 /** Query key factory for disputes */
 export const disputeKeys = {
   all: ['disputes'] as const,
-  queue: (filters: Record<string, unknown>) => [...disputeKeys.all, 'queue', filters] as const,
+  queue: (filters: DisputeQueueFilters) => [...disputeKeys.all, 'queue', filters] as const,
   detail: (id: string) => [...disputeKeys.all, 'detail', id] as const,
   stats: () => [...disputeKeys.all, 'stats'] as const,
 };

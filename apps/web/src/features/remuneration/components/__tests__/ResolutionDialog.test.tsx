@@ -61,6 +61,7 @@ const mockDispute: DisputeDetail = {
   staffRoleName: null,
   resolvedByName: null,
   evidenceFile: null,
+  openedBy: 'user-1',
 };
 
 // ─── Tests ────────────────────────────────────────────────────────

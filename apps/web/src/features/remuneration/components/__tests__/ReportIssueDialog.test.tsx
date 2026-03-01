@@ -45,6 +45,7 @@ const mockRecord: StaffPaymentRecord = {
   disputeComment: null,
   disputeAdminResponse: null,
   disputeResolvedAt: null,
+  disputeReopenCount: null,
   disputeCreatedAt: null,
 };
 
