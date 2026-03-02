@@ -37,7 +37,11 @@ export interface ExportRow {
   dateOfBirth: string;
   lgaName: string;
   source: string;
+  consentMarketplace: string;
+  consentEnriched: string;
   registeredAt: string;
+  totalSubmissions: string;
+  fraudScore: string;
   fraudSeverity: string;
   verificationStatus: string;
 }
@@ -56,7 +60,11 @@ export class ExportQueryService {
     const query = sql`
       SELECT DISTINCT ON (r.id)
         r.first_name, r.last_name, r.nin, r.phone_number, r.date_of_birth,
-        l.name as lga_name, r.source, r.created_at as registered_at,
+        l.name as lga_name, r.source,
+        r.consent_marketplace, r.consent_enriched,
+        r.created_at as registered_at,
+        (SELECT COUNT(*) FROM submissions sub WHERE sub.respondent_id = r.id) as total_submissions,
+        fd.total_score as fraud_score,
         fd.severity as fraud_severity, fd.resolution as verification_status
       FROM respondents r
       LEFT JOIN lgas l ON r.lga_id = l.code
@@ -77,9 +85,13 @@ export class ExportQueryService {
       dateOfBirth: String(row.date_of_birth ?? ''),
       lgaName: String(row.lga_name ?? ''),
       source: String(row.source ?? ''),
+      consentMarketplace: row.consent_marketplace ? 'Yes' : 'No',
+      consentEnriched: row.consent_enriched ? 'Yes' : 'No',
       registeredAt: row.registered_at
-        ? new Date(row.registered_at as string | number | Date).toISOString()
+        ? new Date(row.registered_at as string | number | Date).toISOString().split('T')[0]
         : '',
+      totalSubmissions: String(row.total_submissions ?? '0'),
+      fraudScore: row.fraud_score ? String(Number(row.fraud_score).toFixed(1)) : '',
       fraudSeverity: String(row.fraud_severity ?? ''),
       verificationStatus: String(row.verification_status ?? ''),
     }));

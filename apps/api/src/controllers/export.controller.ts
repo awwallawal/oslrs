@@ -38,12 +38,16 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'lastName', header: 'Last Name', width: 80 },
   { key: 'nin', header: 'NIN', width: 90 },
   { key: 'phoneNumber', header: 'Phone', width: 85 },
-  { key: 'dateOfBirth', header: 'DOB', width: 70 },
+  { key: 'dateOfBirth', header: 'Date of Birth', width: 70 },
   { key: 'lgaName', header: 'LGA', width: 80 },
   { key: 'source', header: 'Source', width: 60 },
-  { key: 'registeredAt', header: 'Registered', width: 70 },
-  { key: 'fraudSeverity', header: 'Fraud', width: 50 },
-  { key: 'verificationStatus', header: 'Status', width: 60 },
+  { key: 'consentMarketplace', header: 'Marketplace Consent', width: 60 },
+  { key: 'consentEnriched', header: 'Enriched Consent', width: 60 },
+  { key: 'registeredAt', header: 'Registration Date', width: 80 },
+  { key: 'totalSubmissions', header: 'Submissions', width: 50 },
+  { key: 'fraudScore', header: 'Fraud Score', width: 50 },
+  { key: 'fraudSeverity', header: 'Fraud Severity', width: 60 },
+  { key: 'verificationStatus', header: 'Verification Status', width: 70 },
 ];
 
 export class ExportController {

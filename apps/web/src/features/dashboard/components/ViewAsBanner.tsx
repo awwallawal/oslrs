@@ -22,7 +22,7 @@ export function ViewAsBanner() {
   const adminName = user?.fullName ?? user?.email ?? 'Admin';
 
   // Look up LGA name from cached query (populated by ViewAsPage)
-  const { data: lgas } = useQuery({
+  const { data: lgas = [] } = useQuery({
     queryKey: ['lgas'],
     queryFn: fetchLgas,
     enabled: !!targetLgaId,

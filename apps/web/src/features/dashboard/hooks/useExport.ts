@@ -37,6 +37,8 @@ export function useLgas() {
     queryKey: exportKeys.lgas,
     queryFn: fetchLgas,
     staleTime: 5 * 60 * 1000,
+    // Guard against non-array responses (e.g., auth errors, network issues)
+    select: (data) => (Array.isArray(data) ? data : []),
   });
 }
 
