@@ -129,7 +129,6 @@ const ViewAsPage = lazy(() => import('./features/dashboard/pages/ViewAsPage'));
 const ViewAsDashboardPage = lazy(() => import('./features/dashboard/pages/ViewAsDashboardPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
-const RegistryTestPage = lazy(() => import('./features/dashboard/pages/RegistryTestPage'));
 
 /**
  * Page loading fallback - shows full page skeleton during route transitions
@@ -672,15 +671,6 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RespondentRegistryPage />
-                    </Suspense>
-                  }
-                />
-                {/* DEBUG: Temporary test route — remove after debugging */}
-                <Route
-                  path="registry-test"
-                  element={
-                    <Suspense fallback={<DashboardLoadingFallback />}>
-                      <RegistryTestPage />
                     </Suspense>
                   }
                 />
