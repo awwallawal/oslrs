@@ -53,7 +53,23 @@ apps/web/e2e/.auth/
 # Temp files
 tmpclaude-*
 new_error.txt
+new_errorr.txt
+new_errorrr.txt
 nul
+api-test-output.txt
+debug.log
+full-test.log
+table_discussion.txt
+test-output-v2.txt
+test-run-output.txt
+
+# Build artifacts (generated)
+*.tsbuildinfo
+apps/web/vite.config.d.ts
+apps/web/vite.config.js
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Unrelated/personal docs
 docs/agrikonsult_ffs_handout.html
@@ -61,3 +77,6 @@ docs/agrikonsult_ffs_presentation.html
 docs/create_presentation.py
 docs/sosina.txt
 docs/Retrospective Workflow bmadbmm.txt
+docs/Lawal Awwal*
+docs/cv-awwal.html
+docs/PageSpeed Insights*

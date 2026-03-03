@@ -11,6 +11,10 @@ describe('seedFraudThresholds (integration)', () => {
   let testUserId: string;
 
   beforeAll(async () => {
+    if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+      throw new Error('Refusing to run destructive seed integration tests outside test environment');
+    }
+
     // Ensure super_admin role exists
     await db.insert(roles).values({
       name: 'super_admin',

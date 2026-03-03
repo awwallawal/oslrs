@@ -20,7 +20,16 @@ const server = http.createServer(app);
 if (process.env.NODE_ENV !== 'test') {
   // Initialize realtime transport before listening
   const { initializeRealtime } = await import('./realtime/index.js');
+  const { FraudConfigService } = await import('./services/fraud-config.service.js');
   initializeRealtime(server);
+
+  // Ensure fraud thresholds exist on boot (self-heal if table was wiped).
+  FraudConfigService.getActiveThresholds().catch((error) => {
+    logger.warn({
+      event: 'fraud.thresholds.bootstrap.failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   server.listen(port, () => {
     logger.info({ event: 'server_start', port });

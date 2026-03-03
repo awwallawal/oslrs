@@ -11,10 +11,11 @@
 
 import { Redis } from 'ioredis';
 import { db } from '../db/index.js';
-import { fraudThresholds } from '../db/schema/index.js';
+import { fraudThresholds, roles, users } from '../db/schema/index.js';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import type { FraudThresholdConfig, HeuristicCategory } from '@oslsr/types';
 import pino from 'pino';
+import { FRAUD_THRESHOLD_DEFAULTS } from '../db/seeds/fraud-thresholds.seed.js';
 
 const logger = pino({ name: 'fraud-config-service' });
 
@@ -59,6 +60,61 @@ function toThresholdConfig(row: typeof fraudThresholds.$inferSelect): FraudThres
 
 export class FraudConfigService {
   /**
+   * Self-heal path: if the thresholds table is empty (e.g. accidentally wiped),
+   * recreate the default seed set so fraud features and admin UI keep working.
+   */
+  private static async bootstrapDefaultsIfTableEmpty(): Promise<boolean> {
+    const [totals] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(fraudThresholds);
+
+    if ((totals?.total ?? 0) > 0) {
+      return false;
+    }
+
+    const superAdminRole = await db.query.roles.findFirst({
+      where: eq(roles.name, 'super_admin'),
+    });
+
+    if (!superAdminRole) {
+      logger.warn({ event: 'fraud.config.bootstrap.skipped', reason: 'super_admin_role_missing' });
+      return false;
+    }
+
+    const adminUser = await db.query.users.findFirst({
+      where: eq(users.roleId, superAdminRole.id),
+    });
+
+    if (!adminUser) {
+      logger.warn({ event: 'fraud.config.bootstrap.skipped', reason: 'super_admin_user_missing' });
+      return false;
+    }
+
+    await db.insert(fraudThresholds).values(
+      FRAUD_THRESHOLD_DEFAULTS.map((threshold) => ({
+        ruleKey: threshold.ruleKey,
+        displayName: threshold.displayName,
+        ruleCategory: threshold.ruleCategory,
+        thresholdValue: threshold.thresholdValue,
+        weight: threshold.weight,
+        severityFloor: threshold.severityFloor,
+        version: 1,
+        isActive: true,
+        effectiveUntil: null,
+        createdBy: adminUser.id,
+        notes: threshold.notes,
+      })),
+    );
+
+    logger.warn({
+      event: 'fraud.config.bootstrap.restored_defaults',
+      count: FRAUD_THRESHOLD_DEFAULTS.length,
+    });
+
+    return true;
+  }
+
+  /**
    * Get all active thresholds (current versions only).
    * Reads from Redis cache first, falls back to DB.
    */
@@ -78,7 +134,7 @@ export class FraudConfigService {
     }
 
     // Query DB: active thresholds where effective_until IS NULL (current version)
-    const rows = await db
+    let rows = await db
       .select()
       .from(fraudThresholds)
       .where(and(
@@ -86,6 +142,21 @@ export class FraudConfigService {
         isNull(fraudThresholds.effectiveUntil),
       ))
       .orderBy(fraudThresholds.ruleCategory, fraudThresholds.ruleKey);
+
+    // Restore defaults if table was wiped in a non-test environment.
+    if (rows.length === 0 && !isTestMode()) {
+      const bootstrapped = await FraudConfigService.bootstrapDefaultsIfTableEmpty();
+      if (bootstrapped) {
+        rows = await db
+          .select()
+          .from(fraudThresholds)
+          .where(and(
+            eq(fraudThresholds.isActive, true),
+            isNull(fraudThresholds.effectiveUntil),
+          ))
+          .orderBy(fraudThresholds.ruleCategory, fraudThresholds.ruleKey);
+      }
+    }
 
     const configs = rows.map(toThresholdConfig);
 
