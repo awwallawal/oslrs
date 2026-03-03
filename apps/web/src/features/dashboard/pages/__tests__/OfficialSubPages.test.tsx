@@ -61,6 +61,12 @@ vi.mock('../../hooks/useExport', () => ({
     isLoading: false,
     isError: false,
   }),
+  usePublishedForms: () => ({
+    data: [
+      { id: 'form-1', title: 'OSLSR Master v3', formId: 'oslsr_master_v3', version: '1.0.0' },
+    ],
+    isLoading: false,
+  }),
   useExportDownload: () => ({
     download: vi.fn(),
     isDownloading: false,
@@ -70,6 +76,7 @@ vi.mock('../../hooks/useExport', () => ({
     all: ['exports'],
     previewCount: (f: unknown) => ['exports', 'count', f],
     lgas: ['lgas'],
+    publishedForms: ['forms', 'published'],
   },
 }));
 

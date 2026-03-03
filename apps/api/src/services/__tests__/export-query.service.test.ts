@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { NativeFormSchema } from '@oslsr/types';
 
 // ── Hoisted mocks ────────────────────────────────────────────────────
 
@@ -12,6 +13,7 @@ vi.mock('../../db/index.js', () => ({
 
 // Import after mocks
 const { ExportQueryService } = await import('../export-query.service.js');
+const { buildColumnsFromFormSchema, flattenRawDataRow, buildChoiceMaps } = await import('../export-query.service.js');
 
 // ── Test data ─────────────────────────────────────────────────────────
 
@@ -215,5 +217,286 @@ describe('ExportQueryService', () => {
       expect(queryResult.params).toContain('ibadan-north');
       expect(queryResult.params).toContain('high');
     });
+  });
+
+  describe('getSubmissionExportData', () => {
+    const mockSubmissionRow = {
+      nin: '61961438053',
+      surname: 'Johnson',
+      first_name: 'Adewale',
+      lga_name: 'Ibadan North',
+      source: 'enumerator',
+      submitted_at: new Date('2026-01-15T10:00:00.000Z'),
+      enumerator_name: 'Jane Doe',
+      completion_time_seconds: 120,
+      gps_latitude: 7.3776,
+      gps_longitude: 3.9470,
+      fraud_score: '45.50',
+      fraud_severity: 'medium',
+      verification_status: 'confirmed_fraud',
+      raw_data: { employment_status: 'employed', main_occupation: 'carpentry' },
+    };
+
+    it('returns submission-level data with rawData', async () => {
+      mockExecute.mockResolvedValue({ rows: [mockSubmissionRow] });
+
+      const result = await ExportQueryService.getSubmissionExportData({ formId: 'test-form-id' });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toEqual({
+        nin: '61961438053',
+        surname: 'Johnson',
+        firstName: 'Adewale',
+        lgaName: 'Ibadan North',
+        source: 'enumerator',
+        submissionDate: '2026-01-15',
+        enumeratorName: 'Jane Doe',
+        completionTimeSeconds: '120',
+        gpsLatitude: '7.3776',
+        gpsLongitude: '3.947',
+        fraudScore: '45.5',
+        fraudSeverity: 'medium',
+        verificationStatus: 'confirmed_fraud',
+        rawData: { employment_status: 'employed', main_occupation: 'carpentry' },
+      });
+    });
+
+    it('includes formId in WHERE clause', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+
+      await ExportQueryService.getSubmissionExportData({ formId: 'abc-123' });
+
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      expect(queryResult.sql).toContain('s.questionnaire_form_id =');
+      expect(queryResult.params).toContain('abc-123');
+    });
+
+    it('applies additional filters alongside formId', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+
+      await ExportQueryService.getSubmissionExportData({
+        formId: 'abc-123',
+        lgaId: 'ibadan-north',
+        severity: 'high',
+      });
+
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      expect(queryResult.sql).toContain('s.questionnaire_form_id =');
+      expect(queryResult.sql).toContain('r.lga_id =');
+      expect(queryResult.sql).toContain('fd.severity =');
+    });
+
+    it('handles null rawData', async () => {
+      mockExecute.mockResolvedValue({ rows: [{ ...mockSubmissionRow, raw_data: null }] });
+
+      const result = await ExportQueryService.getSubmissionExportData({ formId: 'test-form-id' });
+
+      expect(result.data[0].rawData).toEqual({});
+    });
+  });
+
+  describe('getSubmissionFilteredCount', () => {
+    it('returns count with formId filter', async () => {
+      mockExecute.mockResolvedValue({ rows: [{ count: '25' }] });
+
+      const count = await ExportQueryService.getSubmissionFilteredCount({ formId: 'test-form-id' });
+
+      expect(count).toBe(25);
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      expect(queryResult.sql).toContain('s.questionnaire_form_id =');
+    });
+  });
+});
+
+// ── Pure function tests (buildColumnsFromFormSchema, flattenRawDataRow) ──
+
+const mockSchema: NativeFormSchema = {
+  id: 'test-form',
+  title: 'Test Form',
+  version: '1.0.0',
+  status: 'published',
+  createdAt: '2026-01-01',
+  sections: [
+    {
+      id: 'section-1',
+      title: 'Demographics',
+      questions: [
+        { id: 'q1', type: 'text', name: 'full_name', label: 'Full Name', required: true },
+        { id: 'q2', type: 'number', name: 'age', label: 'Age', required: false },
+        { id: 'q3', type: 'note', name: 'note_1', label: 'Please answer carefully', required: false },
+        { id: 'q4', type: 'select_one', name: 'employment_status', label: 'Employment Status', required: true, choices: 'employment_choices' },
+      ],
+    },
+    {
+      id: 'section-2',
+      title: 'Skills',
+      questions: [
+        { id: 'q5', type: 'select_multiple', name: 'skills_possessed', label: 'Skills Possessed', required: false, choices: 'skill_choices' },
+        { id: 'q6', type: 'geopoint', name: 'location', label: 'GPS Location', required: false },
+        { id: 'q7', type: 'date', name: 'training_date', label: 'Training Completion Date', required: false },
+      ],
+    },
+  ],
+  choiceLists: {
+    employment_choices: [
+      { label: 'Wage Earner (Government/Public Sector)', value: 'wage_public' },
+      { label: 'Self-Employed', value: 'self_employed' },
+      { label: 'Unemployed', value: 'unemployed' },
+    ],
+    skill_choices: [
+      { label: 'Carpentry/Woodwork', value: 'carpentry' },
+      { label: 'Plumbing', value: 'plumbing' },
+      { label: 'Welding & Fabrication', value: 'welding' },
+      { label: 'Tailoring', value: 'tailoring' },
+    ],
+  },
+};
+
+describe('buildColumnsFromFormSchema', () => {
+  it('builds columns from form schema in section order', () => {
+    const columns = buildColumnsFromFormSchema(mockSchema);
+
+    // 7 questions - 2 skipped (note + geopoint) = 5 exportable columns
+    expect(columns).toHaveLength(5);
+  });
+
+  it('skips note question types', () => {
+    const columns = buildColumnsFromFormSchema(mockSchema);
+
+    const names = columns.map((c) => c.key);
+    expect(names).not.toContain('note_1');
+  });
+
+  it('skips geopoint question types', () => {
+    const columns = buildColumnsFromFormSchema(mockSchema);
+
+    const names = columns.map((c) => c.key);
+    expect(names).not.toContain('location');
+  });
+
+  it('uses question label as column header', () => {
+    const columns = buildColumnsFromFormSchema(mockSchema);
+
+    expect(columns[0].header).toBe('Full Name');
+    expect(columns[0].key).toBe('full_name');
+  });
+
+  it('preserves section ordering', () => {
+    const columns = buildColumnsFromFormSchema(mockSchema);
+    const keys = columns.map((c) => c.key);
+
+    expect(keys).toEqual([
+      'full_name',
+      'age',
+      'employment_status',
+      'skills_possessed',
+      'training_date',
+    ]);
+  });
+});
+
+describe('flattenRawDataRow', () => {
+  it('maps select_one coded value to label', () => {
+    const rawData = { employment_status: 'wage_public' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.employment_status).toBe('Wage Earner (Government/Public Sector)');
+  });
+
+  it('maps select_multiple space-delimited codes to semicolon-delimited labels', () => {
+    const rawData = { skills_possessed: 'carpentry plumbing welding' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.skills_possessed).toBe('Carpentry/Woodwork; Plumbing; Welding & Fabrication');
+  });
+
+  it('passes through text values unchanged', () => {
+    const rawData = { full_name: 'Adewale Johnson' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.full_name).toBe('Adewale Johnson');
+  });
+
+  it('passes through number values as string', () => {
+    const rawData = { age: 35 };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.age).toBe('35');
+  });
+
+  it('passes through date values as string', () => {
+    const rawData = { training_date: '2026-06-15' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.training_date).toBe('2026-06-15');
+  });
+
+  it('returns empty string for missing rawData keys', () => {
+    const rawData = { full_name: 'Test' }; // no age, employment_status, skills, training_date
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.age).toBe('');
+    expect(result.employment_status).toBe('');
+    expect(result.skills_possessed).toBe('');
+    expect(result.training_date).toBe('');
+  });
+
+  it('returns empty string for null values', () => {
+    const rawData = { full_name: null, age: null };
+    const result = flattenRawDataRow(rawData as Record<string, unknown>, mockSchema);
+
+    expect(result.full_name).toBe('');
+    expect(result.age).toBe('');
+  });
+
+  it('falls back to raw value for unknown choice code', () => {
+    const rawData = { employment_status: 'unknown_code' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.employment_status).toBe('unknown_code');
+  });
+
+  it('falls back to raw codes for unknown select_multiple codes', () => {
+    const rawData = { skills_possessed: 'carpentry unknown_skill' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result.skills_possessed).toBe('Carpentry/Woodwork; unknown_skill');
+  });
+
+  it('does not include note or geopoint fields in output', () => {
+    const rawData = { note_1: 'should not appear', location: '7.3 3.9' };
+    const result = flattenRawDataRow(rawData, mockSchema);
+
+    expect(result).not.toHaveProperty('note_1');
+    expect(result).not.toHaveProperty('location');
+  });
+
+  it('accepts pre-built choiceMaps for O(1) lookups', () => {
+    const maps = buildChoiceMaps(mockSchema);
+    const rawData = { employment_status: 'wage_public', skills_possessed: 'carpentry plumbing' };
+    const result = flattenRawDataRow(rawData, mockSchema, maps);
+
+    expect(result.employment_status).toBe('Wage Earner (Government/Public Sector)');
+    expect(result.skills_possessed).toBe('Carpentry/Woodwork; Plumbing');
+  });
+});
+
+describe('buildChoiceMaps', () => {
+  it('builds Maps from choiceLists for O(1) lookup', () => {
+    const maps = buildChoiceMaps(mockSchema);
+
+    expect(maps.size).toBe(2);
+    expect(maps.get('employment_choices')?.get('wage_public')).toBe('Wage Earner (Government/Public Sector)');
+    expect(maps.get('skill_choices')?.get('carpentry')).toBe('Carpentry/Woodwork');
+  });
+
+  it('returns empty Map for schema with no choiceLists', () => {
+    const emptySchema: NativeFormSchema = { ...mockSchema, choiceLists: {} };
+    const maps = buildChoiceMaps(emptySchema);
+
+    expect(maps.size).toBe(0);
   });
 });

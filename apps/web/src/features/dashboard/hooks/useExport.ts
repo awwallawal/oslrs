@@ -6,7 +6,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
-import { fetchExportPreviewCount, downloadExport, fetchLgas } from '../api/export.api';
+import { fetchExportPreviewCount, downloadExport, fetchLgas, fetchPublishedForms } from '../api/export.api';
 import type { ExportFilters } from '../api/export.api';
 
 /** Query keys for export-related queries */
@@ -14,6 +14,7 @@ export const exportKeys = {
   all: ['exports'] as const,
   previewCount: (filters: ExportFilters) => [...exportKeys.all, 'count', filters] as const,
   lgas: ['lgas'] as const,
+  publishedForms: ['forms', 'published'] as const,
 };
 
 /**
@@ -25,6 +26,19 @@ export function useExportPreviewCount(filters: ExportFilters) {
     queryKey: exportKeys.previewCount(filters),
     queryFn: () => fetchExportPreviewCount(filters),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Hook for published forms list (form selector dropdown).
+ * Cached for 5 minutes since forms rarely change.
+ */
+export function usePublishedForms() {
+  return useQuery({
+    queryKey: exportKeys.publishedForms,
+    queryFn: fetchPublishedForms,
+    staleTime: 5 * 60 * 1000,
+    select: (data) => (Array.isArray(data) ? data : []),
   });
 }
 
@@ -56,7 +70,8 @@ export function useExportDownload() {
     try {
       const blob = await downloadExport(filters, format);
       const dateStr = new Date().toISOString().split('T')[0];
-      const filename = `oslsr-export-${dateStr}.${format}`;
+      const prefix = filters.exportType === 'full' ? 'oslsr-full-export' : 'oslsr-export';
+      const filename = `${prefix}-${dateStr}.${format}`;
 
       // Trigger browser download
       const url = window.URL.createObjectURL(blob);

@@ -25,6 +25,13 @@ const exportAuthorize = authorize(
   UserRole.VERIFICATION_ASSESSOR,
 );
 
+// GET /api/v1/exports/forms — list published forms for dropdown (no rate limit)
+router.get(
+  '/forms',
+  exportAuthorize,
+  ExportController.getPublishedForms,
+);
+
 // GET /api/v1/exports/respondents/count — preview count (no rate limit)
 router.get(
   '/respondents/count',

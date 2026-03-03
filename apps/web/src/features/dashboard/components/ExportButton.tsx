@@ -77,14 +77,20 @@ export function ExportButton({ filters, defaultFormat }: ExportButtonProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          onClick={() => handleExport('csv')}
+          onSelect={(e) => {
+            e.preventDefault();
+            void handleExport('csv');
+          }}
           data-testid="export-csv-option"
         >
           <FileSpreadsheet className="w-4 h-4 mr-2" />
           Export CSV
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => handleExport('pdf')}
+          onSelect={(e) => {
+            e.preventDefault();
+            void handleExport('pdf');
+          }}
           data-testid="export-pdf-option"
         >
           <FileText className="w-4 h-4 mr-2" />

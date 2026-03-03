@@ -15,6 +15,16 @@ export interface ExportFilters {
   dateTo?: string;
   severity?: string;
   verificationStatus?: string;
+  formId?: string;
+  exportType?: 'summary' | 'full';
+}
+
+/** Published form item for dropdown */
+export interface FormListItem {
+  id: string;
+  title: string;
+  formId: string;
+  version: string;
 }
 
 /** LGA reference data */
@@ -24,10 +34,8 @@ export interface LgaItem {
   code: string;
 }
 
-/**
- * GET /api/v1/exports/respondents/count — preview filtered count
- */
-export async function fetchExportPreviewCount(filters: ExportFilters): Promise<number> {
+/** Build URLSearchParams from ExportFilters (shared between count + download) */
+function buildExportParams(filters: ExportFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.lgaId) params.set('lgaId', filters.lgaId);
   if (filters.source) params.set('source', filters.source);
@@ -35,7 +43,24 @@ export async function fetchExportPreviewCount(filters: ExportFilters): Promise<n
   if (filters.dateTo) params.set('dateTo', filters.dateTo);
   if (filters.severity) params.set('severity', filters.severity);
   if (filters.verificationStatus) params.set('verificationStatus', filters.verificationStatus);
+  if (filters.formId) params.set('formId', filters.formId);
+  if (filters.exportType) params.set('exportType', filters.exportType);
+  return params;
+}
 
+/**
+ * GET /api/v1/exports/forms — list published forms for dropdown
+ */
+export async function fetchPublishedForms(): Promise<FormListItem[]> {
+  const result = await apiClient('/exports/forms');
+  return result.data;
+}
+
+/**
+ * GET /api/v1/exports/respondents/count — preview filtered count
+ */
+export async function fetchExportPreviewCount(filters: ExportFilters): Promise<number> {
+  const params = buildExportParams(filters);
   const qs = params.toString();
   const result = await apiClient(`/exports/respondents/count${qs ? `?${qs}` : ''}`);
   return result.data.count;
@@ -46,13 +71,8 @@ export async function fetchExportPreviewCount(filters: ExportFilters): Promise<n
  * Uses raw fetch() for binary response (not apiClient which parses JSON).
  */
 export async function downloadExport(filters: ExportFilters, format: 'csv' | 'pdf'): Promise<Blob> {
-  const params = new URLSearchParams({ format });
-  if (filters.lgaId) params.set('lgaId', filters.lgaId);
-  if (filters.source) params.set('source', filters.source);
-  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-  if (filters.dateTo) params.set('dateTo', filters.dateTo);
-  if (filters.severity) params.set('severity', filters.severity);
-  if (filters.verificationStatus) params.set('verificationStatus', filters.verificationStatus);
+  const params = buildExportParams(filters);
+  params.set('format', format);
 
   const response = await fetch(`${API_BASE_URL}/exports/respondents?${params}`, {
     headers: getAuthHeaders(),

@@ -8,9 +8,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AppError } from '@oslsr/utils';
-import { ExportQueryService } from '../services/export-query.service.js';
+import { ExportQueryService, SUBMISSION_METADATA_COLUMNS, buildColumnsFromFormSchema, flattenRawDataRow, buildChoiceMaps } from '../services/export-query.service.js';
 import { ExportService } from '../services/export.service.js';
 import { AuditService, PII_ACTIONS } from '../services/audit.service.js';
+import { QuestionnaireService } from '../services/questionnaire.service.js';
 import type { AuthenticatedRequest } from '../types.js';
 import type { ExportColumn } from '../services/export.service.js';
 
@@ -22,6 +23,8 @@ export const exportFilterSchema = z.object({
   dateTo: z.string().datetime({ offset: true }).optional(),
   severity: z.enum(['clean', 'low', 'medium', 'high', 'critical']).optional(),
   verificationStatus: z.string().optional(),
+  formId: z.string().uuid().optional(),
+  exportType: z.enum(['summary', 'full']).default('summary'),
 });
 
 /** Zod schema for export download query params (includes format) */
@@ -73,9 +76,78 @@ export class ExportController {
         );
       }
 
-      const { format, lgaId, source, dateFrom, dateTo, severity, verificationStatus } = parseResult.data;
+      const { format, lgaId, source, dateFrom, dateTo, severity, verificationStatus, formId, exportType } = parseResult.data;
       const filters = { lgaId, source, dateFrom, dateTo, severity, verificationStatus };
 
+      // Generate date string for filename
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      // ── Full Response Mode ──────────────────────────────────────────
+      if (exportType === 'full') {
+        if (format !== 'csv') {
+          throw new AppError(
+            'VALIDATION_ERROR',
+            'Full Response export only supports CSV format',
+            400,
+          );
+        }
+        if (!formId) {
+          throw new AppError(
+            'VALIDATION_ERROR',
+            'formId is required for Full Response export',
+            400,
+          );
+        }
+
+        const formSchema = await QuestionnaireService.getFormSchemaById(formId);
+        if (!formSchema) {
+          throw new AppError('FORM_NOT_FOUND', 'Questionnaire form not found or has no schema', 404);
+        }
+
+        const fullFilters = { ...filters, formId };
+        const count = await ExportQueryService.getSubmissionFilteredCount(fullFilters);
+
+        // Audit log BEFORE generating export
+        AuditService.logPiiAccess(
+          req as AuthenticatedRequest,
+          PII_ACTIONS.EXPORT_CSV,
+          'submissions',
+          null,
+          { filters: fullFilters, recordCount: count, format, exportType, formId },
+        );
+
+        const { data } = await ExportQueryService.getSubmissionExportData(fullFilters);
+
+        // Build dynamic columns from form schema
+        const formColumns = buildColumnsFromFormSchema(formSchema);
+        const allColumns = [...SUBMISSION_METADATA_COLUMNS, ...formColumns];
+
+        // Pre-build choice maps once for O(1) label lookups across all rows
+        const choiceMaps = buildChoiceMaps(formSchema);
+
+        // Flatten rawData for each row and merge with metadata
+        const flatRows = data.map((row) => {
+          const { rawData, ...metadata } = row;
+          const flatFields = flattenRawDataRow(rawData, formSchema, choiceMaps);
+          return { ...metadata, ...flatFields };
+        });
+
+        const csvBuffer = await ExportService.generateCsvExport(
+          flatRows as unknown as Record<string, unknown>[],
+          allColumns,
+        );
+
+        res.set({
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="oslsr-full-export-${dateStr}.csv"`,
+          'Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+        });
+        res.send(csvBuffer);
+        return;
+      }
+
+      // ── Summary Mode (existing behavior) ────────────────────────────
       // Check filtered count first (enforce PDF row limit)
       const count = await ExportQueryService.getFilteredCount(filters);
 
@@ -94,14 +166,11 @@ export class ExportController {
         auditAction,
         'respondents',
         null,
-        { filters, recordCount: count, format },
+        { filters, recordCount: count, format, exportType },
       );
 
       // Fetch full data
       const { data } = await ExportQueryService.getRespondentExportData(filters);
-
-      // Generate date string for filename
-      const dateStr = new Date().toISOString().split('T')[0];
 
       if (format === 'csv') {
         const csvBuffer = await ExportService.generateCsvExport(
@@ -159,12 +228,43 @@ export class ExportController {
         );
       }
 
-      const { lgaId, source, dateFrom, dateTo, severity, verificationStatus } = parseResult.data;
+      const { lgaId, source, dateFrom, dateTo, severity, verificationStatus, formId, exportType } = parseResult.data;
       const filters = { lgaId, source, dateFrom, dateTo, severity, verificationStatus };
 
-      const count = await ExportQueryService.getFilteredCount(filters);
+      let count: number;
+      if (exportType === 'full' && formId) {
+        count = await ExportQueryService.getSubmissionFilteredCount({ ...filters, formId });
+      } else {
+        count = await ExportQueryService.getFilteredCount(filters);
+      }
 
       res.json({ data: { count } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/exports/forms
+   * List published forms for the form selector dropdown.
+   */
+  static async getPublishedForms(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user?.sub) {
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
+      }
+
+      const result = await QuestionnaireService.listForms({ status: 'published', pageSize: 200 });
+
+      const data = result.data.map((form) => ({
+        id: form.id,
+        title: form.title,
+        formId: form.formId,
+        version: form.version,
+      }));
+
+      res.json({ data });
     } catch (err) {
       next(err);
     }

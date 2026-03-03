@@ -7,14 +7,14 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Download, FileText, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, AlertTriangle, Database, List } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Skeleton } from '../../../components/ui/skeleton';
-import { useExportPreviewCount, useExportDownload, useLgas } from '../hooks/useExport';
+import { useExportPreviewCount, useExportDownload, useLgas, usePublishedForms } from '../hooks/useExport';
 import { useToast } from '../../../hooks/useToast';
 import type { ExportFilters } from '../api/export.api';
 
@@ -35,6 +35,10 @@ const PDF_MAX_ROWS = 1000;
 export default function ExportPage() {
   const toast = useToast();
 
+  // Export mode state
+  const [exportType, setExportType] = useState<'summary' | 'full'>('summary');
+  const [formId, setFormId] = useState<string>('');
+
   // Filter state
   const [lgaId, setLgaId] = useState<string>('');
   const [source, setSource] = useState<string>('');
@@ -44,6 +48,15 @@ export default function ExportPage() {
   const [verificationStatus, setVerificationStatus] = useState<string>('');
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
 
+  // Force CSV when in full response mode
+  useEffect(() => {
+    if (exportType === 'full' && format !== 'csv') {
+      setFormat('csv');
+    }
+  }, [exportType, format]);
+
+  const isFullMode = exportType === 'full';
+
   // Build filters object (only include non-empty values)
   const filters: ExportFilters = {
     ...(lgaId && { lgaId }),
@@ -52,6 +65,8 @@ export default function ExportPage() {
     ...(dateTo && { dateTo: new Date(dateTo).toISOString() }),
     ...(severity && { severity }),
     ...(verificationStatus && { verificationStatus }),
+    ...(isFullMode && formId && { formId }),
+    exportType,
   };
 
   // Debounce filters for count preview to avoid excessive API calls on rapid changes
@@ -60,15 +75,17 @@ export default function ExportPage() {
     const timer = setTimeout(() => setDebouncedFilters(filters), 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lgaId, source, dateFrom, dateTo, severity, verificationStatus]);
+  }, [lgaId, source, dateFrom, dateTo, severity, verificationStatus, formId, exportType]);
 
   // Queries
   const { data: lgas = [], isLoading: lgasLoading, isError: lgaError } = useLgas();
+  const { data: publishedForms = [], isLoading: formsLoading } = usePublishedForms();
   const { data: previewCount, isLoading: countLoading } = useExportPreviewCount(debouncedFilters);
   const { download, isDownloading } = useExportDownload();
 
   const recordCount = previewCount ?? 0;
-  const isPdfLimited = format === 'pdf' && recordCount > PDF_MAX_ROWS;
+  const isPdfLimited = !isFullMode && format === 'pdf' && recordCount > PDF_MAX_ROWS;
+  const isFormRequired = isFullMode && !formId;
 
   const handleExport = async () => {
     try {
@@ -98,6 +115,67 @@ export default function ExportPage() {
         <h1 className="text-2xl font-brand font-semibold text-gray-800">Export Reports</h1>
         <p className="text-sm text-gray-500 mt-1">Download filtered respondent data as CSV or PDF</p>
       </div>
+
+      {/* Export Mode Toggle */}
+      <Card className="border border-gray-200">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-4">
+            <Label className="text-sm font-medium text-gray-600 shrink-0">Export Mode</Label>
+            <div className="grid grid-cols-2 gap-2 max-w-md" data-testid="mode-toggle">
+              <Button
+                variant={exportType === 'summary' ? 'default' : 'outline'}
+                className={exportType === 'summary' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
+                onClick={() => setExportType('summary')}
+                data-testid="mode-summary"
+              >
+                <List className="w-4 h-4 mr-2" />
+                Respondent Summary
+              </Button>
+              <Button
+                variant={exportType === 'full' ? 'default' : 'outline'}
+                className={exportType === 'full' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
+                onClick={() => setExportType('full')}
+                data-testid="mode-full"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Full Response
+              </Button>
+            </div>
+          </div>
+
+          {/* Form Selector — only in Full Response mode */}
+          {isFullMode && (
+            <div className="mt-4 max-w-md" data-testid="form-selector-container">
+              <Label htmlFor="form-selector" className="text-sm font-medium text-gray-600">Select Form</Label>
+              {formsLoading ? (
+                <Skeleton className="h-10 w-full mt-1.5" />
+              ) : publishedForms.length === 0 ? (
+                <p className="text-sm text-gray-500 mt-1.5" data-testid="no-forms-message">
+                  No published forms available. Publish a form first to enable full response export.
+                </p>
+              ) : (
+                <Select value={formId} onValueChange={setFormId}>
+                  <SelectTrigger data-testid="form-selector" className="mt-1.5">
+                    <SelectValue placeholder="Select a published form..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {publishedForms.map((form) => (
+                      <SelectItem key={form.id} value={form.id}>
+                        {form.title} (v{form.version})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {isFormRequired && (
+                <p className="text-xs text-amber-600 mt-1" data-testid="form-required-message">
+                  Please select a form to export full response data
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Filter Controls (left column) */}
@@ -191,6 +269,9 @@ export default function ExportPage() {
                       onChange={(e) => setDateTo(e.target.value)}
                       data-testid="date-to-filter"
                     />
+                    <p className="text-xs text-gray-400" data-testid="date-hint">
+                      {isFullMode ? 'Filters by submission date' : 'Filters by registration date'}
+                    </p>
                   </div>
 
                   {/* Fraud Severity Filter */}
@@ -245,9 +326,15 @@ export default function ExportPage() {
                   <Skeleton className="h-8 w-24 mx-auto" />
                 ) : (
                   <>
-                    <p className="text-3xl font-bold text-gray-800">{recordCount.toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-gray-800">
+                      {isFullMode && !formId ? '—' : recordCount.toLocaleString()}
+                    </p>
                     <p className="text-sm text-gray-500 mt-1">
-                      {hasActiveFilters ? 'records match your filters' : 'total records'}
+                      {isFullMode
+                        ? (formId
+                          ? (hasActiveFilters ? 'submissions match your filters' : 'total submissions')
+                          : 'select a form to see count')
+                        : (hasActiveFilters ? 'records match your filters' : 'total records')}
                     </p>
                   </>
                 )}
@@ -266,16 +353,21 @@ export default function ExportPage() {
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
                     CSV
                   </Button>
-                  <Button
-                    variant={format === 'pdf' ? 'default' : 'outline'}
-                    className={format === 'pdf' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
-                    onClick={() => setFormat('pdf')}
-                    data-testid="format-pdf"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    PDF
-                  </Button>
+                  {!isFullMode && (
+                    <Button
+                      variant={format === 'pdf' ? 'default' : 'outline'}
+                      className={format === 'pdf' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
+                      onClick={() => setFormat('pdf')}
+                      data-testid="format-pdf"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      PDF
+                    </Button>
+                  )}
                 </div>
+                {isFullMode && (
+                  <p className="text-xs text-gray-500">Full Response export supports CSV only</p>
+                )}
               </div>
 
               {/* PDF Warning */}
@@ -294,7 +386,7 @@ export default function ExportPage() {
               {/* Export Button */}
               <Button
                 className="w-full bg-[#9C1E23] hover:bg-[#7A171B] text-white font-semibold"
-                disabled={recordCount === 0 || isDownloading || isPdfLimited}
+                disabled={recordCount === 0 || isDownloading || isPdfLimited || isFormRequired}
                 onClick={handleExport}
                 data-testid="export-button"
               >

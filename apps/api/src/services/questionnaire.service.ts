@@ -13,6 +13,7 @@ import { convertToNativeForm } from './xlsform-to-native-converter.js';
 import type {
   QuestionnaireFormStatus,
   XlsformValidationResult,
+  NativeFormSchema,
 } from '@oslsr/types';
 import { VALID_STATUS_TRANSITIONS, nativeFormSchema } from '@oslsr/types';
 import { uuidv7 } from 'uuidv7';
@@ -329,6 +330,21 @@ export class QuestionnaireService {
         createdAt: v.createdAt,
       })),
     };
+  }
+
+  /**
+   * Get only the formSchema JSONB for a form by its UUID.
+   * Lightweight method that avoids loading versions or file metadata.
+   * Returns null if form not found or formSchema is null.
+   */
+  static async getFormSchemaById(id: string): Promise<NativeFormSchema | null> {
+    const form = await db.query.questionnaireForms.findFirst({
+      where: eq(questionnaireForms.id, id),
+      columns: { formSchema: true },
+    });
+
+    if (!form?.formSchema) return null;
+    return form.formSchema as NativeFormSchema;
   }
 
   /**

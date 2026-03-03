@@ -29,11 +29,20 @@ let mockLgasReturn = {
   isError: false,
 };
 
+let mockPublishedFormsReturn = {
+  data: [
+    { id: 'form-1', title: 'OSLSR Master v3', formId: 'oslsr_master_v3', version: '1.0.0' },
+    { id: 'form-2', title: 'Skills Survey', formId: 'skills_v1', version: '2.0.0' },
+  ] as Array<{ id: string; title: string; formId: string; version: string }> | undefined,
+  isLoading: false,
+};
+
 const mockDownload = vi.fn().mockResolvedValue('oslsr-export-2026-02-22.csv');
 
 vi.mock('../../hooks/useExport', () => ({
   useExportPreviewCount: () => mockPreviewCountReturn,
   useLgas: () => mockLgasReturn,
+  usePublishedForms: () => mockPublishedFormsReturn,
   useExportDownload: () => ({
     download: mockDownload,
     isDownloading: false,
@@ -43,6 +52,7 @@ vi.mock('../../hooks/useExport', () => ({
     all: ['exports'],
     previewCount: (f: unknown) => ['exports', 'count', f],
     lgas: ['lgas'],
+    publishedForms: ['forms', 'published'],
   },
 }));
 
@@ -82,6 +92,13 @@ describe('ExportPage', () => {
       ],
       isLoading: false,
       isError: false,
+    };
+    mockPublishedFormsReturn = {
+      data: [
+        { id: 'form-1', title: 'OSLSR Master v3', formId: 'oslsr_master_v3', version: '1.0.0' },
+        { id: 'form-2', title: 'Skills Survey', formId: 'skills_v1', version: '2.0.0' },
+      ],
+      isLoading: false,
     };
   });
 
@@ -236,5 +253,109 @@ describe('ExportPage', () => {
     expect(screen.getByTestId('lga-error')).toBeInTheDocument();
     expect(screen.getByTestId('lga-filter')).toBeInTheDocument();
     expect(screen.queryByTestId('filter-skeleton')).not.toBeInTheDocument();
+  });
+
+  // ── Export Mode Toggle & Full Response Tests ───────────────────────
+
+  it('renders mode toggle with Summary and Full Response buttons', () => {
+    renderComponent();
+
+    expect(screen.getByTestId('mode-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('mode-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('mode-full')).toBeInTheDocument();
+  });
+
+  it('defaults to Respondent Summary mode', () => {
+    renderComponent();
+
+    // Summary is default — no form selector should be visible
+    expect(screen.queryByTestId('form-selector-container')).not.toBeInTheDocument();
+    // PDF button should be available in summary mode
+    expect(screen.getByTestId('format-pdf')).toBeInTheDocument();
+  });
+
+  it('shows form selector when Full Response mode is selected', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    expect(screen.getByTestId('form-selector-container')).toBeInTheDocument();
+    expect(screen.getByTestId('form-selector')).toBeInTheDocument();
+  });
+
+  it('hides form selector when switching back to Summary mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+    expect(screen.getByTestId('form-selector-container')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('mode-summary'));
+    expect(screen.queryByTestId('form-selector-container')).not.toBeInTheDocument();
+  });
+
+  it('hides PDF format option in Full Response mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    expect(screen.queryByTestId('format-pdf')).not.toBeInTheDocument();
+    expect(screen.getByTestId('format-csv')).toBeInTheDocument();
+  });
+
+  it('shows form required message when Full Response mode without form selected', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    expect(screen.getByTestId('form-required-message')).toBeInTheDocument();
+    expect(screen.getByTestId('form-required-message').textContent).toContain('Please select a form');
+  });
+
+  it('export button disabled when Full Response mode and no form selected', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    const exportBtn = screen.getByTestId('export-button');
+    expect(exportBtn).toBeDisabled();
+  });
+
+  it('shows placeholder count in Full Response mode without form selected', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    const countEl = screen.getByTestId('record-count');
+    expect(countEl.textContent).toContain('—');
+    expect(countEl.textContent).toContain('select a form to see count');
+  });
+
+  it('shows record count label in Summary mode', () => {
+    renderComponent();
+
+    const countEl = screen.getByTestId('record-count');
+    expect(countEl.textContent).toContain('records');
+  });
+
+  it('shows no-forms message when no published forms available', () => {
+    mockPublishedFormsReturn = { data: [], isLoading: false };
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    expect(screen.getByTestId('no-forms-message')).toBeInTheDocument();
+    expect(screen.getByTestId('no-forms-message').textContent).toContain('No published forms available');
+    expect(screen.queryByTestId('form-selector')).not.toBeInTheDocument();
+  });
+
+  it('shows date filter hint based on export mode', () => {
+    renderComponent();
+
+    const hint = screen.getByTestId('date-hint');
+    expect(hint.textContent).toContain('registration date');
+
+    fireEvent.click(screen.getByTestId('mode-full'));
+
+    expect(screen.getByTestId('date-hint').textContent).toContain('submission date');
   });
 });
