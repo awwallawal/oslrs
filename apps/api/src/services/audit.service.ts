@@ -41,6 +41,7 @@ export const AUDIT_ACTIONS = {
   PII_SEARCH: 'pii.search',
   PII_VIEW_PRODUCTIVITY: 'pii.view_productivity',
   PII_EXPORT_PRODUCTIVITY: 'pii.export_productivity',
+  PII_VIEW_SUBMISSION_RESPONSE: 'pii.view_submission_response',
   // Data Modification
   DATA_CREATE: 'data.create',
   DATA_UPDATE: 'data.update',
@@ -75,6 +76,7 @@ export const PII_ACTIONS = {
   SEARCH_PII: AUDIT_ACTIONS.PII_SEARCH,
   VIEW_PRODUCTIVITY: AUDIT_ACTIONS.PII_VIEW_PRODUCTIVITY,
   EXPORT_PRODUCTIVITY: AUDIT_ACTIONS.PII_EXPORT_PRODUCTIVITY,
+  VIEW_SUBMISSION_RESPONSE: AUDIT_ACTIONS.PII_VIEW_SUBMISSION_RESPONSE,
 } as const;
 
 export type PiiAction = (typeof PII_ACTIONS)[keyof typeof PII_ACTIONS];

@@ -30,7 +30,12 @@ let mockUser = { role: 'super_admin', id: 'user-1', email: 'admin@test.com', ful
 
 vi.mock('../../hooks/useRespondent', () => ({
   useRespondentDetail: () => mockDetailReturn,
-  respondentKeys: { all: ['respondents'], detail: (id: string) => ['respondents', 'detail', id] },
+  useSubmissionResponses: () => ({ data: undefined, isLoading: false }),
+  respondentKeys: {
+    all: ['respondents'],
+    detail: (id: string) => ['respondents', 'detail', id],
+    submissionResponses: (rid: string, sid: string) => ['respondents', 'submissionResponses', rid, sid],
+  },
 }));
 
 vi.mock('../../../auth', () => ({
@@ -151,7 +156,7 @@ describe('RespondentDetailPage', () => {
       expect(screen.getByText('+2348012345678')).toBeInTheDocument();
       expect(screen.getByText('1990-05-15')).toBeInTheDocument();
       // Name appears in header + card, use getAllByText
-      expect(screen.getAllByText('Adewale Johnson').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Johnson, Adewale').length).toBeGreaterThanOrEqual(1);
       // LGA appears in both PII and operational cards
       expect(screen.getAllByText('Ibadan North').length).toBeGreaterThanOrEqual(1);
     });
@@ -175,7 +180,7 @@ describe('RespondentDetailPage', () => {
 
       expect(screen.queryByTestId('pii-card')).not.toBeInTheDocument();
       expect(screen.queryByText('61961438053')).not.toBeInTheDocument();
-      expect(screen.queryByText('Adewale Johnson')).not.toBeInTheDocument();
+      expect(screen.queryByText('Johnson, Adewale')).not.toBeInTheDocument();
     });
 
     it('still shows operational card for supervisor', () => {
@@ -286,7 +291,7 @@ describe('RespondentDetailPage', () => {
       );
 
       // Official route should show the dark header with the respondent name
-      expect(screen.getAllByText('Adewale Johnson').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Johnson, Adewale').length).toBeGreaterThanOrEqual(1);
       // Direction 08 section headers with uppercase tracking
       expect(screen.getByText('Personal Information')).toBeInTheDocument();
     });
@@ -298,7 +303,7 @@ describe('RespondentDetailPage', () => {
       );
 
       // Regular heading style
-      expect(screen.getAllByText('Adewale Johnson').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Johnson, Adewale').length).toBeGreaterThanOrEqual(1);
     });
   });
 

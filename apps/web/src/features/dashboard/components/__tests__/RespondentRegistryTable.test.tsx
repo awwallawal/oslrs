@@ -6,7 +6,7 @@
  * row click navigation, pagination controls, empty state.
  *
  * Tests:
- * - Renders all 11 columns for super_admin
+ * - Renders all key columns for super_admin
  * - Hides PII columns (firstName, nin, phoneNumber) for supervisor
  * - Shows skeleton table during loading
  * - Row click calls navigate
@@ -40,12 +40,6 @@ vi.mock('../../../../components/skeletons/SkeletonTable', () => ({
     <div data-testid="registry-table-skeleton" aria-label="Loading table" aria-busy="true">
       skeleton-cols:{columns}-rows:{rows}
     </div>
-  ),
-}));
-
-vi.mock('../FraudSeverityBadge', () => ({
-  FraudSeverityBadge: ({ severity }: { severity: string }) => (
-    <span data-testid="fraud-badge">{severity}</span>
   ),
 }));
 
@@ -122,22 +116,20 @@ beforeEach(() => {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('RespondentRegistryTable', () => {
-  it('renders all 11 columns for super_admin', () => {
+  it('renders core columns for super_admin', () => {
     render(<RespondentRegistryTable {...defaultProps} />);
 
     const table = screen.getByTestId('registry-table');
     expect(table).toBeInTheDocument();
 
-    // All 11 column headers: Name, NIN, Phone, Gender, LGA, Channel, Enumerator, Form, Date, Fraud, Status
+    // Core headers after de-cluttering: Surname, First Name ... Status (Fraud removed)
     // Use getAllByText where the header text also appears in cell data
-    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.getByText('Surname, First Name')).toBeInTheDocument();
     expect(screen.getByText('NIN')).toBeInTheDocument();
     expect(screen.getByText('Phone')).toBeInTheDocument();
     expect(screen.getByText('Gender')).toBeInTheDocument();
     expect(screen.getByText('Channel')).toBeInTheDocument();
     expect(screen.getByText('Form')).toBeInTheDocument();
-    expect(screen.getByText('Date')).toBeInTheDocument();
-    expect(screen.getByText('Fraud')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
 
     // These header texts also appear as cell values, so use getAllByText
@@ -154,7 +146,7 @@ describe('RespondentRegistryTable', () => {
     expect(table).toBeInTheDocument();
 
     // PII columns should be hidden
-    expect(screen.queryByText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Surname, First Name')).not.toBeInTheDocument();
     expect(screen.queryByText('NIN')).not.toBeInTheDocument();
     expect(screen.queryByText('Phone')).not.toBeInTheDocument();
 
@@ -169,7 +161,7 @@ describe('RespondentRegistryTable', () => {
 
     const skeleton = screen.getByTestId('registry-table-skeleton');
     expect(skeleton).toBeInTheDocument();
-    expect(skeleton.textContent).toContain('skeleton-cols:11');
+    expect(skeleton.textContent).toContain('skeleton-cols:10');
   });
 
   it('shows skeleton with 8 columns for supervisor loading', () => {
@@ -177,7 +169,7 @@ describe('RespondentRegistryTable', () => {
 
     const skeleton = screen.getByTestId('registry-table-skeleton');
     expect(skeleton).toBeInTheDocument();
-    expect(skeleton.textContent).toContain('skeleton-cols:8');
+    expect(skeleton.textContent).toContain('skeleton-cols:7');
   });
 
   it('row click calls navigate', () => {

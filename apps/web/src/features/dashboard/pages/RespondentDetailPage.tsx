@@ -13,8 +13,9 @@
  * AC10: Direction 08 styling for official route.
  */
 
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, FileText, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, AlertTriangle, FileText, Shield, Eye } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { FraudSeverityBadge } from '../components/FraudSeverityBadge';
@@ -22,6 +23,7 @@ import { FraudResolutionBadge } from '../components/FraudResolutionBadge';
 import { RespondentDetailSkeleton } from '../components/RespondentDetailSkeleton';
 import { useRespondentDetail } from '../hooks/useRespondent';
 import { useAuth } from '../../auth';
+import SubmissionResponseSheet from '../components/SubmissionResponseSheet';
 import type { SubmissionSummary } from '@oslsr/types';
 
 // ── Processing status badge ──────────────────────────────────────────
@@ -110,7 +112,17 @@ export default function RespondentDetailPage() {
     : location.pathname.includes('/official/') ? 'Registry'
     : 'Dashboard';
 
-  const { data: detail, isLoading, isError } = useRespondentDetail(respondentId ?? '');
+  const { data: detail, isLoading, isError, error } = useRespondentDetail(respondentId ?? '');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [viewingSubmissionId, setViewingSubmissionId] = useState<string | null>(null);
+
+  // Auto-open sheet when ?viewSubmission=latest is present
+  useEffect(() => {
+    if (detail && searchParams.get('viewSubmission') === 'latest' && detail.submissions.length > 0) {
+      setViewingSubmissionId(detail.submissions[0].id);
+      setSearchParams({}, { replace: true }); // Clean up query param
+    }
+  }, [detail, searchParams, setSearchParams]);
 
   // Determine the fraud review navigation path based on current role
   const getFraudReviewPath = (submission: SubmissionSummary) => {
@@ -136,6 +148,9 @@ export default function RespondentDetailPage() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <AlertTriangle className="w-12 h-12 text-red-300 mb-4" />
           <p className="text-red-600 font-medium">Failed to load respondent details</p>
+          <p className="text-sm text-red-500 mt-1">
+            {(error as { message?: string } | null)?.message || 'Unable to fetch record from server.'}
+          </p>
           <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>
             Go Back
           </Button>
@@ -144,9 +159,10 @@ export default function RespondentDetailPage() {
     );
   }
 
-  const displayName = detail.firstName && detail.lastName
-    ? `${detail.firstName} ${detail.lastName}`
-    : 'Record Details';
+  const first = detail.firstName?.trim() || '';
+  const last = detail.lastName?.trim() || '';
+  const fullName = last && first ? `${last}, ${first}` : (last || first);
+  const displayName = fullName || 'Record Details';
 
   return (
     <div className="p-6">
@@ -210,7 +226,7 @@ export default function RespondentDetailPage() {
               </CardHeader>
             )}
             <CardContent className="space-y-1">
-              <InfoRow label="Full Name" value={`${detail.firstName} ${detail.lastName}`} />
+              <InfoRow label="Full Name" value={fullName || null} />
               <InfoRow label="NIN" value={detail.nin} mono />
               <InfoRow label="Phone Number" value={detail.phoneNumber} />
               <InfoRow label="Date of Birth" value={detail.dateOfBirth} />
@@ -323,13 +339,19 @@ export default function RespondentDetailPage() {
                     <th className="px-4 py-3 text-left font-medium text-neutral-600">Enumerator</th>
                     <th className="px-4 py-3 text-left font-medium text-neutral-600">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-neutral-600">Fraud Score</th>
+                    <th className="px-4 py-3 text-left font-medium text-neutral-600">View</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.submissions.map((submission, index) => {
                     const fraudPath = getFraudReviewPath(submission);
                     return (
-                      <tr key={submission.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                      <tr
+                        key={submission.id}
+                        className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer"
+                        onClick={() => setViewingSubmissionId(submission.id)}
+                        data-testid={`submission-row-${index}`}
+                      >
                         <td className="px-4 py-3 text-neutral-500">{index + 1}</td>
                         <td className="px-4 py-3 text-neutral-900">
                           {new Date(submission.submittedAt).toLocaleDateString()}
@@ -359,6 +381,19 @@ export default function RespondentDetailPage() {
                             <span className="text-neutral-400">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingSubmissionId(submission.id);
+                            }}
+                            className="p-1 rounded hover:bg-neutral-200 text-neutral-400 hover:text-neutral-700"
+                            data-testid={`view-submission-${index}`}
+                            title="View form responses"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -368,6 +403,16 @@ export default function RespondentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Submission Response Sheet */}
+      <SubmissionResponseSheet
+        open={!!viewingSubmissionId}
+        onOpenChange={(open) => { if (!open) setViewingSubmissionId(null); }}
+        respondentId={respondentId ?? ''}
+        submissionId={viewingSubmissionId ?? ''}
+        respondentName={fullName || undefined}
+        onSubmissionChange={setViewingSubmissionId}
+      />
     </div>
   );
 }

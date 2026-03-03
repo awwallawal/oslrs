@@ -7,7 +7,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { fetchRespondentDetail } from '../api/respondent.api';
+import { fetchRespondentDetail, fetchSubmissionResponses } from '../api/respondent.api';
 import { fetchRespondentList } from '../api/registry.api';
 import type { RespondentFilterParams } from '@oslsr/types';
 
@@ -18,9 +18,20 @@ export const respondentKeys = {
   lists: () => [...respondentKeys.all, 'list'] as const,
   list: (params: RespondentFilterParams) => [...respondentKeys.lists(), params] as const,
   detail: (id: string) => [...respondentKeys.all, 'detail', id] as const,
+  submissionResponses: (respondentId: string, submissionId: string) =>
+    [...respondentKeys.all, 'submissionResponses', respondentId, submissionId] as const,
 };
 
 // ── Query Hooks ───────────────────────────────────────────────────────
+
+export function useSubmissionResponses(respondentId: string, submissionId: string) {
+  return useQuery({
+    queryKey: respondentKeys.submissionResponses(respondentId, submissionId),
+    queryFn: () => fetchSubmissionResponses(respondentId, submissionId),
+    enabled: !!respondentId && !!submissionId,
+    staleTime: 60_000,
+  });
+}
 
 export function useRespondentDetail(id: string) {
   return useQuery({

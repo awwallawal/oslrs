@@ -4,11 +4,13 @@ import type { Request, Response, NextFunction } from 'express';
 // ── Hoisted mocks ────────────────────────────────────────────────────
 
 const mockGetRespondentDetail = vi.fn();
+const mockGetSubmissionResponses = vi.fn();
 const mockLogPiiAccess = vi.fn();
 
 vi.mock('../../services/respondent.service.js', () => ({
   RespondentService: {
     getRespondentDetail: (...args: unknown[]) => mockGetRespondentDetail(...args),
+    getSubmissionResponses: (...args: unknown[]) => mockGetSubmissionResponses(...args),
   },
 }));
 
@@ -22,6 +24,7 @@ vi.mock('../../services/audit.service.js', () => ({
     EXPORT_CSV: 'pii.export_csv',
     EXPORT_PDF: 'pii.export_pdf',
     SEARCH_PII: 'pii.search',
+    VIEW_SUBMISSION_RESPONSE: 'pii.view_submission_response',
   },
 }));
 
@@ -374,6 +377,188 @@ describe('RespondentController', () => {
 
       await RespondentController.getRespondentDetail(
         makeReq({ user: undefined }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Authentication required' }),
+      );
+    });
+  });
+
+  describe('getSubmissionResponses', () => {
+    const TEST_SUBMISSION_ID = '018e5f2a-1234-7890-abcd-444444444444';
+
+    const mockSubmissionResponse = {
+      submissionId: TEST_SUBMISSION_ID,
+      respondentId: TEST_RESPONDENT_ID,
+      submittedAt: '2026-01-20T14:30:00.000Z',
+      source: 'enumerator',
+      enumeratorName: 'Jane Doe',
+      completionTimeSeconds: 120,
+      gpsLatitude: 7.3776,
+      gpsLongitude: 3.947,
+      fraudSeverity: 'medium',
+      fraudScore: 45.5,
+      verificationStatus: null,
+      formTitle: 'OSLSR Master v3',
+      formVersion: '1.0.0',
+      sections: [
+        {
+          title: 'Demographics',
+          fields: [
+            { label: 'Employment Status', value: 'Wage Earner (Government)' },
+          ],
+        },
+      ],
+      siblingSubmissionIds: [TEST_SUBMISSION_ID],
+    };
+
+    function makeSubmissionReq(overrides: Record<string, unknown> = {}): Request {
+      return {
+        query: {},
+        params: { respondentId: TEST_RESPONDENT_ID, submissionId: TEST_SUBMISSION_ID },
+        body: {},
+        headers: { 'user-agent': 'test-agent' },
+        ip: '127.0.0.1',
+        user: { sub: TEST_USER_ID, role: 'super_admin' },
+        get: (h: string) => h === 'user-agent' ? 'test-agent' : undefined,
+        ...overrides,
+      } as unknown as Request;
+    }
+
+    it('returns structured sections with mapped labels', async () => {
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      mockGetSubmissionResponses.mockResolvedValue(mockSubmissionResponse);
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq(),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockSubmissionResponse });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 if submission not found', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetSubmissionResponses.mockRejectedValue(
+        Object.assign(new Error('Submission not found'), { statusCode: 404, code: 'NOT_FOUND' }),
+      );
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq(),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Submission not found' }),
+      );
+    });
+
+    it('returns 404 for IDOR — submission belongs to different respondent', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetSubmissionResponses.mockRejectedValue(
+        Object.assign(new Error('Submission not found for this respondent'), { statusCode: 404, code: 'NOT_FOUND' }),
+      );
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq(),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Submission not found for this respondent' }),
+      );
+    });
+
+    it('returns 403 for supervisor when enumerator not in team', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetSubmissionResponses.mockRejectedValue(
+        Object.assign(new Error('Submission not in your team scope'), { statusCode: 403, code: 'FORBIDDEN' }),
+      );
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq({ user: { sub: TEST_USER_ID, role: 'supervisor' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Submission not in your team scope' }),
+      );
+    });
+
+    it('audit log includes VIEW_SUBMISSION_RESPONSE action', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetSubmissionResponses.mockResolvedValue(mockSubmissionResponse);
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq(),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+        expect.anything(),
+        'pii.view_submission_response',
+        'submissions',
+        TEST_SUBMISSION_ID,
+        { respondentId: TEST_RESPONDENT_ID },
+      );
+    });
+
+    it('returns empty sections for legacy form (no schema)', async () => {
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      const legacyResponse = { ...mockSubmissionResponse, sections: [] };
+      mockGetSubmissionResponses.mockResolvedValue(legacyResponse);
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq(),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(jsonMock.mock.calls[0][0].data.sections).toHaveLength(0);
+    });
+
+    it('returns 400 for invalid UUID format', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq({ params: { respondentId: 'bad-id', submissionId: TEST_SUBMISSION_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Invalid respondent ID format' }),
+      );
+    });
+
+    it('returns 400 for invalid submission UUID format', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq({ params: { respondentId: TEST_RESPONDENT_ID, submissionId: 'not-uuid' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Invalid submission ID format' }),
+      );
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await RespondentController.getSubmissionResponses(
+        makeSubmissionReq({ user: undefined }),
         mockRes as Response,
         mockNext,
       );

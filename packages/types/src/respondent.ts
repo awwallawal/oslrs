@@ -88,6 +88,27 @@ export interface CursorPaginatedResponse<T> {
   };
 }
 
+export interface SubmissionResponseDetail {
+  submissionId: string;
+  respondentId: string;
+  submittedAt: string;
+  source: string;
+  enumeratorName: string | null;
+  completionTimeSeconds: number | null;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+  fraudSeverity: string | null;
+  fraudScore: number | null;
+  verificationStatus: string | null;
+  formTitle: string;
+  formVersion: string;
+  sections: Array<{
+    title: string;
+    fields: Array<{ label: string; value: string }>;
+  }>;
+  siblingSubmissionIds: string[];
+}
+
 export interface RespondentDetailResponse {
   id: string;
   // PII fields - null for supervisor role

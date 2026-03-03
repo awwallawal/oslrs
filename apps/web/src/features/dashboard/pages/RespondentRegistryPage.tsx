@@ -44,7 +44,7 @@ export default function RespondentRegistryPage() {
     useLiveMonitoring(activePreset);
 
   // ── Data Fetch ─────────────────────────────────────────────────
-  const { data: response, isLoading, dataUpdatedAt } = useRespondentList(filters, {
+  const { data: response, isLoading, isError, error, dataUpdatedAt } = useRespondentList(filters, {
     refetchInterval,
   });
 
@@ -251,6 +251,14 @@ export default function RespondentRegistryPage() {
 
       {/* Registry Table */}
       <div className={`bg-white border border-gray-200 rounded-lg overflow-hidden ${isOfficialRoute ? 'bg-[#FAFAFA]' : ''}`}>
+        {isError && (
+          <div
+            className="mx-3 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            data-testid="registry-load-error"
+          >
+            {(error as { message?: string } | null)?.message || 'Unable to load respondent registry.'}
+          </div>
+        )}
         <RespondentRegistryTable
           data={response?.data ?? []}
           isLoading={isLoading}

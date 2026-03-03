@@ -29,4 +29,18 @@ router.get('/', authorize(...AUTHORIZED_ROLES), RespondentController.listRespond
 // GET /api/v1/respondents/:id — respondent detail (Story 5.3)
 router.get('/:id', authorize(...AUTHORIZED_ROLES), RespondentController.getRespondentDetail);
 
+// GET /api/v1/respondents/:respondentId/submissions/:submissionId/responses — submission form responses
+router.get(
+  '/:respondentId/submissions/:submissionId/responses',
+  authorize(...AUTHORIZED_ROLES),
+  RespondentController.getSubmissionResponses,
+);
+
+// GET /api/v1/respondents/:respondentId/submissions/:submissionId/export?format=csv|pdf
+router.get(
+  '/:respondentId/submissions/:submissionId/export',
+  authorize(...AUTHORIZED_ROLES),
+  RespondentController.exportSubmissionResponses,
+);
+
 export default router;

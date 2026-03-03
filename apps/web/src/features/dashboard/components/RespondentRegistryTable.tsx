@@ -1,5 +1,5 @@
-/**
- * RespondentRegistryTable — Server-side paginated table with TanStack Table v8
+﻿/**
+ * RespondentRegistryTable â€” Server-side paginated table with TanStack Table v8
  *
  * Story 5.5 Task 5: Role-based column visibility, sortable headers, row click navigation.
  * Uses @tanstack/react-table in manual (server-side) mode.
@@ -15,13 +15,12 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { SkeletonTable } from '../../../components/skeletons/SkeletonTable';
-import { FraudSeverityBadge } from './FraudSeverityBadge';
 import type { RespondentListItem } from '@oslsr/types';
 
-// ── Verification Status Badge ────────────────────────────────────
+// â”€â”€ Verification Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   unprocessed: { label: 'Unprocessed', className: 'bg-gray-100 text-gray-600' },
@@ -45,7 +44,7 @@ function VerificationStatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── Source label helper ──────────────────────────────────────────
+// â”€â”€ Source label helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function sourceLabel(source: string): string {
   switch (source) {
@@ -60,30 +59,31 @@ function sourceLabel(source: string): string {
   }
 }
 
-// ── Column Definitions ──────────────────────────────────────────
+// â”€â”€ Column Definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildColumns(): ColumnDef<RespondentListItem>[] {
   return [
     {
       accessorKey: 'firstName',
-      header: 'Name',
+      header: 'Surname, First Name',
       cell: ({ row }) => {
         const { firstName, lastName } = row.original;
         if (!firstName && !lastName) return '—';
-        return `${firstName ?? ''} ${lastName ?? ''}`.trim();
+        if (lastName && firstName) return `${lastName}, ${firstName}`;
+        return `${lastName ?? firstName ?? ''}`;
       },
       enableSorting: false,
     },
     {
       accessorKey: 'nin',
       header: 'NIN',
-      cell: ({ getValue }) => getValue() ?? '—',
+      cell: ({ getValue }) => getValue() ?? '-',
       enableSorting: false,
     },
     {
       accessorKey: 'phoneNumber',
       header: 'Phone',
-      cell: ({ getValue }) => getValue() ?? '—',
+      cell: ({ getValue }) => getValue() ?? '-',
       enableSorting: false,
     },
     {
@@ -91,14 +91,14 @@ function buildColumns(): ColumnDef<RespondentListItem>[] {
       header: 'Gender',
       cell: ({ getValue }) => {
         const v = getValue() as string | null;
-        return v ? v.charAt(0).toUpperCase() + v.slice(1) : '—';
+        return v ? v.charAt(0).toUpperCase() + v.slice(1) : '-';
       },
       enableSorting: false,
     },
     {
       accessorKey: 'lgaName',
       header: 'LGA',
-      cell: ({ getValue }) => getValue() ?? '—',
+      cell: ({ getValue }) => getValue() ?? '-',
       enableSorting: true,
     },
     {
@@ -110,32 +110,18 @@ function buildColumns(): ColumnDef<RespondentListItem>[] {
     {
       accessorKey: 'enumeratorName',
       header: 'Enumerator',
-      cell: ({ getValue }) => getValue() ?? '—',
+      cell: ({ row }) => {
+        const { enumeratorName, source } = row.original;
+        if (enumeratorName) return enumeratorName;
+        return source === 'enumerator' ? '-' : 'N/A';
+      },
       enableSorting: false,
     },
     {
       accessorKey: 'formName',
       header: 'Form',
-      cell: ({ getValue }) => getValue() ?? '—',
+      cell: ({ getValue }) => getValue() ?? '-',
       enableSorting: false,
-    },
-    {
-      accessorKey: 'registeredAt',
-      header: 'Date',
-      cell: ({ getValue }) => {
-        const val = getValue() as string;
-        return val ? new Date(val).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-      },
-      enableSorting: true,
-    },
-    {
-      accessorKey: 'fraudSeverity',
-      header: 'Fraud',
-      cell: ({ getValue }) => {
-        const severity = getValue() as string | null;
-        return severity ? <FraudSeverityBadge severity={severity} /> : '—';
-      },
-      enableSorting: true,
     },
     {
       accessorKey: 'verificationStatus',
@@ -156,7 +142,7 @@ function getColumnVisibility(userRole: string): VisibilityState {
   };
 }
 
-// ── Sort Header Component ───────────────────────────────────────
+// â”€â”€ Sort Header Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SortIcon({ column }: { column: { getIsSorted: () => false | 'asc' | 'desc' } }) {
   const sorted = column.getIsSorted();
@@ -165,7 +151,7 @@ function SortIcon({ column }: { column: { getIsSorted: () => false | 'asc' | 'de
   return <ChevronsUpDown className="w-4 h-4 ml-1 text-gray-400" />;
 }
 
-// ── Table Props ─────────────────────────────────────────────────
+// â”€â”€ Table Props â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface RespondentRegistryTableProps {
   data: RespondentListItem[];
@@ -198,7 +184,36 @@ export function RespondentRegistryTable({
 }: RespondentRegistryTableProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const columns = useMemo(() => buildColumns(), []);
+
+  // Derive the role's dashboard base path from current URL
+  const roleBasePath = useMemo(() => {
+    const parts = location.pathname.split('/');
+    return parts.slice(0, 3).join('/');
+  }, [location.pathname]);
+
+  const columns = useMemo(() => {
+    const base = buildColumns();
+    // Append actions column with eye icon for quick-view
+    const actionsColumn: ColumnDef<RespondentListItem> = {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`${roleBasePath}/respondent/${row.original.id}?viewSubmission=latest`);
+          }}
+          className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700"
+          data-testid={`quick-view-${row.original.id}`}
+          title="View latest submission"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      ),
+      enableSorting: false,
+    };
+    return [...base, actionsColumn];
+  }, [navigate, roleBasePath]);
   const columnVisibility = useMemo(() => getColumnVisibility(userRole), [userRole]);
 
   const table = useReactTable({
@@ -218,13 +233,6 @@ export function RespondentRegistryTable({
     },
   });
 
-  // Derive the role's dashboard base path from current URL
-  const roleBasePath = useMemo(() => {
-    const parts = location.pathname.split('/');
-    // /dashboard/{role}/registry → /dashboard/{role}
-    return parts.slice(0, 3).join('/');
-  }, [location.pathname]);
-
   const handleRowClick = useCallback(
     (respondentId: string) => {
       navigate(`${roleBasePath}/respondent/${respondentId}`);
@@ -233,7 +241,7 @@ export function RespondentRegistryTable({
   );
 
   if (isLoading) {
-    const colCount = userRole === 'supervisor' ? 8 : 11;
+    const colCount = userRole === 'supervisor' ? 7 : 10;
     return <SkeletonTable columns={colCount} rows={pageSize} data-testid="registry-table-skeleton" />;
   }
 
@@ -280,7 +288,14 @@ export function RespondentRegistryTable({
                   data-testid={`registry-row-${row.original.id}`}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-3 py-2.5 whitespace-nowrap">
+                    <td
+                      key={cell.id}
+                      className={`px-3 py-2.5 ${
+                        cell.column.id === 'firstName'
+                          ? 'whitespace-normal min-w-[240px] max-w-[360px]'
+                          : 'whitespace-nowrap'
+                      }`}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -335,3 +350,7 @@ export function RespondentRegistryTable({
     </div>
   );
 }
+
+
+
+

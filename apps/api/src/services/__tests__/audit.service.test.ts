@@ -106,8 +106,8 @@ describe('AuditService', () => {
       expect(PII_ACTIONS.SEARCH_PII).toBe('pii.search');
     });
 
-    it('should have exactly 7 action types', () => {
-      expect(Object.keys(PII_ACTIONS)).toHaveLength(7);
+    it('should have exactly 8 action types', () => {
+      expect(Object.keys(PII_ACTIONS)).toHaveLength(8);
     });
 
     it('should map to the same values as AUDIT_ACTIONS PII entries (backward compatible)', () => {
@@ -162,8 +162,8 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 21 total action types across all categories', () => {
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(21);
+    it('should have 22 total action types across all categories', () => {
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(22);
     });
   });
 

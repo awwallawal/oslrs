@@ -1,5 +1,5 @@
 /**
- * Respondent Service — Individual Detail + Registry List
+ * Respondent Service — Individual Detail + Registry List + Submission Responses
  *
  * Story 5.3: Individual Record PII View (Authorized Roles).
  * Story 5.5: Respondent Data Registry Table — server-paginated, filterable list.
@@ -20,11 +20,14 @@ import { TeamAssignmentService } from './team-assignment.service.js';
 import type {
   RespondentDetailResponse,
   SubmissionSummary,
+  SubmissionResponseDetail,
   FraudSummary,
   RespondentListItem,
   RespondentFilterParams,
   CursorPaginatedResponse,
 } from '@oslsr/types';
+import { QuestionnaireService } from './questionnaire.service.js';
+import { buildChoiceMaps } from './export-query.service.js';
 
 const SEVERITY_ORDER: Record<string, number> = {
   clean: 0,
@@ -33,6 +36,9 @@ const SEVERITY_ORDER: Record<string, number> = {
   high: 3,
   critical: 4,
 };
+
+// Guard UUID casts from legacy/non-UUID questionnaire_form_id values in submissions.
+const UUID_V4_REGEX_SQL = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$';
 
 export class RespondentService {
   /**
@@ -81,6 +87,7 @@ export class RespondentService {
         source: submissions.source,
         processed: submissions.processed,
         processingError: submissions.processingError,
+        rawData: submissions.rawData,
         enumeratorId: submissions.enumeratorId,
         enumeratorName: users.fullName,
         formName: questionnaireForms.title,
@@ -90,8 +97,11 @@ export class RespondentService {
         fraudResolution: fraudDetections.resolution,
       })
       .from(submissions)
-      .leftJoin(users, eq(submissions.enumeratorId, users.id))
-      .leftJoin(questionnaireForms, sql`${submissions.questionnaireFormId}::uuid = ${questionnaireForms.id}`)
+      .leftJoin(users, sql`${submissions.enumeratorId} = ${users.id}::text`)
+      .leftJoin(
+        questionnaireForms,
+        sql`${submissions.questionnaireFormId} ~ ${UUID_V4_REGEX_SQL} AND ${submissions.questionnaireFormId}::uuid = ${questionnaireForms.id}`,
+      )
       .leftJoin(fraudDetections, eq(fraudDetections.submissionId, submissions.id))
       .where(eq(submissions.respondentId, respondentId))
       .orderBy(desc(submissions.submittedAt))
@@ -108,6 +118,38 @@ export class RespondentService {
 
       if (!hasSubmissionFromTeam) {
         throw new AppError('FORBIDDEN', 'Respondent not in your team scope', 403);
+      }
+    }
+
+    // Fallback name resolution for legacy records where respondent table names are blank.
+    const normalizeName = (value: unknown): string | null => {
+      const s = typeof value === 'string' ? value.trim() : '';
+      return s.length > 0 ? s : null;
+    };
+    const pickFromRaw = (
+      raw: unknown,
+      keys: string[],
+    ): string | null => {
+      if (!raw || typeof raw !== 'object') return null;
+      const asRecord = raw as Record<string, unknown>;
+      for (const key of keys) {
+        const candidate = normalizeName(asRecord[key]);
+        if (candidate) return candidate;
+      }
+      return null;
+    };
+
+    let resolvedFirstName = normalizeName(respondent.firstName);
+    let resolvedLastName = normalizeName(respondent.lastName);
+    if (!resolvedFirstName || !resolvedLastName) {
+      for (const row of submissionRows) {
+        if (!resolvedFirstName) {
+          resolvedFirstName = pickFromRaw(row.rawData, ['first_name', 'firstName', 'firstname']);
+        }
+        if (!resolvedLastName) {
+          resolvedLastName = pickFromRaw(row.rawData, ['last_name', 'lastName', 'lastname', 'surname']);
+        }
+        if (resolvedFirstName && resolvedLastName) break;
       }
     }
 
@@ -157,8 +199,8 @@ export class RespondentService {
     const response: RespondentDetailResponse = {
       id: respondent.id,
       nin: userRole === 'supervisor' ? null : respondent.nin,
-      firstName: userRole === 'supervisor' ? null : respondent.firstName,
-      lastName: userRole === 'supervisor' ? null : respondent.lastName,
+      firstName: userRole === 'supervisor' ? null : resolvedFirstName,
+      lastName: userRole === 'supervisor' ? null : resolvedLastName,
       phoneNumber: userRole === 'supervisor' ? null : respondent.phoneNumber,
       dateOfBirth: userRole === 'supervisor' ? null : respondent.dateOfBirth,
       lgaId: respondent.lgaId,
@@ -173,6 +215,123 @@ export class RespondentService {
     };
 
     return response;
+  }
+
+  // ── Submission Response Detail ──────────────────────────────────────
+
+  /**
+   * Get a single submission's full form responses, flattened with human-readable labels.
+   * Grouped by form sections. Includes sibling submission IDs for navigation.
+   */
+  static async getSubmissionResponses(
+    respondentId: string,
+    submissionId: string,
+    userRole: string,
+    userId: string,
+  ): Promise<SubmissionResponseDetail> {
+    // 1. Fetch the submission with metadata
+    const [row] = await db.execute(sql`
+      SELECT
+        s.id, s.respondent_id, s.submitted_at, s.source,
+        s.questionnaire_form_id, s.enumerator_id,
+        s.completion_time_seconds, s.gps_latitude, s.gps_longitude,
+        s.raw_data,
+        u.full_name as enumerator_name,
+        fd.total_score as fraud_score,
+        fd.severity as fraud_severity,
+        fd.resolution as verification_status,
+        qf.title as form_title, qf.version as form_version
+      FROM submissions s
+      LEFT JOIN users u ON s.enumerator_id = u.id::text
+      LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
+      LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id ~ ${UUID_V4_REGEX_SQL} AND s.questionnaire_form_id::uuid = qf.id
+      WHERE s.id = ${submissionId}
+    `).then(r => r.rows as Record<string, unknown>[]);
+
+    if (!row) {
+      throw new AppError('NOT_FOUND', 'Submission not found', 404);
+    }
+
+    // IDOR prevention: submission must belong to the specified respondent
+    if (String(row.respondent_id) !== respondentId) {
+      throw new AppError('NOT_FOUND', 'Submission not found for this respondent', 404);
+    }
+
+    // Supervisor scope check: submission's enumerator must be in their team
+    if (userRole === 'supervisor') {
+      const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(userId);
+      const submissionEnumeratorId = row.enumerator_id ? String(row.enumerator_id) : null;
+      if (!submissionEnumeratorId || !enumeratorIds.includes(submissionEnumeratorId)) {
+        throw new AppError('FORBIDDEN', 'Submission not in your team scope', 403);
+      }
+    }
+
+    // 2. Build sections from form schema
+    const formId = row.questionnaire_form_id ? String(row.questionnaire_form_id) : null;
+    let sections: SubmissionResponseDetail['sections'] = [];
+
+    if (formId) {
+      const formSchema = await QuestionnaireService.getFormSchemaById(formId);
+      if (formSchema) {
+        const choiceMaps = buildChoiceMaps(formSchema);
+        const rawData = (row.raw_data as Record<string, unknown>) ?? {};
+
+        sections = formSchema.sections.map((section) => ({
+          title: section.title,
+          fields: section.questions
+            .filter((q) => q.type !== 'note' && q.type !== 'geopoint')
+            .map((question) => {
+              const rawValue = rawData[question.name];
+
+              if (rawValue == null || rawValue === '') {
+                return { label: question.label, value: '' };
+              }
+
+              if (question.type === 'select_one' && question.choices) {
+                const choiceMap = choiceMaps.get(question.choices);
+                const label = choiceMap?.get(String(rawValue));
+                return { label: question.label, value: label ?? String(rawValue) };
+              }
+
+              if (question.type === 'select_multiple' && question.choices) {
+                const choiceMap = choiceMaps.get(question.choices);
+                const codes = String(rawValue).split(' ').filter(Boolean);
+                const labels = codes.map((code) => choiceMap?.get(code) ?? code);
+                return { label: question.label, value: labels.join('; ') };
+              }
+
+              return { label: question.label, value: String(rawValue) };
+            }),
+        }));
+      }
+    }
+
+    // 3. Fetch sibling submission IDs for navigator
+    const siblingResult = await db.execute(sql`
+      SELECT id FROM submissions
+      WHERE respondent_id = ${respondentId}
+      ORDER BY submitted_at DESC
+    `);
+    const siblingSubmissionIds = (siblingResult.rows as { id: string }[]).map((r) => r.id);
+
+    // 4. Build response
+    return {
+      submissionId: String(row.id),
+      respondentId,
+      submittedAt: row.submitted_at ? new Date(row.submitted_at as string | number | Date).toISOString() : '',
+      source: String(row.source ?? ''),
+      enumeratorName: row.enumerator_name ? String(row.enumerator_name) : null,
+      completionTimeSeconds: row.completion_time_seconds != null ? Number(row.completion_time_seconds) : null,
+      gpsLatitude: row.gps_latitude != null ? Number(row.gps_latitude) : null,
+      gpsLongitude: row.gps_longitude != null ? Number(row.gps_longitude) : null,
+      fraudSeverity: row.fraud_severity ? String(row.fraud_severity) : null,
+      fraudScore: row.fraud_score ? parseFloat(String(row.fraud_score)) : null,
+      verificationStatus: row.verification_status ? String(row.verification_status) : null,
+      formTitle: row.form_title ? String(row.form_title) : 'Unknown Form',
+      formVersion: row.form_version ? String(row.form_version) : '',
+      sections,
+      siblingSubmissionIds,
+    };
   }
 
   // ── Story 5.5: Registry List ──────────────────────────────────────
@@ -274,9 +433,9 @@ export class RespondentService {
       // Sort column mapping for cursor comparison
       const sortCol = RespondentService.getSortColumn(sortBy);
       if (sortOrder === 'desc') {
-        cursorClause = sql`AND (${sql.raw(sortCol)} < ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND r.id < ${cursorId}))`;
+        cursorClause = sql`AND (${sql.raw(sortCol)} < ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id < ${cursorId}))`;
       } else {
-        cursorClause = sql`AND (${sql.raw(sortCol)} > ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND r.id > ${cursorId}))`;
+        cursorClause = sql`AND (${sql.raw(sortCol)} > ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id > ${cursorId}))`;
       }
     }
 
@@ -290,7 +449,22 @@ export class RespondentService {
       SELECT * FROM (
         SELECT DISTINCT ON (r.id)
           r.id,
-          r.first_name, r.last_name, r.nin, r.phone_number,
+          COALESCE(
+            NULLIF(r.first_name, ''),
+            NULLIF(s.raw_data->>'first_name', ''),
+            NULLIF(s.raw_data->>'firstName', ''),
+            NULLIF(s.raw_data->>'firstname', ''),
+            first_name_fallback.first_name
+          ) as first_name,
+          COALESCE(
+            NULLIF(r.last_name, ''),
+            NULLIF(s.raw_data->>'last_name', ''),
+            NULLIF(s.raw_data->>'lastName', ''),
+            NULLIF(s.raw_data->>'lastname', ''),
+            NULLIF(s.raw_data->>'surname', ''),
+            last_name_fallback.last_name
+          ) as last_name,
+          r.nin, r.phone_number,
           r.lga_id, l.name as lga_name, r.source, r.created_at as registered_at,
           s.raw_data->>'gender' as gender,
           s.enumerator_id,
@@ -310,15 +484,51 @@ export class RespondentService {
           END as verification_status
         FROM respondents r
         LEFT JOIN submissions s ON s.respondent_id = r.id
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(
+              NULLIF(sx.raw_data->>'first_name', ''),
+              NULLIF(sx.raw_data->>'firstName', ''),
+              NULLIF(sx.raw_data->>'firstname', '')
+            ) as first_name
+          FROM submissions sx
+          WHERE sx.respondent_id = r.id
+            AND COALESCE(
+              NULLIF(sx.raw_data->>'first_name', ''),
+              NULLIF(sx.raw_data->>'firstName', ''),
+              NULLIF(sx.raw_data->>'firstname', '')
+            ) IS NOT NULL
+          ORDER BY sx.submitted_at DESC NULLS LAST
+          LIMIT 1
+        ) first_name_fallback ON true
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(
+              NULLIF(sx.raw_data->>'last_name', ''),
+              NULLIF(sx.raw_data->>'lastName', ''),
+              NULLIF(sx.raw_data->>'lastname', ''),
+              NULLIF(sx.raw_data->>'surname', '')
+            ) as last_name
+          FROM submissions sx
+          WHERE sx.respondent_id = r.id
+            AND COALESCE(
+              NULLIF(sx.raw_data->>'last_name', ''),
+              NULLIF(sx.raw_data->>'lastName', ''),
+              NULLIF(sx.raw_data->>'lastname', ''),
+              NULLIF(sx.raw_data->>'surname', '')
+            ) IS NOT NULL
+          ORDER BY sx.submitted_at DESC NULLS LAST
+          LIMIT 1
+        ) last_name_fallback ON true
         LEFT JOIN lgas l ON r.lga_id = l.code
-        LEFT JOIN users u ON s.enumerator_id = u.id
-        LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id::uuid = qf.id
+        LEFT JOIN users u ON s.enumerator_id = u.id::text
+        LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id ~ ${UUID_V4_REGEX_SQL} AND s.questionnaire_form_id::uuid = qf.id
         LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
         ${whereClause}
         ORDER BY r.id, s.submitted_at DESC NULLS LAST
       ) sub
       WHERE 1=1 ${cursorClause}
-      ORDER BY ${sql.raw(sortCol.replace('r.', 'sub.'))} ${sql.raw(orderDir)}, sub.id ${sql.raw(idDir)}
+      ORDER BY ${sql.raw(sortCol)} ${sql.raw(orderDir)}, sub.id ${sql.raw(idDir)}
       LIMIT ${pageSize + 1}
     `;
 
@@ -405,12 +615,12 @@ export class RespondentService {
   /** Map sort field name to SQL column reference */
   private static getSortColumn(sortBy: string): string {
     const mapping: Record<string, string> = {
-      registeredAt: 'r.created_at',
-      fraudScore: 'fd.total_score',
-      lgaName: 'l.name',
-      verificationStatus: 'r.created_at', // Fallback — derived field can't sort directly in outer query
+      registeredAt: 'sub.registered_at',
+      fraudScore: 'sub.fraud_total_score',
+      lgaName: 'sub.lga_name',
+      verificationStatus: 'sub.verification_status',
     };
-    return mapping[sortBy] ?? 'r.created_at';
+    return mapping[sortBy] ?? 'sub.registered_at';
   }
 
   /** Return an empty paginated response */
