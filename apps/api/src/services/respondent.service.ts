@@ -245,7 +245,7 @@ export class RespondentService {
       LEFT JOIN users u ON s.enumerator_id = u.id::text
       LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
       LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id ~ ${UUID_V4_REGEX_SQL} AND s.questionnaire_form_id::uuid = qf.id
-      WHERE s.id = ${submissionId}
+      WHERE s.id = ${submissionId}::uuid
     `).then(r => r.rows as Record<string, unknown>[]);
 
     if (!row) {
@@ -309,7 +309,7 @@ export class RespondentService {
     // 3. Fetch sibling submission IDs for navigator
     const siblingResult = await db.execute(sql`
       SELECT id FROM submissions
-      WHERE respondent_id = ${respondentId}
+      WHERE respondent_id = ${respondentId}::uuid
       ORDER BY submitted_at DESC
     `);
     const siblingSubmissionIds = (siblingResult.rows as { id: string }[]).map((r) => r.id);
@@ -433,9 +433,9 @@ export class RespondentService {
       // Sort column mapping for cursor comparison
       const sortCol = RespondentService.getSortColumn(sortBy);
       if (sortOrder === 'desc') {
-        cursorClause = sql`AND (${sql.raw(sortCol)} < ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id < ${cursorId}))`;
+        cursorClause = sql`AND (${sql.raw(sortCol)} < ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id < ${cursorId}::uuid))`;
       } else {
-        cursorClause = sql`AND (${sql.raw(sortCol)} > ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id > ${cursorId}))`;
+        cursorClause = sql`AND (${sql.raw(sortCol)} > ${parsedDate} OR (${sql.raw(sortCol)} = ${parsedDate} AND sub.id > ${cursorId}::uuid))`;
       }
     }
 

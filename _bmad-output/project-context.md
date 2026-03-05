@@ -5,9 +5,9 @@ date: '2026-01-13'
 sections_completed: ['technology_stack', 'critical_rules', 'project_structure', 'anti_patterns', 'workflow', 'user_notes', 'ui_patterns']
 architecture_source: '_bmad-output/planning-artifacts/architecture.md'
 adrs_count: 11
-pattern_categories: 10
-patterns_documented: 13
-conflict_prevention_rules: 10
+pattern_categories: 12
+patterns_documented: 18
+conflict_prevention_rules: 15
 status: 'complete'
 ---
 
@@ -17,7 +17,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **Architecture Version:** v8.0 (2026-02-06) — SCP-2026-02-05-001: ODK Central removed, native form system
 **Target Scale:** 1M records over 12 months, 200 staff users, 1K concurrent public users
-**Deployment:** Single Hetzner VPS (CX43), Docker Compose, NDPA-compliant
+**Deployment:** DigitalOcean VPS (2GB), Docker Compose (PostgreSQL + Redis), PM2 + NGINX, NDPA-compliant
 
 ---
 
@@ -1044,7 +1044,7 @@ services/
 - ADR-004: Offline Data Model (Browser owns drafts, server validates)
 - ADR-007: Single Database (app_db, read-only replica for marketplace) _(Amended: SCP-2026-02-05-001)_
 - ADR-010: PostgreSQL Selection (UNIQUE constraints, ACID transactions, proven for fraud detection)
-- ADR-011: Hetzner Infrastructure (CX43, $168/year, 73x headroom)
+- ADR-011: ~~Hetzner Infrastructure~~ Production on DigitalOcean 2GB VPS (see Deployment Safety Rules section)
 
 **Pattern Categories:**
 1. Database ID Strategy (UUIDv7)
@@ -1057,6 +1057,8 @@ services/
 8. Database Seeding (Hybrid dev/prod approach) - ADR-017
 9. Layout Architecture (PublicLayout vs DashboardLayout) - ADR-016
 10. Email Verification (Hybrid Magic Link + OTP) - ADR-015
+11. Race Condition Anti-Patterns (5 patterns: TanStack defaults, NavLink exact, TOCTOU, governance guards, state machines)
+12. Deployment Safety Rules (env var coordination, VPS reference)
 
 ---
 
@@ -1494,9 +1496,149 @@ USING column_name::new_type;
 
 ---
 
+## Race Condition Anti-Patterns (5 Patterns from Epic 6)
+
+> Source: Epic 6 Retrospective (2026-03-04) — Race conditions appeared in 22% of items.
+> These patterns span frontend (TanStack Query timing), routing (NavLink prefix matching), and backend (database TOCTOU).
+
+### Pattern 1: TanStack Query Data Defaults
+
+**Problem:** Component renders before query data arrives, causing `undefined.map()` or similar errors.
+
+**Example (prep-1):** `/super-admin/export` threw `lgas.map is not a function` because `lgas` was `undefined` on initial render.
+
+```typescript
+// ❌ WRONG: No default, crashes before data arrives
+const { data: lgas } = useQuery({ queryKey: ['lgas'], queryFn: fetchLgas });
+return lgas.map(lga => ...);  // CRASH: lgas is undefined
+
+// ✅ CORRECT: Default empty array + loading guard
+const { data: lgas = [], isLoading, isError } = useQuery({ queryKey: ['lgas'], queryFn: fetchLgas });
+if (isLoading) return <SkeletonTable />;
+if (isError) return <ErrorState />;
+return lgas.map(lga => ...);  // Safe: lgas is always an array
+```
+
+**Rule:** ALWAYS provide default values for TanStack Query data AND check `isLoading`/`isError` before rendering.
+
+### Pattern 2: NavLink Exact Matching (Sidebar Collisions)
+
+**Problem:** NavLink `to="/super-admin/remuneration"` matches both the parent route and child routes like `/super-admin/remuneration/disputes`, causing dual sidebar highlighting.
+
+```typescript
+// ❌ WRONG: Prefix matching highlights multiple items
+<NavLink to="/super-admin/remuneration" className={({ isActive }) => isActive ? 'active' : ''}>
+
+// ✅ CORRECT: Use `end` prop for exact matching
+<NavLink to="/super-admin/remuneration" end className={({ isActive }) => isActive ? 'active' : ''}>
+```
+
+**Rule:** Sidebar NavLinks to parent routes MUST use `end` prop to prevent prefix collisions with child routes.
+
+### Pattern 3: TOCTOU in Database Operations (Most Dangerous)
+
+**Problem:** Check-then-act pattern where the condition can change between the check and the action due to concurrent requests.
+
+**Example (6-5):** `openDispute()` checked if a payment record existed outside the transaction, but another request could modify it between the check and the dispute creation.
+
+```typescript
+// ❌ WRONG: Check outside transaction (TOCTOU vulnerable)
+const payment = await db.select().from(paymentRecords).where(eq(paymentRecords.id, id));
+if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
+await db.transaction(async (tx) => {
+  await tx.insert(disputes).values({ paymentRecordId: id, ... });
+});
+
+// ✅ CORRECT: Check inside transaction with SELECT FOR UPDATE
+await db.transaction(async (tx) => {
+  const [payment] = await tx.select().from(paymentRecords)
+    .where(eq(paymentRecords.id, id))
+    .for('update');  // Lock the row
+  if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
+  if (payment.status !== 'completed') throw new AppError('INVALID_STATE', 'Cannot dispute', 409);
+  await tx.insert(disputes).values({ paymentRecordId: id, ... });
+});
+```
+
+**Rule:** Any check-then-act on database records MUST be inside a transaction with `SELECT FOR UPDATE` to lock the row.
+
+### Pattern 4: Governance Guard Race Conditions
+
+**Problem:** Count-based checks (e.g., "is this the last admin?") are vulnerable to concurrent requests that change the count between check and action.
+
+**Example (prep-10):** Last-admin protection counted active admins outside the transaction. Two simultaneous deactivation requests could both see count=2 and both proceed.
+
+```typescript
+// ❌ WRONG: Count check outside transaction
+const adminCount = await db.select({ count: count() }).from(users).where(eq(users.role, 'super_admin'));
+if (adminCount === 1) throw new AppError('LAST_ADMIN', 'Cannot deactivate last admin', 409);
+await db.update(users).set({ isActive: false }).where(eq(users.id, targetId));
+
+// ✅ CORRECT: Count check inside transaction with advisory lock or FOR UPDATE
+await db.transaction(async (tx) => {
+  const [{ count: adminCount }] = await tx.select({ count: count() }).from(users)
+    .where(and(eq(users.role, 'super_admin'), eq(users.isActive, true)));
+  if (adminCount <= 1) throw new AppError('LAST_ADMIN', 'Cannot deactivate last admin', 409);
+  await tx.update(users).set({ isActive: false }).where(eq(users.id, targetId));
+});
+```
+
+### Pattern 5: Dispute State Machine Transitions
+
+**Problem:** State transitions (e.g., `pending` → `resolved`) without row-level locking allow concurrent requests to create invalid state.
+
+```typescript
+// ✅ CORRECT: Lock row before state transition
+await db.transaction(async (tx) => {
+  const [dispute] = await tx.select().from(disputes)
+    .where(eq(disputes.id, disputeId))
+    .for('update');
+  if (dispute.status !== 'pending') throw new AppError('INVALID_TRANSITION', 'Dispute not pending', 409);
+  await tx.update(disputes).set({ status: 'resolved', resolvedAt: new Date() })
+    .where(eq(disputes.id, disputeId));
+});
+```
+
+**Rule:** ALL state transitions on database records MUST lock the row first with `SELECT FOR UPDATE`.
+
+---
+
+## Deployment Safety Rules
+
+> Source: Epic 6 Retrospective (2026-03-04) — SEC-3 CORS_ORIGIN crash loop lesson
+> These are MANDATORY for all deployments.
+
+### Env Var Coordination (A9)
+
+**Problem:** Code adding env vars to `requiredProdVars` (or any startup validation) causes production crash loops if the env var isn't set on the server before deployment.
+
+**Example:** SEC-3 added `CORS_ORIGIN` to `requiredProdVars` in code. Deploying without setting the var on the VPS caused 12+ PM2 restart cycles (2026-03-02 18:31).
+
+**Rules:**
+1. **PRs that add/rename required env vars MUST include deployment instructions** in the story file
+2. **Required env vars MUST be set on the VPS _before_ the code is deployed**
+3. **Sprint-status entries for such stories MUST flag the env var dependency**
+4. **Pre-deploy script (prep-2):** Once implemented, validates all required env vars exist on VPS before deploying
+
+**Quick Check:**
+```bash
+# On VPS: Verify env vars before deploying code that adds new requirements
+grep -E "CORS_ORIGIN|NEW_VAR_NAME" /path/to/.env
+```
+
+### Production VPS Reference
+
+- **Provider:** DigitalOcean (NOT Hetzner as originally architected)
+- **Specs:** 2 GB RAM, ~48 GB disk, Ubuntu 24.04.3 LTS
+- **Services:** PM2 (Node.js API), NGINX (reverse proxy), Docker (PostgreSQL + Redis)
+- **Utilization:** ~26% RAM, healthy headroom
+- **Strategy:** Start Epic 7 on current VPS, upgrade only if Story 6-2 monitoring triggers (RAM >75% or p95 >250ms)
+
+---
+
 ## Team Agreements & Process Guardrails
 
-> Source: Combined Epic 2+2.5 Retrospective (2026-02-10)
+> Sources: Combined Epic 2+2.5 Retrospective (2026-02-10), Epic 5 Retrospective (2026-02-24), Epic 6 Retrospective (2026-03-04)
 > These are MANDATORY standards. All AI agents and developers must follow them.
 
 ### UI/Component Standards (A1-A3)
@@ -1527,10 +1669,24 @@ USING column_name::new_type;
 
 10. **Shared constants for cross-boundary values.** Role names, status enums, error codes, and any value used by both API and Web must be defined in `packages/types` as a single source of truth. Never hardcode these strings in application code. (Lesson: Frontend used `admin`, database used `super_admin` — 3 roles broken at runtime.)
 
+### Quality Gates (A7-A8, from Epic 5 Retrospective 2026-02-24)
+
+11. **403 unauthorized tests are mandatory for every protected endpoint.** Every authenticated endpoint must have tests verifying that unauthorized roles receive 403. Code review must check for these. (Lesson: Flagged in 4 consecutive retrospectives — requires structural enforcement, not just standards.)
+
+12. **Tasks aren't done without tests.** No story task is considered complete unless it has corresponding test coverage. Code review catches gaps. (Lesson: Missing service tests found in 6-5 by adversarial review.)
+
+### Deployment & Operations (A9-A11, from Epic 6 Retrospective 2026-03-04)
+
+13. **Env var changes require deployment coordination (A9).** PRs adding or renaming required env vars must include deployment instructions AND be flagged in sprint-status. The production `.env` must be updated BEFORE the code is deployed. (Lesson: SEC-3 CORS_ORIGIN crash loop — 12+ PM2 restarts on production.)
+
+14. **Commit history is a retro input (A10).** Every retrospective pulls the git log and generates an anomaly summary (high commit counts per story, fix: clusters, rapid consecutive commits). Used alongside story files for comprehensive review.
+
+15. **No "coming soon" pages in production (A11).** Unimplemented features must not have visible placeholder routes. Catch-all wildcard routes should show proper "page not found" UX, not "coming soon" text. Inappropriate for a government system.
+
 ---
 
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-03-04
 
-**Version:** 1.6.0 (Added: Team Agreements A1-A6, Process Guardrails from Epic 2+2.5 retrospective. Prep phase for Epic 3.)
+**Version:** 2.0.0 (Added: Race Condition Anti-Patterns (5 patterns from Epic 6), Deployment Safety Rules, Production VPS Reference, Team Agreements A7-A11 from Epic 5+6 retrospectives. Updated deployment info from Hetzner to DigitalOcean.)

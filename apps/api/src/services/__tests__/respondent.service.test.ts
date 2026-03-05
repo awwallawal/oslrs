@@ -10,6 +10,8 @@ const {
   mockLimit,
   mockGetEnumeratorIds,
   mockExecute,
+  mockGetFormSchemaById,
+  mockBuildChoiceMaps,
 } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
   mockFrom: vi.fn(),
@@ -19,6 +21,8 @@ const {
   mockLimit: vi.fn(),
   mockGetEnumeratorIds: vi.fn(),
   mockExecute: vi.fn(),
+  mockGetFormSchemaById: vi.fn(),
+  mockBuildChoiceMaps: vi.fn(),
 }));
 
 // Chain builder that resolves to a configurable result
@@ -52,6 +56,16 @@ vi.mock('../team-assignment.service.js', () => ({
   TeamAssignmentService: {
     getEnumeratorIdsForSupervisor: (...args: any[]) => mockGetEnumeratorIds(...args),
   },
+}));
+
+vi.mock('../questionnaire.service.js', () => ({
+  QuestionnaireService: {
+    getFormSchemaById: (...args: any[]) => mockGetFormSchemaById(...args),
+  },
+}));
+
+vi.mock('../export-query.service.js', () => ({
+  buildChoiceMaps: (...args: any[]) => mockBuildChoiceMaps(...args),
 }));
 
 import { RespondentService } from '../respondent.service.js';
@@ -517,6 +531,28 @@ describe('RespondentService', () => {
       expect(mockExecute).toHaveBeenCalledTimes(2);
     });
 
+    it('applies ::uuid cast to cursor ID in pagination queries', async () => {
+      const sqlObjects: any[] = [];
+      mockExecute.mockImplementation((sqlQuery: any) => {
+        sqlObjects.push(sqlQuery);
+
+        if (sqlObjects.length === 1) {
+          return Promise.resolve({ rows: [mockListRow] });
+        }
+        return Promise.resolve({ rows: [{ count: 1 }] });
+      });
+
+      await RespondentService.listRespondents(
+        { cursor: '2026-01-10T00:00:00.000Z|018e5f2a-1234-7890-abcd-333333333333', sortOrder: 'desc' },
+        'super_admin',
+        USER_ID,
+      );
+
+      // Data query should contain ::uuid cast for cursor ID comparison
+      const dataSql = JSON.stringify(sqlObjects[0]);
+      expect(dataSql).toContain('::uuid');
+    });
+
     it('builds correct nextCursor format', async () => {
       const rows = Array.from({ length: 21 }, (_, i) => ({
         ...mockListRow,
@@ -564,6 +600,140 @@ describe('RespondentService', () => {
 
       expect(count).toBe(5);
       expect(mockExecute).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── prep-1: getSubmissionResponses UUID cast verification ──────────
+
+  describe('getSubmissionResponses', () => {
+    const SUBMISSION_ID = '018e5f2a-1234-7890-abcd-333333333333';
+
+    const mockSubmissionRow = {
+      id: SUBMISSION_ID,
+      respondent_id: RESPONDENT_ID,
+      submitted_at: '2026-01-20T14:30:00Z',
+      source: 'enumerator',
+      questionnaire_form_id: '018e5f2a-0000-7890-abcd-aaaaaaaaaaaa',
+      enumerator_id: '018e5f2a-1234-7890-abcd-444444444444',
+      completion_time_seconds: 120,
+      gps_latitude: 7.3775,
+      gps_longitude: 3.9470,
+      raw_data: { first_name: 'Adewale', gender: 'male' },
+      enumerator_name: 'Bola Ige',
+      fraud_score: null,
+      fraud_severity: null,
+      verification_status: null,
+      form_title: 'OSLSR Labour Survey',
+      form_version: '1',
+    };
+
+    it('passes UUID parameters with ::uuid cast to raw SQL queries', async () => {
+      // Track SQL objects passed to db.execute for cast verification
+      const sqlObjects: any[] = [];
+      mockExecute.mockImplementation((sqlQuery: any) => {
+        sqlObjects.push(sqlQuery);
+
+        if (sqlObjects.length === 1) {
+          return Promise.resolve({ rows: [mockSubmissionRow] });
+        }
+        return Promise.resolve({ rows: [{ id: SUBMISSION_ID }] });
+      });
+      mockGetFormSchemaById.mockResolvedValue(null);
+
+      await RespondentService.getSubmissionResponses(
+        RESPONDENT_ID,
+        SUBMISSION_ID,
+        'super_admin',
+        USER_ID,
+      );
+
+      expect(mockExecute).toHaveBeenCalledTimes(2);
+
+      // Serialize SQL objects to verify ::uuid casts are present in template strings
+      const detailSql = JSON.stringify(sqlObjects[0]);
+      const siblingSql = JSON.stringify(sqlObjects[1]);
+      expect(detailSql).toContain('::uuid');
+      expect(siblingSql).toContain('::uuid');
+    });
+
+    it('returns sibling submission IDs for navigation', async () => {
+      const siblingIds = [
+        SUBMISSION_ID,
+        '018e5f2a-1234-7890-abcd-777777777777',
+        '018e5f2a-1234-7890-abcd-888888888888',
+      ];
+
+      let callCount = 0;
+      mockExecute.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ rows: [mockSubmissionRow] });
+        }
+        return Promise.resolve({
+          rows: siblingIds.map(id => ({ id })),
+        });
+      });
+      mockGetFormSchemaById.mockResolvedValue(null);
+
+      const result = await RespondentService.getSubmissionResponses(
+        RESPONDENT_ID,
+        SUBMISSION_ID,
+        'super_admin',
+        USER_ID,
+      );
+
+      expect(result.siblingSubmissionIds).toEqual(siblingIds);
+    });
+
+    it('throws 404 when submission belongs to different respondent (IDOR)', async () => {
+      mockExecute.mockResolvedValue({
+        rows: [{ ...mockSubmissionRow, respondent_id: 'different-respondent-id' }],
+      });
+
+      await expect(
+        RespondentService.getSubmissionResponses(
+          RESPONDENT_ID,
+          SUBMISSION_ID,
+          'super_admin',
+          USER_ID,
+        ),
+      ).rejects.toThrow('Submission not found for this respondent');
+    });
+
+    it('throws 404 when submission not found', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+
+      await expect(
+        RespondentService.getSubmissionResponses(
+          RESPONDENT_ID,
+          SUBMISSION_ID,
+          'super_admin',
+          USER_ID,
+        ),
+      ).rejects.toThrow('Submission not found');
+    });
+
+    it('enforces supervisor scope on submission responses', async () => {
+      let callCount = 0;
+      mockExecute.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            rows: [{ ...mockSubmissionRow, enumerator_id: 'other-enumerator' }],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+      mockGetEnumeratorIds.mockResolvedValue(['my-team-member']);
+
+      await expect(
+        RespondentService.getSubmissionResponses(
+          RESPONDENT_ID,
+          SUBMISSION_ID,
+          'supervisor',
+          USER_ID,
+        ),
+      ).rejects.toThrow('Submission not in your team scope');
     });
   });
 });

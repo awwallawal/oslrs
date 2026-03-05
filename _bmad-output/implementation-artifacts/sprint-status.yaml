@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-03-01 - Security hardening phase started. SEC-1 (Resolve Dependency CVEs) story created. 31 audit vulns: fast-xml-parser CRITICAL, react-router-dom XSS, xlsx prototype pollution, multer DoS. Epic 6 nearing completion (6-6 in review, 6-7 ready-for-dev).
+# updated: 2026-03-04 - Epic 6 retrospective complete. 23 items reviewed (10 prep + 7 epic + 4 security + 2 tech specs). 11 prep tasks + 3 doc tasks added for Epic 7 readiness. prep-1 (text=uuid bug) is CRITICAL. 5 critical prep tasks block Epic 7.
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -207,7 +207,7 @@ development_status:
   # Epic 6: System Integrity, Accountability & Remuneration
   # Note: View-As feature (Super Admin debug capability) deferred here from Epic 2.5
   # Note: Remuneration scoped to record-keeping (not payment processing) per Epic 5 retro decision.
-  epic-6: in-progress
+  epic-6: done  # Completed 2026-03-01: All 7 stories done + security hardening (4 stories) + 2 tech specs. Retrospective 2026-03-04.
   6-1-immutable-append-only-audit-logs: done  # Code review passed 2026-02-25: 8 findings (3H, 3M, 2L) + 1 bonus, 7 fixed, 2 accepted. H1 canonical JSON, H2 NOT NULL, H3 TRUNCATE trigger, M1 genesis hash, M3 auth test, L1 Zod edges, BONUS race condition. 1011 API + 1799 web tests pass, 0 regressions.
   6-2-system-health-performance-monitoring: done  # Code review passed 2026-02-26: 10 findings (1C, 2H, 4M, 3L), all 10 fixed. Added monitoring scheduler, p95 latency panel, delta CPU, persistent Redis, async exec, shared types, version field. 41 story tests (28 API + 13 web), 1015 API + 1812 web pass, 0 regressions.
   6-3-automated-off-site-backup-orchestration: done  # Completed 2026-02-27. pg_dump + S3 upload via BullMQ cron (2AM WAT), 7-day daily + 7-year monthly retention, restore script, email notifications. 6 new files, 4 modified. 32 new tests, 0 regressions. Code review: 7 findings (1C, 2H, 2M, 2L), all 7 fixed. C1 missing retry attempts config, H1 shell injection, H2 in-memory file load, M1 hardcoded /tmp, M2 S3 pagination, L1+L2 date parsing + table mapping.
@@ -215,7 +215,7 @@ development_status:
   6-5-staff-payment-history-dispute-mechanism: done  # Completed 2026-02-28. Code review passed 2026-03-01: 10 findings (1C, 2H, 4M, 3L), all 10 fixed. C1 missing openDispute service tests (6 added), H1 TOCTOU race condition (SELECT FOR UPDATE), H2 AlertDialogAction auto-close, M1 formatNaira DRY extraction, M2 $onUpdateFn, M3 ROW_NUMBER subquery for latest dispute, M4 invalid UUID test, L1-L3 file list/sprint/userId param. 1096 API + 1867 web tests pass (2963 total), 0 regressions.
   6-6-payment-dispute-resolution-queue: done  # Completed 2026-03-01. Admin dispute queue (split-panel AssessorQueuePage pattern), resolve with evidence upload, acknowledge/reopen transitions, auto-close cron (30 days), email notifications. 8 new files (4 backend, 4 frontend), 15 modified. 62 API + 104 web remuneration tests pass. 1121 API + 1918 web total tests pass, 0 regressions. Code review: 11 findings, all fixed.
   6-7-super-admin-view-as-feature: done  # Completed 2026-03-01. Redis session metadata for View-As state, component import rendering under /super-admin/view-as/:role, read-only dual-layer enforcement (API middleware + frontend context), ViewAsBanner, role/LGA selector, audit trail. 9 new backend + 10 new frontend files, 5 modified. 53 new tests (32 backend + 21 frontend). 1153 API + 1939 web tests pass, 0 regressions. Code review: 10 findings (C2, H2, M4, L2), 8 fixed, 2 deferred (M3 eager import, M4 as-any casts).
-  epic-6-retrospective: optional
+  epic-6-retrospective: done  # Completed 2026-03-04: 23-item scope (10 prep + 7 epic + 4 security + 2 tech specs). 167 CR findings, ~94% fix rate. 11 prep tasks for Epic 7. Context brief created.
 
   # Security Hardening Phase (Post-Epic 6, Pre-Epic 7)
   # Source: security-audit-report-2026-03-01.md
@@ -228,14 +228,41 @@ development_status:
   sec-3-harden-mass-assignment-input-validation: done  # P2 MEDIUM: 4 mass assignment fixes (remuneration+staff controllers), 4 AppError detail leaks (id-card/export/photo services), CORS_ORIGIN to requiredProdVars, audit.controller .parse()→.safeParse(). Code review passed 2026-03-01: 6 findings (4M, 2L), all 6 fixed. Reactivate tests (6), audit assertion hardening, number coercion fix, healthCheck sanitization. 1172 API + 1939 web tests pass, 0 regressions.
   sec-4-dependency-pinning-audit-ci-gate: done  # P3 LOW: CI pnpm audit gate, pin 9 security-critical deps to exact versions, .npmrc security settings (save-exact=true), document accepted risks (build-only + production), fix bcrypt version discrepancy. Code review 2026-03-01: 6 findings (1H, 3M, 2L), all fixed.
 
+  # Prep Phase: Epic 7 Readiness (from Epic 6 Retrospective 2026-03-04)
+  # Source: epic-6-retro-2026-03-04.md Action Items + Prep Tasks
+  # Must complete critical prep (prep-1 through prep-5) before Epic 7 begins.
+  # Includes production bug fix (B1), deployment safety (P1), placeholder cleanup (P4),
+  # marketplace spike, security spike, commit retro tool, email backpressure,
+  # race condition guide, dead code cleanup, 403 enforcement, View-As fix.
+  prep-epic-7: in-progress
+  prep-1-fix-respondent-text-uuid-bug: done  # CRITICAL: Fixed 4 text=uuid mismatches in raw SQL (lines 248, 312, 436, 438). 6 new tests. Code review passed 2026-03-05: 4 findings (2M, 2L), all 4 fixed. 33 respondent tests pass, 0 regressions.
+  prep-2-deployment-env-var-safety-script: ready-for-dev  # HIGH: Pre-deploy check validates required env vars on VPS before deploying. Prevents crash loops like SEC-3 CORS_ORIGIN. Retro P1.
+  prep-3-replace-placeholder-pages-with-404: ready-for-dev  # HIGH: Change catch-all "coming soon" to proper "page not found" with dashboard navigation. No placeholder text on government system. Retro P4.
+  prep-4-marketplace-data-model-spike: ready-for-dev  # HIGH: Anonymous profile extraction, PII stripping, consent model, search strategy (pg_trgm vs full-text). Blocks Stories 7-1, 7-2.
+  prep-5-public-route-security-spike: ready-for-dev  # HIGH: Threat model for unauthenticated routes: rate limiting, bot protection, search injection, CAPTCHA strategy. Blocks Stories 7-2, 7-4, 7-6.
+  prep-6-commit-history-retro-tool: ready-for-dev  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2.
+  prep-7-email-backpressure-implementation: ready-for-dev  # MEDIUM: Resend quota awareness + batch digest notifications. Retro TD3.
+  prep-8-race-condition-anti-pattern-guide: backlog  # MEDIUM: Document 5 patterns in project-context.md with prevention strategies. Retro TD1.
+  prep-9-dead-code-cleanup: backlog  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2.
+  prep-10-403-test-enforcement-tooling: backlog  # MEDIUM: Linting rule or template task making unauthorized tests default. Retro P3.
+  prep-11-fix-view-as-multi-role-rendering: backlog  # MEDIUM: Investigate roleComponentMap imports, fix all 5 viewable roles. Retro Challenge 5.
+
+  # Context & Documentation Tasks (from Epic 6 Retrospective 2026-03-04)
+  doc-1-create-context-brief: done  # HIGH: docs/team-context-brief.md — session reassembly guide. Created 2026-03-04.
+  doc-2-build-portable-playbook: backlog  # MEDIUM: Consolidate retros + project-context + architecture into transferable docs/portable-playbook.md. Replaces 4x-carried CI/CD template extraction (P4). Retro P5.
+  doc-3-update-auto-memory-epic-6: done  # HIGH: Key patterns and context pointers persisted across sessions. Updated 2026-03-04.
+
   # Epic 7: Public Skills Marketplace & Search Security
+  # Prerequisites: prep-1 through prep-5 MUST be done before Epic 7 starts.
+  # Security: First public unauthenticated routes — fundamentally different security surface.
+  # VPS Strategy: Start on current 2GB DigitalOcean, upgrade only if monitoring (Story 6-2) triggers thresholds.
   epic-7: backlog
-  7-1-marketplace-data-extraction-worker: backlog
-  7-2-public-marketplace-search-interface: backlog
+  7-1-marketplace-data-extraction-worker: backlog  # Depends on: prep-4 (marketplace spike)
+  7-2-public-marketplace-search-interface: backlog  # Depends on: prep-4 (marketplace spike), prep-5 (security spike)
   7-3-anonymous-profile-government-verified-badges: backlog
-  7-4-authenticated-contact-reveal-captcha: backlog
+  7-4-authenticated-contact-reveal-captcha: backlog  # Depends on: prep-5 (security spike)
   7-5-profile-enrichment-via-edit-token: backlog
-  7-6-contact-view-logging-rate-limiting: backlog
+  7-6-contact-view-logging-rate-limiting: backlog  # Depends on: prep-5 (security spike)
   epic-7-retrospective: optional
 
 

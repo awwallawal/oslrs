@@ -1928,6 +1928,25 @@ So that I can troubleshoot user issues and demonstrate the system to stakeholder
 
 **Epic Goal:** Create a secure, privacy-compliant bridge between skilled workers and potential employers through an anonymous registry.
 
+**Prerequisites (from Epic 6 Retrospective 2026-03-04):**
+- **prep-1:** Fix `text = uuid` production bug (CRITICAL — active errors in respondent.service.ts:325)
+- **prep-2:** Deployment env var safety script (HIGH — prevents crash loops when Epic 7 adds new env vars for marketplace, CAPTCHA, etc.)
+- **prep-3:** Replace placeholder catch-all pages with proper 404 (HIGH — public users must not see "coming soon")
+- **prep-4:** Marketplace data model spike (HIGH — anonymous profile extraction, PII stripping, consent model, search strategy)
+- **prep-5:** Public route security spike (HIGH — threat model for unauthenticated routes: rate limiting, bot protection, search injection, CAPTCHA strategy)
+
+**Security Notes:**
+- This is the first epic introducing **public unauthenticated routes** — fundamentally different security surface from all previous epics.
+- Security hardening (SEC-1 through SEC-4) completed in Epic 6 as prerequisite: 0 critical/0 high CVEs, CSP configured, mass assignment hardened, CI audit gate active.
+- Stories 7-2, 7-4, and 7-6 depend on the public route security spike (prep-5) to define rate limiting, CAPTCHA, and bot protection strategies.
+
+**VPS Strategy:**
+- Start on current DigitalOcean 2GB VPS (production healthy at 26% RAM utilization)
+- Monitor actively via System Health dashboard (Story 6-2)
+- Upgrade trigger: RAM consistently >75% or p95 latency >250ms → upgrade to larger droplet
+
+**Architecture Note:** Story 7.2 references "Read-Only Replica" but current production runs a single database. The marketplace spike (prep-4) should evaluate whether pg_trgm full-text search on the primary database is sufficient at current scale, or if a replica is needed.
+
 ### Story 7.1: Marketplace Data Extraction Worker
 
 As a System,
