@@ -69,9 +69,9 @@ FAIL_COUNT=0
 # Check required vars
 echo "Required Variables:"
 for var in $REQUIRED_VARS; do
-  # Check if var is defined (non-empty value after =); handles both VAR= and export VAR= formats
-  if grep -q "^\(export \)\?${var}=" "$ENV_FILE" 2>/dev/null; then
-    VAL=$(grep "^\(export \)\?${var}=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+  # Check if var is defined (non-empty value after =); handles whitespace, export prefix
+  if grep -qE "^\s*(export\s+)?${var}=" "$ENV_FILE" 2>/dev/null; then
+    VAL=$(grep -E "^\s*(export\s+)?${var}=" "$ENV_FILE" | head -1 | cut -d= -f2-)
     # Strip surrounding quotes (dotenv strips them at runtime, so we must too)
     VAL=$(echo "$VAL" | sed "s/^[\"']//;s/[\"']$//")
     if [ -z "$VAL" ]; then
@@ -90,7 +90,7 @@ for var in $REQUIRED_VARS; do
 done
 
 # JWT_SECRET length check (min 32 chars per app.ts validation)
-JWT_VAL=$(grep "^\(export \)\?JWT_SECRET=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2-)
+JWT_VAL=$(grep -E "^\s*(export\s+)?JWT_SECRET=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2-)
 JWT_VAL=$(echo "$JWT_VAL" | sed "s/^[\"']//;s/[\"']$//")
 if [ -n "$JWT_VAL" ] && [ ${#JWT_VAL} -lt 32 ]; then
   echo "  FAIL JWT_SECRET too short (${#JWT_VAL} chars, minimum 32)"
@@ -107,7 +107,7 @@ WARN_COUNT=0
 # S3/Backups
 S3_MISSING=""
 for var in S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET_NAME; do
-  if ! grep -q "^\(export \)\?${var}=" "$ENV_FILE" 2>/dev/null; then
+  if ! grep -qE "^\s*(export\s+)?${var}=" "$ENV_FILE" 2>/dev/null; then
     S3_MISSING="$S3_MISSING $var"
   fi
 done
@@ -119,7 +119,7 @@ else
 fi
 
 # Email/Resend
-if ! grep -q "^\(export \)\?RESEND_API_KEY=" "$ENV_FILE" 2>/dev/null; then
+if ! grep -qE "^\s*(export\s+)?RESEND_API_KEY=" "$ENV_FILE" 2>/dev/null; then
   echo "  WARN Email: Missing RESEND_API_KEY (email sending will fail)"
   WARN_COUNT=$((WARN_COUNT + 1))
 else
@@ -127,7 +127,7 @@ else
 fi
 
 # Google OAuth
-if ! grep -q "^\(export \)\?GOOGLE_CLIENT_ID=" "$ENV_FILE" 2>/dev/null; then
+if ! grep -qE "^\s*(export\s+)?GOOGLE_CLIENT_ID=" "$ENV_FILE" 2>/dev/null; then
   echo "  WARN OAuth: Missing GOOGLE_CLIENT_ID (Google login unavailable)"
   WARN_COUNT=$((WARN_COUNT + 1))
 else
