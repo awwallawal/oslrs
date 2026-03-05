@@ -555,6 +555,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pre-deploy env var safety check
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/oslrs
+            trap 'rm -f /tmp/oslrs-check-env.sh /tmp/oslrs-app.ts' EXIT
+            git fetch origin main
+
+            # Use latest check script and app.ts from incoming code (before git pull)
+            git show origin/main:scripts/check-env.sh > /tmp/oslrs-check-env.sh
+            git show origin/main:apps/api/src/app.ts > /tmp/oslrs-app.ts
+
+            bash /tmp/oslrs-check-env.sh --env-file .env --app-ts /tmp/oslrs-app.ts
+
       - name: Deploy to DigitalOcean VPS
         uses: appleboy/ssh-action@v1.2.5
         with:

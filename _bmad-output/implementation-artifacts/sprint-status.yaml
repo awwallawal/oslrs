@@ -236,16 +236,16 @@ development_status:
   # race condition guide, dead code cleanup, 403 enforcement, View-As fix.
   prep-epic-7: in-progress
   prep-1-fix-respondent-text-uuid-bug: done  # CRITICAL: Fixed 4 text=uuid mismatches in raw SQL (lines 248, 312, 436, 438). 6 new tests. Code review passed 2026-03-05: 4 findings (2M, 2L), all 4 fixed. 33 respondent tests pass, 0 regressions.
-  prep-2-deployment-env-var-safety-script: ready-for-dev  # HIGH: Pre-deploy check validates required env vars on VPS before deploying. Prevents crash loops like SEC-3 CORS_ORIGIN. Retro P1.
+  prep-2-deployment-env-var-safety-script: done  # HIGH: Pre-deploy check validates required env vars on VPS before deploying. Prevents crash loops like SEC-3 CORS_ORIGIN. Retro P1. Code review passed 2026-03-05: 7 findings (1H, 4M, 2L), all fixed.
   prep-3-replace-placeholder-pages-with-404: ready-for-dev  # HIGH: Change catch-all "coming soon" to proper "page not found" with dashboard navigation. No placeholder text on government system. Retro P4.
   prep-4-marketplace-data-model-spike: ready-for-dev  # HIGH: Anonymous profile extraction, PII stripping, consent model, search strategy (pg_trgm vs full-text). Blocks Stories 7-1, 7-2.
   prep-5-public-route-security-spike: ready-for-dev  # HIGH: Threat model for unauthenticated routes: rate limiting, bot protection, search injection, CAPTCHA strategy. Blocks Stories 7-2, 7-4, 7-6.
   prep-6-commit-history-retro-tool: ready-for-dev  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2.
   prep-7-email-backpressure-implementation: ready-for-dev  # MEDIUM: Resend quota awareness + batch digest notifications. Retro TD3.
-  prep-8-race-condition-anti-pattern-guide: backlog  # MEDIUM: Document 5 patterns in project-context.md with prevention strategies. Retro TD1.
-  prep-9-dead-code-cleanup: backlog  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2.
-  prep-10-403-test-enforcement-tooling: backlog  # MEDIUM: Linting rule or template task making unauthorized tests default. Retro P3.
-  prep-11-fix-view-as-multi-role-rendering: backlog  # MEDIUM: Investigate roleComponentMap imports, fix all 5 viewable roles. Retro Challenge 5.
+  prep-8-race-condition-anti-pattern-guide: ready-for-dev  # MEDIUM: Document 5 patterns in project-context.md with prevention strategies. Retro TD1.
+  prep-9-dead-code-cleanup: ready-for-dev  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2.
+  prep-10-403-test-enforcement-tooling: ready-for-dev  # MEDIUM: Linting rule or template task making unauthorized tests default. Retro P3.
+  prep-11-fix-view-as-multi-role-rendering: ready-for-dev  # MEDIUM: Investigate roleComponentMap imports, fix all 5 viewable roles. Retro Challenge 5.
 
   # Context & Documentation Tasks (from Epic 6 Retrospective 2026-03-04)
   doc-1-create-context-brief: done  # HIGH: docs/team-context-brief.md — session reassembly guide. Created 2026-03-04.

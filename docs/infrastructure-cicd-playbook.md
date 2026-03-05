@@ -451,6 +451,47 @@ Push to main (or PR)
 | `VPS_USERNAME` | `root` | SSH user |
 | `SSH_PRIVATE_KEY` | Private key content | SSH auth |
 
+### Pre-Deploy Env Var Check
+
+**Added:** 2026-03-05 (Story prep-2)
+
+Before every deploy, the CI pipeline validates that all required environment variables exist on the VPS `.env` file. This prevents crash-restart loops like the SEC-3 incident (2026-03-02), where `CORS_ORIGIN` was added to `requiredProdVars` but not set on the VPS, causing 12+ PM2 crash cycles.
+
+**How it works:**
+
+1. CI fetches the latest code from `origin/main` on the VPS (without pulling)
+2. Extracts the latest `scripts/check-env.sh` and `apps/api/src/app.ts` via `git show`
+3. Runs the check script against the VPS `.env` file
+4. If any required var is missing → deploy **aborts** (app is never restarted)
+5. If all required vars present → deploy proceeds normally
+
+**Adding a new required env var:**
+
+1. Add the var name to `requiredProdVars` array in `apps/api/src/app.ts`
+2. **Before deploying:** SSH to VPS and add the var to `~/oslrs/.env`
+3. Deploy — the pre-deploy check will now validate the new var
+
+> **Critical rule:** Always set the var on VPS `.env` BEFORE deploying code that requires it.
+> The pre-deploy check catches this if you forget, but the fix is still manual.
+
+**Running the check manually on VPS:**
+
+```bash
+cd ~/oslrs
+bash scripts/check-env.sh
+# Or with custom paths:
+bash scripts/check-env.sh --env-file /path/to/.env --app-ts /path/to/app.ts
+```
+
+**What it checks:**
+
+| Category | Behavior |
+|----------|----------|
+| Required vars (from `requiredProdVars` in app.ts) | FAIL — blocks deployment |
+| Empty required var values | FAIL — blocks deployment |
+| JWT_SECRET length < 32 chars | FAIL — blocks deployment |
+| S3, Email, OAuth vars | WARN — deployment proceeds |
+
 ### Deploy Step (runs on VPS via SSH)
 
 ```bash
@@ -546,6 +587,7 @@ docker exec -it oslsr-postgres psql -U oslsr_user -d oslsr_db
 | 13 | WebSocket `wss://` connection refused | NGINX missing `/socket.io/` proxy block | Add `location /socket.io/ { proxy_pass ...; proxy_set_header Connection "upgrade"; }` to NGINX config. See Part 5. |
 | 14 | `pnpm db:seed` command not found at repo root | Seed script defined in `apps/api`, not root `package.json` | Use `pnpm --filter @oslsr/api db:seed` or `cd apps/api && pnpm db:seed` |
 | 15 | `tsx -e` top-level await fails | esbuild CJS output doesn't support top-level await | Wrap in async IIFE: `tsx -e "(async()=>{...})()"`, or write to a temp `.ts` file and run with `tsx /tmp/script.ts` |
+| 16 | PM2 crash-restart loop after deploy | New code requires env var not set on VPS `.env` | Pre-deploy check now catches this automatically. Fix: add var to VPS `.env` before deploying. See "Pre-Deploy Env Var Check" in Part 6. |
 
 ---
 
