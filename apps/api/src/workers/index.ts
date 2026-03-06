@@ -11,6 +11,8 @@ import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 import { backupWorker, closeBackupWorker } from './backup.worker.js';
 import { disputeAutoCloseWorker, closeDisputeAutoCloseWorker } from './dispute-autoclose.worker.js';
+import { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
+import { closeMarketplaceExtractionQueue } from '../queues/marketplace-extraction.queue.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
 import { scheduleDailyBackup } from '../queues/backup.queue.js';
 import { scheduleDisputeAutoClose } from '../queues/dispute-autoclose.queue.js';
@@ -28,6 +30,7 @@ export { fraudDetectionWorker } from './fraud-detection.worker.js';
 export { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 export { backupWorker } from './backup.worker.js';
 export { disputeAutoCloseWorker } from './dispute-autoclose.worker.js';
+export { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
 
 /**
  * Initialize all workers
@@ -39,7 +42,7 @@ export async function initializeWorkers(): Promise<void> {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose', 'marketplace-extraction'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
     webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
@@ -47,6 +50,7 @@ export async function initializeWorkers(): Promise<void> {
     productivitySnapshotWorkerRunning: productivitySnapshotWorker?.isRunning() ?? false,
     backupWorkerRunning: backupWorker?.isRunning() ?? false,
     disputeAutoCloseWorkerRunning: disputeAutoCloseWorker?.isRunning() ?? false,
+    marketplaceExtractionWorkerRunning: marketplaceExtractionWorker?.isRunning() ?? false,
   });
 
   // Schedule nightly productivity snapshot
@@ -111,6 +115,8 @@ export async function closeAllWorkers(): Promise<void> {
     productivitySnapshotWorker?.close(),
     closeBackupWorker(),
     closeDisputeAutoCloseWorker(),
+    marketplaceExtractionWorker?.close(),
+    closeMarketplaceExtractionQueue(),
   ]);
 
   logger.info({ event: 'workers.closed' });

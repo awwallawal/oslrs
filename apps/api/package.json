@@ -23,7 +23,8 @@
     "db:seed": "tsx src/db/seeds/index.ts",
     "db:seed:dev": "tsx src/db/seeds/index.ts --dev",
     "db:seed:clean": "tsx src/db/seeds/index.ts --clean",
-    "db:reset": "tsx scripts/db-reset.ts"
+    "db:reset": "tsx scripts/db-reset.ts",
+    "db:custom": "tsx src/db/custom-sql/apply.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",

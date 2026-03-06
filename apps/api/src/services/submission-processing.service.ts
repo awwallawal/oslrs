@@ -13,6 +13,7 @@ import { questionnaireForms } from '../db/schema/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
+import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
 import type { RespondentSource } from '../db/schema/respondents.js';
 import pino from 'pino';
@@ -185,6 +186,20 @@ export class SubmissionProcessingService {
 
       logger.info({
         event: 'submission_processing.fraud_queued',
+        submissionId,
+        respondentId: respondent.id,
+      });
+    }
+
+    // Queue marketplace profile extraction if consent given
+    if (respondentData.consentMarketplace) {
+      await queueMarketplaceExtraction({
+        respondentId: respondent.id,
+        submissionId,
+      });
+
+      logger.info({
+        event: 'submission_processing.marketplace_queued',
         submissionId,
         respondentId: respondent.id,
       });

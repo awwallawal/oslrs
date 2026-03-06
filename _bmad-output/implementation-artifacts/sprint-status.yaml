@@ -240,7 +240,7 @@ development_status:
   prep-3-replace-placeholder-pages-with-404: done  # HIGH: Change catch-all "coming soon" to proper "page not found" with dashboard navigation. No placeholder text on government system. Retro P4. Code review passed 2026-03-06: 5 findings (3M, 2L), 4 fixed, 1 deferred (L2 PublicLayout wrap). 1970 web tests pass, 0 regressions.
   prep-4-marketplace-data-model-spike: done  # HIGH: Anonymous profile extraction, PII stripping, consent model, search strategy (pg_trgm vs full-text). Spike + code review complete 2026-03-06. 10 findings (4H, 4M, 2L), all fixed.
   prep-5-public-route-security-spike: done  # HIGH: Threat model for unauthenticated routes: rate limiting, bot protection, search injection, CAPTCHA strategy. Blocks Stories 7-2, 7-4, 7-6. Code review passed 2026-03-06: 8 findings (1H, 5M, 2L), all 8 fixed.
-  prep-6-commit-history-retro-tool: ready-for-dev  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2.
+  prep-6-commit-history-retro-tool: done  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2. Completed 2026-03-06. Code review passed 2026-03-06: 1 finding (1M), fixed. Uncategorized tip added.
   prep-7-email-backpressure-implementation: ready-for-dev  # MEDIUM: Resend quota awareness + batch digest notifications. Retro TD3.
   prep-8-race-condition-anti-pattern-guide: ready-for-dev  # MEDIUM: Document 5 patterns in project-context.md with prevention strategies. Retro TD1.
   prep-9-dead-code-cleanup: ready-for-dev  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2.
@@ -257,7 +257,7 @@ development_status:
   # Security: First public unauthenticated routes — fundamentally different security surface.
   # VPS Strategy: Start on current 2GB DigitalOcean, upgrade only if monitoring (Story 6-2) triggers thresholds.
   epic-7: in-progress
-  7-1-marketplace-data-extraction-worker: ready-for-dev  # Depends on: prep-4 (marketplace spike)
+  7-1-marketplace-data-extraction-worker: done  # Depends on: prep-4 (marketplace spike). Completed 2026-03-06: 7 tasks, 32 new tests, 0 regressions. Code review passed 2026-03-06: 7 findings (1H, 4M, 2L), 6 fixed, 1 noted (L2 RegistryTestPage cleanup).
   7-2-public-marketplace-search-interface: ready-for-dev  # Depends on: prep-4 (marketplace spike), prep-5 (security spike)
   7-3-anonymous-profile-government-verified-badges: ready-for-dev
   7-4-authenticated-contact-reveal-captcha: ready-for-dev  # Depends on: prep-5 (security spike)

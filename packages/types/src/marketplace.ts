@@ -1,0 +1,110 @@
+/**
+ * Marketplace Types
+ *
+ * Type definitions for the public skills marketplace.
+ * Created in Story 7.1, design source: prep-4 spike Section 5.
+ */
+
+// ============================================================================
+// Marketplace Profile Types
+// ============================================================================
+
+/** Anonymous profile view — visible to all public visitors */
+export interface MarketplaceProfileAnonymous {
+  id: string;
+  profession: string | null;
+  skills: string | null;
+  lgaName: string | null;
+  experienceLevel: string | null;
+  verifiedBadge: boolean;
+  bio: string | null;
+  portfolioUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Enriched profile view — visible after auth + CAPTCHA + consent check */
+export interface MarketplaceProfileEnriched extends MarketplaceProfileAnonymous {
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+  consentEnriched: true;
+}
+
+/** Union type for profile responses */
+export type MarketplaceProfileView = MarketplaceProfileAnonymous | MarketplaceProfileEnriched;
+
+// ============================================================================
+// Search Types
+// ============================================================================
+
+/** Search request parameters */
+export interface MarketplaceSearchParams {
+  query: string;
+  lgaId?: string;
+  profession?: string;
+  experienceLevelMin?: string;
+  experienceLevelMax?: string;
+  verifiedOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Individual search result with relevance score */
+export interface MarketplaceSearchHit {
+  profile: MarketplaceProfileAnonymous;
+  rank: number;
+}
+
+/** Paginated search results */
+export interface MarketplaceSearchResult {
+  data: MarketplaceSearchHit[];
+  meta: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    query: string;
+  };
+  suggestions?: string[];
+}
+
+// ============================================================================
+// Contact Reveal Types
+// ============================================================================
+
+/** Contact reveal log entry */
+export interface ContactRevealEntry {
+  id: string;
+  searcherId: string;
+  profileId: string;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+/** Contact reveal response (includes rate limit info) */
+export interface ContactRevealResponse {
+  profile: MarketplaceProfileEnriched;
+  rateLimit: {
+    remaining: number;
+    limit: number;
+    resetsAt: string;
+  };
+}
+
+// ============================================================================
+// Profile Enrichment Types (Edit Token — Story 7-5)
+// ============================================================================
+
+/** Payload for self-service profile enrichment via edit token */
+export interface ProfileEnrichmentPayload {
+  bio?: string;
+  portfolioUrl?: string;
+}
+
+/** Edit token validation response */
+export interface EditTokenValidation {
+  valid: boolean;
+  profileId?: string;
+  expiresAt?: string;
+}

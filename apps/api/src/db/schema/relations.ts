@@ -11,6 +11,7 @@ import { fraudDetections } from './fraud-detections.js';
 import { dailyProductivitySnapshots } from './daily-productivity-snapshots.js';
 import { productivityTargets } from './productivity-targets.js';
 import { paymentBatches, paymentRecords, paymentFiles, paymentDisputes } from './remuneration.js';
+import { marketplaceProfiles } from './marketplace.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -109,9 +110,21 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
   }),
 }));
 
-// Respondents relations (Story 3.4)
-export const respondentsRelations = relations(respondents, ({ many }) => ({
+// Respondents relations (Story 3.4, extended Story 7.1)
+export const respondentsRelations = relations(respondents, ({ one, many }) => ({
   submissions: many(submissions),
+  marketplaceProfile: one(marketplaceProfiles, {
+    fields: [respondents.id],
+    references: [marketplaceProfiles.respondentId],
+  }),
+}));
+
+// Marketplace profile relations (Story 7.1)
+export const marketplaceProfilesRelations = relations(marketplaceProfiles, ({ one }) => ({
+  respondent: one(respondents, {
+    fields: [marketplaceProfiles.respondentId],
+    references: [respondents.id],
+  }),
 }));
 
 // Message relations (Story 4.2)

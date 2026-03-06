@@ -99,6 +99,11 @@ vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
 }));
 
+const mockQueueMarketplaceExtraction = vi.fn().mockResolvedValue('mock-job-id');
+vi.mock('../../queues/marketplace-extraction.queue.js', () => ({
+  queueMarketplaceExtraction: (...args: unknown[]) => mockQueueMarketplaceExtraction(...args),
+}));
+
 vi.mock('pino', () => ({
   default: () => ({
     info: vi.fn(),
@@ -190,6 +195,9 @@ describe('Submission Ingestion Pipeline (Integration)', () => {
 
     // Fraud detection should be queued (GPS present in rawData)
     expect(mockQueueFraudDetection).toHaveBeenCalledOnce();
+
+    // Marketplace extraction should be queued (consent_marketplace: 'yes')
+    expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
   });
 
   it('should skip entirely for already-processed submissions (idempotent)', async () => {
