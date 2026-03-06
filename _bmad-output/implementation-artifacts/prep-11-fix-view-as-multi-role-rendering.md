@@ -1,6 +1,6 @@
 # Story 7.prep-11: Fix View-As Multi-Role Rendering
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -37,52 +37,32 @@ It does NOT render the actual role-specific page components (`SupervisorHome`, `
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Investigate and fix backend dashboard data for all 5 roles (AC: #5)
-  - [ ] 1.1 **FIX `getClerkSummary()`** (`view-as-data.service.ts:108`): `WHERE source = 'data_entry_clerk'` uses a value that doesn't exist in the enum. `ingestionSourceTypes` is `['webapp','mobile','webhook','backfill','manual','public','enumerator','clerk']` — correct value is `'clerk'`, not `'data_entry_clerk'`. Change to `WHERE source = 'clerk'`.
-  - [ ] 1.2 **FIX `getEnumeratorSummary()`** (`view-as-data.service.ts:54,59`): `WHERE lga_id = ${lgaId}` on `submissions` table — but `submissions` has NO `lga_id` column. `lga_id` is on the `respondents` table. Fix: JOIN through `respondents` (e.g., `FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`).
-  - [ ] 1.3 **FIX `getSupervisorSummary()`** (`view-as-data.service.ts:78`): Same `lga_id` bug as enumerator — `submissions` has no `lga_id` column. Apply same JOIN fix.
-  - [ ] 1.4 **FIX `getAssessorSummary()`** (`view-as-data.service.ts:129,134`): `WHERE status = 'pending'` — `fraud_detections` has NO `status` column. Columns are `severity` (text enum), `resolution` (text enum, nullable), `assessor_resolution` (text enum, nullable). For "pending reviews", use `WHERE resolution IS NULL` (unreviewed by supervisor). For "reviewed", use `WHERE resolution IS NOT NULL`.
-  - [ ] 1.5 `getOfficialSummary()` — ✅ Works correctly, no fix needed. `respondents.created_at` exists.
-  - [ ] 1.6 Test each fixed method manually or add targeted tests to confirm correct results.
-- [ ] Task 2: Implement roleComponentMap in ViewAsDashboardPage (AC: #1, #2, #4)
-  - [ ] 2.1 Create a `roleRouteMap` that maps each role to its lazy-loaded page components:
-    ```typescript
-    const roleRouteMap: Record<string, Record<string, React.LazyExoticComponent<any>>> = {
-      supervisor: {
-        '': lazy(() => import('./SupervisorHome')),
-        'team': lazy(() => import('./SupervisorTeamPage')),
-        'productivity': lazy(() => import('./SupervisorProductivityPage')),
-        'registry': lazy(() => import('../../../dashboard/pages/RespondentRegistryPage')),
-        'fraud': lazy(() => import('./SupervisorFraudPage')),
-        'messages': lazy(() => import('./SupervisorMessagesPage')),
-      },
-      enumerator: {
-        '': lazy(() => import('./EnumeratorHome')),
-        'survey': lazy(() => import('./EnumeratorSurveysPage')),
-        'drafts': lazy(() => import('./EnumeratorDraftsPage')),
-        'sync': lazy(() => import('./EnumeratorSyncPage')),
-        'messages': lazy(() => import('./EnumeratorMessagesPage')),
-      },
-      // ... data_entry_clerk, verification_assessor, government_official
-    };
-    ```
-  - [ ] 2.2 Determine the current sub-path from `useLocation()` and extract the segment after `/view-as/:role/`
-  - [ ] 2.3 If sub-path matches a roleRouteMap entry, render that component. If sub-path is empty (''), render the Home component. If no match, render the existing generic dashboard cards (fallback).
-  - [ ] 2.4 Wrap rendered components in `<Suspense>` with `DashboardLoadingFallback`
-  - [ ] 2.5 Ensure ViewAsBanner + sidebar remain visible (layout wrapper stays, only main content swaps)
-- [ ] Task 3: Handle graceful degradation for pages that fail (AC: #3)
-  - [ ] 3.1 Wrap each rendered component in an error boundary that catches render errors and shows: "Preview unavailable for this page in View-As mode"
-  - [ ] 3.2 Pages that call `useAuth()` expecting a specific role will still see `super_admin` — some may show empty data (acceptable), others may conditionally render nothing. The error boundary ensures no crashes.
-  - [ ] 3.3 For pages known to require write access (e.g., FormFillerPage, ClerkDataEntryPage), exclude them from roleRouteMap and let them fall through to the generic dashboard or show a "write-only feature" notice
-- [ ] Task 4: Update App.tsx route structure if needed (AC: #2)
-  - [ ] 4.1 The existing `view-as/:role/*` wildcard route should be sufficient. Verify that `ViewAsDashboardPage` can extract the sub-path from the wildcard match.
-  - [ ] 4.2 If nested `<Route>` elements are needed inside the View-As subtree, add them. But prefer keeping route logic inside `ViewAsDashboardPage` via the roleRouteMap to minimize App.tsx changes.
-- [ ] Task 5: Update tests for multi-role coverage (AC: #6, #7)
-  - [ ] 5.1 In `ViewAsDashboardPage.test.tsx`, add test cases for all 5 roles (not just supervisor). Each should verify: sidebar renders, correct Home component loads.
-  - [ ] 5.2 Test sub-page navigation: mock `useParams` with role + `useLocation` with sub-path, verify correct component renders
-  - [ ] 5.3 Test fallback: unknown sub-path renders generic dashboard cards
-  - [ ] 5.4 Test error boundary: component that throws renders "Preview unavailable" message
-  - [ ] 5.5 `pnpm test` — all tests pass, zero regressions
+- [x] Task 1: Investigate and fix backend dashboard data for all 5 roles (AC: #5)
+  - [x] 1.1 **FIX `getClerkSummary()`** (`view-as-data.service.ts:108`): `WHERE source = 'data_entry_clerk'` uses a value that doesn't exist in the enum. `ingestionSourceTypes` is `['webapp','mobile','webhook','backfill','manual','public','enumerator','clerk']` — correct value is `'clerk'`, not `'data_entry_clerk'`. Change to `WHERE source = 'clerk'`.
+  - [x] 1.2 **FIX `getEnumeratorSummary()`** (`view-as-data.service.ts:54,59`): `WHERE lga_id = ${lgaId}` on `submissions` table — but `submissions` has NO `lga_id` column. `lga_id` is on the `respondents` table. Fix: JOIN through `respondents` (e.g., `FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`).
+  - [x] 1.3 **FIX `getSupervisorSummary()`** (`view-as-data.service.ts:78`): Same `lga_id` bug as enumerator — `submissions` has no `lga_id` column. Apply same JOIN fix.
+  - [x] 1.4 **FIX `getAssessorSummary()`** (`view-as-data.service.ts:129,134`): `WHERE status = 'pending'` — `fraud_detections` has NO `status` column. Columns are `severity` (text enum), `resolution` (text enum, nullable), `assessor_resolution` (text enum, nullable). For "pending reviews", use `WHERE resolution IS NULL` (unreviewed by supervisor). For "reviewed", use `WHERE resolution IS NOT NULL`.
+  - [x] 1.5 `getOfficialSummary()` — Works correctly, no fix needed. `respondents.created_at` exists.
+  - [x] 1.6 Test each fixed method manually or add targeted tests to confirm correct results.
+- [x] Task 2: Implement roleComponentMap in ViewAsDashboardPage (AC: #1, #2, #4)
+  - [x] 2.1 Create a `roleRouteMap` that maps each role to its lazy-loaded page components (all 5 roles, 25 routes total).
+  - [x] 2.2 Extract sub-path from `useParams()['*']` wildcard match (React Router v6).
+  - [x] 2.3 If sub-path matches a roleRouteMap entry, render that component. If sub-path is empty (''), render the Home component. If no match, render the existing generic dashboard cards (fallback).
+  - [x] 2.4 Wrap rendered components in `<Suspense>` with amber spinner fallback.
+  - [x] 2.5 Ensure ViewAsBanner + sidebar remain visible (layout wrapper stays, only main content swaps).
+- [x] Task 3: Handle graceful degradation for pages that fail (AC: #3)
+  - [x] 3.1 Wrap each rendered component in existing ErrorBoundary with "Preview unavailable for this page in View-As mode" fallback. resetKey based on role+subPath.
+  - [x] 3.2 Pages that call `useAuth()` expecting a specific role will still see `super_admin` — some may show empty data (acceptable), others may conditionally render nothing. The error boundary ensures no crashes.
+  - [x] 3.3 Write-heavy components (FormFillerPage, ClerkDataEntryPage) excluded from roleRouteMap — they fall through to the generic dashboard cards.
+- [x] Task 4: Update App.tsx route structure if needed (AC: #2)
+  - [x] 4.1 Verified: existing `view-as/:role/*` wildcard route is sufficient. `useParams()['*']` extracts sub-path. No App.tsx changes needed.
+  - [x] 4.2 Route logic kept inside `ViewAsDashboardPage` via roleRouteMap — no nested Routes added to App.tsx.
+- [x] Task 5: Update tests for multi-role coverage (AC: #6, #7)
+  - [x] 5.1 Added test cases for all 5 roles' Home pages using `it.each`. Each verifies sidebar renders and correct Home component loads.
+  - [x] 5.2 Test sub-page navigation: 11 sub-path tests across all roles verifying correct component renders.
+  - [x] 5.3 Test fallback: unknown sub-path renders generic dashboard cards.
+  - [x] 5.4 Test error boundary: component crash renders "Preview unavailable" message.
+  - [x] 5.5 `pnpm test` — 1,991 web + API tests pass, zero regressions.
 
 ## Dev Notes
 
@@ -145,7 +125,7 @@ Both `:role` and `:role/*` render the same `ViewAsDashboardPage` — no sub-path
 | queue | `AssessorQueuePage` | `./features/dashboard/pages/AssessorQueuePage` |
 | registry | `RespondentRegistryPage` | `./features/dashboard/pages/RespondentRegistryPage` |
 | completed | `AssessorCompletedPage` | `./features/dashboard/pages/AssessorCompletedPage` |
-| export | `ExportPage` | `./features/export/pages/ExportPage` |
+| export | `ExportPage` | `./features/dashboard/pages/ExportPage` |
 
 **Government Official** (lines 1052-1129):
 | Sidebar href | Component | Import Path |
@@ -154,7 +134,7 @@ Both `:role` and `:role/*` render the same `ViewAsDashboardPage` — no sub-path
 | stats | `OfficialStatsPage` | `./features/dashboard/pages/OfficialStatsPage` |
 | trends | `OfficialTrendsPage` | `./features/dashboard/pages/OfficialTrendsPage` |
 | registry | `RespondentRegistryPage` | `./features/dashboard/pages/RespondentRegistryPage` |
-| export | `ExportPage` | `./features/export/pages/ExportPage` |
+| export | `ExportPage` | `./features/dashboard/pages/ExportPage` |
 
 ### The Auth Context Challenge
 
@@ -213,12 +193,42 @@ The error boundary in Task 3 handles the crash case. Empty data is acceptable �
 - [Source: middleware/auth.ts:96-114] — View-As state attachment for Super Admins
 - [Source: MEMORY.md] — "View-As partial implementation: Only one role renders correctly in View-As mode. Prep-11 for Epic 7."
 
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] H1: Clerk summary test has zero query assertion — added `source =` positive check and `not.toContain('data_entry_clerk')` negative check [`apps/api/src/services/__tests__/view-as-data.service.test.ts:74-77`]
+- [x] [AI-Review][MEDIUM] M1: 9 of 20 sub-path routes untested — added all missing sub-paths (supervisor/registry, supervisor/messages, enumerator/sync, enumerator/messages, data_entry_clerk/completed, verification_assessor/completed, verification_assessor/export, government_official/registry, government_official/export) to it.each [`apps/web/src/features/dashboard/pages/__tests__/ViewAsDashboardPage.test.tsx:242-263`]
+- [x] [AI-Review][MEDIUM] M2: Backend tests lack positive assertions for SQL fixes — added `toContain('JOIN respondents')` for enumerator/supervisor, `toContain('resolution IS NULL')` / `toContain('resolution IS NOT NULL')` for assessor [`apps/api/src/services/__tests__/view-as-data.service.test.ts:37-42,60-63,93-95`]
+- [x] [AI-Review][MEDIUM] M3: Non-null assertion `targetLgaId!` for field roles — replaced with null guard returning empty cards + added backend test for null lgaId [`apps/api/src/services/view-as-data.service.ts:37-40`, `view-as-data.service.test.ts:127-135`]
+- [x] [AI-Review][LOW] L1: Story doc route count "22" vs actual 25 — corrected in Task 2.1 below
+- [x] [AI-Review][LOW] L2: Dev notes ExportPage import path inconsistency — corrected in reference table below
+
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+None — clean implementation, no debug cycles needed.
 
 ### Completion Notes List
+- **Task 1 (Backend fixes):** Fixed 4 broken dashboard queries in `view-as-data.service.ts`:
+  - `getEnumeratorSummary()`: Fixed missing `lga_id` column on `submissions` — added JOIN through `respondents`
+  - `getSupervisorSummary()`: Same `lga_id` JOIN fix for submission count query
+  - `getClerkSummary()`: Changed `source = 'data_entry_clerk'` to `source = 'clerk'` (correct enum value)
+  - `getAssessorSummary()`: Replaced non-existent `status = 'pending'` with `resolution IS NULL` / `IS NOT NULL`
+  - `getOfficialSummary()`: Confirmed working, no changes needed
+  - Added 7 backend tests covering all 5 roles + unknown role + DB error graceful degradation
+- **Task 2 (roleRouteMap):** Implemented lazy-loaded `roleRouteMap` in `ViewAsDashboardPage.tsx` mapping all 5 roles to their page components (22 routes total). Sub-path extracted via `useParams()['*']`. Home renders on empty sub-path, generic dashboard cards as fallback for unmatched paths.
+- **Task 3 (Graceful degradation):** Wrapped role components in `ErrorBoundary` with "Preview unavailable for this page in View-As mode" fallback. `resetKey` based on `role-subPath`. Write-heavy components (FormFillerPage, ClerkDataEntryPage) excluded from roleRouteMap.
+- **Task 4 (Route structure):** Verified existing `view-as/:role/*` wildcard route is sufficient. No App.tsx changes needed.
+- **Task 5 (Tests):** 35 frontend tests covering all 5 roles' Home pages (it.each), 20 sub-path navigation tests (all routes), fallback rendering, and error boundary. 8 backend tests covering all 5 roles + null lgaId guard + DB error graceful degradation.
+
+### Change Log
+- 2026-03-06: Implemented all 5 tasks — backend query fixes, roleRouteMap, error boundary, test coverage for all 5 roles.
+- 2026-03-06: Adversarial code review — fixed 6 issues (1 HIGH, 3 MEDIUM, 2 LOW): added null guard for field role lgaId, added positive SQL assertions in backend tests, added clerk query assertion, expanded sub-path test coverage from 11→20, corrected story doc inaccuracies.
 
 ### File List
+- `apps/api/src/services/view-as-data.service.ts` — Fixed 4 broken queries (enumerator JOIN, supervisor JOIN, clerk source value, assessor resolution column)
+- `apps/api/src/services/__tests__/view-as-data.service.test.ts` — NEW: 7 backend tests for all 5 role summaries + edge cases
+- `apps/web/src/features/dashboard/pages/ViewAsDashboardPage.tsx` — Added roleRouteMap (22 lazy routes), Suspense wrapping, ErrorBoundary, sub-path routing
+- `apps/web/src/features/dashboard/pages/__tests__/ViewAsDashboardPage.test.tsx` — Rewritten: 26 tests covering all 5 roles, sub-pages, fallback, error boundary

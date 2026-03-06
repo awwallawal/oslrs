@@ -34,9 +34,11 @@ export class ViewAsDataService {
   static async getDashboardSummary(targetRole: string, targetLgaId: string | null): Promise<ViewAsDashboardSummary> {
     switch (targetRole) {
       case 'enumerator':
-        return ViewAsDataService.getEnumeratorSummary(targetLgaId!);
+        if (!targetLgaId) return { role: targetRole, lgaId: null, cards: [], recentActivity: [] };
+        return ViewAsDataService.getEnumeratorSummary(targetLgaId);
       case 'supervisor':
-        return ViewAsDataService.getSupervisorSummary(targetLgaId!);
+        if (!targetLgaId) return { role: targetRole, lgaId: null, cards: [], recentActivity: [] };
+        return ViewAsDataService.getSupervisorSummary(targetLgaId);
       case 'data_entry_clerk':
         return ViewAsDataService.getClerkSummary();
       case 'verification_assessor':
@@ -51,12 +53,12 @@ export class ViewAsDataService {
   private static async getEnumeratorSummary(lgaId: string): Promise<ViewAsDashboardSummary> {
     try {
       const submissionCountResult = await db.execute(
-        sql`SELECT COUNT(*) as total FROM submissions WHERE lga_id = ${lgaId}`,
+        sql`SELECT COUNT(*) as total FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`,
       );
       const total = parseInt((submissionCountResult.rows[0] as any)?.total ?? '0', 10);
 
       const todayResult = await db.execute(
-        sql`SELECT COUNT(*) as today FROM submissions WHERE lga_id = ${lgaId} AND created_at >= CURRENT_DATE`,
+        sql`SELECT COUNT(*) as today FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId} AND s.created_at >= CURRENT_DATE`,
       );
       const today = parseInt((todayResult.rows[0] as any)?.today ?? '0', 10);
 
@@ -83,7 +85,7 @@ export class ViewAsDataService {
       const teamCount = parseInt((teamResult.rows[0] as any)?.total ?? '0', 10);
 
       const submissionResult = await db.execute(
-        sql`SELECT COUNT(*) as total FROM submissions WHERE lga_id = ${lgaId}`,
+        sql`SELECT COUNT(*) as total FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`,
       );
       const submissionCount = parseInt((submissionResult.rows[0] as any)?.total ?? '0', 10);
 
@@ -105,7 +107,7 @@ export class ViewAsDataService {
   private static async getClerkSummary(): Promise<ViewAsDashboardSummary> {
     try {
       const result = await db.execute(
-        sql`SELECT COUNT(*) as total FROM submissions WHERE source = 'data_entry_clerk'`,
+        sql`SELECT COUNT(*) as total FROM submissions WHERE source = 'clerk'`,
       );
       const total = parseInt((result.rows[0] as any)?.total ?? '0', 10);
 
@@ -126,12 +128,12 @@ export class ViewAsDataService {
   private static async getAssessorSummary(): Promise<ViewAsDashboardSummary> {
     try {
       const pendingResult = await db.execute(
-        sql`SELECT COUNT(*) as total FROM fraud_detections WHERE status = 'pending'`,
+        sql`SELECT COUNT(*) as total FROM fraud_detections WHERE resolution IS NULL`,
       );
       const pending = parseInt((pendingResult.rows[0] as any)?.total ?? '0', 10);
 
       const reviewedResult = await db.execute(
-        sql`SELECT COUNT(*) as total FROM fraud_detections WHERE status != 'pending'`,
+        sql`SELECT COUNT(*) as total FROM fraud_detections WHERE resolution IS NOT NULL`,
       );
       const reviewed = parseInt((reviewedResult.rows[0] as any)?.total ?? '0', 10);
 

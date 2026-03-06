@@ -7,6 +7,7 @@
  * Story 6-7: Super Admin View-As Feature
  */
 
+import { lazy, Suspense } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   Home,
@@ -30,6 +31,46 @@ import { getRoleDisplayName } from '@oslsr/types';
 import { ViewAsBanner } from '../components/ViewAsBanner';
 import { useViewAs } from '../context/ViewAsContext';
 import { useViewAsDashboardData } from '../hooks/useViewAs';
+import { ErrorBoundary } from '../../../components/ErrorBoundary';
+
+// Lazy-loaded role page components for View-As rendering
+const roleRouteMap: Record<string, Record<string, React.LazyExoticComponent<React.ComponentType>>> = {
+  supervisor: {
+    '': lazy(() => import('./SupervisorHome')),
+    'team': lazy(() => import('./SupervisorTeamPage')),
+    'productivity': lazy(() => import('./SupervisorProductivityPage')),
+    'registry': lazy(() => import('./RespondentRegistryPage')),
+    'fraud': lazy(() => import('./SupervisorFraudPage')),
+    'messages': lazy(() => import('./SupervisorMessagesPage')),
+  },
+  enumerator: {
+    '': lazy(() => import('./EnumeratorHome')),
+    'survey': lazy(() => import('./EnumeratorSurveysPage')),
+    'drafts': lazy(() => import('./EnumeratorDraftsPage')),
+    'sync': lazy(() => import('./EnumeratorSyncPage')),
+    'messages': lazy(() => import('./EnumeratorMessagesPage')),
+  },
+  data_entry_clerk: {
+    '': lazy(() => import('./ClerkHome')),
+    'surveys': lazy(() => import('./ClerkSurveysPage')),
+    'completed': lazy(() => import('./ClerkCompletedPage')),
+    'stats': lazy(() => import('./ClerkStatsPage')),
+  },
+  verification_assessor: {
+    '': lazy(() => import('./AssessorHome')),
+    'queue': lazy(() => import('./AssessorQueuePage')),
+    'registry': lazy(() => import('./RespondentRegistryPage')),
+    'completed': lazy(() => import('./AssessorCompletedPage')),
+    'export': lazy(() => import('./ExportPage')),
+  },
+  government_official: {
+    '': lazy(() => import('./OfficialHome')),
+    'stats': lazy(() => import('./OfficialStatsPage')),
+    'trends': lazy(() => import('./OfficialTrendsPage')),
+    'registry': lazy(() => import('./RespondentRegistryPage')),
+    'export': lazy(() => import('./ExportPage')),
+  },
+};
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Home,
@@ -96,7 +137,7 @@ const SIDEBAR_MAP: Record<string, SidebarItem[]> = {
 };
 
 export default function ViewAsDashboardPage() {
-  const { role } = useParams<{ role: string }>();
+  const { role, '*': subPath = '' } = useParams<{ role: string; '*': string }>();
   const location = useLocation();
   const { isViewingAs, isLoading: contextLoading } = useViewAs();
   const { data: dashboardData, isLoading: dataLoading } = useViewAsDashboardData(isViewingAs);
@@ -160,15 +201,53 @@ export default function ViewAsDashboardPage() {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">
-            <ViewAsDashboardContent
-              role={role}
-              roleDisplayName={roleDisplayName}
-              dashboardData={dashboardData}
-              isLoading={dataLoading}
-            />
-          </div>
+        <main className="flex-1 overflow-auto" data-testid="view-as-main">
+          {(() => {
+            const roleRoutes = roleRouteMap[role];
+            const RoleComponent = roleRoutes?.[subPath];
+
+            if (RoleComponent) {
+              return (
+                <ErrorBoundary
+                  fallback={
+                    <div className="p-6" data-testid="view-as-preview-unavailable">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-center">
+                        <p className="text-sm font-medium text-amber-800">
+                          Preview unavailable for this page in View-As mode
+                        </p>
+                        <p className="mt-1 text-xs text-amber-600">
+                          This page could not be rendered in the current preview context.
+                        </p>
+                      </div>
+                    </div>
+                  }
+                  resetKey={`${role}-${subPath}`}
+                >
+                  <Suspense
+                    fallback={
+                      <div className="flex h-64 items-center justify-center">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+                      </div>
+                    }
+                  >
+                    <RoleComponent />
+                  </Suspense>
+                </ErrorBoundary>
+              );
+            }
+
+            // Fallback: generic dashboard cards for unmatched sub-paths
+            return (
+              <div className="p-6">
+                <ViewAsDashboardContent
+                  role={role}
+                  roleDisplayName={roleDisplayName}
+                  dashboardData={dashboardData}
+                  isLoading={dataLoading}
+                />
+              </div>
+            );
+          })()}
         </main>
       </div>
     </div>
