@@ -177,49 +177,4 @@ export class ViewAsDataService {
     }
   }
 
-  /**
-   * Get sidebar items for a target role. Returns the config-based sidebar items
-   * with hrefs rewritten for View-As routes.
-   */
-  static getSidebarItems(targetRole: string): Array<{ label: string; href: string; icon: string }> {
-    const sidebarMap: Record<string, Array<{ label: string; href: string; icon: string }>> = {
-      enumerator: [
-        { label: 'Home', href: '', icon: 'Home' },
-        { label: 'Surveys', href: 'survey', icon: 'ClipboardList' },
-        { label: 'Drafts', href: 'drafts', icon: 'FileText' },
-        { label: 'Sync Status', href: 'sync', icon: 'RefreshCw' },
-        { label: 'Messages', href: 'messages', icon: 'MessageSquare' },
-      ],
-      supervisor: [
-        { label: 'Home', href: '', icon: 'Home' },
-        { label: 'Team Progress', href: 'team', icon: 'Users' },
-        { label: 'Productivity', href: 'productivity', icon: 'BarChart3' },
-        { label: 'Registry', href: 'registry', icon: 'Database' },
-        { label: 'Fraud Alerts', href: 'fraud', icon: 'AlertTriangle' },
-        { label: 'Messages', href: 'messages', icon: 'MessageSquare' },
-      ],
-      data_entry_clerk: [
-        { label: 'Home', href: '', icon: 'Home' },
-        { label: 'Entry Queue', href: 'surveys', icon: 'ListChecks' },
-        { label: 'Completed', href: 'completed', icon: 'CheckCircle' },
-        { label: 'My Stats', href: 'stats', icon: 'BarChart3' },
-      ],
-      verification_assessor: [
-        { label: 'Home', href: '', icon: 'Home' },
-        { label: 'Audit Queue', href: 'queue', icon: 'ClipboardCheck' },
-        { label: 'Registry', href: 'registry', icon: 'Database' },
-        { label: 'Completed', href: 'completed', icon: 'CheckCircle' },
-        { label: 'Export Data', href: 'export', icon: 'Download' },
-      ],
-      government_official: [
-        { label: 'Home', href: '', icon: 'Home' },
-        { label: 'Statistics', href: 'stats', icon: 'BarChart3' },
-        { label: 'Trends', href: 'trends', icon: 'TrendingUp' },
-        { label: 'Registry', href: 'registry', icon: 'Database' },
-        { label: 'Export', href: 'export', icon: 'Download' },
-      ],
-    };
-
-    return sidebarMap[targetRole] ?? [];
-  }
 }

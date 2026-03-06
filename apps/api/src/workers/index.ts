@@ -6,6 +6,7 @@
 
 import { importWorker } from './import.worker.js';
 import { emailWorker, closeEmailWorker, scheduleDigestFlush } from './email.worker.js';
+import { closeEmailQueue } from '../queues/email.queue.js';
 import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
@@ -113,6 +114,7 @@ export async function closeAllWorkers(): Promise<void> {
   await Promise.all([
     importWorker.close(),
     closeEmailWorker(),
+    closeEmailQueue(),
     webhookIngestionWorker.close(),
     fraudDetectionWorker.close(),
     productivitySnapshotWorker?.close(),

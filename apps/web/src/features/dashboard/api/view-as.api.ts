@@ -61,6 +61,6 @@ export async function getViewAsDashboardData(): Promise<ViewAsDashboardSummary> 
   return result.data;
 }
 
-// Note: /view-as/data/sidebar endpoint exists on backend but frontend uses
+// Note: /view-as/data/sidebar endpoint was removed (prep-9). Frontend uses
 // hardcoded SIDEBAR_MAP in ViewAsDashboardPage.tsx for instant rendering.
-// If sidebar config becomes dynamic, add a hook consuming that endpoint.
+// If sidebar config becomes dynamic, re-add backend endpoint + hook.

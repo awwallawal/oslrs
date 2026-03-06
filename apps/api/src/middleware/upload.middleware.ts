@@ -133,11 +133,3 @@ export const validateFileContent = (
 
   next();
 };
-
-/**
- * Middleware wrapper for XLSForm upload that includes error handling
- */
-export const uploadXlsform = [
-  xlsformUpload.single('file'),
-  handleMulterError,
-];

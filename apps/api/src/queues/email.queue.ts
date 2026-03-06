@@ -71,54 +71,6 @@ function getEmailQueue(): Queue<EmailJob> {
 }
 
 /**
- * Email notification queue
- *
- * Handles asynchronous email delivery with:
- * - Custom backoff retry (3 attempts: 30s, 2min, 10min per AC3)
- * - Job completion cleanup (keep for 1 hour)
- * - Failed job retention (24 hours for debugging)
- *
- * Job types:
- * - staff-invitation: Staff provisioning invitation emails
- * - verification: Public user email verification (Magic Link + OTP)
- * - password-reset: Password reset emails
- *
- * @deprecated Use getEmailQueue() for lazy initialization. This export is kept for backwards compatibility.
- */
-export const emailQueue = {
-  get add() {
-    return getEmailQueue().add.bind(getEmailQueue());
-  },
-  get getWaitingCount() {
-    return getEmailQueue().getWaitingCount.bind(getEmailQueue());
-  },
-  get getActiveCount() {
-    return getEmailQueue().getActiveCount.bind(getEmailQueue());
-  },
-  get getCompletedCount() {
-    return getEmailQueue().getCompletedCount.bind(getEmailQueue());
-  },
-  get getFailedCount() {
-    return getEmailQueue().getFailedCount.bind(getEmailQueue());
-  },
-  get getDelayedCount() {
-    return getEmailQueue().getDelayedCount.bind(getEmailQueue());
-  },
-  get isPaused() {
-    return getEmailQueue().isPaused.bind(getEmailQueue());
-  },
-  get pause() {
-    return getEmailQueue().pause.bind(getEmailQueue());
-  },
-  get resume() {
-    return getEmailQueue().resume.bind(getEmailQueue());
-  },
-  get close() {
-    return getEmailQueue().close.bind(getEmailQueue());
-  },
-};
-
-/**
  * Get backoff delay for a given attempt number (0-indexed)
  * Returns delay in milliseconds: 30s, 2min, 10min
  */

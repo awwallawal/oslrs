@@ -243,8 +243,8 @@ development_status:
   prep-6-commit-history-retro-tool: done  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2. Completed 2026-03-06. Code review passed 2026-03-06: 1 finding (1M), fixed. Uncategorized tip added.
   prep-7-email-backpressure-implementation: done  # MEDIUM: Resend quota awareness + batch digest notifications. Retro TD3. Code review passed 2026-03-06: 10 findings (1C, 2H, 4M, 3L), all 10 fixed. C1 missing dispute-resolution worker case (Epic 6 bug), H1 hollow tests, H2 HTML injection. 44 tests, 0 regressions. 7 files modified/created.
   prep-8-race-condition-anti-pattern-guide: done  # MEDIUM: Enhanced 5 race condition patterns with real file refs, updated drifted code examples, added Epic 7 forward-looking risks, context brief cross-reference. Code review passed 2026-03-06: 6 findings (1H, 3M, 2L), all 6 fixed. 0 new tests (docs-only). 0 regressions.
-  prep-9-dead-code-cleanup: ready-for-dev  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2.
-  prep-10-403-test-enforcement-tooling: ready-for-dev  # MEDIUM: Linting rule or template task making unauthorized tests default. Retro P3.
+  prep-9-dead-code-cleanup: done  # LOW: Remove deprecated XLSForm endpoint, unused View-As API endpoints. Retro TD2. 3 dead items removed (uploadXlsform export, /view-as/data/sidebar endpoint, emailQueue proxy). Code review passed 2026-03-06: 4 findings (2M, 2L), all 4 fixed. M1 stale frontend comment, M2 orphaned closeEmailQueue() wired into shutdown. 3,283 tests pass, 0 regressions.
+  prep-10-403-test-enforcement-tooling: review  # MEDIUM: Linting rule or template task making unauthorized tests default. Retro P3.
   prep-11-fix-view-as-multi-role-rendering: ready-for-dev  # MEDIUM: Investigate roleComponentMap imports, fix all 5 viewable roles. Retro Challenge 5.
 
   # Context & Documentation Tasks (from Epic 6 Retrospective 2026-03-04)
