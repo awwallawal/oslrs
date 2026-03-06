@@ -1,6 +1,6 @@
 # Story 7.prep-10: 403 Test Enforcement Tooling
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -31,17 +31,17 @@ This story delivers a CI-runnable audit script + dev-story checklist update + pr
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create the 403 test coverage audit script (AC: #1, #2, #3)
-  - [ ] 1.1 Create `scripts/audit-403-tests.sh` — shell script (no Node.js dependency, matches `retro-commits.sh` convention)
-  - [ ] 1.2 Scan `apps/api/src/routes/*.routes.ts` for files containing `authorize(` — these are protected routes
-  - [ ] 1.3 For each protected route file (e.g., `staff.routes.ts`), derive the expected controller test file pattern: `apps/api/src/controllers/__tests__/<name>.controller*.test.ts`
-  - [ ] 1.4 In each matched test file, grep for `403`, `FORBIDDEN`, or `Rejected roles` — presence = covered, absence = gap
-  - [ ] 1.5 Handle edge cases:
+- [x] Task 1: Create the 403 test coverage audit script (AC: #1, #2, #3)
+  - [x] 1.1 Create `scripts/audit-403-tests.sh` — shell script (no Node.js dependency, matches `retro-commits.sh` convention)
+  - [x] 1.2 Scan `apps/api/src/routes/*.routes.ts` for files containing `authorize(` — these are protected routes
+  - [x] 1.3 For each protected route file (e.g., `staff.routes.ts`), derive the expected controller test file pattern: `apps/api/src/controllers/__tests__/<name>.controller*.test.ts`
+  - [x] 1.4 In each matched test file, grep for `403`, `FORBIDDEN`, or `Rejected roles` — presence = covered, absence = gap
+  - [x] 1.5 Handle edge cases:
     - Routes with no corresponding controller test file = MISSING (worst case)
     - Routes with `router.use(authorize(...))` (router-level) vs per-route `authorize()` — both count
     - Route files that are public (no `authorize(`) — skip (e.g., `csp.routes.ts`, `auth.routes.ts`)
     - Multiple test files for one route (e.g., `form.controller.test.ts` + `form.controller.daily-counts.test.ts`) — any hit = covered
-  - [ ] 1.6 Output formatted report:
+  - [x] 1.6 Output formatted report:
     ```
     ## 403 Test Coverage Audit
 
@@ -59,19 +59,19 @@ This story delivers a CI-runnable audit script + dev-story checklist update + pr
     MISSING TEST FILES:
       admin.routes.ts -> NO controller test file found
     ```
-  - [ ] 1.7 Exit code: 0 if all covered, 1 if any gaps or missing files
-- [ ] Task 2: Update dev-story checklist (AC: #4)
-  - [ ] 2.1 In `_bmad/bmm/workflows/4-implementation/dev-story/checklist.md`, add to the "Testing & Quality Assurance" section:
+  - [x] 1.7 Exit code: 0 if all covered, 1 if any gaps or missing files
+- [x] Task 2: Update dev-story checklist (AC: #4)
+  - [x] 2.1 In `_bmad/bmm/workflows/4-implementation/dev-story/checklist.md`, add to the "Testing & Quality Assurance" section:
     ```
     - [ ] **403 Authorization Tests:** Every protected endpoint touched by this story has tests verifying unauthorized roles receive 403. Use `it.each` or `for...of` pattern over rejected roles array (see report.controller.test.ts:214-232 for the canonical pattern).
     ```
-  - [ ] 2.2 Place it after the "Unit Tests" item (position matters — it should be early and visible)
-- [ ] Task 3: Enhance project-context.md Quality Gate #11 (AC: #5)
-  - [ ] 3.1 In `_bmad-output/project-context.md`, find Quality Gate #11 (`403 unauthorized tests are mandatory`)
-  - [ ] 3.2 Add after the existing text: "Run `bash scripts/audit-403-tests.sh` to check coverage. Canonical pattern: `report.controller.test.ts:214-232` (parametrized rejected roles loop)."
-- [ ] Task 4: Verify (AC: #6)
-  - [ ] 4.1 Run the audit script and confirm it correctly identifies the 9 known gaps
-  - [ ] 4.2 `pnpm test` — all tests pass, zero regressions (script has no effect on app code)
+  - [x] 2.2 Place it after the "Unit Tests" item (position matters — it should be early and visible)
+- [x] Task 3: Enhance project-context.md Quality Gate #11 (AC: #5)
+  - [x] 3.1 In `_bmad-output/project-context.md`, find Quality Gate #11 (`403 unauthorized tests are mandatory`)
+  - [x] 3.2 Add after the existing text: "Run `bash scripts/audit-403-tests.sh` to check coverage. Canonical pattern: `report.controller.test.ts:214-232` (parametrized rejected roles loop)."
+- [x] Task 4: Verify (AC: #6)
+  - [x] 4.1 Run the audit script and confirm it correctly identifies the 9 known gaps
+  - [x] 4.2 `pnpm test` — all tests pass, zero regressions (script has no effect on app code)
 
 ## Dev Notes
 
@@ -81,28 +81,28 @@ This story delivers a CI-runnable audit script + dev-story checklist update + pr
 
 | Route File | Controller Test File(s) | 403 Coverage | Notes |
 |-----------|------------------------|-------------|-------|
-| admin.routes.ts | (none found) | GAP | 5 `authorize(SUPER_ADMIN)` calls, no controller test file |
+| admin.routes.ts | (none found) | MISSING | 5 `authorize(SUPER_ADMIN)` calls, no controller test file |
 | assessor.routes.ts | assessor.controller.test.ts | GAP | `router.use(authorize(VERIFICATION_ASSESSOR, SUPER_ADMIN))` |
 | audit.routes.ts | audit.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
-| export.routes.ts | export.controller.test.ts | COVERED | `it.each` pattern, lines 374-401 |
-| form.routes.ts | form.controller.test.ts, daily-counts, submission-counts | PARTIAL | Main + daily-counts have 403 tests; submission-counts does not |
-| fraud-detections.routes.ts | fraud-detections.controller.test.ts, bulk | COVERED | Both files have 403 assertions |
+| export.routes.ts | export.controller.test.ts | COVERED | 2 assertions — `it.each` pattern |
+| form.routes.ts | form.controller.test.ts, daily-counts, submission-counts | COVERED | 5 assertions combined (submission-counts has 0, but any hit = covered) |
+| fraud-detections.routes.ts | fraud-detections.controller.test.ts, fraud-detections-bulk.controller.test.ts | COVERED | 6 assertions combined |
 | fraud-thresholds.routes.ts | fraud-thresholds.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
-| lga.routes.ts | (none found) | GAP | Has `authorize()` but no controller test |
+| lga.routes.ts | (none found) | MISSING | Has `authorize()` but no controller test |
 | message.routes.ts | message.controller.test.ts | COVERED | 4 assertions |
-| productivity.routes.ts | productivity.controller.test.ts | COVERED | 1 assertion (could be more for 8 routes) |
-| questionnaire.routes.ts | (none found) | GAP | `router.use(authorize(SUPER_ADMIN))` |
+| productivity.routes.ts | productivity.controller.test.ts | COVERED | 1 assertion |
+| questionnaire.routes.ts | (none found) | MISSING | `router.use(authorize(SUPER_ADMIN))` |
 | remuneration.routes.ts | remuneration.controller.test.ts | COVERED | 5 assertions |
-| report.routes.ts | report.controller.test.ts | COVERED | Canonical pattern — `for...of` loop, lines 214-232 |
-| respondent.routes.ts | respondent.controller.test.ts, respondent-list | COVERED | 15 assertions combined |
+| report.routes.ts | report.controller.test.ts | COVERED | 3 assertions — canonical `for...of` loop, lines 214-232 |
+| respondent.routes.ts | respondent.controller.test.ts, respondent-list.controller.test.ts | COVERED | 15 assertions combined |
 | roles.routes.ts | roles.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
 | staff.routes.ts | staff.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
 | supervisor.routes.ts | supervisor.controller.test.ts | GAP | `router.use(authorize(SUPERVISOR))` |
 | system.routes.ts | system.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
 | view-as.routes.ts | view-as.controller.test.ts | GAP | `router.use(authorize(SUPER_ADMIN))` |
-| view-as-data.routes.ts | (covered by view-as) | GAP | `router.use(authorize(SUPER_ADMIN))` |
+| view-as-data.routes.ts | (none found) | MISSING | `router.use(authorize(SUPER_ADMIN))` |
 
-**Summary: 11 covered, 9 gaps (55% coverage)**
+**Summary: 8 covered, 8 gaps (test file exists, 0 assertions), 4 missing (no test file) — 20 protected routes total**
 
 ### Canonical 403 Test Pattern (Recommended)
 
@@ -201,12 +201,35 @@ The audit script exits non-zero on gaps, so it **can** be added to CI. However, 
 - [Source: report.controller.test.ts:214-232] — Canonical 403 test pattern (parametrized rejected roles)
 - [Source: export.controller.test.ts:374-401] — Alternative `it.each` 403 test pattern
 
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] H1: CRLF line endings in audit script — causes duplicate output on Git Bash, will break on Linux CI. Fixed: converted to LF via `sed -i 's/\r$//'`. [scripts/audit-403-tests.sh]
+- [x] [AI-Review][MEDIUM] M1: Glob pattern `${base_name}.controller*.test.ts` misses hyphenated test files (respondent-list, fraud-detections-bulk). Fixed: added second glob for `${base_name}-*.controller*.test.ts`. [scripts/audit-403-tests.sh:52]
+- [x] [AI-Review][MEDIUM] M2: Dev Notes coverage table conflicted with script output (manual analysis included hyphenated files, script didn't). Fixed: updated table to match corrected script output. [prep-10-403-test-enforcement-tooling.md:82-104]
+- [x] [AI-Review][LOW] L1: Grammar — "1 assertions" instead of "1 assertion". Fixed: added singular/plural handling. [scripts/audit-403-tests.sh:79]
+- [x] [AI-Review][LOW] L2: "assertions" label counts grep-matching lines, not test assertions. Noted — acceptable as directional coverage indicator. No code change needed.
+
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+None — clean implementation, no issues encountered.
 
 ### Completion Notes List
+- Created `scripts/audit-403-tests.sh` — shell script that scans 20 protected route files, maps them to controller test files via glob pattern, and checks for 403/FORBIDDEN/Rejected roles assertions. Reports 3 categories: COVERED, GAPS, MISSING. Exits non-zero when gaps exist.
+- Actual audit result: 8 covered, 8 gaps (test file exists, 0 assertions), 4 missing (no test file). More granular than the story's "9 known gaps" which counted test files — the script separates GAPS from MISSING for actionable clarity.
+- Added "403 Authorization Tests" checklist item to dev-story checklist, placed after "Unit Tests" for early visibility.
+- Enhanced project-context.md Quality Gate #11 with audit script reference and canonical pattern pointer.
+- Zero regressions — 1,970 web tests + cached API tests all pass. Script is read-only tooling with no app code changes.
+- **[Code Review 2026-03-06]**: 5 findings (1H, 2M, 2L), all 5 resolved. H1 CRLF→LF (duplicate output fix), M1 glob expanded for hyphenated test files (respondent-list, fraud-detections-bulk now detected), M2 Dev Notes table corrected, L1 singular/plural grammar, L2 noted (acceptable).
 
 ### File List
+- `scripts/audit-403-tests.sh` (new) — 403 test coverage audit script
+- `_bmad/bmm/workflows/4-implementation/dev-story/checklist.md` (modified) — added 403 Authorization Tests item
+- `_bmad-output/project-context.md` (modified) — enhanced Quality Gate #11
+
+### Change Log
+- 2026-03-06: Created 403 test coverage audit script, updated dev-story checklist and project-context.md Quality Gate #11 with structural enforcement tooling for the 4-retro-old 403 test gap.
+- 2026-03-06: [Code Review] Fixed 5 findings — CRLF line endings, glob pattern for hyphenated test files, Dev Notes table accuracy, singular/plural grammar. Script now correctly detects all test file naming conventions.

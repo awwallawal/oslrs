@@ -1719,7 +1719,7 @@ grep -E "CORS_ORIGIN|NEW_VAR_NAME" /path/to/.env
 
 ### Quality Gates (A7-A8, from Epic 5 Retrospective 2026-02-24)
 
-11. **403 unauthorized tests are mandatory for every protected endpoint.** Every authenticated endpoint must have tests verifying that unauthorized roles receive 403. Code review must check for these. (Lesson: Flagged in 4 consecutive retrospectives — requires structural enforcement, not just standards.)
+11. **403 unauthorized tests are mandatory for every protected endpoint.** Every authenticated endpoint must have tests verifying that unauthorized roles receive 403. Code review must check for these. Run `bash scripts/audit-403-tests.sh` to check coverage. Canonical pattern: `report.controller.test.ts:214-232` (parametrized rejected roles loop). (Lesson: Flagged in 4 consecutive retrospectives — requires structural enforcement, not just standards.)
 
 12. **Tasks aren't done without tests.** No story task is considered complete unless it has corresponding test coverage. Code review catches gaps. (Lesson: Missing service tests found in 6-5 by adversarial review.)
 

@@ -40,6 +40,7 @@ validation-rules:
 ## 🧪 Testing & Quality Assurance
 
 - [ ] **Unit Tests:** Unit tests added/updated for ALL core functionality introduced/changed by this story
+- [ ] **403 Authorization Tests:** Every protected endpoint touched by this story has tests verifying unauthorized roles receive 403. Use `it.each` or `for...of` pattern over rejected roles array (see report.controller.test.ts:214-232 for the canonical pattern). Run `bash scripts/audit-403-tests.sh` to check coverage.
 - [ ] **Integration Tests:** Integration tests added/updated for component interactions when story requirements demand them
 - [ ] **End-to-End Tests:** End-to-end tests created for critical user flows when story requirements specify them
 - [ ] **Test Coverage:** Tests cover acceptance criteria and edge cases from story Dev Notes
