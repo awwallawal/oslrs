@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AppError } from '@oslsr/utils';
 import { MarketplaceService } from '../services/marketplace.service.js';
+import { AuditService, PII_ACTIONS } from '../services/audit.service.js';
+import type { AuthenticatedRequest } from '../types.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,6 +48,51 @@ export class MarketplaceController {
       }
 
       res.json({ data: profile });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async revealContact(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+
+      if (!id || !UUID_REGEX.test(id)) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid profile ID format', 400);
+      }
+
+      const authReq = req as AuthenticatedRequest;
+      const viewerId = authReq.user.sub;
+      const ipAddress = req.ip || req.socket?.remoteAddress || 'unknown';
+      const userAgent = req.get('user-agent') || 'unknown';
+
+      const result = await MarketplaceService.revealContact(id, viewerId, ipAddress, userAgent);
+
+      if (result.status === 'not_found') {
+        throw new AppError('NOT_FOUND', 'Profile not found or contact details not available', 404);
+      }
+
+      if (result.status === 'rate_limited') {
+        res.setHeader('Retry-After', String(result.retryAfter));
+        res.status(429).json({
+          status: 'error',
+          code: 'REVEAL_LIMIT_EXCEEDED',
+          message: 'Daily contact reveal limit reached (50 per 24 hours)',
+          retryAfter: result.retryAfter,
+        });
+        return;
+      }
+
+      // Fire-and-forget audit log via immutable hash chain
+      AuditService.logPiiAccess(
+        authReq,
+        PII_ACTIONS.CONTACT_REVEAL,
+        'marketplace_profiles',
+        id,
+        { viewerRole: authReq.user.role },
+      );
+
+      res.json({ data: result.data });
     } catch (err) {
       next(err);
     }

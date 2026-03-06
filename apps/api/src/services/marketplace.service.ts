@@ -1,13 +1,20 @@
 import { db } from '../db/index.js';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import type {
+  ContactRevealResponse,
   CursorPaginatedResponse,
   MarketplaceProfileDetail,
   MarketplaceSearchParams,
   MarketplaceSearchResultItem,
 } from '@oslsr/types';
+import { contactReveals } from '../db/schema/contact-reveals.js';
+import { marketplaceProfiles } from '../db/schema/marketplace.js';
+import { respondents } from '../db/schema/respondents.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'marketplace-service' });
 
 export class MarketplaceService {
   /**
@@ -208,5 +215,92 @@ export class MarketplaceService {
       portfolioUrl: row.portfolio_url ? String(row.portfolio_url) : null,
       createdAt: new Date(row.created_at as string).toISOString(),
     };
+  }
+
+  /**
+   * Reveal contact details for a marketplace profile.
+   * Requires authenticated user + CAPTCHA (enforced at route level).
+   * Checks consent gate, rate limit (50/user/24h), inserts audit row.
+   * Returns PII (firstName, lastName, phoneNumber) on success.
+   */
+  static async revealContact(
+    profileId: string,
+    viewerId: string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<
+    | { status: 'success'; data: ContactRevealResponse }
+    | { status: 'not_found' }
+    | { status: 'rate_limited'; retryAfter: number }
+  > {
+    // 1. Fetch marketplace profile
+    const [profile] = await db.select({
+      respondentId: marketplaceProfiles.respondentId,
+      consentEnriched: marketplaceProfiles.consentEnriched,
+    }).from(marketplaceProfiles).where(eq(marketplaceProfiles.id, profileId)).limit(1);
+
+    if (!profile) {
+      return { status: 'not_found' };
+    }
+
+    // 2. Consent gate — return 'not_found' (not 'forbidden') to prevent consent enumeration
+    if (!profile.consentEnriched) {
+      return { status: 'not_found' };
+    }
+
+    // 3. Fetch respondent PII
+    const [respondent] = await db.select({
+      firstName: respondents.firstName,
+      lastName: respondents.lastName,
+      phoneNumber: respondents.phoneNumber,
+    }).from(respondents).where(eq(respondents.id, profile.respondentId)).limit(1);
+
+    if (!respondent) {
+      logger.warn({ profileId, respondentId: profile.respondentId }, 'Marketplace profile references missing respondent');
+      return { status: 'not_found' };
+    }
+
+    // 4 + 5: Rate limit check + audit insert in transaction (TOCTOU guard)
+    return await db.transaction(async (tx) => {
+      // Lock existing reveals for this viewer to serialize concurrent requests
+      const countRows = await tx.execute(sql`
+        SELECT count(*)::int as count
+        FROM contact_reveals
+        WHERE viewer_id = ${viewerId}
+        AND created_at > NOW() - INTERVAL '24 hours'
+        FOR UPDATE
+      `);
+      const count = (countRows.rows[0] as { count: number }).count;
+
+      if (count >= 50) {
+        const oldestRows = await tx.execute(sql`
+          SELECT created_at
+          FROM contact_reveals
+          WHERE viewer_id = ${viewerId}
+          AND created_at > NOW() - INTERVAL '24 hours'
+          ORDER BY created_at ASC
+          LIMIT 1
+        `);
+        const oldestCreatedAt = new Date((oldestRows.rows[0] as { created_at: string }).created_at);
+        const retryAfter = Math.ceil((oldestCreatedAt.getTime() + 86_400_000 - Date.now()) / 1000);
+        return { status: 'rate_limited' as const, retryAfter: Math.max(retryAfter, 1) };
+      }
+
+      await tx.insert(contactReveals).values({
+        viewerId,
+        profileId,
+        ipAddress,
+        userAgent,
+      });
+
+      return {
+        status: 'success' as const,
+        data: {
+          firstName: respondent.firstName,
+          lastName: respondent.lastName,
+          phoneNumber: respondent.phoneNumber,
+        },
+      };
+    });
   }
 }

@@ -75,23 +75,26 @@ export interface MarketplaceSearchResultItem {
 // Contact Reveal Types
 // ============================================================================
 
-/** Contact reveal log entry */
+/** Contact reveal log entry (matches contact_reveals schema) */
 export interface ContactRevealEntry {
   id: string;
-  searcherId: string;
+  viewerId: string;
   profileId: string;
   ipAddress: string | null;
+  userAgent: string | null;
   createdAt: string;
 }
 
-/** Contact reveal response (includes rate limit info) */
+/** Contact reveal response — PII returned on successful reveal */
 export interface ContactRevealResponse {
-  profile: MarketplaceProfileEnriched;
-  rateLimit: {
-    remaining: number;
-    limit: number;
-    resetsAt: string;
-  };
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+}
+
+/** Contact reveal request body */
+export interface ContactRevealRequest {
+  captchaToken: string;
 }
 
 // ============================================================================

@@ -2,15 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockSearchProfiles, mockGetProfileById } = vi.hoisted(() => ({
+const { mockSearchProfiles, mockGetProfileById, mockRevealContact, mockLogPiiAccess } = vi.hoisted(() => ({
   mockSearchProfiles: vi.fn(),
   mockGetProfileById: vi.fn(),
+  mockRevealContact: vi.fn(),
+  mockLogPiiAccess: vi.fn(),
 }));
 
 vi.mock('../../services/marketplace.service.js', () => ({
   MarketplaceService: {
     searchProfiles: (...args: any[]) => mockSearchProfiles(...args),
     getProfileById: (...args: any[]) => mockGetProfileById(...args),
+    revealContact: (...args: any[]) => mockRevealContact(...args),
+  },
+}));
+
+vi.mock('../../services/audit.service.js', () => ({
+  AuditService: {
+    logPiiAccess: (...args: any[]) => mockLogPiiAccess(...args),
+  },
+  PII_ACTIONS: {
+    CONTACT_REVEAL: 'pii.contact_reveal',
   },
 }));
 
@@ -24,6 +36,7 @@ function createMockRes(): any {
   const res: any = {};
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
+  res.setHeader = vi.fn().mockReturnValue(res);
   return res;
 }
 
@@ -429,6 +442,155 @@ describe('MarketplaceController', () => {
       const next = vi.fn();
 
       await MarketplaceController.getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('revealContact', () => {
+    const validId = '018e1234-5678-7000-8000-000000000001';
+    const viewerId = '018e9999-0000-7000-8000-000000000001';
+
+    function createAuthReq(overrides: Record<string, any> = {}): any {
+      return {
+        params: { id: validId },
+        user: { sub: viewerId, role: 'public_user' },
+        ip: '127.0.0.1',
+        socket: { remoteAddress: '127.0.0.1' },
+        get: vi.fn().mockReturnValue('test-user-agent'),
+        headers: { 'user-agent': 'test-user-agent' },
+        ...overrides,
+      };
+    }
+
+    it('should return revealed PII on success (happy path)', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+      });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockRevealContact).toHaveBeenCalledWith(validId, viewerId, '127.0.0.1', 'test-user-agent');
+      expect(res.json).toHaveBeenCalledWith({
+        data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+      });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should fire audit log on successful reveal', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+      });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+        req,
+        'pii.contact_reveal',
+        'marketplace_profiles',
+        validId,
+        { viewerRole: 'public_user' },
+      );
+    });
+
+    it('should return 404 when profile not found (consent gate or missing)', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'not_found' });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('NOT_FOUND');
+      expect(error.statusCode).toBe(404);
+      expect(error.message).toBe('Profile not found or contact details not available');
+    });
+
+    it('should return 429 when rate limited (50/24h)', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'rate_limited', retryAfter: 3600 });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Retry-After', '3600');
+      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.json).toHaveBeenCalledWith({
+        status: 'error',
+        code: 'REVEAL_LIMIT_EXCEEDED',
+        message: 'Daily contact reveal limit reached (50 per 24 hours)',
+        retryAfter: 3600,
+      });
+    });
+
+    it('should return 400 for malformed UUID', async () => {
+      const req = createAuthReq({ params: { id: 'not-a-uuid' } });
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+      expect(mockRevealContact).not.toHaveBeenCalled();
+    });
+
+    it('should return ONLY firstName, lastName, phoneNumber in response (no NIN, dateOfBirth, respondentId)', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+      });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      const responseData = res.json.mock.calls[0][0].data;
+      expect(Object.keys(responseData).sort()).toEqual(['firstName', 'lastName', 'phoneNumber'].sort());
+      expect(responseData).not.toHaveProperty('nin');
+      expect(responseData).not.toHaveProperty('dateOfBirth');
+      expect(responseData).not.toHaveProperty('respondentId');
+    });
+
+    it('should NOT fire audit log when reveal fails', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'not_found' });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockLogPiiAccess).not.toHaveBeenCalled();
+    });
+
+    it('should call next on service error', async () => {
+      mockRevealContact.mockRejectedValue(new Error('DB error'));
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
 
       expect(next).toHaveBeenCalledWith(expect.any(Error));
     });

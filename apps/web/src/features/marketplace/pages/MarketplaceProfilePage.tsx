@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Clock, ExternalLink, LogIn, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, ExternalLink, LogIn, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { GovernmentVerifiedBadge } from '../components/GovernmentVerifiedBadge';
 import { MarketplaceProfileSkeleton } from '../components/MarketplaceProfileSkeleton';
-import { useMarketplaceProfile } from '../hooks/useMarketplace';
+import { useMarketplaceProfile, useRevealContact, marketplaceKeys } from '../hooks/useMarketplace';
 import { useAuth } from '../../auth/context/AuthContext';
+import { HCaptcha } from '../../auth/components/HCaptcha';
+import { ApiError } from '../../../lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import type { ContactRevealResponse } from '@oslsr/types';
 
 function InfoRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -23,11 +28,69 @@ function formatDate(isoString: string): string {
   });
 }
 
+type RevealState = 'idle' | 'captcha' | 'loading' | 'revealed' | 'error';
+
 export default function MarketplaceProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { data: profile, isLoading, error } = useMarketplaceProfile(id || '');
+  const queryClient = useQueryClient();
+  const revealMutation = useRevealContact();
+
+  // Check for cached reveal result (persists across navigation within session)
+  const cachedReveal = id
+    ? queryClient.getQueryData<ContactRevealResponse>(marketplaceKeys.revealedContact(id))
+    : null;
+
+  const [revealState, setRevealState] = useState<RevealState>(cachedReveal ? 'revealed' : 'idle');
+  const [revealedContact, setRevealedContact] = useState<ContactRevealResponse | null>(cachedReveal ?? null);
+  const [revealError, setRevealError] = useState<string>('');
+  const [captchaReset, setCaptchaReset] = useState(false);
+
+  const handleRevealClick = () => {
+    setRevealError('');
+    setRevealState('captcha');
+  };
+
+  const handleCaptchaVerify = (token: string) => {
+    if (!token || !id) return;
+    setRevealState('loading');
+    revealMutation.mutate(
+      { profileId: id, captchaToken: token },
+      {
+        onSuccess: (data) => {
+          setRevealedContact(data);
+          setRevealState('revealed');
+        },
+        onError: (err) => {
+          if (err instanceof ApiError) {
+            if (err.status === 404) {
+              setRevealError('This worker has not opted in to share contact details.');
+            } else if (err.status === 429) {
+              setRevealError("You've reached the daily limit of 50 contact reveals. Please try again tomorrow.");
+            } else {
+              setRevealError(err.message || 'Failed to reveal contact details. Please try again.');
+            }
+          } else {
+            setRevealError('A network error occurred. Please try again.');
+          }
+          setRevealState('error');
+          setCaptchaReset((prev) => !prev);
+        },
+      },
+    );
+  };
+
+  const handleCaptchaExpire = () => {
+    setRevealState('idle');
+  };
+
+  const handleCaptchaError = () => {
+    setRevealError('Verification failed. Please try again.');
+    setRevealState('error');
+    setCaptchaReset((prev) => !prev);
+  };
 
   if (isLoading) {
     return <MarketplaceProfileSkeleton />;
@@ -119,35 +182,80 @@ export default function MarketplaceProfilePage() {
       </Card>
 
       {/* Contact Section */}
-      <Card>
-        <CardContent className="pt-6 space-y-3">
-          {isAuthenticated ? (
-            <Button
-              className="w-full"
-              disabled
-              data-testid="reveal-contact-authenticated"
-            >
-              <Lock className="w-4 h-4 mr-2" />
-              Reveal Contact Details
-            </Button>
-          ) : (
-            <Button
-              className="w-full"
-              onClick={() => navigate('/login', { state: { from: `/marketplace/profile/${id}` } })}
-              data-testid="reveal-contact-unauthenticated"
-            >
-              <LogIn className="w-4 h-4 mr-2" />
-              Sign in to Reveal Contact
-            </Button>
-          )}
-          {isAuthenticated && (
-            <p className="text-xs text-neutral-400 text-center">Contact reveal coming soon</p>
-          )}
-          <p className="text-xs text-neutral-500 text-center">
-            Contact details are only available to registered employers who have verified their identity.
-          </p>
-        </CardContent>
-      </Card>
+      {revealState === 'revealed' && revealedContact ? (
+        <Card className="border-green-200 bg-green-50" data-testid="contact-revealed">
+          <CardHeader>
+            <CardTitle className="text-green-800 text-lg flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" /> Contact Details Revealed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InfoRow
+              label="Name"
+              value={
+                revealedContact.firstName || revealedContact.lastName
+                  ? `${revealedContact.firstName ?? ''} ${revealedContact.lastName ?? ''}`.trim()
+                  : 'Not provided'
+              }
+            />
+            <InfoRow label="Phone" value={revealedContact.phoneNumber ?? 'Not provided'} />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="pt-6 space-y-3">
+            {!isAuthenticated ? (
+              <Button
+                className="w-full"
+                onClick={() => navigate('/login', { state: { from: `/marketplace/profile/${id}` } })}
+                data-testid="reveal-contact-unauthenticated"
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign in to Reveal Contact
+              </Button>
+            ) : revealState === 'loading' ? (
+              <Button className="w-full" disabled data-testid="reveal-contact-loading">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Revealing...
+              </Button>
+            ) : (
+              <Button
+                className="w-full"
+                onClick={handleRevealClick}
+                data-testid="reveal-contact-authenticated"
+              >
+                <Lock className="w-4 h-4 mr-2" />
+                Reveal Contact Details
+              </Button>
+            )}
+
+            {revealState === 'captcha' && (
+              <div className="mt-4" data-testid="captcha-widget">
+                <p className="text-sm text-neutral-600 mb-2">
+                  Please complete the verification to view contact details.
+                </p>
+                <HCaptcha
+                  onVerify={handleCaptchaVerify}
+                  onExpire={handleCaptchaExpire}
+                  onError={handleCaptchaError}
+                  reset={captchaReset}
+                />
+              </div>
+            )}
+
+            {(revealState === 'error' || revealError) && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200" data-testid="reveal-error">
+                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-700">{revealError}</p>
+              </div>
+            )}
+
+            <p className="text-xs text-neutral-500 text-center">
+              Contact details are only available to registered users who have verified their identity.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

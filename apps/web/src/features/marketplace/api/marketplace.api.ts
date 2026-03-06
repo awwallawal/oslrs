@@ -1,5 +1,5 @@
 import { apiClient } from '../../../lib/api-client';
-import type { MarketplaceProfileDetail, MarketplaceSearchParams, MarketplaceSearchResultItem, CursorPaginatedResponse } from '@oslsr/types';
+import type { ContactRevealResponse, MarketplaceProfileDetail, MarketplaceSearchParams, MarketplaceSearchResultItem, CursorPaginatedResponse } from '@oslsr/types';
 
 export async function searchMarketplace(
   params: MarketplaceSearchParams,
@@ -19,5 +19,16 @@ export async function searchMarketplace(
 
 export async function fetchMarketplaceProfile(id: string): Promise<MarketplaceProfileDetail> {
   const response = await apiClient(`/marketplace/profiles/${id}`);
+  return response.data;
+}
+
+export async function revealMarketplaceContact(
+  profileId: string,
+  captchaToken: string,
+): Promise<ContactRevealResponse> {
+  const response = await apiClient(`/marketplace/profiles/${profileId}/reveal`, {
+    method: 'POST',
+    body: JSON.stringify({ captchaToken }),
+  });
   return response.data;
 }

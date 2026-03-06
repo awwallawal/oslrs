@@ -2,13 +2,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockDbExecute } = vi.hoisted(() => ({
+const { mockDbExecute, mockDbSelect, mockDbInsert, mockTxExecute, mockTxInsert } = vi.hoisted(() => ({
   mockDbExecute: vi.fn(),
+  mockDbSelect: vi.fn(),
+  mockDbInsert: vi.fn(),
+  mockTxExecute: vi.fn(),
+  mockTxInsert: vi.fn(),
 }));
+
+// Chainable query builder helpers — Drizzle builders are thenable
+function chainableSelect(finalResult: any[]) {
+  const obj: any = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === 'then') {
+        return (resolve: any, reject: any) => Promise.resolve(finalResult).then(resolve, reject);
+      }
+      // Any chained method returns the same thenable proxy
+      return vi.fn().mockReturnValue(chainableSelect(finalResult));
+    },
+  });
+  return obj;
+}
+
+function chainableInsert() {
+  const valuesProxy: any = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === 'then') {
+        return (resolve: any) => Promise.resolve(undefined).then(resolve);
+      }
+      return vi.fn().mockReturnValue(valuesProxy);
+    },
+  });
+  return { values: vi.fn().mockReturnValue(valuesProxy) };
+}
 
 vi.mock('../../db/index.js', () => ({
   db: {
     execute: (...args: any[]) => mockDbExecute(...args),
+    select: (...args: any[]) => mockDbSelect(...args),
+    insert: (...args: any[]) => mockDbInsert(...args),
+    transaction: (fn: any) => {
+      const tx = {
+        execute: (...args: any[]) => mockTxExecute(...args),
+        insert: () => ({
+          values: (vals: any) => {
+            mockTxInsert(vals);
+            return Promise.resolve();
+          },
+        }),
+      };
+      return fn(tx);
+    },
   },
 }));
 
@@ -374,6 +418,132 @@ describe('MarketplaceService', () => {
       expect(result).not.toHaveProperty('phoneNumber');
       expect(result).not.toHaveProperty('nin');
       expect(result).not.toHaveProperty('dateOfBirth');
+    });
+  });
+
+  describe('revealContact', () => {
+    const profileId = '018e1234-5678-7000-8000-000000000001';
+    const viewerId = '018e9999-0000-7000-8000-000000000001';
+    const respondentId = '018e8888-0000-7000-8000-000000000001';
+
+    function setupRevealMocks(opts: {
+      profile?: { respondentId: string; consentEnriched: boolean } | null;
+      respondent?: { firstName: string | null; lastName: string | null; phoneNumber: string | null } | null;
+      revealCount?: number;
+      oldestCreatedAt?: Date;
+    }) {
+      // Query 1: fetch marketplace profile (outside transaction)
+      const profileChain = chainableSelect(opts.profile ? [opts.profile] : []);
+      mockDbSelect.mockReturnValueOnce(profileChain);
+
+      // Query 2: fetch respondent (outside transaction, only if profile found and consent true)
+      if (opts.profile?.consentEnriched) {
+        const respondentChain = chainableSelect(opts.respondent ? [opts.respondent] : []);
+        mockDbSelect.mockReturnValueOnce(respondentChain);
+      }
+
+      // Inside transaction (only if respondent found):
+      if (opts.profile?.consentEnriched && opts.respondent) {
+        // tx.execute #1: rate limit count (raw SQL with FOR UPDATE)
+        mockTxExecute.mockResolvedValueOnce({ rows: [{ count: opts.revealCount ?? 0 }] });
+
+        // tx.execute #2: oldest reveal for retryAfter (only if rate limited)
+        if ((opts.revealCount ?? 0) >= 50) {
+          mockTxExecute.mockResolvedValueOnce({
+            rows: [{
+              created_at: (opts.oldestCreatedAt ?? new Date(Date.now() - 23 * 60 * 60 * 1000)).toISOString(),
+            }],
+          });
+        }
+      }
+      // Note: tx.insert for contact_reveals is auto-handled by the db.transaction mock
+    }
+
+    it('should return success with PII for consented profile', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('success');
+      expect(result).toHaveProperty('data');
+      if (result.status === 'success') {
+        expect(result.data.firstName).toBe('Adebayo');
+        expect(result.data.lastName).toBe('Ogunlesi');
+        expect(result.data.phoneNumber).toBe('+2348012345678');
+      }
+    });
+
+    it('should return not_found when profile does not exist', async () => {
+      setupRevealMocks({ profile: null });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('not_found');
+    });
+
+    it('should return not_found when consent_enriched is false (consent gate)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: false },
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('not_found');
+    });
+
+    it('should return not_found when respondent is missing (data integrity)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: null,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('not_found');
+    });
+
+    it('should return rate_limited when 50 reveals in 24h', async () => {
+      const oldestCreatedAt = new Date(Date.now() - 23 * 60 * 60 * 1000); // 23h ago
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+        revealCount: 50,
+        oldestCreatedAt,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('rate_limited');
+      if (result.status === 'rate_limited') {
+        expect(result.retryAfter).toBeGreaterThan(0);
+        expect(result.retryAfter).toBeLessThanOrEqual(3600); // ~1 hour until oldest expires
+      }
+    });
+
+    it('should insert audit row on successful reveal', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+      });
+
+      await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(mockTxInsert).toHaveBeenCalled();
+    });
+
+    it('should NOT insert audit row when consent denied', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: false },
+      });
+
+      await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(mockTxInsert).not.toHaveBeenCalled();
     });
   });
 });

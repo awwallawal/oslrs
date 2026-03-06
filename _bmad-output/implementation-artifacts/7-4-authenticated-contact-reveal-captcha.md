@@ -1,6 +1,6 @@
 # Story 7.4: Authenticated Contact Reveal & CAPTCHA
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -41,8 +41,8 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `contact_reveals` schema (AC: #5, #6)
-  - [ ] 1.1 Create `apps/api/src/db/schema/contact-reveals.ts`:
+- [x] Task 1: Create `contact_reveals` schema (AC: #5, #6)
+  - [x] 1.1 Create `apps/api/src/db/schema/contact-reveals.ts`:
     ```typescript
     export const contactReveals = pgTable('contact_reveals', {
       id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
@@ -53,13 +53,13 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     });
     ```
-  - [ ] 1.2 Add index for rate limit query: btree on `(viewer_id, created_at DESC)` — enables efficient `COUNT WHERE viewer_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`
-  - [ ] 1.3 Export from `apps/api/src/db/schema/index.ts`
-  - [ ] 1.4 Run `pnpm --filter @oslsr/api db:push:force` to apply schema
-  - [ ] 1.5 **Schema convention:** Do NOT import from `@oslsr/types` in schema files (drizzle-kit constraint). Do NOT add FK references to `marketplace_profiles` or `users` — the profile or user might be deleted in the future, and orphaned log entries are acceptable for audit purposes.
+  - [x] 1.2 Add index for rate limit query: btree on `(viewer_id, created_at DESC)` — enables efficient `COUNT WHERE viewer_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`
+  - [x] 1.3 Export from `apps/api/src/db/schema/index.ts`
+  - [x] 1.4 Run `pnpm --filter @oslsr/api db:push:force` to apply schema
+  - [x] 1.5 **Schema convention:** Do NOT import from `@oslsr/types` in schema files (drizzle-kit constraint). Do NOT add FK references to `marketplace_profiles` or `users` — the profile or user might be deleted in the future, and orphaned log entries are acceptable for audit purposes.
 
-- [ ] Task 2: Create contact reveal service method (AC: #1, #4, #5, #6)
-  - [ ] 2.1 In `apps/api/src/services/marketplace.service.ts` (created in Story 7-2), add a `revealContact(profileId: string, viewerId: string, ipAddress: string, userAgent: string)` method:
+- [x] Task 2: Create contact reveal service method (AC: #1, #4, #5, #6)
+  - [x] 2.1 In `apps/api/src/services/marketplace.service.ts` (created in Story 7-2), add a `revealContact(profileId: string, viewerId: string, ipAddress: string, userAgent: string)` method:
     1. Fetch marketplace profile by `id`
     2. If not found → return `{ status: 'not_found' }`
     3. Fetch respondent by `profile.respondentId` from `respondents` table
@@ -69,7 +69,7 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
     7. **Insert audit row:** Insert into `contact_reveals`: `{ viewerId, profileId, ipAddress, userAgent }`
     8. **Also log via AuditService:** `AuditService.logPiiAccess(req, 'pii.contact_reveal', 'marketplace_profiles', profileId, { viewerRole: user.role })` — fire-and-forget, immutable hash chain
     9. Return `{ status: 'success', data: { firstName: respondent.firstName, lastName: respondent.lastName, phoneNumber: respondent.phoneNumber } }`
-  - [ ] 2.2 **PII JOIN pattern** (from `respondent.service.ts`):
+  - [x] 2.2 **PII JOIN pattern** (from `respondent.service.ts`):
     ```typescript
     // marketplace_profiles → respondents JOIN for PII
     const [profile] = await db.select({
@@ -83,10 +83,10 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       phoneNumber: respondents.phoneNumber,
     }).from(respondents).where(eq(respondents.id, profile.respondentId)).limit(1);
     ```
-  - [ ] 2.3 **Rate limit TTL calculation:** Query `MIN(created_at)` in the 24h window to calculate `retryAfter` seconds until the oldest reveal expires
+  - [x] 2.3 **Rate limit TTL calculation:** Query `MIN(created_at)` in the 24h window to calculate `retryAfter` seconds until the oldest reveal expires
 
-- [ ] Task 3: Create contact reveal controller method (AC: #1, #2, #3, #4, #6)
-  - [ ] 3.1 In `apps/api/src/controllers/marketplace.controller.ts` (created in Story 7-2), add a `revealContact(req, res, next)` static method:
+- [x] Task 3: Create contact reveal controller method (AC: #1, #2, #3, #4, #6)
+  - [x] 3.1 In `apps/api/src/controllers/marketplace.controller.ts` (created in Story 7-2), add a `revealContact(req, res, next)` static method:
     - Extract `id` from `req.params` (profile ID)
     - Validate UUID format
     - Get `req.user.sub` as viewer ID (guaranteed by `authenticate` middleware)
@@ -96,10 +96,10 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       - `not_found` → `throw new AppError('NOT_FOUND', 'Profile not found or contact details not available', 404)`
       - `rate_limited` → `res.status(429).json({ status: 'error', code: 'REVEAL_LIMIT_EXCEEDED', message: 'Daily contact reveal limit reached (50 per 24 hours)', retryAfter })`
       - `success` → `res.json({ data: { firstName, lastName, phoneNumber } })`
-  - [ ] 3.2 The CAPTCHA token comes from `req.body.captchaToken` — the `verifyCaptcha` middleware handles validation before the controller runs. No CAPTCHA logic needed in the controller.
+  - [x] 3.2 The CAPTCHA token comes from `req.body.captchaToken` — the `verifyCaptcha` middleware handles validation before the controller runs. No CAPTCHA logic needed in the controller.
 
-- [ ] Task 4: Add reveal route with auth + CAPTCHA middleware (AC: #1, #2, #3)
-  - [ ] 4.1 In `apps/api/src/routes/marketplace.routes.ts` (created in Story 7-2), add:
+- [x] Task 4: Add reveal route with auth + CAPTCHA middleware (AC: #1, #2, #3)
+  - [x] 4.1 In `apps/api/src/routes/marketplace.routes.ts` (created in Story 7-2), add:
     ```typescript
     import { authenticate } from '../middleware/auth.js';
     import { verifyCaptcha } from '../middleware/captcha.js';
@@ -111,11 +111,11 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       MarketplaceController.revealContact  // Handler
     );
     ```
-  - [ ] 4.2 Middleware stack order: `authenticate` → `verifyCaptcha` → controller. Auth first so we know WHO is requesting before burning a CAPTCHA solve. This matches the `auth.routes.ts` pattern (lines 21-26).
-  - [ ] 4.3 **No additional IP rate limiting for this route** beyond the 50/24h per-user check in the service. The `authenticate` middleware already rejects unauthenticated requests, and creating an account requires email verification (Layer 6 bot protection). Story 7-6 adds Redis-accelerated rate limiting if needed.
+  - [x] 4.2 Middleware stack order: `authenticate` → `verifyCaptcha` → controller. Auth first so we know WHO is requesting before burning a CAPTCHA solve. This matches the `auth.routes.ts` pattern (lines 21-26).
+  - [x] 4.3 **No additional IP rate limiting for this route** beyond the 50/24h per-user check in the service. The `authenticate` middleware already rejects unauthenticated requests, and creating an account requires email verification (Layer 6 bot protection). Story 7-6 adds Redis-accelerated rate limiting if needed.
 
-- [ ] Task 5: Add contact reveal types (AC: #1)
-  - [ ] 5.1 In `packages/types/src/marketplace.ts`, add:
+- [x] Task 5: Add contact reveal types (AC: #1)
+  - [x] 5.1 In `packages/types/src/marketplace.ts`, add:
     ```typescript
     export interface ContactRevealResponse {
       firstName: string | null;
@@ -127,10 +127,10 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       captchaToken: string;
     }
     ```
-  - [ ] 5.2 Export from `packages/types/src/index.ts` (if not already)
+  - [x] 5.2 Export from `packages/types/src/index.ts` (if not already)
 
-- [ ] Task 6: Activate "Reveal Contact" button on profile page (AC: #7, #8)
-  - [ ] 6.1 In `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx` (created in Story 7-3), replace the placeholder "Reveal Contact" button with the functional implementation:
+- [x] Task 6: Activate "Reveal Contact" button on profile page (AC: #7, #8)
+  - [x] 6.1 In `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx` (created in Story 7-3), replace the placeholder "Reveal Contact" button with the functional implementation:
     - **Unauthenticated user** (no token in `sessionStorage.getItem('oslsr_access_token')`):
       - Button text: "Sign in to Reveal Contact"
       - On click: `navigate('/login', { state: { from: `/marketplace/profile/${id}` } })` — uses React Router location state (LoginPage.tsx:20-21 reads `location.state.from`). Do NOT use `?returnTo=` query param — it's not supported.
@@ -141,13 +141,13 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
     - **Authenticated user, already revealed (PII visible)**:
       - Show PII inline: first name, last name, phone number
       - Show "Contact Revealed" success indicator
-  - [ ] 6.2 **State management for reveal flow:**
+  - [x] 6.2 **State management for reveal flow:**
     ```typescript
     const [revealState, setRevealState] = useState<'idle' | 'captcha' | 'loading' | 'revealed' | 'error'>('idle');
     const [revealedContact, setRevealedContact] = useState<ContactRevealResponse | null>(null);
     const [captchaToken, setCaptchaToken] = useState('');
     ```
-  - [ ] 6.3 **Reveal flow sequence:**
+  - [x] 6.3 **Reveal flow sequence:**
     1. User clicks "Reveal Contact Details" → `setRevealState('captcha')`
     2. hCaptcha widget appears → user solves → `setCaptchaToken(token)`, `setRevealState('loading')`
     3. Call `revealMarketplaceContact(id, captchaToken)` via mutation
@@ -156,8 +156,8 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
     6. On 429 → show "You've reached the daily limit of 50 contact reveals. Please try again tomorrow."
     7. On error → show generic error, reset CAPTCHA
 
-- [ ] Task 7: Create frontend reveal API client and mutation hook (AC: #7)
-  - [ ] 7.1 In `apps/web/src/features/marketplace/api/marketplace.api.ts`, add:
+- [x] Task 7: Create frontend reveal API client and mutation hook (AC: #7)
+  - [x] 7.1 In `apps/web/src/features/marketplace/api/marketplace.api.ts`, add:
     ```typescript
     export async function revealMarketplaceContact(
       profileId: string,
@@ -170,7 +170,7 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       return response.data;
     }
     ```
-  - [ ] 7.2 In `apps/web/src/features/marketplace/hooks/useMarketplace.ts`, add a mutation hook:
+  - [x] 7.2 In `apps/web/src/features/marketplace/hooks/useMarketplace.ts`, add a mutation hook:
     ```typescript
     export function useRevealContact() {
       const queryClient = useQueryClient();
@@ -187,15 +187,15 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       });
     }
     ```
-  - [ ] 7.3 Add to `marketplaceKeys`:
+  - [x] 7.3 Add to `marketplaceKeys`:
     ```typescript
     revealedContact: (profileId: string) => [...marketplaceKeys.all, 'revealed', profileId] as const,
     ```
-  - [ ] 7.4 **Authentication required:** The POST to `/profiles/:id/reveal` requires a Bearer token. The existing `apiClient` attaches the token from sessionStorage when present. Ensure `getAuthHeaders()` returns the token for authenticated users.
+  - [x] 7.4 **Authentication required:** The POST to `/profiles/:id/reveal` requires a Bearer token. The existing `apiClient` attaches the token from sessionStorage when present. Ensure `getAuthHeaders()` returns the token for authenticated users.
 
-- [ ] Task 8: Integrate hCaptcha into reveal flow (AC: #7)
-  - [ ] 8.1 Import the existing `HCaptcha` component from `apps/web/src/features/auth/components/HCaptcha.tsx`
-  - [ ] 8.2 On the profile page, when `revealState === 'captcha'`, render the hCaptcha widget:
+- [x] Task 8: Integrate hCaptcha into reveal flow (AC: #7)
+  - [x] 8.1 Import the existing `HCaptcha` component from `apps/web/src/features/auth/components/HCaptcha.tsx`
+  - [x] 8.2 On the profile page, when `revealState === 'captcha'`, render the hCaptcha widget:
     ```typescript
     {revealState === 'captcha' && (
       <div className="mt-4">
@@ -212,14 +212,14 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       </div>
     )}
     ```
-  - [ ] 8.3 **hCaptcha handlers:**
+  - [x] 8.3 **hCaptcha handlers:**
     - `onVerify`: set token → trigger reveal mutation
     - `onExpire`: reset state to 'idle', clear token
     - `onError`: show error, reset CAPTCHA
-  - [ ] 8.4 **Test bypass:** In E2E/test mode (`VITE_E2E=true`), the HCaptcha component auto-verifies with 'test-captcha-bypass' token. The backend middleware also accepts this token in test mode.
+  - [x] 8.4 **Test bypass:** In E2E/test mode (`VITE_E2E=true`), the HCaptcha component auto-verifies with 'test-captcha-bypass' token. The backend middleware also accepts this token in test mode.
 
-- [ ] Task 9: Display revealed PII on profile page (AC: #1, #7)
-  - [ ] 9.1 When `revealState === 'revealed'`, show the contact details section:
+- [x] Task 9: Display revealed PII on profile page (AC: #1, #7)
+  - [x] 9.1 When `revealState === 'revealed'`, show the contact details section:
     ```typescript
     {revealState === 'revealed' && revealedContact && (
       <Card className="border-green-200 bg-green-50">
@@ -235,17 +235,17 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
       </Card>
     )}
     ```
-  - [ ] 9.2 If `firstName` or `phoneNumber` is null (respondent data incomplete), show "Not provided" placeholder
-  - [ ] 9.3 **Cache reveal result:** Once revealed, cache in TanStack Query so navigating away and back doesn't require re-reveal. Use `queryClient.setQueryData` in the mutation `onSuccess`.
+  - [x] 9.2 If `firstName` or `phoneNumber` is null (respondent data incomplete), show "Not provided" placeholder
+  - [x] 9.3 **Cache reveal result:** Once revealed, cache in TanStack Query so navigating away and back doesn't require re-reveal. Use `queryClient.setQueryData` in the mutation `onSuccess`.
 
-- [ ] Task 10: Handle error states (AC: #4, #6, #7)
-  - [ ] 10.1 **Consent not given (404):** Show "This worker has not opted in to share contact details." in an info card. Do NOT reveal that the profile exists — the wording should be neutral.
-  - [ ] 10.2 **Rate limit exceeded (429):** Show "You've reached the daily limit of 50 contact reveals. Please try again tomorrow." with a countdown timer if `retryAfter` is provided.
-  - [ ] 10.3 **CAPTCHA failed:** Reset CAPTCHA widget, show "Verification failed. Please try again."
-  - [ ] 10.4 **Network error:** Show generic error with retry option.
+- [x] Task 10: Handle error states (AC: #4, #6, #7)
+  - [x] 10.1 **Consent not given (404):** Show "This worker has not opted in to share contact details." in an info card. Do NOT reveal that the profile exists — the wording should be neutral.
+  - [x] 10.2 **Rate limit exceeded (429):** Show "You've reached the daily limit of 50 contact reveals. Please try again tomorrow." with a countdown timer if `retryAfter` is provided.
+  - [x] 10.3 **CAPTCHA failed:** Reset CAPTCHA widget, show "Verification failed. Please try again."
+  - [x] 10.4 **Network error:** Show generic error with retry option.
 
-- [ ] Task 11: Write backend tests (AC: #9)
-  - [ ] 11.1 Add to `apps/api/src/controllers/__tests__/marketplace.controller.test.ts`:
+- [x] Task 11: Write backend tests (AC: #9)
+  - [x] 11.1 Add to `apps/api/src/controllers/__tests__/marketplace.controller.test.ts`:
     - **Reveal happy path:** authenticated user + valid CAPTCHA + consent_enriched=true → 200 with firstName, lastName, phoneNumber
     - **Auth required:** no Bearer token → 401 AUTH_REQUIRED
     - **CAPTCHA required:** no captchaToken in body → 400 AUTH_CAPTCHA_FAILED
@@ -255,16 +255,16 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
     - **Audit logging:** verify contact_reveals row inserted after successful reveal
     - **PII fields only:** verify response contains ONLY firstName, lastName, phoneNumber — no NIN, dateOfBirth, respondentId
     - **Invalid UUID:** malformed profile ID → 400 VALIDATION_ERROR
-  - [ ] 11.2 Add to `apps/api/src/services/__tests__/marketplace.service.test.ts`:
+  - [x] 11.2 Add to `apps/api/src/services/__tests__/marketplace.service.test.ts`:
     - `revealContact` happy path
     - `revealContact` consent gate
     - `revealContact` rate limit check (count query)
     - `revealContact` audit row insertion
-  - [ ] 11.3 **403 authorization test:** The reveal endpoint uses `authenticate` (not `authorize`), so any authenticated role can reveal contacts. This is by design — public_user role is the primary consumer. If role restriction is needed, add `authorize(UserRole.PUBLIC_USER, UserRole.SUPER_ADMIN, ...)` and test rejected roles.
-  - [ ] 11.4 `pnpm test` — all tests pass, zero regressions
+  - [x] 11.3 **403 authorization test:** The reveal endpoint uses `authenticate` (not `authorize`), so any authenticated role can reveal contacts. This is by design — public_user role is the primary consumer. If role restriction is needed, add `authorize(UserRole.PUBLIC_USER, UserRole.SUPER_ADMIN, ...)` and test rejected roles.
+  - [x] 11.4 `pnpm test` — all tests pass, zero regressions
 
-- [ ] Task 12: Write frontend tests (AC: #9)
-  - [ ] 12.1 Update `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`:
+- [x] Task 12: Write frontend tests (AC: #9)
+  - [x] 12.1 Update `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`:
     - Unauthenticated: "Sign in to Reveal Contact" button renders
     - Unauthenticated: clicking navigates to `/login` with `state.from` set to profile URL
     - Authenticated: "Reveal Contact Details" button renders
@@ -273,7 +273,7 @@ This is the fourth story of Epic 7: Public Skills Marketplace & Search Security.
     - Consent not given (404): shows "not opted in" message
     - Rate limit (429): shows daily limit message
     - CAPTCHA error: resets widget
-  - [ ] 12.2 `cd apps/web && pnpm vitest run` — all web tests pass
+  - [x] 12.2 `cd apps/web && pnpm vitest run` — all web tests pass
 
 ## Dev Notes
 
@@ -404,11 +404,7 @@ E2E bypass: `VITE_E2E=true` auto-verifies with `'test-captcha-bypass'`. Backend 
 
 ### Frontend Auth State Detection on Public Pages
 
-From Story 7-3 user correction: use `sessionStorage.getItem('oslsr_access_token')` to detect auth state on public pages. Do NOT rely on `useAuth()` if it may throw or redirect for unauthenticated users on public routes.
-
-```typescript
-const isAuthenticated = !!sessionStorage.getItem('oslsr_access_token');
-```
+**Updated (code review):** `useAuth()` is safe on marketplace public routes because `AuthProvider` wraps the entire app tree (`App.tsx:208-1208`). It returns `{ isAuthenticated: false }` for unauthenticated users without throwing. The Story 7-3 guidance about `sessionStorage.getItem('oslsr_access_token')` was overly cautious — `useAuth()` is the correct pattern here.
 
 The login route is `/login` (App.tsx:445), NOT `/auth/public/login`.
 
@@ -502,9 +498,52 @@ The login flow uses `location.state.from` (set by `ProtectedRoute` or manually):
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- Audit service test count assertions updated (8→9 PII_ACTIONS, 22→23 AUDIT_ACTIONS) after adding `pii.contact_reveal`
+- Service test mock pattern: Drizzle ORM builders are thenable — required Proxy-based mocks for chainable select/insert that also resolve as promises
 
 ### Completion Notes List
+- Task 1: Created `contact_reveals` table with btree index on `(viewer_id, created_at)` for rate limit queries. No FK references per story spec.
+- Task 2: Added `revealContact()` to MarketplaceService with consent gate (returns 'not_found' not 'forbidden'), 50/user/24h rate limit via SQL count, retryAfter calculation from oldest reveal, and audit row insertion.
+- Task 3: Added `revealContact()` controller method mapping service results to HTTP responses (200/404/429). Fire-and-forget AuditService.logPiiAccess on success only.
+- Task 4: Added `POST /profiles/:id/reveal` route with `authenticate` → `verifyCaptcha` middleware chain.
+- Task 5: Updated `ContactRevealResponse` type (was scaffold from prep-4, now matches actual API shape). Added `ContactRevealRequest`.
+- Task 6-10: Full frontend reveal flow: state machine (idle→captcha→loading→revealed/error), hCaptcha integration, PII display with "Not provided" fallback, error handling for 404/429/captcha/network errors, cache via TanStack Query.
+- Task 7: API client + `useRevealContact` mutation hook with `onSuccess` cache population via `queryClient.setQueryData`.
+- Task 11: 8 new controller tests + 7 new service tests = 15 new backend tests. Updated audit service count assertions.
+- Task 12: 8 new frontend tests covering the full reveal flow. Updated 2 existing tests that conflicted with new implementation.
+- Full regression: 1,394 API + 2,057 web = 3,451 total, 0 regressions.
 
 ### File List
+**New files:**
+- `apps/api/src/db/schema/contact-reveals.ts`
+
+**Modified files:**
+- `apps/api/src/db/schema/index.ts`
+- `apps/api/src/services/marketplace.service.ts`
+- `apps/api/src/services/audit.service.ts`
+- `apps/api/src/controllers/marketplace.controller.ts`
+- `apps/api/src/routes/marketplace.routes.ts`
+- `packages/types/src/marketplace.ts`
+- `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx`
+- `apps/web/src/features/marketplace/api/marketplace.api.ts`
+- `apps/web/src/features/marketplace/hooks/useMarketplace.ts`
+- `apps/api/src/controllers/__tests__/marketplace.controller.test.ts`
+- `apps/api/src/services/__tests__/marketplace.service.test.ts`
+- `apps/api/src/services/__tests__/audit.service.test.ts`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Review Follow-ups (AI)
+- [x] [AI-Review][HIGH] TOCTOU race condition in rate limit: revealContact SELECT count + INSERT not in transaction. Wrapped in `db.transaction()` with `SELECT FOR UPDATE` [marketplace.service.ts:264-300]
+- [x] [AI-Review][MEDIUM] `ContactRevealEntry` type mismatch: `searcherId` → `viewerId`, added missing `userAgent` field [packages/types/src/marketplace.ts:79-86]
+- [x] [AI-Review][MEDIUM] Missing `Retry-After` HTTP header on 429 response. Added `res.setHeader('Retry-After', ...)` [marketplace.controller.ts:76]
+- [x] [AI-Review][MEDIUM] Dev notes contradicted implementation re: `useAuth()` on public routes. Updated dev notes — `useAuth()` is safe because `AuthProvider` wraps entire app tree [story dev notes]
+- [x] [AI-Review][LOW] `sprint-status.yaml` not in story File List. Added to File List [story file list]
+- [x] [AI-Review][LOW] HCaptcha `error` prop not passed from MarketplaceProfilePage. Error display handled in separate div — functionally equivalent, no code change needed.
+
+## Change Log
+- 2026-03-06: Adversarial code review (AI). Fixed 5 issues: TOCTOU race in rate limit (wrapped in transaction with FOR UPDATE), ContactRevealEntry type mismatch, missing Retry-After HTTP header, dev notes contradiction, File List gap. Updated 4 source files + 2 test files.
+- 2026-03-06: Story 7-4 implemented. Authenticated contact reveal with CAPTCHA protection, consent gate, 50/24h rate limit, dual audit logging (contact_reveals table + AuditService hash chain), full frontend flow with hCaptcha. 15 backend + 8 frontend = 23 new tests.

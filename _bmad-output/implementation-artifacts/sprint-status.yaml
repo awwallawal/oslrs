@@ -260,7 +260,7 @@ development_status:
   7-1-marketplace-data-extraction-worker: done  # Depends on: prep-4 (marketplace spike). Completed 2026-03-06: 7 tasks, 32 new tests, 0 regressions. Code review passed 2026-03-06: 7 findings (1H, 4M, 2L), 6 fixed, 1 noted (L2 RegistryTestPage cleanup).
   7-2-public-marketplace-search-interface: done  # Depends on: prep-4 (marketplace spike), prep-5 (security spike). Completed 2026-03-06: 10 tasks, 52 new tests (34 API + 18 web), 0 regressions. Code review passed: 9 findings (2H, 5M, 2L), all 9 auto-fixed.
   7-3-anonymous-profile-government-verified-badges: done  # Code review passed 2026-03-06: 8 findings (1H, 5M, 2L), all 8 auto-fixed. Nested interactive elements, XSS portfolio URL, nullable profession type, invalid Tailwind class, missing AC#7 test. 100 marketplace tests (51 API + 49 web), 0 regressions.
-  7-4-authenticated-contact-reveal-captcha: ready-for-dev  # Depends on: prep-5 (security spike)
+  7-4-authenticated-contact-reveal-captcha: done  # Code review passed 2026-03-06: 6 findings (1H, 3M, 2L), 5 auto-fixed. H1 TOCTOU race in rate limit (transaction+FOR UPDATE), M1 type mismatch, M2 Retry-After header, M3 dev notes correction, L1 file list, L2 noted. 1,394 API + 2,057 web tests pass, 0 regressions.  # Depends on: prep-5 (security spike)
   7-5-profile-enrichment-via-edit-token: ready-for-dev
   7-6-contact-view-logging-rate-limiting: ready-for-dev  # Depends on: prep-5 (security spike)
   epic-7-retrospective: optional

@@ -21,18 +21,49 @@ let mockAuthReturn: {
   user: any;
 };
 
+let mockRevealMutation: {
+  mutate: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+};
+
 // ── Mock modules ────────────────────────────────────────────────────────────
 
 vi.mock('../hooks/useMarketplace', () => ({
   useMarketplaceProfile: () => mockProfileReturn,
+  useRevealContact: () => mockRevealMutation,
   marketplaceKeys: {
     all: ['marketplace'],
     profile: (id: string) => ['marketplace', 'profile', id],
+    revealedContact: (id: string) => ['marketplace', 'revealed', id],
   },
 }));
 
 vi.mock('../../auth/context/AuthContext', () => ({
   useAuth: () => mockAuthReturn,
+}));
+
+vi.mock('../../auth/components/HCaptcha', () => ({
+  HCaptcha: ({ onVerify, onExpire, onError, error }: any) => (
+    <div data-testid="hcaptcha-mock">
+      <button data-testid="captcha-solve" onClick={() => onVerify('test-captcha-token')}>Solve</button>
+      <button data-testid="captcha-expire" onClick={() => onExpire?.()}>Expire</button>
+      <button data-testid="captcha-error" onClick={() => onError?.('captcha-error')}>Error</button>
+      {error && <span data-testid="captcha-error-msg">{error}</span>}
+    </div>
+  ),
+}));
+
+vi.mock('../../../lib/api-client', () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(message: string, status: number, code?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.code = code;
+    }
+  },
 }));
 
 vi.mock('lucide-react', async () => {
@@ -48,6 +79,9 @@ vi.mock('lucide-react', async () => {
     Lock: () => <svg data-testid="lock-icon" />,
     BadgeCheck: () => <svg data-testid="badge-check-icon" />,
     Info: () => <svg data-testid="info-icon" />,
+    CheckCircle2: () => <svg data-testid="check-circle-icon" />,
+    Loader2: () => <svg data-testid="loader-icon" />,
+    AlertCircle: () => <svg data-testid="alert-circle-icon" />,
   };
 });
 
@@ -110,6 +144,10 @@ beforeEach(() => {
   mockAuthReturn = {
     isAuthenticated: false,
     user: null,
+  };
+  mockRevealMutation = {
+    mutate: vi.fn(),
+    isPending: false,
   };
 });
 
@@ -207,7 +245,7 @@ describe('MarketplaceProfilePage', () => {
     expect(screen.getByTestId('login-page')).toBeInTheDocument();
   });
 
-  it('renders disabled "Reveal Contact" for authenticated user', async () => {
+  it('renders clickable "Reveal Contact Details" for authenticated user', async () => {
     mockAuthReturn = {
       isAuthenticated: true,
       user: { id: '1', role: 'public_user' },
@@ -216,9 +254,8 @@ describe('MarketplaceProfilePage', () => {
 
     const button = screen.getByTestId('reveal-contact-authenticated');
     expect(button).toBeInTheDocument();
-    expect(button).toBeDisabled();
+    expect(button).not.toBeDisabled();
     expect(button).toHaveTextContent('Reveal Contact Details');
-    expect(screen.getByText('Contact reveal coming soon')).toBeInTheDocument();
   });
 
   it('renders loading skeleton during fetch', async () => {
@@ -270,7 +307,7 @@ describe('MarketplaceProfilePage', () => {
 
     expect(
       screen.getByText(
-        'Contact details are only available to registered employers who have verified their identity.',
+        'Contact details are only available to registered users who have verified their identity.',
       ),
     ).toBeInTheDocument();
   });
@@ -313,5 +350,128 @@ describe('MarketplaceProfilePage', () => {
     fireEvent.click(backButton);
 
     expect(screen.getByTestId('marketplace-search')).toBeInTheDocument();
+  });
+
+  // ── Contact Reveal Flow Tests ────────────────────────────────────────────
+
+  describe('contact reveal flow', () => {
+    beforeEach(() => {
+      mockAuthReturn = {
+        isAuthenticated: true,
+        user: { id: '1', role: 'public_user' },
+      };
+    });
+
+    it('shows hCaptcha widget when authenticated user clicks Reveal Contact', async () => {
+      await renderProfilePage();
+
+      const button = screen.getByTestId('reveal-contact-authenticated');
+      fireEvent.click(button);
+
+      expect(screen.getByTestId('captcha-widget')).toBeInTheDocument();
+      expect(screen.getByTestId('hcaptcha-mock')).toBeInTheDocument();
+      expect(screen.getByText('Please complete the verification to view contact details.')).toBeInTheDocument();
+    });
+
+    it('calls revealContact mutation after CAPTCHA solve', async () => {
+      await renderProfilePage();
+
+      const button = screen.getByTestId('reveal-contact-authenticated');
+      fireEvent.click(button);
+
+      const solveButton = screen.getByTestId('captcha-solve');
+      fireEvent.click(solveButton);
+
+      expect(mockRevealMutation.mutate).toHaveBeenCalledWith(
+        { profileId: '018e1234-5678-7000-8000-000000000001', captchaToken: 'test-captcha-token' },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      );
+    });
+
+    it('displays PII after successful reveal', async () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onSuccess({ firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' });
+      });
+
+      await renderProfilePage();
+
+      const button = screen.getByTestId('reveal-contact-authenticated');
+      fireEvent.click(button);
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      expect(screen.getByTestId('contact-revealed')).toBeInTheDocument();
+      expect(screen.getByText('Contact Details Revealed')).toBeInTheDocument();
+      expect(screen.getByText('Adebayo Ogunlesi')).toBeInTheDocument();
+      expect(screen.getByText('+2348012345678')).toBeInTheDocument();
+    });
+
+    it('shows "Not provided" when PII fields are null', async () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onSuccess({ firstName: null, lastName: null, phoneNumber: null });
+      });
+
+      await renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      const notProvidedElements = screen.getAllByText('Not provided');
+      expect(notProvidedElements.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('shows consent-denied message on 404 error', async () => {
+      const { ApiError } = await import('../../../lib/api-client');
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('Not found', 404, 'NOT_FOUND'));
+      });
+
+      await renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      expect(screen.getByTestId('reveal-error')).toBeInTheDocument();
+      expect(screen.getByText('This worker has not opted in to share contact details.')).toBeInTheDocument();
+    });
+
+    it('shows rate limit message on 429 error', async () => {
+      const { ApiError } = await import('../../../lib/api-client');
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('Rate limited', 429, 'REVEAL_LIMIT_EXCEEDED'));
+      });
+
+      await renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      expect(screen.getByTestId('reveal-error')).toBeInTheDocument();
+      expect(
+        screen.getByText("You've reached the daily limit of 50 contact reveals. Please try again tomorrow."),
+      ).toBeInTheDocument();
+    });
+
+    it('resets to idle state when CAPTCHA expires', async () => {
+      await renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      expect(screen.getByTestId('captcha-widget')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('captcha-expire'));
+
+      // Should be back to idle — button visible, captcha gone
+      expect(screen.getByTestId('reveal-contact-authenticated')).toBeInTheDocument();
+      expect(screen.queryByTestId('captcha-widget')).not.toBeInTheDocument();
+    });
+
+    it('shows error and resets captcha on CAPTCHA widget error', async () => {
+      await renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-error'));
+
+      expect(screen.getByTestId('reveal-error')).toBeInTheDocument();
+      expect(screen.getByText('Verification failed. Please try again.')).toBeInTheDocument();
+    });
   });
 });
