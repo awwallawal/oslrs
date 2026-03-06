@@ -1,6 +1,7 @@
+
 # Story 7.3: Anonymous Profile & "Government Verified" Badges
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -34,38 +35,38 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create marketplace profile detail service method (AC: #1, #2, #3, #4)
-  - [ ] 1.1 In `apps/api/src/services/marketplace.service.ts` (created in Story 7-2), add a `getProfileById(id: string)` method:
+- [x] Task 1: Create marketplace profile detail service method (AC: #1, #2, #3, #4)
+  - [x]1.1 In `apps/api/src/services/marketplace.service.ts` (created in Story 7-2), add a `getProfileById(id: string)` method:
     - Query `marketplace_profiles` by `id` (the profile's own UUID — NOT respondentId)
     - JOIN with `lgas` table to resolve `lgaName` from `lga_id` code (same pattern as search)
     - Return ONLY anonymous fields: `id`, `profession`, `lgaName`, `experienceLevel`, `verifiedBadge`, `bio`, `portfolioUrl`, `createdAt`
     - **NEVER return:** `respondentId`, `editToken`, `editTokenExpiresAt`, `consentEnriched` value (leaks enrichment status)
-  - [ ] 1.2 Return `null` if profile not found (let controller handle 404)
-  - [ ] 1.3 **Response type:** `MarketplaceProfileDetail` — extend the search result type with `portfolioUrl` and `createdAt`
+  - [x]1.2 Return `null` if profile not found (let controller handle 404)
+  - [x]1.3 **Response type:** `MarketplaceProfileDetail` — extend the search result type with `portfolioUrl` and `createdAt`
 
-- [ ] Task 2: Create marketplace profile detail controller method (AC: #1, #3, #4)
-  - [ ] 2.1 In `apps/api/src/controllers/marketplace.controller.ts` (created in Story 7-2), add a `getProfile(req, res, next)` static method:
+- [x] Task 2: Create marketplace profile detail controller method (AC: #1, #3, #4)
+  - [x]2.1 In `apps/api/src/controllers/marketplace.controller.ts` (created in Story 7-2), add a `getProfile(req, res, next)` static method:
     - Extract `id` from `req.params`
     - Validate UUID format (regex: `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`)
     - Call `MarketplaceService.getProfileById(id)`
     - If `null`, throw `AppError('NOT_FOUND', 'Profile not found', 404)`
     - Return `res.json({ data: profile })`
-  - [ ] 2.2 **Error sanitization:** Never expose internal details. 404 for missing profiles. 400 for invalid UUID format. 500 for unexpected errors → generic message only.
+  - [x]2.2 **Error sanitization:** Never expose internal details. 404 for missing profiles. 400 for invalid UUID format. 500 for unexpected errors → generic message only.
 
-- [ ] Task 3: Add profile detail route with rate limiting (AC: #8)
-  - [ ] 3.1 In `apps/api/src/routes/marketplace.routes.ts` (created in Story 7-2), add:
+- [x] Task 3: Add profile detail route with rate limiting (AC: #8)
+  - [x]3.1 In `apps/api/src/routes/marketplace.routes.ts` (created in Story 7-2), add:
     ```typescript
     // GET /api/v1/marketplace/profiles/:id — public anonymous profile view
     router.get('/profiles/:id', marketplaceProfileRateLimit, MarketplaceController.getProfile);
     ```
-  - [ ] 3.2 In `apps/api/src/middleware/marketplace-rate-limit.ts` (created in Story 7-2), add a `marketplaceProfileRateLimit`:
+  - [x]3.2 In `apps/api/src/middleware/marketplace-rate-limit.ts` (created in Story 7-2), add a `marketplaceProfileRateLimit`:
     - 100 req/min/IP (architecture spec for profile views — higher than search because individual views are cheaper)
     - Redis key prefix: `rl:marketplace:profile:`
     - Same pattern as `marketplaceSearchRateLimit` but with different limits
-  - [ ] 3.3 **No authentication** — this is a public anonymous view. Auth is only for contact reveal (Story 7-4).
+  - [x]3.3 **No authentication** — this is a public anonymous view. Auth is only for contact reveal (Story 7-4).
 
-- [ ] Task 4: Add profile detail type (AC: #1, #2)
-  - [ ] 4.1 In `packages/types/src/marketplace.ts`, add:
+- [x] Task 4: Add profile detail type (AC: #1, #2)
+  - [x]4.1 In `packages/types/src/marketplace.ts`, add:
     ```typescript
     export interface MarketplaceProfileDetail {
       id: string;
@@ -78,10 +79,10 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
       createdAt: string;
     }
     ```
-  - [ ] 4.2 Export from `packages/types/src/index.ts` (if not already)
+  - [x]4.2 Export from `packages/types/src/index.ts` (if not already)
 
-- [ ] Task 5: Create GovernmentVerifiedBadge component (AC: #2, #6)
-  - [ ] 5.1 Create `apps/web/src/features/marketplace/components/GovernmentVerifiedBadge.tsx`:
+- [x] Task 5: Create GovernmentVerifiedBadge component (AC: #2, #6)
+  - [x]5.1 Create `apps/web/src/features/marketplace/components/GovernmentVerifiedBadge.tsx`:
     - Green badge with checkmark icon (`BadgeCheck` or `CheckCircle2` from lucide-react)
     - Text: "Government Verified"
     - Styling: `bg-green-100 text-green-700 border border-green-200` (follow `FraudSeverityBadge.tsx` CONFIG pattern)
@@ -89,11 +90,11 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
       - "This badge means: NIN validated, identity confirmed, skills registration reviewed, real person in Oyo State"
       - "What it does NOT mean: We have not tested their skills directly. We do not guarantee work quality."
     - (Source: architecture doc public-website-ia.md verified badge specification)
-  - [ ] 5.2 For unverified profiles, show nothing (no badge) OR a subtle "Not yet verified" indicator — keep it minimal
-  - [ ] 5.3 **Refactor WorkerCard** (from Story 7-2) to use this shared `GovernmentVerifiedBadge` component instead of inline badge rendering, if Story 7-2 implemented the badge inline
+  - [x]5.2 For unverified profiles, show nothing (no badge) OR a subtle "Not yet verified" indicator — keep it minimal
+  - [x]5.3 **Refactor WorkerCard** (from Story 7-2) to use this shared `GovernmentVerifiedBadge` component instead of inline badge rendering, if Story 7-2 implemented the badge inline
 
-- [ ] Task 6: Create frontend profile detail page (AC: #5, #6, #7)
-  - [ ] 6.1 Create `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx`:
+- [x] Task 6: Create frontend profile detail page (AC: #5, #6, #7)
+  - [x]6.1 Create `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx`:
     - **Layout structure** (follow `RespondentDetailPage.tsx` card-based pattern):
       1. **Header**: Back button (← Back to Search), profession as page title, Government Verified badge (if applicable)
       2. **Profile Info Card**: LGA location, experience level, member since (createdAt)
@@ -102,29 +103,29 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
     - Use `useParams<{ id: string }>()` to extract profile ID
     - Use `Card`, `CardHeader`, `CardContent` from shadcn/ui
     - Use `InfoRow` helper pattern from `RespondentDetailPage.tsx` for labeled field display
-  - [ ] 6.2 Create `apps/web/src/features/marketplace/components/MarketplaceProfileSkeleton.tsx`:
+  - [x]6.2 Create `apps/web/src/features/marketplace/components/MarketplaceProfileSkeleton.tsx`:
     - Loading skeleton matching the profile page layout
     - Animated pulse placeholders for header, info card, about section
-  - [ ] 6.3 **Error state**: If profile fetch returns 404, show "Profile not found" with a link back to marketplace search
-  - [ ] 6.4 **Empty bio/portfolio**: Show placeholder text "This worker hasn't added a bio yet" / "No portfolio link provided"
+  - [x]6.3 **Error state**: If profile fetch returns 404, show "Profile not found" with a link back to marketplace search
+  - [x]6.4 **Empty bio/portfolio**: Show placeholder text "This worker hasn't added a bio yet" / "No portfolio link provided"
 
-- [ ] Task 7: Create "Reveal Contact" placeholder button (AC: #7)
-  - [ ] 7.1 On the profile page, render a prominent "Reveal Contact Details" button in the Contact Section
-  - [ ] 7.2 Button behavior (Story 7-4 is not yet implemented):
+- [x] Task 7: Create "Reveal Contact" placeholder button (AC: #7)
+  - [x]7.1 On the profile page, render a prominent "Reveal Contact Details" button in the Contact Section
+  - [x]7.2 Button behavior (Story 7-4 is not yet implemented):
     - **If user is NOT authenticated**: Button text "Sign in to Reveal Contact". Clicking calls `navigate('/login', { state: { from: `/marketplace/profile/${id}` } })` — uses React Router location state (LoginPage.tsx:20-21 reads `location.state.from`). Do NOT use `?returnTo=` query param — it's not supported.
     - **If user IS authenticated**: Button text "Reveal Contact Details" but disabled with tooltip "Contact reveal coming soon" (placeholder until Story 7-4 implements the actual reveal flow with CAPTCHA)
-  - [ ] 7.3 Use `optionalAuthenticate` concept — check if auth token exists in sessionStorage to determine which button variant to show. Do NOT call `useAuth()` if it throws for unauthenticated users — check the auth context behavior for public pages.
-  - [ ] 7.4 Below the button, add a subtle info line: "Contact details are only available to registered employers who have verified their identity."
+  - [x]7.3 Use `optionalAuthenticate` concept — check if auth token exists in sessionStorage to determine which button variant to show. Do NOT call `useAuth()` if it throws for unauthenticated users — check the auth context behavior for public pages.
+  - [x]7.4 Below the button, add a subtle info line: "Contact details are only available to registered employers who have verified their identity."
 
-- [ ] Task 8: Create frontend API client and hooks for profile detail (AC: #5)
-  - [ ] 8.1 In `apps/web/src/features/marketplace/api/marketplace.api.ts` (created in Story 7-2), add:
+- [x] Task 8: Create frontend API client and hooks for profile detail (AC: #5)
+  - [x]8.1 In `apps/web/src/features/marketplace/api/marketplace.api.ts` (created in Story 7-2), add:
     ```typescript
     export async function fetchMarketplaceProfile(id: string): Promise<MarketplaceProfileDetail> {
       const response = await apiClient(`/marketplace/profiles/${id}`);
       return response.data;
     }
     ```
-  - [ ] 8.2 In `apps/web/src/features/marketplace/hooks/useMarketplace.ts` (created in Story 7-2), add:
+  - [x]8.2 In `apps/web/src/features/marketplace/hooks/useMarketplace.ts` (created in Story 7-2), add:
     ```typescript
     // Add to existing marketplaceKeys
     profile: (id: string) => [...marketplaceKeys.all, 'profile', id] as const,
@@ -140,8 +141,8 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
     }
     ```
 
-- [ ] Task 9: Wire frontend routes (AC: #5)
-  - [ ] 9.1 In `apps/web/src/App.tsx`, add a nested route under the `/marketplace` path (inside `<PublicLayout>`):
+- [x] Task 9: Wire frontend routes (AC: #5)
+  - [x]9.1 In `apps/web/src/App.tsx`, add a nested route under the `/marketplace` path (inside `<PublicLayout>`):
     ```typescript
     const MarketplaceProfilePage = lazy(() => import('./features/marketplace/pages/MarketplaceProfilePage'));
     // ...
@@ -150,11 +151,11 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
       <Route path="profile/:id" element={<Suspense fallback={<PageLoadingFallback />}><MarketplaceProfilePage /></Suspense>} />
     </Route>
     ```
-  - [ ] 9.2 Update `WorkerCard` (Story 7-2) to link to `/marketplace/profile/${profile.id}` — either the entire card is clickable or a "View Profile" button navigates there
-  - [ ] 9.3 Ensure the profile route is public (no `<ProtectedRoute>` wrapper) — same as the search page
+  - [x]9.2 Update `WorkerCard` (Story 7-2) to link to `/marketplace/profile/${profile.id}` — either the entire card is clickable or a "View Profile" button navigates there
+  - [x]9.3 Ensure the profile route is public (no `<ProtectedRoute>` wrapper) — same as the search page
 
-- [ ] Task 10: Write backend tests (AC: #9)
-  - [ ] 10.1 Add to `apps/api/src/controllers/__tests__/marketplace.controller.test.ts` (created in Story 7-2):
+- [x] Task 10: Write backend tests (AC: #9)
+  - [x]10.1 Add to `apps/api/src/controllers/__tests__/marketplace.controller.test.ts` (created in Story 7-2):
     - Profile detail happy path: valid ID returns profile with all anonymous fields
     - Verified badge: profile with `verifiedBadge: true` returns badge flag
     - Unverified profile: `verifiedBadge: false` returned correctly
@@ -163,14 +164,14 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
     - 400: malformed UUID returns validation error
     - LGA name resolution: profile returns `lgaName` (not raw `lgaId` code)
     - Rate limiting: verify 429 response format
-  - [ ] 10.2 Add to `apps/api/src/services/__tests__/marketplace.service.test.ts` (created in Story 7-2):
+  - [x]10.2 Add to `apps/api/src/services/__tests__/marketplace.service.test.ts` (created in Story 7-2):
     - `getProfileById` returns correct anonymous fields
     - `getProfileById` returns null for non-existent ID
     - LGA join resolves name correctly
-  - [ ] 10.3 `pnpm test` — all tests pass, zero regressions
+  - [x]10.3 `pnpm test` — all tests pass, zero regressions
 
-- [ ] Task 11: Write frontend tests (AC: #9)
-  - [ ] 11.1 Create `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`:
+- [x] Task 11: Write frontend tests (AC: #9)
+  - [x]11.1 Create `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`:
     - Renders profile detail with all anonymous fields
     - Government Verified badge renders when `verifiedBadge: true`
     - No badge renders when `verifiedBadge: false`
@@ -180,10 +181,21 @@ This is the third story of Epic 7: Public Skills Marketplace & Search Security. 
     - Loading skeleton renders during fetch
     - 404 error state renders "Profile not found"
     - No PII visible in rendered output
-  - [ ] 11.2 Create `apps/web/src/features/marketplace/__tests__/GovernmentVerifiedBadge.test.tsx`:
+  - [x]11.2 Create `apps/web/src/features/marketplace/__tests__/GovernmentVerifiedBadge.test.tsx`:
     - Renders badge with correct text and icon
     - Info tooltip/section explains verification meaning
-  - [ ] 11.3 `cd apps/web && pnpm vitest run` — all web tests pass
+  - [x]11.3 `cd apps/web && pnpm vitest run` — all web tests pass
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] H1: Interactive `<button>` nested inside `<Link>` in WorkerCard — invalid HTML nesting, accessibility violation, expandable info breaks card layout. **Fixed:** Added `interactive` prop to GovernmentVerifiedBadge; WorkerCard uses `interactive={false}` (renders static `<span>`), profile page keeps interactive mode. [WorkerCard.tsx:24-26, GovernmentVerifiedBadge.tsx:8-24]
+- [x] [AI-Review][MEDIUM] M1: Portfolio URL rendered as `<a href>` without protocol validation — XSS risk via `javascript:` URLs. **Fixed:** Added `/^https?:\/\//i` protocol check; non-HTTP URLs fall through to "No portfolio" placeholder. [MarketplaceProfilePage.tsx:102]
+- [x] [AI-Review][MEDIUM] M2: `MarketplaceProfileDetail.profession` typed as non-nullable `string` but service coerces null to `''` — empty heading on profile page. **Fixed:** Made `profession` and `lgaName` nullable in type, service returns null, UI shows "Unknown Profession" fallback. [marketplace.ts:40-41, marketplace.service.ts:203-204, MarketplaceProfilePage.tsx:64]
+- [x] [AI-Review][MEDIUM] M3: `hover:bg-green-150` is not a valid Tailwind class — hover effect non-functional. **Fixed:** Changed to `hover:bg-green-200`. [GovernmentVerifiedBadge.tsx:16]
+- [x] [AI-Review][MEDIUM] M4: AC #7 unauthenticated "Reveal Contact" click navigation to `/login` with `state.from` not tested. **Fixed:** Added navigation test + XSS prevention test + null profession test + back button navigation test (4 new tests). [MarketplaceProfilePage.test.tsx]
+- [x] [AI-Review][MEDIUM] M5: Unused imports `MapPin` and `Briefcase` in MarketplaceProfilePage. **Fixed:** Removed dead imports. [MarketplaceProfilePage.tsx:2]
+- [x] [AI-Review][LOW] L1: `navigate(-1)` on back button is non-deterministic — may leave the app. **Fixed:** Changed to `navigate('/marketplace')`. [MarketplaceProfilePage.tsx:56]
+- [x] [AI-Review][LOW] L2: WorkerCard badge wrapper used `e.preventDefault()` instead of `e.stopPropagation()`. **Fixed:** Resolved by H1 — replaced interactive badge wrapper with static `interactive={false}` badge. [WorkerCard.tsx:25]
 
 ## Dev Notes
 
@@ -396,9 +408,49 @@ Do NOT use `useAuth()` if it throws or redirects for unauthenticated users — c
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- All 51 API marketplace tests pass (26 service + 25 controller)
+- All 42 frontend marketplace tests pass (9 badge + 15 profile + 18 search)
+- Full regression: 1,359 API tests pass, 2,042 web tests pass, 0 regressions
+- ViewAsDashboardPage flaky failure in parallel runs (pre-existing, passes in isolation - 35/35)
 
 ### Completion Notes List
+- Task 4: Added `MarketplaceProfileDetail` type to `packages/types/src/marketplace.ts` (already exported via wildcard)
+- Task 1: Added `getProfileById(id)` method to `MarketplaceService` — raw SQL query with LGA JOIN, returns only anonymous fields, null for missing profiles
+- Task 2: Added `getProfile(req, res, next)` to `MarketplaceController` — UUID regex validation, 400 for invalid format, 404 for missing profiles
+- Task 3: Added `marketplaceProfileRateLimit` (100 req/min/IP, Redis prefix `rl:marketplace:profile:`) and wired `GET /profiles/:id` route
+- Task 5: Created `GovernmentVerifiedBadge` component — green badge with `BadgeCheck` icon, expandable info section explaining verification meaning and disclaimers. Refactored `WorkerCard` to use shared badge (removed inline `Badge` + `CheckCircle`)
+- Task 6: Created `MarketplaceProfilePage` — card-based layout (header + info card + about section + contact section), `InfoRow` helper, loading skeleton, 404 error state, empty bio/portfolio placeholders
+- Task 7: "Reveal Contact" placeholder — unauthenticated users see "Sign in to Reveal Contact" (navigates to `/login` with `state.from`), authenticated users see disabled "Reveal Contact Details" with "Coming soon" text. Uses `useAuth()` (safe on public pages since `AuthProvider` wraps all routes)
+- Task 8: Added `fetchMarketplaceProfile()` API function and `useMarketplaceProfile(id)` hook with 5-minute staleTime
+- Task 9: Changed `/marketplace` from flat route to nested `<Route path="marketplace">` with `index` + `profile/:id`. Updated `WorkerCard` to wrap entire card in `<Link>` to profile page
+- Task 10: Added 15 backend tests (9 controller getProfile + 6 service getProfileById + 2 rate limit contract tests). Covers happy path, verified/unverified, PII exclusion, 404, 400, LGA resolution, error handling
+- Task 11: Added 24 frontend tests (15 profile page + 9 badge). Updated 3 existing search page tests (badge text "Verified" → "Government Verified", disabled button → Link, added BadgeCheck/Info mocks)
+
+### Change Log
+- 2026-03-06: Story 7-3 implementation complete. All 11 tasks done, 39 new tests (15 backend + 24 frontend), 0 regressions.
+- 2026-03-06: Adversarial code review — 8 issues found (1 HIGH, 5 MEDIUM, 2 LOW), all fixed. +7 new tests (3 badge non-interactive + 4 profile page). Total: 100 marketplace tests (51 backend + 49 frontend).
 
 ### File List
+**New files:**
+- `apps/web/src/features/marketplace/components/GovernmentVerifiedBadge.tsx`
+- `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx`
+- `apps/web/src/features/marketplace/components/MarketplaceProfileSkeleton.tsx`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`
+- `apps/web/src/features/marketplace/__tests__/GovernmentVerifiedBadge.test.tsx`
+
+**Modified files:**
+- `packages/types/src/marketplace.ts` — Added `MarketplaceProfileDetail` interface
+- `apps/api/src/services/marketplace.service.ts` — Added `getProfileById()` method + `MarketplaceProfileDetail` import
+- `apps/api/src/controllers/marketplace.controller.ts` — Added `getProfile()` method + UUID regex
+- `apps/api/src/routes/marketplace.routes.ts` — Added `GET /profiles/:id` route
+- `apps/api/src/middleware/marketplace-rate-limit.ts` — Added `marketplaceProfileRateLimit` (100 req/min/IP)
+- `apps/api/src/controllers/__tests__/marketplace.controller.test.ts` — Added 11 profile detail + rate limit tests
+- `apps/api/src/services/__tests__/marketplace.service.test.ts` — Added 6 getProfileById tests
+- `apps/web/src/features/marketplace/api/marketplace.api.ts` — Added `fetchMarketplaceProfile()`
+- `apps/web/src/features/marketplace/hooks/useMarketplace.ts` — Added `useMarketplaceProfile()` hook + `profile` key
+- `apps/web/src/features/marketplace/components/WorkerCard.tsx` — Wrapped in `<Link>`, replaced inline badge with `GovernmentVerifiedBadge`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceSearchPage.test.tsx` — Updated 3 tests for badge text + link change
+- `apps/web/src/App.tsx` — Added lazy import + nested `/marketplace/profile/:id` route

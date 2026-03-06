@@ -2,13 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockSearchProfiles } = vi.hoisted(() => ({
+const { mockSearchProfiles, mockGetProfileById } = vi.hoisted(() => ({
   mockSearchProfiles: vi.fn(),
+  mockGetProfileById: vi.fn(),
 }));
 
 vi.mock('../../services/marketplace.service.js', () => ({
   MarketplaceService: {
     searchProfiles: (...args: any[]) => mockSearchProfiles(...args),
+    getProfileById: (...args: any[]) => mockGetProfileById(...args),
   },
 }));
 
@@ -290,6 +292,148 @@ describe('MarketplaceController', () => {
     });
   });
 
+  describe('getProfile', () => {
+    const validId = '018e1234-5678-7000-8000-000000000001';
+
+    const sampleProfileDetail = {
+      id: validId,
+      profession: 'Electrician',
+      lgaName: 'Ibadan North',
+      experienceLevel: '5-10 years',
+      verifiedBadge: true,
+      bio: 'Experienced electrician specializing in residential wiring.',
+      portfolioUrl: 'https://example.com/portfolio',
+      createdAt: '2026-03-01T12:00:00.000Z',
+    };
+
+    it('should return profile detail for a valid ID', async () => {
+      mockGetProfileById.mockResolvedValue(sampleProfileDetail);
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      expect(mockGetProfileById).toHaveBeenCalledWith(validId);
+      expect(res.json).toHaveBeenCalledWith({ data: sampleProfileDetail });
+    });
+
+    it('should return verified badge when verifiedBadge is true', async () => {
+      mockGetProfileById.mockResolvedValue(sampleProfileDetail);
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      const responseData = res.json.mock.calls[0][0];
+      expect(responseData.data.verifiedBadge).toBe(true);
+    });
+
+    it('should return verifiedBadge false for unverified profiles', async () => {
+      mockGetProfileById.mockResolvedValue({ ...sampleProfileDetail, verifiedBadge: false });
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      const responseData = res.json.mock.calls[0][0];
+      expect(responseData.data.verifiedBadge).toBe(false);
+    });
+
+    it('should NOT include PII fields in response', async () => {
+      mockGetProfileById.mockResolvedValue(sampleProfileDetail);
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      const responseData = res.json.mock.calls[0][0].data;
+      expect(responseData).not.toHaveProperty('respondentId');
+      expect(responseData).not.toHaveProperty('firstName');
+      expect(responseData).not.toHaveProperty('lastName');
+      expect(responseData).not.toHaveProperty('phoneNumber');
+      expect(responseData).not.toHaveProperty('nin');
+      expect(responseData).not.toHaveProperty('dateOfBirth');
+      expect(responseData).not.toHaveProperty('editToken');
+      expect(responseData).not.toHaveProperty('consentEnriched');
+    });
+
+    it('should return 404 for non-existent profile ID', async () => {
+      mockGetProfileById.mockResolvedValue(null);
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('NOT_FOUND');
+      expect(error.statusCode).toBe(404);
+      expect(error.message).toBe('Profile not found');
+    });
+
+    it('should return 400 for malformed UUID', async () => {
+      const req = { params: { id: 'not-a-uuid' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('should return 400 for empty ID', async () => {
+      const req = { params: { id: '' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('should return lgaName (not raw lgaId)', async () => {
+      mockGetProfileById.mockResolvedValue(sampleProfileDetail);
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      const responseData = res.json.mock.calls[0][0].data;
+      expect(responseData).toHaveProperty('lgaName', 'Ibadan North');
+      expect(responseData).not.toHaveProperty('lgaId');
+    });
+
+    it('should call next on service error', async () => {
+      mockGetProfileById.mockRejectedValue(new Error('DB error'));
+
+      const req = { params: { id: validId } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
   describe('rate limiting', () => {
     it('rate limit message matches 429 response spec (RATE_LIMIT_EXCEEDED format)', async () => {
       const { RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
@@ -304,6 +448,20 @@ describe('MarketplaceController', () => {
     it('rate limiter exports a middleware function', async () => {
       const { marketplaceSearchRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
       expect(typeof marketplaceSearchRateLimit).toBe('function');
+    });
+
+    it('profile rate limit message matches 429 response spec', async () => {
+      const { PROFILE_RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(PROFILE_RATE_LIMIT_MESSAGE).toEqual({
+        status: 'error',
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many profile view requests. Please try again later.',
+      });
+    });
+
+    it('profile rate limiter exports a middleware function', async () => {
+      const { marketplaceProfileRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(typeof marketplaceProfileRateLimit).toBe('function');
     });
   });
 });

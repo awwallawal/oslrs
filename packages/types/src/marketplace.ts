@@ -34,6 +34,18 @@ export interface MarketplaceProfileEnriched extends MarketplaceProfileAnonymous 
 /** Union type for profile responses */
 export type MarketplaceProfileView = MarketplaceProfileAnonymous | MarketplaceProfileEnriched;
 
+/** Profile detail view — full anonymous profile for /marketplace/profiles/:id (Story 7-3) */
+export interface MarketplaceProfileDetail {
+  id: string;
+  profession: string | null;
+  lgaName: string | null;
+  experienceLevel: string | null;
+  verifiedBadge: boolean;
+  bio: string | null;
+  portfolioUrl: string | null;
+  createdAt: string;
+}
+
 // ============================================================================
 // Search Types (cursor-based pagination — Story 7-2)
 // ============================================================================

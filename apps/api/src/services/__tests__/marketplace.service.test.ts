@@ -287,4 +287,93 @@ describe('MarketplaceService', () => {
       ).rejects.toThrow('Invalid cursor value');
     });
   });
+
+  describe('getProfileById', () => {
+    function makeDetailProfile(overrides: Record<string, unknown> = {}) {
+      return {
+        id: '018e1234-5678-7000-8000-000000000001',
+        profession: 'Electrician',
+        lga_name: 'Ibadan North',
+        experience_level: '5-10 years',
+        verified_badge: true,
+        bio: 'Experienced electrician specializing in residential wiring.',
+        portfolio_url: 'https://example.com/portfolio',
+        created_at: '2026-03-01T12:00:00.000Z',
+        ...overrides,
+      };
+    }
+
+    it('should return correct anonymous fields for a valid profile', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile()] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('018e1234-5678-7000-8000-000000000001');
+      expect(result!.profession).toBe('Electrician');
+      expect(result!.lgaName).toBe('Ibadan North');
+      expect(result!.experienceLevel).toBe('5-10 years');
+      expect(result!.verifiedBadge).toBe(true);
+      expect(result!.bio).toBe('Experienced electrician specializing in residential wiring.');
+      expect(result!.portfolioUrl).toBe('https://example.com/portfolio');
+      expect(result!.createdAt).toBe('2026-03-01T12:00:00.000Z');
+    });
+
+    it('should return null for non-existent profile', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [] });
+
+      const result = await MarketplaceService.getProfileById('018e0000-0000-0000-0000-000000000000');
+
+      expect(result).toBeNull();
+    });
+
+    it('should resolve lgaName from JOIN', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile({ lga_name: 'Ibadan South-East' })] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.lgaName).toBe('Ibadan South-East');
+    });
+
+    it('should return verifiedBadge as false when not verified', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile({ verified_badge: false })] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.verifiedBadge).toBe(false);
+    });
+
+    it('should handle null optional fields gracefully', async () => {
+      mockDbExecute.mockResolvedValueOnce({
+        rows: [makeDetailProfile({
+          experience_level: null,
+          bio: null,
+          portfolio_url: null,
+        })],
+      });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.experienceLevel).toBeNull();
+      expect(result!.bio).toBeNull();
+      expect(result!.portfolioUrl).toBeNull();
+    });
+
+    it('should NOT return any PII fields', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile()] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      // These properties must NEVER be in the return value
+      expect(result).not.toHaveProperty('respondentId');
+      expect(result).not.toHaveProperty('editToken');
+      expect(result).not.toHaveProperty('editTokenExpiresAt');
+      expect(result).not.toHaveProperty('consentEnriched');
+      expect(result).not.toHaveProperty('firstName');
+      expect(result).not.toHaveProperty('lastName');
+      expect(result).not.toHaveProperty('phoneNumber');
+      expect(result).not.toHaveProperty('nin');
+      expect(result).not.toHaveProperty('dateOfBirth');
+    });
+  });
 });

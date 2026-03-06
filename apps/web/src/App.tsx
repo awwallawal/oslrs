@@ -113,6 +113,7 @@ const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserH
 const PublicSurveysPage = lazy(() => import('./features/dashboard/pages/PublicSurveysPage'));
 const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/PublicMarketplacePage'));
 const MarketplaceSearchPage = lazy(() => import('./features/marketplace/pages/MarketplaceSearchPage'));
+const MarketplaceProfilePage = lazy(() => import('./features/marketplace/pages/MarketplaceProfilePage'));
 const PublicSupportPage = lazy(() => import('./features/dashboard/pages/PublicSupportPage'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
@@ -412,15 +413,25 @@ function App() {
                 }
               />
 
-              {/* Marketplace — public search (Story 7-2) */}
-              <Route
-                path="marketplace"
-                element={
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <MarketplaceSearchPage />
-                  </Suspense>
-                }
-              />
+              {/* Marketplace — public search + profile (Story 7-2, 7-3) */}
+              <Route path="marketplace">
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <MarketplaceSearchPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="profile/:id"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <MarketplaceProfilePage />
+                    </Suspense>
+                  }
+                />
+              </Route>
 
               {/* Public Staff Verification */}
               <Route

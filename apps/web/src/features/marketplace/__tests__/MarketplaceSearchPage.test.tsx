@@ -41,6 +41,8 @@ vi.mock('lucide-react', async () => {
     MapPin: () => <svg data-testid="map-pin-icon" />,
     Briefcase: () => <svg data-testid="briefcase-icon" />,
     CheckCircle: () => <svg data-testid="check-circle-icon" />,
+    BadgeCheck: () => <svg data-testid="badge-check-icon" />,
+    Info: () => <svg data-testid="info-icon" />,
   };
 });
 
@@ -209,7 +211,7 @@ describe('MarketplaceSearchPage', () => {
     expect(screen.getByText('Ibadan North')).toBeInTheDocument();
   });
 
-  it('displays verified badge for verified profiles', () => {
+  it('displays Government Verified badge for verified profiles', () => {
     mockSearchReturn = {
       data: {
         data: [sampleProfile],
@@ -219,7 +221,7 @@ describe('MarketplaceSearchPage', () => {
       isFetching: false,
     };
     renderPage();
-    expect(screen.getByText('Verified')).toBeInTheDocument();
+    expect(screen.getByText('Government Verified')).toBeInTheDocument();
   });
 
   it('does not display verified badge for unverified profiles', () => {
@@ -232,7 +234,7 @@ describe('MarketplaceSearchPage', () => {
       isFetching: false,
     };
     renderPage();
-    expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+    expect(screen.queryByText('Government Verified')).not.toBeInTheDocument();
   });
 
   it('truncates long bio text', () => {
@@ -340,7 +342,7 @@ describe('MarketplaceSearchPage', () => {
     expect(input).toHaveValue('plumber');
   });
 
-  it('has disabled "View Profile" button on worker cards (future Story 7-3)', () => {
+  it('has "View Profile" link on worker cards that navigates to profile page', () => {
     mockSearchReturn = {
       data: {
         data: [sampleProfile],
@@ -350,7 +352,11 @@ describe('MarketplaceSearchPage', () => {
       isFetching: false,
     };
     renderPage();
-    const viewBtn = screen.getByText('View Profile');
-    expect(viewBtn).toBeDisabled();
+    const viewLink = screen.getByText('View Profile');
+    expect(viewLink).toBeInTheDocument();
+    // Card is wrapped in a Link to profile page
+    const card = screen.getByTestId('worker-card');
+    const link = card.closest('a');
+    expect(link).toHaveAttribute('href', `/marketplace/profile/${sampleProfile.id}`);
   });
 });

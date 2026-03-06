@@ -4,6 +4,7 @@ import type { SQL } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import type {
   CursorPaginatedResponse,
+  MarketplaceProfileDetail,
   MarketplaceSearchParams,
   MarketplaceSearchResultItem,
 } from '@oslsr/types';
@@ -168,6 +169,44 @@ export class MarketplaceService {
           totalItems,
         },
       },
+    };
+  }
+
+  /**
+   * Get a single marketplace profile by its public ID.
+   * Returns ONLY anonymous fields — no PII (no respondentId, editToken, consentEnriched).
+   * Returns null if not found (controller handles 404).
+   */
+  static async getProfileById(id: string): Promise<MarketplaceProfileDetail | null> {
+    const result = await db.execute(sql`
+      SELECT
+        mp.id,
+        mp.profession,
+        COALESCE(l.name, mp.lga_name) as lga_name,
+        mp.experience_level,
+        mp.verified_badge,
+        mp.bio,
+        mp.portfolio_url,
+        mp.created_at
+      FROM marketplace_profiles mp
+      LEFT JOIN lgas l ON mp.lga_id = l.code
+      WHERE mp.id = ${id}::uuid
+    `);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0] as Record<string, unknown>;
+    return {
+      id: String(row.id),
+      profession: row.profession ? String(row.profession) : null,
+      lgaName: row.lga_name ? String(row.lga_name) : null,
+      experienceLevel: row.experience_level ? String(row.experience_level) : null,
+      verifiedBadge: Boolean(row.verified_badge),
+      bio: row.bio ? String(row.bio) : null,
+      portfolioUrl: row.portfolio_url ? String(row.portfolio_url) : null,
+      createdAt: new Date(row.created_at as string).toISOString(),
     };
   }
 }
