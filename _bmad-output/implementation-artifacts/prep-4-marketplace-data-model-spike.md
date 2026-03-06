@@ -1,6 +1,6 @@
 # Story 7.prep-4: Marketplace Data Model Spike
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -33,54 +33,67 @@ The architecture doc pre-decides PostgreSQL full-text search over external engin
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Design `marketplace_profiles` schema (AC: #1, #3)
-  - [ ] 1.1 Define columns: respondent_id (FK), profession, lga_id (FK), experience_level, verified_badge, bio, portfolio_url, edit_token, edit_token_expires_at, consent_enriched, search_vector (tsvector), created_at, updated_at
-  - [ ] 1.2 Define primary key strategy (UUIDv7, per project convention)
-  - [ ] 1.3 Define unique constraint: one profile per respondent (respondent_id UNIQUE)
-  - [ ] 1.4 Define indexes: GIN on search_vector, btree on lga_id, btree on profession
-  - [ ] 1.5 Document PII tiers:
-    - **Anonymous (public):** profession, lga_name, experience_level, verified_badge, bio, portfolio_url
+- [x] Task 1: Design `marketplace_profiles` schema (AC: #1, #3)
+  - [x] 1.1 Define columns: respondent_id (FK), profession, skills, lga_id (FK), lga_name (denormalized), experience_level, verified_badge, bio, portfolio_url, edit_token, edit_token_expires_at, consent_enriched, search_vector (tsvector), created_at, updated_at
+  - [x] 1.2 Define primary key strategy (UUIDv7, per project convention)
+  - [x] 1.3 Define unique constraint: one profile per respondent (respondent_id UNIQUE)
+  - [x] 1.4 Define indexes: GIN on search_vector, btree on lga_id, btree on profession, btree on verified_badge
+  - [x] 1.5 Document PII tiers:
+    - **Anonymous (public):** profession, skills, lga_name, experience_level, verified_badge, bio, portfolio_url
     - **Enriched (authenticated + CAPTCHA + consent_enriched=true):** + first_name, last_name, phone_number (from respondents table via JOIN)
-  - [ ] 1.6 Document verified_badge derivation: `true` when respondent has at least one submission with `fraud_detections.assessor_resolution = 'final_approved'`
-- [ ] Task 2: Design search infrastructure (AC: #2, #5)
-  - [ ] 2.1 Define tsvector column composition with field weights:
+  - [x] 1.6 Document verified_badge derivation: `true` when respondent has at least one submission with `fraud_detections.assessor_resolution = 'final_approved'` — materialized column updated by BullMQ job
+- [x] Task 2: Design search infrastructure (AC: #2, #5)
+  - [x] 2.1 Define tsvector column composition with field weights:
     - A: profession (highest relevance)
     - B: skills (if multi-select, concatenated)
     - C: lga_name
     - D: experience_level
-  - [ ] 2.2 Define trigger function for auto-updating search_vector on INSERT/UPDATE
-  - [ ] 2.3 Document query pattern: `plainto_tsquery()` with `ts_rank()` relevance scoring
-  - [ ] 2.4 Document pg_trgm fallback for typo tolerance ("did you mean?" suggestions)
-  - [ ] 2.5 Evaluate single-DB vs read-replica:
+  - [x] 2.2 Define trigger function for auto-updating search_vector on INSERT/UPDATE
+  - [x] 2.3 Document query pattern: `plainto_tsquery()` with `ts_rank()` relevance scoring
+  - [x] 2.4 Document pg_trgm fallback for typo tolerance ("did you mean?" suggestions)
+  - [x] 2.5 Evaluate single-DB vs read-replica:
     - Current VPS: 2GB RAM, 26% utilization, single PostgreSQL
     - Projected: 300K searchable profiles (1M respondents * 30% consent rate)
     - GIN index size estimate: ~30MB for 300K profiles
-    - Decision criteria: query latency under 250ms on primary at projected scale
-  - [ ] 2.6 Document rate limiting: 30 searches/min/IP + CAPTCHA after 10 searches
-- [ ] Task 3: Design form field mapping (AC: #4)
-  - [ ] 3.1 Map OSLSR_REQUIRED_FIELDS to profile columns:
-    - `skills_possessed` → profession (primary skill extraction strategy for select_one vs select_multiple vs text)
+    - **Decision: Single-DB. No replica needed.** 26% RAM + 30MB index = negligible. Upgrade trigger: p95 > 150ms or connections > 80%.
+  - [x] 2.6 Document rate limiting: 30 searches/min/IP + CAPTCHA after 10 searches
+- [x] Task 3: Design form field mapping (AC: #4)
+  - [x] 3.1 Map OSLSR_REQUIRED_FIELDS to profile columns:
+    - `skills_possessed` → profession (first skill) + skills (all concatenated) — handles select_one, select_multiple, text
     - `years_experience` → experience_level
-    - `lga_id` → lga_id (already on respondents table)
+    - `lga_id` → lga_id + lga_name (resolved via LGA lookup)
     - `consent_marketplace` → extraction gate (only extract if 'Yes')
     - `consent_enriched` → consent_enriched flag on profile
-  - [ ] 3.2 Document extraction from `submissions.raw_data` JSONB: key lookup, fallback variants, missing field handling
-  - [ ] 3.3 Define idempotency strategy: UPSERT on respondent_id (latest submission wins, search_vector auto-updates via trigger)
-  - [ ] 3.4 Document BullMQ worker pattern: hook into existing submission ingestion pipeline (`webhook-ingestion.worker.ts` → `SubmissionProcessingService.processSubmission()` in `submission-processing.service.ts:91`), add marketplace extraction as a downstream step
-- [ ] Task 4: Design `contact_reveals` schema (AC: #6)
-  - [ ] 4.1 Define columns: id, searcher_id (FK to users), profile_id (FK to marketplace_profiles), ip_address, created_at
-  - [ ] 4.2 Define rate-limiting strategy: 50 reveals per user per 24h (query-time check, not Redis — simpler for audit trail)
-  - [ ] 4.3 Document index for rate-limit query: btree on (searcher_id, created_at DESC)
-- [ ] Task 5: Draft type definitions (AC: #7)
-  - [ ] 5.1 MarketplaceProfile interface (anonymous view + enriched view)
-  - [ ] 5.2 MarketplaceSearchParams (query, filters: lga, profession, experience range)
-  - [ ] 5.3 MarketplaceSearchResult (paginated, with ts_rank score)
-  - [ ] 5.4 ContactReveal (logging shape)
-  - [ ] 5.5 ProfileEnrichmentPayload (bio, portfolio_url via edit token)
-- [ ] Task 6: Write spike document
-  - [ ] 6.1 Compile all designs into `_bmad-output/implementation-artifacts/spike-marketplace-data-model.md`
-  - [ ] 6.2 Include: schema DDL, trigger SQL, query examples, type definitions, decision rationale, open questions
-  - [ ] 6.3 Reference architecture.md sections (lines 1795-1891 search strategy, line 912 marketplace search)
+  - [x] 3.2 Document extraction from `submissions.raw_data` JSONB: key lookup, fallback variants, missing field handling
+  - [x] 3.3 Define idempotency strategy: UPSERT on respondent_id (latest submission wins, search_vector auto-updates via trigger)
+  - [x] 3.4 Document BullMQ worker pattern: hook into existing submission ingestion pipeline (`webhook-ingestion.worker.ts` → `SubmissionProcessingService.processSubmission()` in `submission-processing.service.ts:91`), add marketplace extraction as a downstream step via separate queue/worker
+- [x] Task 4: Design `contact_reveals` schema (AC: #6)
+  - [x] 4.1 Define columns: id, searcher_id (FK to users), profile_id (FK to marketplace_profiles), ip_address, created_at
+  - [x] 4.2 Define rate-limiting strategy: 50 reveals per user per 24h (query-time check, not Redis — simpler for audit trail)
+  - [x] 4.3 Document index for rate-limit query: composite btree on (searcher_id, created_at)
+- [x] Task 5: Draft type definitions (AC: #7)
+  - [x] 5.1 MarketplaceProfile interface (anonymous view + enriched view)
+  - [x] 5.2 MarketplaceSearchParams (query, filters: lga, profession, experience range, verifiedOnly)
+  - [x] 5.3 MarketplaceSearchResult (paginated, with ts_rank score, suggestions)
+  - [x] 5.4 ContactReveal (logging shape + rate limit response)
+  - [x] 5.5 ProfileEnrichmentPayload (bio, portfolio_url via edit token)
+- [x] Task 6: Write spike document
+  - [x] 6.1 Compile all designs into `_bmad-output/implementation-artifacts/spike-marketplace-data-model.md`
+  - [x] 6.2 Include: schema DDL, trigger SQL, query examples, type definitions, decision rationale, open questions resolved
+  - [x] 6.3 Reference architecture.md sections (lines 1795-1891 search strategy, line 912 marketplace search)
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] H1: Architecture doc pagination conflict — spike uses offset-based but arch doc specifies cursor-based. Document as explicit override in spike Section 2.3 + Open Questions Q6 [spike:Section 2.3, architecture.md:914]
+- [x] [AI-Review][HIGH] H2: Architecture doc Redis caching omission — arch doc specifies 5-min TTL search cache, spike doesn't address it. Add Section 2.7 with decision [spike:Section 2, architecture.md:906-909]
+- [x] [AI-Review][HIGH] H3: Empty/browse-all query pattern not designed — marketplace needs filter-only browsing when no search term. Add browse-all pattern to Section 2.3 [spike:Section 2.3]
+- [x] [AI-Review][HIGH] H4: Consent dual-source-of-truth — `consentEnriched` on both `respondents` and `marketplace_profiles` without sync strategy. Document canonical source in Section 1.5 [spike:Section 1.5, respondents.ts:32]
+- [x] [AI-Review][MEDIUM] M1: DDL not copy-paste ready — `users` import missing for `contact_reveals.searcherId` FK. Add import to DDL [spike:Section 1.1, Section 4.1]
+- [x] [AI-Review][MEDIUM] M2: LGA FK constraint risk — `marketplace_profiles` adds FK to `lgas.code` but `respondents.lgaId` has none. Invalid LGA codes will cause insertion failures. Document graceful handling [spike:Section 1.1, lgas.ts, respondents.ts:28]
+- [x] [AI-Review][MEDIUM] M3: Trigger deployment mechanism undefined — project uses `db:push` only, no migration infrastructure. Propose concrete deployment approach [spike:Section 2.2]
+- [x] [AI-Review][MEDIUM] M4: `experience_level` values not canonicalized — different forms may use different choice labels, making filtering unreliable. Define canonical enum + mapping [spike:Section 3.1]
+- [x] [AI-Review][LOW] L1: Timestamp convention inconsistency — spike uses `$defaultFn(() => new Date())` but story conventions state `.defaultNow()`. Align to `.defaultNow()` [spike:Section 1.1, Section 4.1]
+- [x] [AI-Review][LOW] L2: `ON DELETE` behavior unspecified on all 3 FKs — should be explicit for government registry with 7-year retention [spike:Section 1.1, Section 4.1]
 
 ## Dev Notes
 
@@ -193,9 +206,26 @@ The marketplace model should follow the same pattern but tier by consent level r
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- Loaded respondents.ts, submissions.ts, questionnaire.ts, fraud-detections.ts, lgas.ts schemas
+- Loaded architecture.md sections: full-text search strategy (lines 1795-1891), marketplace overview (lines 900-920)
+- Loaded submission-processing.service.ts:processSubmission() and webhook-ingestion.worker.ts for BullMQ hook point
+- All 5 open questions resolved with evidence-based decisions
 
 ### Completion Notes List
+- Task 1: Designed marketplace_profiles schema with 14 columns, UUIDv7 PK, respondent_id UNIQUE constraint, 4 indexes (GIN + 3 btree). Added `skills` column (not in original spec) for full-text search breadth. Added `lga_name` denormalization for tsvector (avoids JOIN). PII tier model: anonymous (7 fields) + enriched (3 PII fields via JOIN). Badge = materialized column, not computed.
+- Task 2: Full tsvector config with A-D weights, trigger function SQL, plainto_tsquery + ts_rank query pattern, pg_trgm fallback with similarity threshold 0.3. Single-DB decision: 26% RAM + 30MB GIN = negligible, 20-80ms latency well under 250ms target. Recommended separate connection pool for future replica switch. Rate limiting: 30/min/IP + CAPTCHA after 10 + page cap at 50.
+- Task 3: Mapped all OSLSR_REQUIRED_FIELDS to profile columns. skills_possessed extraction handles select_one/select_multiple/text variants. Documented fallback key variants with logging. UPSERT on respondent_id (latest submission wins). BullMQ pattern: separate marketplace-extraction queue/worker, hooked after successful processSubmission in webhook worker.
+- Task 4: contact_reveals schema with 5 columns, composite index for rate-limit query. 50/user/24h via query-time COUNT check (not Redis) — audit trail for free, max 50 rows scanned.
+- Task 5: 8 TypeScript interfaces/types drafted: MarketplaceProfileAnonymous, MarketplaceProfileEnriched, MarketplaceSearchParams, MarketplaceSearchHit, MarketplaceSearchResult, ContactRevealEntry, ContactRevealResponse, ProfileEnrichmentPayload, EditTokenValidation.
+- Task 6: Comprehensive spike document with schema DDL, trigger SQL, query examples, type definitions, decision rationale, dependency map.
+
+### Change Log
+- 2026-03-06: All 6 tasks complete. Spike document created at `_bmad-output/implementation-artifacts/spike-marketplace-data-model.md`.
+- 2026-03-06: Adversarial code review completed. 10 issues found (4H, 4M, 2L). All 10 fixed in spike document: architecture alignment (pagination override Q6, Redis caching Q7, browse-all pattern), consent canonical source, LGA FK removal, users import, trigger deployment mechanism, experience level canonicalization, timestamp convention, ON DELETE behavior. Action items added and resolved.
 
 ### File List
+- `_bmad-output/implementation-artifacts/spike-marketplace-data-model.md` (new) — Complete spike design document
+- `_bmad-output/implementation-artifacts/prep-4-marketplace-data-model-spike.md` (modified) — Story file updated

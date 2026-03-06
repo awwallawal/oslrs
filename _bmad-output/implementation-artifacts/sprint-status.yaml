@@ -238,7 +238,7 @@ development_status:
   prep-1-fix-respondent-text-uuid-bug: done  # CRITICAL: Fixed 4 text=uuid mismatches in raw SQL (lines 248, 312, 436, 438). 6 new tests. Code review passed 2026-03-05: 4 findings (2M, 2L), all 4 fixed. 33 respondent tests pass, 0 regressions.
   prep-2-deployment-env-var-safety-script: done  # HIGH: Pre-deploy check validates required env vars on VPS before deploying. Prevents crash loops like SEC-3 CORS_ORIGIN. Retro P1. Code review passed 2026-03-05: 7 findings (1H, 4M, 2L), all fixed.
   prep-3-replace-placeholder-pages-with-404: done  # HIGH: Change catch-all "coming soon" to proper "page not found" with dashboard navigation. No placeholder text on government system. Retro P4. Code review passed 2026-03-06: 5 findings (3M, 2L), 4 fixed, 1 deferred (L2 PublicLayout wrap). 1970 web tests pass, 0 regressions.
-  prep-4-marketplace-data-model-spike: ready-for-dev  # HIGH: Anonymous profile extraction, PII stripping, consent model, search strategy (pg_trgm vs full-text). Blocks Stories 7-1, 7-2.
+  prep-4-marketplace-data-model-spike: done  # HIGH: Anonymous profile extraction, PII stripping, consent model, search strategy (pg_trgm vs full-text). Spike + code review complete 2026-03-06. 10 findings (4H, 4M, 2L), all fixed.
   prep-5-public-route-security-spike: ready-for-dev  # HIGH: Threat model for unauthenticated routes: rate limiting, bot protection, search injection, CAPTCHA strategy. Blocks Stories 7-2, 7-4, 7-6.
   prep-6-commit-history-retro-tool: ready-for-dev  # MEDIUM: Git log summary script for future retrospectives. Anomaly-driven analysis. Retro P2.
   prep-7-email-backpressure-implementation: ready-for-dev  # MEDIUM: Resend quota awareness + batch digest notifications. Retro TD3.
@@ -260,8 +260,8 @@ development_status:
   7-1-marketplace-data-extraction-worker: ready-for-dev  # Depends on: prep-4 (marketplace spike)
   7-2-public-marketplace-search-interface: ready-for-dev  # Depends on: prep-4 (marketplace spike), prep-5 (security spike)
   7-3-anonymous-profile-government-verified-badges: ready-for-dev
-  7-4-authenticated-contact-reveal-captcha: backlog  # Depends on: prep-5 (security spike)
-  7-5-profile-enrichment-via-edit-token: backlog
+  7-4-authenticated-contact-reveal-captcha: ready-for-dev  # Depends on: prep-5 (security spike)
+  7-5-profile-enrichment-via-edit-token: ready-for-dev
   7-6-contact-view-logging-rate-limiting: backlog  # Depends on: prep-5 (security spike)
   epic-7-retrospective: optional
 
