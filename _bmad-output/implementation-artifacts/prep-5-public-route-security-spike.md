@@ -1,6 +1,6 @@
 # Story 7.prep-5: Public Route Security Spike
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -34,70 +34,70 @@ Security hardening (SEC-1 through SEC-4) established the foundation (CSP, mass a
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Threat model for marketplace routes (AC: #4)
-  - [ ] 1.1 Enumerate all planned public routes and their data exposure:
+- [x] Task 1: Threat model for marketplace routes (AC: #4)
+  - [x] 1.1 Enumerate all planned public routes and their data exposure:
     - `GET /marketplace` — search/list anonymous profiles (no auth)
     - `GET /marketplace/profile/:id` — single anonymous profile view (no auth)
     - `POST /marketplace/profile/:id/reveal` — contact reveal (auth + CAPTCHA required)
     - `POST /marketplace/profile/:id/edit-token` — request edit token via SMS (no auth, CAPTCHA required)
     - `PUT /marketplace/profile/:id` — edit profile with token (token auth)
-  - [ ] 1.2 For each route, document attack vectors:
+  - [x] 1.2 For each route, document attack vectors:
     - Scraping (automated bulk requests)
     - Enumeration (sequential ID probing)
     - Injection (search query manipulation)
     - Abuse (rate limit bypass, CAPTCHA solving services)
     - PII leakage (information disclosure through error messages or timing)
-  - [ ] 1.3 Document mitigations per vector and residual risk assessment
-  - [ ] 1.4 Define data exposure rules: what is visible without auth, with auth, with auth + CAPTCHA + consent
-- [ ] Task 2: Rate limiting architecture (AC: #1, #7)
-  - [ ] 2.1 Design tiered rate limits for marketplace routes:
+  - [x] 1.3 Document mitigations per vector and residual risk assessment
+  - [x] 1.4 Define data exposure rules: what is visible without auth, with auth, with auth + CAPTCHA + consent
+- [x] Task 2: Rate limiting architecture (AC: #1, #7)
+  - [x] 2.1 Design tiered rate limits for marketplace routes:
     - `/marketplace` search: 30 req/min/IP (architecture.md spec)
     - `/marketplace/profile/:id` view: 100 req/min/IP
     - `/marketplace/profile/:id/reveal` contact: 50 reveals/24h/user (epics.md Story 7.6 spec)
     - `/marketplace/profile/:id/edit-token`: 3 req/day/NIN (architecture.md spec)
-  - [ ] 2.2 Define Redis key patterns following existing convention (`rl:marketplace:search:${ip}`, etc.)
-  - [ ] 2.3 Document integration with existing `express-rate-limit` + `rate-limit-redis` stack
-  - [ ] 2.4 Design response format for 429 errors (match existing JSON error shape with `code` field)
-  - [ ] 2.5 Evaluate IP-based vs fingerprint-based limiting (IP + fingerprint hybrid for reveal endpoint)
-- [ ] Task 3: CAPTCHA strategy (AC: #2, #7)
-  - [ ] 3.1 Document reuse of existing hCaptcha infrastructure (`middleware/captcha.ts`)
-  - [ ] 3.2 Define CAPTCHA trigger conditions for marketplace:
+  - [x] 2.2 Define Redis key patterns following existing convention (`rl:marketplace:search:${ip}`, etc.)
+  - [x] 2.3 Document integration with existing `express-rate-limit` + `rate-limit-redis` stack
+  - [x] 2.4 Design response format for 429 errors (match existing JSON error shape with `code` field)
+  - [x] 2.5 Evaluate IP-based vs fingerprint-based limiting (IP + fingerprint hybrid for reveal endpoint)
+- [x] Task 3: CAPTCHA strategy (AC: #2, #7)
+  - [x] 3.1 Document reuse of existing hCaptcha infrastructure (`middleware/captcha.ts`)
+  - [x] 3.2 Define CAPTCHA trigger conditions for marketplace:
     - Contact reveal: always required (Story 7.4 spec)
     - Search: after 10 searches per session (architecture.md spec)
     - Edit token request: always required
-  - [ ] 3.3 Design progressive CAPTCHA escalation: normal → enterprise difficulty after repeated failures
-  - [ ] 3.4 Document CSP implications: existing hCaptcha CSP directives (app.ts:93-126) already cover script/style/frame/connect sources
-  - [ ] 3.5 Plan `optionalCaptcha` middleware usage for search (existing middleware variant at captcha.ts:129-141)
-- [ ] Task 4: Bot detection strategy (AC: #3)
-  - [ ] 4.1 Evaluate device fingerprinting options:
+  - [x] 3.3 Design progressive CAPTCHA escalation: normal → enterprise difficulty after repeated failures
+  - [x] 3.4 Document CSP implications: existing hCaptcha CSP directives (app.ts:93-126) already cover script/style/frame/connect sources
+  - [x] 3.5 Plan `optionalCaptcha` middleware usage for search (existing middleware variant at captcha.ts:129-141)
+- [x] Task 4: Bot detection strategy (AC: #3)
+  - [x] 4.1 Evaluate device fingerprinting options:
     - Server-side: request header analysis (User-Agent, Accept-Language, Accept-Encoding consistency)
     - Client-side: FingerprintJS (free tier) vs custom canvas/WebGL fingerprint
     - Recommendation with RAM/bundle size impact analysis
-  - [ ] 4.2 Design honeypot fields for search form (hidden input that bots fill, humans don't)
-  - [ ] 4.3 Define User-Agent validation rules (block known bot patterns, allow search engines for SEO)
-  - [ ] 4.4 Design pagination safety: max 100 results per page, cursor-based (not offset), no total count exposure
-  - [ ] 4.5 Evaluate whether a full fingerprinting library is needed at current scale vs simpler header-based heuristics
-- [ ] Task 5: Search input validation & injection prevention (AC: #5)
-  - [ ] 5.1 Design Zod schema for marketplace search params:
+  - [x] 4.2 Design honeypot fields for search form (hidden input that bots fill, humans don't)
+  - [x] 4.3 Define User-Agent validation rules (block known bot patterns, allow search engines for SEO)
+  - [x] 4.4 Design pagination safety: max 100 results per page, offset-based with 10K depth cap (per prep-4 decision), no total count exposure
+  - [x] 4.5 Evaluate whether a full fingerprinting library is needed at current scale vs simpler header-based heuristics
+- [x] Task 5: Search input validation & injection prevention (AC: #5)
+  - [x] 5.1 Design Zod schema for marketplace search params:
     - `query`: string, max 200 chars, sanitized (strip SQL/HTML)
     - `lga`: string, validated against LGA codes
     - `profession`: string, validated against known professions list
     - `experience_min`/`experience_max`: integer, bounded range
     - `page_cursor`: string, opaque cursor token
     - `page_size`: integer, max 100
-  - [ ] 5.2 Document tsvector injection prevention:
+  - [x] 5.2 Document tsvector injection prevention:
     - `plainto_tsquery()` is safe (no operator injection, unlike `to_tsquery()`)
     - Parameterized queries via Drizzle `sql` template (already project standard)
     - pg_trgm similarity queries also parameterized
-  - [ ] 5.3 Document error response sanitization: never expose internal column names, query plans, or stack traces in public route errors
-- [ ] Task 6: Env var and infrastructure requirements (AC: #6)
-  - [ ] 6.1 List any new env vars needed (e.g., `MARKETPLACE_SEARCH_RATE_LIMIT`, fingerprint API key if using external service)
-  - [ ] 6.2 Confirm pg_trgm extension availability on production PostgreSQL (Docker container) — document `CREATE EXTENSION IF NOT EXISTS pg_trgm;` if needed
-  - [ ] 6.3 Assess Redis memory impact of marketplace rate-limit keys at projected scale
-- [ ] Task 7: Write spike document
-  - [ ] 7.1 Compile all designs into `_bmad-output/implementation-artifacts/spike-public-route-security.md`
-  - [ ] 7.2 Include: threat model matrix, rate limit table, CAPTCHA flow diagrams, Zod schemas, middleware patterns, env var list, open questions
-  - [ ] 7.3 Reference architecture.md security sections and existing middleware implementations
+  - [x] 5.3 Document error response sanitization: never expose internal column names, query plans, or stack traces in public route errors
+- [x] Task 6: Env var and infrastructure requirements (AC: #6)
+  - [x] 6.1 List any new env vars needed (e.g., `MARKETPLACE_SEARCH_RATE_LIMIT`, fingerprint API key if using external service)
+  - [x] 6.2 Confirm pg_trgm extension availability on production PostgreSQL (Docker container) — document `CREATE EXTENSION IF NOT EXISTS pg_trgm;` if needed
+  - [x] 6.3 Assess Redis memory impact of marketplace rate-limit keys at projected scale
+- [x] Task 7: Write spike document
+  - [x] 7.1 Compile all designs into `_bmad-output/implementation-artifacts/spike-public-route-security.md`
+  - [x] 7.2 Include: threat model matrix, rate limit table, CAPTCHA flow diagrams, Zod schemas, middleware patterns, env var list, open questions
+  - [x] 7.3 Reference architecture.md security sections and existing middleware implementations
 
 ## Dev Notes
 
@@ -214,12 +214,55 @@ From `architecture.md`:
 - [Source: app.ts:86-139] — Helmet CSP configuration with hCaptcha domains
 - [Source: app.ts:20-54] — Environment validation (requiredProdVars)
 
+## Change Log
+
+- 2026-03-06: Spike complete — comprehensive threat model, rate limiting architecture, CAPTCHA strategy, bot detection approach, search validation schemas, env var assessment, and implementation reference compiled into spike-public-route-security.md
+- 2026-03-06: Code review — 8 findings (1H, 5M, 2L), all 8 fixed in spike doc + story file. H1 code sample aligned to project conventions (ioredis import, isTestMode, skip, validate, @ts-expect-error, pino logger). M1 task 4.4 pagination description corrected. M2 NIN hash upgraded to HMAC-SHA256. M3 error shape aligned to existing `status:'error'` convention. M4 edit-token data flow documented. M5 optionalCaptcha non-usage explained. L1 bot score capped at 100. L2 428 caveat added.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Claude Opus 4.6
+
 ### Debug Log References
+
+N/A — research spike, no production code or test execution.
 
 ### Completion Notes List
 
+- **Task 1 (Threat Model):** 5 routes enumerated with attack vectors (scraping, enumeration, injection, abuse, PII leakage). Mitigations documented with residual risk assessment. 3-tier data exposure model: public (anonymous fields), authenticated+CAPTCHA (PII with consent), never-exposed (NIN, surveys).
+- **Task 2 (Rate Limiting):** 5 tiered rate limits designed matching architecture.md specs. Redis key patterns follow existing `rl:` prefix convention. NIN-based key uses SHA-256 hash for PII safety. Full middleware code pattern documented. IP-based for public routes, user-ID-based for auth routes.
+- **Task 3 (CAPTCHA):** Full reuse of existing hCaptcha — no new library or env vars. 3 trigger conditions defined. Progressive escalation deferred (free tier lacks difficulty API). Search CAPTCHA uses IP-based Redis counter with 5-min window and 428 status code.
+- **Task 4 (Bot Detection):** Header-based heuristics recommended over FingerprintJS (0KB vs 30KB, sufficient at current scale). Honeypot field designed (`website`, off-screen positioned). UA validation: allow bots on search (SEO), block on action routes. Offset pagination with max 10K depth cap (per prep-4 decision).
+- **Task 5 (Search Validation):** Complete Zod schema with honeypot field. `plainto_tsquery()` confirmed as hard rule (safe by design). Error response sanitization pattern documented. pg_trgm queries also parameterized.
+- **Task 6 (Env/Infra):** No new env vars needed — all controls use existing Redis + hCaptcha. pg_trgm extension documented for migration. Redis memory impact assessed at ~1.1MB (negligible).
+- **Task 7 (Spike Document):** 9-section document compiled at `spike-public-route-security.md`. All 6 open questions resolved. Implementation reference with middleware chains per route.
+
+### Key Decisions
+
+1. **No device fingerprinting library** — header-based heuristics only. Upgrade path documented if monitoring reveals abuse.
+2. **No progressive CAPTCHA** — standard difficulty at launch. hCaptcha free tier is sufficient.
+3. **IP-based CAPTCHA session tracking** — Redis counter, 5-min window, 428 status for CAPTCHA-required response.
+4. **No new env vars** — all security controls use existing infrastructure.
+5. **CSP stays in report-only mode** — enforcement is a separate change for post-Epic 7.
+6. **Offset pagination** (per prep-4 decision) with max depth cap at 10,000 results.
+
+### Review Follow-ups (AI)
+
+All 8 findings fixed during code review. No open action items.
+
+- [x] [AI-Review][HIGH] H1: Code sample wrong Redis import (`createClient` → `Redis`) + missing 6 project-standard patterns (isTestMode, skip, validate, @ts-expect-error, pino, event logging) [spike-public-route-security.md:§2.3] — **FIXED**
+- [x] [AI-Review][MEDIUM] M1: Task 4.4 says "cursor-based" but spike chose offset-based per prep-4 [prep-5-public-route-security-spike.md:task-4.4] — **FIXED**
+- [x] [AI-Review][MEDIUM] M2: Unsalted SHA-256 for NIN rate-limit key trivially reversible — upgraded to HMAC-SHA256 [spike-public-route-security.md:§2.2] — **FIXED**
+- [x] [AI-Review][MEDIUM] M3: Error response shape inconsistency (numeric status vs existing string 'error') — aligned to project convention [spike-public-route-security.md:§2.4] — **FIXED**
+- [x] [AI-Review][MEDIUM] M4: Edit-token rate-limit key source unresolved — NIN-in-body data flow documented [spike-public-route-security.md:§2.2] — **FIXED**
+- [x] [AI-Review][MEDIUM] M5: optionalCaptcha referenced but not used — controller-level rationale documented [spike-public-route-security.md:§3.2] — **FIXED**
+- [x] [AI-Review][LOW] L1: Bot score heuristics exceed 0-100 range — Math.min cap added [spike-public-route-security.md:§4.1] — **FIXED**
+- [x] [AI-Review][LOW] L2: 428 status code non-standard for CAPTCHA — caveat with 403 fallback noted [spike-public-route-security.md:§3.3] — **FIXED**
+
 ### File List
+
+- `_bmad-output/implementation-artifacts/spike-public-route-security.md` (MODIFIED) — 7 review fixes applied
+- `_bmad-output/implementation-artifacts/prep-5-public-route-security-spike.md` (MODIFIED) — Story file updated with review notes + task 4.4 fix
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED) — Status updated
