@@ -35,38 +35,28 @@ export interface MarketplaceProfileEnriched extends MarketplaceProfileAnonymous 
 export type MarketplaceProfileView = MarketplaceProfileAnonymous | MarketplaceProfileEnriched;
 
 // ============================================================================
-// Search Types
+// Search Types (cursor-based pagination — Story 7-2)
 // ============================================================================
 
-/** Search request parameters */
+/** Search request parameters (cursor-based pagination) */
 export interface MarketplaceSearchParams {
-  query: string;
+  q?: string;
   lgaId?: string;
   profession?: string;
-  experienceLevelMin?: string;
-  experienceLevelMax?: string;
-  verifiedOnly?: boolean;
-  page?: number;
+  experienceLevel?: string;
+  cursor?: string;
   pageSize?: number;
 }
 
-/** Individual search result with relevance score */
-export interface MarketplaceSearchHit {
-  profile: MarketplaceProfileAnonymous;
-  rank: number;
-}
-
-/** Paginated search results */
-export interface MarketplaceSearchResult {
-  data: MarketplaceSearchHit[];
-  meta: {
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-    query: string;
-  };
-  suggestions?: string[];
+/** Individual search result item — anonymous fields with optional relevance score */
+export interface MarketplaceSearchResultItem {
+  id: string;
+  profession: string | null;
+  lgaName: string | null;
+  experienceLevel: string | null;
+  verifiedBadge: boolean;
+  bio: string | null;
+  relevanceScore: number | null;
 }
 
 // ============================================================================

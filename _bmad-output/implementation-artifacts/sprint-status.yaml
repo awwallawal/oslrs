@@ -258,7 +258,7 @@ development_status:
   # VPS Strategy: Start on current 2GB DigitalOcean, upgrade only if monitoring (Story 6-2) triggers thresholds.
   epic-7: in-progress
   7-1-marketplace-data-extraction-worker: done  # Depends on: prep-4 (marketplace spike). Completed 2026-03-06: 7 tasks, 32 new tests, 0 regressions. Code review passed 2026-03-06: 7 findings (1H, 4M, 2L), 6 fixed, 1 noted (L2 RegistryTestPage cleanup).
-  7-2-public-marketplace-search-interface: ready-for-dev  # Depends on: prep-4 (marketplace spike), prep-5 (security spike)
+  7-2-public-marketplace-search-interface: done  # Depends on: prep-4 (marketplace spike), prep-5 (security spike). Completed 2026-03-06: 10 tasks, 52 new tests (34 API + 18 web), 0 regressions. Code review passed: 9 findings (2H, 5M, 2L), all 9 auto-fixed.
   7-3-anonymous-profile-government-verified-badges: ready-for-dev
   7-4-authenticated-contact-reveal-captcha: ready-for-dev  # Depends on: prep-5 (security spike)
   7-5-profile-enrichment-via-edit-token: ready-for-dev

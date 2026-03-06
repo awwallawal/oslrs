@@ -22,6 +22,7 @@ import systemRoutes from './system.routes.js';
 import remunerationRoutes from './remuneration.routes.js';
 import viewAsRoutes from './view-as.routes.js';
 import viewAsDataRoutes from './view-as-data.routes.js';
+import marketplaceRoutes from './marketplace.routes.js';
 
 const router = Router();
 
@@ -47,6 +48,7 @@ router.use('/system', systemRoutes);
 router.use('/remuneration', remunerationRoutes);
 router.use('/view-as', viewAsRoutes);
 router.use('/view-as/data', viewAsDataRoutes);
+router.use('/marketplace', marketplaceRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

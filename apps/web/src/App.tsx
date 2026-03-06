@@ -112,6 +112,7 @@ const ExportPage = lazy(() => import('./features/dashboard/pages/ExportPage'));
 const PublicUserHome = lazy(() => import('./features/dashboard/pages/PublicUserHome'));
 const PublicSurveysPage = lazy(() => import('./features/dashboard/pages/PublicSurveysPage'));
 const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/PublicMarketplacePage'));
+const MarketplaceSearchPage = lazy(() => import('./features/marketplace/pages/MarketplaceSearchPage'));
 const PublicSupportPage = lazy(() => import('./features/dashboard/pages/PublicSupportPage'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
@@ -411,10 +412,14 @@ function App() {
                 }
               />
 
-              {/* Marketplace (placeholder for Epic 7) */}
+              {/* Marketplace — public search (Story 7-2) */}
               <Route
                 path="marketplace"
-                element={<Navigate to="/#marketplace" replace />}
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <MarketplaceSearchPage />
+                  </Suspense>
+                }
               />
 
               {/* Public Staff Verification */}

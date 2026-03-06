@@ -6,12 +6,12 @@ import pino from 'pino';
 const logger = pino({ name: 'login-rate-limit' });
 
 // Check if we're in test mode (vitest sets VITEST env var)
-const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
+export const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
 // Redis client (singleton) - only initialize if not in test mode
 let redisClient: Redis | null = null;
 
-const getRedisClient = () => {
+export const getRedisClient = () => {
   if (!redisClient && !isTestMode()) {
     redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   }
@@ -19,7 +19,7 @@ const getRedisClient = () => {
 };
 
 // Skip function used by all rate limiters in test mode
-const shouldSkipRateLimit = () => isTestMode();
+export const shouldSkipRateLimit = () => isTestMode();
 
 /**
  * Rate limiter for login attempts
