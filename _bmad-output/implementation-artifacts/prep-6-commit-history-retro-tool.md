@@ -1,6 +1,6 @@
 # Story 7.prep-6: Commit History Retro Tool
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -27,23 +27,23 @@ This is a small utility script. Proposed by Awwal from his other project.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create the retro summary script (AC: #1, #2, #3, #4, #5)
-  - [ ] 1.1 Create `scripts/retro-commits.sh` (shell script, no Node.js dependency)
-  - [ ] 1.2 Accept arguments: `--from <date>` and `--to <date>` (ISO format), or `--epic <number>` to auto-derive date range from sprint-status comments
-  - [ ] 1.3 Run `git log --oneline --format="%h %s" --after=<from> --before=<to>` to get commits
-  - [ ] 1.4 Parse commit messages using conventional commit format: `type(scope): message`
-  - [ ] 1.5 Group by story key extraction:
+- [x] Task 1: Create the retro summary script (AC: #1, #2, #3, #4, #5)
+  - [x] 1.1 Create `scripts/retro-commits.sh` (shell script, no Node.js dependency)
+  - [x] 1.2 Accept arguments: `--from <date>` and `--to <date>` (ISO format), or `--epic <number>` to auto-derive date range from sprint-status comments
+  - [x] 1.3 Run `git log --oneline --format="%h %s" --after=<from> --before=<to>` to get commits
+  - [x] 1.4 Parse commit messages using conventional commit format: `type(scope): message`
+  - [x] 1.5 Group by story key extraction:
     - Match `Story X-Y` or `(X-Y)` in message → story key
     - Match `SEC-N` → security story key
     - Match `prep-N` → prep task key
     - Match scope like `(respondent)`, `(export)` → associate with known stories if possible
     - Fallback: "Uncategorized"
-  - [ ] 1.6 Flag anomalies per story group:
+  - [x] 1.6 Flag anomalies per story group:
     - High commit count: >5 commits for a single story (suggests hidden complexity)
     - Fix cluster: >2 `fix:` commits for same story (suggests rework or discovered issues)
     - CI commits: any `ci:` prefixed commits (suggests pipeline issues)
     - Build fix pattern: `fix(web): resolve TypeScript` or similar (suggests type errors slipped through)
-  - [ ] 1.7 Output formatted summary:
+  - [x] 1.7 Output formatted summary:
     ```
     ## Epic 6 Commit Summary (2026-02-25 to 2026-03-04)
 
@@ -64,11 +64,11 @@ This is a small utility script. Proposed by Awwal from his other project.
     e42ddc6 fix(web): remove debug RegistryTestPage import
     c77de6a chore: misc fixes, route wiring, docs
     ```
-  - [ ] 1.8 Default behavior (no args): read sprint-status.yaml `# updated:` comment to infer most recent epic date range
-- [ ] Task 2: Verify and document (AC: #6)
-  - [ ] 2.1 Test the script against Epic 6 commit history (known: 23 items, ~30 commits)
-  - [ ] 2.2 Add usage docs to script header comment
-  - [ ] 2.3 `pnpm test` — all tests pass, zero regressions (script has no effect on app code)
+  - [x] 1.8 Default behavior (no args): read sprint-status.yaml `# updated:` comment to infer most recent epic date range
+- [x] Task 2: Verify and document (AC: #6)
+  - [x] 2.1 Test the script against Epic 6 commit history (known: 23 items, ~30 commits)
+  - [x] 2.2 Add usage docs to script header comment
+  - [x] 2.3 `pnpm test` — all tests pass, zero regressions (script has no effect on app code)
 
 ## Dev Notes
 
@@ -136,12 +136,32 @@ The script is NOT a raw git log reformatter. It specifically surfaces signals th
 - [Source: epic-6-retro-2026-03-04.md#Prep Tasks prep-6] — Task definition
 - [Source: MEMORY.md#Process Patterns] — "Commit history as retro input: Selective, anomaly-driven"
 
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][MEDIUM] 47% uncategorized rate reduces utility — added tip line when uncategorized > 30% suggesting commit message improvements [retro-commits.sh:280-284]
+
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- Initial shell script used per-line grep subprocess calls which caused 60+ second hangs on Git Bash for Windows (MSYS2 fork emulation is extremely slow). Rewrote core grouping logic as a single awk pass — runs in <1 second.
+- `grep -c` returns exit code 1 when count is 0, which combined with `|| echo "0"` inside `$()` produces "0\n0" (double output). Fixed by using `|| true` outside the subshell.
+- Story key regex `[0-9]+[.-][0-9]+[a-z]?` didn't capture sub-epic keys like `2.5-1`. Extended to `[0-9]+[.-][0-9]+[a-z]?(-[0-9]+[a-z]?)?`.
 
 ### Completion Notes List
+- Created `scripts/retro-commits.sh` — dependency-free shell script (awk-based single-pass)
+- Three modes: `--epic N`, `--from/--to`, and auto-detect (latest done epic from sprint-status.yaml)
+- Story key extraction: 7 patterns covering `(Story X-Y)`, `(SEC-N)`, `(prep-N)`, `(ci-fix)`, `(perf-N)`, body-text variants
+- Anomaly detection: high commit count (>5), fix clusters (>2), CI commits, build/type fix patterns
+- Tested against Epic 6 (30 commits, 16 stories, 4 anomalies) and Epic 2.5 (45 commits, 13 stories, 5 anomalies)
+- Decimal epic numbers (2.5, 1.5) and sub-epic story keys (2.5-1, 1.5-3) work correctly
+- All 1,970 web tests + API tests pass, zero regressions
 
 ### File List
+- `scripts/retro-commits.sh` (new)
+
+### Change Log
+- 2026-03-06: Created commit history retro tool (prep-6)
+- 2026-03-06: Code review fix — M3: added uncategorized rate tip when > 30%
