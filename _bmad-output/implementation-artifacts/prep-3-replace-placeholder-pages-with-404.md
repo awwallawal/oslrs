@@ -1,6 +1,6 @@
 # Story 7.prep-3: Replace Placeholder Pages with Proper 404
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -26,21 +26,21 @@ Discovered during Awwal's UAT in Epic 6. Team agreement A11: "No 'coming soon' p
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create NotFoundPage component for dashboard context (AC: #1, #2, #3)
-  - [ ] 1.1 Create `apps/web/src/features/dashboard/pages/NotFoundPage.tsx`
-  - [ ] 1.2 Centered card layout matching existing error page patterns (see UnauthorizedPage at App.tsx:173-190 for precedent)
-  - [ ] 1.3 Heading: "Page not found" (or similar)
-  - [ ] 1.4 Message: friendly, non-technical (e.g., "The page you're looking for doesn't exist or has been moved.")
-  - [ ] 1.5 "Back to Dashboard" button — navigate to `/dashboard/:role` using current user's role from auth context
-  - [ ] 1.6 Use OSLRS error color scheme (Error-600 Crimson `#DC2626` for icon/accent, Error-100 `#FEE2E2` optional background)
-  - [ ] 1.7 Mobile-responsive within DashboardLayout's `<Outlet />`
-- [ ] Task 2: Create PublicNotFoundPage for global context (AC: #4)
-  - [ ] 2.1 Create `apps/web/src/pages/PublicNotFoundPage.tsx` (or similar location matching public page patterns)
-  - [ ] 2.2 Full-page 404 with "Go to Homepage" button (navigates to `/`)
-  - [ ] 2.3 Consistent styling with OSLRS public site design
-- [ ] Task 3: Replace all 7 role catch-all routes (AC: #1, #5)
-  - [ ] 3.1 In `App.tsx`, replace each `<PlaceholderPage title="... Feature" />` with `<NotFoundPage />`
-  - [ ] 3.2 All 7 routes to update (line numbers from current file):
+- [x] Task 1: Create NotFoundPage component for dashboard context (AC: #1, #2, #3)
+  - [x] 1.1 Create `apps/web/src/features/dashboard/pages/NotFoundPage.tsx`
+  - [x] 1.2 Centered card layout matching existing error page patterns (see UnauthorizedPage at App.tsx:173-190 for precedent)
+  - [x] 1.3 Heading: "Page not found" (or similar)
+  - [x] 1.4 Message: friendly, non-technical (e.g., "The page you're looking for doesn't exist or has been moved.")
+  - [x] 1.5 "Back to Dashboard" button — navigate to `/dashboard/:role` using current user's role from auth context
+  - [x] 1.6 Use OSLRS error color scheme (Error-600 Crimson `#DC2626` for icon/accent, Error-100 `#FEE2E2` optional background)
+  - [x] 1.7 Mobile-responsive within DashboardLayout's `<Outlet />`
+- [x] Task 2: Create PublicNotFoundPage for global context (AC: #4)
+  - [x] 2.1 Create `apps/web/src/pages/PublicNotFoundPage.tsx` (or similar location matching public page patterns)
+  - [x] 2.2 Full-page 404 with "Go to Homepage" button (navigates to `/`)
+  - [x] 2.3 Consistent styling with OSLRS public site design
+- [x] Task 3: Replace all 7 role catch-all routes (AC: #1, #5)
+  - [x] 3.1 In `App.tsx`, replace each `<PlaceholderPage title="... Feature" />` with `<NotFoundPage />`
+  - [x] 3.2 All 7 routes to update (line numbers from current file):
     - Line 743: `/dashboard/super-admin/*`
     - Line 831: `/dashboard/supervisor/*`
     - Line 910: `/dashboard/enumerator/*`
@@ -48,20 +48,20 @@ Discovered during Awwal's UAT in Epic 6. Team agreement A11: "No 'coming soon' p
     - Line 1049: `/dashboard/assessor/*`
     - Line 1128: `/dashboard/official/*`
     - Line 1189: `/dashboard/public/*`
-- [ ] Task 4: Replace global catch-all route (AC: #4)
-  - [ ] 4.1 In `App.tsx` line 1204, replace `<Navigate to="/" replace />` with `<PublicNotFoundPage />`
-- [ ] Task 5: Remove PlaceholderPage component (AC: #5)
-  - [ ] 5.1 Delete the PlaceholderPage definition from `App.tsx:157-168`
-  - [ ] 5.2 Remove any imports of PlaceholderPage
-  - [ ] 5.3 Replace `/marketplace` route (App.tsx line ~431): change `<PlaceholderPage title="Skills Marketplace" />` to `<Navigate to="/#marketplace" replace />` — the homepage already has MarketplacePreviewSection with "Skills marketplace coming soon", so users land somewhere useful. Import `Navigate` from react-router-dom (already imported in this file).
-  - [ ] 5.4 Verify no other usages of PlaceholderPage remain anywhere in the codebase
-- [ ] Task 6: Add tests (AC: #7)
-  - [ ] 6.1 Test NotFoundPage renders heading, message, and navigation button
-  - [ ] 6.2 Test "Back to Dashboard" button links to correct role-based path
-  - [ ] 6.3 Test PublicNotFoundPage renders with "Go to Homepage" link
-- [ ] Task 7: Verify (AC: #6, #7)
-  - [ ] 7.1 Confirm "coming soon" text in component bodies is untouched. Representative examples: SuperAdminHome:136, PublicUserHome:166+181, MarketplacePreviewSection:43, EmployersPage:308, SearchBox:25+28, ContactPage:142, Footer:132, MobileNav:199+218, CoverageSection:16, NavDropdown:158. Note: this list is not exhaustive — only verify that no route catch-alls contain "coming soon" text. Legitimate feature-preview instances in component bodies are intentional and must remain.
-  - [ ] 7.2 `pnpm test` — all tests pass, zero regressions
+- [x] Task 4: Replace global catch-all route (AC: #4)
+  - [x] 4.1 In `App.tsx` line 1204, replace `<Navigate to="/" replace />` with `<PublicNotFoundPage />`
+- [x] Task 5: Remove PlaceholderPage component (AC: #5)
+  - [x] 5.1 Delete the PlaceholderPage definition from `App.tsx:157-168`
+  - [x] 5.2 Remove any imports of PlaceholderPage
+  - [x] 5.3 Replace `/marketplace` route (App.tsx line ~431): change `<PlaceholderPage title="Skills Marketplace" />` to `<Navigate to="/#marketplace" replace />` — the homepage already has MarketplacePreviewSection with "Skills marketplace coming soon", so users land somewhere useful. Import `Navigate` from react-router-dom (already imported in this file).
+  - [x] 5.4 Verify no other usages of PlaceholderPage remain anywhere in the codebase
+- [x] Task 6: Add tests (AC: #7)
+  - [x] 6.1 Test NotFoundPage renders heading, message, and navigation button
+  - [x] 6.2 Test "Back to Dashboard" button links to correct role-based path
+  - [x] 6.3 Test PublicNotFoundPage renders with "Go to Homepage" link
+- [x] Task 7: Verify (AC: #6, #7)
+  - [x] 7.1 Confirm "coming soon" text in component bodies is untouched. Representative examples: SuperAdminHome:136, PublicUserHome:166+181, MarketplacePreviewSection:43, EmployersPage:308, SearchBox:25+28, ContactPage:142, Footer:132, MobileNav:199+218, CoverageSection:16, NavDropdown:158. Note: this list is not exhaustive — only verify that no route catch-alls contain "coming soon" text. Legitimate feature-preview instances in component bodies are intentional and must remain.
+  - [x] 7.2 `pnpm test` — all tests pass, zero regressions
 
 ## Dev Notes
 
@@ -149,9 +149,37 @@ These are intentional feature-preview callouts in component bodies — do NOT re
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+None — clean implementation with no blockers.
 
 ### Completion Notes List
+- Created `NotFoundPage` component for dashboard context: centered card with error icon (red-600), "Page not found" heading, friendly message, and "Back to Dashboard" link that dynamically resolves to the current user's role-based dashboard path using `roleRouteMap` from sidebarConfig.
+- Created `PublicNotFoundPage` component for global 404: full-page layout matching UnauthorizedPage aesthetics with "Go to Homepage" link.
+- Replaced all 7 role catch-all routes in App.tsx from `PlaceholderPage` to `NotFoundPage` wrapped in Suspense.
+- Replaced global catch-all from `<Navigate to="/" replace />` to `PublicNotFoundPage`.
+- Replaced `/marketplace` route from `PlaceholderPage` to `<Navigate to="/#marketplace" replace />`.
+- Completely removed `PlaceholderPage` component definition — zero references remain in codebase.
+- Verified all 30+ "coming soon" instances in component bodies remain untouched (AC #6).
+- 8 new tests: 5 for NotFoundPage (heading, message, role-based link for super_admin, data_entry_clerk, fallback), 3 for PublicNotFoundPage (heading, message, homepage link).
+- Full regression suite: 172 test files, 1970 tests pass, 0 regressions.
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][MEDIUM] M1: Test shared mutable state — `NotFoundPage.test.tsx` mutated shared `mockUser` without `afterEach` cleanup. Added `afterEach` reset, removed manual resets. [NotFoundPage.test.tsx:12,27-29]
+- [x] [AI-Review][MEDIUM] M2: Missing `aria-hidden="true"` on decorative SVG icons in both 404 pages. Added to comply with WCAG 2.1 AA. [NotFoundPage.tsx:16, PublicNotFoundPage.tsx:8]
+- [x] [AI-Review][MEDIUM] M3: `ScrollToTop` overrides `/#marketplace` hash scroll — updated to skip `scrollTo(0,0)` when URL has hash fragment. [App.tsx:190]
+- [x] [AI-Review][LOW] L1: Unnecessary `<Suspense>` wrapping synchronous `<Navigate>` on `/marketplace` route. Removed wrapper. [App.tsx:416-418]
+- [ ] [AI-Review][LOW] L2: `PublicNotFoundPage` renders without `PublicLayout` (no header/footer/nav). Follows `UnauthorizedPage` precedent but is a UX gap for public visitors. Consider wrapping in PublicLayout in a future polish pass.
+
+### Change Log
+- 2026-03-06: Code review fixes — test isolation (afterEach), aria-hidden on SVGs, ScrollToTop hash-aware, remove unnecessary Suspense. (review)
+- 2026-03-06: Replaced placeholder pages with proper 404 pages. PlaceholderPage removed. 8 tests added. (prep-3)
 
 ### File List
+- apps/web/src/features/dashboard/pages/NotFoundPage.tsx (new, reviewed)
+- apps/web/src/pages/PublicNotFoundPage.tsx (new, reviewed)
+- apps/web/src/features/dashboard/pages/__tests__/NotFoundPage.test.tsx (new, reviewed)
+- apps/web/src/pages/__tests__/PublicNotFoundPage.test.tsx (new)
+- apps/web/src/App.tsx (modified, reviewed)

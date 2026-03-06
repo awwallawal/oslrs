@@ -129,6 +129,9 @@ const ViewAsPage = lazy(() => import('./features/dashboard/pages/ViewAsPage'));
 const ViewAsDashboardPage = lazy(() => import('./features/dashboard/pages/ViewAsDashboardPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
+// prep-3: 404 pages
+const NotFoundPage = lazy(() => import('./features/dashboard/pages/NotFoundPage'));
+const PublicNotFoundPage = lazy(() => import('./pages/PublicNotFoundPage'));
 
 /**
  * Page loading fallback - shows full page skeleton during route transitions
@@ -151,21 +154,6 @@ function DashboardLoadingFallback() {
   return <PageSkeleton variant="dashboard" showHeader={false} showFooter={false} />;
 }
 
-/**
- * Placeholder page component for routes not yet implemented
- */
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-brand font-semibold text-neutral-900 mb-4">{title}</h1>
-        <p className="text-neutral-600">
-          This page is coming soon. Check back later for updates.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Unauthorized page - shown when user doesn't have required role
@@ -199,8 +187,8 @@ const queryClient = new QueryClient({
 });
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  const { pathname, hash } = useLocation();
+  useEffect(() => { if (!hash) window.scrollTo(0, 0); }, [pathname, hash]);
   return null;
 }
 
@@ -426,11 +414,7 @@ function App() {
               {/* Marketplace (placeholder for Epic 7) */}
               <Route
                 path="marketplace"
-                element={
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <PlaceholderPage title="Skills Marketplace" />
-                  </Suspense>
-                }
+                element={<Navigate to="/#marketplace" replace />}
               />
 
               {/* Public Staff Verification */}
@@ -739,8 +723,7 @@ function App() {
                     </ViewAsProvider>
                   }
                 />
-                {/* Placeholder routes for future stories */}
-                <Route path="*" element={<PlaceholderPage title="Super Admin Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Supervisor Routes - Story 2.5-4 */}
@@ -828,7 +811,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Supervisor Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Enumerator Routes - Story 2.5-5 */}
@@ -907,7 +890,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Enumerator Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Data Entry Clerk Routes - Story 2.5-6 */}
@@ -967,7 +950,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Clerk Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Verification Assessor Routes - Story 2.5-7 */}
@@ -1046,7 +1029,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Assessor Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Government Official Routes - Story 2.5-7 */}
@@ -1125,7 +1108,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Official Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
 
               {/* Public User Routes - Story 2.5-8 */}
@@ -1186,7 +1169,7 @@ function App() {
                     </Suspense>
                   }
                 />
-                <Route path="*" element={<PlaceholderPage title="Public User Feature" />} />
+                <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />
               </Route>
             </Route>
 
@@ -1200,8 +1183,8 @@ function App() {
               element={<Navigate to="/dashboard" replace />}
             />
 
-            {/* Catch-all redirect */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* Catch-all 404 */}
+            <Route path="*" element={<Suspense fallback={<PageLoadingFallback />}><PublicNotFoundPage /></Suspense>} />
           </Routes>
 
           {/* Global Re-Authentication Modal */}
