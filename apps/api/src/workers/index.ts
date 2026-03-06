@@ -5,7 +5,7 @@
  */
 
 import { importWorker } from './import.worker.js';
-import { emailWorker, closeEmailWorker } from './email.worker.js';
+import { emailWorker, closeEmailWorker, scheduleDigestFlush } from './email.worker.js';
 import { webhookIngestionWorker } from './webhook-ingestion.worker.js';
 import { fraudDetectionWorker } from './fraud-detection.worker.js';
 import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
@@ -61,6 +61,9 @@ export async function initializeWorkers(): Promise<void> {
 
   // Schedule daily dispute auto-close
   await scheduleDisputeAutoClose();
+
+  // Schedule email digest flush (every 30 minutes)
+  await scheduleDigestFlush();
 
   // Start monitoring alert scheduler (every 30 seconds)
   startMonitoringScheduler();

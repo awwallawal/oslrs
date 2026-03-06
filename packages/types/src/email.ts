@@ -211,6 +211,34 @@ export interface BackupNotificationEmailData {
 }
 
 // ============================================================================
+// Email Priority Classification (Story prep-7: Backpressure)
+// ============================================================================
+
+/**
+ * Email priority tiers for adaptive throttling.
+ * - critical: User is actively waiting; delay = broken UX (verification, password-reset, staff-invitation)
+ * - standard: Informational; 30-min delay is acceptable (payment, dispute, backup notifications)
+ */
+export type EmailPriority = 'critical' | 'standard';
+
+/** All email job type strings */
+export type EmailJobType = 'staff-invitation' | 'verification' | 'password-reset' | 'payment-notification' | 'dispute-notification' | 'dispute-resolution' | 'backup-notification';
+
+/**
+ * Maps each email job type to its priority tier.
+ * Alert digests are out-of-scope — they bypass the queue entirely.
+ */
+export const EMAIL_TYPE_PRIORITY: Record<EmailJobType, EmailPriority> = {
+  'staff-invitation': 'critical',
+  'verification': 'critical',
+  'password-reset': 'critical',
+  'payment-notification': 'standard',
+  'dispute-notification': 'standard',
+  'dispute-resolution': 'standard',
+  'backup-notification': 'standard',
+};
+
+// ============================================================================
 // Email Job Types (for BullMQ queue)
 // ============================================================================
 
@@ -220,6 +248,7 @@ export interface BackupNotificationEmailData {
 interface BaseEmailJob {
   attemptNumber?: number;
   scheduledFor?: string; // ISO date for deferred emails
+  priority?: EmailPriority;
 }
 
 /**
