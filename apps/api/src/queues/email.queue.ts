@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import type {
   EmailJob,
-  EmailPriority,
   EmailJobType,
   StaffInvitationEmailData,
   VerificationEmailData,
