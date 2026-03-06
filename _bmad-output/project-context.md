@@ -1500,22 +1500,26 @@ USING column_name::new_type;
 
 > Source: Epic 6 Retrospective (2026-03-04) — Race conditions appeared in 22% of items.
 > These patterns span frontend (TanStack Query timing), routing (NavLink prefix matching), and backend (database TOCTOU).
+> Consult this section before implementing any check-then-act, query-before-render, or state transition logic.
 
 ### Pattern 1: TanStack Query Data Defaults
 
 **Problem:** Component renders before query data arrives, causing `undefined.map()` or similar errors.
 
-**Example (prep-1):** `/super-admin/export` threw `lgas.map is not a function` because `lgas` was `undefined` on initial render.
+**Example (prep-1-fix-export-lga-race-condition):** `/super-admin/export` threw `lgas.map is not a function` because `lgas` was `undefined` on initial render.
+
+**Real fix location:** `apps/web/src/features/dashboard/pages/ExportPage.tsx:81`
+**Pattern also applied at:** `apps/web/src/features/dashboard/pages/ViewAsPage.tsx:63`, `apps/web/src/features/dashboard/components/ViewAsBanner.tsx:25`
 
 ```typescript
 // ❌ WRONG: No default, crashes before data arrives
 const { data: lgas } = useQuery({ queryKey: ['lgas'], queryFn: fetchLgas });
 return lgas.map(lga => ...);  // CRASH: lgas is undefined
 
-// ✅ CORRECT: Default empty array + loading guard
-const { data: lgas = [], isLoading, isError } = useQuery({ queryKey: ['lgas'], queryFn: fetchLgas });
-if (isLoading) return <SkeletonTable />;
-if (isError) return <ErrorState />;
+// ✅ CORRECT: Default empty array + loading guard (ExportPage.tsx:81)
+const { data: lgas = [], isLoading: lgasLoading, isError: lgaError } = useLgas();
+if (lgasLoading) return <SkeletonTable />;
+if (lgaError) return <ErrorState />;
 return lgas.map(lga => ...);  // Safe: lgas is always an array
 ```
 
@@ -1525,21 +1529,32 @@ return lgas.map(lga => ...);  // Safe: lgas is always an array
 
 **Problem:** NavLink `to="/super-admin/remuneration"` matches both the parent route and child routes like `/super-admin/remuneration/disputes`, causing dual sidebar highlighting.
 
+**Real fix location:** `apps/web/src/layouts/components/SidebarNav.tsx:38`
+**Type definition:** `apps/web/src/features/dashboard/config/sidebarConfig.ts:52` — `end?: boolean` field on `SidebarItem`
+
 ```typescript
 // ❌ WRONG: Prefix matching highlights multiple items
 <NavLink to="/super-admin/remuneration" className={({ isActive }) => isActive ? 'active' : ''}>
 
-// ✅ CORRECT: Use `end` prop for exact matching
-<NavLink to="/super-admin/remuneration" end className={({ isActive }) => isActive ? 'active' : ''}>
+// ✅ CORRECT: Smart auto-detection with optional override (SidebarNav.tsx:38)
+<NavLink
+  to={item.href}
+  end={item.end !== undefined ? item.end : item.href.split('/').length <= 3}
+  // Auto-applies end=true for top-level paths (≤3 segments like /dashboard/super-admin)
+  // Items can override with explicit end: true/false in sidebarConfig.ts
+>
 ```
 
-**Rule:** Sidebar NavLinks to parent routes MUST use `end` prop to prevent prefix collisions with child routes.
+**Rule:** Sidebar NavLinks to parent routes MUST use `end` prop to prevent prefix collisions with child routes. Our SidebarNav auto-applies this for top-level paths; deeper paths can set `end: true` explicitly in `sidebarConfig.ts`.
 
 ### Pattern 3: TOCTOU in Database Operations (Most Dangerous)
 
 **Problem:** Check-then-act pattern where the condition can change between the check and the action due to concurrent requests.
 
-**Example (6-5):** `openDispute()` checked if a payment record existed outside the transaction, but another request could modify it between the check and the dispute creation.
+**Example (Story 6-5):** `openDispute()` checked if a payment record existed outside the transaction, but another request could modify it between the check and the dispute creation.
+
+**Real fix location:** `apps/api/src/services/remuneration.service.ts:590` — `openDispute()` with `SELECT FOR UPDATE`
+**Pattern also applied at:** lines 1004 (acknowledgeDispute), 1154 (resolveDispute), 1313 (reopenDispute)
 
 ```typescript
 // ❌ WRONG: Check outside transaction (TOCTOU vulnerable)
@@ -1549,14 +1564,15 @@ await db.transaction(async (tx) => {
   await tx.insert(disputes).values({ paymentRecordId: id, ... });
 });
 
-// ✅ CORRECT: Check inside transaction with SELECT FOR UPDATE
+// ✅ CORRECT: Check inside transaction with SELECT FOR UPDATE (remuneration.service.ts:580-615)
 await db.transaction(async (tx) => {
-  const [payment] = await tx.select().from(paymentRecords)
-    .where(eq(paymentRecords.id, id))
-    .for('update');  // Lock the row
-  if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
-  if (payment.status !== 'completed') throw new AppError('INVALID_STATE', 'Cannot dispute', 409);
-  await tx.insert(disputes).values({ paymentRecordId: id, ... });
+  const [record] = await tx.select().from(paymentRecords)
+    .where(eq(paymentRecords.id, paymentRecordId))
+    .for('update');  // Lock the row — prevents concurrent modifications
+  if (!record) throw new AppError('NOT_FOUND', 'Payment record not found', 404);
+  if (record.userId !== actorId) throw new AppError('FORBIDDEN', 'Can only dispute your own payment records', 403);
+  if (record.status !== 'active') throw new AppError('INVALID_STATUS', 'Only active payment records can be disputed', 400);
+  await tx.insert(paymentDisputes).values({ paymentRecordId, ... });
 });
 ```
 
@@ -1566,7 +1582,11 @@ await db.transaction(async (tx) => {
 
 **Problem:** Count-based checks (e.g., "is this the last admin?") are vulnerable to concurrent requests that change the count between check and action.
 
-**Example (prep-10):** Last-admin protection counted active admins outside the transaction. Two simultaneous deactivation requests could both see count=2 and both proceed.
+**Example (prep-10-super-admin-governance-guards):** Last-admin protection counted active admins outside the transaction. Two simultaneous deactivation requests could both see count=2 and both proceed.
+
+**Real fix location:** `apps/api/src/services/staff.service.ts:290-297` — deactivate guard inside transaction
+**Also at:** `apps/api/src/services/staff.service.ts:206-212` — role change guard inside transaction
+**Helper:** `apps/api/src/services/staff.service.ts:843` — `countActiveSuperAdmins()` reusable count method
 
 ```typescript
 // ❌ WRONG: Count check outside transaction
@@ -1574,32 +1594,60 @@ const adminCount = await db.select({ count: count() }).from(users).where(eq(user
 if (adminCount === 1) throw new AppError('LAST_ADMIN', 'Cannot deactivate last admin', 409);
 await db.update(users).set({ isActive: false }).where(eq(users.id, targetId));
 
-// ✅ CORRECT: Count check inside transaction with advisory lock or FOR UPDATE
+// ✅ CORRECT: Count check inside transaction (staff.service.ts:290-297)
 await db.transaction(async (tx) => {
-  const [{ count: adminCount }] = await tx.select({ count: count() }).from(users)
-    .where(and(eq(users.role, 'super_admin'), eq(users.isActive, true)));
-  if (adminCount <= 1) throw new AppError('LAST_ADMIN', 'Cannot deactivate last admin', 409);
-  await tx.update(users).set({ isActive: false }).where(eq(users.id, targetId));
+  if (user.role?.name === 'super_admin') {
+    const activeCount = await StaffService.countActiveSuperAdmins(user.roleId, tx);
+    if (activeCount <= 1) {
+      throw new AppError('CANNOT_DEACTIVATE_LAST_ADMIN', 'Cannot deactivate the last Super Admin account', 400);
+    }
+  }
+  await tx.update(users).set({ status: 'deactivated', updatedAt: new Date() }).where(eq(users.id, userId));
 });
 ```
 
+**Rule:** Count-based governance guards MUST run inside the same transaction as the mutation they protect. Extract reusable count helpers (like `countActiveSuperAdmins`) that accept a transaction context parameter.
+
 ### Pattern 5: Dispute State Machine Transitions
 
-**Problem:** State transitions (e.g., `pending` → `resolved`) without row-level locking allow concurrent requests to create invalid state.
+> This is Pattern 3 (TOCTOU) applied specifically to state machine transitions — same `SELECT FOR UPDATE` technique, but the state-dependent check validates the current status before transitioning.
+
+**Problem:** State transitions (e.g., `disputed` → `pending_resolution` → `resolved`) without row-level locking allow concurrent requests to create invalid state.
+
+**Real fix locations:**
+- `apps/api/src/services/remuneration.service.ts:1004` — acknowledgeDispute: `disputed` → `pending_resolution`
+- `apps/api/src/services/remuneration.service.ts:1154` — resolveDispute: `pending_resolution`/`reopened` → `resolved`
+- `apps/api/src/services/remuneration.service.ts:1313` — reopenDispute: `resolved` → `reopened`
 
 ```typescript
-// ✅ CORRECT: Lock row before state transition
+// ✅ CORRECT: Lock row before state transition (remuneration.service.ts:1145-1164)
 await db.transaction(async (tx) => {
-  const [dispute] = await tx.select().from(disputes)
-    .where(eq(disputes.id, disputeId))
-    .for('update');
-  if (dispute.status !== 'pending') throw new AppError('INVALID_TRANSITION', 'Dispute not pending', 409);
-  await tx.update(disputes).set({ status: 'resolved', resolvedAt: new Date() })
-    .where(eq(disputes.id, disputeId));
+  const [dispute] = await tx.select().from(paymentDisputes)
+    .where(eq(paymentDisputes.id, disputeId))
+    .for('update');  // Lock the row
+  if (!dispute) throw new AppError('NOT_FOUND', 'Dispute not found', 404);
+  if (dispute.status !== 'pending_resolution' && dispute.status !== 'reopened') {
+    throw new AppError('INVALID_STATUS',
+      `Cannot resolve dispute with status '${dispute.status}'. Expected 'pending_resolution' or 'reopened'.`, 400);
+  }
+  await tx.update(paymentDisputes).set({ status: 'resolved', resolvedAt: new Date() })
+    .where(eq(paymentDisputes.id, disputeId));
 });
 ```
 
 **Rule:** ALL state transitions on database records MUST lock the row first with `SELECT FOR UPDATE`.
+
+### Epic 7 Forward-Looking: New Race Condition Risks
+
+> These risks apply to the public marketplace routes being introduced in Epic 7.
+
+**Risk 1: Concurrent Contact Reveals (TOCTOU)**
+The 50-views/user/24h rate limit for contact reveals is vulnerable to the same TOCTOU pattern as Pattern 3. If a count check happens outside a transaction, concurrent requests could bypass the limit.
+**Prevention:** Use Redis atomic increment (`INCR` + `EXPIRE`) as a **fast-path** to reject over-limit requests without hitting the database, AND a SQL count on `contact_reveals` inside a transaction as the **source of truth** fallback. Redis is a cache that can restart — never rely on it alone for rate limiting. See Story 7-6 for the dual-layer design.
+
+**Risk 2: Duplicate Marketplace Profiles**
+Concurrent form submissions for the same respondent could trigger duplicate marketplace profile creation in the extraction worker.
+**Prevention:** Use `INSERT ... ON CONFLICT (respondent_id) DO UPDATE` (Drizzle: `onConflictDoUpdate`) to ensure idempotent profile creation.
 
 ---
 

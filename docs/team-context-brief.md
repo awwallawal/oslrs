@@ -37,6 +37,7 @@ Read these files in order for full project awareness:
 3. **Three-layer quality:** Layer 1 (automated tests), Layer 2 (adversarial code review), Layer 3 (human UAT by context-holder).
 4. **Story-shaped improvements:** Frame all process changes as concrete, deliverable tasks — aspirational commitments slip.
 5. **Adversarial code review:** Every story gets a fresh-context review that must find 3-10 issues. ~94% fix rate standard.
+6. **Race condition awareness:** Consult `project-context.md` "Race Condition Anti-Patterns" section before implementing any check-then-act, query-before-render, or state transition logic. 5 documented patterns with real file references.
 
 ## Critical Deployment Notes
 
