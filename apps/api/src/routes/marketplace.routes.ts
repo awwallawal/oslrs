@@ -10,14 +10,15 @@ import {
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
+import { UserRole } from '@oslsr/types';
 
 const router = Router();
 
 // Analytics routes — Super Admin only (MUST be before /profiles/:id wildcard)
-router.get('/analytics/reveals', authenticate, authorize('super_admin'), RevealAnalyticsController.getStats);
-router.get('/analytics/reveals/top-viewers', authenticate, authorize('super_admin'), RevealAnalyticsController.getTopViewers);
-router.get('/analytics/reveals/top-profiles', authenticate, authorize('super_admin'), RevealAnalyticsController.getTopProfiles);
-router.get('/analytics/reveals/suspicious-devices', authenticate, authorize('super_admin'), RevealAnalyticsController.getSuspiciousDevices);
+router.get('/analytics/reveals', authenticate, authorize(UserRole.SUPER_ADMIN), RevealAnalyticsController.getStats);
+router.get('/analytics/reveals/top-viewers', authenticate, authorize(UserRole.SUPER_ADMIN), RevealAnalyticsController.getTopViewers);
+router.get('/analytics/reveals/top-profiles', authenticate, authorize(UserRole.SUPER_ADMIN), RevealAnalyticsController.getTopProfiles);
+router.get('/analytics/reveals/suspicious-devices', authenticate, authorize(UserRole.SUPER_ADMIN), RevealAnalyticsController.getSuspiciousDevices);
 
 // Public routes — no authentication or authorization middleware
 router.get('/search', marketplaceSearchRateLimit, MarketplaceController.search);
