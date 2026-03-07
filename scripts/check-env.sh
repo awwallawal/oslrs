@@ -135,7 +135,7 @@ else
 fi
 
 # SMS (edit token delivery)
-SMS_PROVIDER_VAL=$(grep -E "^\s*(export\s+)?SMS_PROVIDER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^[\"']//;s/[\"']$//")
+SMS_PROVIDER_VAL=$(grep -E "^\s*(export\s+)?SMS_PROVIDER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^[\"']//;s/[\"']$//") || true
 if [ "$SMS_PROVIDER_VAL" = "http" ]; then
   SMS_MISSING=""
   for var in SMS_API_URL SMS_API_KEY; do
