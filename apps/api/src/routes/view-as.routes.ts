@@ -9,7 +9,7 @@
  * GET  /api/v1/view-as/current — Get current View-As state
  */
 
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
@@ -21,8 +21,8 @@ const router = Router();
 router.use(authenticate);
 router.use(authorize(UserRole.SUPER_ADMIN));
 
-router.post('/start', ViewAsController.startViewAs as any);
-router.post('/end', ViewAsController.endViewAs as any);
-router.get('/current', ViewAsController.getCurrentState as any);
+router.post('/start', ViewAsController.startViewAs as RequestHandler);
+router.post('/end', ViewAsController.endViewAs as RequestHandler);
+router.get('/current', ViewAsController.getCurrentState as RequestHandler);
 
 export default router;

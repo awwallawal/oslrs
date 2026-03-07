@@ -5,8 +5,23 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../../lib/api-client';
 
+interface RespondentRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  nin: string | null;
+  source: string;
+  lgaName: string | null;
+  verificationStatus: string;
+}
+
+interface RegistryResponse {
+  data: RespondentRow[];
+  meta: { pagination: { totalItems: number } };
+}
+
 export default function RegistryTestPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<RegistryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,8 +31,8 @@ export default function RegistryTestPage() {
         const result = await apiClient('/respondents?pageSize=5&sortBy=registeredAt&sortOrder=desc');
         setData(result);
         setError(null);
-      } catch (err: any) {
-        setError(err.message || String(err));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err));
         setData(null);
       } finally {
         setLoading(false);
@@ -57,7 +72,7 @@ export default function RegistryTestPage() {
               </tr>
             </thead>
             <tbody>
-              {data.data?.map((r: any) => (
+              {data.data?.map((r) => (
                 <tr key={r.id}>
                   <td style={{ border: '1px solid #ccc', padding: 8, fontSize: 11 }}>{r.id?.slice(0, 12)}...</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{r.firstName} {r.lastName}</td>

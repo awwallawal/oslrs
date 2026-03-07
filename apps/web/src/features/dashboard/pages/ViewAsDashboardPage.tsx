@@ -261,7 +261,7 @@ interface DashboardContentProps {
   isLoading: boolean;
 }
 
-function ViewAsDashboardContent({ role, roleDisplayName, dashboardData, isLoading }: DashboardContentProps) {
+function ViewAsDashboardContent({ role: _role, roleDisplayName, dashboardData, isLoading }: DashboardContentProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">

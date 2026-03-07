@@ -7,7 +7,7 @@
  * GET /api/v1/view-as/data/dashboard — Target role's dashboard summary
  */
 
-import { Router, Response, NextFunction } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
@@ -25,7 +25,7 @@ router.use(authorize(UserRole.SUPER_ADMIN));
 /**
  * GET /view-as/data/dashboard — Returns dashboard summary for the target role
  */
-router.get('/dashboard', async (req: any, res: Response, next: NextFunction) => {
+router.get('/dashboard', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authReq = req as AuthenticatedRequest;
     if (!authReq.viewAs) {

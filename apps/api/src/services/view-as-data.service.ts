@@ -13,6 +13,8 @@ import pino from 'pino';
 
 const logger = pino({ name: 'view-as-data-service' });
 
+type AggregateRow = Record<string, string | null>;
+
 export interface ViewAsDashboardSummary {
   role: string;
   lgaId: string | null;
@@ -55,12 +57,12 @@ export class ViewAsDataService {
       const submissionCountResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`,
       );
-      const total = parseInt((submissionCountResult.rows[0] as any)?.total ?? '0', 10);
+      const total = parseInt((submissionCountResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       const todayResult = await db.execute(
         sql`SELECT COUNT(*) as today FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId} AND s.created_at >= CURRENT_DATE`,
       );
-      const today = parseInt((todayResult.rows[0] as any)?.today ?? '0', 10);
+      const today = parseInt((todayResult.rows[0] as AggregateRow)?.today ?? '0', 10);
 
       return {
         role: 'enumerator',
@@ -82,12 +84,12 @@ export class ViewAsDataService {
       const teamResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM users u JOIN roles r ON u.role_id = r.id WHERE r.name = 'enumerator' AND u.lga_id = ${lgaId} AND u.status = 'active'`,
       );
-      const teamCount = parseInt((teamResult.rows[0] as any)?.total ?? '0', 10);
+      const teamCount = parseInt((teamResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       const submissionResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM submissions s JOIN respondents r ON s.respondent_id = r.id WHERE r.lga_id = ${lgaId}`,
       );
-      const submissionCount = parseInt((submissionResult.rows[0] as any)?.total ?? '0', 10);
+      const submissionCount = parseInt((submissionResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       return {
         role: 'supervisor',
@@ -109,7 +111,7 @@ export class ViewAsDataService {
       const result = await db.execute(
         sql`SELECT COUNT(*) as total FROM submissions WHERE source = 'clerk'`,
       );
-      const total = parseInt((result.rows[0] as any)?.total ?? '0', 10);
+      const total = parseInt((result.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       return {
         role: 'data_entry_clerk',
@@ -130,12 +132,12 @@ export class ViewAsDataService {
       const pendingResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM fraud_detections WHERE resolution IS NULL`,
       );
-      const pending = parseInt((pendingResult.rows[0] as any)?.total ?? '0', 10);
+      const pending = parseInt((pendingResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       const reviewedResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM fraud_detections WHERE resolution IS NOT NULL`,
       );
-      const reviewed = parseInt((reviewedResult.rows[0] as any)?.total ?? '0', 10);
+      const reviewed = parseInt((reviewedResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       return {
         role: 'verification_assessor',
@@ -157,12 +159,12 @@ export class ViewAsDataService {
       const respondentResult = await db.execute(
         sql`SELECT COUNT(*) as total FROM respondents`,
       );
-      const total = parseInt((respondentResult.rows[0] as any)?.total ?? '0', 10);
+      const total = parseInt((respondentResult.rows[0] as AggregateRow)?.total ?? '0', 10);
 
       const todayResult = await db.execute(
         sql`SELECT COUNT(*) as today FROM respondents WHERE created_at >= CURRENT_DATE`,
       );
-      const today = parseInt((todayResult.rows[0] as any)?.today ?? '0', 10);
+      const today = parseInt((todayResult.rows[0] as AggregateRow)?.today ?? '0', 10);
 
       return {
         role: 'government_official',

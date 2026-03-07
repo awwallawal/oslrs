@@ -20,9 +20,6 @@ const VIEW_AS_KEY_PREFIX = 'view_as:';
 // Session TTL: 30 minutes (auto-expire safety net)
 const VIEW_AS_TTL_SECONDS = 30 * 60; // 1800 seconds
 
-// Roles that cannot be viewed-as
-const EXCLUDED_ROLES = ['super_admin', 'public_user'] as const;
-
 // Field roles that require LGA selection
 const FIELD_ROLES = ['enumerator', 'supervisor'] as const;
 
