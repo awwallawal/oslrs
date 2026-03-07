@@ -16,6 +16,7 @@ describe('Auth Login Integration', () => {
   let publicUserEmail: string;
   let publicUserPassword: string;
 
+  // Increased timeout: bcrypt hashing (2x) + DB inserts exceed 15s under parallel thread pool load
   beforeAll(async () => {
     // Ensure roles exist (use lowercase to match UserRole enum)
     await db.insert(roles).values([
@@ -59,7 +60,7 @@ describe('Auth Login Integration', () => {
       passwordHash: hashedPublicPassword,
     }).returning();
     publicUserId = publicUser.id;
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Wrap in transaction to prevent race conditions with parallel test files

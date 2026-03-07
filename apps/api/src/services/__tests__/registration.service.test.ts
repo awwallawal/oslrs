@@ -87,7 +87,7 @@ describe('RegistrationService', () => {
       expect(createdUser!.email).toBe(email.toLowerCase());
       expect(createdUser!.emailVerificationToken).toBeDefined();
       expect(createdUser!.emailVerificationExpiresAt).toBeDefined();
-    });
+    }, 30000);
 
     it('should hash the password correctly', async () => {
       const email = `test-password-${Date.now()}@example.com`;
@@ -140,6 +140,7 @@ describe('RegistrationService', () => {
       ).rejects.toThrow('This NIN is already registered');
     });
 
+    // Increased timeout: two sequential bcrypt hashes + DB inserts exceed 15s under parallel thread pool load
     it('should reject duplicate email with generic error and send notification', async () => {
       const email = `test-dup-email-${Date.now()}@example.com`;
       const nin1 = generateValidNin();
@@ -166,7 +167,7 @@ describe('RegistrationService', () => {
           password: 'SecurePass123!',
         })
       ).rejects.toThrow('Registration failed');
-    });
+    }, 30000);
 
     it('should generate a 64-character verification token', async () => {
       const email = `test-token-${Date.now()}@example.com`;

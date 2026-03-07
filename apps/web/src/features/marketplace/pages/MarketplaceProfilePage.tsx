@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Clock, ExternalLink, LogIn, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, ExternalLink, LogIn, Lock, Loader2, AlertCircle, Pencil } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { GovernmentVerifiedBadge } from '../components/GovernmentVerifiedBadge';
@@ -256,6 +256,17 @@ export default function MarketplaceProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* "Is this your profile?" link — navigates to edit request */}
+      <div className="text-center" data-testid="edit-profile-prompt">
+        <Link
+          to="/marketplace/edit-request"
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-neutral-600"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Is this your profile? Edit it here.
+        </Link>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Story 7.5: Profile Enrichment via Edit Token
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -41,275 +41,79 @@ This is the fifth story of Epic 7: Public Skills Marketplace & Search Security. 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create SMS service infrastructure (AC: #1)
-  - [ ] 1.1 Create `apps/api/src/services/sms.service.ts` following the `email.service.ts` provider pattern:
-    - `SMSService` static class with `initialize()`, `send(to, message)`, `isEnabled()`
-    - `SMSProvider` interface: `{ send(to: string, message: string): Promise<SMSResult> }`
-    - `SMSResult`: `{ success: boolean; error?: string; messageId?: string }`
-    - Provider implementations:
-      - `MockSMSProvider` — logs to console/Pino, stores in memory (for dev/test)
-      - `HttpSMSProvider` — generic HTTP-based provider (configurable URL, auth headers, body template)
-    - Configuration from env: `SMS_PROVIDER` (mock/http), `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER_ID`
-  - [ ] 1.2 **Provider abstraction:** Don't hardcode a specific SMS vendor. Use a generic HTTP provider pattern so the specific vendor (Termii, Africa's Talking, etc.) can be configured via env vars without code changes.
-  - [ ] 1.3 Initialize in `apps/api/src/index.ts` alongside EmailService initialization
-  - [ ] 1.4 Add env vars to `apps/api/.env.example` and update prep-2's env var safety script if applicable
-  - [ ] 1.5 **Test mode:** In `NODE_ENV=test`, use MockSMSProvider automatically (same pattern as EmailService mock)
+- [x] Task 1: Create SMS service infrastructure (AC: #1)
+  - [x] 1.1 Created `apps/api/src/services/sms.service.ts` with SMSService, MockSMSProvider, HttpSMSProvider
+  - [x] 1.2 Generic HTTP provider pattern — vendor-agnostic via env vars
+  - [x] 1.3 Lazy-initialized (no explicit init in index.ts needed — follows singleton pattern)
+  - [x] 1.4 Added SMS env vars to `.env.example` and updated `scripts/check-env.sh`
+  - [x] 1.5 Auto-uses MockSMSProvider in NODE_ENV=test
 
-- [ ] Task 2: Create edit token service (AC: #1, #2, #3, #5)
-  - [ ] 2.1 Create `apps/api/src/services/marketplace-edit.service.ts`:
-    - `requestEditToken(phoneNumber: string, ipAddress: string): Promise<{ status: 'success' | 'rate_limited' | 'not_found' }>`
-    - **Always returns 'success'** to the controller — even when no profile found (prevents phone enumeration). Only send SMS when profile exists.
-  - [ ] 2.2 Token generation: `crypto.randomBytes(16).toString('hex')` → 32-character hex string (matches architecture spec "32-char random tokens")
-  - [ ] 2.3 Token storage: Update `marketplace_profiles` row:
-    ```typescript
-    await db.update(marketplaceProfiles)
-      .set({
-        editToken: hashedToken,  // Store hashed, not plaintext (see 2.4)
-        editTokenExpiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
-        updatedAt: new Date(),
-      })
-      .where(eq(marketplaceProfiles.id, profile.id));
-    ```
-  - [ ] 2.4 **Token hashing:** Store `SHA-256(token)` in the database, not the plaintext token. Send the plaintext token via SMS. On validation, hash the incoming token and compare. This follows security best practices (same as password reset tokens should be hashed).
-  - [ ] 2.5 Phone → profile resolution:
-    ```typescript
-    // Find respondent by phone number
-    const [respondent] = await db.select({ id: respondents.id, nin: respondents.nin })
-      .from(respondents)
-      .where(eq(respondents.phoneNumber, phoneNumber))
-      .limit(1);
-    // Find marketplace profile by respondentId
-    const [profile] = await db.select()
-      .from(marketplaceProfiles)
-      .where(eq(marketplaceProfiles.respondentId, respondent.id))
-      .limit(1);
-    ```
-  - [ ] 2.6 Rate limit check (3/day per NIN): Use Redis counter `rl:edit-token:${nin}` with 24h TTL
-    ```typescript
-    const key = `rl:edit-token:${respondent.nin}`;
-    const count = parseInt(await redis.get(key) || '0');
-    if (count >= 3) return { status: 'rate_limited' };
-    await redis.incr(key);
-    await redis.expire(key, 86400); // 24 hours
-    ```
-  - [ ] 2.7 SMS message: `"Your OSLRS marketplace profile edit link: https://${DOMAIN}/marketplace/edit/${token} — This link expires in 90 days and can only be used once."`
-  - [ ] 2.8 `validateEditToken(token: string): Promise<{ status: 'valid' | 'expired' | 'invalid'; profile?: MarketplaceProfileEditView }>`
-    - Hash incoming token, query `marketplace_profiles` WHERE `edit_token = hashedToken`
-    - Check `editTokenExpiresAt > NOW()`
-    - Return current bio, portfolioUrl for form pre-population
-  - [ ] 2.9 `applyProfileEdit(token: string, bio: string | null, portfolioUrl: string | null): Promise<{ status: 'success' | 'expired' | 'invalid' }>`
-    - Validate token (same as 2.8)
-    - Update bio and portfolioUrl
-    - **Consume token:** set `editToken = null`, `editTokenExpiresAt = null`
-    - The tsvector trigger (Story 7-1) will NOT auto-update for bio changes since bio isn't in the search vector. This is fine — bio is displayed but not searched.
+- [x] Task 2: Create edit token service (AC: #1, #2, #3, #5)
+  - [x] 2.1 Created `apps/api/src/services/marketplace-edit.service.ts` with requestEditToken, validateEditToken, applyProfileEdit
+  - [x] 2.2 Token generation via `crypto.randomBytes(16).toString('hex')` (32 hex chars)
+  - [x] 2.3 Token storage with 90-day expiry on marketplace_profiles row
+  - [x] 2.4 SHA-256 token hashing — plaintext sent via SMS, hash stored in DB
+  - [x] 2.5 Phone -> respondent -> marketplace_profiles resolution chain
+  - [x] 2.6 Redis NIN rate limit (3/day) with 24h TTL
+  - [x] 2.7 SMS message with edit link
+  - [x] 2.8 validateEditToken returns valid/expired/invalid with profile data
+  - [x] 2.9 applyProfileEdit uses db.transaction() for TOCTOU safety, consumes token on success
 
-- [ ] Task 3: Create edit token controller (AC: #1, #3, #4, #5, #6, #7)
-  - [ ] 3.1 In `apps/api/src/controllers/marketplace.controller.ts`, add three methods:
-  - [ ] 3.2 `requestEditToken(req, res, next)`:
-    - Zod validate: `{ phoneNumber: z.string().min(10).max(15) }`
-    - Call `MarketplaceEditService.requestEditToken(phoneNumber, req.ip)`
-    - **Always return 200** with generic message: `"If a marketplace profile exists for this phone number, an SMS with an edit link has been sent."` (prevents enumeration)
-    - If rate_limited → return 429
-  - [ ] 3.3 `validateEditToken(req, res, next)`:
-    - Extract `token` from `req.params`
-    - Call `MarketplaceEditService.validateEditToken(token)`
-    - If valid → return 200 with `{ data: { valid: true, bio, portfolioUrl } }`
-    - If expired/invalid → return 200 with `{ data: { valid: false, reason: 'expired' | 'invalid' } }`
-  - [ ] 3.4 `applyProfileEdit(req, res, next)`:
-    - Zod validate body:
-      ```typescript
-      const profileEditSchema = z.object({
-        editToken: z.string().length(32),
-        bio: z.string().max(150, 'Bio must be 150 characters or less').nullable().optional(),
-        portfolioUrl: z.string().url('Invalid URL format').max(500).nullable().optional(),
-      });
-      ```
-    - Call `MarketplaceEditService.applyProfileEdit(token, bio, portfolioUrl)`
-    - If success → return 200 with `{ data: { message: 'Profile updated successfully' } }`
-    - If expired → return 410 with `{ code: 'TOKEN_EXPIRED', message: 'This edit link has expired. Please request a new one.' }`
-    - If invalid → return 404 with `{ code: 'NOT_FOUND', message: 'Invalid edit link.' }`
+- [x] Task 3: Create edit token controller (AC: #1, #3, #4, #5, #6, #7)
+  - [x] 3.1-3.4 Added requestEditToken, validateEditToken, applyProfileEdit to marketplace.controller.ts
+  - [x] Zod schemas: editTokenRequestSchema, profileEditSchema with HEX_TOKEN_REGEX validation
 
-- [ ] Task 4: Add edit token routes with CAPTCHA + rate limiting (AC: #1, #2)
-  - [ ] 4.1 In `apps/api/src/routes/marketplace.routes.ts`, add:
-    ```typescript
-    import { verifyCaptcha } from '../middleware/captcha.js';
+- [x] Task 4: Add edit token routes with CAPTCHA + rate limiting (AC: #1, #2)
+  - [x] 4.1 POST /request-edit-token (editTokenRequestRateLimit + verifyCaptcha), GET /edit/:token, PUT /edit
+  - [x] 4.2 editTokenRequestRateLimit: 10/hour/IP with Redis store
+  - [x] 4.3 No auth middleware — token IS the auth
+  - [x] 4.4 CAPTCHA on token request only
 
-    // POST /api/v1/marketplace/request-edit-token — public, CAPTCHA required
-    router.post('/request-edit-token',
-      editTokenRequestRateLimit,   // IP-based rate limit (10/hour/IP)
-      verifyCaptcha,               // hCaptcha required
-      MarketplaceController.requestEditToken
-    );
+- [x] Task 5: Add edit token types (AC: #6, #7)
+  - [x] 5.1 Added ProfileEditTokenRequest, ProfileEditPayload, MarketplaceProfileEditView to packages/types/src/marketplace.ts
+  - [x] 5.2 Already exported via barrel export
 
-    // GET /api/v1/marketplace/edit/:token — public, validate token
-    router.get('/edit/:token',
-      MarketplaceController.validateEditToken
-    );
+- [x] Task 6: Create frontend "Request Edit Token" page (AC: #1, #3)
+  - [x] 6.1 Created MarketplaceEditRequestPage with phone input, CAPTCHA, success/error states
+  - [x] 6.2 Phone validation (min 10 digits after stripping spaces)
 
-    // PUT /api/v1/marketplace/edit — public, apply edit with token
-    router.put('/edit',
-      MarketplaceController.applyProfileEdit
-    );
-    ```
-  - [ ] 4.2 Create `editTokenRequestRateLimit` in `apps/api/src/middleware/marketplace-rate-limit.ts`:
-    - 10 req/hour/IP (prevents brute-force phone enumeration)
-    - Redis key prefix: `rl:marketplace:edit-token-request:`
-    - Follow existing rate limit pattern
-  - [ ] 4.3 **No authentication on any of these routes** — the edit token IS the authentication. Workers may not have OSLRS accounts.
-  - [ ] 4.4 **CAPTCHA on token request only** — not on validate or apply. The token itself is the auth for validate/apply.
+- [x] Task 7: Create frontend "Edit Profile" page (AC: #4, #5, #6, #7)
+  - [x] 7.1 Created MarketplaceEditPage with token validation on mount
+  - [x] 7.2 Bio textarea (150 char max) + portfolio URL input
+  - [x] 7.3 Submit flow with success/error/expired states
+  - [x] 7.4 Live character counter, turns red at 140+, truncates at 150
 
-- [ ] Task 5: Add edit token types (AC: #6, #7)
-  - [ ] 5.1 In `packages/types/src/marketplace.ts`, add:
-    ```typescript
-    export interface ProfileEditTokenRequest {
-      phoneNumber: string;
-      captchaToken: string;
-    }
+- [x] Task 8: Create frontend API client and hooks (AC: #1, #4, #6)
+  - [x] 8.1 Added requestEditToken, validateEditToken, submitProfileEdit to marketplace.api.ts
+  - [x] 8.2 Added useValidateEditToken (query), useSubmitProfileEdit (mutation) hooks
+  - [x] 8.3 Added editToken to marketplaceKeys
 
-    export interface ProfileEditPayload {
-      editToken: string;
-      bio?: string | null;
-      portfolioUrl?: string | null;
-    }
+- [x] Task 9: Wire frontend routes (AC: #4, #6)
+  - [x] 9.1 Lazy-loaded routes in App.tsx: /marketplace/edit-request and /marketplace/edit/:token
+  - [x] 9.2 Added "Is this your profile? Edit it here." link with Pencil icon on profile detail page
+  - [x] 9.3 All edit routes public — no ProtectedRoute wrapper
 
-    export interface MarketplaceProfileEditView {
-      bio: string | null;
-      portfolioUrl: string | null;
-    }
-    ```
-  - [ ] 5.2 Export from `packages/types/src/index.ts`
+- [x] Task 10: Write backend tests (AC: #8)
+  - [x] 10.1 sms.service.test.ts: 11 tests (MockSMSProvider, HttpSMSProvider, SMSService.send, disabled mode)
+  - [x] 10.2 marketplace-edit.service.test.ts: 13 tests (requestEditToken, validateEditToken, applyProfileEdit, rate limiting, token hashing, TOCTOU transaction)
+  - [x] 10.3 marketplace.controller.test.ts: 20+ new tests for edit token endpoints (request, validate, apply, rate limit, validation errors)
+  - [x] 10.4 All 73 new backend tests pass, zero regressions (pre-existing integration test timeouts only)
 
-- [ ] Task 6: Create frontend "Request Edit Token" page (AC: #1, #3)
-  - [ ] 6.1 Create `apps/web/src/features/marketplace/pages/MarketplaceEditRequestPage.tsx`:
-    - Simple form with: phone number input + hCaptcha widget + "Send Edit Link" button
-    - On submit: POST to `/marketplace/request-edit-token` with `{ phoneNumber, captchaToken }`
-    - Success: show "If a marketplace profile exists for this phone number, you'll receive an SMS with an edit link shortly."
-    - Rate limited (429): show "Too many requests. Please try again later."
-    - Page title: "Edit Your Marketplace Profile"
-    - Subtitle: "Enter the phone number used during registration. We'll send you a one-time edit link via SMS."
-  - [ ] 6.2 Phone number input with basic formatting/validation (Nigerian phone format: +234... or 0...)
+- [x] Task 11: Write frontend tests (AC: #8)
+  - [x] 11.1 MarketplaceEditRequestPage.test.tsx: 9 tests (render, phone validation, CAPTCHA flow, success/error states, phone stripping)
+  - [x] 11.2 MarketplaceEditPage.test.tsx: 12 tests (loading, valid/expired/invalid tokens, bio counter, bio truncation, URL validation, submit, success, error, disabled state)
+  - [x] 11.3 All 21 new frontend tests pass
 
-- [ ] Task 7: Create frontend "Edit Profile" page (AC: #4, #5, #6, #7)
-  - [ ] 7.1 Create `apps/web/src/features/marketplace/pages/MarketplaceEditPage.tsx`:
-    - Extract `token` from URL params: `/marketplace/edit/:token`
-    - On mount: call `GET /marketplace/edit/:token` to validate token and get current bio/portfolioUrl
-    - **If valid:** render edit form pre-populated with current values
-    - **If expired/invalid:** render "This link has expired or has already been used" with a link to request a new token
-  - [ ] 7.2 Edit form fields:
-    - **Bio**: `<textarea>` with character counter (0/150), placeholder "Tell employers about your skills and experience..."
-    - **Portfolio URL**: `<input type="url">` with placeholder "https://your-portfolio.com"
-    - "Save Changes" button
-  - [ ] 7.3 On submit: PUT to `/marketplace/edit` with `{ editToken, bio, portfolioUrl }`
-    - Success: show "Your profile has been updated!" with a link to view the profile
-    - Token expired (410): show expiry message with link to request new token
-    - Validation error (400): show field-level errors without consuming token
-  - [ ] 7.4 **Character counter for bio:** Live counter below textarea showing `${bio.length}/150`, red when approaching limit
+## Review Follow-ups (AI)
 
-- [ ] Task 8: Create frontend API client and hooks (AC: #1, #4, #6)
-  - [ ] 8.1 In `apps/web/src/features/marketplace/api/marketplace.api.ts`, add:
-    ```typescript
-    export async function requestEditToken(phoneNumber: string, captchaToken: string): Promise<{ message: string }> {
-      const response = await apiClient('/marketplace/request-edit-token', {
-        method: 'POST',
-        body: JSON.stringify({ phoneNumber, captchaToken }),
-      });
-      return response.data;
-    }
-
-    export async function validateEditToken(token: string): Promise<{ valid: boolean; bio?: string; portfolioUrl?: string; reason?: string }> {
-      const response = await apiClient(`/marketplace/edit/${token}`);
-      return response.data;
-    }
-
-    export async function submitProfileEdit(editToken: string, bio: string | null, portfolioUrl: string | null): Promise<{ message: string }> {
-      const response = await apiClient('/marketplace/edit', {
-        method: 'PUT',
-        body: JSON.stringify({ editToken, bio, portfolioUrl }),
-      });
-      return response.data;
-    }
-    ```
-  - [ ] 8.2 In `apps/web/src/features/marketplace/hooks/useMarketplace.ts`, add:
-    ```typescript
-    export function useValidateEditToken(token: string) {
-      return useQuery({
-        queryKey: marketplaceKeys.editToken(token),
-        queryFn: () => validateEditToken(token),
-        enabled: !!token,
-        retry: false,  // Don't retry — token state is deterministic
-      });
-    }
-
-    export function useSubmitProfileEdit() {
-      return useMutation({
-        mutationFn: ({ editToken, bio, portfolioUrl }: ProfileEditPayload) =>
-          submitProfileEdit(editToken, bio, portfolioUrl),
-      });
-    }
-    ```
-  - [ ] 8.3 Add to `marketplaceKeys`:
-    ```typescript
-    editToken: (token: string) => [...marketplaceKeys.all, 'editToken', token] as const,
-    ```
-
-- [ ] Task 9: Wire frontend routes (AC: #4, #6)
-  - [ ] 9.1 In `apps/web/src/App.tsx`, add routes under the marketplace path (inside `<PublicLayout>`):
-    ```typescript
-    const MarketplaceEditRequestPage = lazy(() => import('./features/marketplace/pages/MarketplaceEditRequestPage'));
-    const MarketplaceEditPage = lazy(() => import('./features/marketplace/pages/MarketplaceEditPage'));
-    // ...
-    <Route path="marketplace">
-      {/* ... existing search and profile routes */}
-      <Route path="edit-request" element={<Suspense><MarketplaceEditRequestPage /></Suspense>} />
-      <Route path="edit/:token" element={<Suspense><MarketplaceEditPage /></Suspense>} />
-    </Route>
-    ```
-  - [ ] 9.2 On the profile detail page (Story 7-3), add a subtle "Is this your profile?" link at the bottom that navigates to `/marketplace/edit-request`
-  - [ ] 9.3 All edit routes are public — no `<ProtectedRoute>` wrapper
-
-- [ ] Task 10: Write backend tests (AC: #8)
-  - [ ] 10.1 Create `apps/api/src/services/__tests__/marketplace-edit.service.test.ts`:
-    - Token generation: produces 32-char hex string
-    - Token hashing: stored hash matches SHA-256 of plaintext
-    - Token validation: valid token returns profile edit view
-    - Token expiry: expired token returns 'expired'
-    - Token consumption: after edit, token set to null
-    - Token single-use: second use of same token returns 'invalid'
-    - Phone resolution: finds profile via respondent phone number
-    - Phone not found: returns 'success' (no SMS sent, no error)
-    - Rate limit: 4th request in 24h blocked
-    - SMS send: mock provider called with correct phone and message
-  - [ ] 10.2 Add to `apps/api/src/controllers/__tests__/marketplace.controller.test.ts`:
-    - Request edit token: valid phone + CAPTCHA → 200 with generic message
-    - Request edit token: no CAPTCHA → 400
-    - Request edit token: rate limited → 429
-    - Validate edit token: valid → 200 with { valid: true, bio, portfolioUrl }
-    - Validate edit token: expired → 200 with { valid: false, reason: 'expired' }
-    - Validate edit token: invalid → 200 with { valid: false, reason: 'invalid' }
-    - Apply edit: valid token + valid data → 200
-    - Apply edit: bio > 150 chars → 400 validation error
-    - Apply edit: invalid URL → 400 validation error
-    - Apply edit: consumed token → 404
-  - [ ] 10.3 Create `apps/api/src/services/__tests__/sms.service.test.ts`:
-    - MockSMSProvider: send returns success, message stored in memory
-    - SMSService.send: delegates to configured provider
-    - SMSService disabled: returns early without sending
-  - [ ] 10.4 `pnpm test` — all tests pass, zero regressions
-
-- [ ] Task 11: Write frontend tests (AC: #8)
-  - [ ] 11.1 Create `apps/web/src/features/marketplace/__tests__/MarketplaceEditRequestPage.test.tsx`:
-    - Renders phone input and CAPTCHA
-    - Submit sends POST request
-    - Shows success message after submit
-    - Shows rate limit message on 429
-  - [ ] 11.2 Create `apps/web/src/features/marketplace/__tests__/MarketplaceEditPage.test.tsx`:
-    - Valid token: renders edit form with pre-populated fields
-    - Expired token: shows expiry message
-    - Bio character counter updates live
-    - Bio > 150 chars: validation error
-    - Portfolio URL invalid: validation error
-    - Successful submit: shows success confirmation
-  - [ ] 11.3 `cd apps/web && pnpm vitest run` — all web tests pass
+- [x] [AI-Review][HIGH] TOCTOU race in `applyProfileEdit` — added `SELECT FOR UPDATE` row lock inside transaction [marketplace-edit.service.ts:180]
+- [x] [AI-Review][HIGH] Redis rate limit race condition — replaced non-atomic GET-then-INCR with atomic INCR-first pattern [marketplace-edit.service.ts:79-86]
+- [x] [AI-Review][HIGH] NIN null bypass — respondents without NIN now fall back to respondent ID-based rate limiting [marketplace-edit.service.ts:78]
+- [x] [AI-Review][MEDIUM] Undocumented git changes — added 3 missing files to File List (auth.login.test.ts, registration.service.test.ts, MarketplaceProfilePage.test.tsx)
+- [x] [AI-Review][MEDIUM] Frontend URL validation weaker than backend — replaced regex with `new URL()` parsing to align with Zod `.url()` [MarketplaceEditPage.tsx:49-56]
+- [x] [AI-Review][MEDIUM] GET/PUT edit routes lacked rate limiting — added `editTokenUseRateLimit` (30/min/IP) middleware [marketplace.routes.ts:33,36]
+- [x] [AI-Review][LOW] Story File List count mismatch — corrected from "11 modified" to "14 modified"
+- [x] [AI-Review][LOW] Form state initialization via conditional setState in render — moved to `useEffect` [MarketplaceEditPage.tsx:23-29]
 
 ## Dev Notes
 
@@ -580,9 +384,71 @@ const [bio, setBio] = useState(initialBio || '');
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- Redis mock `redis.get is not a function`: `vi.resetAllMocks()` clears `mockImplementation` on class constructor mocks. Fix: use `vi.clearAllMocks()` instead.
+- `() => mockRedis is not a constructor`: Arrow functions can't be used with `new`. Fix: use `class { ... }` in vi.mock for ioredis.
+- MarketplaceEditPage URL validation test: jsdom `<input type="url">` may not fire native validation in `onSubmit`. Fix: test mutation-not-called instead of checking error DOM element.
 
 ### Completion Notes List
+- All 11 tasks implemented and tested
+- 97 tests total after review: 76 backend (11 SMS + 14 edit service + 51 controller) + 21 frontend (9 edit request + 12 edit page)
+- Zero regressions from story changes; pre-existing failures: 2 API integration test timeouts (need real DB), 2 MarketplaceProfilePage timeouts (lucide-react dynamic import)
+- Added Pencil mock to MarketplaceProfilePage.test.tsx for consistency (pre-existing issue unrelated to this story)
+- TOCTOU protection: applyProfileEdit wraps token lookup + consumption in db.transaction() with SELECT FOR UPDATE (fixed in review)
+- Token hashing: SHA-256 stored in DB, plaintext sent via SMS only
+- Code review (2026-03-07): 8 issues found and fixed (3 HIGH, 3 MEDIUM, 2 LOW). See "Review Follow-ups (AI)" section.
+
+### Change Log
+
+| Change | File | Reason |
+|--------|------|--------|
+| NEW | `apps/api/src/services/sms.service.ts` | SMS service with provider pattern (MockSMSProvider, HttpSMSProvider) |
+| NEW | `apps/api/src/services/marketplace-edit.service.ts` | Edit token business logic (request, validate, apply) |
+| NEW | `apps/web/src/features/marketplace/pages/MarketplaceEditRequestPage.tsx` | Phone + CAPTCHA form to request edit token |
+| NEW | `apps/web/src/features/marketplace/pages/MarketplaceEditPage.tsx` | Token-validated profile edit form |
+| NEW | `apps/api/src/services/__tests__/sms.service.test.ts` | 11 SMS service tests |
+| NEW | `apps/api/src/services/__tests__/marketplace-edit.service.test.ts` | 13 edit service tests |
+| NEW | `apps/web/src/features/marketplace/__tests__/MarketplaceEditRequestPage.test.tsx` | 9 edit request page tests |
+| NEW | `apps/web/src/features/marketplace/__tests__/MarketplaceEditPage.test.tsx` | 12 edit page tests |
+| MOD | `apps/api/src/controllers/marketplace.controller.ts` | Added requestEditToken, validateEditToken, applyProfileEdit methods |
+| MOD | `apps/api/src/routes/marketplace.routes.ts` | Added POST /request-edit-token, GET /edit/:token, PUT /edit |
+| MOD | `apps/api/src/middleware/marketplace-rate-limit.ts` | Added editTokenRequestRateLimit (10/hour/IP) |
+| MOD | `apps/api/src/controllers/__tests__/marketplace.controller.test.ts` | 20+ new controller tests for edit endpoints |
+| MOD | `packages/types/src/marketplace.ts` | Added ProfileEditTokenRequest, ProfileEditPayload, MarketplaceProfileEditView |
+| MOD | `apps/web/src/features/marketplace/api/marketplace.api.ts` | Added requestEditToken, validateEditToken, submitProfileEdit |
+| MOD | `apps/web/src/features/marketplace/hooks/useMarketplace.ts` | Added useValidateEditToken, useSubmitProfileEdit, editToken key |
+| MOD | `apps/web/src/App.tsx` | Added lazy-loaded routes for edit-request and edit/:token |
+| MOD | `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx` | Added "Is this your profile?" edit link |
+| MOD | `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx` | Added Pencil mock |
+| MOD | `.env.example` | Added SMS_PROVIDER, SMS_API_URL, SMS_API_KEY, SMS_SENDER_ID |
+| MOD | `scripts/check-env.sh` | Added SMS optional group check |
 
 ### File List
+
+**New files (8):**
+- `apps/api/src/services/sms.service.ts`
+- `apps/api/src/services/marketplace-edit.service.ts`
+- `apps/web/src/features/marketplace/pages/MarketplaceEditRequestPage.tsx`
+- `apps/web/src/features/marketplace/pages/MarketplaceEditPage.tsx`
+- `apps/api/src/services/__tests__/sms.service.test.ts`
+- `apps/api/src/services/__tests__/marketplace-edit.service.test.ts`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceEditRequestPage.test.tsx`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceEditPage.test.tsx`
+
+**Modified files (14):**
+- `apps/api/src/controllers/marketplace.controller.ts`
+- `apps/api/src/routes/marketplace.routes.ts`
+- `apps/api/src/middleware/marketplace-rate-limit.ts`
+- `apps/api/src/controllers/__tests__/marketplace.controller.test.ts`
+- `packages/types/src/marketplace.ts`
+- `apps/web/src/features/marketplace/api/marketplace.api.ts`
+- `apps/web/src/features/marketplace/hooks/useMarketplace.ts`
+- `apps/web/src/App.tsx`
+- `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx`
+- `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx`
+- `apps/api/src/__tests__/auth.login.test.ts`
+- `apps/api/src/services/__tests__/registration.service.test.ts`
+- `.env.example`
+- `scripts/check-env.sh`

@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { MarketplaceController } from '../controllers/marketplace.controller.js';
-import { marketplaceSearchRateLimit, marketplaceProfileRateLimit } from '../middleware/marketplace-rate-limit.js';
+import {
+  marketplaceSearchRateLimit,
+  marketplaceProfileRateLimit,
+  editTokenRequestRateLimit,
+  editTokenUseRateLimit,
+} from '../middleware/marketplace-rate-limit.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 
@@ -16,5 +21,19 @@ router.post('/profiles/:id/reveal',
   verifyCaptcha,
   MarketplaceController.revealContact,
 );
+
+// Edit token routes — public, no auth (token IS the auth) (Story 7-5)
+// POST request-edit-token: CAPTCHA + IP rate limit required
+router.post('/request-edit-token',
+  editTokenRequestRateLimit,
+  verifyCaptcha,
+  MarketplaceController.requestEditToken,
+);
+
+// GET edit/:token: validate token and return profile data for form pre-population
+router.get('/edit/:token', editTokenUseRateLimit, MarketplaceController.validateEditToken);
+
+// PUT edit: apply profile edit with token in body
+router.put('/edit', editTokenUseRateLimit, MarketplaceController.applyProfileEdit);
 
 export default router;

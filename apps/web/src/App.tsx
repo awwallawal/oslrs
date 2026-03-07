@@ -114,6 +114,8 @@ const PublicSurveysPage = lazy(() => import('./features/dashboard/pages/PublicSu
 const PublicMarketplacePage = lazy(() => import('./features/dashboard/pages/PublicMarketplacePage'));
 const MarketplaceSearchPage = lazy(() => import('./features/marketplace/pages/MarketplaceSearchPage'));
 const MarketplaceProfilePage = lazy(() => import('./features/marketplace/pages/MarketplaceProfilePage'));
+const MarketplaceEditRequestPage = lazy(() => import('./features/marketplace/pages/MarketplaceEditRequestPage'));
+const MarketplaceEditPage = lazy(() => import('./features/marketplace/pages/MarketplaceEditPage'));
 const PublicSupportPage = lazy(() => import('./features/dashboard/pages/PublicSupportPage'));
 const ProfilePage = lazy(() => import('./features/dashboard/pages/ProfilePage'));
 
@@ -413,7 +415,7 @@ function App() {
                 }
               />
 
-              {/* Marketplace — public search + profile (Story 7-2, 7-3) */}
+              {/* Marketplace — public search + profile + edit (Story 7-2, 7-3, 7-5) */}
               <Route path="marketplace">
                 <Route
                   index
@@ -428,6 +430,22 @@ function App() {
                   element={
                     <Suspense fallback={<PageLoadingFallback />}>
                       <MarketplaceProfilePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="edit-request"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <MarketplaceEditRequestPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="edit/:token"
+                  element={
+                    <Suspense fallback={<PageLoadingFallback />}>
+                      <MarketplaceEditPage />
                     </Suspense>
                   }
                 />

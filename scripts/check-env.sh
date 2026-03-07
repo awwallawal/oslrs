@@ -134,6 +134,25 @@ else
   echo "  PASS Google OAuth"
 fi
 
+# SMS (edit token delivery)
+SMS_PROVIDER_VAL=$(grep -E "^\s*(export\s+)?SMS_PROVIDER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^[\"']//;s/[\"']$//")
+if [ "$SMS_PROVIDER_VAL" = "http" ]; then
+  SMS_MISSING=""
+  for var in SMS_API_URL SMS_API_KEY; do
+    if ! grep -qE "^\s*(export\s+)?${var}=" "$ENV_FILE" 2>/dev/null; then
+      SMS_MISSING="$SMS_MISSING $var"
+    fi
+  done
+  if [ -n "$SMS_MISSING" ]; then
+    echo "  WARN SMS: Provider=http but missing$SMS_MISSING (SMS sending will fail)"
+    WARN_COUNT=$((WARN_COUNT + 1))
+  else
+    echo "  PASS SMS (http provider)"
+  fi
+else
+  echo "  PASS SMS (mock provider — no config needed)"
+fi
+
 # Summary
 echo ""
 echo "=================================="

@@ -101,15 +101,21 @@ export interface ContactRevealRequest {
 // Profile Enrichment Types (Edit Token — Story 7-5)
 // ============================================================================
 
-/** Payload for self-service profile enrichment via edit token */
-export interface ProfileEnrichmentPayload {
-  bio?: string;
-  portfolioUrl?: string;
+/** Request body for requesting an edit token via SMS */
+export interface ProfileEditTokenRequest {
+  phoneNumber: string;
+  captchaToken: string;
 }
 
-/** Edit token validation response */
-export interface EditTokenValidation {
-  valid: boolean;
-  profileId?: string;
-  expiresAt?: string;
+/** Payload for applying a profile edit via edit token */
+export interface ProfileEditPayload {
+  editToken: string;
+  bio?: string | null;
+  portfolioUrl?: string | null;
+}
+
+/** Profile data returned when validating an edit token (for form pre-population) */
+export interface MarketplaceProfileEditView {
+  bio: string | null;
+  portfolioUrl: string | null;
 }

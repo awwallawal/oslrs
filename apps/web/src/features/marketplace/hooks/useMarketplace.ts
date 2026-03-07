@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { searchMarketplace, fetchMarketplaceProfile, revealMarketplaceContact } from '../api/marketplace.api';
-import type { MarketplaceSearchParams } from '@oslsr/types';
+import { searchMarketplace, fetchMarketplaceProfile, revealMarketplaceContact, validateEditToken, submitProfileEdit } from '../api/marketplace.api';
+import type { MarketplaceSearchParams, ProfileEditPayload } from '@oslsr/types';
 
 export const marketplaceKeys = {
   all: ['marketplace'] as const,
   search: (params: MarketplaceSearchParams) => [...marketplaceKeys.all, 'search', params] as const,
   profile: (id: string) => [...marketplaceKeys.all, 'profile', id] as const,
   revealedContact: (profileId: string) => [...marketplaceKeys.all, 'revealed', profileId] as const,
+  editToken: (token: string) => [...marketplaceKeys.all, 'editToken', token] as const,
 };
 
 export function useMarketplaceSearch(params: MarketplaceSearchParams) {
@@ -38,5 +39,20 @@ export function useRevealContact() {
         data,
       );
     },
+  });
+}
+
+export function useValidateEditToken(token: string) {
+  return useQuery({
+    queryKey: marketplaceKeys.editToken(token),
+    queryFn: () => validateEditToken(token),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useSubmitProfileEdit() {
+  return useMutation({
+    mutationFn: (payload: ProfileEditPayload) => submitProfileEdit(payload),
   });
 }

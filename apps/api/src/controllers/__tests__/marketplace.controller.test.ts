@@ -2,11 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockSearchProfiles, mockGetProfileById, mockRevealContact, mockLogPiiAccess } = vi.hoisted(() => ({
+const {
+  mockSearchProfiles, mockGetProfileById, mockRevealContact, mockLogPiiAccess,
+  mockRequestEditToken, mockValidateEditToken, mockApplyProfileEdit,
+} = vi.hoisted(() => ({
   mockSearchProfiles: vi.fn(),
   mockGetProfileById: vi.fn(),
   mockRevealContact: vi.fn(),
   mockLogPiiAccess: vi.fn(),
+  mockRequestEditToken: vi.fn(),
+  mockValidateEditToken: vi.fn(),
+  mockApplyProfileEdit: vi.fn(),
 }));
 
 vi.mock('../../services/marketplace.service.js', () => ({
@@ -14,6 +20,14 @@ vi.mock('../../services/marketplace.service.js', () => ({
     searchProfiles: (...args: any[]) => mockSearchProfiles(...args),
     getProfileById: (...args: any[]) => mockGetProfileById(...args),
     revealContact: (...args: any[]) => mockRevealContact(...args),
+  },
+}));
+
+vi.mock('../../services/marketplace-edit.service.js', () => ({
+  MarketplaceEditService: {
+    requestEditToken: (...args: any[]) => mockRequestEditToken(...args),
+    validateEditToken: (...args: any[]) => mockValidateEditToken(...args),
+    applyProfileEdit: (...args: any[]) => mockApplyProfileEdit(...args),
   },
 }));
 
@@ -596,6 +610,228 @@ describe('MarketplaceController', () => {
     });
   });
 
+  describe('requestEditToken', () => {
+    it('should return 200 with generic message on success', async () => {
+      mockRequestEditToken.mockResolvedValue({ status: 'success' });
+
+      const req = { body: { phoneNumber: '+2348012345678' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.requestEditToken(req, res, next);
+
+      expect(mockRequestEditToken).toHaveBeenCalledWith('+2348012345678');
+      expect(res.json).toHaveBeenCalledWith({
+        data: {
+          message: 'If a marketplace profile exists for this phone number, an SMS with an edit link has been sent.',
+        },
+      });
+    });
+
+    it('should return 429 when rate limited', async () => {
+      mockRequestEditToken.mockResolvedValue({ status: 'rate_limited' });
+
+      const req = { body: { phoneNumber: '+2348012345678' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.requestEditToken(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.json).toHaveBeenCalledWith({
+        status: 'error',
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many edit token requests. Please try again later.',
+      });
+    });
+
+    it('should return 400 for missing phoneNumber', async () => {
+      const req = { body: {} } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.requestEditToken(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('should return 400 for phoneNumber shorter than 10 chars', async () => {
+      const req = { body: { phoneNumber: '12345' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.requestEditToken(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+  });
+
+  describe('validateEditToken', () => {
+    const validToken = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+
+    it('should return valid=true with profile data for valid token', async () => {
+      mockValidateEditToken.mockResolvedValue({
+        status: 'valid',
+        profile: { bio: 'Expert plumber', portfolioUrl: 'https://example.com' },
+      });
+
+      const req = { params: { token: validToken } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.validateEditToken(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        data: { valid: true, bio: 'Expert plumber', portfolioUrl: 'https://example.com' },
+      });
+    });
+
+    it('should return valid=false with reason expired', async () => {
+      mockValidateEditToken.mockResolvedValue({ status: 'expired' });
+
+      const req = { params: { token: validToken } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.validateEditToken(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        data: { valid: false, reason: 'expired' },
+      });
+    });
+
+    it('should return valid=false with reason invalid', async () => {
+      mockValidateEditToken.mockResolvedValue({ status: 'invalid' });
+
+      const req = { params: { token: validToken } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.validateEditToken(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        data: { valid: false, reason: 'invalid' },
+      });
+    });
+
+    it('should return valid=false for malformed token (not 32 hex chars)', async () => {
+      const req = { params: { token: 'short' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.validateEditToken(req, res, next);
+
+      expect(res.json).toHaveBeenCalledWith({
+        data: { valid: false, reason: 'invalid' },
+      });
+      expect(mockValidateEditToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyProfileEdit', () => {
+    const validToken = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+
+    it('should return 200 on successful edit', async () => {
+      mockApplyProfileEdit.mockResolvedValue({ status: 'success' });
+
+      const req = {
+        body: { editToken: validToken, bio: 'Updated bio', portfolioUrl: 'https://example.com' },
+      } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(mockApplyProfileEdit).toHaveBeenCalledWith(validToken, 'Updated bio', 'https://example.com');
+      expect(res.json).toHaveBeenCalledWith({
+        data: { message: 'Profile updated successfully' },
+      });
+    });
+
+    it('should return 410 for expired token', async () => {
+      mockApplyProfileEdit.mockResolvedValue({ status: 'expired' });
+
+      const req = { body: { editToken: validToken, bio: 'Bio' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(410);
+      expect(res.json).toHaveBeenCalledWith({
+        status: 'error',
+        code: 'TOKEN_EXPIRED',
+        message: 'This edit link has expired. Please request a new one.',
+      });
+    });
+
+    it('should return 404 for consumed/invalid token', async () => {
+      mockApplyProfileEdit.mockResolvedValue({ status: 'invalid' });
+
+      const req = { body: { editToken: validToken } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        status: 'error',
+        code: 'NOT_FOUND',
+        message: 'Invalid edit link.',
+      });
+    });
+
+    it('should return 400 for bio > 150 characters', async () => {
+      const req = {
+        body: { editToken: validToken, bio: 'a'.repeat(151) },
+      } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('should return 400 for invalid URL', async () => {
+      const req = {
+        body: { editToken: validToken, portfolioUrl: 'not-a-url' },
+      } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+
+    it('should return 400 for missing editToken', async () => {
+      const req = { body: { bio: 'Some bio' } } as any;
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.applyProfileEdit(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const error = next.mock.calls[0][0];
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.statusCode).toBe(400);
+    });
+  });
+
   describe('rate limiting', () => {
     it('rate limit message matches 429 response spec (RATE_LIMIT_EXCEEDED format)', async () => {
       const { RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
@@ -624,6 +860,34 @@ describe('MarketplaceController', () => {
     it('profile rate limiter exports a middleware function', async () => {
       const { marketplaceProfileRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
       expect(typeof marketplaceProfileRateLimit).toBe('function');
+    });
+
+    it('edit token rate limit message matches 429 response spec', async () => {
+      const { EDIT_TOKEN_RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(EDIT_TOKEN_RATE_LIMIT_MESSAGE).toEqual({
+        status: 'error',
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many edit token requests. Please try again later.',
+      });
+    });
+
+    it('edit token rate limiter exports a middleware function', async () => {
+      const { editTokenRequestRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(typeof editTokenRequestRateLimit).toBe('function');
+    });
+
+    it('edit token use rate limit message matches 429 response spec', async () => {
+      const { EDIT_TOKEN_USE_RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(EDIT_TOKEN_USE_RATE_LIMIT_MESSAGE).toEqual({
+        status: 'error',
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many requests. Please try again later.',
+      });
+    });
+
+    it('edit token use rate limiter exports a middleware function', async () => {
+      const { editTokenUseRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(typeof editTokenUseRateLimit).toBe('function');
     });
   });
 });
