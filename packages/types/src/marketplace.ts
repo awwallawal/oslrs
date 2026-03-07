@@ -98,6 +98,43 @@ export interface ContactRevealRequest {
 }
 
 // ============================================================================
+// Reveal Analytics Types (Story 7-6)
+// ============================================================================
+
+/** Reveal statistics for multi-period overview */
+export interface RevealStats {
+  total24h: number;
+  total7d: number;
+  total30d: number;
+  uniqueViewers24h: number;
+  uniqueProfiles24h: number;
+}
+
+/** Top viewer by reveal count */
+export interface TopViewer {
+  viewerId: string;
+  revealCount: number;
+  distinctProfiles: number;
+  lastRevealAt: string;
+}
+
+/** Top viewed profile by reveal count */
+export interface TopProfile {
+  profileId: string;
+  revealCount: number;
+  distinctViewers: number;
+  lastRevealAt: string;
+}
+
+/** Suspicious device — same fingerprint across multiple accounts */
+export interface SuspiciousDevice {
+  deviceFingerprint: string;
+  accountCount: number;
+  totalReveals: number;
+  lastSeenAt: string;
+}
+
+// ============================================================================
 // Profile Enrichment Types (Edit Token — Story 7-5)
 // ============================================================================
 

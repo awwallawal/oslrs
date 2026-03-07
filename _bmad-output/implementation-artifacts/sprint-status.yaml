@@ -256,13 +256,13 @@ development_status:
   # Prerequisites: prep-1 through prep-5 MUST be done before Epic 7 starts.
   # Security: First public unauthenticated routes — fundamentally different security surface.
   # VPS Strategy: Start on current 2GB DigitalOcean, upgrade only if monitoring (Story 6-2) triggers thresholds.
-  epic-7: in-progress
+  epic-7: done  # Completed 2026-03-07: All 6 stories done (7-1 through 7-6). Public Skills Marketplace with search, anonymous profiles, CAPTCHA-protected contact reveal, device fingerprinting, Redis rate limiting, admin analytics. 11 prep tasks + 6 stories.
   7-1-marketplace-data-extraction-worker: done  # Depends on: prep-4 (marketplace spike). Completed 2026-03-06: 7 tasks, 32 new tests, 0 regressions. Code review passed 2026-03-06: 7 findings (1H, 4M, 2L), 6 fixed, 1 noted (L2 RegistryTestPage cleanup).
   7-2-public-marketplace-search-interface: done  # Depends on: prep-4 (marketplace spike), prep-5 (security spike). Completed 2026-03-06: 10 tasks, 52 new tests (34 API + 18 web), 0 regressions. Code review passed: 9 findings (2H, 5M, 2L), all 9 auto-fixed.
   7-3-anonymous-profile-government-verified-badges: done  # Code review passed 2026-03-06: 8 findings (1H, 5M, 2L), all 8 auto-fixed. Nested interactive elements, XSS portfolio URL, nullable profession type, invalid Tailwind class, missing AC#7 test. 100 marketplace tests (51 API + 49 web), 0 regressions.
   7-4-authenticated-contact-reveal-captcha: done  # Code review passed 2026-03-06: 6 findings (1H, 3M, 2L), 5 auto-fixed. H1 TOCTOU race in rate limit (transaction+FOR UPDATE), M1 type mismatch, M2 Retry-After header, M3 dev notes correction, L1 file list, L2 noted. 1,394 API + 2,057 web tests pass, 0 regressions.  # Depends on: prep-5 (security spike)
   7-5-profile-enrichment-via-edit-token: done  # Code review passed 2026-03-07: 8 findings (3H, 3M, 2L), all 8 auto-fixed. H1 TOCTOU SELECT FOR UPDATE, H2 atomic Redis rate limit, H3 NIN null bypass, M1 undocumented files, M2 URL validation alignment, M3 GET/PUT rate limiting, L1 file list count, L2 useEffect init. 97 tests (76 API + 21 web), 0 regressions.
-  7-6-contact-view-logging-rate-limiting: ready-for-dev  # Depends on: prep-5 (security spike)
+  7-6-contact-view-logging-rate-limiting: done  # Depends on: prep-5 (security spike). Completed 2026-03-07: 12 tasks. Code review passed 2026-03-07: 7 findings (2C, 2H, 3M), all 7 auto-fixed. C1 missing service tests (8 added), C2 inflated test count corrected, H1 Redis INCR/EXPIRE race condition, H2 false File List claim, M1 sql.raw→parameterized, M2 undocumented files, M3 shallow rate limit tests (8 Redis logic tests added). 56 total new tests (39 pre-review + 17 review). 1471 API + 2093 web tests pass, 0 regressions.
   epic-7-retrospective: optional
 
 

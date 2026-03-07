@@ -12,6 +12,7 @@ import type {
 import { contactReveals } from '../db/schema/contact-reveals.js';
 import { marketplaceProfiles } from '../db/schema/marketplace.js';
 import { respondents } from '../db/schema/respondents.js';
+import { checkRevealRateLimit } from '../middleware/reveal-rate-limit.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-service' });
@@ -228,6 +229,7 @@ export class MarketplaceService {
     viewerId: string,
     ipAddress: string,
     userAgent: string,
+    deviceFingerprint?: string | null,
   ): Promise<
     | { status: 'success'; data: ContactRevealResponse }
     | { status: 'not_found' }
@@ -258,6 +260,12 @@ export class MarketplaceService {
     if (!respondent) {
       logger.warn({ profileId, respondentId: profile.respondentId }, 'Marketplace profile references missing respondent');
       return { status: 'not_found' };
+    }
+
+    // Redis fast-path rate limit check (Story 7-6) — avoids DB query if already blocked
+    const redisCheck = await checkRevealRateLimit(viewerId, deviceFingerprint);
+    if (!redisCheck.allowed) {
+      return { status: 'rate_limited' as const, retryAfter: redisCheck.retryAfter! };
     }
 
     // 4 + 5: Rate limit check + audit insert in transaction (TOCTOU guard)
@@ -291,6 +299,7 @@ export class MarketplaceService {
         profileId,
         ipAddress,
         userAgent,
+        deviceFingerprint: deviceFingerprint ?? null,
       });
 
       return {

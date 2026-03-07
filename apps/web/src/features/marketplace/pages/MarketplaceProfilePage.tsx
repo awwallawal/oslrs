@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Clock, ExternalLink, LogIn, Lock, Loader2, AlertCircle, Pencil } from 'lucide-react';
+import { useDeviceFingerprint } from '../../../hooks/useDeviceFingerprint';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { GovernmentVerifiedBadge } from '../components/GovernmentVerifiedBadge';
@@ -34,6 +35,7 @@ export default function MarketplaceProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const deviceFingerprint = useDeviceFingerprint();
   const { data: profile, isLoading, error } = useMarketplaceProfile(id || '');
   const queryClient = useQueryClient();
   const revealMutation = useRevealContact();
@@ -57,7 +59,7 @@ export default function MarketplaceProfilePage() {
     if (!token || !id) return;
     setRevealState('loading');
     revealMutation.mutate(
-      { profileId: id, captchaToken: token },
+      { profileId: id, captchaToken: token, deviceFingerprint },
       {
         onSuccess: (data) => {
           setRevealedContact(data);

@@ -133,6 +133,8 @@ const ViewAsPage = lazy(() => import('./features/dashboard/pages/ViewAsPage'));
 const ViewAsDashboardPage = lazy(() => import('./features/dashboard/pages/ViewAsDashboardPage'));
 // Story 5.5: Respondent Data Registry Table (4 roles: SA, Assessor, Official, Supervisor)
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
+// Story 7-6: Reveal Analytics (Super Admin)
+const RevealAnalyticsPage = lazy(() => import('./features/marketplace/pages/RevealAnalyticsPage'));
 // prep-3: 404 pages
 const NotFoundPage = lazy(() => import('./features/dashboard/pages/NotFoundPage'));
 const PublicNotFoundPage = lazy(() => import('./pages/PublicNotFoundPage'));
@@ -725,6 +727,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <PaymentDisputeQueuePage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 7-6: Reveal Analytics */}
+                <Route
+                  path="reveal-analytics"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <RevealAnalyticsPage />
                     </Suspense>
                   }
                 />

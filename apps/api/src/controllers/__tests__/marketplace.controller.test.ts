@@ -471,7 +471,11 @@ describe('MarketplaceController', () => {
         user: { sub: viewerId, role: 'public_user' },
         ip: '127.0.0.1',
         socket: { remoteAddress: '127.0.0.1' },
-        get: vi.fn().mockReturnValue('test-user-agent'),
+        get: vi.fn().mockImplementation((header: string) => {
+          if (header === 'user-agent') return 'test-user-agent';
+          if (header === 'x-device-fingerprint') return null;
+          return null;
+        }),
         headers: { 'user-agent': 'test-user-agent' },
         ...overrides,
       };
@@ -489,7 +493,7 @@ describe('MarketplaceController', () => {
 
       await MarketplaceController.revealContact(req, res, next);
 
-      expect(mockRevealContact).toHaveBeenCalledWith(validId, viewerId, '127.0.0.1', 'test-user-agent');
+      expect(mockRevealContact).toHaveBeenCalledWith(validId, viewerId, '127.0.0.1', 'test-user-agent', null);
       expect(res.json).toHaveBeenCalledWith({
         data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
       });
@@ -513,7 +517,7 @@ describe('MarketplaceController', () => {
         'pii.contact_reveal',
         'marketplace_profiles',
         validId,
-        { viewerRole: 'public_user' },
+        { viewerRole: 'public_user', deviceFingerprint: null },
       );
     });
 
@@ -829,6 +833,81 @@ describe('MarketplaceController', () => {
       const error = next.mock.calls[0][0];
       expect(error.code).toBe('VALIDATION_ERROR');
       expect(error.statusCode).toBe(400);
+    });
+  });
+
+  describe('revealContact — device fingerprint (Story 7-6)', () => {
+    const validId = '018e1234-5678-7000-8000-000000000001';
+    const viewerId = '018e9999-0000-7000-8000-000000000001';
+
+    function createAuthReqWithFingerprint(fingerprint: string | null): any {
+      return {
+        params: { id: validId },
+        user: { sub: viewerId, role: 'public_user' },
+        ip: '127.0.0.1',
+        socket: { remoteAddress: '127.0.0.1' },
+        get: vi.fn().mockImplementation((header: string) => {
+          if (header === 'user-agent') return 'test-user-agent';
+          if (header === 'x-device-fingerprint') return fingerprint;
+          return null;
+        }),
+        headers: { 'user-agent': 'test-user-agent' },
+      };
+    }
+
+    it('should pass device fingerprint from x-device-fingerprint header to service', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'A', lastName: 'B', phoneNumber: '+234' },
+      });
+
+      const req = createAuthReqWithFingerprint('fp_abc123');
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockRevealContact).toHaveBeenCalledWith(
+        validId, viewerId, '127.0.0.1', 'test-user-agent', 'fp_abc123',
+      );
+    });
+
+    it('should pass null when x-device-fingerprint header is absent', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'A', lastName: 'B', phoneNumber: '+234' },
+      });
+
+      const req = createAuthReqWithFingerprint(null);
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockRevealContact).toHaveBeenCalledWith(
+        validId, viewerId, '127.0.0.1', 'test-user-agent', null,
+      );
+    });
+
+    it('should include deviceFingerprint in audit log', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'A', lastName: 'B', phoneNumber: '+234' },
+      });
+
+      const req = createAuthReqWithFingerprint('fp_xyz789');
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+        req,
+        'pii.contact_reveal',
+        'marketplace_profiles',
+        validId,
+        { viewerRole: 'public_user', deviceFingerprint: 'fp_xyz789' },
+      );
     });
   });
 

@@ -42,6 +42,12 @@ vi.mock('../../auth/context/AuthContext', () => ({
   useAuth: () => mockAuthReturn,
 }));
 
+let mockDeviceFingerprint: string | null = null;
+
+vi.mock('../../../hooks/useDeviceFingerprint', () => ({
+  useDeviceFingerprint: () => mockDeviceFingerprint,
+}));
+
 vi.mock('../../auth/components/HCaptcha', () => ({
   HCaptcha: ({ onVerify, onExpire, onError, error }: any) => (
     <div data-testid="hcaptcha-mock">
@@ -145,6 +151,7 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   };
+  mockDeviceFingerprint = null;
 });
 
 afterEach(() => {
@@ -379,7 +386,7 @@ describe('MarketplaceProfilePage', () => {
       fireEvent.click(solveButton);
 
       expect(mockRevealMutation.mutate).toHaveBeenCalledWith(
-        { profileId: '018e1234-5678-7000-8000-000000000001', captchaToken: 'test-captcha-token' },
+        { profileId: '018e1234-5678-7000-8000-000000000001', captchaToken: 'test-captcha-token', deviceFingerprint: null },
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       );
     });
@@ -466,6 +473,34 @@ describe('MarketplaceProfilePage', () => {
 
       expect(screen.getByTestId('reveal-error')).toBeInTheDocument();
       expect(screen.getByText('Verification failed. Please try again.')).toBeInTheDocument();
+    });
+
+    it('passes deviceFingerprint to reveal mutation when available (Story 7-6)', () => {
+      mockDeviceFingerprint = 'fp_test_abc123';
+
+      renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      expect(mockRevealMutation.mutate).toHaveBeenCalledWith(
+        { profileId: '018e1234-5678-7000-8000-000000000001', captchaToken: 'test-captcha-token', deviceFingerprint: 'fp_test_abc123' },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+    });
+
+    it('passes null deviceFingerprint when fingerprint unavailable (Story 7-6)', () => {
+      mockDeviceFingerprint = null;
+
+      renderProfilePage();
+
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      expect(mockRevealMutation.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceFingerprint: null }),
+        expect.any(Object),
+      );
     });
   });
 });

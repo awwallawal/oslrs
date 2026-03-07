@@ -38,6 +38,7 @@ import {
   Wallet,
   Scale,
   Eye,
+  Search,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -144,6 +145,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Export Data', href: '/dashboard/super-admin/export', icon: Download },
     { label: 'Remuneration', href: '/dashboard/super-admin/remuneration', icon: DollarSign },
     { label: 'Payment Disputes', href: '/dashboard/super-admin/disputes', icon: Scale },
+    { label: 'Reveal Analytics', href: '/dashboard/super-admin/reveal-analytics', icon: Search },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
   ],

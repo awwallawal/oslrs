@@ -21,10 +21,13 @@ export const contactReveals = pgTable('contact_reveals', {
   profileId: uuid('profile_id').notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   // Btree index for rate limit query: COUNT WHERE viewer_id = $1 AND created_at > NOW() - 24h
   idxContactRevealsViewerCreated: index('idx_contact_reveals_viewer_created').on(table.viewerId, table.createdAt),
+  // Index for "same device, multiple accounts" detection (Story 7-6)
+  idxContactRevealsDeviceCreatedAt: index('idx_contact_reveals_device_created_at').on(table.deviceFingerprint, table.createdAt),
 }));
 
 export type ContactReveal = typeof contactReveals.$inferSelect;

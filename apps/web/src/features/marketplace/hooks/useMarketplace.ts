@@ -31,8 +31,8 @@ export function useMarketplaceProfile(id: string) {
 export function useRevealContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ profileId, captchaToken }: { profileId: string; captchaToken: string }) =>
-      revealMarketplaceContact(profileId, captchaToken),
+    mutationFn: ({ profileId, captchaToken, deviceFingerprint }: { profileId: string; captchaToken: string; deviceFingerprint?: string | null }) =>
+      revealMarketplaceContact(profileId, captchaToken, deviceFingerprint),
     onSuccess: (data, variables) => {
       queryClient.setQueryData(
         marketplaceKeys.revealedContact(variables.profileId),

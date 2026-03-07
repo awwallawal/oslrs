@@ -25,10 +25,16 @@ export async function fetchMarketplaceProfile(id: string): Promise<MarketplacePr
 export async function revealMarketplaceContact(
   profileId: string,
   captchaToken: string,
+  deviceFingerprint?: string | null,
 ): Promise<ContactRevealResponse> {
+  const headers: Record<string, string> = {};
+  if (deviceFingerprint) {
+    headers['x-device-fingerprint'] = deviceFingerprint;
+  }
   const response = await apiClient(`/marketplace/profiles/${profileId}/reveal`, {
     method: 'POST',
     body: JSON.stringify({ captchaToken }),
+    headers,
   });
   return response.data;
 }

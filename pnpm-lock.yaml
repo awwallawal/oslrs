@@ -228,6 +228,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@fingerprintjs/fingerprintjs':
+        specifier: 5.1.0
+        version: 5.1.0
       '@hcaptcha/react-hcaptcha':
         specifier: ^2.0.1
         version: 2.0.1
@@ -1916,6 +1919,9 @@ packages:
     peerDependenciesMeta:
       '@exodus/crypto':
         optional: true
+
+  '@fingerprintjs/fingerprintjs@5.1.0':
+    resolution: {integrity: sha512-8h/CscV3xQ4KSLyXbSK8YFpZ5AaezzHfkl82mn8NJIEWNi1zLfbZSIu7MGGtx4pqa10oejhEk4u0MNutuE63Fw==}
 
   '@floating-ui/core@1.7.4':
     resolution: {integrity: sha512-C3HlIdsBxszvm5McXlB8PeOEWfBhcGBTZGkGlWc2U0KFY5IwG5OQEuQ8rq52DZmcHDlPLd+YFBK+cZcytwIFWg==}
@@ -9127,6 +9133,8 @@ snapshots:
       levn: 0.4.1
 
   '@exodus/bytes@1.8.0': {}
+
+  '@fingerprintjs/fingerprintjs@5.1.0': {}
 
   '@floating-ui/core@1.7.4':
     dependencies:

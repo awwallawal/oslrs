@@ -16,6 +16,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "5.1.0",
     "@hcaptcha/react-hcaptcha": "^2.0.1",
     "@hookform/resolvers": "^3.4.2",
     "@oslsr/testing": "workspace:^",

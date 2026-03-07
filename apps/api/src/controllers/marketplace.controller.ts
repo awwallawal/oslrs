@@ -77,8 +77,9 @@ export class MarketplaceController {
       const viewerId = authReq.user.sub;
       const ipAddress = req.ip || req.socket?.remoteAddress || 'unknown';
       const userAgent = req.get('user-agent') || 'unknown';
+      const deviceFingerprint = req.get('x-device-fingerprint') || null;
 
-      const result = await MarketplaceService.revealContact(id, viewerId, ipAddress, userAgent);
+      const result = await MarketplaceService.revealContact(id, viewerId, ipAddress, userAgent, deviceFingerprint);
 
       if (result.status === 'not_found') {
         throw new AppError('NOT_FOUND', 'Profile not found or contact details not available', 404);
@@ -101,7 +102,7 @@ export class MarketplaceController {
         PII_ACTIONS.CONTACT_REVEAL,
         'marketplace_profiles',
         id,
-        { viewerRole: authReq.user.role },
+        { viewerRole: authReq.user.role, deviceFingerprint },
       );
 
       res.json({ data: result.data });

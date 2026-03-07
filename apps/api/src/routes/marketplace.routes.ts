@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { MarketplaceController } from '../controllers/marketplace.controller.js';
+import { RevealAnalyticsController } from '../controllers/reveal-analytics.controller.js';
 import {
   marketplaceSearchRateLimit,
   marketplaceProfileRateLimit,
@@ -7,9 +8,16 @@ import {
   editTokenUseRateLimit,
 } from '../middleware/marketplace-rate-limit.js';
 import { authenticate } from '../middleware/auth.js';
+import { authorize } from '../middleware/rbac.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 
 const router = Router();
+
+// Analytics routes — Super Admin only (MUST be before /profiles/:id wildcard)
+router.get('/analytics/reveals', authenticate, authorize('super_admin'), RevealAnalyticsController.getStats);
+router.get('/analytics/reveals/top-viewers', authenticate, authorize('super_admin'), RevealAnalyticsController.getTopViewers);
+router.get('/analytics/reveals/top-profiles', authenticate, authorize('super_admin'), RevealAnalyticsController.getTopProfiles);
+router.get('/analytics/reveals/suspicious-devices', authenticate, authorize('super_admin'), RevealAnalyticsController.getSuspiciousDevices);
 
 // Public routes — no authentication or authorization middleware
 router.get('/search', marketplaceSearchRateLimit, MarketplaceController.search);
