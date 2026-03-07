@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { db } from '../db/index.js';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { marketplaceProfiles } from '../db/schema/marketplace.js';
 import { respondents } from '../db/schema/respondents.js';
 import { SMSService } from './sms.service.js';
