@@ -28,11 +28,13 @@ export const RESPONDENT_FIELD_MAP: Record<string, string> = {
   // NIN (REQUIRED)
   'nin': 'nin',
   'national_id': 'nin',
-  // Name
+  // Name (supports XLSForm, camelCase, and snake_case conventions)
   'first_name': 'firstName',
   'firstName': 'firstName',
+  'firstname': 'firstName',
   'last_name': 'lastName',
   'lastName': 'lastName',
+  'surname': 'lastName',
   // Personal
   'date_of_birth': 'dateOfBirth',
   'dob': 'dateOfBirth',

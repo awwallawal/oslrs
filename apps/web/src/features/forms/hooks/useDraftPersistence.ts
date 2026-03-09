@@ -178,11 +178,18 @@ export function useDraftPersistence({
       formVersion,
       submittedAt: now,
     };
-    // Include GPS if available in form data
-    if (formData.gps_latitude != null) {
+    // Include GPS if available in form data.
+    // GeopointInput stores as { latitude, longitude, accuracy } under the question name (e.g. gps_location).
+    // Also support flat gps_latitude/gps_longitude keys for backwards compatibility.
+    const gpsObj = formData.gps_location as { latitude?: number; longitude?: number } | undefined;
+    if (gpsObj && typeof gpsObj === 'object' && gpsObj.latitude != null) {
+      enrichedPayload.gpsLatitude = gpsObj.latitude;
+    } else if (formData.gps_latitude != null) {
       enrichedPayload.gpsLatitude = formData.gps_latitude;
     }
-    if (formData.gps_longitude != null) {
+    if (gpsObj && typeof gpsObj === 'object' && gpsObj.longitude != null) {
+      enrichedPayload.gpsLongitude = gpsObj.longitude;
+    } else if (formData.gps_longitude != null) {
       enrichedPayload.gpsLongitude = formData.gps_longitude;
     }
     // Story 4.3: Include completion time for speed-run fraud detection

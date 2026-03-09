@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Controller, useForm, useWatch, type ResolverOptions } from 'react-hook-form';
+import { Controller, useForm, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFormSchema, useFormPreview } from '../hooks/useForms';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
@@ -16,6 +16,7 @@ import { getCachedDynamicFormSchema, validateQuestionValue } from '../utils/form
 import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
+import { syncManager } from '../../../services/sync-manager';
 
 const NIN_QUESTION_NAMES = ['nin', 'national_id'];
 
@@ -65,13 +66,14 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     resolver,
     mode: 'onChange',
     defaultValues: {},
+    shouldUnregister: false,
   });
 
-  const watchedFormData = useWatch({ control }) as Record<string, unknown> | undefined;
-  const formData = useMemo<Record<string, unknown>>(
-    () => watchedFormData ?? {},
-    [watchedFormData]
-  );
+  // Accumulate all answers across question navigation.
+  // react-hook-form drops values when Controllers unmount (even with shouldUnregister:false),
+  // so we maintain our own persistent store keyed by question name.
+  const allAnswersRef = useRef<Record<string, unknown>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
@@ -87,6 +89,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   useEffect(() => {
     if (!draftLoaded && draft.resumeData && !draft.loading) {
       reset(draft.resumeData.formData);
+      // Restore accumulated answers from draft
+      allAnswersRef.current = { ...draft.resumeData.formData };
+      setFormData({ ...draft.resumeData.formData });
       setCurrentIndex(draft.resumeData.questionPosition);
       setDraftLoaded(true);
     } else if (!draft.loading && !draft.resumeData) {
@@ -96,8 +101,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
   const visibleQuestions = useMemo(() => {
     if (!form) return [];
+    // Preview mode: show ALL questions (inputs are disabled, so skip logic can't be triggered)
+    if (isPreview) return form.questions;
     return getVisibleQuestions(form.questions, formData, form.sectionShowWhen);
-  }, [form, formData]);
+  }, [form, formData, isPreview]);
 
   // Current question from the FULL array
   const currentQuestion = form?.questions[currentIndex] ?? null;
@@ -184,11 +191,15 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     }
 
     // Use full-array index for navigation
-    const nextIdx = getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
+    const nextIdx = isPreview
+      ? (currentIndex + 1 < form.questions.length ? currentIndex + 1 : -1)
+      : getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
     if (nextIdx === -1) {
-      // End of form — complete draft
+      // End of form — complete draft and trigger sync
       if (!isPreview) {
         await draft.completeDraft();
+        // Trigger upload immediately if online (don't await — fire-and-forget)
+        syncManager.syncNow().catch(() => {});
       }
       setCompleted(true);
       return;
@@ -206,7 +217,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     if (!form) return;
 
     // Use full-array index for navigation
-    const prevIdx = getPrevVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
+    const prevIdx = isPreview
+      ? (currentIndex > 0 ? currentIndex - 1 : -1)
+      : getPrevVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
     if (prevIdx === -1) return;
 
     setSlideDirection('right');
@@ -217,13 +230,14 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       }
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, currentQuestion, formData, form, clearErrors]);
+  }, [currentIndex, currentQuestion, formData, form, isPreview, clearErrors]);
 
   // Determine if there's a next visible question (for button label)
   const hasNextQuestion = useMemo(() => {
     if (!form) return false;
+    if (isPreview) return currentIndex + 1 < form.questions.length;
     return getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen) !== -1;
-  }, [form, currentIndex, formData]);
+  }, [form, currentIndex, formData, isPreview]);
 
   // Loading state
   if (isLoading || (!draftLoaded && !isPreview)) {
@@ -354,6 +368,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
                 value={field.value}
                 onChange={(value) => {
                   field.onChange(value);
+                  // Accumulate answer for skip logic across questions
+                  allAnswersRef.current[currentQuestion.name] = value;
+                  setFormData({ ...allAnswersRef.current });
                   clearErrors(currentQuestion.name);
                   if (isCurrentNin) {
                     ninCheck.reset();

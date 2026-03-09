@@ -150,22 +150,30 @@ export function convertChoiceLists(choices: XlsformChoiceRow[]): Record<string, 
  * Extracts Section[] from XLSForm survey rows.
  * begin_group/end_group pairs become sections.
  * Questions inside groups become section questions.
- * Metadata types and questions outside groups are skipped.
+ * Questions outside groups are placed in an auto-generated "General" section.
+ * Metadata types are skipped.
+ *
+ * Section-level relevance (begin_group `relevant` column) is intentionally
+ * NOT converted to showWhen. XLSForm section gating depends on calculated
+ * fields and ODK engine features that the native form system does not support.
+ * Hiding entire sections causes enumerators to miss questions. Individual
+ * question-level showWhen (the `relevant` column on question rows) is still
+ * fully supported.
  */
 export function extractSections(survey: XlsformSurveyRow[]): Section[] {
   const sections: Section[] = [];
   let currentSection: Section | null = null;
+  let ungroupedSection: Section | null = null;
 
   for (const row of survey) {
     const baseType = row.type.split(' ')[0];
 
     if (baseType === 'begin_group') {
-      const relevance = getRelevance(row);
+      // Section-level showWhen deliberately omitted — see JSDoc above
       currentSection = {
         id: uuidv7(),
         title: row.label || row.name,
         questions: [],
-        ...(relevance ? { showWhen: parseXlsformRelevance(relevance) } : {}),
       };
       continue;
     }
@@ -200,7 +208,22 @@ export function extractSections(survey: XlsformSurveyRow[]): Section[] {
 
     if (currentSection) {
       currentSection.questions.push(question);
+    } else {
+      // Questions outside groups go into a default "General" section
+      if (!ungroupedSection) {
+        ungroupedSection = {
+          id: uuidv7(),
+          title: 'General',
+          questions: [],
+        };
+      }
+      ungroupedSection.questions.push(question);
     }
+  }
+
+  // Prepend ungrouped section if any questions fell outside groups
+  if (ungroupedSection && ungroupedSection.questions.length > 0) {
+    sections.unshift(ungroupedSection);
   }
 
   return sections;

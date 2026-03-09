@@ -80,18 +80,14 @@ describe('extractSections', () => {
     expect(sections[0].title).toBe('My Section Title');
   });
 
-  it('converts group-level relevance to section showWhen', () => {
+  it('ignores group-level relevance (section showWhen deliberately stripped)', () => {
     const survey: XlsformSurveyRow[] = [
       { type: 'begin_group', name: 'grp1', label: 'Conditional', relevance: "${consent} = 'yes'" },
       { type: 'text', name: 'f1', label: 'F1' },
       { type: 'end_group', name: 'grp1' },
     ];
     const sections = extractSections(survey);
-    expect(sections[0].showWhen).toEqual({
-      field: 'consent',
-      operator: 'equals',
-      value: 'yes',
-    });
+    expect(sections[0].showWhen).toBeUndefined();
   });
 
   it('places questions inside correct section', () => {
@@ -118,18 +114,14 @@ describe('extractSections', () => {
 // ── Relevant Column Fallback Test ──────────────────────────────────────────
 
 describe('getRelevance fallback (relevant vs relevance)', () => {
-  it('reads showWhen from "relevant" column when "relevance" is absent', () => {
+  it('ignores group-level "relevant" column (section showWhen stripped)', () => {
     const survey: XlsformSurveyRow[] = [
       { type: 'begin_group', name: 'grp1', label: 'Conditional Group', relevant: "${consent} = 'yes'" } as XlsformSurveyRow,
       { type: 'text', name: 'f1', label: 'F1' },
       { type: 'end_group', name: 'grp1' },
     ];
     const sections = extractSections(survey);
-    expect(sections[0].showWhen).toEqual({
-      field: 'consent',
-      operator: 'equals',
-      value: 'yes',
-    });
+    expect(sections[0].showWhen).toBeUndefined();
   });
 
   it('reads question showWhen from "relevant" column', () => {
@@ -146,14 +138,14 @@ describe('getRelevance fallback (relevant vs relevance)', () => {
     });
   });
 
-  it('prefers "relevance" over "relevant" when both are present', () => {
+  it('prefers "relevance" over "relevant" for question-level showWhen', () => {
     const survey: XlsformSurveyRow[] = [
-      { type: 'begin_group', name: 'grp1', label: 'Section', relevance: "${a} = 'x'", relevant: "${b} = 'y'" } as XlsformSurveyRow,
-      { type: 'text', name: 'f1', label: 'F1' },
+      { type: 'begin_group', name: 'grp1', label: 'Section' },
+      { type: 'text', name: 'f1', label: 'F1', relevance: "${a} = 'x'", relevant: "${b} = 'y'" } as XlsformSurveyRow,
       { type: 'end_group', name: 'grp1' },
     ];
     const sections = extractSections(survey);
-    expect(sections[0].showWhen).toEqual({
+    expect(sections[0].questions[0].showWhen).toEqual({
       field: 'a',
       operator: 'equals',
       value: 'x',
@@ -164,18 +156,14 @@ describe('getRelevance fallback (relevant vs relevance)', () => {
 // ── Skip Logic Integration Tests (multiple patterns through converter) ────
 
 describe('skip logic patterns through extractSections', () => {
-  it('converts numeric >= comparison (${age} >= 15)', () => {
+  it('strips group-level relevance even for numeric comparisons (${age} >= 15)', () => {
     const survey: XlsformSurveyRow[] = [
       { type: 'begin_group', name: 'grp1', label: 'Labor', relevance: '${age} >= 15' },
       { type: 'text', name: 'f1', label: 'F1' },
       { type: 'end_group', name: 'grp1' },
     ];
     const sections = extractSections(survey);
-    expect(sections[0].showWhen).toEqual({
-      field: 'age',
-      operator: 'greater_or_equal',
-      value: 15,
-    });
+    expect(sections[0].showWhen).toBeUndefined();
   });
 
   it('converts OR compound expression (${a} = x or ${b} = y)', () => {
@@ -220,6 +208,40 @@ describe('skip logic patterns through extractSections', () => {
     expect(sections[0].questions[3].showWhen).toEqual({ field: 'has_business', operator: 'equals', value: 'yes' });
     // Non-conditional question should NOT have showWhen
     expect(sections[0].questions[0].showWhen).toBeUndefined();
+  });
+});
+
+// ── Calculate field / ungrouped question handling ─────────────────────────
+
+describe('extractSections — ungrouped question handling', () => {
+  it('places questions outside groups into a General section', () => {
+    const survey: XlsformSurveyRow[] = [
+      { type: 'geopoint', name: 'gps_location', label: 'GPS Location' },
+      { type: 'begin_group', name: 'grp1', label: 'Section One' },
+      { type: 'text', name: 'field1', label: 'Field 1' },
+      { type: 'end_group', name: 'grp1' },
+    ];
+    const sections = extractSections(survey);
+    expect(sections).toHaveLength(2);
+    expect(sections[0].title).toBe('General');
+    expect(sections[0].questions).toHaveLength(1);
+    expect(sections[0].questions[0].name).toBe('gps_location');
+    expect(sections[1].title).toBe('Section One');
+  });
+
+  it('strips all section-level showWhen regardless of field references', () => {
+    const survey: XlsformSurveyRow[] = [
+      { type: 'begin_group', name: 'grp_intro', label: 'Intro' },
+      { type: 'select_one yes_no', name: 'consent', label: 'Do you consent?' },
+      { type: 'end_group', name: 'grp_intro' },
+      { type: 'begin_group', name: 'grp_data', label: 'Data', relevance: "${consent} = 'yes'" },
+      { type: 'text', name: 'name', label: 'Name' },
+      { type: 'end_group', name: 'grp_data' },
+    ];
+    const sections = extractSections(survey);
+    expect(sections[0].showWhen).toBeUndefined();
+    expect(sections[1].showWhen).toBeUndefined();
+    expect(sections[1].questions).toHaveLength(1);
   });
 });
 
@@ -402,7 +424,8 @@ describe('convertToNativeForm', () => {
     expect(result.sections[0].questions).toHaveLength(2);
     expect(result.sections[1].title).toBe('Data Collection');
     expect(result.sections[1].questions).toHaveLength(3);
-    expect(result.sections[1].showWhen).toBeDefined();
+    // Section-level showWhen is deliberately stripped (only question-level skip logic preserved)
+    expect(result.sections[1].showWhen).toBeUndefined();
 
     // Choice list references resolve
     const consentQ = result.sections[0].questions[1];
@@ -434,8 +457,8 @@ describe('convertToNativeForm', () => {
     expect(summary.sectionCount).toBe(2);
     expect(summary.questionCount).toBe(5);
     expect(summary.choiceListCount).toBe(2);
-    // 1 section-level showWhen (grp_data)
-    expect(summary.skipLogicCount).toBe(1);
+    // Section-level showWhen stripped, so 0 skip logic conditions in this form
+    expect(summary.skipLogicCount).toBe(0);
   });
 
   it('handles empty form with zero sections and choices', () => {

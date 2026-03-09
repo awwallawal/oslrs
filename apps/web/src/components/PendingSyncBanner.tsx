@@ -40,7 +40,7 @@ export function PendingSyncBanner({
           disabled={isSyncing}
           className="shrink-0 px-3 py-1.5 bg-white text-red-600 text-sm font-semibold rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Retry
+          {isSyncing ? 'Retrying...' : 'Retry'}
         </button>
       ) : (
         <button
@@ -48,7 +48,7 @@ export function PendingSyncBanner({
           disabled={isSyncing}
           className="shrink-0 px-3 py-1.5 bg-white text-red-600 text-sm font-semibold rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Upload Now
+          {isSyncing ? 'Uploading...' : 'Upload Now'}
         </button>
       )}
     </div>

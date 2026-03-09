@@ -68,16 +68,16 @@ describe('PendingSyncBanner', () => {
     expect(onRetryFailed).toHaveBeenCalledTimes(1);
   });
 
-  it('disables "Upload Now" button while syncing', () => {
+  it('shows "Uploading..." and disables button while syncing', () => {
     render(<PendingSyncBanner {...defaultProps} pendingCount={2} isSyncing={true} />);
 
-    expect(screen.getByRole('button', { name: /upload now/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /uploading/i })).toBeDisabled();
   });
 
-  it('disables "Retry" button while syncing', () => {
+  it('shows "Retrying..." and disables button while syncing', () => {
     render(<PendingSyncBanner {...defaultProps} failedCount={1} isSyncing={true} />);
 
-    expect(screen.getByRole('button', { name: /retry/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /retrying/i })).toBeDisabled();
   });
 
   it('shows failed variant (priority) when both pending and failed exist', () => {

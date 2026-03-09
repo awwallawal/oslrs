@@ -8,11 +8,12 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Controller, useForm, useWatch, type ResolverOptions } from 'react-hook-form';
+import { Controller, useForm, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { useFormSchema } from '../hooks/useForms';
+import { syncManager } from '../../../services/sync-manager';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { getVisibleQuestions } from '../utils/skipLogic';
 import { QuestionRenderer } from '../components/QuestionRenderer';
@@ -66,13 +67,12 @@ export default function ClerkDataEntryPage() {
     resolver,
     mode: 'onChange',
     defaultValues: {},
+    shouldUnregister: false,
   });
 
-  const watchedFormData = useWatch({ control }) as Record<string, unknown> | undefined;
-  const formData = useMemo<Record<string, unknown>>(
-    () => watchedFormData ?? {},
-    [watchedFormData]
-  );
+  // Accumulate all answers across question navigation.
+  const allAnswersRef = useRef<Record<string, unknown>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   // Session tracking (persisted to sessionStorage)
   const [session, setSession] = useState(() => {
@@ -102,6 +102,8 @@ export default function ClerkDataEntryPage() {
   useEffect(() => {
     if (draft.resumeData && Object.keys(draft.resumeData.formData).length > 0) {
       reset(draft.resumeData.formData as Record<string, unknown>);
+      allAnswersRef.current = { ...draft.resumeData.formData };
+      setFormData({ ...draft.resumeData.formData });
     }
   }, [draft.resumeData, reset]);
 
@@ -221,6 +223,8 @@ export default function ClerkDataEntryPage() {
 
     try {
       await draft.completeDraft();
+      // Trigger upload immediately if online (don't await — fire-and-forget)
+      syncManager.syncNow().catch(() => {});
     } catch {
       toast.error({ message: 'Failed to save submission. Please try again.' });
       return;
@@ -449,6 +453,8 @@ export default function ClerkDataEntryPage() {
                           value={field.value}
                           onChange={(value) => {
                             field.onChange(value);
+                            allAnswersRef.current[question.name] = value;
+                            setFormData({ ...allAnswersRef.current });
                             clearErrors(question.name);
                             if (ninQuestionName && question.name === ninQuestionName) {
                               ninCheck.reset();

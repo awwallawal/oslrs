@@ -75,8 +75,12 @@ export default function EnumeratorSyncPage() {
           disabled={syncingCount > 0}
           className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Upload className="w-4 h-4" />
-          Upload Now
+          {syncingCount > 0 ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          {syncingCount > 0 ? 'Uploading...' : 'Upload Now'}
         </button>
         {failedCount > 0 && (
           <button
@@ -85,8 +89,12 @@ export default function EnumeratorSyncPage() {
             data-testid="retry-failed-button"
             className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RotateCcw className="w-4 h-4" />
-            Retry Failed
+            {syncingCount > 0 ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RotateCcw className="w-4 h-4" />
+            )}
+            {syncingCount > 0 ? 'Retrying...' : 'Retry Failed'}
           </button>
         )}
       </div>

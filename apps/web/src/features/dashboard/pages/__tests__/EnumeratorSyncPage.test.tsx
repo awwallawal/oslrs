@@ -197,7 +197,7 @@ describe('EnumeratorSyncPage', () => {
     expect(mockSyncNow).toHaveBeenCalledTimes(1);
   });
 
-  it('disables Upload Now button while syncing', () => {
+  it('shows "Uploading..." and disables button while syncing', () => {
     mockUseSyncStatus.mockReturnValue({
       status: 'syncing',
       pendingCount: 1,
@@ -206,7 +206,7 @@ describe('EnumeratorSyncPage', () => {
       totalCount: 2,
     });
     render(<EnumeratorSyncPage />);
-    expect(screen.getByRole('button', { name: /upload now/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /uploading/i })).toBeDisabled();
   });
 
   it('shows Retry Failed button when failedCount > 0', () => {

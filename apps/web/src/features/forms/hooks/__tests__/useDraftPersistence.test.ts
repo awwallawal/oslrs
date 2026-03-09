@@ -194,9 +194,49 @@ describe('useDraftPersistence', () => {
     );
   });
 
-  it('includes GPS coordinates in enriched payload when present', async () => {
+  it('includes GPS coordinates from GeopointInput object in enriched payload', async () => {
     mockDraftsFirst.mockResolvedValue({
       id: 'draft-gps',
+      formId: 'form-1',
+      responses: { q1: 'answer' },
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '2.0.0',
+        formData: { q1: 'answer', gps_location: { latitude: 7.3775, longitude: 3.947, accuracy: 15 } },
+        currentIndex: 1,
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.resumeData).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.completeDraft();
+    });
+
+    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          responses: { q1: 'answer', gps_location: { latitude: 7.3775, longitude: 3.947, accuracy: 15 } },
+          formVersion: '2.0.0',
+          submittedAt: expect.any(String),
+          gpsLatitude: 7.3775,
+          gpsLongitude: 3.947,
+        }),
+      })
+    );
+  });
+
+  it('includes GPS coordinates from flat keys (backwards compat) in enriched payload', async () => {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'draft-gps-flat',
       formId: 'form-1',
       responses: { q1: 'answer' },
       questionPosition: 0,
@@ -224,9 +264,6 @@ describe('useDraftPersistence', () => {
     expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: expect.objectContaining({
-          responses: { q1: 'answer', gps_latitude: 7.3775, gps_longitude: 3.947 },
-          formVersion: '2.0.0',
-          submittedAt: expect.any(String),
           gpsLatitude: 7.3775,
           gpsLongitude: 3.947,
         }),
