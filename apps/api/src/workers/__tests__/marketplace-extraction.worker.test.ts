@@ -297,6 +297,86 @@ describe('marketplace-extraction worker', () => {
     });
   });
 
+  describe('array-format skills (native form SelectMultipleInput)', () => {
+    it('should handle skills_possessed as array of strings', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: ['carpentry', 'plumbing', 'welding'] },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        profession: 'carpentry',
+        skills: 'carpentry, plumbing, welding',
+      }));
+    });
+
+    it('should handle single-element array', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: ['welding'] },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        profession: 'welding',
+        skills: 'welding',
+      }));
+    });
+  });
+
+  describe('bio and portfolio extraction from survey', () => {
+    it('should extract bio_short and portfolio_url from rawData', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: {
+            skills_possessed: ['carpentry'],
+            bio_short: 'Experienced carpenter with 10 years of work',
+            portfolio_url: 'https://example.com/portfolio',
+          },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: true, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        bio: 'Experienced carpenter with 10 years of work',
+        portfolioUrl: 'https://example.com/portfolio',
+      }));
+    });
+
+    it('should set bio and portfolioUrl to null when not provided', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: ['welding'] },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        bio: null,
+        portfolioUrl: null,
+      }));
+    });
+  });
+
   describe('experience level normalization', () => {
     it.each([
       ['3', '1-3'],

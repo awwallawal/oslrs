@@ -68,8 +68,9 @@ function normalizeExperienceLevel(raw: string | undefined | null): ExperienceLev
 
 /**
  * Extract skills and profession from rawData.
- * skills_possessed is a XLSForm select_multiple stored as space-delimited string.
- * Canonical split pattern: String(rawValue).split(' ').filter(Boolean)
+ * skills_possessed may be:
+ * - An array of strings (native form SelectMultipleInput): ["carpentry", "plumbing"]
+ * - A space-delimited string (XLSForm select_multiple via ODK): "carpentry plumbing"
  */
 function extractSkills(rawData: Record<string, unknown>): { profession: string; skills: string } {
   // Try primary field first, then fallbacks
@@ -87,8 +88,14 @@ function extractSkills(rawData: Record<string, unknown>): { profession: string; 
     });
   }
 
-  const skillsStr = String(skillsValue);
-  const skillsList = skillsStr.split(' ').map(s => s.trim()).filter(Boolean);
+  // Handle both array (native form) and space-delimited string (XLSForm) formats
+  let skillsList: string[];
+  if (Array.isArray(skillsValue)) {
+    skillsList = skillsValue.map(s => String(s).trim()).filter(Boolean);
+  } else {
+    const skillsStr = String(skillsValue);
+    skillsList = skillsStr.split(' ').map(s => s.trim()).filter(Boolean);
+  }
 
   return {
     profession: skillsList[0] || '',
@@ -221,6 +228,8 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     const rawData = (submission.rawData as Record<string, unknown>) || {};
     const { profession, skills } = extractSkills(rawData);
     const experienceLevel = normalizeExperienceLevel(getExperienceRaw(rawData));
+    const bio = rawData['bio_short'] ? String(rawData['bio_short']).slice(0, 150) : null;
+    const portfolioUrl = rawData['portfolio_url'] ? String(rawData['portfolio_url']) : null;
 
     // 5. Resolve LGA name
     const { lgaId: resolvedLgaId, lgaName } = await resolveLgaName(respondent.lgaId);
@@ -244,6 +253,8 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
         experienceLevel,
         verifiedBadge,
         consentEnriched: respondent.consentEnriched,
+        bio,
+        portfolioUrl,
       })
       .onConflictDoUpdate({
         target: marketplaceProfiles.respondentId,
@@ -255,6 +266,8 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
           experienceLevel,
           consentEnriched: respondent.consentEnriched,
           verifiedBadge,
+          bio,
+          portfolioUrl,
           updatedAt: sql`now()`,
         },
       });

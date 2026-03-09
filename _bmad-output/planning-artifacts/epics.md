@@ -41,6 +41,8 @@ FR18: Enriched Contact Access - The system shall require Public Searchers to reg
 FR19: Contact View Logging - The system shall log every instance of a Public Searcher viewing unredacted contact details.
 FR20: Data Entry Interface - The system shall provide a dedicated, keyboard-optimized High-Volume Data Entry Interface for Clerks.
 FR21: Global NIN Uniqueness - The system shall enforce uniqueness of NIN across all submission sources (Enumerator, Public, Paper) at the database level.
+FR22: Survey Analytics - The system shall provide role-scoped statistical analysis (descriptive and inferential) of survey data across all dashboard roles, with appropriate access controls.
+FR23: Public Labour Market Insights - The system shall publish anonymized, aggregated labour market statistics on the public-facing website for transparency and policy communication.
 
 ### NonFunctional Requirements
 
@@ -126,6 +128,8 @@ FR18 (Enriched Contact Access): Epic 7
 FR19 (Contact View Logging): Epic 7
 FR20 (Data Entry Interface): Epic 3, **Epic 2.5** (Keyboard Dashboard Shell)
 FR21 (Global NIN Uniqueness): Epic 1 (Registration), Epic 3 (Submission)
+FR22 (Survey Analytics): Epic 8
+FR23 (Public Labour Market Insights): Epic 8
 
 ### NFR Coverage (Epic 1.5)
 
@@ -184,6 +188,13 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **Goal:** Create a secure, privacy-compliant bridge between skilled workers and potential employers through an anonymous registry.
 **User Outcome:** The public can find verified local talent; workers can opt-in to opportunities; the state protects worker PII via authenticated contact reveal.
 **FRs covered:** FR1, FR2, FR17, FR18, FR19
+
+### Epic 8: Survey Analytics & Public Insights
+**Goal:** Transform raw survey data into actionable statistical insights across all system roles, and publish anonymized labour market intelligence on the public website.
+**User Outcome:** Super Admins see system-wide analytics; Supervisors and Enumerators track field performance; Assessors monitor verification quality; Government Officials access policy-driving statistics; the public sees transparent labour market trends.
+**FRs covered:** FR22, FR23
+**Dependencies:** Epic 3 (Submissions pipeline), Epic 4 (Supervisor/Enumerator hierarchy), Epic 5 (Back-Office dashboards), Epic 7 (Marketplace profiles)
+**Source Documents:** `docs/survey-analytics-spec.md`
 
 ---
 
@@ -2024,3 +2035,175 @@ So that I protect workers from spam and scrapers.
 **When** the user clicks "Reveal Contact"
 **Then** the system must log the Viewer ID, Worker ID, and timestamp
 **And** enforce a hard limit of 50 reveals per user per 24 hours.
+
+---
+
+## Epic 8: Survey Analytics & Public Insights
+
+**Epic Goal:** Transform raw survey data into actionable statistical insights across all system roles, and publish anonymized labour market intelligence on the public-facing website for transparency and policy communication.
+
+**Design Document:** `docs/survey-analytics-spec.md` — comprehensive specification covering 80 features across 6 roles + public page, 5 implementation phases, role-by-role feature matrix, and technical architecture.
+
+**Prerequisites (from Epic 7 completion):**
+- **prep-1:** Analytics data layer spike (HIGH — define aggregation strategy: real-time vs materialized views vs scheduled snapshots for each stat category)
+- **prep-2:** Chart library selection & design system integration (MEDIUM — evaluate recharts/nivo/chart.js for bundle size, accessibility, SSR compatibility with existing Tailwind/shadcn stack)
+- **prep-3:** Role-scoped API middleware pattern (HIGH — establish reusable scope chain pattern: system-wide → LGA-scoped → personal, consumed by all analytics endpoints)
+- **prep-4:** Sample size & statistical validity guard (MEDIUM — implement minimum-N thresholds to prevent misleading statistics from small samples; define suppression rules for public-facing data)
+
+**Architecture Notes:**
+- All analytics endpoints share a single scope chain middleware: Super Admin/Gov Official see system-wide data; Supervisors see LGA-scoped data; Enumerators/Clerks see personal data only.
+- Descriptive statistics computed from `submissions.raw_data` JSONB via SQL aggregation functions. Inferential statistics (chi-square, correlation) computed in application layer (no heavy stats library — use lightweight formulas).
+- Public insights page shows only anonymized, aggregated data with minimum sample size thresholds to prevent de-identification.
+- Materialized views recommended for expensive cross-tabulations; simple counts can use real-time queries.
+
+**Sidebar Integration Plan:**
+- Super Admin: Add "Survey Analytics" item (distinct from existing "Reveal Analytics")
+- Government Official: Expand existing "Statistics" page with tabbed analytics sections
+- Assessor: Add "Analytics" item (verification pipeline + quality flags)
+- Supervisor: Add "Team Analytics" item (distinct from existing "Productivity" and "Team Progress")
+- Enumerator: Add "My Stats" item
+- Clerk: Replace existing placeholder "My Stats" with real analytics content
+- Public site: Replace "Coming Soon" Insights dropdown with real pages (`/insights`, `/insights/skills`, `/insights/trends`)
+
+### Story 8.1: Analytics Backend Foundation & Descriptive Statistics API
+
+As a System,
+I want a reusable analytics API layer with role-scoped access and core descriptive statistics,
+So that all dashboard roles can query survey data within their authorized scope.
+
+**Acceptance Criteria:**
+
+**Given** an authenticated user with any dashboard role
+**When** they request the analytics summary endpoint
+**Then** the API should return descriptive statistics scoped to their role:
+  - Super Admin / Government Official: system-wide aggregates
+  - Supervisor: LGA-scoped aggregates (their assigned LGA only)
+  - Enumerator / Clerk: personal submission aggregates only
+**And** the response should include:
+  - Submission counts (total, by status, by time period)
+  - Demographic distributions (age bands, gender, LGA)
+  - Employment statistics (employment status breakdown, sector distribution)
+  - Skills frequency ranking (top N skills by count)
+  - Experience level distribution
+  - Consent rates (marketplace opt-in %, enriched consent %)
+
+**Given** fewer than 5 submissions in any aggregation bucket
+**When** the data is requested by any role
+**Then** the bucket should be suppressed (returned as null) to prevent de-identification.
+
+### Story 8.2: Super Admin & Government Official Survey Analytics Dashboard
+
+As a Super Admin or Government Official,
+I want a comprehensive survey analytics dashboard with charts and cross-tabulation,
+So that I can understand state-wide labour market patterns and make data-driven policy decisions.
+
+**Acceptance Criteria:**
+
+**Given** a Super Admin navigating to "Survey Analytics" in the sidebar
+**When** the page loads
+**Then** it should display:
+  - Summary stat cards (total submissions, completion rate, avg completion time, active enumerators)
+  - Time-series chart (submissions per day/week/month with date range selector)
+  - Demographic breakdown charts (age, gender, LGA distribution)
+  - Employment & skills charts (top skills, employment status, sector distribution)
+  - Cross-tabulation engine (select any two categorical variables for contingency table)
+**And** all charts should support CSV export of underlying data.
+
+**Given** a Government Official navigating to the existing "Statistics" page
+**When** the page loads
+**Then** it should display the same analytics as Super Admin in a tabbed layout
+**And** PII fields (names, NIN, phone) must never appear in analytics views.
+
+### Story 8.3: Field Team Analytics (Supervisor, Enumerator, Clerk)
+
+As a Supervisor,
+I want to see team-level analytics for my assigned LGA,
+So that I can identify performance patterns, coverage gaps, and coach my enumerators effectively.
+
+As an Enumerator or Clerk,
+I want to see my personal submission statistics,
+So that I can track my own productivity and data quality.
+
+**Acceptance Criteria:**
+
+**Given** a Supervisor navigating to "Team Analytics" in the sidebar
+**When** the page loads
+**Then** it should display LGA-scoped analytics:
+  - Team submission volume (daily/weekly trend chart)
+  - Per-enumerator comparison (bar chart: submissions per enumerator)
+  - Coverage heatmap (submissions by ward/area within their LGA)
+  - Data quality indicators (completion rates, fraud flag rates per enumerator)
+  - Demographic summary for their LGA vs state-wide comparison
+
+**Given** an Enumerator navigating to "My Stats" in the sidebar
+**When** the page loads
+**Then** it should display personal analytics:
+  - Daily/weekly submission count trend
+  - Average completion time per survey
+  - Personal fraud flag rate with comparison to team average
+  - Skills collected frequency (what skills they've recorded most)
+
+**Given** a Clerk navigating to "My Stats" in the sidebar
+**When** the page loads
+**Then** it should display the same personal analytics as Enumerator
+**And** include data entry speed metrics (avg time per submission).
+
+### Story 8.4: Assessor Verification Analytics & Quality Dashboard
+
+As an Assessor,
+I want analytics on the verification pipeline and data quality patterns,
+So that I can prioritize my audit queue and identify systematic quality issues.
+
+**Acceptance Criteria:**
+
+**Given** an Assessor navigating to "Analytics" in the sidebar
+**When** the page loads
+**Then** it should display:
+  - Verification funnel (submissions → flagged → reviewed → approved/rejected)
+  - Fraud detection breakdown (flags by type: cluster, speed-run, straight-lining)
+  - Resolution rate trend (verified per day/week)
+  - Top flagged enumerators table (ranked by fraud flag count)
+  - Inter-rater reliability score (agreement rate between assessors on same submissions)
+  - Data quality scorecard (completeness %, consistency checks passed %)
+
+**Given** the assessor clicks on a fraud type in the breakdown chart
+**When** the drill-down loads
+**Then** it should show the specific submissions flagged for that fraud type
+**And** link directly to the audit queue filtered by that flag.
+
+### Story 8.5: Public Insights Page (Anonymized Labour Market Intelligence)
+
+As a Public Visitor,
+I want to see anonymized labour market statistics for Oyo State,
+So that I can understand the local skills landscape without requiring login.
+
+**Acceptance Criteria:**
+
+**Given** a public visitor navigating to `/insights` from the navbar
+**When** the page loads
+**Then** it should display:
+  - Hero stat cards (total registered workers, LGAs covered, skills tracked)
+  - Skills distribution chart (top 15 skills by count, anonymized)
+  - LGA coverage map or chart (submissions per LGA, no PII)
+  - Experience level distribution (pie/donut chart)
+  - Gender distribution (bar chart)
+**And** all data must be aggregated with minimum sample size of 10 per bucket
+**And** no PII (names, NIN, phone, individual records) shall be exposed.
+
+**Given** a public visitor navigating to `/insights/skills`
+**When** the page loads
+**Then** it should display a detailed skills breakdown:
+  - Searchable/filterable skills table (skill name, count, % of total)
+  - Skills by LGA cross-tabulation (which LGAs have which skills)
+  - Experience level by skill (how experienced workers are in each skill)
+
+**Given** a public visitor navigating to `/insights/trends`
+**When** the page loads
+**Then** it should display temporal patterns:
+  - Monthly registration trend (line chart)
+  - Skills demand trend (new skills appearing over time)
+  - LGA registration growth comparison
+
+**Given** the existing "Insights" navbar dropdown shows "Coming Soon" placeholders
+**When** Epic 8 is deployed
+**Then** the placeholders should be replaced with links to the real `/insights`, `/insights/skills`, and `/insights/trends` pages.
