@@ -265,4 +265,15 @@ development_status:
   7-6-contact-view-logging-rate-limiting: done  # Depends on: prep-5 (security spike). Completed 2026-03-07: 12 tasks. Code review passed 2026-03-07: 7 findings (2C, 2H, 3M), all 7 auto-fixed. C1 missing service tests (8 added), C2 inflated test count corrected, H1 Redis INCR/EXPIRE race condition, H2 false File List claim, M1 sql.raw→parameterized, M2 undocumented files, M3 shallow rate limit tests (8 Redis logic tests added). 56 total new tests (39 pre-review + 17 review). 1471 API + 2093 web tests pass, 0 regressions.
   epic-7-retrospective: optional
 
-
+  # Epic 8: Survey Analytics & Public Insights
+  # Source: docs/survey-analytics-spec.md (80 features, 5 phases, 6 roles + public)
+  # Dependencies: Epic 3 (Submissions), Epic 4 (Supervisor/Enumerator), Epic 5 (Back-Office), Epic 7 (Marketplace)
+  # Design: Role-scoped analytics — same endpoints, different data per role via scope chain middleware.
+  # Public insights page replaces "Coming Soon" navbar dropdown with real anonymized statistics.
+  epic-8: backlog
+  8-1-analytics-backend-foundation-descriptive-statistics-api: backlog
+  8-2-super-admin-government-official-survey-analytics-dashboard: backlog
+  8-3-field-team-analytics-supervisor-enumerator-clerk: backlog
+  8-4-assessor-verification-analytics-quality-dashboard: backlog
+  8-5-public-insights-page-anonymized-labour-market-intelligence: backlog
+  epic-8-retrospective: optional

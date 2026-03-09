@@ -130,7 +130,7 @@ export const OSLSR_RECOMMENDED_FIELDS = [
  */
 export const OSLSR_REQUIRED_CHOICE_LISTS = {
   lga_list: { minOptions: 33, description: 'Oyo State LGAs' },
-  skill_list: { minOptions: 50, description: 'Categorized skills' },
+  skill_list: { minOptions: 150, description: 'ISCO-08 aligned skills across 20 sectors' },
   experience_list: { minOptions: 5, description: 'Years of experience ranges' },
   emp_type: { minOptions: 6, description: 'Employment types' },
 } as const;

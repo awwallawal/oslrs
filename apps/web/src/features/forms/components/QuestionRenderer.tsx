@@ -4,6 +4,7 @@ import { NumberQuestionInput } from './NumberQuestionInput';
 import { DateQuestionInput } from './DateQuestionInput';
 import { SelectOneInput } from './SelectOneInput';
 import { SelectMultipleInput } from './SelectMultipleInput';
+import { ComboboxMultiSelect, COMBOBOX_THRESHOLD } from './ComboboxMultiSelect';
 import { GeopointInput } from './GeopointInput';
 import { NoteDisplay } from './NoteDisplay';
 
@@ -34,6 +35,9 @@ export function QuestionRenderer({
     case 'select_one':
       return <SelectOneInput {...props} />;
     case 'select_multiple':
+      if ((question.choices?.length ?? 0) > COMBOBOX_THRESHOLD) {
+        return <ComboboxMultiSelect {...props} />;
+      }
       return <SelectMultipleInput {...props} />;
     case 'geopoint':
       return <GeopointInput {...props} />;

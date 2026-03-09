@@ -88,6 +88,28 @@ describe('QuestionRenderer', () => {
     expect(screen.getByTestId('checkbox-test_field-b')).toBeInTheDocument();
   });
 
+  it('renders ComboboxMultiSelect for select_multiple with >20 choices', () => {
+    const manyChoices = Array.from({ length: 25 }, (_, i) => ({
+      label: `Skill ${i + 1}`,
+      value: `skill_${i + 1}`,
+    }));
+    render(
+      <QuestionRenderer
+        question={makeQuestion({
+          type: 'select_multiple',
+          name: 'skills_possessed',
+          choices: manyChoices,
+        })}
+        value={[]}
+        onChange={vi.fn()}
+      />
+    );
+    // Should render combobox search instead of checkboxes
+    expect(screen.getByTestId('combobox-search-skills_possessed')).toBeInTheDocument();
+    // Checkboxes should NOT be rendered
+    expect(screen.queryByTestId('checkbox-skills_possessed-skill_1')).not.toBeInTheDocument();
+  });
+
   it('renders GeopointInput for geopoint type', () => {
     render(
       <QuestionRenderer

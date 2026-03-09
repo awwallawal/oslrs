@@ -1,7 +1,7 @@
 # OSLSR ODK XLSForm Specification (Master Schema)
 
-**Version:** 3.0 (PRD-Aligned with FR17 Marketplace Fields)
-**Date:** 2026-01-26
+**Version:** 4.0 (ISCO-08 Skills Taxonomy — 150 Skills, 20 Sectors)
+**Date:** 2026-03-09
 **Status:** ONE SOURCE OF TRUTH - APPROVED
 
 ## 1. Metadata & Settings
@@ -184,100 +184,242 @@
 | lga_list | saki_west | Saki West |
 | lga_list | surulere | Surulere |
 
-### skill_list (50+ Skills organized by category)
+### skill_list (150 Skills — ISCO-08 Aligned, 20 Sectors)
 
-#### Construction & Building Trades
+> **Standard:** ILO ISCO-08 (International Standard Classification of Occupations, 2008)
+> **Scope:** 150 skills across 20 economic sectors, optimised for Southwestern Nigeria (Oyo State)
+> **Reference:** `docs/skills-taxonomy-isco08.md` — full taxonomy with ISCO-08 codes, descriptions, certification pathways
+
+#### 1. Construction & Building Trades (16)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | carpentry | Carpentry/Woodwork |
-| skill_list | plumbing | Plumbing |
+| skill_list | bricklaying | Bricklaying & Block Work |
+| skill_list | plastering | Plastering & Screeding |
+| skill_list | painting | Painting & Decorating |
+| skill_list | tiling | Tiling & Terrazzo Work |
+| skill_list | carpentry | Carpentry & Joinery |
+| skill_list | plumbing | Plumbing & Pipe Fitting |
 | skill_list | electrical | Electrical Installation |
-| skill_list | welding | Welding & Fabrication |
-| skill_list | masonry | Masonry/Bricklaying |
-| skill_list | painting | Painting & Decoration |
-| skill_list | tiling | Tiling & Flooring |
-| skill_list | roofing | Roofing |
-| skill_list | hvac | HVAC/Air Conditioning |
-| skill_list | solar | Solar Installation |
-| skill_list | aluminum | Aluminum & Glass Fitting |
-
-#### Automotive & Mechanical
-| list_name | name | label |
-| :--- | :--- | :--- |
-| skill_list | auto_mechanic | Auto Mechanic |
-| skill_list | auto_electrician | Auto Electrician |
-| skill_list | panel_beating | Panel Beating & Spray Painting |
-| skill_list | vulcanizing | Vulcanizing/Tire Services |
-| skill_list | motorcycle_repair | Motorcycle/Tricycle Repair |
+| skill_list | welding | Welding & Metal Fabrication |
+| skill_list | aluminium_glass | Aluminium & Glass Work |
+| skill_list | pop_ceiling | POP Ceiling & Suspended Ceiling |
+| skill_list | iron_bending | Iron Bending & Steel Fixing |
+| skill_list | roofing | Roofing (Aluminium & Long-span) |
 | skill_list | heavy_equipment | Heavy Equipment Operation |
-| skill_list | generator_repair | Generator Repair |
+| skill_list | interlocking_paving | Interlocking Paving & Concrete Work |
+| skill_list | surveying | Surveying & Setting Out |
+| skill_list | quantity_surveying | Building Estimation & Quantity Surveying |
 
-#### Fashion, Beauty & Personal Care
+#### 2. Automotive & Mechanical (7)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | tailoring | Tailoring/Sewing |
+| skill_list | auto_mechanic | Motor Vehicle Mechanic |
+| skill_list | auto_electrician | Auto Electrician |
+| skill_list | motorcycle_repair | Motorcycle & Tricycle Mechanic |
+| skill_list | vulcanizing | Vulcanising & Tyre Services |
+| skill_list | panel_beating | Panel Beating & Spray Painting |
+| skill_list | generator_repair | Diesel/Generator Mechanic |
+| skill_list | hvac | Refrigeration & Air Conditioning |
+
+#### 3. Fashion, Beauty & Personal Care (11)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | tailoring | Tailoring & Garment Making |
 | skill_list | fashion_design | Fashion Design |
-| skill_list | hairdressing | Hairdressing/Styling |
-| skill_list | barbing | Barbing |
+| skill_list | aso_oke_weaving | Aso-Oke Weaving |
+| skill_list | adire_dyeing | Adire & Textile Dyeing |
+| skill_list | hairdressing | Hairdressing & Braiding |
+| skill_list | barbing | Barbering |
 | skill_list | makeup | Makeup Artistry |
-| skill_list | shoe_making | Shoe Making/Cobbling |
-| skill_list | bag_making | Bag Making/Leather Craft |
-| skill_list | jewelry | Jewelry Making |
+| skill_list | cosmetology | Cosmetology & Skincare |
+| skill_list | nail_tech | Manicure, Pedicure & Nail Technology |
+| skill_list | leather_work | Leather Work & Shoe Making |
+| skill_list | bead_making | Bead Making & Jewellery Design |
 
-#### Food, Agriculture & Processing
+#### 4. Food, Agriculture & Processing (15)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | farming | Crop Farming |
-| skill_list | livestock | Livestock/Poultry Farming |
-| skill_list | fishery | Fishery/Aquaculture |
-| skill_list | catering | Catering/Event Cooking |
+| skill_list | crop_farming | Crop Farming (Arable) |
+| skill_list | vegetable_farming | Vegetable & Horticulture Farming |
+| skill_list | poultry | Poultry Farming |
+| skill_list | fish_farming | Fish Farming (Aquaculture) |
+| skill_list | livestock | Livestock & Cattle Rearing |
+| skill_list | cassava_processing | Cassava Processing (Garri, Fufu, Lafun) |
+| skill_list | palm_oil | Palm Oil & Kernel Processing |
 | skill_list | baking | Baking & Confectionery |
-| skill_list | food_processing | Food Processing/Preservation |
-| skill_list | butchery | Butchery/Meat Processing |
+| skill_list | catering | Catering & Food Preparation |
+| skill_list | butchery | Butchery & Meat Processing |
+| skill_list | snail_farming | Snail Farming (Heliculture) |
+| skill_list | bee_keeping | Bee Keeping (Apiculture) |
+| skill_list | grain_milling | Grain Milling & Feed Production |
+| skill_list | cocoa_farming | Cocoa Farming & Post-Harvest Handling |
+| skill_list | farm_mechanisation | Irrigation & Farm Mechanisation |
 
-#### Digital, Technology & Office
+#### 5. Digital, Technology & Office (13)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | software_dev | Software Development |
-| skill_list | web_design | Web Design/Development |
-| skill_list | graphic_design | Graphic Design |
-| skill_list | video_editing | Video Editing/Production |
-| skill_list | data_entry | Data Entry/Typing |
-| skill_list | accounting | Accounting/Bookkeeping |
-| skill_list | office_admin | Office Administration |
-| skill_list | computer_repair | Computer/Phone Repair |
-| skill_list | social_media | Social Media Management |
+| skill_list | computer_repair | Computer Hardware Repair & Maintenance |
+| skill_list | phone_repair | Mobile Phone & Tablet Repair |
+| skill_list | web_dev | Web Development |
+| skill_list | mobile_app_dev | Mobile App Development |
+| skill_list | graphic_design | Graphic Design & Branding |
+| skill_list | digital_marketing | Digital Marketing & Social Media |
+| skill_list | data_entry | Data Entry & Office Administration |
+| skill_list | networking | Networking & IT Support |
+| skill_list | cctv_security | CCTV & Security System Installation |
+| skill_list | photography | Photography & Videography |
+| skill_list | video_editing | Video Editing & Post-Production |
+| skill_list | solar_pv | Solar PV Installation & Maintenance |
+| skill_list | accounting | Accounting & Bookkeeping Software |
 
-#### Healthcare & Wellness
+#### 6. Healthcare & Wellness (9)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | nursing | Nursing/Patient Care |
-| skill_list | pharmacy_tech | Pharmacy Assistant |
-| skill_list | lab_tech | Laboratory Technician |
-| skill_list | community_health | Community Health Worker |
-| skill_list | caregiving | Elderly/Child Caregiving |
-| skill_list | physiotherapy | Physiotherapy Assistant |
+| skill_list | community_health | Community Health Extension Work |
+| skill_list | nursing | Nursing & Midwifery Assistance |
+| skill_list | pharmacy_tech | Pharmacy Technician Services |
+| skill_list | lab_tech | Medical Laboratory Assistance |
+| skill_list | dental_tech | Dental Technology |
+| skill_list | optometry | Optometry & Optical Dispensing |
+| skill_list | physiotherapy | Physiotherapy Assistance |
+| skill_list | traditional_medicine | Traditional/Herbal Medicine Practice |
+| skill_list | health_records | Health Records & Information Management |
 
-#### Education & Professional Services
+#### 7. Education & Professional Services (7)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | teaching | Teaching/Tutoring |
-| skill_list | driving | Professional Driving |
-| skill_list | security | Security Services |
-| skill_list | event_planning | Event Planning/Decoration |
-| skill_list | photography | Photography/Videography |
-| skill_list | cleaning | Professional Cleaning |
-| skill_list | laundry | Laundry/Dry Cleaning |
+| skill_list | teaching | Primary & Secondary School Teaching |
+| skill_list | vocational_instruction | Vocational & Technical Instruction |
+| skill_list | adult_literacy | Adult Literacy & Non-Formal Education |
+| skill_list | tutoring | Tutorial & Lesson Coordination |
+| skill_list | sign_language | Sign Language Interpretation |
+| skill_list | legal_clerking | Legal Clerking & Court Process Services |
+| skill_list | tax_preparation | Accounting & Tax Preparation |
 
-#### Artisan & Traditional Crafts
+#### 8. Artisan & Traditional Crafts (8)
 | list_name | name | label |
 | :--- | :--- | :--- |
-| skill_list | furniture | Furniture Making |
-| skill_list | upholstery | Upholstery |
-| skill_list | pottery | Pottery/Ceramics |
-| skill_list | blacksmith | Blacksmithing |
-| skill_list | weaving | Weaving/Textile Crafts |
-| skill_list | sign_writing | Sign Writing/Branding |
+| skill_list | blacksmithing | Blacksmithing (Alagbede) |
+| skill_list | woodcarving | Woodcarving & Sculpture |
+| skill_list | pottery | Pottery & Ceramics (Amokoko) |
+| skill_list | mat_weaving | Mat & Basket Weaving |
+| skill_list | calabash_carving | Calabash Carving & Decoration |
+| skill_list | bronze_casting | Bronze & Brass Casting |
+| skill_list | upholstery | Upholstery & Furniture Making |
+| skill_list | sign_writing | Sign Writing & Vehicle Branding |
+
+#### 9. Transport & Logistics (7)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | commercial_driving | Commercial Driving (Bus/Truck) |
+| skill_list | motorcycle_dispatch | Motorcycle Dispatch & Courier |
+| skill_list | tricycle_operation | Tricycle (Keke) Operation |
+| skill_list | forklift_operation | Forklift & Warehouse Equipment |
+| skill_list | freight_logistics | Freight & Logistics Coordination |
+| skill_list | driving_instruction | Driving Instruction |
+| skill_list | fleet_management | Fleet Management & Vehicle Tracking |
+
+#### 10. Sales, Marketing & Distribution (9)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | agrochem_sales | Agrochemical Sales |
+| skill_list | pharma_sales | Pharmaceutical/Medical Sales |
+| skill_list | fmcg_sales | FMCG Sales & Distribution |
+| skill_list | real_estate | Real Estate Marketing & Brokerage |
+| skill_list | building_materials | Building Materials Sales |
+| skill_list | auto_parts | Automobile Parts Dealing |
+| skill_list | market_trading | Market Trading & Open-Market Selling |
+| skill_list | ecommerce | E-Commerce & Online Selling |
+| skill_list | insurance_sales | Insurance & Financial Product Sales |
+
+#### 11. Retail & Commerce (6)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | retail_management | Supermarket & Retail Store Operation |
+| skill_list | pos_agent | POS Agent & Mobile Money Services |
+| skill_list | fuel_station | Fuel Station Attendant & Management |
+| skill_list | patent_medicine | Pharmaceutical Retail (Patent Medicine) |
+| skill_list | telecom_retail | Mobile Recharge & Telecom Retail |
+| skill_list | provisions_retail | Provisions & Household Goods Retail |
+
+#### 12. Mining, Quarrying & Extraction (4)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | quarrying | Quarrying & Stone Crushing |
+| skill_list | sand_dredging | Sand Dredging & Gravel Mining |
+| skill_list | artisanal_mining | Artisanal Gold & Mineral Mining |
+| skill_list | gemstone_cutting | Gemstone Cutting & Polishing |
+
+#### 13. Oil, Gas & Energy (6)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | petroleum_distribution | Petroleum Product Distribution |
+| skill_list | gas_plant | Gas Plant Operation & LPG Dispensing |
+| skill_list | pipeline_welding | Pipeline Welding & Maintenance |
+| skill_list | drilling | Drilling Operations Assistance |
+| skill_list | power_line | Electrical Power Line Installation |
+| skill_list | renewable_energy | Renewable Energy Technology (Biogas) |
+
+#### 14. Manufacturing & Processing (5)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | soap_manufacturing | Soap & Detergent Manufacturing |
+| skill_list | water_production | Sachet/Bottled Water Production |
+| skill_list | block_making | Block & Precast Concrete Manufacturing |
+| skill_list | plastic_manufacturing | Plastic & Rubber Products Manufacturing |
+| skill_list | printing | Printing & Publishing |
+
+#### 15. Hospitality & Tourism (5)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | hotel_management | Hotel & Guest House Management |
+| skill_list | event_planning | Event Planning & Decoration |
+| skill_list | bartending | Bartending & Mixology |
+| skill_list | tour_guiding | Tour Guiding & Cultural Tourism |
+| skill_list | laundry | Laundry & Dry Cleaning Services |
+
+#### 16. Entertainment & Creative Arts (6)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | music_production | Music Production & Sound Engineering |
+| skill_list | dj_services | Disc Jockey (DJ) Services |
+| skill_list | mc_services | Master of Ceremonies (MC) & Hype |
+| skill_list | acting | Acting & Nollywood Film Production |
+| skill_list | drumming | Drumming & Traditional Music |
+| skill_list | animation | Animation & Motion Graphics |
+
+#### 17. Security & Safety (4)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | security_guard | Private Security Guard Services |
+| skill_list | fire_safety | Fire Safety & Prevention |
+| skill_list | ohs | Occupational Health & Safety |
+| skill_list | traffic_management | Traffic & Crowd Management |
+
+#### 18. Domestic & Personal Services (4)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | housekeeping | Housekeeping & Domestic Cleaning |
+| skill_list | childcare | Childcare & Nanny Services |
+| skill_list | elderly_care | Elderly & Home Care Assistance |
+| skill_list | gardening | Gardening & Landscaping |
+
+#### 19. Waste, Recycling & Environment (4)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | waste_collection | Waste Collection & Disposal |
+| skill_list | scrap_recycling | Scrap Metal & E-Waste Recycling |
+| skill_list | plastic_recycling | Plastic Recycling & PET Collection |
+| skill_list | fumigation | Fumigation & Pest Control |
+
+#### 20. Legal, Religious & Community Services (5)
+| list_name | name | label |
+| :--- | :--- | :--- |
+| skill_list | religious_ministry | Religious Ministry & Pastoral Work |
+| skill_list | quranic_teaching | Islamic Education (Quranic Teaching) |
+| skill_list | community_development | Community Development & Social Work |
+| skill_list | mediation | Mediation & Alternative Dispute Resolution |
+| skill_list | cooperative_management | Cooperative & Thrift Society Management |
 
 ## 4. Field Mapping for Story 2.1 Validation
 
@@ -313,3 +455,4 @@ The XLSForm parser in Story 2.1 must validate these OSLSR-specific required fiel
 | 1.0 | 2025-12-27 | Initial draft | John (PM) |
 | 2.0 | 2026-01-01 | Policy aligned, consent workflow added | Sarah (PO) |
 | 3.0 | 2026-01-26 | **Major Update:** Added FR17 fields (lga_id, years_experience), NIN required, skills expanded to 50+, added contractor employment type, business_address, apprentice_count, skills_other free-text. PRD gap analysis complete. | Awwal (PO) |
+| 4.0 | 2026-03-09 | **Skills Taxonomy Upgrade:** Expanded skill_list from 50 to 150 skills across 20 ISCO-08 aligned sectors (was 8 categories). Added 12 new sectors: Transport, Sales, Retail, Mining, Oil/Gas, Manufacturing, Hospitality, Entertainment, Security, Domestic, Waste/Recycling, Legal/Religious. Frontend upgraded to searchable dropdown with sector grouping + custom skill entry. Reference: `docs/skills-taxonomy-isco08.md`. | Awwal (PO) |
