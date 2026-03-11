@@ -135,6 +135,8 @@ const ViewAsDashboardPage = lazy(() => import('./features/dashboard/pages/ViewAs
 const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/RespondentRegistryPage'));
 // Story 7-6: Reveal Analytics (Super Admin)
 const RevealAnalyticsPage = lazy(() => import('./features/marketplace/pages/RevealAnalyticsPage'));
+// Story 8-2: Survey Analytics (Super Admin)
+const SurveyAnalyticsPage = lazy(() => import('./features/dashboard/pages/SurveyAnalyticsPage'));
 // prep-3: 404 pages
 const NotFoundPage = lazy(() => import('./features/dashboard/pages/NotFoundPage'));
 const PublicNotFoundPage = lazy(() => import('./pages/PublicNotFoundPage'));
@@ -736,6 +738,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <RevealAnalyticsPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 8-2: Survey Analytics */}
+                <Route
+                  path="survey-analytics"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SurveyAnalyticsPage />
                     </Suspense>
                   }
                 />

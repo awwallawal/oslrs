@@ -270,10 +270,13 @@ development_status:
   # Dependencies: Epic 3 (Submissions), Epic 4 (Supervisor/Enumerator), Epic 5 (Back-Office), Epic 7 (Marketplace)
   # Design: Role-scoped analytics — same endpoints, different data per role via scope chain middleware.
   # Public insights page replaces "Coming Soon" navbar dropdown with real anonymized statistics.
-  epic-8: backlog
-  8-1-analytics-backend-foundation-descriptive-statistics-api: backlog
-  8-2-super-admin-government-official-survey-analytics-dashboard: backlog
-  8-3-field-team-analytics-supervisor-enumerator-clerk: backlog
-  8-4-assessor-verification-analytics-quality-dashboard: backlog
-  8-5-public-insights-page-anonymized-labour-market-intelligence: backlog
+  epic-8: in-progress
+  8-1-analytics-backend-foundation-descriptive-statistics-api: done  # Code review passed 2026-03-11: 10 findings (2H, 4M, 4L), 8 auto-fixed. H1 consent rates AC#2, H2 skills suppression AC#3. 77 story tests, 1551 API tests pass, 0 regressions.
+  8-2-super-admin-government-official-survey-analytics-dashboard: done  # Code review passed 2026-03-11: 42 findings (4C, 10H, 16M, 12L), ALL 42 resolved (0 deferred). C1 CSV injection, C2 stale closure, C3 TrendsCharts features, C4 LGA scope leak. Shared chart-utils + AnalyticsTabsContent + deriveEquityData extracted. Hook tab-gating, retry buttons, ErrorBoundary per tab, suppression fixes. 3,756 total tests pass (1,561 API + 2,195 web), 0 regressions.
+  8-3-field-team-analytics-supervisor-enumerator-clerk: ready-for-dev
+  8-4-assessor-verification-analytics-quality-dashboard: ready-for-dev
+  8-5-public-insights-page-anonymized-labour-market-intelligence: ready-for-dev
+  8-6-cross-tabulation-skills-inventory-gap-analysis: ready-for-dev
+  8-7-inferential-statistics-progressive-activation-pdf-export: ready-for-dev
+  8-8-geographic-visualization-registry-integration-analytics-spec-completion: ready-for-dev
   epic-8-retrospective: optional

@@ -76,9 +76,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has 11+ sidebar items', () => {
+    it('super_admin has exactly 13 sidebar items', () => {
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBeGreaterThanOrEqual(11);
+      expect(items.length).toBe(13);
     });
 
     // Story 6.5: Payments sidebar item for enumerator and supervisor
@@ -98,6 +98,15 @@ describe('sidebarConfig', () => {
       const thresholds = sidebarConfig.super_admin.find(i => i.label === 'Fraud Thresholds');
       expect(thresholds).toBeDefined();
       expect(thresholds?.href).toBe('/dashboard/super-admin/settings/fraud-thresholds');
+    });
+
+    it('super_admin has Survey Analytics sidebar item after Reveal Analytics', () => {
+      const items = sidebarConfig.super_admin;
+      const surveyIdx = items.findIndex(i => i.label === 'Survey Analytics');
+      const revealIdx = items.findIndex(i => i.label === 'Reveal Analytics');
+      expect(surveyIdx).toBeGreaterThan(-1);
+      expect(items[surveyIdx].href).toBe('/dashboard/super-admin/survey-analytics');
+      expect(surveyIdx).toBeGreaterThan(revealIdx);
     });
   });
 

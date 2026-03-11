@@ -3,6 +3,14 @@
  *
  * Story 5.1: High-Level Policy Dashboard
  * Reporting dashboard — 60s stale time since data is not real-time operational.
+ *
+ * NOTE (Story 8.2 review): These hooks call the /reports/* endpoints which are
+ * state-wide aggregates with no query-param filtering support. The API's
+ * ReportService methods (getOverviewStats, getSkillsDistribution, getLgaBreakdown)
+ * query all respondents without WHERE clauses for lgaId, dateFrom, dateTo, or source.
+ * Adding filter support requires API-side changes to the ReportService. The global
+ * AnalyticsFilters on OfficialStatsPage only affect the analytics hooks (8-1 endpoints),
+ * not these Overview-tab endpoints. This is an upstream API limitation, not a frontend bug.
  */
 
 import { useQuery } from '@tanstack/react-query';

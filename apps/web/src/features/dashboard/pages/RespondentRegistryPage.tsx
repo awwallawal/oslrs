@@ -19,6 +19,8 @@ import { RespondentRegistryTable } from '../components/RespondentRegistryTable';
 import { ExportButton } from '../components/ExportButton';
 import type { RespondentFilterParams } from '@oslsr/types';
 import type { ExportFilters } from '../api/export.api';
+import { useRegistrySummary } from '../hooks/useAnalytics';
+import { RegistrySummaryStrip } from '../components/charts/RegistrySummaryStrip';
 
 export default function RespondentRegistryPage() {
   const { user } = useAuth();
@@ -47,6 +49,16 @@ export default function RespondentRegistryPage() {
   const { data: response, isLoading, isError, error, dataUpdatedAt } = useRespondentList(filters, {
     refetchInterval,
   });
+
+  // Registry summary strip (AC#3 — all 4 roles with registry access)
+  // Pass active filter params so summary reflects the filtered view
+  const registryParams = useMemo((): import('@oslsr/types').AnalyticsQueryParams => ({
+    lgaId: filters.lgaId,
+    source: filters.source,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  }), [filters.lgaId, filters.source, filters.dateFrom, filters.dateTo]);
+  const { data: registrySummary, isLoading: regSummaryLoading, error: regSummaryError } = useRegistrySummary(registryParams);
 
   // Track new submissions in live mode
   const prevTotalRef = useRef<number>(0);
@@ -224,6 +236,14 @@ export default function RespondentRegistryPage() {
           )}
         </div>
       )}
+
+      {/* Registry Summary Strip (Story 8.2 AC#3) */}
+      <RegistrySummaryStrip
+        data={registrySummary}
+        isLoading={regSummaryLoading}
+        error={regSummaryError}
+        className="mb-2"
+      />
 
       {/* Collapsible Filters */}
       <div className={`${isOfficialRoute ? 'border-l-4 border-[#9C1E23]' : ''}`}>

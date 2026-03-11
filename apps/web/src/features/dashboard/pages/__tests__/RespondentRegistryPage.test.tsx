@@ -93,6 +93,23 @@ vi.mock('../../components/ExportButton', () => ({
   ),
 }));
 
+// Story 8.2: Registry summary strip mocks
+let mockRegistrySummaryReturn = {
+  data: undefined as any,
+  isLoading: false,
+  error: null as Error | null,
+};
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useRegistrySummary: () => mockRegistrySummaryReturn,
+}));
+
+vi.mock('../../components/charts/RegistrySummaryStrip', () => ({
+  RegistrySummaryStrip: ({ data, isLoading }: { data: any; isLoading: boolean }) => (
+    <div data-testid="registry-summary-strip">{isLoading ? 'loading' : data ? 'summary' : 'empty'}</div>
+  ),
+}));
+
 import RespondentRegistryPage from '../RespondentRegistryPage';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -107,6 +124,11 @@ beforeEach(() => {
     data: undefined,
     isLoading: false,
     dataUpdatedAt: Date.now(),
+  };
+  mockRegistrySummaryReturn = {
+    data: undefined,
+    isLoading: false,
+    error: null,
   };
 });
 
@@ -147,5 +169,42 @@ describe('RespondentRegistryPage', () => {
     const presets = screen.getByTestId('quick-filter-presets');
     expect(presets).toBeInTheDocument();
     expect(presets.textContent).toContain('preset-active:all');
+  });
+
+  // ── Story 8.2 AC#3: Registry Summary Strip ──
+
+  it('renders registry summary strip above table', () => {
+    render(<RespondentRegistryPage />);
+    expect(screen.getByTestId('registry-summary-strip')).toBeInTheDocument();
+  });
+
+  it('passes loading state to registry summary strip', () => {
+    mockRegistrySummaryReturn = { data: undefined, isLoading: true, error: null };
+    render(<RespondentRegistryPage />);
+    const strip = screen.getByTestId('registry-summary-strip');
+    expect(strip.textContent).toContain('loading');
+  });
+
+  it('passes data to registry summary strip when loaded', () => {
+    mockRegistrySummaryReturn = {
+      data: { totalRespondents: 100, employedCount: 60, employedPct: 60, femaleCount: 50, femalePct: 50, avgAge: 30, businessOwners: 20, businessOwnersPct: 20 },
+      isLoading: false,
+      error: null,
+    };
+    render(<RespondentRegistryPage />);
+    const strip = screen.getByTestId('registry-summary-strip');
+    expect(strip.textContent).toContain('summary');
+  });
+
+  it('registry summary strip appears before collapsible filters', () => {
+    render(<RespondentRegistryPage />);
+    const strip = screen.getByTestId('registry-summary-strip');
+    const toggleFilters = screen.getByTestId('toggle-filters');
+    // Verify strip appears before filters in DOM order
+    const page = screen.getByTestId('respondent-registry-page');
+    const children = Array.from(page.querySelectorAll('[data-testid]'));
+    const stripIndex = children.indexOf(strip);
+    const filtersIndex = children.indexOf(toggleFilters);
+    expect(stripIndex).toBeLessThan(filtersIndex);
   });
 });

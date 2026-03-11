@@ -39,6 +39,7 @@ import {
   Scale,
   Eye,
   Search,
+  BarChart3,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -146,6 +147,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Remuneration', href: '/dashboard/super-admin/remuneration', icon: DollarSign },
     { label: 'Payment Disputes', href: '/dashboard/super-admin/disputes', icon: Scale },
     { label: 'Reveal Analytics', href: '/dashboard/super-admin/reveal-analytics', icon: Search },
+    { label: 'Survey Analytics', href: '/dashboard/super-admin/survey-analytics', icon: BarChart3 },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
   ],

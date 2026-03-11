@@ -53,8 +53,8 @@ This means one API endpoint like `GET /analytics/demographics` returns different
 
 | Metric | Type | Visualization | Notes |
 |--------|------|---------------|-------|
-| Primary skills frequency | Count per skill (all 50+) | Horizontal bar chart (top 20, expandable) | Grouped by 8 ISCO-aligned categories |
-| Skills by category | Aggregate count per category | Treemap or grouped bar | 8 categories: Construction, Automotive, Fashion, Food, Digital, Healthcare, Education, Artisan |
+| Primary skills frequency | Count per skill (all 150) | Horizontal bar chart (top 20, expandable) | Grouped by 20 ISCO-08 aligned sectors |
+| Skills by category | Aggregate count per sector | Treemap or grouped bar | 20 sectors (see `docs/skills-taxonomy-isco08.md` for full list) |
 | Skills concentration by LGA | Top 3 skills per LGA | Table or small multiples | Reveals geographic specialization |
 | Skills gap analysis | "Have" vs "Want to learn" | Diverging bar chart | Side-by-side: current skills vs desired training |
 | Skill diversity index | Shannon diversity per LGA | Stat card per LGA | Higher = more diverse skill base; lower = monoculture risk |
@@ -477,7 +477,7 @@ Route: /insights (PublicLayout)
 
 Sub-pages (from navbar dropdown):
 - `/insights` — main dashboard (above)
-- `/insights/skills` — expanded skills map with all 50+ skills, category breakdown
+- `/insights/skills` — expanded skills map with all 150 skills, sector breakdown
 - `/insights/trends` — registration trends, time series
 - `/insights/reports` — downloadable PDF policy briefs (Phase 4)
 
@@ -694,8 +694,8 @@ Consolidated list of all features across all roles. Check (Y) = include, (N) = d
 | D11 | Hours worked histogram + percentiles | SA, Official, Supervisor | 1 |
 | D12 | Monthly income distribution (bands) | SA, Official, Supervisor | 1 |
 | D13 | Income by LGA (ranked bar) | SA, Official | 1 |
-| D14 | Primary skills frequency (all 50+) | SA, Official, Supervisor + Public (top 10) | 3 |
-| D15 | Skills by category (8 groups) | SA, Official, Supervisor | 3 |
+| D14 | Primary skills frequency (all 150) | SA, Official, Supervisor + Public (top 10) | 3 |
+| D15 | Skills by sector (20 groups) | SA, Official, Supervisor | 3 |
 | D16 | Skills concentration by LGA | SA, Official | 3 |
 | D17 | Skills gap: have vs want-to-learn | SA, Official + Public | 3 |
 | D18 | Skill diversity index (Shannon) | SA, Official | 3 |

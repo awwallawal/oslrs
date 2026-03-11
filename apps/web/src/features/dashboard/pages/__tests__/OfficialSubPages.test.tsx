@@ -11,6 +11,8 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createElement } from 'react';
 
 expect.extend(matchers);
 import { MemoryRouter } from 'react-router-dom';
@@ -35,6 +37,14 @@ let mockTrendsReturn = {
   error: null as Error | null,
 };
 
+// Analytics hook mocks (Story 8.2)
+const mockAnalyticsRefetch = vi.fn();
+const mockDemographicsReturn = { data: null as any, isLoading: true, error: null as any, refetch: mockAnalyticsRefetch };
+const mockEmploymentReturn = { data: null as any, isLoading: true, error: null as any, refetch: mockAnalyticsRefetch };
+const mockHouseholdReturn = { data: null as any, isLoading: true, error: null as any, refetch: mockAnalyticsRefetch };
+const mockAnalyticsTrendsReturn = { data: [] as any, isLoading: true, error: null as any, refetch: mockAnalyticsRefetch };
+const mockRegistryReturn = { data: null as any, isLoading: true, error: null as any };
+
 vi.mock('../../hooks/useOfficial', () => ({
   useSkillsDistribution: () => mockSkillsReturn,
   useLgaBreakdown: () => mockLgaReturn,
@@ -45,6 +55,20 @@ vi.mock('../../hooks/useOfficial', () => ({
     lgaBreakdown: () => ['official', 'lgaBreakdown'],
     trends: (d: number) => ['official', 'trends', d],
   },
+}));
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useDemographics: () => mockDemographicsReturn,
+  useEmployment: () => mockEmploymentReturn,
+  useHousehold: () => mockHouseholdReturn,
+  useTrends: () => mockAnalyticsTrendsReturn,
+  useRegistrySummary: () => mockRegistryReturn,
+  useSkillsFrequency: () => ({ data: [], isLoading: true, error: null }),
+  usePipelineSummary: () => ({ data: null, isLoading: true, error: null }),
+}));
+
+vi.mock('../../api/export.api', () => ({
+  fetchLgas: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
@@ -103,11 +127,24 @@ vi.mock('recharts', () => ({
   Legend: () => <div />,
   CartesianGrid: () => <div />,
   ReferenceLine: () => <div />,
+  AreaChart: ({ children }: any) => <div>{children}</div>,
+  Area: () => <div />,
+  LineChart: ({ children }: any) => <div>{children}</div>,
+  Line: () => <div />,
 }));
 
 import OfficialStatsPage from '../OfficialStatsPage';
 import OfficialTrendsPage from '../OfficialTrendsPage';
 import OfficialExportPage from '../OfficialExportPage';
+
+function renderWithProviders(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(
+    createElement(QueryClientProvider, { client: qc },
+      createElement(MemoryRouter, null, ui)
+    )
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -143,44 +180,44 @@ describe('OfficialStatsPage', () => {
   });
 
   it('renders page title', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
-    expect(screen.getByText('Statistics')).toBeInTheDocument();
+    renderWithProviders(<OfficialStatsPage />);
+    expect(screen.getByText('Statistics & Analytics')).toBeInTheDocument();
   });
 
   it('renders summary stats section', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('summary-stats')).toBeInTheDocument();
   });
 
   it('displays top skill from data', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('top-skill')).toHaveTextContent('Carpentry');
   });
 
   it('displays most active LGA', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('most-active-lga')).toHaveTextContent('Ibadan North');
   });
 
   it('displays coverage count', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('coverage')).toHaveTextContent('2 / 33');
   });
 
   it('renders skills distribution chart', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('skills-distribution-chart')).toBeInTheDocument();
   });
 
   it('renders LGA breakdown chart', () => {
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('lga-breakdown-chart')).toBeInTheDocument();
   });
 
   it('shows skeleton loading when data is loading', () => {
     mockSkillsReturn = { data: undefined, isLoading: true, error: null };
     mockLgaReturn = { data: undefined, isLoading: true, error: null };
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     const skeletons = screen.getAllByLabelText('Loading card');
     expect(skeletons.length).toBeGreaterThanOrEqual(4);
   });
@@ -188,21 +225,73 @@ describe('OfficialStatsPage', () => {
   it('hides charts when loading', () => {
     mockSkillsReturn = { data: undefined, isLoading: true, error: null };
     mockLgaReturn = { data: undefined, isLoading: true, error: null };
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.queryByTestId('skills-distribution-chart')).not.toBeInTheDocument();
     expect(screen.queryByTestId('lga-breakdown-chart')).not.toBeInTheDocument();
   });
 
   it('renders empty skills message when no skills data', () => {
     mockSkillsReturn = { data: [], isLoading: false, error: null };
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('skills-empty')).toHaveTextContent('No skill data available yet');
   });
 
   it('renders empty LGA message when no LGA data', () => {
     mockLgaReturn = { data: [], isLoading: false, error: null };
-    render(<MemoryRouter><OfficialStatsPage /></MemoryRouter>);
+    renderWithProviders(<OfficialStatsPage />);
     expect(screen.getByTestId('lga-empty')).toHaveTextContent('No LGA data available yet');
+  });
+
+  // ── Story 8.2 Tests: Tabbed Analytics ──
+
+  it('renders tabbed layout with all 6 tabs', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByText('Demographics')).toBeInTheDocument();
+    expect(screen.getByText('Employment')).toBeInTheDocument();
+    expect(screen.getByText('Household')).toBeInTheDocument();
+    expect(screen.getByText('Trends')).toBeInTheDocument();
+    expect(screen.getByText('Equity')).toBeInTheDocument();
+  });
+
+  it('preserves existing skills + LGA charts in Overview tab', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    // Overview is default active tab — existing charts should render
+    expect(screen.getByTestId('skills-distribution-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('lga-breakdown-chart')).toBeInTheDocument();
+  });
+
+  it('renders global analytics filters', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    expect(screen.getByTestId('analytics-filters')).toBeInTheDocument();
+  });
+
+  it('does not show source filter for government official', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    expect(screen.queryByLabelText('Filter by source')).not.toBeInTheDocument();
+  });
+
+  it('renders overview tab as default active', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    const overviewTrigger = screen.getByText('Overview').closest('[data-state]');
+    expect(overviewTrigger).toHaveAttribute('data-state', 'active');
+  });
+
+  it('no PII fields present in any analytics view', () => {
+    renderWithProviders(<OfficialStatsPage />);
+    // Verify no PII-related labels or patterns exist anywhere in Overview tab
+    expect(screen.queryByText(/NIN/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/phone/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/email/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Full Name/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Date of Birth/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Address/i)).not.toBeInTheDocument();
+    // Assert no NIN patterns (11-digit) or phone patterns (+234 / 080x) in rendered text
+    const pageText = screen.getByTestId('official-stats-page').textContent ?? '';
+    expect(pageText).not.toMatch(/\b\d{11}\b/); // NIN-like 11-digit numbers
+    expect(pageText).not.toMatch(/\+234/); // Nigerian phone prefix
+    expect(pageText).not.toMatch(/\b0[789]0\d{8}\b/); // Nigerian mobile numbers
+    expect(pageText).not.toMatch(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/); // Email addresses
   });
 });
 
