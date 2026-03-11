@@ -15,24 +15,6 @@ interface Props {
   className?: string;
 }
 
-function scoreColor(score: number | null, teamAvg: number | null): string {
-  if (score === null) return 'text-neutral-400';
-  if (teamAvg === null) return 'text-neutral-700';
-  if (score >= teamAvg) return 'text-green-600';
-  if (score >= teamAvg * 0.9) return 'text-amber-500';
-  return 'text-red-500';
-}
-
-function badgeColor(rate: number | null, teamRate: number | null, invert = false): string {
-  if (rate === null || teamRate === null) return 'bg-neutral-100 text-neutral-500';
-  const better = invert ? rate <= teamRate : rate >= teamRate;
-  const near = invert
-    ? rate <= teamRate * 1.1
-    : rate >= teamRate * 0.9;
-  if (better) return 'bg-green-100 text-green-700';
-  if (near) return 'bg-amber-100 text-amber-700';
-  return 'bg-red-100 text-red-700';
-}
 
 function formatRate(val: number | null): string {
   if (val === null) return '—';

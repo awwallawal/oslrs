@@ -23,7 +23,6 @@ import type {
   TrendDataPoint,
   RegistrySummary,
   PipelineSummary,
-  FrequencyBucket,
 } from '@oslsr/types';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';

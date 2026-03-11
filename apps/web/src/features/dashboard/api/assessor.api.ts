@@ -71,6 +71,8 @@ export interface AuditQueueFilters {
   dateFrom?: string;
   dateTo?: string;
   enumeratorName?: string;
+  heuristic?: string;
+  enumeratorId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -99,6 +101,8 @@ export async function fetchAuditQueue(filters: AuditQueueFilters): Promise<Pagin
   if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
   if (filters.dateTo) params.set('dateTo', filters.dateTo);
   if (filters.enumeratorName) params.set('enumeratorName', filters.enumeratorName);
+  if (filters.heuristic) params.set('heuristic', filters.heuristic);
+  if (filters.enumeratorId) params.set('enumeratorId', filters.enumeratorId);
   params.set('page', String(filters.page || 1));
   params.set('pageSize', String(filters.pageSize || 20));
   return apiClient(`/assessor/audit-queue?${params.toString()}`);

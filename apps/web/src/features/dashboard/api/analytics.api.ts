@@ -17,6 +17,8 @@ import type {
   PipelineSummary,
   TeamQualityData,
   PersonalStatsData,
+  VerificationPipelineData,
+  VerificationPipelineQueryParams,
 } from '@oslsr/types';
 
 function buildQueryString(params?: AnalyticsQueryParams): string {
@@ -92,5 +94,23 @@ export async function fetchTeamQuality(params?: TeamQualityQueryParams): Promise
 
 export async function fetchPersonalStats(params?: AnalyticsQueryParams): Promise<PersonalStatsData> {
   const result = await apiClient(`/analytics/my-stats${buildQueryString(params)}`);
+  return result.data;
+}
+
+// --- Story 8.4: Verification Pipeline Analytics ---
+
+function buildVerificationQueryString(params?: VerificationPipelineQueryParams): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  if (params.lgaId) searchParams.set('lgaId', params.lgaId);
+  if (params.severity && params.severity.length > 0) searchParams.set('severity', params.severity.join(','));
+  if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+  if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function fetchVerificationPipeline(params?: VerificationPipelineQueryParams): Promise<VerificationPipelineData> {
+  const result = await apiClient(`/analytics/verification-pipeline${buildVerificationQueryString(params)}`);
   return result.data;
 }

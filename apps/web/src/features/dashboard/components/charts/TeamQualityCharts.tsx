@@ -3,11 +3,11 @@
  * Story 8.3: Supervisor team analytics
  */
 
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
-import { CHART_COLORS, SUPPRESSED_COLOR } from './chart-utils';
-import type { EnumeratorQualityMetric, TeamQualityData } from '@oslsr/types';
+import { CHART_COLORS } from './chart-utils';
+import type { TeamQualityData } from '@oslsr/types';
 
 interface Props {
   data?: TeamQualityData;
@@ -15,14 +15,6 @@ interface Props {
   error: Error | null;
   onRetry?: () => void;
   className?: string;
-}
-
-function thresholdColor(value: number | null, teamAvg: number | null, invert = false): string {
-  if (value === null || teamAvg === null) return SUPPRESSED_COLOR;
-  const ratio = invert ? teamAvg / value : value / teamAvg;
-  if (ratio >= 1) return '#22c55e'; // green
-  if (ratio >= 0.9) return '#f59e0b'; // amber
-  return '#ef4444'; // red
 }
 
 function formatRate(val: number | null): string {

@@ -7,6 +7,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { AnalyticsQueryParams } from '@oslsr/types';
+import type { VerificationPipelineQueryParams } from '@oslsr/types';
 import {
   fetchDemographics,
   fetchEmployment,
@@ -17,6 +18,7 @@ import {
   fetchPipelineSummary,
   fetchTeamQuality,
   fetchPersonalStats,
+  fetchVerificationPipeline,
 } from '../api/analytics.api';
 import type { TeamQualityQueryParams } from '../api/analytics.api';
 
@@ -109,6 +111,17 @@ export function usePersonalStats(params?: AnalyticsQueryParams, enabled = true) 
   return useQuery({
     queryKey: [...analyticsKeys.all, 'personalStats', params] as const,
     queryFn: () => fetchPersonalStats(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+// --- Story 8.4: Verification Pipeline Analytics ---
+
+export function useVerificationPipeline(params?: VerificationPipelineQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'verificationPipeline', params] as const,
+    queryFn: () => fetchVerificationPipeline(params),
     staleTime: 60_000,
     enabled,
   });

@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { AnalyticsController } from '../controllers/analytics.controller.js';
 import { TeamQualityController } from '../controllers/team-quality.controller.js';
 import { PersonalStatsController } from '../controllers/personal-stats.controller.js';
+import { VerificationAnalyticsController } from '../controllers/verification-analytics.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { resolveAnalyticsScope } from '../middleware/analytics-scope.js';
@@ -29,6 +30,13 @@ router.use(authorize(
   UserRole.VERIFICATION_ASSESSOR,
 ));
 router.use(resolveAnalyticsScope);
+
+// Story 8.4: Verification pipeline analytics (Assessor + Super Admin + Gov Official)
+router.get(
+  '/verification-pipeline',
+  authorize(UserRole.SUPER_ADMIN, UserRole.VERIFICATION_ASSESSOR, UserRole.GOVERNMENT_OFFICIAL),
+  VerificationAnalyticsController.getVerificationPipeline,
+);
 
 // Story 8.1: Descriptive statistics
 router.get('/demographics', AnalyticsController.getDemographics);

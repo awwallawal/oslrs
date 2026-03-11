@@ -17,6 +17,7 @@ vi.mock('../../services/assessor.service.js', () => ({
     getRecentActivity: (...args: unknown[]) => mockGetRecentActivity(...args),
     reviewDetection: (...args: unknown[]) => mockReviewDetection(...args),
   },
+  VALID_HEURISTICS: ['gps_clustering', 'speed_run', 'straight_lining', 'duplicate_response', 'off_hours'],
 }));
 
 vi.mock('pino', () => ({ default: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) }));
@@ -98,6 +99,64 @@ describe('AssessorController', () => {
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({ statusCode: 400 }),
       );
+    });
+
+    // Story 8.4: Drill-down filter tests
+    it('should pass heuristic filter to service', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetAuditQueue.mockResolvedValue({ data: [], page: 1, pageSize: 20, totalPages: 0, totalItems: 0 });
+
+      await AssessorController.getAuditQueue(
+        makeReq({ query: { heuristic: 'gps_clustering' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockGetAuditQueue).toHaveBeenCalledWith(expect.objectContaining({
+        heuristic: 'gps_clustering',
+      }));
+    });
+
+    it('should pass enumeratorId filter to service', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetAuditQueue.mockResolvedValue({ data: [], page: 1, pageSize: 20, totalPages: 0, totalItems: 0 });
+
+      await AssessorController.getAuditQueue(
+        makeReq({ query: { enumeratorId: TEST_DET_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockGetAuditQueue).toHaveBeenCalledWith(expect.objectContaining({
+        enumeratorId: TEST_DET_ID,
+      }));
+    });
+
+    it('should reject invalid heuristic name', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await AssessorController.getAuditQueue(
+        makeReq({ query: { heuristic: 'nonexistent_heuristic' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 400 }),
+      );
+    });
+
+    it('should work backward-compatible with no new params', async () => {
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      mockGetAuditQueue.mockResolvedValue({ data: [], page: 1, pageSize: 20, totalPages: 0, totalItems: 0 });
+
+      await AssessorController.getAuditQueue(makeReq(), mockRes as Response, mockNext);
+
+      expect(mockGetAuditQueue).toHaveBeenCalledWith(expect.objectContaining({
+        heuristic: undefined,
+        enumeratorId: undefined,
+      }));
+      expect(mockNext).not.toHaveBeenCalled();
     });
   });
 

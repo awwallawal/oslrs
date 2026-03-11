@@ -5,7 +5,6 @@
 
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
-import { CHART_COLORS } from './chart-utils';
 
 interface Props {
   isLoading: boolean;

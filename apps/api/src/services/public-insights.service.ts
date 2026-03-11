@@ -9,7 +9,7 @@
 import { Redis } from 'ioredis';
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
-import type { PublicInsightsData, FrequencyBucket, SkillsFrequency } from '@oslsr/types';
+import type { PublicInsightsData, SkillsFrequency } from '@oslsr/types';
 import { suppressSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
 import pino from 'pino';
 

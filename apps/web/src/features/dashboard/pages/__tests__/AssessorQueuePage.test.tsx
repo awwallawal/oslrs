@@ -33,8 +33,10 @@ let mockDetailData = {
   isLoading: false,
 };
 
+const mockUseAuditQueue = vi.fn(() => mockQueueData);
+
 vi.mock('../../hooks/useAssessor', () => ({
-  useAuditQueue: () => mockQueueData,
+  useAuditQueue: (...args: Parameters<typeof mockUseAuditQueue>) => mockUseAuditQueue(...args),
   useQueueStats: () => mockStatsData,
   useAssessorReview: () => ({
     mutate: vi.fn(),
@@ -59,9 +61,9 @@ beforeEach(() => {
   mockDetailData = { data: undefined, isLoading: false };
 });
 
-function renderComponent() {
+function renderComponent(initialEntries?: string[]) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <AssessorQueuePage />
     </MemoryRouter>
   );
@@ -235,6 +237,43 @@ describe('AssessorQueuePage', () => {
       renderComponent();
       const prevBtn = screen.getByText('Previous').closest('button');
       expect(prevBtn).toBeDisabled();
+    });
+  });
+
+  // Story 8.4: Drill-down navigation from analytics charts
+  describe('Drill-down URL params', () => {
+    it('reads heuristic from URL and passes to useAuditQueue', () => {
+      renderComponent(['/queue?heuristic=gps_clustering']);
+      expect(mockUseAuditQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ heuristic: 'gps_clustering' }),
+      );
+    });
+
+    it('reads enumeratorId from URL and passes to useAuditQueue', () => {
+      renderComponent(['/queue?enumeratorId=00000000-0000-4000-8000-000000000001']);
+      expect(mockUseAuditQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ enumeratorId: '00000000-0000-4000-8000-000000000001' }),
+      );
+    });
+
+    it('reads both heuristic and severity from URL together', () => {
+      renderComponent(['/queue?heuristic=speed_run&severity=high,critical']);
+      expect(mockUseAuditQueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          heuristic: 'speed_run',
+          severity: ['high', 'critical'],
+        }),
+      );
+    });
+
+    it('passes undefined for absent drill-down params', () => {
+      renderComponent(['/queue']);
+      expect(mockUseAuditQueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          heuristic: undefined,
+          enumeratorId: undefined,
+        }),
+      );
     });
   });
 });

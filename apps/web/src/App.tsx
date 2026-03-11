@@ -102,6 +102,7 @@ const AssessorHome = lazy(() => import('./features/dashboard/pages/AssessorHome'
 const AssessorQueuePage = lazy(() => import('./features/dashboard/pages/AssessorQueuePage'));
 const AssessorCompletedPage = lazy(() => import('./features/dashboard/pages/AssessorCompletedPage'));
 const AssessorEvidencePage = lazy(() => import('./features/dashboard/pages/AssessorEvidencePage'));
+const AssessorAnalyticsPage = lazy(() => import('./features/dashboard/pages/AssessorAnalyticsPage'));
 const SuperAdminProductivityPage = lazy(() => import('./features/dashboard/pages/SuperAdminProductivityPage'));
 const SystemHealthPage = lazy(() => import('./features/dashboard/pages/SystemHealthPage'));
 const OfficialHome = lazy(() => import('./features/dashboard/pages/OfficialHome'));
@@ -1060,6 +1061,14 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <AssessorQueuePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="analytics"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AssessorAnalyticsPage />
                     </Suspense>
                   }
                 />

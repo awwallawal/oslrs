@@ -123,6 +123,7 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
   verification_assessor: [
     { label: 'Home', href: '/dashboard/assessor', icon: Home },
     { label: 'Audit Queue', href: '/dashboard/assessor/queue', icon: FileSearch },
+    { label: 'Analytics', href: '/dashboard/assessor/analytics', icon: BarChart3 },
     { label: 'Registry', href: '/dashboard/assessor/registry', icon: Database },
     { label: 'Completed', href: '/dashboard/assessor/completed', icon: CheckCircle },
     { label: 'Evidence', href: '/dashboard/assessor/evidence', icon: Shield },

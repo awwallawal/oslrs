@@ -65,9 +65,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(4);
     });
 
-    it('verification_assessor has exactly 6 sidebar items', () => {
+    it('verification_assessor has exactly 7 sidebar items', () => {
       const items = sidebarConfig.verification_assessor;
-      expect(items.length).toBe(6);
+      expect(items.length).toBe(7);
     });
 
     it('government_official has exactly 6 sidebar items', () => {
@@ -125,6 +125,20 @@ describe('sidebarConfig', () => {
       const item = sidebarConfig.data_entry_clerk.find(i => i.label === 'My Stats');
       expect(item).toBeDefined();
       expect(item?.href).toBe('/dashboard/clerk/stats');
+    });
+
+    // Story 8.4: Assessor Analytics sidebar item
+    it('verification_assessor has Analytics sidebar item', () => {
+      const item = sidebarConfig.verification_assessor.find(i => i.label === 'Analytics');
+      expect(item).toBeDefined();
+      expect(item?.href).toBe('/dashboard/assessor/analytics');
+    });
+
+    it('verification_assessor Analytics item is positioned after Audit Queue', () => {
+      const items = sidebarConfig.verification_assessor;
+      const queueIdx = items.findIndex(i => i.label === 'Audit Queue');
+      const analyticsIdx = items.findIndex(i => i.label === 'Analytics');
+      expect(analyticsIdx).toBeGreaterThan(queueIdx);
     });
   });
 

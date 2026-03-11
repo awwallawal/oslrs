@@ -3,7 +3,7 @@
  * Story 8.3: Supervisor team analytics
  */
 
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import { CHART_COLORS } from './chart-utils';

@@ -8,7 +8,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { AssessorService } from '../services/assessor.service.js';
+import { AssessorService, VALID_HEURISTICS } from '../services/assessor.service.js';
 import { assessorReviewSchema, fraudSeverities, Lga } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -30,6 +30,8 @@ export class AssessorController {
         dateFrom,
         dateTo,
         enumeratorName,
+        heuristic,
+        enumeratorId,
         page = '1',
         pageSize = '20',
       } = req.query as Record<string, string | undefined>;
@@ -50,6 +52,16 @@ export class AssessorController {
         }
       }
 
+      // Validate heuristic filter
+      if (heuristic && !VALID_HEURISTICS.includes(heuristic)) {
+        throw new AppError('VALIDATION_ERROR', `Invalid heuristic: ${heuristic}. Valid values: ${VALID_HEURISTICS.join(', ')}`, 400);
+      }
+
+      // Validate enumeratorId format
+      if (enumeratorId && !UUID_REGEX.test(enumeratorId)) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid enumeratorId format', 400);
+      }
+
       const result = await AssessorService.getAuditQueue({
         lgaId,
         severity: severityValues,
@@ -57,6 +69,8 @@ export class AssessorController {
         dateFrom,
         dateTo,
         enumeratorName,
+        heuristic,
+        enumeratorId,
         page: parseInt(page ?? '1', 10),
         pageSize: parseInt(pageSize ?? '20', 10),
       });

@@ -58,6 +58,17 @@ function castScores<T extends Record<string, unknown>>(row: T): T {
   return result;
 }
 
+/** Map heuristic name to score column for drill-down filtering */
+const HEURISTIC_SCORE_MAP: Record<string, string> = {
+  gps_clustering: 'gps_score',
+  speed_run: 'speed_score',
+  straight_lining: 'straightline_score',
+  duplicate_response: 'duplicate_score',
+  off_hours: 'timing_score',
+};
+
+export const VALID_HEURISTICS = Object.keys(HEURISTIC_SCORE_MAP);
+
 export interface AuditQueueFilters {
   lgaId?: string;
   severity?: string[];
@@ -65,6 +76,8 @@ export interface AuditQueueFilters {
   dateFrom?: string;
   dateTo?: string;
   enumeratorName?: string;
+  heuristic?: string;
+  enumeratorId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -124,6 +137,15 @@ export class AssessorService {
 
     if (filters.enumeratorName) {
       conditions.push(like(users.fullName, `%${escapeLike(filters.enumeratorName)}%`));
+    }
+
+    if (filters.enumeratorId) {
+      conditions.push(eq(fraudDetections.enumeratorId, filters.enumeratorId));
+    }
+
+    if (filters.heuristic && HEURISTIC_SCORE_MAP[filters.heuristic]) {
+      const scoreColumn = HEURISTIC_SCORE_MAP[filters.heuristic];
+      conditions.push(sql`CAST(${sql.raw(`fraud_detections.${scoreColumn}`)} AS numeric) > 0`);
     }
 
     const whereClause = and(...conditions);

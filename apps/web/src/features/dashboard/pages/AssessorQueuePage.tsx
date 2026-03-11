@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileSearch, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { FileSearch, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { SkeletonTable, SkeletonCard } from '../../../components/skeletons';
@@ -57,6 +57,8 @@ export default function AssessorQueuePage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [enumeratorName, setEnumeratorName] = useState('');
+  const [heuristicFilter, setHeuristicFilter] = useState(() => searchParams.get('heuristic') ?? '');
+  const [enumeratorIdFilter, setEnumeratorIdFilter] = useState(() => searchParams.get('enumeratorId') ?? '');
   const [page, setPage] = useState(1);
 
   // Selection state
@@ -70,6 +72,8 @@ export default function AssessorQueuePage() {
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     enumeratorName: enumeratorName || undefined,
+    heuristic: heuristicFilter || undefined,
+    enumeratorId: enumeratorIdFilter || undefined,
     page,
     pageSize: 20,
   };
@@ -213,6 +217,38 @@ export default function AssessorQueuePage() {
           />
         </div>
       </div>
+
+      {/* Active drill-down filter chips */}
+      {(heuristicFilter || enumeratorIdFilter) && (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="drill-down-chips">
+          {heuristicFilter && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#9C1E23]/10 text-[#9C1E23] text-sm font-medium">
+              Heuristic: {heuristicFilter.replace(/_/g, ' ')}
+              <button
+                onClick={() => { setHeuristicFilter(''); setPage(1); }}
+                className="rounded-full p-0.5 hover:bg-[#9C1E23]/20 transition-colors"
+                aria-label="Clear heuristic filter"
+                data-testid="clear-heuristic"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          )}
+          {enumeratorIdFilter && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#9C1E23]/10 text-[#9C1E23] text-sm font-medium">
+              Enumerator ID: {enumeratorIdFilter.slice(0, 8)}...
+              <button
+                onClick={() => { setEnumeratorIdFilter(''); setPage(1); }}
+                className="rounded-full p-0.5 hover:bg-[#9C1E23]/20 transition-colors"
+                aria-label="Clear enumerator filter"
+                data-testid="clear-enumerator-id"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Split-panel layout */}
       <div className="flex gap-6">

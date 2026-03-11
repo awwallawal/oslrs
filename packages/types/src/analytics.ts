@@ -166,6 +166,74 @@ export interface DataQualityScorecard {
   compositeScore: number | null;
 }
 
+// --- Verification Pipeline Analytics (Story 8.4: Assessor Dashboard) ---
+
+export interface VerificationFunnel {
+  totalSubmissions: number;
+  totalFlagged: number;
+  totalReviewed: number;
+  totalApproved: number;
+  totalRejected: number;
+}
+
+export interface FraudTypeBreakdown {
+  gpsCluster: number;
+  speedRun: number;
+  straightLining: number;
+  duplicateResponse: number;
+  offHours: number;
+}
+
+export interface ReviewThroughput {
+  date: string;
+  reviewedCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+}
+
+export interface TopFlaggedEnumerator {
+  enumeratorId: string;
+  name: string;
+  flagCount: number;
+  criticalCount: number;
+  highCount: number;
+  approvalRate: number;
+}
+
+export interface BacklogTrend {
+  date: string;
+  pendingCount: number;
+  highCriticalCount: number;
+}
+
+export interface RejectionReasonFrequency {
+  reason: string;
+  count: number;
+  percentage: number;
+}
+
+export interface VerificationPipelineData {
+  funnel: VerificationFunnel;
+  fraudTypeBreakdown: FraudTypeBreakdown;
+  throughputTrend: ReviewThroughput[];
+  topFlaggedEnumerators: TopFlaggedEnumerator[];
+  backlogTrend: BacklogTrend[];
+  rejectionReasons: RejectionReasonFrequency[];
+  avgReviewTimeMinutes: number | null;
+  medianTimeToResolutionDays: number | null;
+  dataQualityScore: {
+    completenessRate: number;
+    consistencyRate: number;
+  };
+}
+
+export interface VerificationPipelineQueryParams {
+  lgaId?: string;
+  severity?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 // --- Public Insights ---
 
 export interface PublicInsightsData {

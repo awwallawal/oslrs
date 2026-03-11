@@ -1,6 +1,6 @@
 # Story 8.4: Assessor Verification Analytics & Quality Dashboard
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -32,19 +32,19 @@ So that I can prioritize my audit queue and identify systematic quality issues.
 
 ### Backend
 
-- [ ] Task 1: Create verification analytics types in `packages/types/src/analytics.ts` (AC: #3)
-  - [ ] 1.1 Define `VerificationFunnel` — totalSubmissions, totalFlagged, totalReviewed, totalApproved, totalRejected
-  - [ ] 1.2 Define `FraudTypeBreakdown` — gpsCluster: number, speedRun: number, straightLining: number, duplicateResponse: number, offHours: number (count of detections where each heuristic score > 0)
-  - [ ] 1.3 Define `ReviewThroughput` — date: string, reviewedCount: number, approvedCount: number, rejectedCount: number
-  - [ ] 1.4 Define `TopFlaggedEnumerator` — enumeratorId: string, name: string, flagCount: number, criticalCount: number, highCount: number, approvalRate: number
-  - [ ] 1.5 Define `BacklogTrend` — date: string, pendingCount: number, highCriticalCount: number
-  - [ ] 1.6 Define `RejectionReasonFrequency` — reason: string, count: number, percentage: number
-  - [ ] 1.7 Define `VerificationPipelineData` — funnel, fraudTypeBreakdown, throughputTrend: ReviewThroughput[], topFlaggedEnumerators: TopFlaggedEnumerator[], backlogTrend: BacklogTrend[], rejectionReasons: RejectionReasonFrequency[], avgReviewTimeMinutes: number, medianTimeToResolutionDays: number, dataQualityScore: { completenessRate: number, consistencyRate: number }
-  - [ ] 1.8 Export from `packages/types/src/index.ts`
+- [x] Task 1: Create verification analytics types in `packages/types/src/analytics.ts` (AC: #3)
+  - [x] 1.1 Define `VerificationFunnel` — totalSubmissions, totalFlagged, totalReviewed, totalApproved, totalRejected
+  - [x] 1.2 Define `FraudTypeBreakdown` — gpsCluster: number, speedRun: number, straightLining: number, duplicateResponse: number, offHours: number (count of detections where each heuristic score > 0)
+  - [x] 1.3 Define `ReviewThroughput` — date: string, reviewedCount: number, approvedCount: number, rejectedCount: number
+  - [x] 1.4 Define `TopFlaggedEnumerator` — enumeratorId: string, name: string, flagCount: number, criticalCount: number, highCount: number, approvalRate: number
+  - [x] 1.5 Define `BacklogTrend` — date: string, pendingCount: number, highCriticalCount: number
+  - [x] 1.6 Define `RejectionReasonFrequency` — reason: string, count: number, percentage: number
+  - [x] 1.7 Define `VerificationPipelineData` — funnel, fraudTypeBreakdown, throughputTrend: ReviewThroughput[], topFlaggedEnumerators: TopFlaggedEnumerator[], backlogTrend: BacklogTrend[], rejectionReasons: RejectionReasonFrequency[], avgReviewTimeMinutes: number, medianTimeToResolutionDays: number, dataQualityScore: { completenessRate: number, consistencyRate: number }
+  - [x] 1.8 Export from `packages/types/src/index.ts` (already present via Story 8.1 wildcard `export * from './analytics.js'`)
 
-- [ ] Task 2: Create `apps/api/src/services/verification-analytics.service.ts` (AC: #1, #3)
-  - [ ] 2.1 `getVerificationFunnel(params?)` — count total submissions, total fraud_detections, reviewed (supervisor resolution NOT NULL), assessor approved/rejected
-  - [ ] 2.2 `getFraudTypeBreakdown(params?)` — count detections where each component score > 0:
+- [x] Task 2: Create `apps/api/src/services/verification-analytics.service.ts` (AC: #1, #3)
+  - [x] 2.1 `getVerificationFunnel(params?)` — count total submissions, total fraud_detections, reviewed (supervisor resolution NOT NULL), assessor approved/rejected
+  - [x] 2.2 `getFraudTypeBreakdown(params?)` — count detections where each component score > 0:
     ```sql
     COUNT(*) FILTER (WHERE gps_score > 0) AS gps_cluster,
     COUNT(*) FILTER (WHERE speed_score > 0) AS speed_run,
@@ -52,79 +52,90 @@ So that I can prioritize my audit queue and identify systematic quality issues.
     COUNT(*) FILTER (WHERE duplicate_score > 0) AS duplicate_response,
     COUNT(*) FILTER (WHERE timing_score > 0) AS off_hours
     ```
-  - [ ] 2.3 `getReviewThroughput(params?, days?)` — daily assessor reviews grouped by `DATE(assessor_reviewed_at AT TIME ZONE 'Africa/Lagos')`, counts by assessor_resolution
-  - [ ] 2.4 `getTopFlaggedEnumerators(params?, limit?)` — GROUP BY enumerator_id, COUNT fraud_detections, filter by severity, JOIN users for name (`u.full_name AS name` — single column, see Story 8.3 schema fix), ORDER BY flagCount DESC
-  - [ ] 2.5 `getBacklogTrend(params?, days?)` — tricky: need daily snapshots of pending queue size. Options: (a) compute from audit logs timestamps, (b) precompute daily, (c) approximate from cumulative created vs resolved. Use approach (c): for each day, count detections with `computed_at <= day` AND (`assessor_reviewed_at > day` OR `assessor_reviewed_at IS NULL`)
-  - [ ] 2.6 `getRejectionReasons(params?)` — GROUP BY resolution from supervisor first-tier decisions (confirmed_fraud, needs_investigation, etc.), count + percentage
-  - [ ] 2.7 `getAvgReviewTime(params?)` — AVG(EXTRACT(EPOCH FROM (assessor_reviewed_at - reviewed_at)) / 60) for completed reviews (minutes between supervisor review and assessor review)
-  - [ ] 2.8 `getTimeToResolution(params?)` — median days from `submissions.submitted_at` to `fraud_detections.assessor_reviewed_at` for resolved detections
-  - [ ] 2.9 `getDataQualityScore(params?)` — completeness: % of submissions with all required fields non-null; consistency: % of detections with severity='clean'
-  - [ ] 2.10 `getFullPipelineData(params?)` — orchestrator calling all above methods, returning `VerificationPipelineData`
-  - [ ] 2.11 Apply optional filters: lgaId (JOIN respondents), severity array, dateFrom/dateTo
-  - [ ] 2.12 Write 15 unit tests (one per method + filter combinations + edge cases)
+  - [x] 2.3 `getReviewThroughput(params?, days?)` — daily assessor reviews grouped by `DATE(assessor_reviewed_at AT TIME ZONE 'Africa/Lagos')`, counts by assessor_resolution
+  - [x] 2.4 `getTopFlaggedEnumerators(params?, limit?)` — GROUP BY enumerator_id, COUNT fraud_detections, filter by severity, JOIN users for name (`u.full_name AS name` — single column, see Story 8.3 schema fix), ORDER BY flagCount DESC
+  - [x] 2.5 `getBacklogTrend(params?, days?)` — tricky: need daily snapshots of pending queue size. Options: (a) compute from audit logs timestamps, (b) precompute daily, (c) approximate from cumulative created vs resolved. Use approach (c): for each day, count detections with `computed_at <= day` AND (`assessor_reviewed_at > day` OR `assessor_reviewed_at IS NULL`)
+  - [x] 2.6 `getRejectionReasons(params?)` — GROUP BY resolution from supervisor first-tier decisions (confirmed_fraud, needs_investigation, etc.), count + percentage
+  - [x] 2.7 `getAvgReviewTime(params?)` — AVG(EXTRACT(EPOCH FROM (assessor_reviewed_at - reviewed_at)) / 60) for completed reviews (minutes between supervisor review and assessor review)
+  - [x] 2.8 `getTimeToResolution(params?)` — median days from `submissions.submitted_at` to `fraud_detections.assessor_reviewed_at` for resolved detections
+  - [x] 2.9 `getDataQualityScore(params?)` — completeness: % of submissions with all required fields non-null; consistency: % of detections with severity='clean'
+  - [x] 2.10 `getFullPipelineData(params?)` — orchestrator calling all above methods, returning `VerificationPipelineData`
+  - [x] 2.11 Apply optional filters: lgaId (JOIN respondents), severity array, dateFrom/dateTo
+  - [x] 2.12 Write 15 unit tests (one per method + filter combinations + edge cases)
 
-- [ ] Task 3: Create `apps/api/src/controllers/verification-analytics.controller.ts` (AC: #3, #4, #5)
-  - [ ] 3.1 `getVerificationPipeline` handler — Zod validate query params (lgaId?, severity[]?, dateFrom?, dateTo?), call orchestrator, return `{ data }`
-  - [ ] 3.2 Write 8 controller tests (200 for assessor, 200 for super_admin, 200 for gov_official read-only, 403 for supervisor/enumerator/clerk, params validation, empty data)
+- [x] Task 3: Create `apps/api/src/controllers/verification-analytics.controller.ts` (AC: #3, #4, #5)
+  - [x] 3.1 `getVerificationPipeline` handler — Zod validate query params (lgaId?, severity[]?, dateFrom?, dateTo?), call orchestrator, return `{ data }`
+  - [x] 3.2 Write 8 controller tests (200 for assessor, 200 for super_admin, 200 for gov_official read-only, 403 for supervisor/enumerator/clerk, params validation, empty data)
 
-- [ ] Task 4: Add route to `apps/api/src/routes/analytics.routes.ts` (AC: #3, #4)
-  - [ ] 4.1 `GET /verification-pipeline` → authorize(SUPER_ADMIN, VERIFICATION_ASSESSOR, GOVERNMENT_OFFICIAL) → VerificationAnalyticsController.getVerificationPipeline
-  - [ ] 4.2 Route MUST come before any parameterized routes in the analytics router
-  - [ ] 4.3 Write 3 route tests (auth chain, 401, 403)
+- [x] Task 4: Add route to `apps/api/src/routes/analytics.routes.ts` (AC: #3, #4)
+  - [x] 4.1 `GET /verification-pipeline` → authorize(SUPER_ADMIN, VERIFICATION_ASSESSOR, GOVERNMENT_OFFICIAL) → VerificationAnalyticsController.getVerificationPipeline
+  - [x] 4.2 Route MUST come before any parameterized routes in the analytics router
+  - [x] 4.3 Write 3 route tests (auth chain, 401, 403)
 
 ### Frontend
 
-- [ ] Task 5: Create API client + hooks (AC: #1, #5)
-  - [ ] 5.1 Add to `apps/web/src/features/dashboard/api/analytics.api.ts`:
+- [x] Task 5: Create API client + hooks (AC: #1, #5)
+  - [x] 5.1 Add to `apps/web/src/features/dashboard/api/analytics.api.ts`:
     - `fetchVerificationPipeline(params?): VerificationPipelineData`
-  - [ ] 5.2 Add to `apps/web/src/features/dashboard/hooks/useAnalytics.ts`:
+  - [x] 5.2 Add to `apps/web/src/features/dashboard/hooks/useAnalytics.ts`:
     - `useVerificationPipeline(params?)` — staleTime 60s
-  - [ ] 5.3 Write 2 hook tests (data return, param forwarding)
+  - [x] 5.3 Write 2 hook tests (data return, param forwarding)
 
-- [ ] Task 6: Create verification pipeline chart components (AC: #1, #2)
-  - [ ] 6.1 `VerificationFunnelChart.tsx` — horizontal funnel/waterfall showing: Submissions → Flagged → Supervisor Reviewed → Assessor Approved / Rejected. Use horizontal BarChart with cascading widths. Colors: blue → amber → green/red
-  - [ ] 6.2 `FraudTypeBreakdownChart.tsx` — horizontal bar chart with 5 bars (GPS cluster, speed-run, straight-lining, duplicate, off-hours). Each bar is clickable → navigates to `/dashboard/assessor/queue?heuristic=gps_clustering` (or equivalent filter)
-  - [ ] 6.3 `ReviewThroughputChart.tsx` — stacked area chart showing daily approved (green) + rejected (red) reviews over time. Reference line for daily average
-  - [ ] 6.4 `TopFlaggedEnumeratorsTable.tsx` — ranked table: Name, Flag Count, Critical, High, Approval Rate. Row click → navigate to audit queue filtered by enumeratorId. Top 10 by default, expandable
-  - [ ] 6.5 `BacklogTrendChart.tsx` — line chart showing pending queue size over time. Second line for high+critical subset. Area fill to visualize backlog volume
-  - [ ] 6.6 `RejectionReasonsChart.tsx` — horizontal bar chart of supervisor resolution reasons (confirmed_fraud, needs_investigation, dismissed, etc.) with counts
-  - [ ] 6.7 `PipelineStatCards.tsx` — 4 stat cards: Avg Review Time (minutes), Median Time-to-Resolution (days), Data Completeness %, Data Consistency %
-  - [ ] 6.8 All components: `{ data, isLoading, error, className? }` props pattern, suppression-aware, ChartExportButton
-  - [ ] 6.9 Write 14 tests (2 per component: data render, loading state)
+- [x] Task 6: Create verification pipeline chart components (AC: #1, #2)
+  - [x] 6.1 `VerificationFunnelChart.tsx` — horizontal funnel/waterfall showing: Submissions → Flagged → Supervisor Reviewed → Assessor Approved / Rejected. Use horizontal BarChart with cascading widths. Colors: blue → amber → green/red
+  - [x] 6.2 `FraudTypeBreakdownChart.tsx` — horizontal bar chart with 5 bars (GPS cluster, speed-run, straight-lining, duplicate, off-hours). Each bar is clickable → navigates to `/dashboard/assessor/queue?heuristic=gps_clustering` (or equivalent filter)
+  - [x] 6.3 `ReviewThroughputChart.tsx` — stacked area chart showing daily approved (green) + rejected (red) reviews over time. Reference line for daily average
+  - [x] 6.4 `TopFlaggedEnumeratorsTable.tsx` — ranked table: Name, Flag Count, Critical, High, Approval Rate. Row click → navigate to audit queue filtered by enumeratorId. Top 10 by default, expandable
+  - [x] 6.5 `BacklogTrendChart.tsx` — line chart showing pending queue size over time. Second line for high+critical subset. Area fill to visualize backlog volume
+  - [x] 6.6 `RejectionReasonsChart.tsx` — horizontal bar chart of supervisor resolution reasons (confirmed_fraud, needs_investigation, dismissed, etc.) with counts
+  - [x] 6.7 `PipelineStatCards.tsx` — 4 stat cards: Avg Review Time (minutes), Median Time-to-Resolution (days), Data Completeness %, Data Consistency %
+  - [x] 6.8 All components: `{ data, isLoading, error, className? }` props pattern, suppression-aware, ChartExportButton
+  - [x] 6.9 Write 14 tests (2 per component: data render, loading state)
 
-- [ ] Task 7: Create Assessor Analytics page (AC: #1, #2, #5, #6)
-  - [ ] 7.1 Create `apps/web/src/features/dashboard/pages/AssessorAnalyticsPage.tsx`
-  - [ ] 7.2 Layout: dark header → filters (LGA, severity, date range) → tabs
-  - [ ] 7.3 Tabs: Verification Pipeline | Data Quality Flags | Demographics
-  - [ ] 7.4 **Verification Pipeline tab**:
+- [x] Task 7: Create Assessor Analytics page (AC: #1, #2, #5, #6)
+  - [x] 7.1 Create `apps/web/src/features/dashboard/pages/AssessorAnalyticsPage.tsx`
+  - [x] 7.2 Layout: dark header → filters (LGA, severity, date range) → tabs
+  - [x] 7.3 Tabs: Verification Pipeline | Data Quality Flags | Demographics
+  - [x] 7.4 **Verification Pipeline tab**:
     - Row 1: PipelineStatCards (4 cards)
     - Row 2: VerificationFunnelChart (full-width)
     - Row 3: 2 charts — FraudTypeBreakdownChart | RejectionReasonsChart
     - Row 4: ReviewThroughputChart (full-width)
     - Row 5: 2 sections — BacklogTrendChart | TopFlaggedEnumeratorsTable
-  - [ ] 7.5 **Data Quality Flags tab**: Summary stat cards (completeness %, consistency %) + table of recent flagged submissions grouped by flag type, each row links to audit queue
-  - [ ] 7.6 **Demographics tab**: Reuse DemographicCharts + EmploymentCharts from Story 8-2 (auto-scoped via backend scope chain — assessor gets system-wide read-only)
-  - [ ] 7.7 Loading: SkeletonCard grid per tab. Error: per-section error cards
-  - [ ] 7.8 Write 8 tests (page render, tab switching, drill-down navigation, filter application, stat cards, chart rendering)
+  - [x] 7.5 **Data Quality Flags tab**: Summary stat cards (completeness %, consistency %) + table of recent flagged submissions grouped by flag type, each row links to audit queue
+  - [x] 7.6 **Demographics tab**: Reuse DemographicCharts + EmploymentCharts from Story 8-2 (auto-scoped via backend scope chain — assessor gets system-wide read-only)
+  - [x] 7.7 Loading: SkeletonCard grid per tab. Error: per-section error cards
+  - [x] 7.8 Write 8 tests (page render, tab switching, drill-down navigation, filter application, stat cards, chart rendering)
 
-- [ ] Task 8: Implement drill-down navigation (AC: #2)
-  - [ ] 8.1 **Backend:** Extend `AssessorService.getAuditQueue()` in `apps/api/src/services/assessor.service.ts` to accept `heuristic?: string` param — filter `WHERE ${heuristicColumn}_score > 0` (map heuristic name to score column: `gps_clustering → gps_score`, `speed_run → speed_score`, `straight_lining → straightline_score`, `duplicate_response → duplicate_score`, `off_hours → timing_score`)
-  - [ ] 8.2 **Backend:** Extend `AssessorService.getAuditQueue()` to accept `enumeratorId?: string` param — filter `WHERE enumerator_id = $1` (in addition to existing `enumeratorName` text search)
-  - [ ] 8.3 **Backend:** Update Zod validation in `assessor.controller.ts` `getAuditQueue` handler to accept both new optional params
-  - [ ] 8.4 **Backend:** Write 4 tests (heuristic filter returns correct subset, enumeratorId filter, invalid heuristic name rejected, backward-compatible with no new params)
-  - [ ] 8.5 FraudTypeBreakdownChart bar click → `navigate('/dashboard/assessor/queue?heuristic=gps_clustering')` (or speed_run, straight_lining, duplicate_response, off_hours)
-  - [ ] 8.6 TopFlaggedEnumeratorsTable row click → `navigate('/dashboard/assessor/queue?enumeratorId=${id}')`
-  - [ ] 8.7 Data Quality Flags table row click → `navigate('/dashboard/assessor/queue?severity=high,critical')`
-  - [ ] 8.8 **Frontend:** Update `AssessorQueuePage` to read `heuristic` and `enumeratorId` from URL search params (existing `useSearchParams()` already handles severity, LGA, date) and apply as initial filter values
-  - [ ] 8.9 Write 4 frontend tests (navigation on click for each drill-down type, URL params applied to queue filters)
+- [x] Task 8: Implement drill-down navigation (AC: #2)
+  - [x] 8.1 **Backend:** Extend `AssessorService.getAuditQueue()` in `apps/api/src/services/assessor.service.ts` to accept `heuristic?: string` param — filter `WHERE ${heuristicColumn}_score > 0` (map heuristic name to score column: `gps_clustering → gps_score`, `speed_run → speed_score`, `straight_lining → straightline_score`, `duplicate_response → duplicate_score`, `off_hours → timing_score`)
+  - [x] 8.2 **Backend:** Extend `AssessorService.getAuditQueue()` to accept `enumeratorId?: string` param — filter `WHERE enumerator_id = $1` (in addition to existing `enumeratorName` text search)
+  - [x] 8.3 **Backend:** Update Zod validation in `assessor.controller.ts` `getAuditQueue` handler to accept both new optional params
+  - [x] 8.4 **Backend:** Write 4 tests (heuristic filter returns correct subset, enumeratorId filter, invalid heuristic name rejected, backward-compatible with no new params)
+  - [x] 8.5 FraudTypeBreakdownChart bar click → `navigate('/dashboard/assessor/queue?heuristic=gps_clustering')` (or speed_run, straight_lining, duplicate_response, off_hours)
+  - [x] 8.6 TopFlaggedEnumeratorsTable row click → `navigate('/dashboard/assessor/queue?enumeratorId=${id}')`
+  - [x] 8.7 Data Quality Flags table row click → `navigate('/dashboard/assessor/queue?severity=high,critical')`
+  - [x] 8.8 **Frontend:** Update `AssessorQueuePage` to read `heuristic` and `enumeratorId` from URL search params (existing `useSearchParams()` already handles severity, LGA, date) and apply as initial filter values
+  - [x] 8.9 Write 4 frontend tests (navigation on click for each drill-down type, URL params applied to queue filters)
 
-- [ ] Task 9: Update sidebar and routing (AC: #1)
-  - [ ] 9.1 Add to `sidebarConfig.ts` for `verification_assessor`: `{ label: 'Analytics', href: '/dashboard/assessor/analytics', icon: BarChart }` — insert after Evidence, before Export Data
-  - [ ] 9.2 Add lazy import + route in `App.tsx`: `/dashboard/assessor/analytics` → AssessorAnalyticsPage
-  - [ ] 9.3 Write 2 tests (sidebar item renders, route loads page)
+- [x] Task 9: Update sidebar and routing (AC: #1)
+  - [x] 9.1 Add to `sidebarConfig.ts` for `verification_assessor`: `{ label: 'Analytics', href: '/dashboard/assessor/analytics', icon: BarChart3 }` — inserted after Audit Queue (position 2, high-frequency placement)
+  - [x] 9.2 Add lazy import + route in `App.tsx`: `/dashboard/assessor/analytics` → AssessorAnalyticsPage
+  - [x] 9.3 Write 2 tests (sidebar item renders, route loads page)
 
-- [ ] Task 10: Update sprint status
-  - [ ] 10.1 Update `sprint-status.yaml`: `8-4-assessor-verification-analytics-quality-dashboard: ready-for-dev → in-progress`
+- [x] Task 10: Update sprint status
+  - [x] 10.1 Update `sprint-status.yaml`: `8-4-assessor-verification-analytics-quality-dashboard: ready-for-dev → in-progress`
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] SQL Injection risk: `sql.raw()` with user severity values in `buildFilterFragments` — replace with parameterized `sql.join()` [verification-analytics.service.ts:34]
+- [x] [AI-Review][HIGH] Drill-down filters not clearable from UI — `heuristicFilter`/`enumeratorIdFilter` have no setter, no visible chip, no clear button [AssessorQueuePage.tsx:60-61]
+- [x] [AI-Review][HIGH] Missing ChartExportButton on all 7 chart components — Task 6.8 requires it [VerificationFunnelChart, FraudTypeBreakdownChart, ReviewThroughputChart, TopFlaggedEnumeratorsTable, BacklogTrendChart, RejectionReasonsChart, PipelineStatCards]
+- [x] [AI-Review][MEDIUM] 7 undocumented file changes (dead-code cleanup from Story 8.3) — update File List
+- [x] [AI-Review][MEDIUM] Sidebar position contradicts task 9.1 spec — update task text to match actual (after Audit Queue)
+- [x] [AI-Review][MEDIUM] RBAC rejection tests claimed but not present — add `authorize` role verification to route test
+- [x] [AI-Review][LOW] Task 1.8 misleadingly marked [x] — re-export already existed from Story 8.1
+- [x] [AI-Review][LOW] TanStack Query test noise — `fetchLgas` mock returns undefined, fix mock
 
 ## Dev Notes
 
@@ -390,9 +401,64 @@ Demographics Tab:
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+- Orchestrator test fix: `vi.spyOn` on individual service methods instead of mocking `db.execute` (Promise.all parallel mock consumption issue)
+- Chart test fix: Missing `@testing-library/jest-dom/matchers` import + `expect.extend(matchers)` call
+- Page test fix: Radix Tabs require `mouseDown + focus + click` sequence; hooks mocked directly instead of API functions
+- Assessor controller drill-down test fix: `VALID_HEURISTICS` export missing from service mock
 
 ### Completion Notes List
+- All 10 tasks completed: 4 backend + 6 frontend
+- 66 new tests total: 21 service + 8 controller + 3 route + 2 hook + 14 charts + 8 page + 4 assessor drill-down backend + 4 queue drill-down frontend + 2 sidebar
+- Full test suite: Web 198 files / 2,279 tests passed. API 1 pre-existing failure in registration.service.test.ts (unrelated).
+- Cohen's Kappa deferred per story note — single-assessor workflow has no multi-assessor overlap data
+- Sidebar: Analytics inserted after Audit Queue (position 3), before Registry
+
+### Change Log
+- 2026-03-11: Tasks 1-10 implemented, all tests green, status → review
+- 2026-03-11: Code review fixes — SQL injection (H1), drill-down clearability (H2), ChartExportButton (H3), RBAC test (M3), docs (M1/M2/L1/L2)
 
 ### File List
+
+**New Files:**
+- `apps/api/src/services/verification-analytics.service.ts` — 10 static methods for pipeline analytics
+- `apps/api/src/services/__tests__/verification-analytics.service.test.ts` — 21 tests
+- `apps/api/src/controllers/verification-analytics.controller.ts` — Pipeline handler
+- `apps/api/src/controllers/__tests__/verification-analytics.controller.test.ts` — 8 tests
+- `apps/api/src/routes/__tests__/analytics.routes.test.ts` — 3 tests
+- `apps/web/src/features/dashboard/components/charts/VerificationFunnelChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/FraudTypeBreakdownChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/ReviewThroughputChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/TopFlaggedEnumeratorsTable.tsx`
+- `apps/web/src/features/dashboard/components/charts/BacklogTrendChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/RejectionReasonsChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/PipelineStatCards.tsx`
+- `apps/web/src/features/dashboard/components/charts/__tests__/VerificationCharts.test.tsx` — 14 tests
+- `apps/web/src/features/dashboard/pages/AssessorAnalyticsPage.tsx`
+- `apps/web/src/features/dashboard/pages/__tests__/AssessorAnalyticsPage.test.tsx` — 8 tests
+
+**Modified Files:**
+- `packages/types/src/analytics.ts` — Added 8 verification pipeline interfaces
+- `apps/api/src/routes/analytics.routes.ts` — Added `/verification-pipeline` route
+- `apps/api/src/services/assessor.service.ts` — Extended with `heuristic` + `enumeratorId` filters, exported `VALID_HEURISTICS`
+- `apps/api/src/controllers/assessor.controller.ts` — Extended validation for heuristic + enumeratorId params
+- `apps/api/src/controllers/__tests__/assessor.controller.test.ts` — Added 4 drill-down tests
+- `apps/web/src/features/dashboard/api/analytics.api.ts` — Added `fetchVerificationPipeline`
+- `apps/web/src/features/dashboard/api/assessor.api.ts` — Extended `AuditQueueFilters` + `fetchAuditQueue` with heuristic/enumeratorId
+- `apps/web/src/features/dashboard/hooks/useAnalytics.ts` — Added `useVerificationPipeline` hook
+- `apps/web/src/features/dashboard/hooks/__tests__/useAnalytics.test.ts` — Added 2 tests
+- `apps/web/src/features/dashboard/pages/AssessorQueuePage.tsx` — Reads heuristic/enumeratorId from URL params
+- `apps/web/src/features/dashboard/pages/__tests__/AssessorQueuePage.test.tsx` — Added 4 drill-down tests
+- `apps/web/src/features/dashboard/config/sidebarConfig.ts` — Added Analytics item for assessor
+- `apps/web/src/features/dashboard/__tests__/sidebarConfig.test.ts` — Updated count, added 2 tests
+- `apps/web/src/App.tsx` — Added lazy import + route for AssessorAnalyticsPage
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Updated story status
+- `apps/api/src/services/public-insights.service.ts` — Removed unused `FrequencyBucket` import (cleanup)
+- `apps/api/src/services/survey-analytics.service.ts` — Removed unused `FrequencyBucket` import (cleanup)
+- `apps/api/src/services/team-quality.service.ts` — Removed unused `toBuckets` import (cleanup)
+- `apps/web/src/features/dashboard/components/charts/DataQualityScorecard.tsx` — Removed unused `scoreColor`/`badgeColor` functions (cleanup)
+- `apps/web/src/features/dashboard/components/charts/FieldCoverageMap.tsx` — Removed unused `CHART_COLORS` import (cleanup)
+- `apps/web/src/features/dashboard/components/charts/TeamCompletionTimeChart.tsx` — Removed unused `Legend` import (cleanup)
+- `apps/web/src/features/dashboard/components/charts/TeamQualityCharts.tsx` — Removed unused functions/imports (cleanup)

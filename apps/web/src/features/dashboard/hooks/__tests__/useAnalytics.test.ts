@@ -26,6 +26,7 @@ vi.mock('../../api/analytics.api', () => ({
   fetchPipelineSummary: vi.fn(),
   fetchTeamQuality: vi.fn(),
   fetchPersonalStats: vi.fn(),
+  fetchVerificationPipeline: vi.fn(),
 }));
 
 import {
@@ -38,6 +39,7 @@ import {
   usePipelineSummary,
   useTeamQuality,
   usePersonalStats,
+  useVerificationPipeline,
 } from '../useAnalytics';
 
 import {
@@ -50,6 +52,7 @@ import {
   fetchPipelineSummary,
   fetchTeamQuality,
   fetchPersonalStats,
+  fetchVerificationPipeline,
 } from '../../api/analytics.api';
 
 function createWrapper() {
@@ -240,5 +243,38 @@ describe('useAnalytics hooks — Story 8.3', () => {
     expect(result.current.error).toBeInstanceOf(Error);
     expect((result.current.error as Error).message).toBe('Server unavailable');
     expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe('useAnalytics hooks — Story 8.4', () => {
+  it('useVerificationPipeline returns data and forwards params', async () => {
+    const mockData = {
+      funnel: { totalSubmissions: 100, totalFlagged: 30, totalReviewed: 20, totalApproved: 15, totalRejected: 5 },
+      fraudTypeBreakdown: { gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, offHours: 2 },
+      throughputTrend: [],
+      topFlaggedEnumerators: [],
+      backlogTrend: [],
+      rejectionReasons: [],
+      avgReviewTimeMinutes: 30,
+      medianTimeToResolutionDays: 2,
+      dataQualityScore: { completenessRate: 90, consistencyRate: 85 },
+    };
+    vi.mocked(fetchVerificationPipeline).mockResolvedValue(mockData as any);
+
+    const params = { lgaId: 'akinyele', severity: ['high', 'critical'] };
+    const { result } = renderHook(() => useVerificationPipeline(params), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(mockData);
+    expect(fetchVerificationPipeline).toHaveBeenCalledWith(params);
+  });
+
+  it('useVerificationPipeline returns error state when API fails', async () => {
+    vi.mocked(fetchVerificationPipeline).mockRejectedValue(new Error('Forbidden'));
+
+    const { result } = renderHook(() => useVerificationPipeline(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
   });
 });
