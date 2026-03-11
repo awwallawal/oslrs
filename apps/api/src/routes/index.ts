@@ -23,6 +23,7 @@ import remunerationRoutes from './remuneration.routes.js';
 import viewAsRoutes from './view-as.routes.js';
 import viewAsDataRoutes from './view-as-data.routes.js';
 import marketplaceRoutes from './marketplace.routes.js';
+import analyticsRoutes from './analytics.routes.js';
 
 const router = Router();
 
@@ -49,6 +50,7 @@ router.use('/remuneration', remunerationRoutes);
 router.use('/view-as', viewAsRoutes);
 router.use('/view-as/data', viewAsDataRoutes);
 router.use('/marketplace', marketplaceRoutes);
+router.use('/analytics', analyticsRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

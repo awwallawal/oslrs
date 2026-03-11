@@ -2207,3 +2207,79 @@ So that I can understand the local skills landscape without requiring login.
 **Given** the existing "Insights" navbar dropdown shows "Coming Soon" placeholders
 **When** Epic 8 is deployed
 **Then** the placeholders should be replaced with links to the real `/insights`, `/insights/skills`, and `/insights/trends` pages.
+
+### Story 8.6: Cross-Tabulation Engine, Skills Inventory & Gap Analysis
+
+As a Super Admin, Government Official, or Supervisor,
+I want a cross-tabulation engine for flexible two-dimensional data exploration and a full skills inventory with gap analysis,
+So that I can discover hidden patterns in the workforce data and identify skills mismatches for policy planning.
+
+**Progressive Activation**: All features built and deployed; each self-enables when its data threshold is met (cross-tab: 50 submissions, skills: 30 submissions, skills by LGA: 20 per LGA). Below threshold, components show progress toward activation.
+
+**Acceptance Criteria:**
+
+**Given** a Super Admin or Government Official navigates to the "Cross-Tab" tab on Survey Analytics
+**When** ≥ 50 submissions exist
+**Then** a cross-tabulation interface displays with row/column dimension selectors (8 dimensions), measure toggle (count / row% / col% / total%), and a heatmap-styled table
+**And** cells with count < 5 show "< 5" (suppression)
+**And** results are role-scoped (system-wide for SA/Official, LGA for Supervisor).
+
+**Given** a Super Admin or Government Official navigates to the "Skills" tab
+**When** the page loads
+**Then** it displays full skills bar chart (all skills), ISCO-08 category grouping, skills concentration by LGA (top 3 per LGA), skills gap diverging bar (have vs want-to-learn), and Shannon diversity index per LGA
+**And** each section independently shows a threshold guard if insufficient data.
+
+### Story 8.7: Inferential Statistics, Progressive Activation & PDF Export
+
+As a Super Admin or Government Official,
+I want inferential statistical insights (chi-square, correlations, group comparisons, confidence intervals), exportable policy brief PDFs, and a progressive activation system,
+So that I can make evidence-based policy decisions and share findings with offline stakeholders.
+
+**Progressive Activation**: Capstone activation story. Builds all Phase 4 features (13 items) + registers Phase 5 features (5 items) as dormant hooks. An Activation Status Panel shows all features grouped by Active/Approaching/Dormant with progress bars.
+
+**Acceptance Criteria:**
+
+**Given** a Super Admin or Government Official navigates to the "Insights" tab
+**When** ≥ 100 submissions exist
+**Then** it displays: 6 chi-square association tests, 4 correlations, 5 group comparisons, 5 proportion confidence intervals — each with significance badges and plain-English interpretations.
+
+**Given** a Super Admin or Government Official clicks "Export Policy Brief"
+**When** the PDF generates
+**Then** a branded ≤ 5-page PDF downloads with executive summary, key demographics, employment findings, inferential insights, and methodology note.
+
+**Given** any analytics page
+**When** the user views the Activation Status Panel
+**Then** it shows all analytics features grouped as Active (green), Approaching (amber, > 50%), or Dormant (grey) with progress bars
+**And** Phase 5 features (regression, anomaly detection) appear as Dormant with "Requires 500+ submissions" messaging.
+
+**Given** the public `/insights` page and ≥ 200 submissions
+**When** the page loads
+**Then** a "Key Findings" section shows 2-3 anonymized plain-English inferential findings (no p-values or technical stats).
+
+### Story 8.8: Geographic Visualization, Registry Integration & Analytics Spec Completion
+
+As a Super Admin, Government Official, Supervisor, or public visitor,
+I want LGA choropleth maps, a registry summary strip on all registry pages, inter-enumerator reliability analysis, and a complete activation roadmap for all 80 analytics features,
+So that every feature in the analytics specification is either live, threshold-guarded, or registered as a dormant hook — zero gaps.
+
+**Spec Completion**: This is the clean-up story that closes all remaining gaps. After 8.8, all 80 features from `docs/survey-analytics-spec.md §11` are accounted for across Stories 8.1-8.8.
+
+**Acceptance Criteria:**
+
+**Given** the Geographic tab on SA/Official Survey Analytics, Supervisor Team Analytics, or the public `/insights` page
+**When** the page loads
+**Then** an interactive Leaflet choropleth map of Oyo State's 33 LGAs displays, with color intensity proportional to registration count per LGA
+**And** hovering shows LGA name + count, clicking filters to that LGA (authenticated pages only).
+
+**Given** any of the 4 registry pages (Super Admin, Official, Assessor, Supervisor)
+**When** the page loads
+**Then** a collapsible 5-stat-card summary strip appears above the respondent table (Total, Employed%, Female%, AvgAge, BusinessOwners%)
+**And** the strip updates live when registry filters change.
+
+**Given** a Supervisor's Team Analytics → Data Quality tab
+**When** ≥ 2 enumerators each have ≥ 20 submissions in the same LGA
+**Then** an inter-enumerator reliability section shows answer distribution comparisons, Jensen-Shannon divergence scores, and amber/red flags for suspicious divergence.
+
+**Given** the Activation Status Panel (Story 8.7)
+**When** it renders
+**Then** it includes all remaining Phase 5 dormant hooks (T7 seasonality, T8 campaign effectiveness, S11 response entropy, S12 GPS dispersion) alongside existing dormant hooks.

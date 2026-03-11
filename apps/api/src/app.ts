@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from './routes/index.js';
 import cspRoutes from './routes/csp.routes.js';
+import publicInsightsRoutes from './routes/public-insights.routes.js';
 import { AppError } from '@oslsr/utils';
 import { metricsMiddleware } from './middleware/metrics.js';
 
@@ -161,6 +162,9 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ message: 'OSLSR API is running' });
 });
+
+// Mount public routes (no auth) BEFORE authenticated router
+app.use('/api/v1/public/insights', publicInsightsRoutes);
 
 // Mount routes
 app.use('/api/v1', routes);

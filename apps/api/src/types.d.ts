@@ -1,5 +1,6 @@
 import { JwtPayload } from '@oslsr/types';
 import { Request } from 'express';
+import type { AnalyticsScope } from './middleware/analytics-scope.js';
 
 declare global {
   namespace Express {
@@ -13,6 +14,7 @@ declare global {
         startedAt: string;
         expiresAt: string;
       };
+      analyticsScope?: AnalyticsScope;
     }
   }
 }
