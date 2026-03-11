@@ -44,10 +44,9 @@ describe('sidebarConfig', () => {
   });
 
   describe('AC5: Sidebar item counts per role', () => {
-    it('enumerator has 5-6 sidebar items (mobile-first + messages + payments)', () => {
+    it('enumerator has 7 sidebar items (mobile-first + messages + payments + stats)', () => {
       const items = sidebarConfig.enumerator;
-      expect(items.length).toBeGreaterThanOrEqual(5);
-      expect(items.length).toBeLessThanOrEqual(6);
+      expect(items.length).toBe(7);
     });
 
     it('public_user has 3-4 sidebar items (mobile-first)', () => {
@@ -56,9 +55,9 @@ describe('sidebarConfig', () => {
       expect(items.length).toBeLessThanOrEqual(4);
     });
 
-    it('supervisor has exactly 7 sidebar items (AC3 + Registry + Productivity + Payments)', () => {
+    it('supervisor has exactly 8 sidebar items (AC3 + Registry + Productivity + Payments + Team Analytics)', () => {
       const items = sidebarConfig.supervisor;
-      expect(items.length).toBe(7);
+      expect(items.length).toBe(8);
     });
 
     it('data_entry_clerk has exactly 4 sidebar items', () => {
@@ -107,6 +106,25 @@ describe('sidebarConfig', () => {
       expect(surveyIdx).toBeGreaterThan(-1);
       expect(items[surveyIdx].href).toBe('/dashboard/super-admin/survey-analytics');
       expect(surveyIdx).toBeGreaterThan(revealIdx);
+    });
+
+    // Story 8.3: Team Analytics + My Stats sidebar items
+    it('supervisor has Team Analytics sidebar item', () => {
+      const item = sidebarConfig.supervisor.find(i => i.label === 'Team Analytics');
+      expect(item).toBeDefined();
+      expect(item?.href).toBe('/dashboard/supervisor/analytics');
+    });
+
+    it('enumerator has My Stats sidebar item', () => {
+      const item = sidebarConfig.enumerator.find(i => i.label === 'My Stats');
+      expect(item).toBeDefined();
+      expect(item?.href).toBe('/dashboard/enumerator/stats');
+    });
+
+    it('clerk has My Stats sidebar item', () => {
+      const item = sidebarConfig.data_entry_clerk.find(i => i.label === 'My Stats');
+      expect(item).toBeDefined();
+      expect(item?.href).toBe('/dashboard/clerk/stats');
     });
   });
 

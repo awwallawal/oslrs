@@ -137,6 +137,9 @@ const RespondentRegistryPage = lazy(() => import('./features/dashboard/pages/Res
 const RevealAnalyticsPage = lazy(() => import('./features/marketplace/pages/RevealAnalyticsPage'));
 // Story 8-2: Survey Analytics (Super Admin)
 const SurveyAnalyticsPage = lazy(() => import('./features/dashboard/pages/SurveyAnalyticsPage'));
+// Story 8-3: Field Team Analytics (Supervisor, Enumerator)
+const SupervisorAnalyticsPage = lazy(() => import('./features/dashboard/pages/SupervisorAnalyticsPage'));
+const EnumeratorStatsPage = lazy(() => import('./features/dashboard/pages/EnumeratorStatsPage'));
 // prep-3: 404 pages
 const NotFoundPage = lazy(() => import('./features/dashboard/pages/NotFoundPage'));
 const PublicNotFoundPage = lazy(() => import('./pages/PublicNotFoundPage'));
@@ -858,6 +861,15 @@ function App() {
                     </Suspense>
                   }
                 />
+                {/* Story 8.3: Team Analytics */}
+                <Route
+                  path="analytics"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SupervisorAnalyticsPage />
+                    </Suspense>
+                  }
+                />
                 {/* Story 6.5: Payment History */}
                 <Route
                   path="payments"
@@ -925,6 +937,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <EnumeratorSyncPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 8.3: My Stats */}
+                <Route
+                  path="stats"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <EnumeratorStatsPage />
                     </Suspense>
                   }
                 />

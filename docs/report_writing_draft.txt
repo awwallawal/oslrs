@@ -1,0 +1,814 @@
+
+ ▐▛███▜▌   Claude Code v2.1.71
+▝▜█████▛▘  Opus 4.6 with high effort · Claude Max
+  ▘▘ ▝▝    ~\Desktop\oslrs
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Read _bmad-output\baseline-report\appendices\appendix-f-comparative-extended.md (105 lines)
+  ⎿  Read _bmad-output\baseline-report\appendices\appendix-e-lga-population.md (97 lines)
+  ⎿  Referenced file _bmad-output\baseline-report\appendices\appendix-d-validation-data.md
+  ⎿  Read _bmad-output\baseline-report\appendices\appendix-i-curriculum-outline.md (121 lines)
+  ⎿  Read _bmad-output\baseline-report\appendices\appendix-c-skills-taxonomy.md (171 lines)
+  ⎿  Skills restored (bmad:core:workflows:party-mode, bmad:bmm:agents:dev, bmad:bmm:workflows:dev-story)
+
+● Searched for 3 patterns, read 3 files (ctrl+o to expand)
+
+● Let me read the remaining chapters to compile the master document.
+
+● Read 10 files (ctrl+o to expand)
+
+● Now I'll compile the master document by concatenating all chapters and appendices in the correct order.
+
+● Bash(cd /c/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report && cat \
+        chapters/ch01-cover-page.md \…)
+  ⎿  7454
+
+● Bash({
+        # Add page separator between files…)
+  ⎿  7582 BASELINE-STUDY-REPORT-COMPLETE.md
+     --- File created successfully ---
+
+● Read 1 file (ctrl+o to expand)
+
+● Master report compiled: 7,582 lines / 456 KB in a single file. Now creating the key visual diagrams as Excalidraw files for the report.     
+
+● Bash(mkdir -p /c/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/diagrams && ls
+      /c/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/diagrams/)
+  ⎿  (No output)
+
+● 2 agents launched (ctrl+o to expand)
+   ├─ Create stage gate flowchart
+   │  ⎿  Running in the background
+   └─ Create security architecture diagram
+      ⎿  Running in the background
+
+● 8 diagram agents launched in background. While they work, let me create additional visual charts for the validation exercise data — these   
+  are the colourful charts the report needs most.
+
+● 2 agents launched (ctrl+o to expand)
+   ├─ Create validation demographics charts
+   │  ⎿  Running in the background
+   └─ Create skills distribution chart
+      ⎿  Running in the background
+
+● 12 diagram agents running. Let me create more key diagrams and a diagram reference index.
+
+● 2 agents launched (ctrl+o to expand)
+   ├─ Create ILO classification cascade
+   │  ⎿  Running in the background
+   └─ Create skills sector pie chart
+      ⎿  Running in the background
+
+● 16 diagram agents now running. While they complete, let me create the diagram index reference document and a few more critical visuals.     
+
+● Write(diagrams\DIAGRAM-INDEX.md)
+  ⎿  Wrote 54 lines to diagrams\DIAGRAM-INDEX.md
+       1 # BASELINE STUDY REPORT — DIAGRAM INDEX
+       2
+       3 All diagrams are in Excalidraw format (`.excalidraw`). Open in Excalidraw.com or VS Code Excalidraw extension to view, edit, a       
+         nd export as PNG/SVG for insertion into the final PDF report.
+       4
+       5 ---
+       6
+       7 ## Export Instructions
+       8
+       9 1. Open each `.excalidraw` file in [excalidraw.com](https://excalidraw.com) or the VS Code Excalidraw extension
+      10 2. Select All (Ctrl+A)
+     … +44 lines (ctrl+o to expand)
+
+● Now let me check on the background agents and verify the diagrams are being created properly.
+
+● Read 1 file (ctrl+o to expand)
+
+● 9 of 16 diagrams already created. Let me do a quality consistency check on the master document while the remaining agents finish.
+
+● Bash(echo "=== Chapter word counts ===" && for f in chapters/ch*.md; do words=$(wc -w < "$f"); name=$(basename "$f" .md); printf "%-40s %6d 
+      words\n" "$name" "$words"…)
+  ⎿  === Chapter word counts ===
+     ch01-cover-page                             694 words
+     ch02-table-of-contents                     1798 words
+     … +29 lines (ctrl+o to expand)
+
+● 63,254 words across 22 chapters + 11 appendices. At ~250 words/page with formatting, that's ~253 pages of text plus 16 diagrams adding      
+  another ~25 pages = ~280 pages formatted.
+
+  Let me check the remaining diagrams and verify quality.
+
+● Read 1 file (ctrl+o to expand)
+
+● All 16 diagrams created successfully. Let me verify one to ensure valid Excalidraw JSON format.
+
+● Bash(cd /c/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/diagrams && for f in *.excalidraw; do if python3 -c "import json;
+      json.load(open('$f'))" 2>/dev/null…)
+  ⎿  fig-07-1-population-zones.excalidraw               ✗ INVALID
+     fig-08-1-comparative-positioning.excalidraw        ✗ INVALID
+     fig-09-1-methodology-framework.excalidraw          ✗ INVALID
+     … +13 lines (ctrl+o to expand)
+
+● Read 1 file (ctrl+o to expand)
+
+● Bash(python3 -c "
+      import json, sys…)
+  ⎿  Error: Exit code 49
+     Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced
+      app settings > App execution aliases.
+     Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced
+      app settings > App execution aliases.
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  fig-07-1-population-zones.excalidraw                   ✓ Valid (41 elements)
+     fig-08-1-comparative-positioning.excalidraw            ✓ Valid (215 elements)
+     fig-09-1-methodology-framework.excalidraw              ✓ Valid (30 elements)
+     … +13 lines (ctrl+o to expand)
+
+● All 16 diagrams validated — proper Excalidraw JSON with a total of 1,166 elements across all files.
+
+  Let me now create a final summary of everything produced and update the diagram index with file sizes.
+
+● Bash(echo "================================================================"
+      echo "  BASELINE STUDY REPORT — PRODUCTION SUMMARY"…)
+  ⎿  ================================================================
+       BASELINE STUDY REPORT — PRODUCTION SUMMARY
+       Generated: 2026-03-08 17:03
+     … +36 lines (ctrl+o to expand)
+
+● The Baseline Study Report is now fully produced. Here's the complete deliverable:
+
+  ---
+  Baseline Study Report — Final Deliverable Summary
+
+  Master Document
+
+  _bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md
+  - 63,350 words | 7,582 lines | 456 KB
+  - All 22 chapters + 11 appendices compiled with page breaks
+
+  22 Chapters (46,829 words)
+
+  ┌─────┬────────────────────────────────────────────────┬───────┐
+  │ Ch  │                     Title                      │ Words │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 1   │ Cover Page & Document Control                  │ 694   │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 2   │ Table of Contents                              │ 1,798 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 3   │ Abbreviations, Tables, Figures, Plates         │ 1,658 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 4   │ Executive Summary                              │ 1,315 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 5   │ About Chemiroy Nigeria Limited                 │ 727   │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 6   │ Project Overview & Mandate                     │ 1,486 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 7   │ Situational Analysis — Oyo State Labour Market │ 2,732 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 8   │ Comparative Analysis — State Registries        │ 1,749 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 9   │ Baseline Study Methodology                     │ 2,072 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 10  │ Survey Instrument Design & Validation          │ 3,482 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 11  │ Occupational Skills Taxonomy                   │ 3,666 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 12  │ Data Center Establishment                      │ 1,612 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 13  │ Registry Platform & Capabilities               │ 2,154 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 14  │ Security Architecture & Data Protection        │ 1,450 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 15  │ Validation — Aggregate Findings                │ 2,975 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 16  │ Validation — 33 LGA Profiles                   │ 4,568 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 17  │ Data Quality Assurance Framework               │ 2,591 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 18  │ Capacity Building Programme                    │ 2,573 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 19  │ Implementation Roadmap & Stage Gates           │ 1,778 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 20  │ Risk Register & Mitigation                     │ 2,176 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 21  │ Monitoring & KPIs                              │ 2,211 │
+  ├─────┼────────────────────────────────────────────────┼───────┤
+  │ 22  │ Recommendations & Next Steps                   │ 1,362 │
+  └─────┴────────────────────────────────────────────────┴───────┘
+
+  11 Appendices (16,425 words)
+
+  A through K — TOR, Full Questionnaire, 150-Skill Taxonomy, 33-LGA Data Sheets, Population Projections, Comparative Tables, Architecture     
+  Docs, DPIA, Curriculum, Plates, Bibliography
+
+  16 Professional Diagrams (Excalidraw)
+
+  All in _bmad-output/baseline-report/diagrams/ — covering population distribution, methodology framework, ILO classification cascade, skills 
+  taxonomy, data center architecture, system architecture, user roles, security layers, demographics dashboard, top 20 skills, NBS benchmarks,
+   QA protocol, training programme, stage gates, risk heat map, and comparative scorecard.
+
+  Estimated Formatted Output: ~280 pages
+
+  To generate the PDF:
+
+  1. Open each .excalidraw file at https://excalidraw.com → Export as PNG (2x scale)
+  2. Import the master markdown into Google Docs, Word, or a Markdown-to-PDF tool (Pandoc, Typora, etc.)
+  3. Insert the exported diagram PNGs at the corresponding figure references
+  4. Add the platform screenshots from Appendix J (Plates 1–14)
+
+✻ Crunched for 9m 37s
+
+● Agent "Create stage gate flowchart" completed
+
+● Agent "Create security architecture diagram" completed
+
+● Agent "Create population distribution chart" completed
+
+● Agent "Create methodology framework diagram" completed
+
+● Agent "Create system architecture diagram" completed
+
+● Agent "Create QA framework diagram" completed
+
+● Agent "Create role hierarchy diagram" completed
+
+● Agent "Create risk heat map diagram" completed
+
+● Agent "Create skills distribution chart" completed
+
+● Agent "Create ILO classification cascade" completed
+
+● Agent "Create NBS benchmark comparison" completed
+
+● Agent "Create capacity building diagram" completed
+
+● Agent "Create validation demographics charts" completed
+
+● Agent "Create hybrid data center diagram" completed
+
+● Agent "Create comparative analysis radar" completed
+
+● Agent "Create skills sector pie chart" completed
+
+● All 16 background diagram agents completed successfully. Let me do a final verification.
+
+● Bash(echo "=== FINAL DIAGRAM INVENTORY ===" && node -e "
+      const fs = require('fs');…)
+  ⎿  === FINAL DIAGRAM INVENTORY ===
+     fig-07-1-population-zones.excalidraw                     41 elements    11 KB
+     fig-08-1-comparative-positioning.excalidraw             215 elements    48 KB
+     … +17 lines (ctrl+o to expand)
+
+● Everything is verified. Here's the complete production summary:
+
+  ---
+  Baseline Study Report — Complete
+
+  Deliverables Produced
+
+  ┌────────────────────────┬────────────────────────────────────────────────────────────────┬─────────────────────────────────────┐
+  │         Asset          │                            Location                            │               Metrics               │
+  ├────────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
+  │ Master Document        │ _bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md │ 63,350 words / 7,582 lines / 456 KB │
+  ├────────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
+  │ 22 Chapters            │ _bmad-output/baseline-report/chapters/                         │ 46,829 words                        │
+  ├────────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
+  │ 11 Appendices          │ _bmad-output/baseline-report/appendices/                       │ 16,425 words                        │
+  ├────────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
+  │ 16 Excalidraw Diagrams │ _bmad-output/baseline-report/diagrams/                         │ 1,166 elements / 529 KB             │
+  ├────────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
+  │ Diagram Index          │ _bmad-output/baseline-report/diagrams/DIAGRAM-INDEX.md         │ Reference with export instructions  │
+  └────────────────────────┴────────────────────────────────────────────────────────────────┴─────────────────────────────────────┘
+
+  Diagrams Created
+
+  ┌──────┬────────────────────────────────────────────────────────────┬──────────────────────┐
+  │ Fig  │                          Diagram                           │       Chapter        │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 7.1  │ Population Distribution by Zone (bar chart)                │ Situational Analysis │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 8.1  │ Comparative Capability Scorecard — 5 states, 10 dimensions │ Comparative Analysis │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 9.1  │ Methodology Framework (3-phase flowchart)                  │ Methodology          │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 10.1 │ ILO ICLS-19 Classification Cascade (decision tree)         │ Survey Instrument    │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 11.1 │ Skills Taxonomy — 20 sectors donut + table                 │ Skills Taxonomy      │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 12.1 │ Hybrid Data Center Architecture                            │ Data Center          │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 13.1 │ System Architecture — 3-tier with 8 modules                │ Platform             │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 13.2 │ User Role Hierarchy — 8 roles with counts                  │ Platform             │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 14.1 │ Defence-in-Depth — 6 security layers                       │ Security             │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 15.1 │ Validation Demographics Dashboard (4-panel)                │ Validation Findings  │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 15.2 │ Top 20 Skills horizontal bar chart                         │ Validation Findings  │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 15.3 │ NBS Benchmark Comparison (grouped bars)                    │ Validation Findings  │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 17.1 │ 4-Layer QA Protocol (vertical flow)                        │ Data Quality         │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 18.1 │ Capacity Building — 4 module cards                         │ Training             │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 19.1 │ Stage Gate Overview with "WE ARE HERE"                     │ Roadmap              │
+  ├──────┼────────────────────────────────────────────────────────────┼──────────────────────┤
+  │ 20.1 │ Risk Heat Map — 5x5 matrix with 8 risks                    │ Risk Register        │
+  └──────┴────────────────────────────────────────────────────────────┴──────────────────────┘
+
+  Estimated Formatted Output: ~280 pages
+
+  Next Step
+
+  Open each .excalidraw file at https://excalidraw.com, export as PNG at 2x scale, and insert into the master document when converting to PDF 
+  via Word, Google Docs, or Pandoc.
+
+❯ is it possible the document is in html so that I can use pdf print
+
+● Absolutely. Let me convert the entire report to a print-ready HTML document with professional styling.
+
+● Bash(cd /c/Users/DELL/Desktop/oslrs && npm ls marked 2>/dev/null; npm ls markdown-it 2>/dev/null; which pandoc 2>/dev/null; echo "---" && ls
+       node_modules/.package-lo…)
+  ⎿  oslsr@1.0.0 C:\Users\DELL\Desktop\oslrs
+     └── (empty)
+     … +5 lines (ctrl+o to expand)
+
+● Bash(cd /tmp && mkdir -p md2html && cd md2html && npm init -y --silent 2>/dev/null && npm install marked --silent 2>&1 | tail -1)
+  ⎿  Wrote to C:\Users\DELL\AppData\Local\Temp\md2html\package.json:
+
+     {
+     … +12 lines (ctrl+o to expand)
+
+● Bash(cd /tmp/md2html && npm install marked 2>&1 | tail -3)
+  ⎿  up to date, audited 2 packages in 6s
+
+     found 0 vulnerabilities
+
+● Read 2 files (ctrl+o to expand)
+
+● Now let me write the conversion script with professional print styling.
+
+● Write(~\AppData\Local\Temp\md2html\convert.cjs)
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+ ..\..\AppData\Local\Temp\md2html\convert.cjs
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+    1 const fs = require('fs');
+    2 const path = require('path');
+    3 const { marked } = require('./node_modules/marked/lib/marked.umd.js');
+    4
+    5 const INPUT = path.resolve('C:/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md');
+    6 const OUTPUT = path.resolve('C:/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/BASELINE-STUDY-REPORT.html');
+    7
+    8 const md = fs.readFileSync(INPUT, 'utf8');
+    9
+   10 // Configure marked
+   11 marked.setOptions({
+   12   gfm: true,
+   13   breaks: false,
+   14   headerIds: true,
+   15 });
+   16
+   17 const body = marked.parse(md);
+   18
+   19 const html = `<!DOCTYPE html>
+   20 <html lang="en">
+   21 <head>
+   22 <meta charset="UTF-8">
+   23 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   24 <title>Baseline Study Report — Oyo State Skilled Labour Register</title>
+   25 <style>
+   26   /* ============================================
+   27      PRINT-READY PROFESSIONAL REPORT STYLING
+   28      Oyo State Skilled Labour Register
+   29      Chemiroy Nigeria Limited
+   30      ============================================ */
+   31
+   32   @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700;900&family=Source+Sans+3:wght@300;400;600;700&f   
+      amily=Fira+Code:wght@400;500&display=swap');
+   33
+   34   :root {
+   35     --brand-maroon: #9C1E23;
+   36     --brand-dark: #7A171B;
+   37     --text-primary: #1a1a1a;
+   38     --text-secondary: #4a4a4a;
+   39     --text-muted: #6b7280;
+   40     --border: #d1d5db;
+   41     --bg-light: #f9fafb;
+   42     --bg-table-header: #1f2937;
+   43     --bg-table-alt: #f3f4f6;
+   44     --accent-blue: #3498db;
+   45     --accent-green: #27ae60;
+   46     --accent-orange: #e67e22;
+   47     --accent-red: #e74c3c;
+   48     --accent-purple: #9b59b6;
+   49   }
+   50
+   51   * {
+   52     margin: 0;
+   53     padding: 0;
+   54     box-sizing: border-box;
+   55   }
+   56
+   57   body {
+   58     font-family: 'Source Sans 3', 'Segoe UI', -apple-system, sans-serif;
+   59     font-size: 11pt;
+   60     line-height: 1.6;
+   61     color: var(--text-primary);
+   62     background: #fff;
+   63     max-width: 210mm;
+   64     margin: 0 auto;
+   65     padding: 20mm 25mm;
+   66   }
+   67
+   68   /* ---- HEADINGS ---- */
+   69   h1 {
+   70     font-family: 'Merriweather', Georgia, serif;
+   71     font-size: 24pt;
+   72     font-weight: 900;
+   73     color: var(--brand-maroon);
+   74     margin-top: 0;
+   75     margin-bottom: 16pt;
+   76     padding-bottom: 8pt;
+   77     border-bottom: 3px solid var(--brand-maroon);
+   78     page-break-before: always;
+   79     line-height: 1.2;
+   80   }
+   81
+   82   /* First h1 should not have page break */
+   83   body > h1:first-child,
+   84   body > div:first-child > h1:first-child {
+   85     page-break-before: avoid;
+   86   }
+   87
+   88   h2 {
+   89     font-family: 'Merriweather', Georgia, serif;
+   90     font-size: 16pt;
+   91     font-weight: 700;
+   92     color: var(--brand-dark);
+   93     margin-top: 24pt;
+   94     margin-bottom: 10pt;
+   95     padding-bottom: 4pt;
+   96     border-bottom: 1.5px solid var(--border);
+   97     page-break-after: avoid;
+   98   }
+   99
+  100   h3 {
+  101     font-family: 'Source Sans 3', sans-serif;
+  102     font-size: 13pt;
+  103     font-weight: 700;
+  104     color: var(--text-primary);
+  105     margin-top: 18pt;
+  106     margin-bottom: 8pt;
+  107     page-break-after: avoid;
+  108   }
+  109
+  110   h4 {
+  111     font-family: 'Source Sans 3', sans-serif;
+  112     font-size: 11pt;
+  113     font-weight: 700;
+  114     color: var(--text-secondary);
+  115     margin-top: 14pt;
+  116     margin-bottom: 6pt;
+  117     page-break-after: avoid;
+  118   }
+  119
+  120   /* ---- PARAGRAPHS & TEXT ---- */
+  121   p {
+  122     margin-bottom: 8pt;
+  123     text-align: justify;
+  124     orphans: 3;
+  125     widows: 3;
+  126   }
+  127
+  128   strong {
+  129     font-weight: 700;
+  130     color: var(--text-primary);
+  131   }
+  132
+  133   em {
+  134     font-style: italic;
+  135     color: var(--text-secondary);
+  136   }
+  137
+  138   a {
+  139     color: var(--accent-blue);
+  140     text-decoration: none;
+  141   }
+  142
+  143   /* ---- TABLES ---- */
+  144   table {
+  145     width: 100%;
+  146     border-collapse: collapse;
+  147     margin: 12pt 0 16pt 0;
+  148     font-size: 9.5pt;
+  149     page-break-inside: auto;
+  150   }
+  151
+  152   thead {
+  153     display: table-header-group;
+  154   }
+  155
+  156   tr {
+  157     page-break-inside: avoid;
+  158     page-break-after: auto;
+  159   }
+  160
+  161   th {
+  162     background: var(--bg-table-header);
+  163     color: #fff;
+  164     font-weight: 700;
+  165     padding: 8px 10px;
+  166     text-align: left;
+  167     border: 1px solid #374151;
+  168     font-size: 9pt;
+  169     letter-spacing: 0.02em;
+  170   }
+  171
+  172   td {
+  173     padding: 6px 10px;
+  174     border: 1px solid var(--border);
+  175     vertical-align: top;
+  176   }
+  177
+  178   tr:nth-child(even) td {
+  179     background: var(--bg-table-alt);
+  180   }
+  181
+  182   tr:hover td {
+  183     background: #e8f4f8;
+  184   }
+  185
+  186   /* Center-aligned columns (matching markdown :---:) */
+  187   th[align="center"], td[align="center"] {
+  188     text-align: center;
+  189   }
+  190
+  191   th[align="right"], td[align="right"] {
+  192     text-align: right;
+  193   }
+  194
+  195   /* ---- LISTS ---- */
+  196   ul, ol {
+  197     margin: 6pt 0 12pt 24pt;
+  198   }
+  199
+  200   li {
+  201     margin-bottom: 4pt;
+  202   }
+  203
+  204   li > ul, li > ol {
+  205     margin-top: 4pt;
+  206     margin-bottom: 4pt;
+  207   }
+  208
+  209   /* ---- CODE & PRE ---- */
+  210   code {
+  211     font-family: 'Fira Code', 'Consolas', monospace;
+  212     font-size: 9pt;
+  213     background: #f1f5f9;
+  214     padding: 1px 4px;
+  215     border-radius: 3px;
+  216     color: var(--brand-maroon);
+  217   }
+  218
+  219   pre {
+  220     background: #1e293b;
+  221     color: #e2e8f0;
+  222     padding: 14px 18px;
+  223     border-radius: 6px;
+  224     overflow-x: auto;
+  225     font-size: 8.5pt;
+  226     line-height: 1.5;
+  227     margin: 12pt 0 16pt 0;
+  228     page-break-inside: avoid;
+  229     border-left: 4px solid var(--brand-maroon);
+  230   }
+  231
+  232   pre code {
+  233     background: none;
+  234     color: inherit;
+  235     padding: 0;
+  236     font-size: inherit;
+  237   }
+  238
+  239   /* ---- HORIZONTAL RULES ---- */
+  240   hr {
+  241     border: none;
+  242     border-top: 1px solid var(--border);
+  243     margin: 16pt 0;
+  244   }
+  245
+  246   /* ---- BLOCKQUOTES ---- */
+  247   blockquote {
+  248     border-left: 4px solid var(--accent-blue);
+  249     padding: 8pt 16pt;
+  250     margin: 12pt 0;
+  251     background: #eff6ff;
+  252     color: var(--text-secondary);
+  253     font-style: italic;
+  254   }
+  255
+  256   /* ---- PAGE BREAK DIVS ---- */
+  257   div[style*="page-break"] {
+  258     page-break-before: always;
+  259     height: 0;
+  260     margin: 0;
+  261     padding: 0;
+  262   }
+  263
+  264   /* ---- COVER PAGE STYLING ---- */
+  265   div[align="center"] {
+  266     text-align: center;
+  267     padding: 40pt 0;
+  268   }
+  269
+  270   div[align="center"] h1 {
+  271     border-bottom: none;
+  272     page-break-before: avoid;
+  273     color: var(--brand-maroon);
+  274   }
+  275
+  276   div[align="center"] h2 {
+  277     border-bottom: none;
+  278     color: var(--text-primary);
+  279     font-size: 18pt;
+  280     margin-top: 12pt;
+  281   }
+  282
+  283   div[align="center"] h3 {
+  284     color: var(--text-secondary);
+  285     font-weight: 600;
+  286     font-size: 14pt;
+  287     margin-top: 8pt;
+  288   }
+  289
+  290   /* ---- SPECIAL MARKERS ---- */
+  291   /* Status badges */
+  292   td:has(strong:only-child) {
+  293     font-weight: 700;
+  294   }
+  295
+  296   /* Checkmark styling */
+  297
+  298   /* ---- PRINT STYLES ---- */
+  299   @media print {
+  300     body {
+  301       padding: 15mm 20mm;
+  302       font-size: 10pt;
+  303       max-width: none;
+  304     }
+  305
+  306     h1 {
+  307       font-size: 22pt;
+  308       page-break-before: always;
+  309     }
+  310
+  311     /* Prevent first chapter from starting on a new page */
+  312     body > h1:first-of-type {
+  313       page-break-before: avoid;
+  314     }
+  315
+  316     h2, h3, h4 {
+  317       page-break-after: avoid;
+  318     }
+  319
+  320     table {
+  321       font-size: 8.5pt;
+  322       page-break-inside: auto;
+  323     }
+  324
+  325     pre {
+  326       font-size: 7.5pt;
+  327       page-break-inside: avoid;
+  328       background: #f1f5f9 !important;
+  329       color: #1e293b !important;
+  330       -webkit-print-color-adjust: exact;
+  331       print-color-adjust: exact;
+  332     }
+  333
+  334     th {
+  335       background: var(--bg-table-header) !important;
+  336       color: #fff !important;
+  337       -webkit-print-color-adjust: exact;
+  338       print-color-adjust: exact;
+  339     }
+  340
+  341     tr:nth-child(even) td {
+  342       background: var(--bg-table-alt) !important;
+  343       -webkit-print-color-adjust: exact;
+  344       print-color-adjust: exact;
+  345     }
+  346
+  347     a {
+  348       color: var(--text-primary);
+  349       text-decoration: none;
+  350     }
+  351
+  352     img {
+  353       max-width: 100%;
+  354       page-break-inside: avoid;
+  355     }
+  356
+  357     .no-print {
+  358       display: none;
+  359     }
+  360
+  361     /* Page margins and headers */
+  362     @page {
+  363       size: A4;
+  364       margin: 20mm 18mm 25mm 18mm;
+  365     }
+  366
+  367     @page :first {
+  368       margin-top: 15mm;
+  369     }
+  370
+  371     /* Footer with page numbers */
+  372     @page {
+  373       @bottom-center {
+  374         content: "CHM/OSLR/2026/001 — Chemiroy Nigeria Limited";
+  375         font-size: 8pt;
+  376         color: #999;
+  377       }
+  378       @bottom-right {
+  379         content: "Page " counter(page);
+  380         font-size: 8pt;
+  381         color: #999;
+  382       }
+  383     }
+  384   }
+  385
+  386   /* ---- SCREEN-ONLY HELPERS ---- */
+  387   @media screen {
+  388     body {
+  389       background: #f5f5f5;
+  390       padding: 30mm 35mm;
+  391       box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  392     }
+  393
+  394     .toolbar {
+  395       position: fixed;
+  396       top: 10px;
+  397       right: 10px;
+  398       background: var(--brand-maroon);
+  399       color: white;
+  400       padding: 12px 20px;
+  401       border-radius: 8px;
+  402       cursor: pointer;
+  403       font-weight: 700;
+  404       font-size: 14px;
+  405       z-index: 1000;
+  406       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  407       transition: background 0.2s;
+  408     }
+  409
+  410     .toolbar:hover {
+  411       background: var(--brand-dark);
+  412     }
+  413   }
+  414
+  415   /* ---- FIGURE PLACEHOLDERS ---- */
+  416   .figure-placeholder {
+  417     border: 2px dashed var(--border);
+  418     background: var(--bg-light);
+  419     padding: 30px;
+  420     text-align: center;
+  421     margin: 16pt 0;
+  422     border-radius: 8px;
+  423     color: var(--text-muted);
+  424     font-style: italic;
+  425     page-break-inside: avoid;
+  426   }
+  427
+  428   .figure-placeholder strong {
+  429     display: block;
+  430     color: var(--brand-maroon);
+  431     font-size: 11pt;
+  432     margin-bottom: 6pt;
+  433   }
+  434 </style>
+  435 </head>
+  436 <body>
+  437
+  438 <div class="toolbar no-print" onclick="window.print()">
+  439   &#128424; Print to PDF
+  440 </div>
+  441
+  442 ${body}
+  443
+  444 </body>
+  445 </html>`;
+  446
+  447 fs.writeFileSync(OUTPUT, html, 'utf8');
+  448 const stats = fs.statSync(OUTPUT);
+  449 console.log('HTML report generated: ' + OUTPUT);
+  450 console.log('Size: ' + (stats.size / 1024 / 1024).toFixed(2) + ' MB');
+  451 console.log('Ready to open in browser and Print to PDF');
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to create convert.cjs?
+ ❯ 1. Yes
+   2. Yes, allow all edits in md2html/ during this session (shift+tab)
+   3. No

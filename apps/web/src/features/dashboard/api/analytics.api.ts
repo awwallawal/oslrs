@@ -15,6 +15,8 @@ import type {
   TrendDataPoint,
   RegistrySummary,
   PipelineSummary,
+  TeamQualityData,
+  PersonalStatsData,
 } from '@oslsr/types';
 
 function buildQueryString(params?: AnalyticsQueryParams): string {
@@ -60,5 +62,35 @@ export async function fetchRegistrySummary(params?: AnalyticsQueryParams): Promi
 
 export async function fetchPipelineSummary(params?: AnalyticsQueryParams): Promise<PipelineSummary> {
   const result = await apiClient(`/analytics/pipeline-summary${buildQueryString(params)}`);
+  return result.data;
+}
+
+// --- Story 8.3: Team Quality + Personal Stats ---
+
+export interface TeamQualityQueryParams {
+  dateFrom?: string;
+  dateTo?: string;
+  enumeratorId?: string;
+  supervisorId?: string;
+}
+
+function buildTeamQualityQueryString(params?: TeamQualityQueryParams): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+  if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+  if (params.enumeratorId) searchParams.set('enumeratorId', params.enumeratorId);
+  if (params.supervisorId) searchParams.set('supervisorId', params.supervisorId);
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function fetchTeamQuality(params?: TeamQualityQueryParams): Promise<TeamQualityData> {
+  const result = await apiClient(`/analytics/team-quality${buildTeamQualityQueryString(params)}`);
+  return result.data;
+}
+
+export async function fetchPersonalStats(params?: AnalyticsQueryParams): Promise<PersonalStatsData> {
+  const result = await apiClient(`/analytics/my-stats${buildQueryString(params)}`);
   return result.data;
 }

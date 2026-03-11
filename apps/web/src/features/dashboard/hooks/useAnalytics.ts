@@ -15,7 +15,10 @@ import {
   fetchTrends,
   fetchRegistrySummary,
   fetchPipelineSummary,
+  fetchTeamQuality,
+  fetchPersonalStats,
 } from '../api/analytics.api';
+import type { TeamQualityQueryParams } from '../api/analytics.api';
 
 export const analyticsKeys = {
   all: ['analytics'] as const,
@@ -86,6 +89,26 @@ export function usePipelineSummary(params?: AnalyticsQueryParams, enabled = true
   return useQuery({
     queryKey: analyticsKeys.pipelineSummary(params),
     queryFn: () => fetchPipelineSummary(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+// --- Story 8.3: Team Quality + Personal Stats ---
+
+export function useTeamQuality(params?: TeamQualityQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'teamQuality', params] as const,
+    queryFn: () => fetchTeamQuality(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+export function usePersonalStats(params?: AnalyticsQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'personalStats', params] as const,
+    queryFn: () => fetchPersonalStats(params),
     staleTime: 60_000,
     enabled,
   });

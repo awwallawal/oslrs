@@ -15,7 +15,7 @@
 | NIN now **REQUIRED** | All respondents must provide NIN | FR5, FR21 |
 | LGA field added | Enables marketplace filtering by location | FR17 |
 | Years of Experience added | Enables marketplace filtering by experience | FR17 |
-| Skills expanded to 50+ | Comprehensive coverage across 8 categories | FR17 |
+| Skills expanded to 150 | Comprehensive coverage across 20 ISCO-08 sectors | FR17 |
 | Employment types expanded | Added Contractor, Apprentice/Intern options | Labor statistics |
 | Education levels refined | 9 granular options (NCE/OND, HND/BSc separated) | Demographics |
 | Business fields added | Address, Apprentice Count for enterprise data | Skills/Business |
@@ -111,7 +111,7 @@
 
 | # | Question | Response Type | Required | Show If | Validation / Notes |
 |---|----------|---------------|----------|---------|-------------------|
-| 5.1 | Primary Skills (Select all that apply) | Multiple Choice | Yes | Always | 50+ skills in 8 categories |
+| 5.1 | Primary Skills (Select all that apply) | Multiple Choice | Yes | Always | 150 skills in 20 ISCO-08 sectors |
 | 5.2 | Other skills not listed above | Text | No | Always | Maximum 200 characters |
 | 5.3 | Skills you would like to learn | Multiple Choice | No | Always | Same skills list |
 | 5.4 | Do you own or operate a business? | Yes / No | Yes | Always | - |

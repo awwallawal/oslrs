@@ -24,6 +24,8 @@ vi.mock('../../api/analytics.api', () => ({
   fetchTrends: vi.fn(),
   fetchRegistrySummary: vi.fn(),
   fetchPipelineSummary: vi.fn(),
+  fetchTeamQuality: vi.fn(),
+  fetchPersonalStats: vi.fn(),
 }));
 
 import {
@@ -34,6 +36,8 @@ import {
   useTrends,
   useRegistrySummary,
   usePipelineSummary,
+  useTeamQuality,
+  usePersonalStats,
 } from '../useAnalytics';
 
 import {
@@ -44,6 +48,8 @@ import {
   fetchTrends,
   fetchRegistrySummary,
   fetchPipelineSummary,
+  fetchTeamQuality,
+  fetchPersonalStats,
 } from '../../api/analytics.api';
 
 function createWrapper() {
@@ -166,6 +172,73 @@ describe('useAnalytics hooks', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(Error);
     expect((result.current.error as Error).message).toBe('403 Forbidden');
+    expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe('useAnalytics hooks — Story 8.3', () => {
+  it('useTeamQuality returns data and forwards params', async () => {
+    const mockData = {
+      enumerators: [],
+      teamAverages: { avgCompletionTime: 600, gpsRate: 0.85, ninRate: 0.7, skipRate: 0.1, fraudRate: 0.02 },
+      submissionsByDay: [],
+      dayOfWeekPattern: [],
+      hourOfDayPattern: [],
+    };
+    vi.mocked(fetchTeamQuality).mockResolvedValue(mockData as any);
+
+    const params = { dateFrom: '2026-01-01', supervisorId: 'sup-1' };
+    const { result } = renderHook(() => useTeamQuality(params), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(mockData);
+    expect(fetchTeamQuality).toHaveBeenCalledWith(params);
+  });
+
+  it('useTeamQuality returns error state when API fails', async () => {
+    vi.mocked(fetchTeamQuality).mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useTeamQuality(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect((result.current.error as Error).message).toBe('Network error');
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it('usePersonalStats returns data and forwards params', async () => {
+    const mockData = {
+      dailyTrend: [],
+      cumulativeCount: 42,
+      avgCompletionTimeSec: 300,
+      teamAvgCompletionTimeSec: 350,
+      gpsRate: 0.9,
+      ninRate: 0.8,
+      skipRate: 0.05,
+      fraudFlagRate: 0.01,
+      teamAvgFraudRate: 0.03,
+      respondentDiversity: { genderSplit: [], ageSpread: [] },
+      topSkillsCollected: [],
+      compositeQualityScore: 78,
+    };
+    vi.mocked(fetchPersonalStats).mockResolvedValue(mockData as any);
+
+    const params = { dateFrom: '2026-02-01', dateTo: '2026-03-01' };
+    const { result } = renderHook(() => usePersonalStats(params), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(mockData);
+    expect(fetchPersonalStats).toHaveBeenCalledWith(params);
+  });
+
+  it('usePersonalStats returns error state when API fails', async () => {
+    vi.mocked(fetchPersonalStats).mockRejectedValue(new Error('Server unavailable'));
+
+    const { result } = renderHook(() => usePersonalStats(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect((result.current.error as Error).message).toBe('Server unavailable');
     expect(result.current.data).toBeUndefined();
   });
 });

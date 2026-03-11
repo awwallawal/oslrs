@@ -108,6 +108,66 @@ export interface EquityData {
 
 // --- Public Insights ---
 
+// --- Team Quality (Story 8.3: Supervisor view) ---
+
+export interface EnumeratorQualityMetric {
+  enumeratorId: string;
+  name: string;
+  submissionCount: number;
+  avgCompletionTimeSec: number | null;
+  gpsRate: number | null;
+  ninRate: number | null;
+  skipRate: number | null;
+  fraudFlagRate: number | null;
+  status: 'active' | 'inactive';
+}
+
+export interface TeamQualityData {
+  enumerators: EnumeratorQualityMetric[];
+  teamAverages: {
+    avgCompletionTime: number | null;
+    gpsRate: number | null;
+    ninRate: number | null;
+    skipRate: number | null;
+    fraudRate: number | null;
+  };
+  submissionsByDay: TrendDataPoint[];
+  dayOfWeekPattern: FrequencyBucket[];
+  hourOfDayPattern: FrequencyBucket[];
+}
+
+// --- Personal Stats (Story 8.3: Enumerator/Clerk view) ---
+
+export interface PersonalStatsData {
+  dailyTrend: TrendDataPoint[];
+  cumulativeCount: number;
+  avgCompletionTimeSec: number | null;
+  teamAvgCompletionTimeSec: number | null;
+  gpsRate: number | null;
+  ninRate: number | null;
+  skipRate: number | null;
+  fraudFlagRate: number | null;
+  teamAvgFraudRate: number | null;
+  respondentDiversity: {
+    genderSplit: FrequencyBucket[];
+    ageSpread: FrequencyBucket[];
+  };
+  topSkillsCollected: SkillsFrequency[];
+  compositeQualityScore: number | null;
+}
+
+export interface DataQualityScorecard {
+  gpsScore: number | null;
+  ninScore: number | null;
+  completionTimeScore: number | null;
+  skipScore: number | null;
+  rejectionScore: number | null;
+  diversityScore: number | null;
+  compositeScore: number | null;
+}
+
+// --- Public Insights ---
+
 export interface PublicInsightsData {
   totalRegistered: number;
   lgasCovered: number;

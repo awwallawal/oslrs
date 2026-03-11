@@ -2,40 +2,113 @@
 /**
  * ClerkStatsPage Tests
  *
- * Story 2.5-6 AC7: Empty state placeholder for performance stats
+ * Story 8.3: Field Team Analytics — Clerk personal stats page
+ * Replaces Story 2.5-6 placeholder tests with real implementation tests.
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
 expect.extend(matchers);
+afterEach(() => cleanup());
+
+// ── Hoisted mocks ─────────────────────────────────────────────────
+const mockPersonalStats = vi.hoisted(() => ({
+  data: null as any,
+  isLoading: true,
+  error: null as any,
+}));
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  usePersonalStats: () => mockPersonalStats,
+}));
+
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
+  PieChart: ({ children }: any) => <div>{children}</div>,
+  Pie: ({ children }: any) => <div>{children}</div>,
+  Cell: () => <div />,
+  BarChart: ({ children }: any) => <div>{children}</div>,
+  Bar: () => <div />,
+  AreaChart: ({ children }: any) => <div>{children}</div>,
+  Area: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  Legend: () => <div />,
+  CartesianGrid: () => <div />,
+  LineChart: ({ children }: any) => <div>{children}</div>,
+  Line: () => <div />,
+  ComposedChart: ({ children }: any) => <div>{children}</div>,
+}));
 
 import ClerkStatsPage from '../ClerkStatsPage';
 
-afterEach(() => {
-  cleanup();
-});
-
-function renderComponent() {
-  return render(<ClerkStatsPage />);
+function resetMocks() {
+  mockPersonalStats.data = null;
+  mockPersonalStats.isLoading = true;
+  mockPersonalStats.error = null;
 }
+
+beforeEach(() => resetMocks());
 
 describe('ClerkStatsPage', () => {
   it('renders page heading', () => {
-    renderComponent();
-    expect(screen.getByText('My Performance Stats')).toBeInTheDocument();
-    expect(screen.getByText('Track your data entry productivity')).toBeInTheDocument();
+    render(<ClerkStatsPage />);
+    expect(screen.getByText('My Stats')).toBeInTheDocument();
+    expect(screen.getByText('Track your data entry productivity and quality')).toBeInTheDocument();
   });
 
-  it('renders empty state message', () => {
-    renderComponent();
-    expect(screen.getByText('No stats available yet')).toBeInTheDocument();
-    expect(screen.getByText('Stats will populate as you complete entries')).toBeInTheDocument();
+  it('renders tabs for performance and quality', () => {
+    render(<ClerkStatsPage />);
+    expect(screen.getByText('My Performance')).toBeInTheDocument();
+    expect(screen.getByText('My Data Quality')).toBeInTheDocument();
   });
 
-  it('keeps stats placeholder message visible', () => {
-    renderComponent();
-    expect(screen.getByText('No stats available yet')).toBeInTheDocument();
+  it('shows summary cards when data is loaded', () => {
+    mockPersonalStats.data = {
+      dailyTrend: [],
+      cumulativeCount: 42,
+      avgCompletionTimeSec: 300,
+      teamAvgCompletionTimeSec: 350,
+      gpsRate: null,
+      ninRate: 0.8,
+      skipRate: 0.05,
+      fraudFlagRate: 0.01,
+      teamAvgFraudRate: 0.03,
+      respondentDiversity: { genderSplit: [], ageSpread: [] },
+      topSkillsCollected: [],
+      compositeQualityScore: 78,
+    };
+    mockPersonalStats.isLoading = false;
+
+    render(<ClerkStatsPage />);
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('78')).toBeInTheDocument();
+    expect(screen.getByText('5m')).toBeInTheDocument();
+  });
+
+  it('handles null quality score gracefully', () => {
+    mockPersonalStats.data = {
+      dailyTrend: [],
+      cumulativeCount: 0,
+      avgCompletionTimeSec: null,
+      teamAvgCompletionTimeSec: null,
+      gpsRate: null,
+      ninRate: null,
+      skipRate: null,
+      fraudFlagRate: null,
+      teamAvgFraudRate: null,
+      respondentDiversity: { genderSplit: [], ageSpread: [] },
+      topSkillsCollected: [],
+      compositeQualityScore: null,
+    };
+    mockPersonalStats.isLoading = false;
+
+    render(<ClerkStatsPage />);
+    // em dashes for null values
+    const dashes = screen.getAllByText('\u2014');
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 });
