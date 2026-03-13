@@ -153,7 +153,7 @@ export default function SurveyAnalyticsPage() {
           >
             <div className="flex justify-end mb-2">
               <ChartExportButton
-                data={(skills ?? []) as unknown as Record<string, unknown>[]}
+                data={skills ?? []}
                 filename="skills-frequency"
               />
             </div>

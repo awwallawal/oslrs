@@ -46,7 +46,7 @@ export default function ReviewThroughputChart({ data, isLoading, error, classNam
           <div className="border-l-4 border-[#9C1E23] pl-3">
             <CardTitle className="text-base">Review Throughput</CardTitle>
           </div>
-          <ChartExportButton data={data as Record<string, unknown>[]} filename="review-throughput" />
+          <ChartExportButton data={data} filename="review-throughput" />
         </div>
       </CardHeader>
       <CardContent className="h-72">

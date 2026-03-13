@@ -44,7 +44,7 @@ export default function BacklogTrendChart({ data, isLoading, error, className }:
           <div className="border-l-4 border-[#9C1E23] pl-3">
             <CardTitle className="text-base">Backlog Trend</CardTitle>
           </div>
-          <ChartExportButton data={data as Record<string, unknown>[]} filename="backlog-trend" />
+          <ChartExportButton data={data} filename="backlog-trend" />
         </div>
       </CardHeader>
       <CardContent className="h-72">

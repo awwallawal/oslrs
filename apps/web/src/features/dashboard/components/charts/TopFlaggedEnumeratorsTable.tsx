@@ -51,7 +51,7 @@ export default function TopFlaggedEnumeratorsTable({ data, isLoading, error, cla
             <CardTitle className="text-base">Top Flagged Enumerators</CardTitle>
             <p className="text-xs text-neutral-500 mt-1">Click a row to view in audit queue</p>
           </div>
-          <ChartExportButton data={data as Record<string, unknown>[]} filename="top-flagged-enumerators" />
+          <ChartExportButton data={data} filename="top-flagged-enumerators" />
         </div>
       </CardHeader>
       <CardContent>

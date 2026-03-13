@@ -237,7 +237,7 @@ export class PersonalStatsService {
       WHERE ${where}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as { cumulative_count?: string; avg_completion_time?: string | null; gps_rate?: string | null; nin_rate?: string | null } | undefined;
     return {
       cumulativeCount: Number(row?.cumulative_count ?? 0),
       avgCompletionTime: row?.avg_completion_time != null ? Number(row.avg_completion_time) : null,
@@ -292,7 +292,7 @@ export class PersonalStatsService {
       WHERE fd.enumerator_id = ${userId}::uuid${dateConds}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as { fraud_rate?: string | null } | undefined;
     return row?.fraud_rate != null ? Number(row.fraud_rate) : null;
   }
 
@@ -317,7 +317,7 @@ export class PersonalStatsService {
       WHERE fd.enumerator_id::text = ANY(${teamIds})${dateConds}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as { fraud_rate?: string | null } | undefined;
     return row?.fraud_rate != null ? Number(row.fraud_rate) : null;
   }
 
@@ -340,7 +340,7 @@ export class PersonalStatsService {
         WHERE ${where}
       `);
 
-      const row = rows.rows[0] as any;
+      const row = rows.rows[0] as { avg_time?: string | null } | undefined;
       if (row?.avg_time != null) return Number(row.avg_time);
     }
 
@@ -350,7 +350,7 @@ export class PersonalStatsService {
       FROM users u
       WHERE u.id = ${userId}::uuid
     `);
-    const lgaId = (lgaRows.rows[0] as any)?.lga_id;
+    const lgaId = (lgaRows.rows[0] as { lga_id?: string } | undefined)?.lga_id;
     if (!lgaId) return null;
 
     const where = sql.join(
@@ -368,7 +368,7 @@ export class PersonalStatsService {
       WHERE ${where}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as { avg_time?: string | null } | undefined;
     return row?.avg_time != null ? Number(row.avg_time) : null;
   }
 
@@ -393,7 +393,7 @@ export class PersonalStatsService {
       WHERE ${where}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as { skip_rate?: string | null } | undefined;
     return row?.skip_rate != null ? Number(row.skip_rate) : null;
   }
 
@@ -430,12 +430,13 @@ export class PersonalStatsService {
       `),
     ]);
 
-    const genderTotal = (genderRows.rows as any[]).reduce((s, r) => s + Number(r.count), 0);
-    const ageTotal = (ageRows.rows as any[]).reduce((s, r) => s + Number(r.count), 0);
+    type LabelCountRow = { label: string; count: string | number };
+    const genderTotal = (genderRows.rows as LabelCountRow[]).reduce((s, r) => s + Number(r.count), 0);
+    const ageTotal = (ageRows.rows as LabelCountRow[]).reduce((s, r) => s + Number(r.count), 0);
 
     return {
-      genderSplit: toBuckets(genderRows.rows as any, genderTotal),
-      ageSpread: toBuckets(ageRows.rows as any, ageTotal),
+      genderSplit: toBuckets(genderRows.rows as LabelCountRow[], genderTotal),
+      ageSpread: toBuckets(ageRows.rows as LabelCountRow[], ageTotal),
     };
   }
 
@@ -458,7 +459,7 @@ export class PersonalStatsService {
       FROM submissions s
       WHERE ${where}
     `);
-    const total = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const total = Number((totalResult.rows[0] as { total?: string } | undefined)?.total ?? 0);
 
     const rows = await db.execute(sql`
       SELECT skill, COUNT(*) AS count
@@ -491,7 +492,7 @@ export class PersonalStatsService {
       LIMIT 1
     `);
 
-    const supervisorId = (supervisorRows.rows[0] as any)?.supervisor_id;
+    const supervisorId = (supervisorRows.rows[0] as { supervisor_id?: string } | undefined)?.supervisor_id;
     if (supervisorId) {
       return TeamAssignmentService.getEnumeratorIdsForSupervisor(supervisorId);
     }
@@ -500,7 +501,7 @@ export class PersonalStatsService {
     const lgaRows = await db.execute(sql`
       SELECT u.lga_id FROM users u WHERE u.id = ${userId}::uuid
     `);
-    const lgaId = (lgaRows.rows[0] as any)?.lga_id;
+    const lgaId = (lgaRows.rows[0] as { lga_id?: string } | undefined)?.lga_id;
     if (!lgaId) return [];
 
     const rows = await db.execute(sql`

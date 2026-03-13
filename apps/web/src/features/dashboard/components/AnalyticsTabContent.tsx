@@ -112,7 +112,7 @@ export function AnalyticsTabsContent({
         <TabErrorBoundary tabName="Demographics" resetKey={activeTab}>
           <div className="flex justify-end mb-2">
             <ChartExportButton
-              data={(demographics?.genderDistribution ?? []) as unknown as Record<string, unknown>[]}
+              data={demographics?.genderDistribution ?? []}
               filename="demographics-gender"
             />
           </div>
@@ -124,7 +124,7 @@ export function AnalyticsTabsContent({
         <TabErrorBoundary tabName="Employment" resetKey={activeTab}>
           <div className="flex justify-end mb-2">
             <ChartExportButton
-              data={(employment?.workStatusBreakdown ?? []) as unknown as Record<string, unknown>[]}
+              data={employment?.workStatusBreakdown ?? []}
               filename="employment-status"
             />
           </div>
@@ -136,7 +136,7 @@ export function AnalyticsTabsContent({
         <TabErrorBoundary tabName="Household" resetKey={activeTab}>
           <div className="flex justify-end mb-2">
             <ChartExportButton
-              data={(household?.householdSizeDistribution ?? []) as unknown as Record<string, unknown>[]}
+              data={household?.householdSizeDistribution ?? []}
               filename="household-size"
             />
           </div>
@@ -148,7 +148,7 @@ export function AnalyticsTabsContent({
         <TabErrorBoundary tabName="Trends" resetKey={activeTab}>
           <div className="flex justify-end mb-2">
             <ChartExportButton
-              data={(trends ?? []) as unknown as Record<string, unknown>[]}
+              data={trends ?? []}
               filename="registration-trends"
             />
           </div>

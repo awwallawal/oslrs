@@ -8,7 +8,7 @@ import { Download } from 'lucide-react';
 import { exportToCSV } from '../../utils/csv-export';
 
 interface ChartExportButtonProps {
-  data: Record<string, unknown>[];
+  data: object[];
   filename: string;
 }
 

@@ -20,12 +20,12 @@ function sanitizeCell(value: unknown): string {
   return sanitized;
 }
 
-export function exportToCSV(data: Record<string, unknown>[], filename: string) {
+export function exportToCSV(data: object[], filename: string) {
   if (!data || data.length === 0) return;
 
   // Strip suppressed metadata field from exported data
   const cleanData = data.map(row => {
-    const clean = { ...row };
+    const clean = { ...row } as Record<string, unknown>;
     delete clean['suppressed'];
     return clean;
   });

@@ -50,7 +50,7 @@ export default function RejectionReasonsChart({ data, isLoading, error, classNam
           <div className="border-l-4 border-[#9C1E23] pl-3">
             <CardTitle className="text-base">Resolution Reasons</CardTitle>
           </div>
-          <ChartExportButton data={chartData as Record<string, unknown>[]} filename="rejection-reasons" />
+          <ChartExportButton data={chartData} filename="rejection-reasons" />
         </div>
       </CardHeader>
       <CardContent className="h-72">
