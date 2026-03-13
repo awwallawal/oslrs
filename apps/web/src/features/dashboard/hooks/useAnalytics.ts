@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import type { AnalyticsQueryParams } from '@oslsr/types';
+import type { AnalyticsQueryParams, CrossTabQuery } from '@oslsr/types';
 import type { VerificationPipelineQueryParams } from '@oslsr/types';
 import {
   fetchDemographics,
@@ -19,6 +19,8 @@ import {
   fetchTeamQuality,
   fetchPersonalStats,
   fetchVerificationPipeline,
+  fetchCrossTab,
+  fetchSkillsInventory,
 } from '../api/analytics.api';
 import type { TeamQualityQueryParams } from '../api/analytics.api';
 
@@ -122,6 +124,26 @@ export function useVerificationPipeline(params?: VerificationPipelineQueryParams
   return useQuery({
     queryKey: [...analyticsKeys.all, 'verificationPipeline', params] as const,
     queryFn: () => fetchVerificationPipeline(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+// --- Story 8.6: Cross-Tabulation & Skills Inventory ---
+
+export function useCrossTab(query: CrossTabQuery, params?: AnalyticsQueryParams) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'crossTab', query, params] as const,
+    queryFn: () => fetchCrossTab(query, params),
+    staleTime: 60_000,
+    enabled: !!query.rowDim && !!query.colDim,
+  });
+}
+
+export function useSkillsInventory(params?: AnalyticsQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'skillsInventory', params] as const,
+    queryFn: () => fetchSkillsInventory(params),
     staleTime: 60_000,
     enabled,
   });

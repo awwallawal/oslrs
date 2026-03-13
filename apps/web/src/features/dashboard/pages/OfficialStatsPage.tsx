@@ -20,7 +20,15 @@ import {
   useHousehold,
   useTrends,
   useRegistrySummary,
+  useSkillsInventory,
 } from '../hooks/useAnalytics';
+import { CrossTabTable } from '../components/charts/CrossTabTable';
+import { FullSkillsChart } from '../components/charts/FullSkillsChart';
+import { SkillsCategoryChart } from '../components/charts/SkillsCategoryChart';
+import { SkillsGapChart } from '../components/charts/SkillsGapChart';
+import { SkillsConcentrationTable } from '../components/charts/SkillsConcentrationTable';
+import { SkillsDiversityCards } from '../components/charts/SkillsDiversityCards';
+import { Card } from '../../../components/ui/card';
 import { SkillsDistributionChart } from '../components/SkillsDistributionChart';
 import { LgaBreakdownChart } from '../components/LgaBreakdownChart';
 import { AnalyticsFilters } from '../components/AnalyticsFilters';
@@ -48,6 +56,7 @@ export default function OfficialStatsPage() {
   const { data: employment, isLoading: empLoading, error: empError, refetch: refetchEmp } = useEmployment(params, activeTab === 'employment' || activeTab === 'equity');
   const { data: household, isLoading: hhLoading, error: hhError, refetch: refetchHh } = useHousehold(params, activeTab === 'household');
   const { data: trends, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useTrends(params, activeTab === 'trends');
+  const { data: skillsInventory, isLoading: siLoading, isError: siError } = useSkillsInventory(params, activeTab === 'skills-inventory');
 
   const overviewLoading = skillsLoading || lgaLoading;
 
@@ -84,6 +93,8 @@ export default function OfficialStatsPage() {
           <TabsTrigger value="household">Household</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="equity">Equity</TabsTrigger>
+          <TabsTrigger value="cross-tab">Cross-Tab</TabsTrigger>
+          <TabsTrigger value="skills-inventory">Skills Inventory</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab — Preserved from Story 5.1 */}
@@ -174,6 +185,48 @@ export default function OfficialStatsPage() {
           equityError={demoError || empError}
           onRetryEquity={() => { refetchDemo(); refetchEmp(); }}
         />
+
+        {/* Cross-Tab tab (Story 8.6) */}
+        <TabsContent value="cross-tab">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Cross-tabulation error',
+              description: 'This tab encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            <CrossTabTable params={params} />
+          </ErrorBoundary>
+        </TabsContent>
+
+        {/* Skills Inventory tab (Story 8.6) */}
+        <TabsContent value="skills-inventory">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Skills inventory error',
+              description: 'This tab encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            {siLoading && <SkeletonCard data-testid="skills-inventory-skeleton" />}
+            {siError && (
+              <Card className="p-6 text-center text-red-600" data-testid="skills-inventory-error">
+                Failed to load skills inventory data.
+              </Card>
+            )}
+            {skillsInventory && (
+              <div className="space-y-6" data-testid="skills-inventory-section">
+                <FullSkillsChart skills={skillsInventory.allSkills} threshold={skillsInventory.thresholds.allSkills} />
+                <SkillsCategoryChart categories={skillsInventory.byCategory} threshold={skillsInventory.thresholds.byCategory} />
+                <SkillsGapChart gapAnalysis={skillsInventory.gapAnalysis} threshold={skillsInventory.thresholds.gapAnalysis} />
+                <SkillsConcentrationTable data={skillsInventory.byLga} threshold={skillsInventory.thresholds.byLga} />
+                <SkillsDiversityCards data={skillsInventory.diversityIndex} threshold={skillsInventory.thresholds.diversityIndex} />
+              </div>
+            )}
+          </ErrorBoundary>
+        </TabsContent>
       </Tabs>
     </div>
   );

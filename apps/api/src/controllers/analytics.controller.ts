@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { SurveyAnalyticsService } from '../services/survey-analytics.service.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import type { AnalyticsQueryParams } from '@oslsr/types';
+import { CrossTabDimension, CrossTabMeasure } from '@oslsr/types';
 
 const dateParam = z.string().refine(
   (val) => /^\d{4}-\d{2}-\d{2}/.test(val) && !isNaN(Date.parse(val)),
@@ -30,6 +31,15 @@ const skillsQuerySchema = analyticsQuerySchema.extend({
 const trendsQuerySchema = analyticsQuerySchema.extend({
   granularity: z.enum(['day', 'week', 'month']).default('day'),
   days: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+const crossTabQuerySchema = analyticsQuerySchema.extend({
+  rowDim: z.nativeEnum(CrossTabDimension),
+  colDim: z.nativeEnum(CrossTabDimension),
+  measure: z.nativeEnum(CrossTabMeasure).default(CrossTabMeasure.COUNT),
+}).refine((data) => data.rowDim !== data.colDim, {
+  message: 'rowDim and colDim must be different dimensions',
+  path: ['colDim'],
 });
 
 function getScope(req: Request): AnalyticsScope {
@@ -119,6 +129,32 @@ export class AnalyticsController {
     try {
       const parsed = analyticsQuerySchema.parse(req.query);
       const data = await SurveyAnalyticsService.getPipelineSummary(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getCrossTab(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = crossTabQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getCrossTab(
+        parsed.rowDim,
+        parsed.colDim,
+        parsed.measure,
+        getScope(req),
+        getParams(parsed),
+      );
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getSkillsInventory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getSkillsInventory(getScope(req), getParams(parsed));
       res.json({ data });
     } catch (error) {
       next(error);

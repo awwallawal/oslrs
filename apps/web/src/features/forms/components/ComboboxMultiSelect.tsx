@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { QuestionRendererProps } from './QuestionRenderer';
 import type { Choice } from '@oslsr/types';
+import { ISCO08_SECTOR_MAP } from '@oslsr/types';
 
 /**
  * Searchable multi-select with sector grouping, selected chips, and custom entry.
@@ -15,116 +16,12 @@ import type { Choice } from '@oslsr/types';
 
 /** Infer sector grouping from choice value prefixes or adjacent label patterns */
 function groupChoices(choices: Choice[]): { sector: string; choices: Choice[] }[] {
-  // The questionnaire schema lists choices in sector order.
-  // We detect sector boundaries by looking for common naming patterns.
-  // Group map: value prefix → sector name (based on ISCO-08 taxonomy)
-  const SECTOR_MAP: Record<string, string> = {
-    // Construction
-    bricklaying: 'Construction & Building', plastering: 'Construction & Building',
-    painting: 'Construction & Building', tiling: 'Construction & Building',
-    carpentry: 'Construction & Building', plumbing: 'Construction & Building',
-    electrical: 'Construction & Building', welding: 'Construction & Building',
-    aluminium_glass: 'Construction & Building', pop_ceiling: 'Construction & Building',
-    iron_bending: 'Construction & Building', roofing: 'Construction & Building',
-    heavy_equipment: 'Construction & Building', interlocking_paving: 'Construction & Building',
-    surveying: 'Construction & Building', quantity_surveying: 'Construction & Building',
-    // Automotive
-    auto_mechanic: 'Automotive & Mechanical', auto_electrician: 'Automotive & Mechanical',
-    motorcycle_repair: 'Automotive & Mechanical', vulcanizing: 'Automotive & Mechanical',
-    panel_beating: 'Automotive & Mechanical', generator_repair: 'Automotive & Mechanical',
-    hvac: 'Automotive & Mechanical',
-    // Fashion
-    tailoring: 'Fashion, Beauty & Personal Care', fashion_design: 'Fashion, Beauty & Personal Care',
-    aso_oke_weaving: 'Fashion, Beauty & Personal Care', adire_dyeing: 'Fashion, Beauty & Personal Care',
-    hairdressing: 'Fashion, Beauty & Personal Care', barbing: 'Fashion, Beauty & Personal Care',
-    makeup: 'Fashion, Beauty & Personal Care', cosmetology: 'Fashion, Beauty & Personal Care',
-    nail_tech: 'Fashion, Beauty & Personal Care', leather_work: 'Fashion, Beauty & Personal Care',
-    bead_making: 'Fashion, Beauty & Personal Care',
-    // Food & Agriculture
-    crop_farming: 'Food, Agriculture & Processing', vegetable_farming: 'Food, Agriculture & Processing',
-    poultry: 'Food, Agriculture & Processing', fish_farming: 'Food, Agriculture & Processing',
-    livestock: 'Food, Agriculture & Processing', cassava_processing: 'Food, Agriculture & Processing',
-    palm_oil: 'Food, Agriculture & Processing', baking: 'Food, Agriculture & Processing',
-    catering: 'Food, Agriculture & Processing', butchery: 'Food, Agriculture & Processing',
-    snail_farming: 'Food, Agriculture & Processing', bee_keeping: 'Food, Agriculture & Processing',
-    grain_milling: 'Food, Agriculture & Processing', cocoa_farming: 'Food, Agriculture & Processing',
-    farm_mechanisation: 'Food, Agriculture & Processing',
-    // Digital & Technology
-    computer_repair: 'Digital, Technology & Office', phone_repair: 'Digital, Technology & Office',
-    web_dev: 'Digital, Technology & Office', mobile_app_dev: 'Digital, Technology & Office',
-    graphic_design: 'Digital, Technology & Office', digital_marketing: 'Digital, Technology & Office',
-    data_entry: 'Digital, Technology & Office', networking: 'Digital, Technology & Office',
-    cctv_security: 'Digital, Technology & Office', photography: 'Digital, Technology & Office',
-    video_editing: 'Digital, Technology & Office', solar_pv: 'Digital, Technology & Office',
-    accounting: 'Digital, Technology & Office',
-    // Healthcare
-    community_health: 'Healthcare & Wellness', nursing: 'Healthcare & Wellness',
-    pharmacy_tech: 'Healthcare & Wellness', lab_tech: 'Healthcare & Wellness',
-    dental_tech: 'Healthcare & Wellness', optometry: 'Healthcare & Wellness',
-    physiotherapy: 'Healthcare & Wellness', traditional_medicine: 'Healthcare & Wellness',
-    health_records: 'Healthcare & Wellness',
-    // Education
-    teaching: 'Education & Professional Services', vocational_instruction: 'Education & Professional Services',
-    adult_literacy: 'Education & Professional Services', tutoring: 'Education & Professional Services',
-    sign_language: 'Education & Professional Services', legal_clerking: 'Education & Professional Services',
-    tax_preparation: 'Education & Professional Services',
-    // Artisan
-    blacksmithing: 'Artisan & Traditional Crafts', woodcarving: 'Artisan & Traditional Crafts',
-    pottery: 'Artisan & Traditional Crafts', mat_weaving: 'Artisan & Traditional Crafts',
-    calabash_carving: 'Artisan & Traditional Crafts', bronze_casting: 'Artisan & Traditional Crafts',
-    upholstery: 'Artisan & Traditional Crafts', sign_writing: 'Artisan & Traditional Crafts',
-    // Transport
-    commercial_driving: 'Transport & Logistics', motorcycle_dispatch: 'Transport & Logistics',
-    tricycle_operation: 'Transport & Logistics', forklift_operation: 'Transport & Logistics',
-    freight_logistics: 'Transport & Logistics', driving_instruction: 'Transport & Logistics',
-    fleet_management: 'Transport & Logistics',
-    // Sales
-    agrochem_sales: 'Sales, Marketing & Distribution', pharma_sales: 'Sales, Marketing & Distribution',
-    fmcg_sales: 'Sales, Marketing & Distribution', real_estate: 'Sales, Marketing & Distribution',
-    building_materials: 'Sales, Marketing & Distribution', auto_parts: 'Sales, Marketing & Distribution',
-    market_trading: 'Sales, Marketing & Distribution', ecommerce: 'Sales, Marketing & Distribution',
-    insurance_sales: 'Sales, Marketing & Distribution',
-    // Retail
-    retail_management: 'Retail & Commerce', pos_agent: 'Retail & Commerce',
-    fuel_station: 'Retail & Commerce', patent_medicine: 'Retail & Commerce',
-    telecom_retail: 'Retail & Commerce', provisions_retail: 'Retail & Commerce',
-    // Mining
-    quarrying: 'Mining, Quarrying & Extraction', sand_dredging: 'Mining, Quarrying & Extraction',
-    artisanal_mining: 'Mining, Quarrying & Extraction', gemstone_cutting: 'Mining, Quarrying & Extraction',
-    // Oil & Gas
-    petroleum_distribution: 'Oil, Gas & Energy', gas_plant: 'Oil, Gas & Energy',
-    pipeline_welding: 'Oil, Gas & Energy', drilling: 'Oil, Gas & Energy',
-    power_line: 'Oil, Gas & Energy', renewable_energy: 'Oil, Gas & Energy',
-    // Manufacturing
-    soap_manufacturing: 'Manufacturing & Processing', water_production: 'Manufacturing & Processing',
-    block_making: 'Manufacturing & Processing', plastic_manufacturing: 'Manufacturing & Processing',
-    printing: 'Manufacturing & Processing',
-    // Hospitality
-    hotel_management: 'Hospitality & Tourism', event_planning: 'Hospitality & Tourism',
-    bartending: 'Hospitality & Tourism', tour_guiding: 'Hospitality & Tourism',
-    laundry: 'Hospitality & Tourism',
-    // Entertainment
-    music_production: 'Entertainment & Creative Arts', dj_services: 'Entertainment & Creative Arts',
-    mc_services: 'Entertainment & Creative Arts', acting: 'Entertainment & Creative Arts',
-    drumming: 'Entertainment & Creative Arts', animation: 'Entertainment & Creative Arts',
-    // Security
-    security_guard: 'Security & Safety', fire_safety: 'Security & Safety',
-    ohs: 'Security & Safety', traffic_management: 'Security & Safety',
-    // Domestic
-    housekeeping: 'Domestic & Personal Services', childcare: 'Domestic & Personal Services',
-    elderly_care: 'Domestic & Personal Services', gardening: 'Domestic & Personal Services',
-    // Waste
-    waste_collection: 'Waste, Recycling & Environment', scrap_recycling: 'Waste, Recycling & Environment',
-    plastic_recycling: 'Waste, Recycling & Environment', fumigation: 'Waste, Recycling & Environment',
-    // Legal/Religious
-    religious_ministry: 'Legal, Religious & Community', quranic_teaching: 'Legal, Religious & Community',
-    community_development: 'Legal, Religious & Community', mediation: 'Legal, Religious & Community',
-    cooperative_management: 'Legal, Religious & Community',
-  };
+  // ISCO-08 taxonomy imported from shared package (source of truth)
+  // See packages/types/src/skills-taxonomy.ts for the full 150-skill mapping
 
   const grouped = new Map<string, Choice[]>();
   for (const choice of choices) {
-    const sector = SECTOR_MAP[choice.value] || 'Other';
+    const sector = ISCO08_SECTOR_MAP[choice.value] || 'Other';
     if (!grouped.has(sector)) grouped.set(sector, []);
     grouped.get(sector)!.push(choice);
   }

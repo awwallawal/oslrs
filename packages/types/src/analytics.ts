@@ -272,3 +272,57 @@ export interface PublicTrendsData {
   totalDays: number;
   lastUpdated: string;
 }
+
+// --- Cross-Tabulation (Story 8.6) ---
+
+export enum CrossTabDimension {
+  GENDER = 'gender',
+  AGE_BAND = 'ageBand',
+  EDUCATION = 'education',
+  LGA = 'lga',
+  EMPLOYMENT_TYPE = 'employmentType',
+  MARITAL_STATUS = 'maritalStatus',
+  HOUSING = 'housing',
+  DISABILITY = 'disability',
+}
+
+export enum CrossTabMeasure {
+  COUNT = 'count',
+  ROW_PCT = 'rowPct',
+  COL_PCT = 'colPct',
+  TOTAL_PCT = 'totalPct',
+}
+
+export interface CrossTabResult {
+  rowLabels: string[];
+  colLabels: string[];
+  cells: (number | null)[][];
+  totalN: number;
+  anySuppressed: boolean;
+  belowThreshold?: boolean;
+  currentN?: number;
+  requiredN?: number;
+}
+
+export interface CrossTabQuery {
+  rowDim: CrossTabDimension;
+  colDim: CrossTabDimension;
+  measure?: CrossTabMeasure;
+}
+
+// --- Skills Inventory (Story 8.6) ---
+
+export interface SkillsInventoryData {
+  allSkills: SkillsFrequency[];
+  byCategory: { category: string; totalCount: number; skills: SkillsFrequency[] }[];
+  byLga: { lgaId: string; lgaName: string; topSkills: { skill: string; count: number }[] }[] | null;
+  gapAnalysis: { skill: string; haveCount: number; wantCount: number }[] | null;
+  diversityIndex: { lgaId: string; lgaName: string; index: number; skillCount: number }[] | null;
+  thresholds: {
+    allSkills: { met: boolean; currentN: number; requiredN: number };
+    byCategory: { met: boolean; currentN: number; requiredN: number };
+    byLga: { met: boolean; currentN: number; requiredN: number };
+    gapAnalysis: { met: boolean; currentN: number; requiredN: number };
+    diversityIndex: { met: boolean; currentN: number; requiredN: number };
+  };
+}

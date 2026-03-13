@@ -38,6 +38,20 @@ router.get(
   VerificationAnalyticsController.getVerificationPipeline,
 );
 
+// Story 8.6: Cross-tabulation (SA + Official + Supervisor only)
+router.get(
+  '/cross-tab',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL, UserRole.SUPERVISOR),
+  AnalyticsController.getCrossTab,
+);
+
+// Story 8.6: Skills inventory (SA + Official + Supervisor only)
+router.get(
+  '/skills-inventory',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL, UserRole.SUPERVISOR),
+  AnalyticsController.getSkillsInventory,
+);
+
 // Story 8.1: Descriptive statistics
 router.get('/demographics', AnalyticsController.getDemographics);
 router.get('/employment', AnalyticsController.getEmployment);

@@ -23,9 +23,87 @@ import type {
   TrendDataPoint,
   RegistrySummary,
   PipelineSummary,
+  CrossTabResult,
+  CrossTabMeasure,
+  SkillsInventoryData,
 } from '@oslsr/types';
+import { CrossTabDimension } from '@oslsr/types';
+import { ISCO08_SECTOR_MAP } from '@oslsr/types';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';
+import { Redis } from 'ioredis';
+import pino from 'pino';
+
+const logger = pino({ name: 'survey-analytics' });
+
+const isTestMode = () =>
+  process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
+
+let redisClient: Redis | null = null;
+
+function getRedisClient(): Redis | null {
+  if (!redisClient && !isTestMode()) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redisClient;
+}
+
+/**
+ * Map CrossTabDimension enum to SQL expression.
+ * All use Drizzle sql template tags — never sql.raw() for safety.
+ */
+function dimensionToSql(dim: CrossTabDimension): SQL {
+  switch (dim) {
+    case CrossTabDimension.GENDER:
+      return sql`s.raw_data->>'gender'`;
+    case CrossTabDimension.AGE_BAND:
+      return sql`CASE
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 19 THEN '15-19'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 20 AND 24 THEN '20-24'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 25 AND 29 THEN '25-29'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 30 AND 34 THEN '30-34'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 35 AND 39 THEN '35-39'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 40 AND 44 THEN '40-44'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 45 AND 49 THEN '45-49'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 50 AND 54 THEN '50-54'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 55 AND 59 THEN '55-59'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) >= 60 THEN '60+'
+        ELSE 'unknown'
+      END`;
+    case CrossTabDimension.EDUCATION:
+      return sql`s.raw_data->>'education_level'`;
+    case CrossTabDimension.LGA:
+      return sql`COALESCE(l.name, r.lga_id, 'Unknown')`;
+    case CrossTabDimension.EMPLOYMENT_TYPE:
+      return sql`s.raw_data->>'employment_type'`;
+    case CrossTabDimension.MARITAL_STATUS:
+      return sql`s.raw_data->>'marital_status'`;
+    case CrossTabDimension.HOUSING:
+      return sql`s.raw_data->>'housing_status'`;
+    case CrossTabDimension.DISABILITY:
+      return sql`s.raw_data->>'disability_status'`;
+  }
+}
+
+/**
+ * Shannon diversity index: H = -sum(p_i * ln(p_i))
+ */
+function shannonIndex(counts: number[]): number {
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (total === 0) return 0;
+  return -counts
+    .filter(c => c > 0)
+    .reduce((H, c) => H + (c / total) * Math.log(c / total), 0);
+}
+
+/** Deterministic JSON serialization for cache keys (sorted object keys). */
+function stableStringify(obj: Record<string, unknown>): string {
+  return JSON.stringify(obj, Object.keys(obj).sort());
+}
+
+const CROSS_TAB_THRESHOLD = 50;
+const SKILLS_THRESHOLD_GENERAL = 30;
+const SKILLS_THRESHOLD_PER_LGA = 20;
 
 /**
  * Build parameterized WHERE clause fragments for scope + optional params.
@@ -614,5 +692,360 @@ export class SurveyAnalyticsService {
       avgCompletionTimeSecs: row?.avgCompletionTimeSecs != null ? Number(row.avgCompletionTimeSecs) : null,
       activeEnumerators: Number(row?.activeEnumerators ?? 0),
     };
+  }
+
+  /**
+   * Cross-tabulation: 2D pivot of any two demographic dimensions.
+   * Returns matrix structure with suppression and percentage measures.
+   */
+  static async getCrossTab(
+    rowDim: CrossTabDimension,
+    colDim: CrossTabDimension,
+    measure: CrossTabMeasure | string = 'count',
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+  ): Promise<CrossTabResult> {
+    const where = buildWhereFragments(scope, params);
+
+    // Check cache
+    const cacheKey = `analytics:cross-tab:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${rowDim}:${colDim}:${measure}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'cross_tab.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Threshold guard
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+    `);
+    const totalN = Number((totalResult.rows[0] as any)?.total ?? 0);
+
+    if (totalN < CROSS_TAB_THRESHOLD) {
+      return { rowLabels: [], colLabels: [], cells: [], totalN, anySuppressed: false, belowThreshold: true, currentN: totalN, requiredN: CROSS_TAB_THRESHOLD };
+    }
+
+    const rowExpr = dimensionToSql(rowDim);
+    const colExpr = dimensionToSql(colDim);
+
+    // LGA dimension requires extra JOIN
+    const needsLgaJoin = rowDim === CrossTabDimension.LGA || colDim === CrossTabDimension.LGA;
+    const lgaJoin = needsLgaJoin ? sql`LEFT JOIN lgas l ON l.code = r.lga_id` : sql``;
+
+    const rows = await db.execute(sql`
+      SELECT
+        ${rowExpr} AS row_val,
+        ${colExpr} AS col_val,
+        COUNT(*) AS cell_count
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      ${lgaJoin}
+      WHERE ${where}
+        AND ${rowExpr} IS NOT NULL
+        AND ${colExpr} IS NOT NULL
+      GROUP BY row_val, col_val
+      ORDER BY row_val, col_val
+    `);
+
+    // Pivot flat results into matrix
+    const rowLabelSet = new Set<string>();
+    const colLabelSet = new Set<string>();
+    const cellMap = new Map<string, number>();
+
+    for (const r of rows.rows as Array<{ row_val: string; col_val: string; cell_count: string | number }>) {
+      const rv = String(r.row_val);
+      const cv = String(r.col_val);
+      rowLabelSet.add(rv);
+      colLabelSet.add(cv);
+      cellMap.set(`${rv}|${cv}`, Number(r.cell_count));
+    }
+
+    const rowLabels = [...rowLabelSet].sort();
+    const colLabels = [...colLabelSet].sort();
+
+    // Build raw count matrix and apply suppression
+    let anySuppressed = false;
+    const rawCells: (number | null)[][] = rowLabels.map((rl) =>
+      colLabels.map((cl) => {
+        const count = cellMap.get(`${rl}|${cl}`) ?? 0;
+        if (count > 0 && count < SUPPRESSION_MIN_N) {
+          anySuppressed = true;
+          return null;
+        }
+        return count;
+      }),
+    );
+
+    // Compute percentage measures if requested
+    let cells: (number | null)[][];
+    if (measure === 'count') {
+      cells = rawCells;
+    } else {
+      cells = rawCells.map((row, ri) => {
+        const rowTotal = row.reduce((sum: number, c) => sum + (c ?? 0), 0);
+        return row.map((cell, ci) => {
+          if (cell === null) return null;
+          if (measure === 'rowPct') {
+            return rowTotal > 0 ? Math.round((cell / rowTotal) * 1000) / 10 : 0;
+          } else if (measure === 'colPct') {
+            const colTotal = rawCells.reduce((sum: number, r) => sum + (r[ci] ?? 0), 0);
+            return colTotal > 0 ? Math.round((cell / colTotal) * 1000) / 10 : 0;
+          } else {
+            // totalPct
+            return totalN > 0 ? Math.round((cell / totalN) * 1000) / 10 : 0;
+          }
+        });
+      });
+    }
+
+    const result: CrossTabResult = { rowLabels, colLabels, cells, totalN, anySuppressed };
+
+    // Cache result
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      } catch (err) {
+        logger.warn({ event: 'cross_tab.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Skills Inventory: full skills list, category grouping, LGA concentration,
+   * gap analysis (have vs want), and Shannon diversity index.
+   */
+  static async getSkillsInventory(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+  ): Promise<SkillsInventoryData> {
+    const where = buildWhereFragments(scope, params);
+
+    // Check cache
+    const cacheKey = `analytics:skills-inventory:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'skills_inventory.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Count total submissions with skills data for threshold checks
+    const totalSkillsResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+        AND s.raw_data->>'skills_possessed' IS NOT NULL
+        AND s.raw_data->>'skills_possessed' != ''
+    `);
+    const totalWithSkills = Number((totalSkillsResult.rows[0] as any)?.total ?? 0);
+
+    // Count total submissions for LGA-specific thresholds
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+    `);
+    const totalSubmissions = Number((totalResult.rows[0] as any)?.total ?? 0);
+
+    // Build threshold objects
+    const thresholds = {
+      allSkills: { met: totalWithSkills >= SKILLS_THRESHOLD_GENERAL, currentN: totalWithSkills, requiredN: SKILLS_THRESHOLD_GENERAL },
+      byCategory: { met: totalWithSkills >= SKILLS_THRESHOLD_GENERAL, currentN: totalWithSkills, requiredN: SKILLS_THRESHOLD_GENERAL },
+      byLga: { met: totalSubmissions >= SKILLS_THRESHOLD_PER_LGA, currentN: totalSubmissions, requiredN: SKILLS_THRESHOLD_PER_LGA },
+      gapAnalysis: { met: totalWithSkills >= SKILLS_THRESHOLD_GENERAL, currentN: totalWithSkills, requiredN: SKILLS_THRESHOLD_GENERAL },
+      diversityIndex: { met: totalSubmissions >= SKILLS_THRESHOLD_GENERAL, currentN: totalSubmissions, requiredN: SKILLS_THRESHOLD_GENERAL },
+    };
+
+    // allSkills: full skills frequency (no LIMIT)
+    let allSkills: SkillsFrequency[] = [];
+    if (thresholds.allSkills.met) {
+      const skillRows = await db.execute(sql`
+        SELECT skill, COUNT(*) AS count
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id,
+             unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+        WHERE ${where}
+          AND s.raw_data->>'skills_possessed' IS NOT NULL
+          AND s.raw_data->>'skills_possessed' != ''
+        GROUP BY skill
+        ORDER BY count DESC
+      `);
+      allSkills = (skillRows.rows as Array<{ skill: string; count: string | number }>)
+        .map((r) => ({
+          skill: String(r.skill),
+          count: Number(r.count),
+          percentage: totalWithSkills > 0 ? Math.round((Number(r.count) / totalWithSkills) * 1000) / 10 : 0,
+        }))
+        .filter((s) => s.count >= SUPPRESSION_MIN_N);
+    }
+
+    // byCategory: group by ISCO-08 sector
+    const byCategory: SkillsInventoryData['byCategory'] = [];
+    if (thresholds.byCategory.met && allSkills.length > 0) {
+      const categoryMap = new Map<string, { totalCount: number; skills: SkillsFrequency[] }>();
+      for (const skill of allSkills) {
+        const category = ISCO08_SECTOR_MAP[skill.skill] || 'Other';
+        const entry = categoryMap.get(category) || { totalCount: 0, skills: [] };
+        entry.totalCount += skill.count;
+        entry.skills.push(skill);
+        categoryMap.set(category, entry);
+      }
+      for (const [category, data] of categoryMap) {
+        byCategory.push({ category, totalCount: data.totalCount, skills: data.skills });
+      }
+      byCategory.sort((a, b) => b.totalCount - a.totalCount);
+    }
+
+    // byLga: top 3 skills per LGA (SA/Official only)
+    let byLga: SkillsInventoryData['byLga'] = null;
+    if (scope.type === 'system' && thresholds.byLga.met) {
+      const lgaSkillRows = await db.execute(sql`
+        WITH skill_counts AS (
+          SELECT r.lga_id, skill, COUNT(*) AS count
+          FROM submissions s
+          LEFT JOIN respondents r ON r.id = s.respondent_id,
+               unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+          WHERE ${where}
+            AND s.raw_data->>'skills_possessed' IS NOT NULL
+            AND s.raw_data->>'skills_possessed' != ''
+          GROUP BY r.lga_id, skill
+          HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
+        ),
+        ranked AS (
+          SELECT *, ROW_NUMBER() OVER (PARTITION BY lga_id ORDER BY count DESC) AS rn
+          FROM skill_counts
+        )
+        SELECT r.lga_id, COALESCE(l.name, r.lga_id, 'Unknown') AS lga_name, r.skill, r.count
+        FROM ranked r
+        LEFT JOIN lgas l ON l.code = r.lga_id
+        WHERE r.rn <= 3
+        ORDER BY lga_name, r.rn
+      `);
+
+      const lgaMap = new Map<string, { lgaId: string; lgaName: string; topSkills: { skill: string; count: number }[] }>();
+      for (const row of lgaSkillRows.rows as Array<{ lga_id: string; lga_name: string; skill: string; count: string | number }>) {
+        const key = row.lga_id || 'unknown';
+        const entry = lgaMap.get(key) || { lgaId: key, lgaName: String(row.lga_name), topSkills: [] };
+        entry.topSkills.push({ skill: String(row.skill), count: Number(row.count) });
+        lgaMap.set(key, entry);
+      }
+      byLga = [...lgaMap.values()];
+    }
+
+    // gapAnalysis: have vs want-to-learn
+    let gapAnalysis: SkillsInventoryData['gapAnalysis'] = null;
+    if (thresholds.gapAnalysis.met) {
+      const [haveRows, wantRows] = await Promise.all([
+        db.execute(sql`
+          SELECT skill, COUNT(*) AS count
+          FROM submissions s
+          LEFT JOIN respondents r ON r.id = s.respondent_id,
+               unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+          WHERE ${where}
+            AND s.raw_data->>'skills_possessed' IS NOT NULL
+            AND s.raw_data->>'skills_possessed' != ''
+          GROUP BY skill
+          HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
+        `),
+        db.execute(sql`
+          SELECT skill, COUNT(*) AS count
+          FROM submissions s
+          LEFT JOIN respondents r ON r.id = s.respondent_id,
+               unnest(string_to_array(s.raw_data->>'training_interest', ' ')) AS skill
+          WHERE ${where}
+            AND s.raw_data->>'training_interest' IS NOT NULL
+            AND s.raw_data->>'training_interest' != ''
+          GROUP BY skill
+          HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
+        `),
+      ]);
+
+      const wantMap = new Map<string, number>();
+      for (const r of wantRows.rows as Array<{ skill: string; count: string | number }>) {
+        wantMap.set(String(r.skill), Number(r.count));
+      }
+
+      // Only produce gap analysis if we have want data
+      if (wantMap.size > 0) {
+        const haveMap = new Map<string, number>();
+        for (const r of haveRows.rows as Array<{ skill: string; count: string | number }>) {
+          haveMap.set(String(r.skill), Number(r.count));
+        }
+
+        // Merge all skills from both dimensions
+        const allSkillKeys = new Set([...haveMap.keys(), ...wantMap.keys()]);
+        gapAnalysis = [...allSkillKeys]
+          .map((skill) => ({
+            skill,
+            haveCount: haveMap.get(skill) ?? 0,
+            wantCount: wantMap.get(skill) ?? 0,
+          }))
+          .sort((a, b) => (b.wantCount - b.haveCount) - (a.wantCount - a.haveCount));
+      }
+    }
+
+    // diversityIndex: Shannon diversity per LGA (SA/Official only)
+    let diversityIndex: SkillsInventoryData['diversityIndex'] = null;
+    if (scope.type === 'system' && thresholds.diversityIndex.met) {
+      const divRows = await db.execute(sql`
+        SELECT r.lga_id, COALESCE(l.name, r.lga_id, 'Unknown') AS lga_name,
+               skill, COUNT(*) AS count
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id
+        LEFT JOIN lgas l ON l.code = r.lga_id,
+             unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+        WHERE ${where}
+          AND s.raw_data->>'skills_possessed' IS NOT NULL
+          AND s.raw_data->>'skills_possessed' != ''
+        GROUP BY r.lga_id, lga_name, skill
+      `);
+
+      // Group by LGA, compute Shannon index
+      const lgaDivMap = new Map<string, { lgaName: string; counts: number[]; skillCount: number }>();
+      for (const row of divRows.rows as Array<{ lga_id: string; lga_name: string; skill: string; count: string | number }>) {
+        const key = row.lga_id || 'unknown';
+        const entry = lgaDivMap.get(key) || { lgaName: String(row.lga_name), counts: [], skillCount: 0 };
+        entry.counts.push(Number(row.count));
+        entry.skillCount++;
+        lgaDivMap.set(key, entry);
+      }
+
+      diversityIndex = [...lgaDivMap.entries()]
+        .filter(([, data]) => data.counts.reduce((a, b) => a + b, 0) >= SKILLS_THRESHOLD_GENERAL)
+        .map(([lgaId, data]) => ({
+          lgaId,
+          lgaName: data.lgaName,
+          index: Math.round(shannonIndex(data.counts) * 100) / 100,
+          skillCount: data.skillCount,
+        }))
+        .sort((a, b) => b.index - a.index);
+    }
+
+    const result: SkillsInventoryData = { allSkills, byCategory, byLga, gapAnalysis, diversityIndex, thresholds };
+
+    // Cache result
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+      } catch (err) {
+        logger.warn({ event: 'skills_inventory.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
   }
 }

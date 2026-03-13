@@ -5,7 +5,9 @@
 
 import { useState, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs';
-import { useTeamQuality, useDemographics, useEmployment } from '../hooks/useAnalytics';
+import { Card } from '../../../components/ui/card';
+import { SkeletonCard } from '../../../components/skeletons';
+import { useTeamQuality, useDemographics, useEmployment, useSkillsInventory } from '../hooks/useAnalytics';
 import { AnalyticsFilters } from '../components/AnalyticsFilters';
 import TeamQualityCharts from '../components/charts/TeamQualityCharts';
 import TeamCompletionTimeChart from '../components/charts/TeamCompletionTimeChart';
@@ -17,6 +19,8 @@ import type { AnalyticsQueryParams } from '@oslsr/types';
 // Named imports from Story 8-2
 import { DemographicCharts } from '../components/charts/DemographicCharts';
 import { EmploymentCharts } from '../components/charts/EmploymentCharts';
+import { FullSkillsChart } from '../components/charts/FullSkillsChart';
+import { SkillsCategoryChart } from '../components/charts/SkillsCategoryChart';
 
 export default function SupervisorAnalyticsPage() {
   const [activeTab, setActiveTab] = useState('quality');
@@ -39,6 +43,11 @@ export default function SupervisorAnalyticsPage() {
   const employment = useEmployment(
     filterParams,
     activeTab === 'demographics',
+  );
+
+  const { data: skillsInventory, isLoading: siLoading, isError: siError } = useSkillsInventory(
+    filterParams,
+    activeTab === 'skills',
   );
 
   return (
@@ -64,6 +73,7 @@ export default function SupervisorAnalyticsPage() {
           <TabsTrigger value="quality">Data Quality</TabsTrigger>
           <TabsTrigger value="coverage">Field Coverage</TabsTrigger>
           <TabsTrigger value="demographics">LGA Demographics</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
         </TabsList>
 
         <TabsContent value="quality">
@@ -141,6 +151,22 @@ export default function SupervisorAnalyticsPage() {
               onRetry={() => employment.refetch()}
             />
           </div>
+        </TabsContent>
+
+        {/* Simplified Skills tab (Story 8.6) — LGA-scoped only */}
+        <TabsContent value="skills">
+          {siLoading && <SkeletonCard data-testid="skills-inventory-skeleton" />}
+          {siError && (
+            <Card className="p-6 text-center text-red-600" data-testid="skills-inventory-error">
+              Failed to load skills inventory data.
+            </Card>
+          )}
+          {skillsInventory && (
+            <div className="space-y-6" data-testid="supervisor-skills-section">
+              <FullSkillsChart skills={skillsInventory.allSkills} threshold={skillsInventory.thresholds.allSkills} />
+              <SkillsCategoryChart categories={skillsInventory.byCategory} threshold={skillsInventory.thresholds.byCategory} />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

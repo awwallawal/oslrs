@@ -65,6 +65,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useRegistrySummary: () => mockRegistryReturn,
   useSkillsFrequency: () => ({ data: [], isLoading: true, error: null }),
   usePipelineSummary: () => ({ data: null, isLoading: true, error: null }),
+  useSkillsInventory: () => ({ data: null, isLoading: false }),
 }));
 
 vi.mock('../../api/export.api', () => ({

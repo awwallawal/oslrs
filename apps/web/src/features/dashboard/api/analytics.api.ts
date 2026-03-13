@@ -19,6 +19,9 @@ import type {
   PersonalStatsData,
   VerificationPipelineData,
   VerificationPipelineQueryParams,
+  CrossTabResult,
+  CrossTabQuery,
+  SkillsInventoryData,
 } from '@oslsr/types';
 
 function buildQueryString(params?: AnalyticsQueryParams): string {
@@ -112,5 +115,25 @@ function buildVerificationQueryString(params?: VerificationPipelineQueryParams):
 
 export async function fetchVerificationPipeline(params?: VerificationPipelineQueryParams): Promise<VerificationPipelineData> {
   const result = await apiClient(`/analytics/verification-pipeline${buildVerificationQueryString(params)}`);
+  return result.data;
+}
+
+// --- Story 8.6: Cross-Tabulation & Skills Inventory ---
+
+export async function fetchCrossTab(query: CrossTabQuery, params?: AnalyticsQueryParams): Promise<CrossTabResult> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('rowDim', query.rowDim);
+  searchParams.set('colDim', query.colDim);
+  if (query.measure) searchParams.set('measure', query.measure);
+  if (params?.lgaId) searchParams.set('lgaId', params.lgaId);
+  if (params?.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+  if (params?.dateTo) searchParams.set('dateTo', params.dateTo);
+  if (params?.source) searchParams.set('source', params.source);
+  const result = await apiClient(`/analytics/cross-tab?${searchParams.toString()}`);
+  return result.data;
+}
+
+export async function fetchSkillsInventory(params?: AnalyticsQueryParams): Promise<SkillsInventoryData> {
+  const result = await apiClient(`/analytics/skills-inventory${buildQueryString(params)}`);
   return result.data;
 }

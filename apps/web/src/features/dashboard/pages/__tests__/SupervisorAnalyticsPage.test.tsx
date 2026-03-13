@@ -19,6 +19,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useTeamQuality: () => mockTeamQuality,
   useDemographics: () => mockDemographics,
   useEmployment: () => mockEmployment,
+  useSkillsInventory: () => ({ data: null, isLoading: false }),
 }));
 
 vi.mock('../../api/export.api', () => ({

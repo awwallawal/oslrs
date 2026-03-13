@@ -16,7 +16,7 @@ vi.mock('../../controllers/analytics.controller.js', () => ({
   AnalyticsController: {
     getDemographics: vi.fn(), getEmployment: vi.fn(), getHousehold: vi.fn(),
     getSkillsFrequency: vi.fn(), getTrends: vi.fn(), getRegistrySummary: vi.fn(),
-    getPipelineSummary: vi.fn(),
+    getPipelineSummary: vi.fn(), getCrossTab: vi.fn(), getSkillsInventory: vi.fn(),
   },
 }));
 vi.mock('../../controllers/team-quality.controller.js', () => ({
@@ -76,5 +76,61 @@ describe('Analytics Routes', () => {
     );
     expect(vpAuthorizeCall).toBeDefined();
     expect(vpAuthorizeCall).toHaveLength(3);
+  });
+
+  // Story 8.6: Cross-tab route
+  it('registers GET /cross-tab route', () => {
+    const ctRoute = routes.find((r: { path: string }) => r.path === '/cross-tab');
+    expect(ctRoute).toBeDefined();
+    expect(ctRoute!.methods).toContain('get');
+  });
+
+  it('cross-tab route has per-route authorize middleware', () => {
+    const ctLayer = router.stack.find(
+      (layer: { route?: { path: string } }) => layer.route?.path === '/cross-tab',
+    );
+    expect(ctLayer?.route?.stack?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('cross-tab authorize restricts to super_admin, government_official, supervisor (403 for enumerator/clerk/assessor)', () => {
+    const ctAuthorizeCall = authorizeCalls.find(
+      (args: string[]) =>
+        args.includes('super_admin') &&
+        args.includes('government_official') &&
+        args.includes('supervisor') &&
+        !args.includes('enumerator') &&
+        !args.includes('data_entry_clerk') &&
+        !args.includes('verification_assessor'),
+    );
+    expect(ctAuthorizeCall).toBeDefined();
+    expect(ctAuthorizeCall).toHaveLength(3);
+  });
+
+  // Story 8.6: Skills inventory route
+  it('registers GET /skills-inventory route', () => {
+    const siRoute = routes.find((r: { path: string }) => r.path === '/skills-inventory');
+    expect(siRoute).toBeDefined();
+    expect(siRoute!.methods).toContain('get');
+  });
+
+  it('skills-inventory route has per-route authorize middleware', () => {
+    const siLayer = router.stack.find(
+      (layer: { route?: { path: string } }) => layer.route?.path === '/skills-inventory',
+    );
+    expect(siLayer?.route?.stack?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('skills-inventory authorize restricts to super_admin, government_official, supervisor (403 for enumerator/clerk/assessor)', () => {
+    const siAuthorizeCall = authorizeCalls.find(
+      (args: string[]) =>
+        args.includes('super_admin') &&
+        args.includes('government_official') &&
+        args.includes('supervisor') &&
+        !args.includes('enumerator') &&
+        !args.includes('data_entry_clerk') &&
+        !args.includes('verification_assessor'),
+    );
+    expect(siAuthorizeCall).toBeDefined();
+    expect(siAuthorizeCall).toHaveLength(3);
   });
 });

@@ -27,6 +27,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useTrends: () => mockTrends,
   useRegistrySummary: () => mockRegistry,
   usePipelineSummary: () => mockPipeline,
+  useSkillsInventory: () => ({ data: null, isLoading: false }),
 }));
 
 vi.mock('../../api/export.api', () => ({
