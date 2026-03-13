@@ -139,7 +139,7 @@ describe('NavDropdown', () => {
     expect(contactLink).toHaveClass('hover:text-primary-600');
   });
 
-  describe('AC6: Insights Navigation Placeholder', () => {
+  describe('Insights Navigation (Story 8-5)', () => {
     it('renders Insights dropdown trigger', () => {
       renderWithRouter(<NavDropdown />);
       expect(screen.getByRole('button', { name: /insights/i })).toBeInTheDocument();
@@ -163,21 +163,33 @@ describe('NavDropdown', () => {
       expect(insightsIndex).toBeLessThan(supportIndex);
     });
 
-    it('exports insightsItems with Coming Soon items', () => {
+    it('exports insightsItems with 4 items (3 active + 1 Coming Soon)', () => {
       expect(insightsItems).toBeInstanceOf(Array);
-      expect(insightsItems.length).toBe(3);
-      insightsItems.forEach((item) => {
-        expect(item).toHaveProperty('label');
-        expect(item).toHaveProperty('description');
-        expect(item).toHaveProperty('comingSoon', true);
-      });
+      expect(insightsItems.length).toBe(4);
+
+      // 3 items have href (active links)
+      const activeItems = insightsItems.filter(item => item.href);
+      expect(activeItems).toHaveLength(3);
+
+      // 1 item is Coming Soon (Reports)
+      const comingSoonItems = insightsItems.filter(item => item.comingSoon);
+      expect(comingSoonItems).toHaveLength(1);
+      expect(comingSoonItems[0].label).toBe('Reports');
     });
 
-    it('insightsItems contains expected items', () => {
+    it('insightsItems contains expected items with correct routes', () => {
       const labels = insightsItems.map((item) => item.label);
+      expect(labels).toContain('Labour Force Overview');
       expect(labels).toContain('Skills Map');
       expect(labels).toContain('Trends');
       expect(labels).toContain('Reports');
+
+      const overview = insightsItems.find(i => i.label === 'Labour Force Overview');
+      expect(overview?.href).toBe('/insights');
+      const skills = insightsItems.find(i => i.label === 'Skills Map');
+      expect(skills?.href).toBe('/insights/skills');
+      const trends = insightsItems.find(i => i.label === 'Trends');
+      expect(trends?.href).toBe('/insights/trends');
     });
   });
 });

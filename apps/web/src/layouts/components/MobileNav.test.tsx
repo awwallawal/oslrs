@@ -226,8 +226,8 @@ describe('MobileNav', () => {
     });
   });
 
-  describe('AC7: Mobile Navigation Sync - Insights', () => {
-    it('shows Insights section in mobile nav (per Story 1.5-8 AC7)', async () => {
+  describe('Insights Mobile Navigation (Story 8-5)', () => {
+    it('shows Insights section in mobile nav', async () => {
       const user = userEvent.setup();
       renderWithRouter(<MobileNav />);
 
@@ -239,7 +239,7 @@ describe('MobileNav', () => {
       });
     });
 
-    it('Insights section shows Coming Soon label', async () => {
+    it('Insights button does NOT have Coming Soon badge (removed in Story 8-5)', async () => {
       const user = userEvent.setup();
       renderWithRouter(<MobileNav />);
 
@@ -248,11 +248,11 @@ describe('MobileNav', () => {
 
       await waitFor(() => {
         const insightsButton = screen.getByRole('button', { name: /insights/i });
-        expect(insightsButton.textContent).toContain('Coming Soon');
+        expect(insightsButton.textContent).not.toContain('Coming Soon');
       });
     });
 
-    it('expands Insights submenu when clicked and shows disabled items', async () => {
+    it('expands Insights submenu with clickable links and one Coming Soon item', async () => {
       const user = userEvent.setup();
       renderWithRouter(<MobileNav />);
 
@@ -264,11 +264,33 @@ describe('MobileNav', () => {
       const insightsButton = await screen.findByRole('button', { name: /insights/i });
       await user.click(insightsButton);
 
-      // Submenu items should be visible but disabled
+      // Active items render as links
       await waitFor(() => {
-        expect(screen.getByText(/skills map/i)).toBeInTheDocument();
-        expect(screen.getByText(/trends/i)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /labour force overview/i })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /skills map/i })).toBeInTheDocument();
+        // Note: "Trends" text also appears in the link
+        const trendLinks = screen.getAllByText(/trends/i).filter(
+          el => el.closest('a') !== null
+        );
+        expect(trendLinks.length).toBeGreaterThanOrEqual(1);
+        // Reports is still Coming Soon (disabled)
         expect(screen.getByText(/reports/i)).toBeInTheDocument();
+      });
+    });
+
+    it('Insights clickable links navigate to correct routes', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<MobileNav />);
+
+      const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
+      await user.click(menuButton);
+
+      const insightsButton = await screen.findByRole('button', { name: /insights/i });
+      await user.click(insightsButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('link', { name: /labour force overview/i })).toHaveAttribute('href', '/insights');
+        expect(screen.getByRole('link', { name: /skills map/i })).toHaveAttribute('href', '/insights/skills');
       });
     });
   });

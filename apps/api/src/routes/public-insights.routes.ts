@@ -46,5 +46,6 @@ const publicInsightsRateLimit = rateLimit({
 
 // NO auth middleware — public endpoint
 router.get('/', publicInsightsRateLimit, PublicInsightsController.getInsights);
+router.get('/trends', publicInsightsRateLimit, PublicInsightsController.getTrends);
 
 export default router;

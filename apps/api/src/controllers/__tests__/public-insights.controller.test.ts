@@ -4,10 +4,12 @@ import type { Request, Response, NextFunction } from 'express';
 // ── Hoisted mock ──────────────────────────────────────────────────────
 
 const mockGetPublicInsights = vi.fn();
+const mockGetTrends = vi.fn();
 
 vi.mock('../../services/public-insights.service.js', () => ({
   PublicInsightsService: {
     getPublicInsights: (...args: unknown[]) => mockGetPublicInsights(...args),
+    getTrends: (...args: unknown[]) => mockGetTrends(...args),
   },
 }));
 
@@ -43,7 +45,7 @@ describe('PublicInsightsController', () => {
   });
 
   it('handles empty data gracefully', async () => {
-    const data = { totalRegistered: 0, lgasCovered: 0, genderSplit: [], topSkills: [] };
+    const data = { totalRegistered: 0, lgasCovered: 0, genderSplit: [], allSkills: [] };
     mockGetPublicInsights.mockResolvedValueOnce(data);
     const { mockReq, mockRes, mockNext, jsonMock } = makeMocks();
 
@@ -71,5 +73,32 @@ describe('PublicInsightsController', () => {
     await PublicInsightsController.getInsights(req, res, next);
     expect(jsonMock).toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('PublicInsightsController.getTrends', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('returns trends data in data envelope', async () => {
+    const data = { dailyRegistrations: [{ date: '2026-03-01', count: 25 }], employmentByWeek: [], totalDays: 1, lastUpdated: '2026-03-13T10:00:00.000Z' };
+    mockGetTrends.mockResolvedValueOnce(data);
+    const { mockReq, mockRes, mockNext, jsonMock } = makeMocks();
+
+    await PublicInsightsController.getTrends(mockReq, mockRes, mockNext);
+
+    expect(mockGetTrends).toHaveBeenCalledTimes(1);
+    expect(jsonMock).toHaveBeenCalledWith({ data });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('passes errors to next middleware', async () => {
+    const error = new Error('DB error');
+    mockGetTrends.mockRejectedValueOnce(error);
+    const { mockReq, mockRes, mockNext } = makeMocks();
+
+    await PublicInsightsController.getTrends(mockReq, mockRes, mockNext);
+    expect(mockNext).toHaveBeenCalledWith(error);
   });
 });

@@ -9,13 +9,14 @@
 import { Redis } from 'ioredis';
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
-import type { PublicInsightsData, SkillsFrequency } from '@oslsr/types';
+import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
 import { suppressSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
 
 const CACHE_KEY = 'analytics:public:insights';
+const TRENDS_CACHE_KEY = 'analytics:public:trends';
 const CACHE_TTL = 3600; // 1 hour
 const PUBLIC_MIN_N = 10; // Stricter suppression for public data
 
@@ -74,6 +75,7 @@ export class PublicInsightsService {
       genderRows,
       ageRows,
       skillRows,
+      desiredSkillRows,
       empRows,
       formalInformalRows,
       lgaRows,
@@ -140,7 +142,7 @@ export class PublicInsightsService {
         GROUP BY label ORDER BY label
       `),
 
-      // Top 10 skills
+      // All skills (no LIMIT — frontend slices for display)
       db.execute(sql`
         SELECT skill, COUNT(*) AS count
         FROM submissions s
@@ -151,7 +153,19 @@ export class PublicInsightsService {
           AND s.raw_data->>'skills_possessed' != ''
         GROUP BY skill
         ORDER BY count DESC
-        LIMIT 10
+      `),
+
+      // Desired skills (training_interest — want-to-learn)
+      db.execute(sql`
+        SELECT skill, COUNT(*) AS count
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id,
+             unnest(string_to_array(s.raw_data->>'training_interest', ' ')) AS skill
+        WHERE ${baseWhere}
+          AND s.raw_data->>'training_interest' IS NOT NULL
+          AND s.raw_data->>'training_interest' != ''
+        GROUP BY skill
+        ORDER BY count DESC
       `),
 
       // Employment breakdown
@@ -204,11 +218,24 @@ export class PublicInsightsService {
       (sum: number, r: any) => sum + Number(r.count), 0,
     );
 
-    const topSkills: SkillsFrequency[] = (skillRows.rows as Array<{ skill: string; count: string | number }>)
+    const allSkills: SkillsFrequency[] = (skillRows.rows as Array<{ skill: string; count: string | number }>)
       .map((r) => ({
         skill: String(r.skill),
         count: Number(r.count),
         percentage: skillsTotal > 0 ? Math.round((Number(r.count) / skillsTotal) * 1000) / 10 : 0,
+      }))
+      .filter((s) => s.count >= PUBLIC_MIN_N);
+
+    // Desired skills (training_interest)
+    const desiredTotal = (desiredSkillRows.rows as any[]).reduce(
+      (sum: number, r: any) => sum + Number(r.count), 0,
+    );
+
+    const desiredSkills: SkillsFrequency[] = (desiredSkillRows.rows as Array<{ skill: string; count: string | number }>)
+      .map((r) => ({
+        skill: String(r.skill),
+        count: Number(r.count),
+        percentage: desiredTotal > 0 ? Math.round((Number(r.count) / desiredTotal) * 1000) / 10 : 0,
       }))
       .filter((s) => s.count >= PUBLIC_MIN_N);
 
@@ -220,7 +247,8 @@ export class PublicInsightsService {
       lgasCovered: Number(summary?.lgas_covered ?? 0),
       genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as any, total), PUBLIC_MIN_N),
       ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as any, total), PUBLIC_MIN_N),
-      topSkills,
+      allSkills,
+      desiredSkills,
       employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as any, total), PUBLIC_MIN_N),
       formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as any, total), PUBLIC_MIN_N),
       businessOwnershipRate: meetsThreshold && summary?.biz_rate != null ? Number(summary.biz_rate) : null,
@@ -228,6 +256,100 @@ export class PublicInsightsService {
       youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
       lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as any, total), PUBLIC_MIN_N),
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Get daily registration trends for the last 90 days.
+   * Redis cached with 1-hour TTL. Days with count < PUBLIC_MIN_N return null.
+   */
+  static async getTrends(): Promise<PublicTrendsData> {
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const cached = await redis.get(TRENDS_CACHE_KEY);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (err) {
+        logger.warn({ event: 'public_trends.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    const data = await PublicInsightsService.computeTrends();
+
+    if (redis) {
+      try {
+        await redis.setex(TRENDS_CACHE_KEY, CACHE_TTL, JSON.stringify(data));
+      } catch (err) {
+        logger.warn({ event: 'public_trends.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return data;
+  }
+
+  private static async computeTrends(): Promise<PublicTrendsData> {
+    const [dailyResult, empResult] = await Promise.all([
+      db.execute(sql`
+        SELECT DATE(s.created_at AT TIME ZONE 'Africa/Lagos') AS date,
+               COUNT(*) AS count
+        FROM submissions s
+        WHERE s.raw_data IS NOT NULL
+          AND s.respondent_id IS NOT NULL
+          AND s.created_at >= NOW() - INTERVAL '90 days'
+        GROUP BY date
+        ORDER BY date ASC
+      `),
+      // Weekly employment type breakdown (AC#5)
+      db.execute(sql`
+        SELECT DATE_TRUNC('week', s.created_at AT TIME ZONE 'Africa/Lagos')::date AS week,
+               CASE
+                 WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
+                 WHEN s.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
+                 WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
+                 ELSE 'other'
+               END AS status,
+               COUNT(*) AS count
+        FROM submissions s
+        WHERE s.raw_data IS NOT NULL
+          AND s.respondent_id IS NOT NULL
+          AND s.created_at >= NOW() - INTERVAL '90 days'
+        GROUP BY week, status
+        ORDER BY week ASC
+      `),
+    ]);
+
+    const dailyRegistrations = (dailyResult.rows as Array<{ date: string; count: string | number }>)
+      .map((r) => ({
+        date: String(r.date),
+        count: Number(r.count) >= PUBLIC_MIN_N ? Number(r.count) : null,
+      }));
+
+    // Pivot employment rows into weekly points with per-cell suppression
+    const weekMap = new Map<string, EmploymentTrendPoint>();
+    for (const row of empResult.rows as Array<{ week: string; status: string; count: string | number }>) {
+      const week = String(row.week);
+      if (!weekMap.has(week)) {
+        weekMap.set(week, { week, employed: null, unemployedSeeking: null, temporarilyAbsent: null, other: null });
+      }
+      const point = weekMap.get(week)!;
+      const count = Number(row.count);
+      const val = count >= PUBLIC_MIN_N ? count : null;
+      switch (row.status) {
+        case 'employed': point.employed = val; break;
+        case 'unemployed_seeking': point.unemployedSeeking = val; break;
+        case 'temporarily_absent': point.temporarilyAbsent = val; break;
+        default: point.other = val; break;
+      }
+    }
+
+    return {
+      dailyRegistrations,
+      employmentByWeek: Array.from(weekMap.values()),
+      totalDays: dailyRegistrations.length,
+      lastUpdated: new Date().toISOString(),
     };
   }
 }

@@ -241,7 +241,8 @@ export interface PublicInsightsData {
   lgasCovered: number;
   genderSplit: FrequencyBucket[];
   ageDistribution: FrequencyBucket[];
-  topSkills: SkillsFrequency[];
+  allSkills: SkillsFrequency[];
+  desiredSkills: SkillsFrequency[];
   employmentBreakdown: FrequencyBucket[];
   formalInformalRatio: FrequencyBucket[];
   businessOwnershipRate: number | null;
@@ -249,4 +250,25 @@ export interface PublicInsightsData {
   youthEmploymentRate: number | null;
   gpi: number | null;
   lgaDensity: FrequencyBucket[];
+  lastUpdated: string;
+}
+
+export interface PublicTrendDataPoint {
+  date: string;
+  count: number | null;
+}
+
+export interface EmploymentTrendPoint {
+  week: string;
+  employed: number | null;
+  unemployedSeeking: number | null;
+  temporarilyAbsent: number | null;
+  other: number | null;
+}
+
+export interface PublicTrendsData {
+  dailyRegistrations: PublicTrendDataPoint[];
+  employmentByWeek: EmploymentTrendPoint[];
+  totalDays: number;
+  lastUpdated: string;
 }

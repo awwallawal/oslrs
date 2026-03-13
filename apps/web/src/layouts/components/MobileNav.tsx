@@ -185,7 +185,7 @@ function MobileNav() {
               </SheetClose>
             </div>
 
-            {/* Insights Section - per Story 1.5-8 AC6/AC7 */}
+            {/* Insights Section - Story 8-5: real routes + Reports Coming Soon */}
             <div className="px-4">
               <button
                 onClick={() => setInsightsExpanded(!insightsExpanded)}
@@ -193,12 +193,7 @@ function MobileNav() {
                 aria-expanded={insightsExpanded}
                 aria-controls="insights-submenu"
               >
-                <span className="flex items-center gap-2">
-                  Insights
-                  <span className="text-xs bg-neutral-100 text-neutral-500 px-1.5 py-0.5 rounded">
-                    Coming Soon
-                  </span>
-                </span>
+                <span>Insights</span>
                 {insightsExpanded ? (
                   <ChevronUp className="h-5 w-5" />
                 ) : (
@@ -209,15 +204,26 @@ function MobileNav() {
                 <ul id="insights-submenu" className="pl-4 space-y-1">
                   {insightsItems.map((item) => (
                     <li key={item.label}>
-                      <div
-                        className="block py-2 px-3 text-sm text-neutral-400 cursor-default rounded-md"
-                        aria-disabled="true"
-                      >
-                        <span className="flex items-center gap-2">
-                          {item.label}
-                          <span className="text-xs text-neutral-400">Coming Soon</span>
-                        </span>
-                      </div>
+                      {item.href ? (
+                        <SheetClose asChild>
+                          <Link
+                            to={item.href}
+                            className="block py-2 px-3 text-sm text-neutral-600 hover:text-primary-600 hover:bg-neutral-100 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                          >
+                            {item.label}
+                          </Link>
+                        </SheetClose>
+                      ) : (
+                        <div
+                          className="block py-2 px-3 text-sm text-neutral-400 cursor-default rounded-md"
+                          aria-disabled="true"
+                        >
+                          <span className="flex items-center gap-2">
+                            {item.label}
+                            <span className="text-xs text-neutral-400">Coming Soon</span>
+                          </span>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

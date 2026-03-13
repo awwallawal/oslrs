@@ -1,6 +1,6 @@
 # Story 8.5: Public Insights Page — Anonymized Labour Market Intelligence
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -42,9 +42,9 @@ So that I can understand workforce composition, skills distribution, and employm
 
 ### Backend
 
-- [ ] Task 0: Return all skills + desired skills from public insights endpoint (AC: #4)
-  - [ ] 0.1 In `apps/api/src/services/public-insights.service.ts`, remove `LIMIT 10` from the skills query (line ~154) so all skills above suppression threshold are returned
-  - [ ] 0.2 Add a new parallel query for `training_interest` (want-to-learn skills) using the same `unnest(string_to_array(...))` pattern:
+- [x] Task 0: Return all skills + desired skills from public insights endpoint (AC: #4)
+  - [x] 0.1 In `apps/api/src/services/public-insights.service.ts`, remove `LIMIT 10` from the skills query (line ~154) so all skills above suppression threshold are returned
+  - [x] 0.2 Add a new parallel query for `training_interest` (want-to-learn skills) using the same `unnest(string_to_array(...))` pattern:
     ```sql
     SELECT skill, COUNT(*) AS count
     FROM submissions s
@@ -56,13 +56,13 @@ So that I can understand workforce composition, skills distribution, and employm
     GROUP BY skill
     ORDER BY count DESC
     ```
-  - [ ] 0.3 Add `desiredSkills: SkillsFrequency[]` to `PublicInsightsData` in `packages/types/src/analytics.ts` — same shape as `topSkills`, with PUBLIC_MIN_N suppression
-  - [ ] 0.4 Rename `topSkills` field to `allSkills` in `PublicInsightsData` type and service return value (all skills returned, no LIMIT). Update `packages/types/src/index.ts` export if needed.
-  - [ ] 0.5 Write 3 additional backend tests: returns all skills (not just 10), desiredSkills populated from `training_interest`, suppression applied to both arrays
+  - [x] 0.3 Add `desiredSkills: SkillsFrequency[]` to `PublicInsightsData` in `packages/types/src/analytics.ts` — same shape as `topSkills`, with PUBLIC_MIN_N suppression
+  - [x] 0.4 Rename `topSkills` field to `allSkills` in `PublicInsightsData` type and service return value (all skills returned, no LIMIT). Update `packages/types/src/index.ts` export if needed.
+  - [x] 0.5 Write 3 additional backend tests: returns all skills (not just 10), desiredSkills populated from `training_interest`, suppression applied to both arrays
   - **IMPORTANT**: The survey form field is `training_interest` (NOT `skills_desired` or `skills_wanted`). Confirmed in `scripts/generate-xlsform.cjs:62` and `docs/questionnaire_schema.md:64`.
 
-- [ ] Task 1: Add trends endpoint to public insights backend (AC: #5, #10)
-  - [ ] 1.1 Add `getTrends()` method to `PublicInsightsService` in `apps/api/src/services/public-insights.service.ts`:
+- [x] Task 1: Add trends endpoint to public insights backend (AC: #5, #10)
+  - [x] 1.1 Add `getTrends()` method to `PublicInsightsService` in `apps/api/src/services/public-insights.service.ts`:
     ```sql
     SELECT DATE(s.created_at AT TIME ZONE 'Africa/Lagos') AS date,
            COUNT(*) AS count
@@ -73,21 +73,21 @@ So that I can understand workforce composition, skills distribution, and employm
     GROUP BY date
     ORDER BY date ASC
     ```
-  - [ ] 1.2 Apply suppression: days with count < 10 return `null` count (consistent with PUBLIC_MIN_N=10)
-  - [ ] 1.3 Cache result in Redis with key `analytics:public:trends`, TTL 3600s (same as insights)
-  - [ ] 1.4 Define `PublicTrendDataPoint` type in `packages/types/src/analytics.ts`: `{ date: string; count: number | null }`
-  - [ ] 1.5 Define `PublicTrendsData` type: `{ dailyRegistrations: PublicTrendDataPoint[]; totalDays: number }`
-  - [ ] 1.6 Export new types from `packages/types/src/index.ts`
+  - [x] 1.2 Apply suppression: days with count < 10 return `null` count (consistent with PUBLIC_MIN_N=10)
+  - [x] 1.3 Cache result in Redis with key `analytics:public:trends`, TTL 3600s (same as insights)
+  - [x] 1.4 Define `PublicTrendDataPoint` type in `packages/types/src/analytics.ts`: `{ date: string; count: number | null }`
+  - [x] 1.5 Define `PublicTrendsData` type: `{ dailyRegistrations: PublicTrendDataPoint[]; totalDays: number }`
+  - [x] 1.6 Export new types from `packages/types/src/index.ts`
 
-- [ ] Task 2: Add trends route to `apps/api/src/routes/public-insights.routes.ts` (AC: #10)
-  - [ ] 2.1 Add `GET /trends` route with same rate limiter as the main `/` endpoint
-  - [ ] 2.2 Create `getTrends` handler in `apps/api/src/controllers/public-insights.controller.ts`
-  - [ ] 2.3 Write 5 backend tests: 200 response shape, empty data, suppression of small days, rate limiting, cache hit/miss
+- [x] Task 2: Add trends route to `apps/api/src/routes/public-insights.routes.ts` (AC: #10)
+  - [x] 2.1 Add `GET /trends` route with same rate limiter as the main `/` endpoint
+  - [x] 2.2 Create `getTrends` handler in `apps/api/src/controllers/public-insights.controller.ts`
+  - [x] 2.3 Write 5 backend tests: 200 response shape, empty data, suppression of small days, rate limiting, cache hit/miss
 
 ### Frontend — Feature Scaffold
 
-- [ ] Task 3: Create insights feature module (AC: #1, #2, #9)
-  - [ ] 3.1 Create `apps/web/src/features/insights/` directory structure:
+- [x] Task 3: Create insights feature module (AC: #1, #2, #9)
+  - [x] 3.1 Create `apps/web/src/features/insights/` directory structure:
     ```
     features/insights/
       api/publicInsights.api.ts
@@ -106,7 +106,7 @@ So that I can understand workforce composition, skills distribution, and employm
         StatCard.tsx
         SkillsGapChart.tsx
     ```
-  - [ ] 3.2 Create `publicInsights.api.ts` — fetch from `/public/insights` and `/public/insights/trends` using `apiClient` WITHOUT auth headers:
+  - [x] 3.2 Create `publicInsights.api.ts` — fetch from `/public/insights` and `/public/insights/trends` using `apiClient` WITHOUT auth headers:
     ```ts
     import { apiClient } from '../../../lib/api-client';
     import type { PublicInsightsData, PublicTrendsData } from '@oslsr/types';
@@ -124,7 +124,7 @@ So that I can understand workforce composition, skills distribution, and employm
     }
     ```
     **VERIFIED**: `apiClient` works without auth token. `getAuthHeaders()` in `api-client.ts:26-29` returns `{}` when no token exists in sessionStorage — no Authorization header is sent. Marketplace already uses this pattern for unauthenticated requests (`/marketplace/search`, `/marketplace/profiles/:id`). No need for a separate `publicApiClient`.
-  - [ ] 3.3 Create `usePublicInsights.ts` — TanStack Query hooks:
+  - [x] 3.3 Create `usePublicInsights.ts` — TanStack Query hooks:
     ```ts
     export function usePublicInsights() {
       return useQuery({
@@ -145,54 +145,54 @@ So that I can understand workforce composition, skills distribution, and employm
 
 ### Frontend — Main Insights Page
 
-- [ ] Task 4: Create `AnimatedCounter` component (AC: #1)
-  - [ ] 4.1 Implement CSS-only counter animation using `requestAnimationFrame` — count from 0 to target value over ~1.5s with easing. No external animation library.
-  - [ ] 4.2 Accept props: `value: number`, `duration?: number`, `prefix?: string`, `suffix?: string`
-  - [ ] 4.3 Format large numbers with locale separators (e.g., 1,234)
-  - [ ] 4.4 Write 3 component tests: renders final value, renders prefix/suffix, handles zero
+- [x] Task 4: Create `AnimatedCounter` component (AC: #1)
+  - [x] 4.1 Implement CSS-only counter animation using `requestAnimationFrame` — count from 0 to target value over ~1.5s with easing. No external animation library.
+  - [x] 4.2 Accept props: `value: number`, `duration?: number`, `prefix?: string`, `suffix?: string`
+  - [x] 4.3 Format large numbers with locale separators (e.g., 1,234)
+  - [x] 4.4 Write 3 component tests: renders final value, renders prefix/suffix, handles zero
 
-- [ ] Task 5: Create `StatCard` component (AC: #1)
-  - [ ] 5.1 Card with icon, label, `AnimatedCounter` value, optional subtitle
-  - [ ] 5.2 Use existing shadcn Card component
-  - [ ] 5.3 Responsive: 2-column grid on mobile, 4-column on desktop
-  - [ ] 5.4 Write 2 component tests: renders label + value, renders optional subtitle
+- [x] Task 5: Create `StatCard` component (AC: #1)
+  - [x] 5.1 Card with icon, label, `AnimatedCounter` value, optional subtitle
+  - [x] 5.2 Use existing shadcn Card component
+  - [x] 5.3 Responsive: 2-column grid on mobile, 4-column on desktop
+  - [x] 5.4 Write 2 component tests: renders label + value, renders optional subtitle
 
-- [ ] Task 6: Create `PublicInsightsPage` (AC: #1, #2, #6, #7, #9)
-  - [ ] 6.1 Hero section: maroon gradient background, white text, "Oyo State Labour Force at a Glance" heading, 4 `StatCard` components (totalRegistered, lgasCovered, GPI, youthEmploymentRate)
-  - [ ] 6.2 Demographics section: `PublicDemographicsSection` — gender pie chart (recharts PieChart), age bar chart (recharts BarChart)
-  - [ ] 6.3 Employment section: `PublicEmploymentSection` — employment status donut (PieChart with inner radius), formal/informal stat cards, unemployment estimate card
-  - [ ] 6.4 Skills section: `PublicSkillsChart` — top 10 skills horizontal BarChart (slice `allSkills.slice(0, 10)` client-side), "View all skills →" link to `/insights/skills`
-  - [ ] 6.5 Geographic section: `PublicLgaTable` — sortable table of LGAs by registration count (top 10, expandable). No map — LGA choropleth out of scope (requires GeoJSON boundary files not yet available; can be added as a future enhancement when boundary data is sourced).
-  - [ ] 6.6 Methodology section: `MethodologyNote` — sample size, collection method, hourly refresh, data suppression notice
-  - [ ] 6.7 Set `useDocumentTitle('Labour Market Insights')` (hook auto-appends base title suffix — do NOT include "OSLRS" in the argument)
-  - [ ] 6.8 Handle loading state with content-shaped skeletons (not spinner)
-  - [ ] 6.9 Handle error state with retry button
-  - [ ] 6.10 Filter out suppressed buckets (where `suppressed === true` or `count === null`) before passing to charts
-  - [ ] 6.11 Write 8 component tests: renders hero stats, renders charts, handles loading, handles error, handles suppressed data, responsive layout, document title, methodology section
+- [x] Task 6: Create `PublicInsightsPage` (AC: #1, #2, #6, #7, #9)
+  - [x] 6.1 Hero section: maroon gradient background, white text, "Oyo State Labour Force at a Glance" heading, 4 `StatCard` components (totalRegistered, lgasCovered, GPI, youthEmploymentRate)
+  - [x] 6.2 Demographics section: `PublicDemographicsSection` — gender pie chart (recharts PieChart), age bar chart (recharts BarChart)
+  - [x] 6.3 Employment section: `PublicEmploymentSection` — employment status donut (PieChart with inner radius), formal/informal stat cards, unemployment estimate card
+  - [x] 6.4 Skills section: `PublicSkillsChart` — top 10 skills horizontal BarChart (slice `allSkills.slice(0, 10)` client-side), "View all skills →" link to `/insights/skills`
+  - [x] 6.5 Geographic section: `PublicLgaTable` — sortable table of LGAs by registration count (top 10, expandable). No map — LGA choropleth out of scope (requires GeoJSON boundary files not yet available; can be added as a future enhancement when boundary data is sourced).
+  - [x] 6.6 Methodology section: `MethodologyNote` — sample size, collection method, hourly refresh, data suppression notice
+  - [x] 6.7 Set `useDocumentTitle('Labour Market Insights')` (hook auto-appends base title suffix — do NOT include "OSLRS" in the argument)
+  - [x] 6.8 Handle loading state with content-shaped skeletons (not spinner)
+  - [x] 6.9 Handle error state with retry button
+  - [x] 6.10 Filter out suppressed buckets (where `suppressed === true` or `count === null`) before passing to charts
+  - [x] 6.11 Write 8 component tests: renders hero stats, renders charts, handles loading, handles error, handles suppressed data, responsive layout, document title, methodology section
 
 ### Frontend — Sub-Pages
 
-- [ ] Task 7: Create `SkillsMapPage` at `/insights/skills` (AC: #4)
-  - [ ] 7.1 Full skills horizontal bar chart (all skills from `allSkills` — backend now returns complete list, no LIMIT 10)
-  - [ ] 7.2 Skills grouped by ISCO-08 category (if category metadata available from spec, else flat list with category labels)
-  - [ ] 7.3 Skills gap diverging bar chart: left bars = `allSkills` (have), right bars = `desiredSkills` (want-to-learn). Match skills by name. Use diverging horizontal bar pattern (green for have, amber for want). If `desiredSkills` is empty, show "No training interest data yet" placeholder instead of broken chart.
-  - [ ] 7.4 Set `useDocumentTitle('Skills Distribution')`
-  - [ ] 7.5 Back link to `/insights`
-  - [ ] 7.6 Reuse `usePublicInsights()` hook (same data, different visualization)
-  - [ ] 7.7 Write 6 component tests: renders all skills, loading state, error state, back navigation, skills gap chart renders, empty desiredSkills placeholder
+- [x] Task 7: Create `SkillsMapPage` at `/insights/skills` (AC: #4)
+  - [x] 7.1 Full skills horizontal bar chart (all skills from `allSkills` — backend now returns complete list, no LIMIT 10)
+  - [x] 7.2 Skills grouped by ISCO-08 category (if category metadata available from spec, else flat list with category labels)
+  - [x] 7.3 Skills gap diverging bar chart: left bars = `allSkills` (have), right bars = `desiredSkills` (want-to-learn). Match skills by name. Use diverging horizontal bar pattern (green for have, amber for want). If `desiredSkills` is empty, show "No training interest data yet" placeholder instead of broken chart.
+  - [x] 7.4 Set `useDocumentTitle('Skills Distribution')`
+  - [x] 7.5 Back link to `/insights`
+  - [x] 7.6 Reuse `usePublicInsights()` hook (same data, different visualization)
+  - [x] 7.7 Write 6 component tests: renders all skills, loading state, error state, back navigation, skills gap chart renders, empty desiredSkills placeholder
 
-- [ ] Task 8: Create `TrendsPage` at `/insights/trends` (AC: #5)
-  - [ ] 8.1 Cumulative registration area chart (recharts AreaChart) from `dailyRegistrations`
-  - [ ] 8.2 Compute cumulative sum client-side from daily counts
-  - [ ] 8.3 Set `useDocumentTitle('Registration Trends')`
-  - [ ] 8.4 Back link to `/insights`
-  - [ ] 8.5 Handle suppressed days (null count) by interpolating or showing gap
-  - [ ] 8.6 Write 4 component tests: renders chart, loading state, cumulative computation, suppressed days
+- [x] Task 8: Create `TrendsPage` at `/insights/trends` (AC: #5)
+  - [x] 8.1 Cumulative registration area chart (recharts AreaChart) from `dailyRegistrations`
+  - [x] 8.2 Compute cumulative sum client-side from daily counts
+  - [x] 8.3 Set `useDocumentTitle('Registration Trends')`
+  - [x] 8.4 Back link to `/insights`
+  - [x] 8.5 Handle suppressed days (null count) by interpolating or showing gap
+  - [x] 8.6 Write 4 component tests: renders chart, loading state, cumulative computation, suppressed days
 
 ### Frontend — Routing & Navigation
 
-- [ ] Task 9: Update navbar to link to real Insights routes (AC: #3)
-  - [ ] 9.1 In `apps/web/src/layouts/components/NavDropdown.tsx`, update `insightsItems` array:
+- [x] Task 9: Update navbar to link to real Insights routes (AC: #3)
+  - [x] 9.1 In `apps/web/src/layouts/components/NavDropdown.tsx`, update `insightsItems` array:
     ```ts
     const insightsItems = [
       { label: 'Labour Force Overview', description: 'Key workforce statistics at a glance', href: '/insights' },
@@ -201,21 +201,21 @@ So that I can understand workforce composition, skills distribution, and employm
       { label: 'Reports', description: 'Detailed statistical reports', comingSoon: true },
     ];
     ```
-  - [ ] 9.2 Update the rendering logic to use `<Link>` for items with `href` and the disabled "Coming Soon" div for items with `comingSoon: true`
-  - [ ] 9.3 Update `NavDropdown.test.tsx`: adjust `insightsItems.length` assertion (still 4), update Coming Soon test (only 1 now — Reports), add test for clickable links
-  - [ ] 9.4 Update `MobileNav.tsx` — Insights items DO appear in mobile nav (imported from NavDropdown):
-    - [ ] 9.4a Remove the hardcoded "Coming Soon" badge from the parent `<button>` at line 198-200 (Insights is no longer Coming Soon)
-    - [ ] 9.4b Replace the all-disabled rendering loop (lines 210-222) with conditional logic: items with `href` render as `<SheetClose asChild><Link to={item.href}>` (same pattern as support items), items with `comingSoon: true` keep the disabled `<div>` rendering
-    - [ ] 9.4c Update `MobileNav.test.tsx`: Coming Soon badge removed from parent, only "Reports" remains Coming Soon, clickable links navigate correctly
+  - [x] 9.2 Update the rendering logic to use `<Link>` for items with `href` and the disabled "Coming Soon" div for items with `comingSoon: true`
+  - [x] 9.3 Update `NavDropdown.test.tsx`: adjust `insightsItems.length` assertion (still 4), update Coming Soon test (only 1 now — Reports), add test for clickable links
+  - [x] 9.4 Update `MobileNav.tsx` — Insights items DO appear in mobile nav (imported from NavDropdown):
+    - [x] 9.4a Remove the hardcoded "Coming Soon" badge from the parent `<button>` at line 198-200 (Insights is no longer Coming Soon)
+    - [x] 9.4b Replace the all-disabled rendering loop (lines 210-222) with conditional logic: items with `href` render as `<SheetClose asChild><Link to={item.href}>` (same pattern as support items), items with `comingSoon: true` keep the disabled `<div>` rendering
+    - [x] 9.4c Update `MobileNav.test.tsx`: Coming Soon badge removed from parent, only "Reports" remains Coming Soon, clickable links navigate correctly
 
-- [ ] Task 10: Add Insights routes to `App.tsx` (AC: #3)
-  - [ ] 10.1 Add lazy imports:
+- [x] Task 10: Add Insights routes to `App.tsx` (AC: #3)
+  - [x] 10.1 Add lazy imports:
     ```ts
     const PublicInsightsPage = lazy(() => import('./features/insights/pages/PublicInsightsPage'));
     const SkillsMapPage = lazy(() => import('./features/insights/pages/SkillsMapPage'));
     const TrendsPage = lazy(() => import('./features/insights/pages/TrendsPage'));
     ```
-  - [ ] 10.2 Add routes inside the `<Route element={<PublicLayout />}>` block, AFTER the marketplace routes:
+  - [x] 10.2 Add routes inside the `<Route element={<PublicLayout />}>` block, AFTER the marketplace routes:
     ```tsx
     {/* Insights — public analytics (Story 8-5) */}
     <Route path="insights">
@@ -224,7 +224,28 @@ So that I can understand workforce composition, skills distribution, and employm
       <Route path="trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendsPage /></Suspense>} />
     </Route>
     ```
-  - [ ] 10.3 Verify no route collision with existing paths
+  - [x] 10.3 Verify no route collision with existing paths
+
+### Review Follow-ups — Round 1 (AI)
+
+- [x] [AI-Review][CRITICAL] C-1: Fix 6 TypeScript compilation errors in recharts Tooltip/Pie label callbacks [PublicDemographicsSection.tsx:35, PublicEmploymentSection.tsx:45, PublicSkillsChart.tsx:31, SkillsMapPage.tsx:64, TrendsPage.tsx:75-76]
+- [x] [AI-Review][HIGH] H-1: Implement employment type breakdown over time chart on TrendsPage — AC#5 requires both cumulative curve AND employment breakdown [TrendsPage.tsx, public-insights.service.ts]
+- [x] [AI-Review][HIGH] H-2: Add last-updated badge to MethodologyNote — AC#6 requires a timestamp of when data was last refreshed [MethodologyNote.tsx, public-insights.service.ts]
+- [x] [AI-Review][HIGH] H-3: Handle null GPI/youthEmploymentRate in stat cards — show N/A instead of misleading 0% [PublicInsightsPage.tsx:92,99, StatCard.tsx]
+- [x] [AI-Review][MEDIUM] M-1: Convert SkillsGapChart from grouped bars to diverging bar pattern per AC#4 spec [SkillsGapChart.tsx]
+- [x] [AI-Review][MEDIUM] M-2: Fix TrendsPage test recharts mock leaking SVG warnings into jsdom [TrendsPage.test.tsx:29]
+- [x] [AI-Review][MEDIUM] M-3: Extract duplicated formatLabel/formatSkill to shared utility — 5 copies across components [features/insights/utils/chart-utils.ts]
+- [x] [AI-Review][LOW] L-1: Extract duplicated COLORS array to shared constants [PublicDemographicsSection.tsx, PublicEmploymentSection.tsx]
+- [x] [AI-Review][LOW] L-2: Add ISCO-08 category grouping note/placeholder on SkillsMapPage [SkillsMapPage.tsx]
+
+### Review Follow-ups — Round 2 (AI)
+
+- [x] [AI-Review][HIGH] H-1: AC#6 violation — MethodologyNote missing from SkillsMapPage and TrendsPage. Added MethodologyNote to both sub-pages. TrendsPage now also calls usePublicInsights() for totalRegistered. [SkillsMapPage.tsx, TrendsPage.tsx]
+- [x] [AI-Review][HIGH] H-2: Review follow-up items (Round 1) fixed but not marked [x] — created false impression of unresolved issues. Marked all as [x].
+- [x] [AI-Review][MEDIUM] M-1: sprint-status.yaml modified but not in story File List — added to File List below.
+- [x] [AI-Review][MEDIUM] M-2: No test for PublicLgaTable expand/collapse — added expand/collapse test to PublicInsightsPage.test.tsx.
+- [x] [AI-Review][MEDIUM] M-3: Story task descriptions out of sync — PublicTrendsData type (Task 1.5) now includes employmentByWeek + lastUpdated; Task 2.3 test distribution differs from description. Noted as documentation drift.
+- [x] [AI-Review][LOW] L-1: AnimatedCounter doesn't guard against non-positive values — added guard for negative/NaN values. [AnimatedCounter.tsx]
 
 ## Dev Notes
 
@@ -327,4 +348,53 @@ Claude Opus 4.6
 
 ### Completion Notes List
 
+- Task 0: Removed LIMIT 10 from skills query, added `training_interest` extraction for `desiredSkills`, renamed `topSkills` → `allSkills` in type + service + tests. 3 new service tests (all skills, desiredSkills populated, dual suppression).
+- Task 1-2: Added `getTrends()` service method (90-day daily registrations, suppression, Redis cache), controller handler, route with rate limiter. 5 new backend tests (3 service + 2 controller). New types `PublicTrendDataPoint` and `PublicTrendsData`.
+- Task 3: Created `features/insights/` module: API client, TanStack Query hooks (`usePublicInsights`, `usePublicTrends`), directory structure.
+- Task 4-5: AnimatedCounter (requestAnimationFrame, easeOutCubic, locale formatting) and StatCard (icon + label + animated value + optional subtitle). 5 component tests.
+- Task 6: PublicInsightsPage — hero with gradient + 4 stat cards, Demographics (gender pie + age bar), Employment (donut + formal/informal cards + unemployment), Skills (top 10 horizontal bar + link to /insights/skills), LGA table (sortable, expandable), Methodology footer. 8 page tests.
+- Task 7: SkillsMapPage — full skills bar chart + SkillsGapChart (diverging bar: have vs want-to-learn). Back link. Empty desiredSkills placeholder. 6 page tests.
+- Task 8: TrendsPage — cumulative area chart from daily registrations. Client-side cumulative sum. Suppressed days contribute 0. 4 page tests.
+- Task 9: Updated NavDropdown insightsItems (3 active links + 1 Coming Soon: Reports), mixed rendering (Link for href, disabled div for comingSoon). Updated MobileNav (removed Coming Soon badge from parent, conditional Link vs disabled rendering). Updated NavDropdown.test.tsx and MobileNav.test.tsx.
+- Task 10: Added lazy imports and routes for PublicInsightsPage, SkillsMapPage, TrendsPage in App.tsx under PublicLayout `insights` path.
+
+### Change Log
+
+- 2026-03-13: Story 8.5 implementation complete. All 10 tasks done. Backend: 8 new tests (3 all-skills, 2 desiredSkills, 3 trends). Frontend: ~37 new tests. Total new tests: ~45.
+- 2026-03-13: Code review round 2 — fixed 6 issues: AC#6 MethodologyNote added to SkillsMapPage/TrendsPage, LGA table expand/collapse test, AnimatedCounter guard, marked round 1 follow-ups as [x], added sprint-status.yaml to File List. 3 new tests added (2 methodology, 1 LGA expand).
+
 ### File List
+
+**New files:**
+- apps/web/src/features/insights/api/publicInsights.api.ts
+- apps/web/src/features/insights/hooks/usePublicInsights.ts
+- apps/web/src/features/insights/components/AnimatedCounter.tsx
+- apps/web/src/features/insights/components/StatCard.tsx
+- apps/web/src/features/insights/components/PublicDemographicsSection.tsx
+- apps/web/src/features/insights/components/PublicEmploymentSection.tsx
+- apps/web/src/features/insights/components/PublicSkillsChart.tsx
+- apps/web/src/features/insights/components/PublicLgaTable.tsx
+- apps/web/src/features/insights/components/MethodologyNote.tsx
+- apps/web/src/features/insights/components/SkillsGapChart.tsx
+- apps/web/src/features/insights/pages/PublicInsightsPage.tsx
+- apps/web/src/features/insights/pages/SkillsMapPage.tsx
+- apps/web/src/features/insights/pages/TrendsPage.tsx
+- apps/web/src/features/insights/components/__tests__/AnimatedCounter.test.tsx
+- apps/web/src/features/insights/components/__tests__/StatCard.test.tsx
+- apps/web/src/features/insights/pages/__tests__/PublicInsightsPage.test.tsx
+- apps/web/src/features/insights/pages/__tests__/SkillsMapPage.test.tsx
+- apps/web/src/features/insights/pages/__tests__/TrendsPage.test.tsx
+
+**Modified files:**
+- packages/types/src/analytics.ts (renamed topSkills→allSkills, added desiredSkills, PublicTrendDataPoint, PublicTrendsData)
+- apps/api/src/services/public-insights.service.ts (removed LIMIT 10, added training_interest query, getTrends method, TRENDS_CACHE_KEY)
+- apps/api/src/controllers/public-insights.controller.ts (added getTrends handler)
+- apps/api/src/routes/public-insights.routes.ts (added GET /trends route)
+- apps/api/src/services/__tests__/public-insights.service.test.ts (updated topSkills→allSkills, added 6 new tests)
+- apps/api/src/controllers/__tests__/public-insights.controller.test.ts (updated topSkills→allSkills, added 2 trends tests)
+- apps/web/src/layouts/components/NavDropdown.tsx (updated insightsItems: 3 active + 1 Coming Soon, mixed Link/div rendering)
+- apps/web/src/layouts/components/NavDropdown.test.tsx (updated insightsItems assertions)
+- apps/web/src/layouts/components/MobileNav.tsx (removed Coming Soon badge, conditional Link vs disabled rendering)
+- apps/web/src/layouts/components/MobileNav.test.tsx (updated Insights section tests)
+- apps/web/src/App.tsx (added lazy imports + routes for insights pages)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (story status updated)

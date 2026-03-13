@@ -141,6 +141,10 @@ const SurveyAnalyticsPage = lazy(() => import('./features/dashboard/pages/Survey
 // Story 8-3: Field Team Analytics (Supervisor, Enumerator)
 const SupervisorAnalyticsPage = lazy(() => import('./features/dashboard/pages/SupervisorAnalyticsPage'));
 const EnumeratorStatsPage = lazy(() => import('./features/dashboard/pages/EnumeratorStatsPage'));
+// Story 8-5: Public Insights pages
+const PublicInsightsPage = lazy(() => import('./features/insights/pages/PublicInsightsPage'));
+const SkillsMapPage = lazy(() => import('./features/insights/pages/SkillsMapPage'));
+const InsightsTrendsPage = lazy(() => import('./features/insights/pages/TrendsPage'));
 // prep-3: 404 pages
 const NotFoundPage = lazy(() => import('./features/dashboard/pages/NotFoundPage'));
 const PublicNotFoundPage = lazy(() => import('./pages/PublicNotFoundPage'));
@@ -457,6 +461,13 @@ function App() {
                     </Suspense>
                   }
                 />
+              </Route>
+
+              {/* Insights — public analytics (Story 8-5) */}
+              <Route path="insights">
+                <Route index element={<Suspense fallback={<PageLoadingFallback />}><PublicInsightsPage /></Suspense>} />
+                <Route path="skills" element={<Suspense fallback={<PageLoadingFallback />}><SkillsMapPage /></Suspense>} />
+                <Route path="trends" element={<Suspense fallback={<PageLoadingFallback />}><InsightsTrendsPage /></Suspense>} />
               </Route>
 
               {/* Public Staff Verification */}

@@ -17,4 +17,13 @@ export class PublicInsightsController {
       next(error);
     }
   }
+
+  static async getTrends(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await PublicInsightsService.getTrends();
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
