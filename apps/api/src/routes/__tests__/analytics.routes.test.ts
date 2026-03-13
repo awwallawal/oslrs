@@ -31,6 +31,10 @@ vi.mock('../../controllers/verification-analytics.controller.js', () => ({
 
 const { default: router } = await import('../analytics.routes.js');
 
+// Capture mock calls immediately after import — mockReset: true in base config
+// clears mock.calls before each test, so we must snapshot them here.
+const authorizeCalls = [...mockAuthorize.mock.calls];
+
 describe('Analytics Routes', () => {
   const routes = router.stack
     .filter((layer: { route?: { path: string; methods: Record<string, boolean> } }) => layer.route)
@@ -60,8 +64,8 @@ describe('Analytics Routes', () => {
   });
 
   it('verification-pipeline authorize restricts to super_admin, verification_assessor, government_official', () => {
-    // The route-level authorize call (2nd call after the router.use global authorize)
-    const vpAuthorizeCall = mockAuthorize.mock.calls.find(
+    // Use snapshotted calls — mockReset clears mock.calls before each test
+    const vpAuthorizeCall = authorizeCalls.find(
       (args: string[]) =>
         args.includes('super_admin') &&
         args.includes('verification_assessor') &&
