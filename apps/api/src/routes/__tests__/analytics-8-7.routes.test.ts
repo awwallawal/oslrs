@@ -186,8 +186,8 @@ describe('getPolicyBrief controller handler (Gaps 3-5)', () => {
     expect(next).toHaveBeenCalledTimes(1);
     const error = next.mock.calls[0][0] as any;
     expect(error.message).toMatch(/rate limit/i);
-    // The controller passes 429 as the first arg to AppError (becomes .code)
-    expect(String(error.code)).toBe('429');
+    expect(error.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(error.statusCode).toBe(429);
   });
 
   // Gap 4: 400 threshold guard — insufficient submissions
@@ -201,7 +201,8 @@ describe('getPolicyBrief controller handler (Gaps 3-5)', () => {
     expect(next).toHaveBeenCalledTimes(1);
     const error = next.mock.calls[0][0] as any;
     expect(error.message).toMatch(/insufficient data/i);
-    expect(String(error.code)).toBe('400');
+    expect(error.code).toBe('INSUFFICIENT_DATA');
+    expect(error.statusCode).toBe(400);
   });
 
   // Gap 5: PDF response headers on success
