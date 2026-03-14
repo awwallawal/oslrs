@@ -8,9 +8,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { SurveyAnalyticsService } from '../services/survey-analytics.service.js';
+import { PolicyBriefService } from '../services/policy-brief.service.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import type { AnalyticsQueryParams } from '@oslsr/types';
 import { CrossTabDimension, CrossTabMeasure } from '@oslsr/types';
+import { AppError } from '@oslsr/utils';
 
 const dateParam = z.string().refine(
   (val) => /^\d{4}-\d{2}-\d{2}/.test(val) && !isNaN(Date.parse(val)),
@@ -156,6 +158,85 @@ export class AnalyticsController {
       const parsed = analyticsQuerySchema.parse(req.query);
       const data = await SurveyAnalyticsService.getSkillsInventory(getScope(req), getParams(parsed));
       res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Story 8.7: Inferential insights
+  static async getInsights(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getInferentialInsights(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Story 8.7: Extended equity metrics
+  static async getEquity(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getExtendedEquity(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Story 8.7: Activation status (lightweight — all roles)
+  static async getActivationStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await SurveyAnalyticsService.getActivationStatus(getScope(req));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Story 8.7: Policy brief PDF export
+  /** Rate tracking: Map<userId, timestamp[]> for in-memory rate limiting (5/hr) */
+  private static pdfRateMap = new Map<string, number[]>();
+
+  static async getPolicyBrief(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const userId = req.user?.sub || 'anonymous';
+
+      // Per-user rate limit: 5 per hour
+      const now = Date.now();
+      const oneHourAgo = now - 3600_000;
+      const userRequests = (AnalyticsController.pdfRateMap.get(userId) || []).filter(t => t > oneHourAgo);
+      if (userRequests.length >= 5) {
+        throw new AppError(429, 'Rate limit exceeded. Maximum 5 policy brief exports per hour.');
+      }
+
+      // Periodic cleanup: evict stale entries (no requests in last hour)
+      if (AnalyticsController.pdfRateMap.size > 100) {
+        for (const [key, timestamps] of AnalyticsController.pdfRateMap) {
+          if (timestamps.every(t => t <= oneHourAgo)) {
+            AnalyticsController.pdfRateMap.delete(key);
+          }
+        }
+      }
+
+      // Threshold guard
+      const activationStatus = await SurveyAnalyticsService.getActivationStatus(getScope(req));
+      if (activationStatus.totalSubmissions < 100) {
+        throw new AppError(400, 'Insufficient data for policy brief (need >= 100 submissions)');
+      }
+
+      const pdfBuffer = await PolicyBriefService.generatePolicyBrief(getScope(req), getParams(parsed));
+
+      // Increment rate counter AFTER successful generation (M-1 fix)
+      userRequests.push(now);
+      AnalyticsController.pdfRateMap.set(userId, userRequests);
+
+      const date = new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="oslrs-policy-brief-${date}.pdf"`);
+      res.send(pdfBuffer);
     } catch (error) {
       next(error);
     }

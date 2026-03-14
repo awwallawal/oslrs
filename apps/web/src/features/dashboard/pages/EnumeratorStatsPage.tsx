@@ -12,6 +12,7 @@ import PersonalSkillsChart from '../components/charts/PersonalSkillsChart';
 import CompletionTimeComparison from '../components/charts/CompletionTimeComparison';
 import DataQualityScorecard from '../components/charts/DataQualityScorecard';
 import RespondentDiversityChart from '../components/charts/RespondentDiversityChart';
+import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
 
 export default function EnumeratorStatsPage() {
   const [activeTab, setActiveTab] = useState('performance');
@@ -100,6 +101,7 @@ export default function EnumeratorStatsPage() {
           />
         </TabsContent>
       </Tabs>
+      <ActivationStatusPanel />
     </div>
   );
 }

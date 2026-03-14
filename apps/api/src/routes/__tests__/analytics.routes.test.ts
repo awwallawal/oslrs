@@ -17,6 +17,8 @@ vi.mock('../../controllers/analytics.controller.js', () => ({
     getDemographics: vi.fn(), getEmployment: vi.fn(), getHousehold: vi.fn(),
     getSkillsFrequency: vi.fn(), getTrends: vi.fn(), getRegistrySummary: vi.fn(),
     getPipelineSummary: vi.fn(), getCrossTab: vi.fn(), getSkillsInventory: vi.fn(),
+    getInsights: vi.fn(), getEquity: vi.fn(), getActivationStatus: vi.fn(),
+    getPolicyBrief: vi.fn(),
   },
 }));
 vi.mock('../../controllers/team-quality.controller.js', () => ({

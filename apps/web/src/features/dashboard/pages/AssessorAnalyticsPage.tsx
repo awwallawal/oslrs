@@ -19,6 +19,7 @@ import { DemographicCharts } from '../components/charts/DemographicCharts';
 import { EmploymentCharts } from '../components/charts/EmploymentCharts';
 import { Card, CardContent } from '../../../components/ui/card';
 import type { AnalyticsQueryParams } from '@oslsr/types';
+import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
 
 const SEVERITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
 
@@ -225,6 +226,7 @@ export default function AssessorAnalyticsPage() {
           </div>
         </TabsContent>
       </Tabs>
+      <ActivationStatusPanel />
     </div>
   );
 }

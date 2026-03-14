@@ -15,6 +15,7 @@ import type {
   HouseholdStats,
   TrendDataPoint,
   EquityData,
+  ExtendedEquityData,
 } from '@oslsr/types';
 import { TabsContent } from '../../../components/ui/tabs';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
@@ -24,6 +25,7 @@ import { EmploymentCharts } from './charts/EmploymentCharts';
 import { HouseholdCharts } from './charts/HouseholdCharts';
 import { TrendsCharts } from './charts/TrendsCharts';
 import { EquityMetrics } from './charts/EquityMetrics';
+import { ExtendedEquityMetrics } from './charts/ExtendedEquityMetrics';
 
 // --- Tab configuration types ---
 
@@ -52,6 +54,12 @@ interface TabDataMap {
   equityLoading: boolean;
   equityError: Error | null;
   onRetryEquity?: () => void;
+
+  // Story 8.7: Extended equity (optional — only SA + Official pass these)
+  extendedEquity?: ExtendedEquityData;
+  eqxLoading?: boolean;
+  eqxError?: Error | null;
+  onRetryEqx?: () => void;
 }
 
 interface AnalyticsTabsProps extends TabDataMap {
@@ -105,6 +113,10 @@ export function AnalyticsTabsContent({
   equityLoading,
   equityError,
   onRetryEquity,
+  extendedEquity,
+  eqxLoading,
+  eqxError,
+  onRetryEqx,
 }: AnalyticsTabsProps) {
   return (
     <>
@@ -164,6 +176,15 @@ export function AnalyticsTabsContent({
             error={equityError}
             onRetry={onRetryEquity}
           />
+          {/* Story 8.7: Extended equity metrics below existing */}
+          {(extendedEquity || eqxLoading || eqxError) && (
+            <ExtendedEquityMetrics
+              data={extendedEquity}
+              isLoading={eqxLoading ?? false}
+              error={eqxError ?? null}
+              onRetry={onRetryEqx}
+            />
+          )}
         </TabErrorBoundary>
       </TabsContent>
     </>

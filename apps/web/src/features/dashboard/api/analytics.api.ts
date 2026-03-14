@@ -22,6 +22,9 @@ import type {
   CrossTabResult,
   CrossTabQuery,
   SkillsInventoryData,
+  InferentialInsightsData,
+  ExtendedEquityData,
+  ActivationStatusData,
 } from '@oslsr/types';
 
 function buildQueryString(params?: AnalyticsQueryParams): string {
@@ -136,4 +139,33 @@ export async function fetchCrossTab(query: CrossTabQuery, params?: AnalyticsQuer
 export async function fetchSkillsInventory(params?: AnalyticsQueryParams): Promise<SkillsInventoryData> {
   const result = await apiClient(`/analytics/skills-inventory${buildQueryString(params)}`);
   return result.data;
+}
+
+// --- Story 8.7: Inferential Insights, Equity, Activation, Policy Brief ---
+
+export async function fetchInferentialInsights(params?: AnalyticsQueryParams): Promise<InferentialInsightsData> {
+  const result = await apiClient(`/analytics/insights${buildQueryString(params)}`);
+  return result.data;
+}
+
+export async function fetchExtendedEquity(params?: AnalyticsQueryParams): Promise<ExtendedEquityData> {
+  const result = await apiClient(`/analytics/equity${buildQueryString(params)}`);
+  return result.data;
+}
+
+export async function fetchActivationStatus(): Promise<ActivationStatusData> {
+  const result = await apiClient('/analytics/activation-status');
+  return result.data;
+}
+
+export async function fetchPolicyBriefPdf(): Promise<Blob> {
+  const { API_BASE_URL, getAuthHeaders } = await import('../../../lib/api-client');
+  const response = await fetch(`${API_BASE_URL}/analytics/policy-brief`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ message: 'PDF generation failed' }));
+    throw new Error(body.message || 'PDF generation failed');
+  }
+  return response.blob();
 }

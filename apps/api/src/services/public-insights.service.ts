@@ -210,12 +210,31 @@ export class PublicInsightsService {
       `),
     ]);
 
-    const summary = summaryRows.rows[0] as any;
+    interface SummaryRow {
+      total: string;
+      lgas_covered: string;
+      biz_rate: string | null;
+      unemployment_est: string | null;
+      youth_emp_rate: string | null;
+      gpi: string | null;
+    }
+
+    interface LabelCountRow {
+      label: string;
+      count: string | number;
+    }
+
+    interface SkillCountRow {
+      skill: string;
+      count: string | number;
+    }
+
+    const summary = summaryRows.rows[0] as SummaryRow | undefined;
     const total = Number(summary?.total ?? 0);
 
     // Skills total for percentage
-    const skillsTotal = (skillRows.rows as any[]).reduce(
-      (sum: number, r: any) => sum + Number(r.count), 0,
+    const skillsTotal = (skillRows.rows as SkillCountRow[]).reduce(
+      (sum: number, r: SkillCountRow) => sum + Number(r.count), 0,
     );
 
     const allSkills: SkillsFrequency[] = (skillRows.rows as Array<{ skill: string; count: string | number }>)
@@ -227,8 +246,8 @@ export class PublicInsightsService {
       .filter((s) => s.count >= PUBLIC_MIN_N);
 
     // Desired skills (training_interest)
-    const desiredTotal = (desiredSkillRows.rows as any[]).reduce(
-      (sum: number, r: any) => sum + Number(r.count), 0,
+    const desiredTotal = (desiredSkillRows.rows as SkillCountRow[]).reduce(
+      (sum: number, r: SkillCountRow) => sum + Number(r.count), 0,
     );
 
     const desiredSkills: SkillsFrequency[] = (desiredSkillRows.rows as Array<{ skill: string; count: string | number }>)
@@ -245,19 +264,47 @@ export class PublicInsightsService {
     return {
       totalRegistered: total,
       lgasCovered: Number(summary?.lgas_covered ?? 0),
-      genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as any, total), PUBLIC_MIN_N),
-      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as any, total), PUBLIC_MIN_N),
+      genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
+      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
       allSkills,
       desiredSkills,
-      employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as any, total), PUBLIC_MIN_N),
-      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as any, total), PUBLIC_MIN_N),
+      employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
+      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
       businessOwnershipRate: meetsThreshold && summary?.biz_rate != null ? Number(summary.biz_rate) : null,
       unemploymentEstimate: meetsThreshold && summary?.unemployment_est != null ? Number(summary.unemployment_est) : null,
       youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
-      lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as any, total), PUBLIC_MIN_N),
+      lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
       lastUpdated: new Date().toISOString(),
+      // Story 8.7: Key findings from inferential engine (Redis cache bridge)
+      ...(await PublicInsightsService.getKeyFindings(total)),
     };
+  }
+
+  /**
+   * Story 8.7: Read pre-computed key findings from Redis.
+   * Written by SurveyAnalyticsService.getInferentialInsights() (Task 2.9).
+   * Returns keyFindings only when total >= 200 and cache exists.
+   */
+  private static async getKeyFindings(totalSubmissions: number): Promise<{ keyFindings?: string[] }> {
+    if (totalSubmissions < 200) return {};
+
+    const redis = getRedisClient();
+    if (!redis) return {};
+
+    try {
+      const cached = await redis.get('analytics:public:key-findings');
+      if (cached) {
+        const findings = JSON.parse(cached) as string[];
+        if (Array.isArray(findings) && findings.length > 0) {
+          return { keyFindings: findings };
+        }
+      }
+    } catch (err) {
+      logger.warn({ event: 'public_insights.key_findings_read_failed', error: (err as Error).message });
+    }
+
+    return {};
   }
 
   /**

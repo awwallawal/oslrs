@@ -25,7 +25,14 @@ import {
   useRegistrySummary,
   usePipelineSummary,
   useSkillsInventory,
+  useInferentialInsights,
+  useExtendedEquity,
 } from '../hooks/useAnalytics';
+import { InsightsPanel } from '../components/charts/InsightsPanel';
+import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
+import { fetchPolicyBriefPdf } from '../api/analytics.api';
+import { FileDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { CrossTabTable } from '../components/charts/CrossTabTable';
 import { FullSkillsChart } from '../components/charts/FullSkillsChart';
 import { SkillsCategoryChart } from '../components/charts/SkillsCategoryChart';
@@ -60,6 +67,9 @@ export default function SurveyAnalyticsPage() {
   const { data: skills, isLoading: skillsLoading, error: skillsError, refetch: refetchSkills } = useSkillsFrequency(params, activeTab === 'skills');
   const { data: trends, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useTrends(params, activeTab === 'trends');
   const { data: skillsInventory, isLoading: siLoading, isError: siError } = useSkillsInventory(params, activeTab === 'skills-inventory');
+  const { data: insights, isLoading: insightsLoading, error: insightsError } = useInferentialInsights(params, activeTab === 'insights');
+  const { data: extendedEquity, isLoading: eqxLoading, error: eqxError, refetch: refetchEqx } = useExtendedEquity(params, activeTab === 'equity');
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Derive equity data from raw analytics responses (Fix 4: derivation in parent)
   const equityData = useMemo(
@@ -124,6 +134,7 @@ export default function SurveyAnalyticsPage() {
           <TabsTrigger value="equity">Equity</TabsTrigger>
           <TabsTrigger value="cross-tab">Cross-Tab</TabsTrigger>
           <TabsTrigger value="skills-inventory">Skills Inventory</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
 
         {/* Shared tabs: Demographics, Employment, Household, Trends, Equity */}
@@ -149,6 +160,10 @@ export default function SurveyAnalyticsPage() {
           equityLoading={demoLoading || empLoading || regLoading}
           equityError={demoError || empError}
           onRetryEquity={() => { refetchDemo(); refetchEmp(); }}
+          extendedEquity={extendedEquity}
+          eqxLoading={eqxLoading}
+          eqxError={eqxError}
+          onRetryEqx={refetchEqx}
         />
 
         {/* Skills tab — only on SurveyAnalyticsPage (not shared) */}
@@ -212,7 +227,55 @@ export default function SurveyAnalyticsPage() {
             )}
           </ErrorBoundary>
         </TabsContent>
+
+        {/* Insights tab (Story 8.7) */}
+        <TabsContent value="insights">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Insights error',
+              description: 'This tab encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={async () => {
+                  setPdfLoading(true);
+                  try {
+                    const blob = await fetchPolicyBriefPdf();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `oslrs-policy-brief-${new Date().toISOString().split('T')[0]}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'PDF generation failed');
+                  } finally {
+                    setPdfLoading(false);
+                  }
+                }}
+                disabled={pdfLoading || (pipeline?.totalSubmissions ?? 0) < 100}
+                className="inline-flex items-center gap-2 rounded-md bg-[#9C1E23] px-3 py-2 text-sm text-white hover:bg-[#7A171B] disabled:opacity-50 disabled:cursor-not-allowed"
+                title={(pipeline?.totalSubmissions ?? 0) < 100 ? 'Need >= 100 submissions for policy brief' : undefined}
+              >
+                {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                {pdfLoading ? 'Generating...' : 'Export Policy Brief'}
+              </button>
+            </div>
+            {insightsLoading && <SkeletonCard />}
+            {insightsError && (
+              <Card className="p-6 text-center text-red-600">Failed to load inferential insights.</Card>
+            )}
+            {insights && <InsightsPanel data={insights} />}
+          </ErrorBoundary>
+        </TabsContent>
       </Tabs>
+
+      {/* Activation Status Panel (Story 8.7) — all roles */}
+      <ActivationStatusPanel />
     </div>
   );
 }

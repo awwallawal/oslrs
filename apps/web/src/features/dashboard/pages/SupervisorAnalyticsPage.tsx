@@ -15,6 +15,7 @@ import DayOfWeekChart from '../components/charts/DayOfWeekChart';
 import HourOfDayChart from '../components/charts/HourOfDayChart';
 import FieldCoverageMap from '../components/charts/FieldCoverageMap';
 import type { AnalyticsQueryParams } from '@oslsr/types';
+import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
 
 // Named imports from Story 8-2
 import { DemographicCharts } from '../components/charts/DemographicCharts';
@@ -169,6 +170,7 @@ export default function SupervisorAnalyticsPage() {
           )}
         </TabsContent>
       </Tabs>
+      <ActivationStatusPanel />
     </div>
   );
 }

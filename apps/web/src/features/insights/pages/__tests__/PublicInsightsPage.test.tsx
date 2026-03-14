@@ -203,6 +203,37 @@ describe('PublicInsightsPage', () => {
     expect(screen.getAllByRole('row')).toHaveLength(11);
   });
 
+  // Story 8.7: Key Findings tests
+  it('renders key findings section when findings present', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = {
+      ...fullData,
+      keyFindings: [
+        'Gender is significantly associated with employment type in Oyo State',
+        'Education level correlates with monthly income',
+      ],
+    };
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByTestId('key-findings-section')).toBeInTheDocument();
+    expect(screen.getByText('Key Findings')).toBeInTheDocument();
+    expect(screen.getByText(/Gender is significantly associated/)).toBeInTheDocument();
+    expect(screen.getByText(/Education level correlates/)).toBeInTheDocument();
+  });
+
+  it('hides key findings section when undefined or empty', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData; // no keyFindings property
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.queryByTestId('key-findings-section')).not.toBeInTheDocument();
+
+    // Also test empty array
+    mockInsights.data = { ...fullData, keyFindings: [] };
+    const { unmount } = renderPage();
+    expect(screen.queryByTestId('key-findings-section')).not.toBeInTheDocument();
+  });
+
   it('handles suppressed data by excluding suppressed buckets', () => {
     const dataWithSuppressed: PublicInsightsData = {
       ...fullData,

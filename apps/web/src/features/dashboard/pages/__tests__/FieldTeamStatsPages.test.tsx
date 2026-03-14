@@ -14,6 +14,7 @@ const mockPersonalStats = vi.hoisted(() => ({ data: null as any, isLoading: true
 
 vi.mock('../../hooks/useAnalytics', () => ({
   usePersonalStats: () => mockPersonalStats,
+  useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 vi.mock('../../../../components/skeletons', () => ({

@@ -2,6 +2,7 @@
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
 
@@ -28,6 +29,9 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useRegistrySummary: () => mockRegistry,
   usePipelineSummary: () => mockPipeline,
   useSkillsInventory: () => ({ data: null, isLoading: false }),
+  useInferentialInsights: () => ({ data: null, isLoading: false, error: null }),
+  useExtendedEquity: () => ({ data: null, isLoading: false, error: null, refetch: mockRefetch }),
+  useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 vi.mock('../../api/export.api', () => ({
@@ -36,6 +40,14 @@ vi.mock('../../api/export.api', () => ({
 
 vi.mock('../../../../components/skeletons', () => ({
   SkeletonCard: () => <div data-testid="skeleton-card" />,
+}));
+
+vi.mock('../../api/analytics.api', () => ({
+  fetchPolicyBriefPdf: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
 }));
 
 vi.mock('recharts', () => ({
@@ -149,5 +161,19 @@ describe('SurveyAnalyticsPage', () => {
   it('renders page header description', () => {
     render(<SurveyAnalyticsPage />, { wrapper });
     expect(screen.getByText('State-wide labour market intelligence')).toBeInTheDocument();
+  });
+
+  it('disables PDF export button when submissions < 100', async () => {
+    mockPipeline.data = { totalSubmissions: 50, completionRate: 70, avgCompletionTimeSecs: 900, activeEnumerators: 5 };
+    mockPipeline.isLoading = false;
+
+    const user = userEvent.setup();
+    render(<SurveyAnalyticsPage />, { wrapper });
+
+    // Switch to insights tab
+    await user.click(screen.getByRole('tab', { name: 'Insights' }));
+
+    const exportBtn = screen.getByRole('button', { name: /Export Policy Brief/i });
+    expect(exportBtn).toBeDisabled();
   });
 });

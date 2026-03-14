@@ -1,4 +1,4 @@
-import { Users, MapPin, Scale, Briefcase } from 'lucide-react';
+import { Users, MapPin, Scale, Briefcase, Lightbulb } from 'lucide-react';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { usePublicInsights } from '../hooks/usePublicInsights';
@@ -121,6 +121,24 @@ export default function PublicInsightsPage() {
         <PublicLgaTable lgaDensity={data.lgaDensity} />
 
         <MethodologyNote totalRegistered={data.totalRegistered} lastUpdated={data.lastUpdated} />
+
+        {/* Story 8.7: Key Findings — only shown when available */}
+        {data.keyFindings && data.keyFindings.length > 0 && (
+          <section data-testid="key-findings-section">
+            <h2 className="text-2xl font-bold text-neutral-900 mb-6">Key Findings</h2>
+            <div className="space-y-3">
+              {data.keyFindings.map((finding, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 rounded-lg border bg-neutral-50 p-4"
+                >
+                  <Lightbulb className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-neutral-700">{finding}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

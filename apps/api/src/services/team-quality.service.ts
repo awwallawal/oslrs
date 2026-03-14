@@ -242,11 +242,17 @@ export class TeamQualityService {
       ORDER BY day_of_week
     `);
 
+    interface DayOfWeekRow {
+      day_of_week: string | number;
+      count: string | number;
+    }
+
+    const typedRows = rows.rows as DayOfWeekRow[];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const total = (rows.rows as any[]).reduce((sum, r) => sum + Number(r.count), 0);
+    const total = typedRows.reduce((sum, r) => sum + Number(r.count), 0);
 
     return dayNames.map((name, i) => {
-      const row = (rows.rows as any[]).find((r) => Number(r.day_of_week) === i);
+      const row = typedRows.find((r) => Number(r.day_of_week) === i);
       const count = row ? Number(row.count) : 0;
       return {
         label: name,
@@ -278,10 +284,16 @@ export class TeamQualityService {
       ORDER BY hour
     `);
 
-    const total = (rows.rows as any[]).reduce((sum, r) => sum + Number(r.count), 0);
+    interface HourRow {
+      hour: string | number;
+      count: string | number;
+    }
+
+    const typedHourRows = rows.rows as HourRow[];
+    const total = typedHourRows.reduce((sum, r) => sum + Number(r.count), 0);
 
     return Array.from({ length: 24 }, (_, i) => {
-      const row = (rows.rows as any[]).find((r) => Number(r.hour) === i);
+      const row = typedHourRows.find((r) => Number(r.hour) === i);
       const count = row ? Number(row.count) : 0;
       return {
         label: `${String(i).padStart(2, '0')}:00`,

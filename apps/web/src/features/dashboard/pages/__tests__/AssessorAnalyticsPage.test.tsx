@@ -25,6 +25,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useVerificationPipeline: () => mockPipeline,
   useDemographics: () => mockDemographics,
   useEmployment: () => mockEmployment,
+  useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 vi.mock('../../components/AnalyticsFilters', () => ({

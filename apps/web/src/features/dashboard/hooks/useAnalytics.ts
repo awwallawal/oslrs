@@ -21,6 +21,9 @@ import {
   fetchVerificationPipeline,
   fetchCrossTab,
   fetchSkillsInventory,
+  fetchInferentialInsights,
+  fetchExtendedEquity,
+  fetchActivationStatus,
 } from '../api/analytics.api';
 import type { TeamQualityQueryParams } from '../api/analytics.api';
 
@@ -145,6 +148,35 @@ export function useSkillsInventory(params?: AnalyticsQueryParams, enabled = true
     queryKey: [...analyticsKeys.all, 'skillsInventory', params] as const,
     queryFn: () => fetchSkillsInventory(params),
     staleTime: 60_000,
+    enabled,
+  });
+}
+
+// --- Story 8.7: Inferential Insights, Equity, Activation ---
+
+export function useInferentialInsights(params?: AnalyticsQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'insights', params] as const,
+    queryFn: () => fetchInferentialInsights(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+export function useExtendedEquity(params?: AnalyticsQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'extendedEquity', params] as const,
+    queryFn: () => fetchExtendedEquity(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+export function useActivationStatus(enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'activationStatus'] as const,
+    queryFn: () => fetchActivationStatus(),
+    staleTime: 300_000, // 5 min — lightweight endpoint
     enabled,
   });
 }

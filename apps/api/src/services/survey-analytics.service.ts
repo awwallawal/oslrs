@@ -26,8 +26,21 @@ import type {
   CrossTabResult,
   CrossTabMeasure,
   SkillsInventoryData,
+  InferentialInsightsData,
+  ExtendedEquityData,
+  ActivationStatusData,
+  ThresholdStatus,
 } from '@oslsr/types';
 import { CrossTabDimension } from '@oslsr/types';
+import {
+  runChiSquareTest,
+  runCorrelationTest,
+  runGroupComparisonTest,
+  runProportionCI,
+  linearRegressionForecast,
+  wilsonScoreInterval,
+} from './statistical-tests.service.js';
+// simple-statistics used via statistical-tests.service.ts
 import { ISCO08_SECTOR_MAP } from '@oslsr/types';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';
@@ -35,6 +48,59 @@ import { Redis } from 'ioredis';
 import pino from 'pino';
 
 const logger = pino({ name: 'survey-analytics' });
+
+/** Row shape returned by Drizzle `db.execute(sql...)` for queries with a single COUNT(*) AS total */
+interface TotalRow { total: string | number }
+
+/** Row shape for label/count distribution queries used with toBuckets() */
+interface LabelCountRow { label: string; count: string | number }
+
+/** Row shape for aggregate household scalars */
+interface HouseholdAggRow {
+  dependency_ratio: string | number | null;
+  biz_owners: string | number;
+  biz_registered: string | number;
+  apprentice_total: string | number;
+  total_count: string | number;
+}
+
+/** Row shape for registry summary query */
+interface RegistrySummaryRow {
+  total: string | number;
+  employed: string | number;
+  female: string | number;
+  avg_age: string | number | null;
+  biz_owners: string | number;
+  consent_marketplace_pct: string | number;
+  consent_enriched_pct: string | number;
+}
+
+/** Row shape for pipeline summary query */
+interface PipelineSummaryRow {
+  totalSubmissions: string | number;
+  completionRate: string | number;
+  avgCompletionTimeSecs: string | number | null;
+  activeEnumerators: string | number;
+}
+
+/** Row shape for disability gap query */
+interface DisabilityGapRow {
+  disability_status: string;
+  total: string | number;
+  employed: string | number;
+}
+
+/** Row shape for education-employment alignment query */
+interface AlignmentRow {
+  education_level: string;
+  employment_type: string;
+}
+
+/** Row shape for LGA count query */
+interface LgaCountRow { lga_id: string; count: string | number }
+
+/** Row shape for daily count query */
+interface DailyCountRow { day: string; count: string | number }
 
 const isTestMode = () =>
   process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
@@ -96,9 +162,17 @@ function shannonIndex(counts: number[]): number {
     .reduce((H, c) => H + (c / total) * Math.log(c / total), 0);
 }
 
-/** Deterministic JSON serialization for cache keys (sorted object keys). */
+/** Deterministic JSON serialization for cache keys (recursively sorted object keys). */
 function stableStringify(obj: Record<string, unknown>): string {
-  return JSON.stringify(obj, Object.keys(obj).sort());
+  return JSON.stringify(obj, (_, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.keys(value).sort().reduce<Record<string, unknown>>((sorted, key) => {
+        sorted[key] = (value as Record<string, unknown>)[key];
+        return sorted;
+      }, {});
+    }
+    return value;
+  });
 }
 
 const CROSS_TAB_THRESHOLD = 50;
@@ -166,7 +240,7 @@ export class SurveyAnalyticsService {
       LEFT JOIN respondents r ON r.id = s.respondent_id
       WHERE ${where}
     `);
-    const total = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     // Run all distribution queries in parallel
     const [genderRows, ageRows, eduRows, maritalRows, disabilityRows, lgaRows, consentMktRows, consentEnrRows] = await Promise.all([
@@ -252,14 +326,14 @@ export class SurveyAnalyticsService {
     ]);
 
     return {
-      genderDistribution: suppressSmallBuckets(toBuckets(genderRows.rows as any, total)),
-      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as any, total)),
-      educationDistribution: suppressSmallBuckets(toBuckets(eduRows.rows as any, total)),
-      maritalDistribution: suppressSmallBuckets(toBuckets(maritalRows.rows as any, total)),
-      disabilityPrevalence: suppressSmallBuckets(toBuckets(disabilityRows.rows as any, total)),
-      lgaDistribution: suppressSmallBuckets(toBuckets(lgaRows.rows as any, total)),
-      consentMarketplace: suppressSmallBuckets(toBuckets(consentMktRows.rows as any, total)),
-      consentEnriched: suppressSmallBuckets(toBuckets(consentEnrRows.rows as any, total)),
+      genderDistribution: suppressSmallBuckets(toBuckets(genderRows.rows as unknown as LabelCountRow[], total)),
+      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as unknown as LabelCountRow[], total)),
+      educationDistribution: suppressSmallBuckets(toBuckets(eduRows.rows as unknown as LabelCountRow[], total)),
+      maritalDistribution: suppressSmallBuckets(toBuckets(maritalRows.rows as unknown as LabelCountRow[], total)),
+      disabilityPrevalence: suppressSmallBuckets(toBuckets(disabilityRows.rows as unknown as LabelCountRow[], total)),
+      lgaDistribution: suppressSmallBuckets(toBuckets(lgaRows.rows as unknown as LabelCountRow[], total)),
+      consentMarketplace: suppressSmallBuckets(toBuckets(consentMktRows.rows as unknown as LabelCountRow[], total)),
+      consentEnriched: suppressSmallBuckets(toBuckets(consentEnrRows.rows as unknown as LabelCountRow[], total)),
     };
   }
 
@@ -275,7 +349,7 @@ export class SurveyAnalyticsService {
       LEFT JOIN respondents r ON r.id = s.respondent_id
       WHERE ${where}
     `);
-    const total = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     const [workStatusRows, empTypeRows, formalInformalRows, expRows, hoursRows, incomeRows, incomeByLgaRows] = await Promise.all([
       // Work status (ILO-aligned classification)
@@ -376,13 +450,13 @@ export class SurveyAnalyticsService {
     ]);
 
     return {
-      workStatusBreakdown: suppressSmallBuckets(toBuckets(workStatusRows.rows as any, total)),
-      employmentTypeBreakdown: suppressSmallBuckets(toBuckets(empTypeRows.rows as any, total)),
-      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as any, total)),
-      experienceDistribution: suppressSmallBuckets(toBuckets(expRows.rows as any, total)),
-      hoursWorked: suppressSmallBuckets(toBuckets(hoursRows.rows as any, total)),
-      incomeDistribution: suppressSmallBuckets(toBuckets(incomeRows.rows as any, total)),
-      incomeByLga: suppressSmallBuckets(toBuckets(incomeByLgaRows.rows as any, total)),
+      workStatusBreakdown: suppressSmallBuckets(toBuckets(workStatusRows.rows as unknown as LabelCountRow[], total)),
+      employmentTypeBreakdown: suppressSmallBuckets(toBuckets(empTypeRows.rows as unknown as LabelCountRow[], total)),
+      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as unknown as LabelCountRow[], total)),
+      experienceDistribution: suppressSmallBuckets(toBuckets(expRows.rows as unknown as LabelCountRow[], total)),
+      hoursWorked: suppressSmallBuckets(toBuckets(hoursRows.rows as unknown as LabelCountRow[], total)),
+      incomeDistribution: suppressSmallBuckets(toBuckets(incomeRows.rows as unknown as LabelCountRow[], total)),
+      incomeByLga: suppressSmallBuckets(toBuckets(incomeByLgaRows.rows as unknown as LabelCountRow[], total)),
     };
   }
 
@@ -398,7 +472,7 @@ export class SurveyAnalyticsService {
       LEFT JOIN respondents r ON r.id = s.respondent_id
       WHERE ${where}
     `);
-    const total = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     const [sizeRows, headRows, housingRows, aggregates] = await Promise.all([
       // Household size bands
@@ -461,18 +535,18 @@ export class SurveyAnalyticsService {
       `),
     ]);
 
-    const agg = aggregates.rows[0] as any;
+    const agg = aggregates.rows[0] as unknown as HouseholdAggRow;
     const totalCount = Number(agg?.total_count ?? 0);
     const bizOwners = Number(agg?.biz_owners ?? 0);
     const bizRegistered = Number(agg?.biz_registered ?? 0);
 
-    const headTotal = (headRows.rows as any[]).reduce((sum: number, r: any) => sum + Number(r.count), 0);
+    const headTotal = (headRows.rows as unknown as LabelCountRow[]).reduce((sum: number, r: LabelCountRow) => sum + Number(r.count), 0);
 
     return {
-      householdSizeDistribution: suppressSmallBuckets(toBuckets(sizeRows.rows as any, total)),
+      householdSizeDistribution: suppressSmallBuckets(toBuckets(sizeRows.rows as unknown as LabelCountRow[], total)),
       dependencyRatio: agg?.dependency_ratio != null ? Number(agg.dependency_ratio) : null,
-      headOfHouseholdByGender: suppressSmallBuckets(toBuckets(headRows.rows as any, headTotal)),
-      housingDistribution: suppressSmallBuckets(toBuckets(housingRows.rows as any, total)),
+      headOfHouseholdByGender: suppressSmallBuckets(toBuckets(headRows.rows as unknown as LabelCountRow[], headTotal)),
+      housingDistribution: suppressSmallBuckets(toBuckets(housingRows.rows as unknown as LabelCountRow[], total)),
       businessOwnershipRate: suppressIfTooFew(bizOwners) !== null && totalCount > 0
         ? Math.round((bizOwners / totalCount) * 1000) / 10
         : null,
@@ -502,7 +576,7 @@ export class SurveyAnalyticsService {
         AND s.raw_data->>'skills_possessed' IS NOT NULL
         AND s.raw_data->>'skills_possessed' != ''
     `);
-    const total = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     const safeLimit = Math.max(1, Math.min(limit, 100));
 
@@ -591,7 +665,7 @@ export class SurveyAnalyticsService {
       WHERE ${where}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as unknown as RegistrySummaryRow;
     const total = Number(row?.total ?? 0);
     const employed = Number(row?.employed ?? 0);
     const female = Number(row?.female ?? 0);
@@ -673,7 +747,7 @@ export class SurveyAnalyticsService {
       WHERE ${where}
     `);
 
-    const row = rows.rows[0] as any;
+    const row = rows.rows[0] as unknown as PipelineSummaryRow;
     const totalSubmissions = Number(row?.totalSubmissions ?? 0);
 
     // Suppress pipeline stats when sample size is too small
@@ -726,7 +800,7 @@ export class SurveyAnalyticsService {
       LEFT JOIN respondents r ON r.id = s.respondent_id
       WHERE ${where}
     `);
-    const totalN = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     if (totalN < CROSS_TAB_THRESHOLD) {
       return { rowLabels: [], colLabels: [], cells: [], totalN, anySuppressed: false, belowThreshold: true, currentN: totalN, requiredN: CROSS_TAB_THRESHOLD };
@@ -788,7 +862,7 @@ export class SurveyAnalyticsService {
     if (measure === 'count') {
       cells = rawCells;
     } else {
-      cells = rawCells.map((row, ri) => {
+      cells = rawCells.map((row, _ri) => {
         const rowTotal = row.reduce((sum: number, c) => sum + (c ?? 0), 0);
         return row.map((cell, ci) => {
           if (cell === null) return null;
@@ -850,7 +924,7 @@ export class SurveyAnalyticsService {
         AND s.raw_data->>'skills_possessed' IS NOT NULL
         AND s.raw_data->>'skills_possessed' != ''
     `);
-    const totalWithSkills = Number((totalSkillsResult.rows[0] as any)?.total ?? 0);
+    const totalWithSkills = Number((totalSkillsResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     // Count total submissions for LGA-specific thresholds
     const totalResult = await db.execute(sql`
@@ -859,7 +933,7 @@ export class SurveyAnalyticsService {
       LEFT JOIN respondents r ON r.id = s.respondent_id
       WHERE ${where}
     `);
-    const totalSubmissions = Number((totalResult.rows[0] as any)?.total ?? 0);
+    const totalSubmissions = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
     // Build threshold objects
     const thresholds = {
@@ -1048,4 +1122,569 @@ export class SurveyAnalyticsService {
 
     return result;
   }
+
+  // =========================================================================
+  // Story 8.7: Inferential Insights
+  // =========================================================================
+
+  /**
+   * Single extraction query for all inferential tests.
+   * Returns typed row array for in-memory computation.
+   */
+  private static async extractInferentialData(where: SQL): Promise<InferentialRow[]> {
+    const result = await db.execute(sql`
+      SELECT
+        s.raw_data->>'gender' AS gender,
+        s.raw_data->>'employment_type' AS employment_type,
+        s.raw_data->>'education_level' AS education_level,
+        s.raw_data->>'disability_status' AS disability_status,
+        s.raw_data->>'marital_status' AS marital_status,
+        s.raw_data->>'is_head' AS is_head,
+        s.raw_data->>'housing_status' AS housing_status,
+        s.raw_data->>'has_business' AS has_business,
+        s.raw_data->>'monthly_income' AS monthly_income,
+        s.raw_data->>'years_experience' AS years_experience,
+        s.raw_data->>'household_size' AS household_size,
+        s.raw_data->>'hours_worked' AS hours_worked,
+        CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
+             WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END AS work_status,
+        r.lga_id
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+    `);
+    return result.rows as unknown as InferentialRow[];
+  }
+
+  /**
+   * Build a contingency table from two categorical columns.
+   * Returns { table: number[][], rowLabels, colLabels }
+   */
+  private static buildContingencyTable(
+    rows: InferentialRow[],
+    rowField: keyof InferentialRow,
+    colField: keyof InferentialRow,
+  ): { table: number[][]; rowLabels: string[]; colLabels: string[] } {
+    const rowSet = new Set<string>();
+    const colSet = new Set<string>();
+    const counts = new Map<string, number>();
+
+    for (const row of rows) {
+      const r = row[rowField];
+      const c = row[colField];
+      if (!r || !c) continue;
+      rowSet.add(r);
+      colSet.add(c);
+      const key = `${r}|${c}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+
+    const rowLabels = [...rowSet].sort();
+    const colLabels = [...colSet].sort();
+    const table = rowLabels.map((rl) =>
+      colLabels.map((cl) => counts.get(`${rl}|${cl}`) || 0),
+    );
+
+    return { table, rowLabels, colLabels };
+  }
+
+  /**
+   * Extract numeric pairs filtering nulls.
+   */
+  private static extractNumericPairs(
+    rows: InferentialRow[],
+    xField: keyof InferentialRow,
+    yField: keyof InferentialRow,
+    xEncoder?: (v: string) => number | null,
+  ): { x: number[]; y: number[] } {
+    const x: number[] = [];
+    const y: number[] = [];
+    for (const row of rows) {
+      const xRaw = row[xField];
+      const yRaw = row[yField];
+      if (!xRaw || !yRaw) continue;
+      const xVal = xEncoder ? xEncoder(xRaw) : parseFloat(xRaw);
+      const yVal = parseFloat(yRaw);
+      if (xVal === null || isNaN(xVal) || isNaN(yVal)) continue;
+      x.push(xVal);
+      y.push(yVal);
+    }
+    return { x, y };
+  }
+
+  /**
+   * Partition rows into groups by categorical field, extracting a numeric value.
+   */
+  private static partitionGroups(
+    rows: InferentialRow[],
+    groupField: keyof InferentialRow,
+    valueField: keyof InferentialRow,
+  ): Record<string, number[]> {
+    const groups: Record<string, number[]> = {};
+    for (const row of rows) {
+      const group = row[groupField];
+      const val = row[valueField];
+      if (!group || !val) continue;
+      const num = parseFloat(val);
+      if (isNaN(num)) continue;
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(num);
+    }
+    return groups;
+  }
+
+  static async getInferentialInsights(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+  ): Promise<InferentialInsightsData> {
+    const where = buildWhereFragments(scope, params);
+
+    // Check cache
+    const cacheKey = `analytics:insights:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'insights.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Get total count for threshold checks
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+    `);
+    const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
+
+    // Per-section thresholds
+    const thresholds = {
+      chiSquare: { met: totalN >= 100, currentN: totalN, requiredN: 100 } as ThresholdStatus,
+      correlations: { met: totalN >= 100, currentN: totalN, requiredN: 100 } as ThresholdStatus,
+      groupComparisons: { met: totalN >= 50, currentN: totalN, requiredN: 50 } as ThresholdStatus,
+      proportionCIs: { met: totalN >= 30, currentN: totalN, requiredN: 30 } as ThresholdStatus,
+      forecast: { met: totalN >= 10, currentN: totalN, requiredN: 10 } as ThresholdStatus,
+    };
+
+    // Extract all data in one query
+    const rows = totalN >= 30 ? await SurveyAnalyticsService.extractInferentialData(where) : [];
+
+    // --- Chi-Square Tests (need >= 100) ---
+    const chiSquare = thresholds.chiSquare.met ? [
+      runChiSquareTest('gender and employment type',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'gender', 'employment_type').table),
+      runChiSquareTest('education level and employment type',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'education_level', 'employment_type').table),
+      runChiSquareTest('LGA and work status',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'lga_id', 'work_status').table),
+      runChiSquareTest('gender and business ownership',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'gender', 'has_business').table),
+      runChiSquareTest('disability status and work status',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'disability_status', 'work_status').table),
+      runChiSquareTest('marital status and head of household',
+        SurveyAnalyticsService.buildContingencyTable(rows, 'marital_status', 'is_head').table),
+    ] : [];
+
+    // --- Correlations (need >= 100) ---
+    const educationEncoder = (v: string): number | null => {
+      const map: Record<string, number> = { none: 0, primary: 1, secondary: 2, vocational: 3, tertiary: 4, postgraduate: 5 };
+      return map[v] ?? null;
+    };
+
+    const correlations = thresholds.correlations.met ? (() => {
+      const eduIncome = SurveyAnalyticsService.extractNumericPairs(rows, 'education_level', 'monthly_income', educationEncoder);
+      const expIncome = SurveyAnalyticsService.extractNumericPairs(rows, 'years_experience', 'monthly_income');
+      const hhIncome = SurveyAnalyticsService.extractNumericPairs(rows, 'household_size', 'monthly_income');
+      const hrsIncome = SurveyAnalyticsService.extractNumericPairs(rows, 'hours_worked', 'monthly_income');
+      return [
+        ...(eduIncome.x.length >= 10 ? [runCorrelationTest('education level and monthly income', eduIncome.x, eduIncome.y, 'spearman')] : []),
+        ...(expIncome.x.length >= 10 ? [runCorrelationTest('years of experience and monthly income', expIncome.x, expIncome.y, 'spearman')] : []),
+        ...(hhIncome.x.length >= 10 ? [runCorrelationTest('household size and monthly income', hhIncome.x, hhIncome.y, 'pearson')] : []),
+        ...(hrsIncome.x.length >= 10 ? [runCorrelationTest('hours worked and monthly income', hrsIncome.x, hrsIncome.y, 'pearson')] : []),
+      ];
+    })() : [];
+
+    // --- Group Comparisons (need >= 50) ---
+    const groupComparisons = thresholds.groupComparisons.met ? (() => {
+      const incomeByLga = SurveyAnalyticsService.partitionGroups(rows, 'lga_id', 'monthly_income');
+      const incomeByGender = SurveyAnalyticsService.partitionGroups(rows, 'gender', 'monthly_income');
+      const incomeByEdu = SurveyAnalyticsService.partitionGroups(rows, 'education_level', 'monthly_income');
+      const hhByHousing = SurveyAnalyticsService.partitionGroups(rows, 'housing_status', 'household_size');
+      const hrsByEmpType = SurveyAnalyticsService.partitionGroups(rows, 'employment_type', 'hours_worked');
+      return [
+        ...(Object.keys(incomeByLga).length >= 2 ? [runGroupComparisonTest('Monthly income across LGAs', incomeByLga)] : []),
+        ...(Object.keys(incomeByGender).length >= 2 ? [runGroupComparisonTest('Monthly income by gender', incomeByGender)] : []),
+        ...(Object.keys(incomeByEdu).length >= 2 ? [runGroupComparisonTest('Monthly income by education level', incomeByEdu)] : []),
+        ...(Object.keys(hhByHousing).length >= 2 ? [runGroupComparisonTest('Household size by housing status', hhByHousing)] : []),
+        ...(Object.keys(hrsByEmpType).length >= 2 ? [runGroupComparisonTest('Hours worked by employment type', hrsByEmpType)] : []),
+      ];
+    })() : [];
+
+    // --- Proportion CIs (need >= 30) ---
+    const proportionCIs = thresholds.proportionCIs.met ? (() => {
+      const total = rows.length;
+      const unemployed = rows.filter(r => r.work_status === 'unemployed').length;
+      const disabled = rows.filter(r => r.disability_status === 'yes').length;
+      const hasBusiness = rows.filter(r => r.has_business === 'yes').length;
+      const females = rows.filter(r => r.gender === 'female');
+      const femaleHeads = females.filter(r => r.is_head === 'yes').length;
+      const employed = rows.filter(r => r.work_status === 'employed');
+      const formalTypes = ['wage_public', 'wage_private', 'contractor'];
+      const formal = employed.filter(r => formalTypes.includes(r.employment_type || '')).length;
+      return [
+        runProportionCI('Unemployment rate', unemployed, total),
+        runProportionCI('Disability rate', disabled, total),
+        runProportionCI('Business ownership rate', hasBusiness, total),
+        ...(females.length >= 10 ? [runProportionCI('Female head-of-household rate', femaleHeads, females.length)] : []),
+        ...(employed.length >= 10 ? [runProportionCI('Formal employment rate', formal, employed.length)] : []),
+      ];
+    })() : [];
+
+    // --- Enrollment Forecast ---
+    let forecast = null;
+    if (thresholds.forecast.met) {
+      const trendsResult = await db.execute(sql`
+        SELECT
+          DATE(s.submitted_at AT TIME ZONE 'Africa/Lagos') AS day,
+          COUNT(*) AS count
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id
+        WHERE ${where}
+          AND s.submitted_at >= NOW() - INTERVAL '90 days'
+        GROUP BY DATE(s.submitted_at AT TIME ZONE 'Africa/Lagos')
+        ORDER BY day
+      `);
+      const dailyCounts = (trendsResult.rows as unknown as DailyCountRow[]).map((r, i) => ({
+        day: i,
+        count: Number(r.count),
+      }));
+
+      // Determine next threshold
+      const nextThreshold = totalN < 100 ? { n: 100, label: 'Phase 4 Inferential Statistics' }
+        : totalN < 200 ? { n: 200, label: 'Public Key Findings' }
+        : totalN < 500 ? { n: 500, label: 'Phase 5 Regression Models' }
+        : { n: 1000, label: 'Large-scale Analytics' };
+
+      forecast = linearRegressionForecast(dailyCounts, totalN, nextThreshold.n, nextThreshold.label);
+    }
+
+    const result: InferentialInsightsData = {
+      chiSquare,
+      correlations,
+      groupComparisons,
+      proportionCIs,
+      forecast,
+      thresholds,
+    };
+
+    // Cache result (1 hour)
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
+      } catch (err) {
+        logger.warn({ event: 'insights.cache_write_failed', error: (err as Error).message });
+      }
+
+      // Write key findings to public cache (Task 2.9)
+      try {
+        const significantFindings = [
+          ...chiSquare.filter(r => r.significant),
+          ...correlations.filter(r => r.significant),
+          ...groupComparisons.filter(r => r.significant),
+        ]
+          .sort((a, b) => a.pValue - b.pValue)
+          .slice(0, 3)
+          .map(f => {
+            // Strip stats from interpretation for public consumption
+            const interp = f.interpretation;
+            // Remove parenthetical stats: "(chi-sq = ..., p < ...)" or "(r = ..., p ...)"
+            return interp.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+          });
+
+        if (significantFindings.length > 0 && scope.type === 'system') {
+          await redis.set('analytics:public:key-findings', JSON.stringify(significantFindings), 'EX', 3600);
+        }
+      } catch (err) {
+        logger.warn({ event: 'insights.public_cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
+  }
+
+  // =========================================================================
+  // Story 8.7: Extended Equity Metrics
+  // =========================================================================
+
+  static async getExtendedEquity(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+  ): Promise<ExtendedEquityData> {
+    const where = buildWhereFragments(scope, params);
+
+    // Check cache
+    const cacheKey = `analytics:equity:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'equity.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Total count for thresholds
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${where}
+    `);
+    const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
+
+    const thresholds = {
+      disabilityGap: { met: totalN >= 100, currentN: totalN, requiredN: 100 } as ThresholdStatus,
+      educationAlignment: { met: totalN >= 100, currentN: totalN, requiredN: 100 } as ThresholdStatus,
+      giniCoefficient: { met: totalN >= 30, currentN: totalN, requiredN: 30 } as ThresholdStatus,
+    };
+
+    let disabilityGap: ExtendedEquityData['disabilityGap'] = null;
+    let educationAlignment: ExtendedEquityData['educationAlignment'] = null;
+    let giniCoefficient: ExtendedEquityData['giniCoefficient'] = null;
+
+    if (thresholds.disabilityGap.met) {
+      const disabilityResult = await db.execute(sql`
+        SELECT
+          s.raw_data->>'disability_status' AS disability_status,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE
+            CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
+                 WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
+          ) AS employed
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id
+        WHERE ${where} AND s.raw_data->>'disability_status' IS NOT NULL
+        GROUP BY s.raw_data->>'disability_status'
+      `);
+
+      const disabledRow = (disabilityResult.rows as unknown as DisabilityGapRow[]).find(r => r.disability_status === 'yes');
+      const nonDisabledRow = (disabilityResult.rows as unknown as DisabilityGapRow[]).find(r => r.disability_status === 'no');
+
+      if (disabledRow && nonDisabledRow) {
+        const dTotal = Number(disabledRow.total);
+        const dEmployed = Number(disabledRow.employed);
+        const ndTotal = Number(nonDisabledRow.total);
+        const ndEmployed = Number(nonDisabledRow.employed);
+
+        const dRate = dTotal > 0 ? dEmployed / dTotal : 0;
+        const ndRate = ndTotal > 0 ? ndEmployed / ndTotal : 0;
+
+        disabilityGap = {
+          disabledEmployedRate: Math.round(dRate * 10000) / 10000,
+          nonDisabledEmployedRate: Math.round(ndRate * 10000) / 10000,
+          gap: Math.round((ndRate - dRate) * 10000) / 10000,
+          disabledCI: wilsonScoreInterval(dEmployed, dTotal),
+          nonDisabledCI: wilsonScoreInterval(ndEmployed, ndTotal),
+        };
+      }
+    }
+
+    if (thresholds.educationAlignment.met) {
+      const alignResult = await db.execute(sql`
+        SELECT
+          s.raw_data->>'education_level' AS education_level,
+          s.raw_data->>'employment_type' AS employment_type
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id
+        WHERE ${where}
+          AND CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
+                   WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
+          AND s.raw_data->>'education_level' IS NOT NULL
+          AND s.raw_data->>'employment_type' IS NOT NULL
+      `);
+
+      const alignRows = alignResult.rows as unknown as AlignmentRow[];
+      if (alignRows.length >= 10) {
+        const eduTier = (v: string): number => {
+          if (['none', 'primary'].includes(v)) return 1;
+          if (['secondary', 'vocational'].includes(v)) return 2;
+          if (['tertiary', 'postgraduate'].includes(v)) return 3;
+          return 0;
+        };
+        const empTier = (v: string): number => {
+          if (['family_unpaid', 'apprentice'].includes(v)) return 1;
+          if (v === 'self_employed') return 2;
+          if (['wage_private', 'wage_public', 'contractor'].includes(v)) return 3;
+          return 0;
+        };
+
+        let aligned = 0, over = 0, under = 0;
+        const valid = alignRows.filter(r => eduTier(r.education_level) > 0 && empTier(r.employment_type) > 0);
+        for (const r of valid) {
+          const et = eduTier(r.education_level);
+          const emp = empTier(r.employment_type);
+          if (et === emp) aligned++;
+          else if (et > emp) over++;
+          else under++;
+        }
+
+        const n = valid.length;
+        if (n > 0) {
+          educationAlignment = {
+            alignedPct: Math.round((aligned / n) * 10000) / 100,
+            overQualifiedPct: Math.round((over / n) * 10000) / 100,
+            underQualifiedPct: Math.round((under / n) * 10000) / 100,
+            n,
+          };
+        }
+      }
+    }
+
+    if (thresholds.giniCoefficient.met) {
+      const lgaResult = await db.execute(sql`
+        SELECT r.lga_id, COUNT(*) AS count
+        FROM submissions s
+        LEFT JOIN respondents r ON r.id = s.respondent_id
+        WHERE ${where} AND r.lga_id IS NOT NULL
+        GROUP BY r.lga_id
+        ORDER BY count
+      `);
+
+      const lgaCounts = (lgaResult.rows as unknown as LgaCountRow[]).map(r => Number(r.count));
+      if (lgaCounts.length >= 2) {
+        // Gini coefficient using sorted proportions
+        const sorted = lgaCounts.slice().sort((a, b) => a - b);
+        const n = sorted.length;
+        const total = sorted.reduce((a, b) => a + b, 0);
+        if (total > 0) {
+          let sumOfWeighted = 0;
+          for (let i = 0; i < n; i++) {
+            sumOfWeighted += (2 * (i + 1) - n - 1) * sorted[i];
+          }
+          const gini = Math.round((sumOfWeighted / (n * total)) * 1000) / 1000;
+          const interpretation = gini < 0.2 ? 'low inequality' : gini <= 0.4 ? 'moderate inequality' : 'high inequality';
+          giniCoefficient = { value: gini, interpretation, lgaCount: n };
+        }
+      }
+    }
+
+    const result: ExtendedEquityData = { disabilityGap, educationAlignment, giniCoefficient, thresholds };
+
+    // Cache result (10 min)
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+      } catch (err) {
+        logger.warn({ event: 'equity.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
+  }
+
+  // =========================================================================
+  // Story 8.7: Activation Status (lightweight — all roles)
+  // =========================================================================
+
+  static async getActivationStatus(scope: AnalyticsScope): Promise<ActivationStatusData> {
+    const redis = getRedisClient();
+    const cacheKey = `analytics:activation-status:${scope.type}:${scope.lgaCode || scope.userId || 'all'}`;
+
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'activation_status.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Simple COUNT query — no expensive computation
+    const conditions: SQL[] = [
+      sql`s.raw_data IS NOT NULL`,
+      sql`s.respondent_id IS NOT NULL`,
+    ];
+    if (scope.type === 'lga' && scope.lgaCode) {
+      conditions.push(sql`r.lga_id = ${scope.lgaCode}`);
+    } else if (scope.type === 'personal' && scope.userId) {
+      conditions.push(sql`s.submitter_id = ${scope.userId}`);
+    }
+    const whereClause = sql.join(conditions, sql` AND `);
+
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM submissions s
+      LEFT JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${whereClause}
+    `);
+    const totalSubmissions = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
+
+    const features = ACTIVATION_REGISTRY.map(feat => {
+      const met = feat.phase <= 4 && totalSubmissions >= feat.requiredN;
+      const ratio = feat.requiredN > 0 ? totalSubmissions / feat.requiredN : 0;
+      const category = met ? 'active' as const
+        : (feat.phase >= 5 || ratio <= 0.5) ? 'dormant' as const
+        : 'approaching' as const;
+      return { ...feat, currentN: totalSubmissions, met, category };
+    });
+
+    const result: ActivationStatusData = { totalSubmissions, features };
+
+    // Cache for 5 min
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      } catch (err) {
+        logger.warn({ event: 'activation_status.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Story 8.7: Types and constants used by inferential methods
+// ---------------------------------------------------------------------------
+
+interface InferentialRow {
+  gender: string | null;
+  employment_type: string | null;
+  education_level: string | null;
+  disability_status: string | null;
+  marital_status: string | null;
+  is_head: string | null;
+  housing_status: string | null;
+  has_business: string | null;
+  monthly_income: string | null;
+  years_experience: string | null;
+  household_size: string | null;
+  hours_worked: string | null;
+  work_status: string | null;
+  lga_id: string | null;
+}
+
+/**
+ * Activation Feature Registry — Phase 4 (built) + Phase 5 (dormant hooks only)
+ */
+const ACTIVATION_REGISTRY: Omit<import('@oslsr/types').ActivationFeature, 'currentN' | 'met' | 'category'>[] = [
+  // Phase 4 — Built
+  { id: 'chi_square', label: 'Association Tests (Chi-Square)', requiredN: 100, phase: 4 },
+  { id: 'correlations', label: 'Correlation Analysis', requiredN: 100, phase: 4 },
+  { id: 'group_comparisons', label: 'Group Comparisons', requiredN: 50, phase: 4 },
+  { id: 'proportion_cis', label: 'Confidence Intervals', requiredN: 30, phase: 4 },
+  { id: 'equity_extended', label: 'Extended Equity Metrics', requiredN: 100, phase: 4 },
+  { id: 'enrollment_forecast', label: 'Enrollment Velocity Forecast', requiredN: 10, phase: 4 },
+  { id: 'policy_brief', label: 'Policy Brief PDF Export', requiredN: 100, phase: 4 },
+  { id: 'public_key_findings', label: 'Public Key Findings', requiredN: 200, phase: 4 },
+  // Phase 5 — Dormant
+  { id: 'regression_income', label: 'Income Predictors (OLS Regression)', requiredN: 500, phase: 5 },
+  { id: 'regression_employment', label: 'Employment Predictors (Logistic)', requiredN: 500, phase: 5 },
+  { id: 'regression_business', label: 'Business Ownership Predictors (Logistic)', requiredN: 500, phase: 5 },
+  { id: 'inter_rater_reliability', label: 'Inter-Rater Reliability Scoring', requiredN: 200, phase: 5 },
+  { id: 'anomaly_detection', label: 'Automated Anomaly Detection', requiredN: 500, phase: 5 },
+];

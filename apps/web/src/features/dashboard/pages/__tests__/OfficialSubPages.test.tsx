@@ -66,6 +66,9 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useSkillsFrequency: () => ({ data: [], isLoading: true, error: null }),
   usePipelineSummary: () => ({ data: null, isLoading: true, error: null }),
   useSkillsInventory: () => ({ data: null, isLoading: false }),
+  useInferentialInsights: () => ({ data: null, isLoading: false, error: null }),
+  useExtendedEquity: () => ({ data: null, isLoading: false, error: null, refetch: mockAnalyticsRefetch }),
+  useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 vi.mock('../../api/export.api', () => ({

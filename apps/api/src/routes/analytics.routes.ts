@@ -52,6 +52,30 @@ router.get(
   AnalyticsController.getSkillsInventory,
 );
 
+// Story 8.7: Inferential insights (SA + Official only)
+router.get(
+  '/insights',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL),
+  AnalyticsController.getInsights,
+);
+
+// Story 8.7: Extended equity metrics (SA + Official only)
+router.get(
+  '/equity',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL),
+  AnalyticsController.getEquity,
+);
+
+// Story 8.7: Policy brief PDF export (SA + Official only, separate rate limit)
+router.get(
+  '/policy-brief',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL),
+  AnalyticsController.getPolicyBrief,
+);
+
+// Story 8.7: Activation status (all dashboard roles — lightweight endpoint)
+router.get('/activation-status', AnalyticsController.getActivationStatus);
+
 // Story 8.1: Descriptive statistics
 router.get('/demographics', AnalyticsController.getDemographics);
 router.get('/employment', AnalyticsController.getEmployment);

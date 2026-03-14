@@ -11,6 +11,7 @@ import { usePersonalStats } from '../hooks/useAnalytics';
 import PersonalTrendChart from '../components/charts/PersonalTrendChart';
 import CompletionTimeComparison from '../components/charts/CompletionTimeComparison';
 import DataQualityScorecard from '../components/charts/DataQualityScorecard';
+import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
 
 export default function ClerkStatsPage() {
   const [activeTab, setActiveTab] = useState('performance');
@@ -86,6 +87,7 @@ export default function ClerkStatsPage() {
           />
         </TabsContent>
       </Tabs>
+      <ActivationStatusPanel />
     </div>
   );
 }

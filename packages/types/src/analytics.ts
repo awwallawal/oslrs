@@ -251,6 +251,7 @@ export interface PublicInsightsData {
   gpi: number | null;
   lgaDensity: FrequencyBucket[];
   lastUpdated: string;
+  keyFindings?: string[];
 }
 
 export interface PublicTrendDataPoint {
@@ -308,6 +309,121 @@ export interface CrossTabQuery {
   rowDim: CrossTabDimension;
   colDim: CrossTabDimension;
   measure?: CrossTabMeasure;
+}
+
+// --- Inferential Insights (Story 8.7) ---
+
+export interface ChiSquareResult {
+  hypothesis: string;
+  chiSq: number;
+  df: number;
+  pValue: number; // exact if implemented, or -1 for bracket-only
+  pBracket: string; // '< 0.005' | '< 0.01' | '< 0.05' | '>= 0.05'
+  cramersV: number;
+  effectLabel: 'negligible' | 'small' | 'medium' | 'large';
+  interpretation: string;
+  significant: boolean;
+}
+
+export interface CorrelationResult {
+  hypothesis: string;
+  coefficient: number;
+  pValue: number;
+  pBracket: string;
+  method: 'spearman' | 'pearson';
+  interpretation: string;
+  significant: boolean;
+}
+
+export interface GroupComparisonResult {
+  hypothesis: string;
+  statistic: number;
+  pValue: number;
+  pBracket: string;
+  method: 'mann-whitney' | 'kruskal-wallis';
+  groupMedians: Record<string, number>;
+  interpretation: string;
+  significant: boolean;
+}
+
+export interface ProportionCI {
+  metric: string;
+  estimate: number;
+  ci95Lower: number;
+  ci95Upper: number;
+  n: number;
+  interpretation: string;
+}
+
+export interface EnrollmentForecast {
+  dailyRate: number;
+  currentN: number;
+  nextThresholdN: number;
+  nextThresholdLabel: string;
+  projectedDate: string | null; // ISO date, null if rate <= 0
+  interpretation: string;
+}
+
+export type ThresholdStatus = {
+  met: boolean;
+  currentN: number;
+  requiredN: number;
+};
+
+export interface InferentialInsightsData {
+  chiSquare: ChiSquareResult[];
+  correlations: CorrelationResult[];
+  groupComparisons: GroupComparisonResult[];
+  proportionCIs: ProportionCI[];
+  forecast: EnrollmentForecast | null;
+  thresholds: {
+    chiSquare: ThresholdStatus;
+    correlations: ThresholdStatus;
+    groupComparisons: ThresholdStatus;
+    proportionCIs: ThresholdStatus;
+    forecast: ThresholdStatus;
+  };
+}
+
+export interface ActivationFeature {
+  id: string;
+  label: string;
+  requiredN: number;
+  currentN: number;
+  met: boolean;
+  phase: number;
+  category: 'active' | 'approaching' | 'dormant';
+}
+
+export interface ActivationStatusData {
+  totalSubmissions: number;
+  features: ActivationFeature[];
+}
+
+export interface ExtendedEquityData {
+  disabilityGap: {
+    disabledEmployedRate: number;
+    nonDisabledEmployedRate: number;
+    gap: number;
+    disabledCI: { lower: number; upper: number };
+    nonDisabledCI: { lower: number; upper: number };
+  } | null;
+  educationAlignment: {
+    alignedPct: number;
+    overQualifiedPct: number;
+    underQualifiedPct: number;
+    n: number;
+  } | null;
+  giniCoefficient: {
+    value: number;
+    interpretation: string;
+    lgaCount: number;
+  } | null;
+  thresholds: {
+    disabilityGap: ThresholdStatus;
+    educationAlignment: ThresholdStatus;
+    giniCoefficient: ThresholdStatus;
+  };
 }
 
 // --- Skills Inventory (Story 8.6) ---
