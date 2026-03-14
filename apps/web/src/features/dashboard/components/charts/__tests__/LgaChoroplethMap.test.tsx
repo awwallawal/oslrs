@@ -85,7 +85,7 @@ import { LgaChoroplethMap, _resetGeoJsonCache } from '../LgaChoroplethMap';
 beforeEach(() => {
   vi.clearAllMocks();
   _resetGeoJsonCache();
-  global.fetch = vi.fn().mockResolvedValue({
+  globalThis.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve(mockGeoJson),
   });

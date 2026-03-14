@@ -58,7 +58,7 @@ import PublicInsightsPage from '../PublicInsightsPage';
 
 beforeEach(() => {
   _resetGeoJsonCache();
-  global.fetch = vi.fn().mockResolvedValue({
+  globalThis.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({
       type: 'FeatureCollection',
