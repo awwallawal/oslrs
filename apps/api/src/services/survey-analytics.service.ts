@@ -1700,13 +1700,13 @@ export class SurveyAnalyticsService {
     }
 
     const enumerators: EnumeratorDistribution[] = qualified.map(q => {
-      const qMap = distMap.get(q.enumerator_id) || new Map();
+      const qMap = distMap.get(q.enumerator_id) || new Map<string, Map<string, number>>();
       const distributions = QUESTIONS.map(question => {
-        const answerMap = qMap.get(question) || new Map();
-        const total = Array.from(answerMap.values()).reduce((a, b) => a + b, 0);
+        const answerMap: Map<string, number> = qMap.get(question) || new Map<string, number>();
+        const total = Array.from(answerMap.values()).reduce((a: number, b: number) => a + b, 0);
         const answers = Array.from(answerMap.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([label, count]) => ({
+          .sort(([a]: [string, number], [b]: [string, number]) => a.localeCompare(b))
+          .map(([label, count]: [string, number]) => ({
             label,
             count,
             proportion: total > 0 ? count / total : 0,
