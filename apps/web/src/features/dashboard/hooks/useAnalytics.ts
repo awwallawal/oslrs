@@ -24,6 +24,7 @@ import {
   fetchInferentialInsights,
   fetchExtendedEquity,
   fetchActivationStatus,
+  fetchEnumeratorReliability,
 } from '../api/analytics.api';
 import type { TeamQualityQueryParams } from '../api/analytics.api';
 
@@ -167,6 +168,17 @@ export function useExtendedEquity(params?: AnalyticsQueryParams, enabled = true)
   return useQuery({
     queryKey: [...analyticsKeys.all, 'extendedEquity', params] as const,
     queryFn: () => fetchExtendedEquity(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+// --- Story 8.8: Enumerator Reliability ---
+
+export function useEnumeratorReliability(lgaId?: string, enabled = true) {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'enumeratorReliability', lgaId] as const,
+    queryFn: () => fetchEnumeratorReliability(lgaId),
     staleTime: 60_000,
     enabled,
   });

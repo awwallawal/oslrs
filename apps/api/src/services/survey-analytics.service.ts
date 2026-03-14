@@ -30,6 +30,9 @@ import type {
   ExtendedEquityData,
   ActivationStatusData,
   ThresholdStatus,
+  EnumeratorReliabilityData,
+  EnumeratorDistribution,
+  ReliabilityPair,
 } from '@oslsr/types';
 import { CrossTabDimension } from '@oslsr/types';
 import {
@@ -160,6 +163,20 @@ function shannonIndex(counts: number[]): number {
   return -counts
     .filter(c => c > 0)
     .reduce((H, c) => H + (c / total) * Math.log(c / total), 0);
+}
+
+/** KL divergence: sum(p_i * log2(p_i / q_i)) — base-2 for [0, 1] bound in JSD */
+function klDivergence(p: number[], q: number[]): number {
+  return p.reduce((sum, pi, i) => {
+    if (pi === 0) return sum;
+    return sum + pi * Math.log2(pi / q[i]);
+  }, 0);
+}
+
+/** Jensen-Shannon divergence (bounded [0, 1] with base-2 log) */
+function jsDivergence(p: number[], q: number[]): number {
+  const m = p.map((pi, i) => (pi + q[i]) / 2);
+  return (klDivergence(p, m) + klDivergence(q, m)) / 2;
 }
 
 /** Deterministic JSON serialization for cache keys (recursively sorted object keys). */
@@ -1587,6 +1604,172 @@ export class SurveyAnalyticsService {
   }
 
   // =========================================================================
+  // Story 8.8: Inter-Enumerator Reliability (Supervisor + SA + Assessor)
+  // =========================================================================
+
+  static async getEnumeratorReliability(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+  ): Promise<EnumeratorReliabilityData> {
+    const redis = getRedisClient();
+    const lgaCode = scope.type === 'lga' && scope.lgaCode ? scope.lgaCode : params.lgaId;
+    const cacheKey = `analytics:reliability:${lgaCode || 'all'}`;
+
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        logger.warn({ event: 'reliability.cache_read_failed', error: (err as Error).message });
+      }
+    }
+
+    // Build scope conditions
+    const conditions: SQL[] = [
+      sql`s.raw_data IS NOT NULL`,
+      sql`s.respondent_id IS NOT NULL`,
+    ];
+    if (lgaCode) {
+      conditions.push(sql`r.lga_id = ${lgaCode}`);
+    }
+    if (params.dateFrom) {
+      conditions.push(sql`s.submitted_at >= ${params.dateFrom}::timestamptz`);
+    }
+    if (params.dateTo) {
+      conditions.push(sql`s.submitted_at <= ${params.dateTo}::timestamptz`);
+    }
+    const whereClause = sql.join(conditions, sql` AND `);
+
+    // Count submissions per enumerator
+    const enumeratorCounts = await db.execute(sql`
+      SELECT s.submitter_id AS enumerator_id, u.full_name AS enumerator_name, COUNT(*) AS count
+      FROM submissions s
+      JOIN users u ON s.submitter_id = u.id
+      JOIN respondents r ON r.id = s.respondent_id
+      WHERE ${whereClause}
+      GROUP BY s.submitter_id, u.full_name
+      ORDER BY count DESC
+    `);
+    const qualified = (enumeratorCounts.rows as { enumerator_id: string; enumerator_name: string; count: string | number }[])
+      .filter(row => Number(row.count) >= 20);
+
+    // Threshold check: need 2+ enumerators with 20+ submissions
+    if (qualified.length < 2) {
+      const result: EnumeratorReliabilityData = {
+        enumerators: [],
+        pairs: [],
+        threshold: { met: false, currentN: qualified.length, requiredN: 2 },
+      };
+      return result;
+    }
+
+    const qualifiedIds = qualified.map(r => r.enumerator_id);
+    const QUESTIONS = ['gender', 'employment_type', 'education_level'];
+
+    // Query answer distributions for all qualified enumerators across 3 questions
+    const distRows = await db.execute(sql`
+      SELECT
+        s.submitter_id AS enumerator_id,
+        q.question,
+        q.answer,
+        COUNT(*) AS count
+      FROM submissions s
+      JOIN respondents r ON r.id = s.respondent_id
+      CROSS JOIN LATERAL (
+        VALUES
+          ('gender', s.raw_data->>'gender'),
+          ('employment_type', s.raw_data->>'employment_type'),
+          ('education_level', s.raw_data->>'education_level')
+      ) AS q(question, answer)
+      WHERE ${whereClause}
+        AND s.submitter_id = ANY(${qualifiedIds})
+        AND q.answer IS NOT NULL
+      GROUP BY s.submitter_id, q.question, q.answer
+      ORDER BY s.submitter_id, q.question, q.answer
+    `);
+
+    // Build per-enumerator distributions
+    type DistRow = { enumerator_id: string; question: string; answer: string; count: string | number };
+    const distMap = new Map<string, Map<string, Map<string, number>>>();
+
+    for (const row of distRows.rows as DistRow[]) {
+      if (!distMap.has(row.enumerator_id)) distMap.set(row.enumerator_id, new Map());
+      const qMap = distMap.get(row.enumerator_id)!;
+      if (!qMap.has(row.question)) qMap.set(row.question, new Map());
+      qMap.get(row.question)!.set(row.answer, Number(row.count));
+    }
+
+    const enumerators: EnumeratorDistribution[] = qualified.map(q => {
+      const qMap = distMap.get(q.enumerator_id) || new Map();
+      const distributions = QUESTIONS.map(question => {
+        const answerMap = qMap.get(question) || new Map();
+        const total = Array.from(answerMap.values()).reduce((a, b) => a + b, 0);
+        const answers = Array.from(answerMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([label, count]) => ({
+            label,
+            count,
+            proportion: total > 0 ? count / total : 0,
+          }));
+        return { question, answers };
+      });
+      return {
+        enumeratorId: q.enumerator_id,
+        enumeratorName: q.enumerator_name,
+        submissionCount: Number(q.count),
+        distributions,
+      };
+    });
+
+    // Compute pairwise JSD
+    const pairs: ReliabilityPair[] = [];
+    for (let i = 0; i < enumerators.length; i++) {
+      for (let j = i + 1; j < enumerators.length; j++) {
+        const a = enumerators[i];
+        const b = enumerators[j];
+        const divergenceScores = QUESTIONS.map(question => {
+          const distA = a.distributions.find(d => d.question === question)?.answers ?? [];
+          const distB = b.distributions.find(d => d.question === question)?.answers ?? [];
+          // Align labels
+          const allLabels = [...new Set([...distA.map(x => x.label), ...distB.map(x => x.label)])].sort();
+          const pA = allLabels.map(l => distA.find(x => x.label === l)?.proportion ?? 0);
+          const pB = allLabels.map(l => distB.find(x => x.label === l)?.proportion ?? 0);
+          return { question, jsDivergence: jsDivergence(pA, pB) };
+        });
+        const avgDivergence = divergenceScores.reduce((sum, d) => sum + d.jsDivergence, 0) / divergenceScores.length;
+        const flag = avgDivergence > 0.7 ? 'red' as const : avgDivergence > 0.5 ? 'amber' as const : 'normal' as const;
+        const interpretation = flag !== 'normal'
+          ? `${a.enumeratorName} and ${b.enumeratorName} report significantly different distributions in the same area — may warrant investigation`
+          : '';
+        pairs.push({
+          enumeratorA: a.enumeratorName,
+          enumeratorB: b.enumeratorName,
+          divergenceScores,
+          avgDivergence,
+          flag,
+          interpretation,
+        });
+      }
+    }
+
+    const result: EnumeratorReliabilityData = {
+      enumerators,
+      pairs,
+      threshold: { met: true, currentN: qualified.length, requiredN: 2 },
+    };
+
+    if (redis) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+      } catch (err) {
+        logger.warn({ event: 'reliability.cache_write_failed', error: (err as Error).message });
+      }
+    }
+
+    return result;
+  }
+
+  // =========================================================================
   // Story 8.7: Activation Status (lightweight — all roles)
   // =========================================================================
 
@@ -1687,4 +1870,9 @@ const ACTIVATION_REGISTRY: Omit<import('@oslsr/types').ActivationFeature, 'curre
   { id: 'regression_business', label: 'Business Ownership Predictors (Logistic)', requiredN: 500, phase: 5 },
   { id: 'inter_rater_reliability', label: 'Inter-Rater Reliability Scoring', requiredN: 200, phase: 5 },
   { id: 'anomaly_detection', label: 'Automated Anomaly Detection', requiredN: 500, phase: 5 },
+  // Story 8.8: Phase 5 dormant hooks — AC#6
+  { id: 'seasonality_detection', label: 'Seasonality Detection', requiredN: 365, phase: 5 },
+  { id: 'campaign_effectiveness', label: 'Campaign Effectiveness Analysis', requiredN: 0, phase: 5 },
+  { id: 'response_entropy', label: 'Response Pattern Entropy', requiredN: 50, phase: 5 },
+  { id: 'gps_dispersion', label: 'GPS Dispersion Analysis', requiredN: 20, phase: 5 },
 ];

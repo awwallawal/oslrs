@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -26,6 +26,17 @@ vi.mock('../../../../hooks/useDocumentTitle', () => ({
   useDocumentTitle: vi.fn(),
 }));
 
+// Mock react-leaflet (used by LgaChoroplethMap added in Story 8.8)
+vi.mock('react-leaflet', () => ({
+  MapContainer: ({ children }: any) => <div data-testid="mock-map">{children}</div>,
+  TileLayer: () => <div />,
+  GeoJSON: () => <div data-testid="mock-geojson" />,
+}));
+vi.mock('leaflet', () => ({
+  default: { icon: vi.fn(() => ({})), Marker: { prototype: { options: {} } } },
+}));
+vi.mock('leaflet/dist/leaflet.css', () => ({}));
+
 // Mock recharts
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
@@ -40,7 +51,23 @@ vi.mock('recharts', () => ({
   Legend: () => <div />,
 }));
 
+// Reset LgaChoroplethMap module cache and mock fetch for GeoJSON
+import { _resetGeoJsonCache } from '../../../dashboard/components/charts/LgaChoroplethMap';
+
 import PublicInsightsPage from '../PublicInsightsPage';
+
+beforeEach(() => {
+  _resetGeoJsonCache();
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { lgaName: 'Ibadan North', lgaCode: 'ibadan_north' }, geometry: { type: 'Polygon', coordinates: [[[3.9, 7.4], [3.9, 7.5], [4.0, 7.5], [4.0, 7.4], [3.9, 7.4]]] } },
+      ],
+    }),
+  });
+});
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -232,6 +259,31 @@ describe('PublicInsightsPage', () => {
     mockInsights.data = { ...fullData, keyFindings: [] };
     const { unmount } = renderPage();
     expect(screen.queryByTestId('key-findings-section')).not.toBeInTheDocument();
+  });
+
+  // Story 8.8: Choropleth map tests
+  it('renders registration density map section', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByTestId('geographic-map-section')).toBeInTheDocument();
+    expect(screen.getByText('Registration Density Map')).toBeInTheDocument();
+  });
+
+  it('choropleth section renders with suppressed public data', () => {
+    const dataWithSuppressed: PublicInsightsData = {
+      ...fullData,
+      lgaDensity: [
+        { label: 'Ibadan North', count: 500, percentage: 50, suppressed: false },
+        { label: 'Ido', count: 5, percentage: 0.5, suppressed: true },
+      ],
+    };
+    mockInsights.isLoading = false;
+    mockInsights.data = dataWithSuppressed;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByTestId('geographic-map-section')).toBeInTheDocument();
   });
 
   it('handles suppressed data by excluding suppressed buckets', () => {

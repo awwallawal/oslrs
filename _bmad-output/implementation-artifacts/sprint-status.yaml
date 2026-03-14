@@ -278,5 +278,16 @@ development_status:
   8-5-public-insights-page-anonymized-labour-market-intelligence: done  # Completed 2026-03-13: 10 tasks + 2 review rounds. Code review R2: 6 findings (2H, 3M, 1L), all 6 auto-fixed. H1 AC#6 MethodologyNote on sub-pages, H2 follow-up documentation. 48 new tests (20 API + 28 web + 3 review fixes). 0 regressions.
   8-6-cross-tabulation-skills-inventory-gap-analysis: done  # Completed 2026-03-13: 15 tasks. Code review: 9 findings (3H, 4M, 2L), all 9 auto-fixed. H1 missing loading/error states on Skills Inventory tabs (3 pages), H2 gap chart legend semantically incorrect, H3 test desc 150→151. M1 skeleton loading, M2 magic number, M3 Zod refine, M4 stable cache keys. 51 new tests (35 API + 16 web), 0 regressions.
   8-7-inferential-statistics-progressive-activation-pdf-export: done  # Completed 2026-03-14: 19 tasks. Backend: statistical engine (13 functions), inferential analytics, extended equity, policy brief PDF, activation system. Frontend: 7 card components, ActivationStatusPanel on all 6 pages, key findings on public insights. 77 new tests. Code review: 26 issues found, all HIGH/MEDIUM/LOW fixed.
-  8-8-geographic-visualization-registry-integration-analytics-spec-completion: ready-for-dev
+  8-8-geographic-visualization-registry-integration-analytics-spec-completion: done  # Completed 2026-03-14: 12 tasks. Choropleth on 4 pages (SA, Official, Supervisor, Public), inter-enumerator reliability (JSD), 4 dormant hooks, spec audit (88 features mapped). 31 new tests, 4,093 total pass, 0 regressions. Code review: 10 issues found (3H/4M/3L), 9 fixed.
   epic-8-retrospective: optional
+
+  # Epic 9: Platform Polish, Profile & Domain Migration
+  # Source: _bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md
+  # Added: 2026-03-14 — Profile page fix, domain migration, trust section polish, email setup.
+  # Dependencies: Story 9-2 blocked by oslrs.com purchase. Story 9-4 blocked by 9-2 (DNS).
+  epic-9: backlog
+  9-1-profile-page-auth-me-fix-editable-profile: ready-for-dev  # HIGH: Fix /auth/me missing fullName + editable profile with PATCH /users/profile. Story created 2026-03-14.
+  9-2-domain-migration-oslrs-com: backlog  # CRITICAL: Migrate oyotradeministry.com.ng → oslrs.com (28 files, ~75+ references, NGINX, DNS). Blocked by domain purchase.
+  9-3-trust-section-footer-minor-polish: backlog  # LOW: Remove one logo from Trust section (pending decision), wire footer Insights links.
+  9-4-email-setup-resend-domain: backlog  # MEDIUM: Resend domain verification for oslrs.com, human-facing email setup. Depends on 9-2 (DNS).
+  epic-9-retrospective: optional

@@ -73,6 +73,13 @@ router.get(
   AnalyticsController.getPolicyBrief,
 );
 
+// Story 8.8: Inter-enumerator reliability (SA + Supervisor + Assessor only)
+router.get(
+  '/enumerator-reliability',
+  authorize(UserRole.SUPER_ADMIN, UserRole.SUPERVISOR, UserRole.VERIFICATION_ASSESSOR),
+  AnalyticsController.getEnumeratorReliability,
+);
+
 // Story 8.7: Activation status (all dashboard roles — lightweight endpoint)
 router.get('/activation-status', AnalyticsController.getActivationStatus);
 

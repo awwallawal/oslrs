@@ -34,11 +34,13 @@ import { fetchPolicyBriefPdf } from '../api/analytics.api';
 import { FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CrossTabTable } from '../components/charts/CrossTabTable';
+import { LgaChoroplethMap } from '../components/charts/LgaChoroplethMap';
 import { FullSkillsChart } from '../components/charts/FullSkillsChart';
 import { SkillsCategoryChart } from '../components/charts/SkillsCategoryChart';
 import { SkillsGapChart } from '../components/charts/SkillsGapChart';
 import { SkillsConcentrationTable } from '../components/charts/SkillsConcentrationTable';
 import { SkillsDiversityCards } from '../components/charts/SkillsDiversityCards';
+import { lgaDistributionToMapData } from '../utils/analytics-transforms';
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -61,7 +63,7 @@ export default function SurveyAnalyticsPage() {
   const { data: pipeline, isLoading: pipeLoading } = usePipelineSummary(params);
 
   // Gated by active tab — only fire when the corresponding tab is selected
-  const { data: demographics, isLoading: demoLoading, error: demoError, refetch: refetchDemo } = useDemographics(params, activeTab === 'demographics' || activeTab === 'equity');
+  const { data: demographics, isLoading: demoLoading, error: demoError, refetch: refetchDemo } = useDemographics(params, activeTab === 'demographics' || activeTab === 'equity' || activeTab === 'geographic');
   const { data: employment, isLoading: empLoading, error: empError, refetch: refetchEmp } = useEmployment(params, activeTab === 'employment' || activeTab === 'equity');
   const { data: household, isLoading: hhLoading, error: hhError, refetch: refetchHh } = useHousehold(params, activeTab === 'household');
   const { data: skills, isLoading: skillsLoading, error: skillsError, refetch: refetchSkills } = useSkillsFrequency(params, activeTab === 'skills');
@@ -132,6 +134,7 @@ export default function SurveyAnalyticsPage() {
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="equity">Equity</TabsTrigger>
+          <TabsTrigger value="geographic">Geographic</TabsTrigger>
           <TabsTrigger value="cross-tab">Cross-Tab</TabsTrigger>
           <TabsTrigger value="skills-inventory">Skills Inventory</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
@@ -183,6 +186,29 @@ export default function SurveyAnalyticsPage() {
               />
             </div>
             <SkillsCharts data={skills ?? []} isLoading={skillsLoading} error={skillsError} onRetry={refetchSkills} />
+          </ErrorBoundary>
+        </TabsContent>
+
+        {/* Geographic tab (Story 8.8) */}
+        <TabsContent value="geographic">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Geographic chart error',
+              description: 'This chart encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            {demoLoading && <SkeletonCard />}
+            {demoError && (
+              <Card className="p-6 text-center text-red-600">Failed to load geographic data.</Card>
+            )}
+            {demographics && (
+              <LgaChoroplethMap
+                data={lgaDistributionToMapData(demographics.lgaDistribution)}
+                onLgaClick={(lgaCode) => setParams({ ...params, lgaId: lgaCode })}
+              />
+            )}
           </ErrorBoundary>
         </TabsContent>
 

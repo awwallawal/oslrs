@@ -21,6 +21,12 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useEmployment: () => mockEmployment,
   useSkillsInventory: () => ({ data: null, isLoading: false }),
   useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
+  useRegistrySummary: () => ({ data: null, isLoading: false }),
+  useEnumeratorReliability: () => ({ data: null, isLoading: false, error: null }),
+}));
+
+vi.mock('../../../auth/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', role: 'supervisor', lgaId: 'ibadan_north' } }),
 }));
 
 vi.mock('../../api/export.api', () => ({
@@ -45,6 +51,12 @@ vi.mock('../../components/charts/HourOfDayChart', () => ({
 }));
 vi.mock('../../components/charts/FieldCoverageMap', () => ({
   default: (props: any) => <div data-testid="field-coverage-map">{props.isLoading ? 'loading' : 'loaded'}</div>,
+}));
+vi.mock('../../components/charts/LgaChoroplethMap', () => ({
+  LgaChoroplethMap: () => <div data-testid="lga-choropleth-map" />,
+}));
+vi.mock('../../components/charts/EnumeratorReliabilityPanel', () => ({
+  EnumeratorReliabilityPanel: () => <div data-testid="enumerator-reliability-panel" />,
 }));
 vi.mock('../../components/charts/DemographicCharts', () => ({
   DemographicCharts: (props: any) => <div data-testid="demographic-charts">{props.isLoading ? 'loading' : 'loaded'}</div>,

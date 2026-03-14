@@ -31,6 +31,7 @@ import { fetchPolicyBriefPdf } from '../api/analytics.api';
 import { FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CrossTabTable } from '../components/charts/CrossTabTable';
+import { LgaChoroplethMap } from '../components/charts/LgaChoroplethMap';
 import { FullSkillsChart } from '../components/charts/FullSkillsChart';
 import { SkillsCategoryChart } from '../components/charts/SkillsCategoryChart';
 import { SkillsGapChart } from '../components/charts/SkillsGapChart';
@@ -42,6 +43,7 @@ import { LgaBreakdownChart } from '../components/LgaBreakdownChart';
 import { AnalyticsFilters } from '../components/AnalyticsFilters';
 import { AnalyticsTabsContent } from '../components/AnalyticsTabContent';
 import { deriveEquityData } from '../utils/derive-equity-data';
+import { lgaDistributionToMapData } from '../utils/analytics-transforms';
 
 export default function OfficialStatsPage() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -61,7 +63,7 @@ export default function OfficialStatsPage() {
   const { data: pipeline } = usePipelineSummary(params);
 
   // Analytics hooks gated by active tab (Story 8.2)
-  const { data: demographics, isLoading: demoLoading, error: demoError, refetch: refetchDemo } = useDemographics(params, activeTab === 'demographics' || activeTab === 'equity');
+  const { data: demographics, isLoading: demoLoading, error: demoError, refetch: refetchDemo } = useDemographics(params, activeTab === 'demographics' || activeTab === 'equity' || activeTab === 'geographic');
   const { data: employment, isLoading: empLoading, error: empError, refetch: refetchEmp } = useEmployment(params, activeTab === 'employment' || activeTab === 'equity');
   const { data: household, isLoading: hhLoading, error: hhError, refetch: refetchHh } = useHousehold(params, activeTab === 'household');
   const { data: trends, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useTrends(params, activeTab === 'trends');
@@ -105,6 +107,7 @@ export default function OfficialStatsPage() {
           <TabsTrigger value="household">Household</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="equity">Equity</TabsTrigger>
+          <TabsTrigger value="geographic">Geographic</TabsTrigger>
           <TabsTrigger value="cross-tab">Cross-Tab</TabsTrigger>
           <TabsTrigger value="skills-inventory">Skills Inventory</TabsTrigger>
           <TabsTrigger value="insights">Policy Insights</TabsTrigger>
@@ -202,6 +205,29 @@ export default function OfficialStatsPage() {
           eqxError={eqxError}
           onRetryEqx={refetchEqx}
         />
+
+        {/* Geographic tab (Story 8.8) */}
+        <TabsContent value="geographic">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Geographic chart error',
+              description: 'This chart encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            {demoLoading && <SkeletonCard />}
+            {demoError && (
+              <Card className="p-6 text-center text-red-600">Failed to load geographic data.</Card>
+            )}
+            {demographics && (
+              <LgaChoroplethMap
+                data={lgaDistributionToMapData(demographics.lgaDistribution)}
+                onLgaClick={(lgaCode) => setParams({ ...params, lgaId: lgaCode })}
+              />
+            )}
+          </ErrorBoundary>
+        </TabsContent>
 
         {/* Cross-Tab tab (Story 8.6) */}
         <TabsContent value="cross-tab">

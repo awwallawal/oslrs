@@ -442,3 +442,30 @@ export interface SkillsInventoryData {
     diversityIndex: { met: boolean; currentN: number; requiredN: number };
   };
 }
+
+// --- Story 8.8: Inter-Enumerator Reliability ---
+
+export interface EnumeratorDistribution {
+  enumeratorId: string;
+  enumeratorName: string;
+  submissionCount: number;
+  distributions: {
+    question: string;
+    answers: { label: string; count: number; proportion: number }[];
+  }[];
+}
+
+export interface ReliabilityPair {
+  enumeratorA: string;
+  enumeratorB: string;
+  divergenceScores: { question: string; jsDivergence: number }[];
+  avgDivergence: number;
+  flag: 'normal' | 'amber' | 'red';
+  interpretation: string;
+}
+
+export interface EnumeratorReliabilityData {
+  enumerators: EnumeratorDistribution[];
+  pairs: ReliabilityPair[];
+  threshold: ThresholdStatus;
+}

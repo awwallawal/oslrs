@@ -185,6 +185,17 @@ export class AnalyticsController {
     }
   }
 
+  // Story 8.8: Inter-enumerator reliability (SA + Supervisor + Assessor)
+  static async getEnumeratorReliability(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getEnumeratorReliability(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Story 8.7: Activation status (lightweight — all roles)
   static async getActivationStatus(req: Request, res: Response, next: NextFunction) {
     try {

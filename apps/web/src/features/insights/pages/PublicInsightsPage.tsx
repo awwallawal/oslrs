@@ -7,6 +7,8 @@ import { PublicDemographicsSection } from '../components/PublicDemographicsSecti
 import { PublicEmploymentSection } from '../components/PublicEmploymentSection';
 import { PublicSkillsChart } from '../components/PublicSkillsChart';
 import { PublicLgaTable } from '../components/PublicLgaTable';
+import { LgaChoroplethMap } from '../../dashboard/components/charts/LgaChoroplethMap';
+import { lgaDistributionToMapData } from '../../dashboard/utils/analytics-transforms';
 import { MethodologyNote } from '../components/MethodologyNote';
 
 function HeroSkeleton() {
@@ -117,6 +119,15 @@ export default function PublicInsightsPage() {
         />
 
         <PublicSkillsChart allSkills={data.allSkills} />
+
+        {/* Story 8.8 AC#3: Geographic choropleth for public insights */}
+        <section data-testid="geographic-map-section">
+          <h2 className="text-2xl font-bold text-neutral-900 mb-6">Registration Density Map</h2>
+          <LgaChoroplethMap
+            data={lgaDistributionToMapData(data.lgaDensity)}
+            suppressionMinN={10}
+          />
+        </section>
 
         <PublicLgaTable lgaDensity={data.lgaDensity} />
 

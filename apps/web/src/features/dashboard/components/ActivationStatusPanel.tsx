@@ -80,6 +80,14 @@ export function ActivationStatusPanel() {
   );
 }
 
+/** Per-feature descriptions for dormant hooks with non-standard requirements */
+const DORMANT_DESCRIPTIONS: Record<string, string> = {
+  seasonality_detection: 'Requires 365+ days of data',
+  campaign_effectiveness: 'Requires campaign event dates',
+  response_entropy: 'Requires 50+ submissions per enumerator',
+  gps_dispersion: 'Requires 20+ GPS-tagged submissions per enumerator',
+};
+
 function FeatureGroup({ title, features, badgeClass }: {
   title: string;
   features: { id: string; label: string; currentN: number; requiredN: number; phase: number }[];
@@ -94,29 +102,38 @@ function FeatureGroup({ title, features, badgeClass }: {
       </div>
       <div className="space-y-2">
         {features.map(f => {
-          const progress = f.requiredN > 0 ? Math.min(100, Math.round((f.currentN / f.requiredN) * 100)) : 100;
+          const customDesc = DORMANT_DESCRIPTIONS[f.id];
+          const progress = (f.requiredN > 0 && !customDesc)
+            ? Math.min(100, Math.round((f.currentN / f.requiredN) * 100))
+            : (customDesc ? 0 : 100);
           return (
             <div key={f.id} className="flex items-center gap-3">
               <span className={`text-xs text-gray-700 w-56 truncate ${f.phase >= 5 ? 'italic' : ''}`}>
                 {f.label}
               </span>
-              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={f.currentN} aria-valuemin={0} aria-valuemax={f.requiredN} aria-label={`${f.label} progress`}>
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    progress >= 100 ? 'bg-green-500' : progress > 50 ? 'bg-amber-400' : 'bg-gray-300'
-                  }`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="text-xs text-gray-500 w-20 text-right">
-                {f.currentN} / {f.requiredN}
-              </span>
+              {customDesc ? (
+                <span className="flex-1 text-xs text-gray-400 italic">{customDesc}</span>
+              ) : (
+                <>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={f.currentN} aria-valuemin={0} aria-valuemax={f.requiredN} aria-label={`${f.label} progress`}>
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        progress >= 100 ? 'bg-green-500' : progress > 50 ? 'bg-amber-400' : 'bg-gray-300'
+                      }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 w-20 text-right">
+                    {f.currentN} / {f.requiredN}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}
-        {features.some(f => f.phase >= 5) && (
+        {features.some(f => f.phase >= 5 && !DORMANT_DESCRIPTIONS[f.id]) && (
           <p className="text-xs text-gray-400 italic mt-1">
-            Requires 500+ submissions — activates automatically
+            Activates automatically when submission threshold is reached
           </p>
         )}
       </div>

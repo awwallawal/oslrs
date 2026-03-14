@@ -291,7 +291,7 @@ describe('SurveyAnalyticsService — Story 8.7', () => {
       const result = await SurveyAnalyticsService.getActivationStatus(systemScope);
 
       expect(result.totalSubmissions).toBe(75);
-      expect(result.features.length).toBe(13); // 8 Phase 4 + 5 Phase 5
+      expect(result.features.length).toBe(17); // 8 Phase 4 + 9 Phase 5 (Story 8.8 added 4 dormant hooks)
       // Phase 5 always dormant
       const phase5 = result.features.filter(f => f.phase === 5);
       expect(phase5.every(f => f.category === 'dormant')).toBe(true);

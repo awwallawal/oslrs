@@ -26,6 +26,11 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useDemographics: () => mockDemographics,
   useEmployment: () => mockEmployment,
   useActivationStatus: () => ({ data: null, isLoading: false, error: null }),
+  useEnumeratorReliability: () => ({ data: null, isLoading: false, error: null }),
+}));
+
+vi.mock('../../components/charts/EnumeratorReliabilityPanel', () => ({
+  EnumeratorReliabilityPanel: () => <div data-testid="enumerator-reliability-panel" />,
 }));
 
 vi.mock('../../components/AnalyticsFilters', () => ({

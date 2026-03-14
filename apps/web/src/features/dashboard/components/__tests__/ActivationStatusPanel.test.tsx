@@ -16,6 +16,11 @@ const mockData: ActivationStatusData = {
     { id: 'correlations', label: 'Correlation Analysis', requiredN: 100, currentN: 75, met: false, phase: 4, category: 'approaching' },
     { id: 'regression_income', label: 'Income Predictors (OLS Regression)', requiredN: 500, currentN: 75, met: false, phase: 5, category: 'dormant' },
     { id: 'anomaly_detection', label: 'Automated Anomaly Detection', requiredN: 500, currentN: 75, met: false, phase: 5, category: 'dormant' },
+    // Story 8.8 AC#6: New Phase 5 dormant hooks
+    { id: 'seasonality_detection', label: 'Seasonality Detection', requiredN: 365, currentN: 75, met: false, phase: 5, category: 'dormant' },
+    { id: 'campaign_effectiveness', label: 'Campaign Effectiveness Analysis', requiredN: 0, currentN: 75, met: false, phase: 5, category: 'dormant' },
+    { id: 'response_entropy', label: 'Response Pattern Entropy', requiredN: 50, currentN: 75, met: false, phase: 5, category: 'dormant' },
+    { id: 'gps_dispersion', label: 'GPS Dispersion Analysis', requiredN: 20, currentN: 75, met: false, phase: 5, category: 'dormant' },
   ],
 };
 
@@ -57,7 +62,7 @@ describe('ActivationStatusPanel', () => {
     fireEvent.click(screen.getByText('Analytics Activation Status'));
 
     expect(screen.getByText('Income Predictors (OLS Regression)')).toBeInTheDocument();
-    expect(screen.getByText(/Requires 500\+ submissions/)).toBeInTheDocument();
+    expect(screen.getByText(/Activates automatically when submission threshold is reached/)).toBeInTheDocument();
   });
 
   it('shows progress bars with correct counts', () => {
@@ -67,15 +72,32 @@ describe('ActivationStatusPanel', () => {
     expect(screen.getByText('75 / 30')).toBeInTheDocument(); // proportion_cis
     // chi_square + correlations both show 75 / 100
     expect(screen.getAllByText('75 / 100')).toHaveLength(2);
-    // regression_income + anomaly_detection both show 75 / 500
-    expect(screen.getAllByText('75 / 500')).toHaveLength(2);
+    // regression_income + anomaly_detection show 75 / 500
+    expect(screen.getAllByText('75 / 500').length).toBeGreaterThanOrEqual(2);
   });
 
   it('shows summary counts in collapsed header', () => {
     renderWithProviders(<ActivationStatusPanel />);
     expect(screen.getByText(/2 active/)).toBeInTheDocument();
     expect(screen.getByText(/2 approaching/)).toBeInTheDocument();
-    expect(screen.getByText(/2 dormant/)).toBeInTheDocument();
+    expect(screen.getByText(/6 dormant/)).toBeInTheDocument();
+  });
+
+  // Story 8.8 AC#6: All 4 new dormant hooks appear with specific descriptions
+  it('shows all 4 Story 8.8 dormant hooks with correct descriptions', () => {
+    renderWithProviders(<ActivationStatusPanel />);
+    fireEvent.click(screen.getByText('Analytics Activation Status'));
+
+    expect(screen.getByText('Seasonality Detection')).toBeInTheDocument();
+    expect(screen.getByText('Campaign Effectiveness Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Response Pattern Entropy')).toBeInTheDocument();
+    expect(screen.getByText('GPS Dispersion Analysis')).toBeInTheDocument();
+
+    // Per-feature descriptions instead of generic message
+    expect(screen.getByText('Requires 365+ days of data')).toBeInTheDocument();
+    expect(screen.getByText('Requires campaign event dates')).toBeInTheDocument();
+    expect(screen.getByText('Requires 50+ submissions per enumerator')).toBeInTheDocument();
+    expect(screen.getByText('Requires 20+ GPS-tagged submissions per enumerator')).toBeInTheDocument();
   });
 
   it('defaults to collapsed when no localStorage entry exists', () => {

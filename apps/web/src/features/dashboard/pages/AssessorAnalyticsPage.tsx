@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs';
-import { useVerificationPipeline, useDemographics, useEmployment } from '../hooks/useAnalytics';
+import { useVerificationPipeline, useDemographics, useEmployment, useEnumeratorReliability } from '../hooks/useAnalytics';
 import { AnalyticsFilters } from '../components/AnalyticsFilters';
 import VerificationFunnelChart from '../components/charts/VerificationFunnelChart';
 import FraudTypeBreakdownChart from '../components/charts/FraudTypeBreakdownChart';
@@ -17,6 +17,7 @@ import RejectionReasonsChart from '../components/charts/RejectionReasonsChart';
 import PipelineStatCards from '../components/charts/PipelineStatCards';
 import { DemographicCharts } from '../components/charts/DemographicCharts';
 import { EmploymentCharts } from '../components/charts/EmploymentCharts';
+import { EnumeratorReliabilityPanel } from '../components/charts/EnumeratorReliabilityPanel';
 import { Card, CardContent } from '../../../components/ui/card';
 import type { AnalyticsQueryParams } from '@oslsr/types';
 import { ActivationStatusPanel } from '../components/ActivationStatusPanel';
@@ -54,6 +55,9 @@ export default function AssessorAnalyticsPage() {
 
   const demographics = useDemographics(filterParams, activeTab === 'demographics');
   const employment = useEmployment(filterParams, activeTab === 'demographics');
+
+  // Story 8.8: Enumerator reliability — read-only flagged pairs for assessor
+  const reliability = useEnumeratorReliability(filterParams.lgaId, activeTab === 'quality');
 
   const data = pipeline.data;
 
@@ -206,6 +210,14 @@ export default function AssessorAnalyticsPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Story 8.8 AC#5: Enumerator Reliability — flagged pairs only */}
+            <EnumeratorReliabilityPanel
+              data={reliability.data}
+              isLoading={reliability.isLoading}
+              error={reliability.error}
+              flagsOnly
+            />
           </div>
         </TabsContent>
 

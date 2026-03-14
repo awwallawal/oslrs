@@ -25,6 +25,7 @@ import type {
   InferentialInsightsData,
   ExtendedEquityData,
   ActivationStatusData,
+  EnumeratorReliabilityData,
 } from '@oslsr/types';
 
 function buildQueryString(params?: AnalyticsQueryParams): string {
@@ -138,6 +139,14 @@ export async function fetchCrossTab(query: CrossTabQuery, params?: AnalyticsQuer
 
 export async function fetchSkillsInventory(params?: AnalyticsQueryParams): Promise<SkillsInventoryData> {
   const result = await apiClient(`/analytics/skills-inventory${buildQueryString(params)}`);
+  return result.data;
+}
+
+// --- Story 8.8: Inter-Enumerator Reliability ---
+
+export async function fetchEnumeratorReliability(lgaId?: string): Promise<EnumeratorReliabilityData> {
+  const qs = lgaId ? `?lgaId=${encodeURIComponent(lgaId)}` : '';
+  const result = await apiClient(`/analytics/enumerator-reliability${qs}`);
   return result.data;
 }
 

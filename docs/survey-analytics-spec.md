@@ -679,140 +679,142 @@ Consolidated list of all features across all roles. Check (Y) = include, (N) = d
 
 ### Descriptive Analytics
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| D1 | Gender distribution (pie/donut) | All 6 roles (scoped) + Public | 1 |
-| D2 | Age distribution histogram + mean/median/std dev | All 6 + Public | 1 |
-| D3 | Education level bar chart | All 6 + Public | 1 |
-| D4 | Marital status breakdown | SA, Official, Assessor, Supervisor | 1 |
-| D5 | Disability prevalence with 95% CI | SA, Official, Assessor, Supervisor + Public | 1 |
-| D6 | LGA registration density choropleth (Leaflet) | SA, Official, Supervisor (their LGA) + Public | 1 |
-| D7 | Work status breakdown | All 6 + Public | 1 |
-| D8 | Employment type donut | All 6 + Public | 1 |
-| D9 | Formal vs informal employment ratio | SA, Official + Public | 1 |
-| D10 | Years of experience bar chart | SA, Official, Supervisor | 1 |
-| D11 | Hours worked histogram + percentiles | SA, Official, Supervisor | 1 |
-| D12 | Monthly income distribution (bands) | SA, Official, Supervisor | 1 |
-| D13 | Income by LGA (ranked bar) | SA, Official | 1 |
-| D14 | Primary skills frequency (all 150) | SA, Official, Supervisor + Public (top 10) | 3 |
-| D15 | Skills by sector (20 groups) | SA, Official, Supervisor | 3 |
-| D16 | Skills concentration by LGA | SA, Official | 3 |
-| D17 | Skills gap: have vs want-to-learn | SA, Official + Public | 3 |
-| D18 | Skill diversity index (Shannon) | SA, Official | 3 |
-| D19 | Household size distribution | SA, Official, Supervisor | 1 |
-| D20 | Dependency ratio | SA, Official | 1 |
-| D21 | Head of household by gender | SA, Official | 1 |
-| D22 | Housing status breakdown | SA, Official, Supervisor | 1 |
-| D23 | Business ownership rate with CI | SA, Official + Public | 1 |
-| D24 | Business registration rate | SA, Official | 1 |
-| D25 | Apprentice employment totals | SA, Official | 1 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| D1 | Gender distribution (pie/donut) | All 6 roles (scoped) + Public | 1 | 8.1, 8.2 |
+| D2 | Age distribution histogram + mean/median/std dev | All 6 + Public | 1 | 8.1, 8.2 |
+| D3 | Education level bar chart | All 6 + Public | 1 | 8.1, 8.2 |
+| D4 | Marital status breakdown | SA, Official, Assessor, Supervisor | 1 | 8.1, 8.2 |
+| D5 | Disability prevalence with 95% CI | SA, Official, Assessor, Supervisor + Public | 1 | 8.1, 8.2 |
+| D6 | LGA registration density choropleth (Leaflet) | SA, Official, Supervisor (their LGA) + Public | 1 | **8.8** |
+| D7 | Work status breakdown | All 6 + Public | 1 | 8.1, 8.2 |
+| D8 | Employment type donut | All 6 + Public | 1 | 8.1, 8.2 |
+| D9 | Formal vs informal employment ratio | SA, Official + Public | 1 | 8.1, 8.2 |
+| D10 | Years of experience bar chart | SA, Official, Supervisor | 1 | 8.1, 8.2 |
+| D11 | Hours worked histogram + percentiles | SA, Official, Supervisor | 1 | 8.1, 8.2 |
+| D12 | Monthly income distribution (bands) | SA, Official, Supervisor | 1 | 8.1, 8.2 |
+| D13 | Income by LGA (ranked bar) | SA, Official | 1 | 8.1, 8.2 |
+| D14 | Primary skills frequency (all 150) | SA, Official, Supervisor + Public (top 10) | 3 | 8.6 |
+| D15 | Skills by sector (20 groups) | SA, Official, Supervisor | 3 | 8.6 |
+| D16 | Skills concentration by LGA | SA, Official | 3 | 8.6 |
+| D17 | Skills gap: have vs want-to-learn | SA, Official + Public | 3 | 8.6 |
+| D18 | Skill diversity index (Shannon) | SA, Official | 3 | 8.6 |
+| D19 | Household size distribution | SA, Official, Supervisor | 1 | 8.1, 8.2 |
+| D20 | Dependency ratio | SA, Official | 1 | 8.1, 8.2 |
+| D21 | Head of household by gender | SA, Official | 1 | 8.1, 8.2 |
+| D22 | Housing status breakdown | SA, Official, Supervisor | 1 | 8.1, 8.2 |
+| D23 | Business ownership rate with CI | SA, Official + Public | 1 | 8.1, 8.2 |
+| D24 | Business registration rate | SA, Official | 1 | 8.1, 8.2 |
+| D25 | Apprentice employment totals | SA, Official | 1 | 8.1, 8.2 |
 
 ### Time Series & Trends
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| T1 | Daily registration trend (7/30/90d) | SA, Official, Supervisor, Enum, Clerk | 1 |
-| T2 | Cumulative registration curve | SA, Official + Public | 1 |
-| T3 | Day-of-week submission pattern | SA, Official, Supervisor | 2 |
-| T4 | Hour-of-day submission pattern | SA, Supervisor | 2 |
-| T5 | Source channel trend (enum/public/clerk) | SA, Official | 1 |
-| T6 | Enrollment velocity forecast | SA, Official | 4 |
-| T7 | Seasonality detection | SA, Official | 5 |
-| T8 | Campaign effectiveness (before/after) | SA, Official | 5 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| T1 | Daily registration trend (7/30/90d) | SA, Official, Supervisor, Enum, Clerk | 1 | 8.1, 8.2 |
+| T2 | Cumulative registration curve | SA, Official + Public | 1 | 8.1, 8.2 |
+| T3 | Day-of-week submission pattern | SA, Official, Supervisor | 2 | 8.3 |
+| T4 | Hour-of-day submission pattern | SA, Supervisor | 2 | 8.3 |
+| T5 | Source channel trend (enum/public/clerk) | SA, Official | 1 | 8.1, 8.2 |
+| T6 | Enrollment velocity forecast | SA, Official | 4 | 8.7 |
+| T7 | Seasonality detection | SA, Official | 5 | **8.8** (dormant) |
+| T8 | Campaign effectiveness (before/after) | SA, Official | 5 | **8.8** (dormant) |
 
 ### Supervisor/Team Analytics
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| S1 | Submissions per enumerator (ranked bar) | SA, Supervisor | 2 |
-| S2 | Completion time box plots per enumerator | SA, Supervisor | 2 |
-| S3 | GPS coverage rate per enumerator | SA, Supervisor | 2 |
-| S4 | GPS cluster map (Leaflet, LGA-scoped) | SA, Supervisor | 2 |
-| S5 | Daily submission velocity per enumerator | SA, Supervisor | 2 |
-| S6 | Skip/refusal rate per enumerator | SA, Supervisor | 2 |
-| S7 | NIN capture rate per enumerator | SA, Supervisor | 2 |
-| S8 | Rejection/fraud flag rate per enumerator | SA, Supervisor | 2 |
-| S9 | Field coverage map (GPS on LGA boundary) | SA, Supervisor | 2 |
-| S10 | Inter-enumerator reliability (distribution comparison) | SA, Supervisor, Assessor (flags) | 3 |
-| S11 | Response pattern entropy per enumerator | SA, Supervisor | 5 |
-| S12 | GPS dispersion (std dev of coordinates) | SA, Supervisor | 5 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| S1 | Submissions per enumerator (ranked bar) | SA, Supervisor | 2 | 8.3 |
+| S2 | Completion time box plots per enumerator | SA, Supervisor | 2 | 8.3 |
+| S3 | GPS coverage rate per enumerator | SA, Supervisor | 2 | 8.3 |
+| S4 | GPS cluster map (Leaflet, LGA-scoped) | SA, Supervisor | 2 | 8.3 |
+| S5 | Daily submission velocity per enumerator | SA, Supervisor | 2 | 8.3 |
+| S6 | Skip/refusal rate per enumerator | SA, Supervisor | 2 | 8.3 |
+| S7 | NIN capture rate per enumerator | SA, Supervisor | 2 | 8.3 |
+| S8 | Rejection/fraud flag rate per enumerator | SA, Supervisor | 2 | 8.3 |
+| S9 | Field coverage map (GPS on LGA boundary) | SA, Supervisor | 2 | 8.3 |
+| S10 | Inter-enumerator reliability (distribution comparison) | SA, Supervisor, Assessor (flags) | 3 | **8.8** |
+| S11 | Response pattern entropy per enumerator | SA, Supervisor | 5 | **8.8** (dormant) |
+| S12 | GPS dispersion (std dev of coordinates) | SA, Supervisor | 5 | **8.8** (dormant) |
 
 ### Enumerator/Clerk Personal Stats
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| P1 | My daily submissions line chart | Enumerator, Clerk | 2 |
-| P2 | My cumulative progress vs target | Enumerator, Clerk | 2 |
-| P3 | My avg completion time vs team avg | Enumerator, Clerk | 2 |
-| P4 | My GPS capture rate | Enumerator | 2 |
-| P5 | My data quality composite score (0-100) | Enumerator, Clerk | 2 |
-| P6 | My respondent demographic diversity | Enumerator | 2 |
-| P7 | My NIN capture rate | Enumerator, Clerk | 2 |
-| P8 | My skip rate | Enumerator, Clerk | 2 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| P1 | My daily submissions line chart | Enumerator, Clerk | 2 | 8.3 |
+| P2 | My cumulative progress vs target | Enumerator, Clerk | 2 | 8.3 |
+| P3 | My avg completion time vs team avg | Enumerator, Clerk | 2 | 8.3 |
+| P4 | My GPS capture rate | Enumerator | 2 | 8.3 |
+| P5 | My data quality composite score (0-100) | Enumerator, Clerk | 2 | 8.3 |
+| P6 | My respondent demographic diversity | Enumerator | 2 | 8.3 |
+| P7 | My NIN capture rate | Enumerator, Clerk | 2 | 8.3 |
+| P8 | My skip rate | Enumerator, Clerk | 2 | 8.3 |
 
 ### Assessor/Verification Analytics
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| V1 | Daily review throughput (line chart) | SA, Assessor | 3 |
-| V2 | Avg review time (median minutes) | SA, Assessor | 3 |
-| V3 | Backlog trend (queue size over time) | SA, Assessor | 3 |
-| V4 | Approval/rejection rate with trend | SA, Official (read), Assessor | 3 |
-| V5 | Rejection reason frequency | SA, Assessor | 3 |
-| V6 | Time-to-resolution (submission → verdict) | SA, Assessor | 3 |
-| V7 | Inter-rater agreement (Cohen's Kappa) | SA | 5 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| V1 | Daily review throughput (line chart) | SA, Assessor | 3 | 8.4 |
+| V2 | Avg review time (median minutes) | SA, Assessor | 3 | 8.4 |
+| V3 | Backlog trend (queue size over time) | SA, Assessor | 3 | 8.4 |
+| V4 | Approval/rejection rate with trend | SA, Official (read), Assessor | 3 | 8.4 |
+| V5 | Rejection reason frequency | SA, Assessor | 3 | 8.4 |
+| V6 | Time-to-resolution (submission → verdict) | SA, Assessor | 3 | 8.4 |
+| V7 | Inter-rater agreement (Cohen's Kappa) | SA | 5 | 8.7 (dormant) |
 
 ### Inferential Statistics
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| I1 | Chi-square: gender × employment type | SA, Official + Public (finding only) | 4 |
-| I2 | Chi-square: education × employment type | SA, Official | 4 |
-| I3 | Chi-square: LGA × unemployment | SA, Official | 4 |
-| I4 | Chi-square: gender × business ownership | SA, Official | 4 |
-| I5 | Chi-square: disability × employment | SA, Official + Public (finding only) | 4 |
-| I6 | Chi-square: marital status × head of household | SA, Official | 4 |
-| I7 | Correlation: education vs income (Spearman) | SA, Official | 4 |
-| I8 | Correlation: experience vs income (Spearman) | SA, Official | 4 |
-| I9 | Correlation: household size vs income (Pearson) | SA, Official | 4 |
-| I10 | Correlation: hours vs income (Pearson) | SA, Official | 4 |
-| I11 | Group comparison: income across LGAs (Kruskal-Wallis) | SA, Official | 4 |
-| I12 | Group comparison: income by gender (Mann-Whitney) | SA, Official | 4 |
-| I13 | Group comparison: income by education (Kruskal-Wallis) | SA, Official | 4 |
-| I14 | Proportion CIs: unemployment, disability, business, formal employment | SA, Official + Public | 4 |
-| I15 | Regression: income predictors (OLS) | SA, Official | 5 |
-| I16 | Regression: employment predictors (logistic) | SA, Official | 5 |
-| I17 | Regression: business ownership predictors (logistic) | SA, Official | 5 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| I1 | Chi-square: gender × employment type | SA, Official + Public (finding only) | 4 | 8.7 |
+| I2 | Chi-square: education × employment type | SA, Official | 4 | 8.7 |
+| I3 | Chi-square: LGA × unemployment | SA, Official | 4 | 8.7 |
+| I4 | Chi-square: gender × business ownership | SA, Official | 4 | 8.7 |
+| I5 | Chi-square: disability × employment | SA, Official + Public (finding only) | 4 | 8.7 |
+| I6 | Chi-square: marital status × head of household | SA, Official | 4 | 8.7 |
+| I7 | Correlation: education vs income (Spearman) | SA, Official | 4 | 8.7 |
+| I8 | Correlation: experience vs income (Spearman) | SA, Official | 4 | 8.7 |
+| I9 | Correlation: household size vs income (Pearson) | SA, Official | 4 | 8.7 |
+| I10 | Correlation: hours vs income (Pearson) | SA, Official | 4 | 8.7 |
+| I11 | Group comparison: income across LGAs (Kruskal-Wallis) | SA, Official | 4 | 8.7 |
+| I12 | Group comparison: income by gender (Mann-Whitney) | SA, Official | 4 | 8.7 |
+| I13 | Group comparison: income by education (Kruskal-Wallis) | SA, Official | 4 | 8.7 |
+| I14 | Proportion CIs: unemployment, disability, business, formal employment | SA, Official + Public | 4 | 8.7 |
+| I15 | Regression: income predictors (OLS) | SA, Official | 5 | 8.7 (dormant) |
+| I16 | Regression: employment predictors (logistic) | SA, Official | 5 | 8.7 (dormant) |
+| I17 | Regression: business ownership predictors (logistic) | SA, Official | 5 | 8.7 (dormant) |
 
 ### Equity & Inclusion (Government Official focus)
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| E1 | Gender Parity Index (GPI) | SA, Official + Public | 1 |
-| E2 | Youth employment rate (15-35) | SA, Official + Public | 1 |
-| E3 | Disability employment gap | SA, Official | 4 |
-| E4 | Education-employment alignment | SA, Official | 4 |
-| E5 | Geographic equity (Gini coefficient) | SA, Official | 4 |
-| E6 | Informal sector size | SA, Official + Public | 1 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| E1 | Gender Parity Index (GPI) | SA, Official + Public | 1 | 8.2 |
+| E2 | Youth employment rate (15-35) | SA, Official + Public | 1 | 8.2 |
+| E3 | Disability employment gap | SA, Official | 4 | 8.7 |
+| E4 | Education-employment alignment | SA, Official | 4 | 8.7 |
+| E5 | Geographic equity (Gini coefficient) | SA, Official | 4 | 8.7 |
+| E6 | Informal sector size | SA, Official + Public | 1 | 8.2 |
 
 ### Cross-Cutting
 
-| # | Feature | Roles | Phase |
-|---|---------|-------|-------|
-| X1 | Cross-tabulation engine (any × any) | SA, Official, Supervisor | 3 |
-| X2 | Registry summary strip (5 stat cards) | SA, Official, Assessor, Supervisor | 1 |
-| X3 | Public Insights page (/insights) | Unauthenticated | 1 |
-| X4 | Export chart data as CSV | All roles with analytics | 1 |
-| X5 | Policy brief PDF export | SA, Official | 4 |
+| # | Feature | Roles | Phase | Story |
+|---|---------|-------|-------|-------|
+| X1 | Cross-tabulation engine (any × any) | SA, Official, Supervisor | 3 | 8.6 |
+| X2 | Registry summary strip (5 stat cards) | SA, Official, Assessor, Supervisor | 1 | 8.2 |
+| X3 | Public Insights page (/insights) | Unauthenticated | 1 | 8.5 |
+| X4 | Export chart data as CSV | All roles with analytics | 1 | 8.2 |
+| X5 | Policy brief PDF export | SA, Official | 4 | 8.7 |
 
 ---
 
-**Totals: 80 features across 5 phases, 6 authenticated roles + 1 public page**
+**Totals: 88 features across 5 phases, 6 authenticated roles + 1 public page**
 
-| Phase | Features | Focus |
-|-------|----------|-------|
-| Phase 1 | 28 | Descriptive foundation + Public Insights page |
-| Phase 2 | 20 | Supervisor/Enumerator/Clerk team & personal analytics |
-| Phase 3 | 16 | Assessor pipeline + Skills + Cross-tabulation |
-| Phase 4 | 13 | Inferential statistics + equity metrics |
-| Phase 5 | 3 | Regression + advanced anomaly detection |
+> **Note:** The original phase breakdown claimed 80 features. The detailed feature list contains 88 items (D1-D25=25, T1-T8=8, S1-S12=12, P1-P8=8, V1-V7=7, I1-I17=17, E1-E6=6, X1-X5=5). The discrepancy of 8 features is due to Phase 5 dormant hooks being undercounted (originally 3, actually 8) and minor phase assignment differences. All 88 features are accounted for across Stories 8.1-8.8.
+
+| Phase | Features | Focus | Stories |
+|-------|----------|-------|---------|
+| Phase 1 | 29 | Descriptive foundation + Public Insights page | 8.1, 8.2, 8.5 |
+| Phase 2 | 19 | Supervisor/Enumerator/Clerk team & personal analytics | 8.3 |
+| Phase 3 | 13 | Assessor pipeline + Skills + Cross-tabulation + Reliability | 8.4, 8.6, 8.8 |
+| Phase 4 | 19 | Inferential statistics + equity metrics | 8.7 |
+| Phase 5 | 8 | Regression + anomaly detection + dormant hooks | 8.7, 8.8 (dormant) |
