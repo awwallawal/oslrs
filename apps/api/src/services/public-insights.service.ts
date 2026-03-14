@@ -229,11 +229,11 @@ export class PublicInsightsService {
       count: string | number;
     }
 
-    const summary = summaryRows.rows[0] as SummaryRow | undefined;
+    const summary = summaryRows.rows[0] as unknown as SummaryRow | undefined;
     const total = Number(summary?.total ?? 0);
 
     // Skills total for percentage
-    const skillsTotal = (skillRows.rows as SkillCountRow[]).reduce(
+    const skillsTotal = (skillRows.rows as unknown as SkillCountRow[]).reduce(
       (sum: number, r: SkillCountRow) => sum + Number(r.count), 0,
     );
 
@@ -246,7 +246,7 @@ export class PublicInsightsService {
       .filter((s) => s.count >= PUBLIC_MIN_N);
 
     // Desired skills (training_interest)
-    const desiredTotal = (desiredSkillRows.rows as SkillCountRow[]).reduce(
+    const desiredTotal = (desiredSkillRows.rows as unknown as SkillCountRow[]).reduce(
       (sum: number, r: SkillCountRow) => sum + Number(r.count), 0,
     );
 
@@ -264,17 +264,17 @@ export class PublicInsightsService {
     return {
       totalRegistered: total,
       lgasCovered: Number(summary?.lgas_covered ?? 0),
-      genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
-      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
+      genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
+      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       allSkills,
       desiredSkills,
-      employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
-      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
+      employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
+      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       businessOwnershipRate: meetsThreshold && summary?.biz_rate != null ? Number(summary.biz_rate) : null,
       unemploymentEstimate: meetsThreshold && summary?.unemployment_est != null ? Number(summary.unemployment_est) : null,
       youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
-      lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as LabelCountRow[], total), PUBLIC_MIN_N),
+      lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       lastUpdated: new Date().toISOString(),
       // Story 8.7: Key findings from inferential engine (Redis cache bridge)
       ...(await PublicInsightsService.getKeyFindings(total)),

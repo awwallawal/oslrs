@@ -247,7 +247,7 @@ export class TeamQualityService {
       count: string | number;
     }
 
-    const typedRows = rows.rows as DayOfWeekRow[];
+    const typedRows = rows.rows as unknown as DayOfWeekRow[];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const total = typedRows.reduce((sum, r) => sum + Number(r.count), 0);
 
@@ -289,7 +289,7 @@ export class TeamQualityService {
       count: string | number;
     }
 
-    const typedHourRows = rows.rows as HourRow[];
+    const typedHourRows = rows.rows as unknown as HourRow[];
     const total = typedHourRows.reduce((sum, r) => sum + Number(r.count), 0);
 
     return Array.from({ length: 24 }, (_, i) => {

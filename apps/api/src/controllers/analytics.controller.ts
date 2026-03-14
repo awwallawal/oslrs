@@ -209,7 +209,7 @@ export class AnalyticsController {
       const oneHourAgo = now - 3600_000;
       const userRequests = (AnalyticsController.pdfRateMap.get(userId) || []).filter(t => t > oneHourAgo);
       if (userRequests.length >= 5) {
-        throw new AppError(429, 'Rate limit exceeded. Maximum 5 policy brief exports per hour.');
+        throw new AppError('RATE_LIMIT_EXCEEDED', 'Rate limit exceeded. Maximum 5 policy brief exports per hour.', 429);
       }
 
       // Periodic cleanup: evict stale entries (no requests in last hour)
@@ -224,7 +224,7 @@ export class AnalyticsController {
       // Threshold guard
       const activationStatus = await SurveyAnalyticsService.getActivationStatus(getScope(req));
       if (activationStatus.totalSubmissions < 100) {
-        throw new AppError(400, 'Insufficient data for policy brief (need >= 100 submissions)');
+        throw new AppError('INSUFFICIENT_DATA', 'Insufficient data for policy brief (need >= 100 submissions)', 400);
       }
 
       const pdfBuffer = await PolicyBriefService.generatePolicyBrief(getScope(req), getParams(parsed));

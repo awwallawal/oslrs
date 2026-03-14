@@ -50,7 +50,7 @@ export function pValueBracketFromChiSq(statistic: number, df: number): string {
   } else {
     dfKey = Math.floor(df / 10) * 10;
   }
-  const row = table[dfKey];
+  const row = (table as Record<number, (typeof table)[1]>)[dfKey];
   if (!row) return '>= 0.05';
 
   if (statistic > (row[0.005] ?? Infinity)) return '< 0.005';
