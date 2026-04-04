@@ -43,12 +43,15 @@
   },
   "pnpm": {
     "overrides": {
-      "fast-xml-parser": ">=5.3.5",
+      "fast-xml-parser": ">=5.5.6",
       "minimatch": ">=9.0.7",
-      "rollup": ">=4.59.0"
+      "rollup": ">=4.59.0",
+      "socket.io-parser": ">=4.2.6",
+      "path-to-regexp@<1.0.0": ">=0.1.13",
+      "picomatch": ">=4.0.4"
     },
     "comments": {
-      "overrides": "SEC-1: fast-xml-parser for AWS SDK CVEs (GHSA-m7jm, GHSA-fj3w, GHSA-4r6h, CVE-2026-27942). minimatch for ReDoS via google-auth-library->gaxios->rimraf->glob. rollup for path traversal (dev-only).",
+      "overrides": "SEC-1+SEC2-2: fast-xml-parser >=5.5.6 for AWS SDK CVEs (GHSA-8gc5-j5rx-235r incomplete fix bypass). socket.io-parser >=4.2.6 for unbounded binary attachments (GHSA-677m). path-to-regexp >=0.1.13 for ReDoS via express (GHSA-37ch). picomatch >=2.3.2/>=4.0.4 for ReDoS via extglob (GHSA-c2c7). minimatch for ReDoS via google-auth-library. rollup for path traversal (dev-only).",
       "accepted-risks": "qs (LOW arrayLimit bypass, via express->body-parser — no fix without Express 5 major version change). xlsx (devDep only — one-time migration, CVE-2023-30533 prototype pollution). serialize-javascript (dev-only via workbox-build). esbuild (dev-only via tsx/vite). ajv (dev-only via eslint). phin (dev-only via potrace/jimp)."
     }
   },
