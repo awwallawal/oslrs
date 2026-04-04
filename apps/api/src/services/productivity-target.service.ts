@@ -8,7 +8,7 @@
  * Follows FraudConfigService temporal versioning pattern.
  */
 
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { productivityTargets, lgas } from '../db/schema/index.js';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
@@ -19,15 +19,6 @@ const logger = pino({ name: 'productivity-target-service' });
 
 const REDIS_KEY_TARGETS = 'productivity:targets:active';
 const REDIS_TTL_SECONDS = 300; // 5 minutes
-
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 

@@ -1,25 +1,21 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import { Redis } from 'ioredis';
+import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
-
-// Lazy-initialized Redis client to avoid connection during test imports
-let redisClient: Redis | null = null;
-
-function getRedisClient(): Redis {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-}
 
 // In test environment, use memory store to avoid Redis dependency
 const isTestEnv = process.env.NODE_ENV === 'test';
 
+// Redis client — delegates to centralized factory, null in test mode
+const getRedisClient = () => {
+  if (isTestEnv) return null;
+  return getFactoryRedisClient();
+};
+
 export const ninCheckRateLimit = rateLimit({
   store: isTestEnv ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
-    sendCommand: (...args: string[]) => getRedisClient().call(...args),
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 20, // 20 requests per minute per user (AC 3.7.3)
@@ -40,7 +36,7 @@ export const ninCheckRateLimit = rateLimit({
 export const publicVerificationRateLimit = rateLimit({
   store: isTestEnv ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
-    sendCommand: (...args: string[]) => getRedisClient().call(...args),
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 30, // 30 requests per minute per IP (matches marketplace search limit)

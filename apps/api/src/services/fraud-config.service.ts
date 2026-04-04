@@ -9,7 +9,6 @@
  * @see ADR-003 — Fraud Detection Engine Design
  */
 
-import { Redis } from 'ioredis';
 import { db } from '../db/index.js';
 import { fraudThresholds, roles, users } from '../db/schema/index.js';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
@@ -23,15 +22,8 @@ const logger = pino({ name: 'fraud-config-service' });
 const REDIS_KEY_ACTIVE_THRESHOLDS = 'fraud:thresholds:active';
 const REDIS_TTL_SECONDS = 300; // 5 minutes
 
-// Lazy-initialized Redis client (avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
+// Redis client — centralized factory
+import { getRedisClient } from '../lib/redis.js';
 
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 

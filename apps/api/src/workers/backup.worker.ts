@@ -14,7 +14,7 @@
  */
 
 import { Worker, Job } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, statSync, unlinkSync, existsSync } from 'node:fs';
@@ -537,9 +537,7 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
 let backupWorker: Worker | null = null;
 
 if (!isTestMode()) {
-  const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-  });
+  const connection = createRedisConnection();
 
   backupWorker = new Worker(
     'database-backup',

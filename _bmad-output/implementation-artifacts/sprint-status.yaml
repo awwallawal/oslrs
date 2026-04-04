@@ -1,5 +1,5 @@
 # generated: 2026-01-23
-# updated: 2026-03-04 - Epic 6 retrospective complete. 23 items reviewed (10 prep + 7 epic + 4 security + 2 tech specs). 11 prep tasks + 3 doc tasks added for Epic 7 readiness. prep-1 (text=uuid bug) is CRITICAL. 5 critical prep tasks block Epic 7.
+# updated: 2026-04-04 - Security Hardening Phase 2 added (4 stories). Trigger: DigitalOcean Ticket #11882585 — Redis publicly exposed. Epic 9 paused (0 stories in-progress). SCP: sprint-change-proposal-2026-04-04.md.
 # project: oslr_cl
 # project_key: oslr_cl
 # tracking_system: file-system
@@ -281,13 +281,26 @@ development_status:
   8-8-geographic-visualization-registry-integration-analytics-spec-completion: done  # Completed 2026-03-14: 12 tasks. Choropleth on 4 pages (SA, Official, Supervisor, Public), inter-enumerator reliability (JSD), 4 dormant hooks, spec audit (88 features mapped). 31 new tests, 4,093 total pass, 0 regressions. Code review: 10 issues found (3H/4M/3L), 9 fixed.
   epic-8-retrospective: optional
 
+  # Security Hardening Phase 2 (Infrastructure + Application)
+  # Source: infrastructure-security-audit-2026-04-04.md, sprint-change-proposal-2026-04-04.md
+  # Trigger: DigitalOcean Ticket #11882585 — Redis publicly exposed via Docker-UFW bypass.
+  # Added: 2026-04-04 — 4 stories covering VPS hardening, Redis centralization, app security, defense-in-depth.
+  # Must complete before Epic 9 resumes. SEC2-1 is manual VPS ops (Awwal). SEC2-2/3/4 are code stories.
+  # Dependencies: SEC2-1 ��� SEC2-2 → SEC2-3. SEC2-4 can parallel with SEC2-3.
+  security-hardening-2: in-progress
+  sec2-1-vps-infrastructure-hardening: done  # P0 CRITICAL: Completed 2026-04-04. Redis rebound 127.0.0.1 + AUTH, Postgres rebound + rotated creds (oslsr_user/oslsr_db), DO Cloud Firewall "OSLRS" active, JWT secrets rotated (hex). DB restored from March 29 DO backup after db:push:force data loss. Docs deferred to SEC2-4. DO ticket reply pending.
+  sec2-2-centralized-redis-connection-factory: done  # P1 HIGH: Completed 2026-04-04. Code review passed 2026-04-04: 10 findings (3H, 3M, 4L), all 10 auto-fixed. H1 AppError type, H2 shutdown wiring, H3 factory tests (16). 1,770 API + 2,355 web tests pass (4,125 total), 0 regressions.
+  sec2-3-application-security-hardening: ready-for-dev  # P1 HIGH: JWT defaults removal, express.json limit, CSP enforcement, CORS validation, socket.io websocket-only. Depends on SEC2-2. Story created 2026-04-04.
+  sec2-4-defense-in-depth-documentation: ready-for-dev  # P2 MEDIUM: Token revocation on role change, DB pool config, dev route guard, architecture doc updates. Depends on SEC2-2. Story created 2026-04-04.
+
   # Epic 9: Platform Polish, Profile & Domain Migration
   # Source: _bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md
   # Added: 2026-03-14 — Profile page fix, domain migration, trust section polish, email setup.
   # Dependencies: Story 9-2 blocked by oslrs.com purchase. Story 9-4 blocked by 9-2 (DNS).
-  epic-9: backlog
+  # PAUSED: 2026-04-04 — Paused for Security Hardening Phase 2. No stories were in-progress. Resumes after SEC2-4 completes.
+  epic-9: in-progress  # Paused — security hardening takes priority. 0 stories were in-progress.
   9-1-profile-page-auth-me-fix-editable-profile: ready-for-dev  # HIGH: Fix /auth/me missing fullName + editable profile with PATCH /users/profile. Story created 2026-03-14.
-  9-2-domain-migration-oslrs-com: backlog  # CRITICAL: Migrate oyotradeministry.com.ng → oslrs.com (28 files, ~75+ references, NGINX, DNS). Blocked by domain purchase.
-  9-3-trust-section-footer-minor-polish: backlog  # LOW: Remove one logo from Trust section (pending decision), wire footer Insights links.
-  9-4-email-setup-resend-domain: backlog  # MEDIUM: Resend domain verification for oslrs.com, human-facing email setup. Depends on 9-2 (DNS).
+  9-2-domain-migration-oslrs-com: ready-for-dev  # CRITICAL: Migrate oyotradeministry.com.ng → oslrs.com (28 files, ~75+ references, NGINX, DNS). Story created 2026-03-14. Blocked by domain purchase.
+  9-3-trust-section-footer-minor-polish: ready-for-dev  # LOW: Remove one logo from Trust section (pending decision), wire footer Insights links. Story created 2026-03-14.
+  9-4-email-setup-resend-domain: ready-for-dev  # MEDIUM: Resend domain verification for oslrs.com, human-facing email setup. Depends on 9-2 (DNS). Story created 2026-03-14.
   epic-9-retrospective: optional

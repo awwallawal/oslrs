@@ -1,4 +1,4 @@
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { uuidv7 } from 'uuidv7';
 import type { SessionInfo } from '@oslsr/types';
 
@@ -10,16 +10,6 @@ const REMEMBER_ME_SESSION_EXPIRY = 30 * 24 * 60 * 60; // 30 days
 // Redis key patterns
 const SESSION_KEY_PREFIX = 'session:';
 const USER_SESSION_KEY_PREFIX = 'user_session:';
-
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 interface SessionData {
   userId: string;

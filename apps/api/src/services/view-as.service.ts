@@ -7,7 +7,7 @@
  * Story 6-7: Super Admin View-As Feature
  */
 
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { AppError } from '@oslsr/utils';
 import { AuditService } from './audit.service.js';
 import pino from 'pino';
@@ -54,15 +54,6 @@ interface StartViewAsParams {
   req: ReqLike;
 }
 
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 export class ViewAsService {
   /**

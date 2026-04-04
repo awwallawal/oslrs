@@ -1,5 +1,5 @@
 import { Worker, Job, Queue } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -18,9 +18,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const logger = pino({ name: 'email-worker' });
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+const connection = createRedisConnection();
 
 // Budget service for tracking email sends
 const emailTier = (process.env.EMAIL_TIER || 'free') as EmailTier;

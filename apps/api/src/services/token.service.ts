@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { uuidv7 } from 'uuidv7';
 import { AppError } from '@oslsr/utils';
 import type { JwtPayload, AuthUser } from '@oslsr/types';
@@ -16,16 +16,6 @@ const REMEMBER_ME_SESSION_EXPIRY = 30 * 24 * 60 * 60; // 30 days
 // Redis key patterns
 const BLACKLIST_KEY_PREFIX = 'jwt:blacklist:';
 const REFRESH_TOKEN_KEY_PREFIX = 'refresh:';
-
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 export class TokenService {
   private static jwtSecret = process.env.JWT_SECRET || 'default-secret-change-in-production';

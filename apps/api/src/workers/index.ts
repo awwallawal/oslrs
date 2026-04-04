@@ -19,6 +19,7 @@ import { scheduleDailyBackup } from '../queues/backup.queue.js';
 import { scheduleDisputeAutoClose } from '../queues/dispute-autoclose.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
+import { closeAllConnections } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'workers' });
@@ -123,6 +124,9 @@ export async function closeAllWorkers(): Promise<void> {
     marketplaceExtractionWorker?.close(),
     closeMarketplaceExtractionQueue(),
   ]);
+
+  // Close factory-tracked Redis connections (singleton + any remaining dedicated)
+  await closeAllConnections();
 
   logger.info({ event: 'workers.closed' });
 }

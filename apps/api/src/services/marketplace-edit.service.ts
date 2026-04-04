@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { marketplaceProfiles } from '../db/schema/marketplace.js';
 import { respondents } from '../db/schema/respondents.js';
 import { SMSService } from './sms.service.js';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-edit-service' });
@@ -12,15 +12,6 @@ const logger = pino({ name: 'marketplace-edit-service' });
 const EDIT_TOKEN_EXPIRY_DAYS = 90;
 const RATE_LIMIT_PER_NIN = 3;
 const RATE_LIMIT_WINDOW_SECONDS = 86400; // 24 hours
-
-// Lazy-initialized Redis client (avoid connection during test imports)
-let redisClient: Redis | null = null;
-function getRedisClient(): Redis {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-}
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');

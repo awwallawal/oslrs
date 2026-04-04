@@ -13,6 +13,7 @@ import { promisify } from 'util';
 import { createRequire } from 'module';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { checkRedisHealth } from '../lib/redis.js';
 import { getEmailQueueStats } from '../queues/email.queue.js';
 import { getFraudDetectionQueue } from '../queues/fraud-detection.queue.js';
 import { importQueue } from '../queues/import.queue.js';
@@ -49,22 +50,6 @@ const CACHE_TTL_MS = 10_000;
 // Previous CPU reading for delta-based measurement
 let prevCpuIdle = 0;
 let prevCpuTotal = 0;
-
-// Persistent Redis connection for health checks (lazy-initialized)
-let healthRedis: import('ioredis').Redis | null = null;
-
-async function getHealthRedis(): Promise<import('ioredis').Redis> {
-  if (!healthRedis) {
-    const { Redis } = await import('ioredis');
-    healthRedis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      connectTimeout: 2000,
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-    });
-    await healthRedis.connect();
-  }
-  return healthRedis;
-}
 
 export class MonitoringService {
   /**
@@ -215,19 +200,12 @@ export class MonitoringService {
       return { status: 'ok', latencyMs: 1 };
     }
 
-    const start = Date.now();
     try {
-      const redis = await getHealthRedis();
-      await redis.ping();
-      return { status: 'ok', latencyMs: Date.now() - start };
+      const health = await checkRedisHealth();
+      return { status: health.connected ? 'ok' : 'error', latencyMs: health.latencyMs };
     } catch (err) {
-      // Reset connection on failure so next call creates a fresh one
-      if (healthRedis) {
-        try { await healthRedis.quit(); } catch { /* ignore */ }
-        healthRedis = null;
-      }
       logger.error({ event: 'health.redis_check_failed', error: (err as Error).message });
-      return { status: 'error', latencyMs: Date.now() - start };
+      return { status: 'error', latencyMs: -1 };
     }
   }
 

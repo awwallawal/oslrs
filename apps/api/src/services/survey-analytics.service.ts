@@ -47,7 +47,7 @@ import {
 import { ISCO08_SECTOR_MAP } from '@oslsr/types';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';
-import { Redis } from 'ioredis';
+import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'survey-analytics' });
@@ -108,13 +108,9 @@ interface DailyCountRow { day: string; count: string | number }
 const isTestMode = () =>
   process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
-let redisClient: Redis | null = null;
-
-function getRedisClient(): Redis | null {
-  if (!redisClient && !isTestMode()) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
+function getRedisClient() {
+  if (isTestMode()) return null;
+  return getFactoryRedisClient();
 }
 
 /**

@@ -55,6 +55,7 @@ describe('checkRevealRateLimit — Redis logic', () => {
     vi.stubEnv('VITEST', '');
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('E2E', '');
+    vi.stubEnv('REDIS_URL', 'redis://localhost:6379');
 
     // Mock ioredis with a real function constructor (not arrow)
     vi.doMock('ioredis', () => {

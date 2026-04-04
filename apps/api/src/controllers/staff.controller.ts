@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { z } from 'zod';
 import { StaffService } from '../services/staff.service.js';
 import { importQueue } from '../queues/import.queue.js';
@@ -17,17 +17,6 @@ const reactivateSchema = z.object({
   reOnboard: z.boolean().optional().default(false),
 });
 
-// Redis connection for rate limiting
-let redis: Redis | null = null;
-
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
-    });
-  }
-  return redis;
-}
 
 const VALID_STATUSES = new Set(['invited', 'pending_verification', 'active', 'verified', 'suspended', 'deactivated']);
 
@@ -281,7 +270,7 @@ export class StaffController {
       const { userId } = req.params;
       if (!userId) throw new AppError('MISSING_PARAM', 'User ID is required', 400);
 
-      const result = await StaffService.resendInvitation(userId, actorId, getRedis());
+      const result = await StaffService.resendInvitation(userId, actorId, getRedisClient());
 
       res.json({
         data: result,

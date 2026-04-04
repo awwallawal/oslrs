@@ -6,7 +6,7 @@
  * Redis cached with 1-hour TTL. Stricter suppression (minN=10).
  */
 
-import { Redis } from 'ioredis';
+import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
 import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
@@ -23,13 +23,9 @@ const PUBLIC_MIN_N = 10; // Stricter suppression for public data
 const isTestMode = () =>
   process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
-let redisClient: Redis | null = null;
-
-function getRedisClient(): Redis | null {
-  if (!redisClient && !isTestMode()) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
+function getRedisClient() {
+  if (isTestMode()) return null;
+  return getFactoryRedisClient();
 }
 
 export class PublicInsightsService {

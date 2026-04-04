@@ -9,7 +9,7 @@
  */
 
 import { Worker, Job } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 import { RemunerationService } from '../services/remuneration.service.js';
 
@@ -36,9 +36,7 @@ async function processDisputeAutoClose(job: Job): Promise<{ closedCount: number;
 let disputeAutoCloseWorker: Worker | null = null;
 
 if (!isTestMode()) {
-  const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-  });
+  const connection = createRedisConnection();
 
   disputeAutoCloseWorker = new Worker(
     'dispute-autoclose',

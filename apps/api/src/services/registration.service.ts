@@ -1,4 +1,4 @@
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
@@ -19,15 +19,6 @@ const OTP_EXPIRY_SECONDS = OTP_EXPIRY_MINUTES * 60;
 // Redis key patterns for OTP (ADR-015)
 const OTP_KEY_PREFIX = 'verification_otp:';
 
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 interface RegisterPublicUserData {
   fullName: string;

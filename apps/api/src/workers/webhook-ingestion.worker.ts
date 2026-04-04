@@ -14,7 +14,7 @@
  */
 
 import { Worker, Job } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 import { db } from '../db/index.js';
 import { submissions } from '../db/schema/index.js';
@@ -28,9 +28,7 @@ import {
 
 const logger = pino({ name: 'webhook-ingestion-worker' });
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+const connection = createRedisConnection();
 
 /**
  * Result of processing a submission

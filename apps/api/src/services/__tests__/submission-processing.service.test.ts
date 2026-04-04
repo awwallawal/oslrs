@@ -46,6 +46,10 @@ vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
 }));
 
+vi.mock('../../queues/marketplace-extraction.queue.js', () => ({
+  queueMarketplaceExtraction: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('uuidv7', () => ({
   uuidv7: () => 'mock-uuid-v7-001',
 }));

@@ -1,6 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import { Redis } from 'ioredis';
+import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'password-reset-rate-limit' });
@@ -8,14 +8,10 @@ const logger = pino({ name: 'password-reset-rate-limit' });
 // Check if we're in test mode (vitest sets VITEST env var)
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
-// Redis client (singleton) - only initialize if not in test mode
-let redisClient: Redis | null = null;
-
+// Redis client — delegates to centralized factory, null in test mode
 const getRedisClient = () => {
-  if (!redisClient && !isTestMode()) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
+  if (isTestMode()) return null;
+  return getFactoryRedisClient();
 };
 
 // Skip function used by all rate limiters in test mode

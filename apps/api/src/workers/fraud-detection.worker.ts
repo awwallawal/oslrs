@@ -9,7 +9,7 @@
  */
 
 import { Worker, Job } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 import { db } from '../db/index.js';
 import { fraudDetections } from '../db/schema/index.js';
@@ -19,9 +19,7 @@ import type { FraudDetectionResult } from '@oslsr/types';
 
 const logger = pino({ name: 'fraud-detection-worker' });
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+const connection = createRedisConnection();
 
 interface WorkerResult {
   processed: boolean;

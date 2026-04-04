@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
@@ -11,18 +11,6 @@ import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
 const router = Router();
-
-// Redis connection for budget service
-let redis: Redis | null = null;
-
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
-    });
-  }
-  return redis;
-}
 
 /**
  * GET /api/v1/admin/email-budget
@@ -40,7 +28,7 @@ router.get(
     try {
       const config = getEmailConfigFromEnv();
       const budgetService = new EmailBudgetService(
-        getRedis(),
+        getRedisClient(),
         config.tier,
         config.monthlyOverageBudgetCents
       );
@@ -105,7 +93,7 @@ router.post(
       await pauseEmailQueue();
 
       // Mark as paused in Redis
-      await getRedis().set('email:queue:paused', 'true');
+      await getRedisClient().set('email:queue:paused', 'true');
 
       logger.info({ event: 'admin.email_queue.paused' });
 
@@ -141,7 +129,7 @@ router.post(
       await resumeEmailQueue();
 
       // Clear paused flag in Redis
-      await getRedis().del('email:queue:paused');
+      await getRedisClient().del('email:queue:paused');
 
       logger.info({ event: 'admin.email_queue.resumed' });
 

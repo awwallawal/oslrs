@@ -21,6 +21,7 @@ if (process.env.NODE_ENV !== 'test') {
   // Initialize realtime transport before listening
   const { initializeRealtime } = await import('./realtime/index.js');
   const { FraudConfigService } = await import('./services/fraud-config.service.js');
+  const { closeAllConnections } = await import('./lib/redis.js');
   initializeRealtime(server);
 
   // Ensure fraud thresholds exist on boot (self-heal if table was wiped).
@@ -34,6 +35,15 @@ if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {
     logger.info({ event: 'server_start', port });
   });
+
+  // Graceful shutdown — close Redis connections on SIGTERM/SIGINT
+  const shutdown = async () => {
+    logger.info({ event: 'server.shutdown' });
+    await closeAllConnections();
+    server.close(() => process.exit(0));
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 export { server };

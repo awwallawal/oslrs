@@ -1,19 +1,15 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import { Redis } from 'ioredis';
+import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'message-rate-limit' });
 
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.E2E === 'true';
 
-let redisClient: Redis | null = null;
-
 const getRedisClient = () => {
-  if (!redisClient && !isTestMode()) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
+  if (isTestMode()) return null;
+  return getFactoryRedisClient();
 };
 
 const shouldSkipRateLimit = () => isTestMode();

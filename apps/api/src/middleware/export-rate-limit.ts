@@ -13,20 +13,10 @@
 
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
 
 type AuthRequest = Request & { user?: { sub: string; role?: string } };
-
-// Lazy-initialized Redis client to avoid connection during test imports
-let redisClient: Redis | null = null;
-
-function getRedisClient(): Redis {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-}
 
 /** Role-based export rate limits (per hour) */
 export const ROLE_RATE_LIMITS: Record<string, number> = {

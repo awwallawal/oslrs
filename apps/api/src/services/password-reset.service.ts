@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
@@ -18,16 +18,6 @@ const RESET_RATE_KEY_PREFIX = 'password_reset_rate:';
 
 // Check if we're in test mode (vitest sets VITEST env var)
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 interface ResetTokenData {
   userId: string;

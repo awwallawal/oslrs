@@ -6,7 +6,7 @@
  */
 
 import { Queue, type JobsOptions } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-extraction-queue' });
@@ -33,9 +33,7 @@ const defaultJobOptions: JobsOptions = {
  */
 export function getMarketplaceExtractionQueue(): Queue<MarketplaceExtractionJobData> {
   if (!marketplaceExtractionQueue) {
-    const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
-    });
+    const connection = createRedisConnection();
 
     marketplaceExtractionQueue = new Queue<MarketplaceExtractionJobData>('marketplace-extraction', {
       connection,

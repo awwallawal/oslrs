@@ -9,19 +9,10 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import { PublicInsightsController } from '../controllers/public-insights.controller.js';
 
 const router = Router();
-
-// Lazy Redis for rate limit store (memory store in test)
-let redisClient: Redis | null = null;
-function getRedisClient(): Redis {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-}
 
 const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 

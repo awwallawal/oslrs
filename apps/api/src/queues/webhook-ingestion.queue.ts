@@ -12,7 +12,7 @@
  */
 
 import { Queue, type JobsOptions } from 'bullmq';
-import { Redis } from 'ioredis';
+import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
 import type { IngestionSource } from '../db/schema/submissions.js';
 
@@ -58,9 +58,7 @@ const defaultJobOptions: JobsOptions = {
  */
 export function getWebhookIngestionQueue(): Queue<WebhookIngestionJobData> {
   if (!webhookIngestionQueue) {
-    const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
-    });
+    const connection = createRedisConnection();
 
     webhookIngestionQueue = new Queue<WebhookIngestionJobData>('webhook-ingestion', {
       connection,

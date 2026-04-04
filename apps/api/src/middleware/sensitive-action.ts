@@ -1,19 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@oslsr/utils';
-import { Redis } from 'ioredis';
+import { getRedisClient } from '../lib/redis.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'sensitive-action-middleware' });
-
-// Redis client (lazy-initialized singleton to avoid connection during test imports)
-let redisClient: Redis | null = null;
-
-const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  }
-  return redisClient;
-};
 
 // Re-auth key prefix
 const REAUTH_KEY_PREFIX = 'reauth:';
