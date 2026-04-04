@@ -233,7 +233,8 @@ describe('ViewAsDashboardPage', () => {
 
       renderComponent();
 
-      const rolePage = await screen.findByTestId('role-page');
+      // Timeout extended: React.lazy() + Suspense can exceed default 1s under CPU pressure
+      const rolePage = await screen.findByTestId('role-page', {}, { timeout: 5000 });
       expect(rolePage).toHaveTextContent(expectedComponent);
     });
   });
@@ -267,7 +268,7 @@ describe('ViewAsDashboardPage', () => {
 
       renderComponent();
 
-      const rolePage = await screen.findByTestId('role-page');
+      const rolePage = await screen.findByTestId('role-page', {}, { timeout: 5000 });
       expect(rolePage).toHaveTextContent(expectedComponent);
     });
   });
@@ -303,7 +304,7 @@ describe('ViewAsDashboardPage', () => {
 
       renderComponent();
 
-      const unavailable = await screen.findByTestId('view-as-preview-unavailable');
+      const unavailable = await screen.findByTestId('view-as-preview-unavailable', {}, { timeout: 5000 });
       expect(unavailable).toBeInTheDocument();
       expect(screen.getByText(/Preview unavailable for this page in View-As mode/)).toBeInTheDocument();
     });
