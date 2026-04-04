@@ -49,6 +49,21 @@ const validateEnvironment = () => {
       console.error('[SECURITY] JWT_SECRET is too short. Use at least 32 characters in production.');
       process.exit(1);
     }
+
+    if (process.env.REFRESH_TOKEN_SECRET && process.env.REFRESH_TOKEN_SECRET.length < 32) {
+      console.error('[SECURITY] REFRESH_TOKEN_SECRET is too short. Use at least 32 characters in production.');
+      process.exit(1);
+    }
+
+    // CORS origin format validation (existence already validated via requiredProdVars)
+    if (process.env.CORS_ORIGIN === '*') {
+      console.error('[SECURITY] CORS_ORIGIN cannot be wildcard (*) in production. Set a specific origin.');
+      process.exit(1);
+    }
+    if (!/^https?:\/\//.test(process.env.CORS_ORIGIN!)) {
+      console.error('[SECURITY] CORS_ORIGIN must start with http:// or https:// in production.');
+      process.exit(1);
+    }
   }
 };
 
@@ -80,13 +95,14 @@ app.use('/api/v1', cspRoutes);
 // CSP configuration — report-only mode for initial deployment (SEC-2)
 const isProduction = process.env.NODE_ENV === 'production';
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
 const wsUrl = isProduction
   ? corsOrigin.replace(/^https?:\/\//, 'wss://')
   : 'ws://localhost:3000';
 
 app.use(helmet({
   contentSecurityPolicy: {
-    reportOnly: true,
+    reportOnly: process.env.NODE_ENV !== 'production',
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: [
@@ -149,7 +165,8 @@ app.use(cors({
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(metricsMiddleware);
 
 // Health check endpoint
@@ -170,7 +187,7 @@ app.use('/api/v1/public/insights', publicInsightsRoutes);
 app.use('/api/v1', routes);
 
 // Error Handler
-app.use((err: Error & { code?: string; statusCode?: number; details?: unknown }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: Error & { code?: string; status?: number; statusCode?: number; type?: string; details?: unknown }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof AppError) {
     logger.warn({ event: 'api.error', code: err.code, path: req.path });
     return res.status(err.statusCode).json({
@@ -178,6 +195,18 @@ app.use((err: Error & { code?: string; statusCode?: number; details?: unknown },
       code: err.code,
       message: err.message,
       details: err.details
+    });
+  }
+
+  // Handle HTTP errors from Express middleware (e.g., body-parser 413 PayloadTooLargeError)
+  const httpStatus = err.status || err.statusCode;
+  if (httpStatus && httpStatus >= 400 && httpStatus < 500) {
+    const safeMessage = err instanceof SyntaxError ? 'Invalid request body' : err.message;
+    logger.warn({ event: 'api.error.http', status: httpStatus, type: err.type, path: req.path });
+    return res.status(httpStatus).json({
+      status: 'error',
+      code: err.type || 'REQUEST_ERROR',
+      message: safeMessage,
     });
   }
 

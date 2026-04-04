@@ -38,8 +38,8 @@ export function initializeRealtime(httpServer: HttpServer): SocketServer {
       origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
       credentials: true,
     },
-    // Limit to websocket to avoid long-polling overhead on single server
-    transports: ['websocket', 'polling'],
+    // Websocket-only — polling disabled to eliminate CSRF attack surface (SEC2-3)
+    transports: ['websocket'],
   });
 
   // ── Auth middleware ──────────────────────────────────────────────────────

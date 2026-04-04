@@ -18,8 +18,34 @@ const BLACKLIST_KEY_PREFIX = 'jwt:blacklist:';
 const REFRESH_TOKEN_KEY_PREFIX = 'refresh:';
 
 export class TokenService {
-  private static jwtSecret = process.env.JWT_SECRET || 'default-secret-change-in-production';
-  private static refreshSecret = process.env.JWT_REFRESH_SECRET || 'default-refresh-secret-change-in-production';
+  private static isTestMode(): boolean {
+    return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  }
+
+  private static getJwtSecret(): string {
+    if (this.isTestMode()) {
+      return process.env.JWT_SECRET || 'test-jwt-secret-minimum-32-characters-long';
+    }
+    if (!process.env.JWT_SECRET) {
+      throw new AppError('MISSING_JWT_SECRET', 'JWT_SECRET environment variable is required', 500);
+    }
+    return process.env.JWT_SECRET;
+  }
+
+  /**
+   * Returns the refresh token signing secret.
+   * Currently unused — refresh tokens use opaque UUIDs stored in Redis.
+   * Retained as defense-in-depth for future JWT-signed refresh tokens.
+   */
+  private static getRefreshSecret(): string {
+    if (this.isTestMode()) {
+      return process.env.REFRESH_TOKEN_SECRET || 'test-refresh-secret-minimum-32-chars-long';
+    }
+    if (!process.env.REFRESH_TOKEN_SECRET) {
+      throw new AppError('MISSING_REFRESH_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET environment variable is required', 500);
+    }
+    return process.env.REFRESH_TOKEN_SECRET;
+  }
 
   /**
    * Generates an access token (JWT) for a user
@@ -36,7 +62,7 @@ export class TokenService {
       rememberMe,
     };
 
-    const token = jwt.sign(payload, this.jwtSecret, {
+    const token = jwt.sign(payload, this.getJwtSecret(), {
       expiresIn: ACCESS_TOKEN_EXPIRY,
     });
 
@@ -102,7 +128,7 @@ export class TokenService {
    */
   static verifyAccessToken(token: string): JwtPayload {
     try {
-      const decoded = jwt.verify(token, this.jwtSecret) as JwtPayload;
+      const decoded = jwt.verify(token, this.getJwtSecret()) as JwtPayload;
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {

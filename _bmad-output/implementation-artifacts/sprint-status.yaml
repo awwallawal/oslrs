@@ -290,7 +290,7 @@ development_status:
   security-hardening-2: in-progress
   sec2-1-vps-infrastructure-hardening: done  # P0 CRITICAL: Completed 2026-04-04. Redis rebound 127.0.0.1 + AUTH, Postgres rebound + rotated creds (oslsr_user/oslsr_db), DO Cloud Firewall "OSLRS" active, JWT secrets rotated (hex). DB restored from March 29 DO backup after db:push:force data loss. Docs deferred to SEC2-4. DO ticket reply pending.
   sec2-2-centralized-redis-connection-factory: done  # P1 HIGH: Completed 2026-04-04. Code review passed 2026-04-04: 10 findings (3H, 3M, 4L), all 10 auto-fixed. H1 AppError type, H2 shutdown wiring, H3 factory tests (16). 1,770 API + 2,355 web tests pass (4,125 total), 0 regressions.
-  sec2-3-application-security-hardening: ready-for-dev  # P1 HIGH: JWT defaults removal, express.json limit, CSP enforcement, CORS validation, socket.io websocket-only. Depends on SEC2-2. Story created 2026-04-04.
+  sec2-3-application-security-hardening: done  # P1 HIGH: Completed 2026-04-04. Code review passed: 9 findings (1C, 2H, 3M, 3L), all auto-fixed. CSP test added, error code fixed, CORS validation consolidated, error messages sanitized. 11 new tests (5 JWT + 6 security). 0 regressions.
   sec2-4-defense-in-depth-documentation: ready-for-dev  # P2 MEDIUM: Token revocation on role change, DB pool config, dev route guard, architecture doc updates. Depends on SEC2-2. Story created 2026-04-04.
 
   # Epic 9: Platform Polish, Profile & Domain Migration

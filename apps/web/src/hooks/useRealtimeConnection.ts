@@ -72,7 +72,7 @@ export function useRealtimeConnection(): RealtimeConnectionReturn {
       auth: (cb) => {
         cb({ token: sessionStorage.getItem(ACCESS_TOKEN_KEY) });
       },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
