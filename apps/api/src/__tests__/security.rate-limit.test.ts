@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../middleware/rate-limit.js', () => ({
   publicVerificationRateLimit: mocks.rateLimitMock,
   ninCheckRateLimit: mocks.rateLimitMock,
+  profileUpdateRateLimit: mocks.rateLimitMock,
 }));
 
 // Mock auth so supertest requests pass authentication
