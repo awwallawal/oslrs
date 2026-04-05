@@ -30,7 +30,7 @@ const logger = pino({ name: 'email-service' });
 export class EmailService {
   private static readonly APP_URL = process.env.PUBLIC_APP_URL || 'http://localhost:5173';
   private static readonly BRAND_COLOR = '#9C1E23'; // Oyo State Red
-  private static readonly SUPPORT_URL = process.env.PUBLIC_APP_URL || 'https://oyotradeministry.com.ng';
+  private static readonly SUPPORT_URL = process.env.SUPPORT_URL || 'https://oyotradeministry.com.ng';
 
   private static provider: EmailProvider | null = null;
   private static config: EmailConfig | null = null;
