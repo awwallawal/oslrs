@@ -314,7 +314,7 @@ export class PersonalStatsService {
           / NULLIF(COUNT(*), 0) AS fraud_rate
       FROM fraud_detections fd
       JOIN submissions s ON fd.submission_id = s.id
-      WHERE fd.enumerator_id::text = ANY(${teamIds})${dateConds}
+      WHERE fd.enumerator_id::text IN (${sql.join(teamIds.map(id => sql`${id}`), sql`, `)})${dateConds}
     `);
 
     const row = rows.rows[0] as { fraud_rate?: string | null } | undefined;
@@ -330,7 +330,7 @@ export class PersonalStatsService {
 
     if (teamIds.length > 0) {
       const where = sql.join(
-        [sql`s.submitter_id = ANY(${teamIds})`, ...dateConditions],
+        [sql`s.submitter_id IN (${sql.join(teamIds.map(id => sql`${id}`), sql`, `)})`, ...dateConditions],
         sql` AND `,
       );
 

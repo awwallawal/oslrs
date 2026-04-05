@@ -3,8 +3,12 @@ import { UserRole } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { teamAssignments } from '../db/schema/team-assignments.js';
+import { users } from '../db/schema/users.js';
 import { lgas } from '../db/schema/lgas.js';
 import { and, eq, isNull } from 'drizzle-orm';
+import pino from 'pino';
+
+const logger = pino({ name: 'analytics-scope' });
 
 export interface AnalyticsScope {
   type: 'system' | 'lga' | 'personal';
@@ -40,6 +44,7 @@ export async function resolveAnalyticsScope(req: Request, _res: Response, next: 
         break;
 
       case UserRole.SUPERVISOR: {
+        // Primary: team_assignments lookup
         const assignment = await db
           .select({ lgaId: teamAssignments.lgaId, lgaCode: lgas.code })
           .from(teamAssignments)
@@ -50,11 +55,25 @@ export async function resolveAnalyticsScope(req: Request, _res: Response, next: 
           ))
           .limit(1);
 
-        if (!assignment.length) {
+        if (assignment.length) {
+          req.analyticsScope = { type: 'lga', lgaId: assignment[0].lgaId, lgaCode: assignment[0].lgaCode };
+          break;
+        }
+
+        // Fallback: user's lga_id (mirrors TeamAssignmentService LGA fallback)
+        logger.warn({ event: 'analytics_scope.lga_fallback', userId: user.sub });
+        const supervisor = await db
+          .select({ lgaId: users.lgaId, lgaCode: lgas.code })
+          .from(users)
+          .innerJoin(lgas, eq(users.lgaId, lgas.id))
+          .where(eq(users.id, user.sub))
+          .limit(1);
+
+        if (!supervisor.length || !supervisor[0].lgaId) {
           return next(new AppError('FORBIDDEN', 'Supervisor has no active LGA assignment', 403));
         }
 
-        req.analyticsScope = { type: 'lga', lgaId: assignment[0].lgaId, lgaCode: assignment[0].lgaCode };
+        req.analyticsScope = { type: 'lga', lgaId: supervisor[0].lgaId, lgaCode: supervisor[0].lgaCode };
         break;
       }
 

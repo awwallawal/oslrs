@@ -1640,7 +1640,7 @@ export class SurveyAnalyticsService {
     const enumeratorCounts = await db.execute(sql`
       SELECT s.submitter_id AS enumerator_id, u.full_name AS enumerator_name, COUNT(*) AS count
       FROM submissions s
-      JOIN users u ON s.submitter_id = u.id
+      JOIN users u ON s.submitter_id = u.id::text
       JOIN respondents r ON r.id = s.respondent_id
       WHERE ${whereClause}
       GROUP BY s.submitter_id, u.full_name
@@ -1678,7 +1678,7 @@ export class SurveyAnalyticsService {
           ('education_level', s.raw_data->>'education_level')
       ) AS q(question, answer)
       WHERE ${whereClause}
-        AND s.submitter_id = ANY(${qualifiedIds})
+        AND s.submitter_id IN (${sql.join(qualifiedIds.map(id => sql`${id}`), sql`, `)})
         AND q.answer IS NOT NULL
       GROUP BY s.submitter_id, q.question, q.answer
       ORDER BY s.submitter_id, q.question, q.answer

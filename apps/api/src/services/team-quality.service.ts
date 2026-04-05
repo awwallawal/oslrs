@@ -37,6 +37,11 @@ export interface TeamQualityParams {
   enumeratorId?: string;
 }
 
+/** Build a safe `col IN (v1, v2, ...)` fragment from a string array */
+function inList(column: ReturnType<typeof sql>, ids: string[]) {
+  return sql`${column} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`;
+}
+
 export class TeamQualityService {
   /**
    * Get per-enumerator quality metrics for a supervisor's team.
@@ -125,7 +130,7 @@ export class TeamQualityService {
   ) {
     const where = sql.join(
       [
-        sql`s.enumerator_id = ANY(${enumeratorIds})`,
+        inList(sql`s.enumerator_id`, enumeratorIds),
         ...dateConditions,
       ],
       sql` AND `,
@@ -175,7 +180,7 @@ export class TeamQualityService {
           / NULLIF(COUNT(*), 0) AS fraud_rate
       FROM fraud_detections fd
       JOIN submissions s ON fd.submission_id = s.id
-      WHERE fd.enumerator_id::text = ANY(${enumeratorIds})${dateConds}
+      WHERE ${inList(sql`fd.enumerator_id::text`, enumeratorIds)}${dateConds}
       GROUP BY fd.enumerator_id
     `);
 
@@ -191,7 +196,7 @@ export class TeamQualityService {
   ) {
     const where = sql.join(
       [
-        sql`s.enumerator_id = ANY(${enumeratorIds})`,
+        inList(sql`s.enumerator_id`, enumeratorIds),
         sql`s.raw_data IS NOT NULL`,
         ...dateConditions,
       ],
@@ -226,7 +231,7 @@ export class TeamQualityService {
   ): Promise<FrequencyBucket[]> {
     const where = sql.join(
       [
-        sql`s.enumerator_id = ANY(${enumeratorIds})`,
+        inList(sql`s.enumerator_id`, enumeratorIds),
         ...dateConditions,
       ],
       sql` AND `,
@@ -268,7 +273,7 @@ export class TeamQualityService {
   ): Promise<FrequencyBucket[]> {
     const where = sql.join(
       [
-        sql`s.enumerator_id = ANY(${enumeratorIds})`,
+        inList(sql`s.enumerator_id`, enumeratorIds),
         ...dateConditions,
       ],
       sql` AND `,
@@ -309,7 +314,7 @@ export class TeamQualityService {
   ): Promise<TrendDataPoint[]> {
     const where = sql.join(
       [
-        sql`s.enumerator_id = ANY(${enumeratorIds})`,
+        inList(sql`s.enumerator_id`, enumeratorIds),
         ...dateConditions,
       ],
       sql` AND `,

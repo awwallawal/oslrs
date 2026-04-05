@@ -27,6 +27,10 @@ vi.mock('../../db/schema/team-assignments.js', () => ({
   },
 }));
 
+vi.mock('../../db/schema/users.js', () => ({
+  users: { id: 'id', lgaId: 'lga_id' },
+}));
+
 vi.mock('../../db/schema/lgas.js', () => ({
   lgas: { id: 'id', code: 'code' },
 }));
@@ -88,10 +92,30 @@ describe('resolveAnalyticsScope middleware', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('rejects Supervisor with no active LGA assignment', async () => {
-    mockLimit.mockResolvedValue([]);
+  it('falls back to user lga_id when no team assignment exists', async () => {
+    const lgaId = 'lga-uuid-fallback';
+    const lgaCode = 'ibadan-south';
+    // First call (team_assignments) returns empty, second call (users fallback) returns LGA
+    mockLimit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ lgaId, lgaCode }]);
 
     const req = makeReq({ sub: 'sup2', role: UserRole.SUPERVISOR });
+    const next = vi.fn();
+
+    await resolveAnalyticsScope(req, res, next);
+
+    expect(req.analyticsScope).toEqual({ type: 'lga', lgaId, lgaCode });
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('rejects Supervisor with no team assignment and no user lga_id', async () => {
+    // Both calls return empty
+    mockLimit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const req = makeReq({ sub: 'sup3', role: UserRole.SUPERVISOR });
     const next = vi.fn();
 
     await resolveAnalyticsScope(req, res, next);
