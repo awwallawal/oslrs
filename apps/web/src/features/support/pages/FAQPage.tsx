@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { SearchBox, CategoryTabs } from '../components';
 import { FAQAccordion } from '../../participate/components';
+import { siteEmail } from '../../../config/site';
 import type { FAQItem } from '../../participate/components';
 
 /**
@@ -21,7 +22,7 @@ const faqsByCategory: Record<string, FAQItem[]> = {
     },
     {
       question: 'Is registration free?',
-      answer: 'Yes, registration is completely free. OSLSR never charges fees for registration, verification, or marketplace access. Report any request for payment as fraud to report@oslsr.oyo.gov.ng.',
+      answer: `Yes, registration is completely free. OSLSR never charges fees for registration, verification, or marketplace access. Report any request for payment as fraud to ${siteEmail('report')}.`,
     },
     {
       question: 'What is the NIN and where do I get one?',
@@ -95,7 +96,7 @@ const faqsByCategory: Record<string, FAQItem[]> = {
   Technical: [
     {
       question: "I didn't receive the verification email. What should I do?",
-      answer: 'First, check your spam/junk folder. If the email is not there, visit the resend verification page to request a new email. If problems persist, contact tech@oslsr.oyo.gov.ng with your registered email address.',
+      answer: `First, check your spam/junk folder. If the email is not there, visit the resend verification page to request a new email. If problems persist, contact ${siteEmail('tech')} with your registered email address.`,
     },
     {
       question: 'I forgot my password. How do I reset it?',
@@ -103,7 +104,7 @@ const faqsByCategory: Record<string, FAQItem[]> = {
     },
     {
       question: "The survey isn't loading. What should I do?",
-      answer: 'Try refreshing the page or clearing your browser cache. Make sure you have a stable internet connection. If the issue persists, try a different browser or contact tech@oslsr.oyo.gov.ng with details about the error.',
+      answer: `Try refreshing the page or clearing your browser cache. Make sure you have a stable internet connection. If the issue persists, try a different browser or contact ${siteEmail('tech')} with details about the error.`,
     },
   ],
 };

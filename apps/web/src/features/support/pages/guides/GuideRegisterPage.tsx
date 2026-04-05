@@ -1,4 +1,5 @@
 import { GuidePageLayout, StepList, TipCard } from '../../components';
+import { siteEmail } from '../../../../config/site';
 
 const prerequisites = [
   { text: 'National Identification Number (NIN)' },
@@ -81,7 +82,7 @@ function GuideRegisterPage() {
             </TipCard>
             <TipCard title="Registration is FREE" variant="success">
               <p>
-                OSLSR registration is completely free. Never pay anyone for registration services. Report any requests for payment to <a href="mailto:report@oslsr.oyo.gov.ng" className="text-primary-600 hover:underline">report@oslsr.oyo.gov.ng</a>.
+                OSLSR registration is completely free. Never pay anyone for registration services. Report any requests for payment to <a href={`mailto:${siteEmail('report')}`} className="text-primary-600 hover:underline">{siteEmail('report')}</a>.
               </p>
             </TipCard>
           </div>

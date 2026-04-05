@@ -76,7 +76,7 @@ vi.mock('../../hooks/useViewAs', () => ({
 
 vi.mock('../../../auth/context/AuthContext', () => ({
   useAuth: () => ({
-    user: { fullName: 'Admin User', email: 'admin@oslsr.gov.ng', role: 'super_admin' },
+    user: { fullName: 'Admin User', email: 'admin@example.com', role: 'super_admin' },
   }),
 }));
 

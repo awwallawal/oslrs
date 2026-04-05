@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
+import { supportEmail } from '../../../../config/site';
 import { WizardProgressBar } from './WizardProgressBar';
 import { WizardNavigation } from './WizardNavigation';
 import {
@@ -133,7 +134,7 @@ export function ActivationWizard({
       <p className="mt-4 text-center text-sm text-neutral-500">
         Need help?{' '}
         <a
-          href="mailto:support@oslsr.gov.ng"
+          href={`mailto:${supportEmail}`}
           className="text-primary-600 hover:text-primary-700 font-medium"
         >
           Contact Support
@@ -267,7 +268,7 @@ export function ActivationWizardUI({
       <p className="mt-4 text-center text-sm text-neutral-500">
         Need help?{' '}
         <a
-          href="mailto:support@oslsr.gov.ng"
+          href={`mailto:${supportEmail}`}
           className="text-primary-600 hover:text-primary-700 font-medium"
         >
           Contact Support

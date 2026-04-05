@@ -22,10 +22,10 @@ describe('CSP Report Endpoint', () => {
   it('should accept a valid CSP violation report and return 204', async () => {
     const report = {
       'csp-report': {
-        'document-uri': 'https://oyotradeministry.com.ng/dashboard',
+        'document-uri': 'https://example.com/dashboard',
         'violated-directive': 'script-src',
         'blocked-uri': 'https://evil.example.com/script.js',
-        'source-file': 'https://oyotradeministry.com.ng/dashboard',
+        'source-file': 'https://example.com/dashboard',
         'line-number': 42,
       },
     };
@@ -42,12 +42,12 @@ describe('CSP Report Endpoint', () => {
     const reports = [
       {
         type: 'csp-violation',
-        url: 'https://oyotradeministry.com.ng/dashboard',
+        url: 'https://example.com/dashboard',
         body: {
-          documentURL: 'https://oyotradeministry.com.ng/dashboard',
+          documentURL: 'https://example.com/dashboard',
           violatedDirective: 'script-src',
           blockedURL: 'https://evil.example.com/script.js',
-          sourceFile: 'https://oyotradeministry.com.ng/dashboard',
+          sourceFile: 'https://example.com/dashboard',
           lineNumber: 42,
         },
       },
@@ -73,7 +73,7 @@ describe('CSP Report Endpoint', () => {
   it('should rate-limit excessive reports', async () => {
     const report = JSON.stringify({
       'csp-report': {
-        'document-uri': 'https://oyotradeministry.com.ng/',
+        'document-uri': 'https://example.com/',
         'violated-directive': 'script-src',
         'blocked-uri': 'inline',
       },

@@ -517,7 +517,7 @@ export class StaffService {
       staffId: user.id,
       photoBuffer,
       logoBuffer,
-      verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oslrs.oyostate.gov.ng'}/verify-staff/${user.id}`,
+      verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oyotradeministry.com.ng'}/verify-staff/${user.id}`,
     });
 
     logger.info({

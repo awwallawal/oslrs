@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CheckCircle, XCircle, Shield } from 'lucide-react';
 import { GuidePageLayout, StepList, TipCard } from '../../components';
+import { siteEmail } from '../../../../config/site';
 
 const steps = [
   {
@@ -126,7 +127,7 @@ function GuideVerifyWorkerPage() {
             <TipCard title="Report suspicious activity" variant="info">
               <p>
                 If a worker claims to be verified but their code doesn't check out, or if you
-                encounter fraud, report it to <a href="mailto:report@oslsr.oyo.gov.ng" className="text-primary-600 hover:underline">report@oslsr.oyo.gov.ng</a>.
+                encounter fraud, report it to <a href={`mailto:${siteEmail('report')}`} className="text-primary-600 hover:underline">{siteEmail('report')}</a>.
               </p>
             </TipCard>
           </div>

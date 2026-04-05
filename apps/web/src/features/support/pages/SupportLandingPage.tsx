@@ -3,6 +3,7 @@ import { HelpCircle, BookOpen, MessageSquare, UserCheck, ArrowRight } from 'luci
 import { SupportCard, SearchBox } from '../components';
 import { FAQAccordion } from '../../participate/components';
 import type { FAQItem } from '../../participate/components';
+import { supportEmail, siteEmail } from '../../../config/site';
 
 /**
  * Quick link cards for Support landing page
@@ -42,7 +43,7 @@ const popularFAQs: FAQItem[] = [
   },
   {
     question: 'Is registration free?',
-    answer: 'Yes, registration is completely free. OSLSR never charges fees for registration, verification, or marketplace access. Report any request for payment as fraud to report@oslsr.oyo.gov.ng.',
+    answer: `Yes, registration is completely free. OSLSR never charges fees for registration, verification, or marketplace access. Report any request for payment as fraud to ${siteEmail('report')}.`,
   },
   {
     question: 'How long does verification take?',
@@ -50,7 +51,7 @@ const popularFAQs: FAQItem[] = [
   },
   {
     question: 'Can I update my information after registering?',
-    answer: 'Yes, you can update your profile information at any time before verification. After verification, you can request changes through support by contacting support@oslsr.oyo.gov.ng.',
+    answer: `Yes, you can update your profile information at any time before verification. After verification, you can request changes through support by contacting ${supportEmail}.`,
   },
 ];
 

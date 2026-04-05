@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { FileText, AlertTriangle, Scale, Mail } from 'lucide-react';
+import { siteEmail } from '../../../config/site';
 
 /**
  * TermsPage - Terms of Service page per Story 1.5.6 AC1.
@@ -291,10 +292,10 @@ function TermsPage() {
                       <p>
                         Email:{' '}
                         <a
-                          href="mailto:legal@oslsr.oyo.gov.ng"
+                          href={`mailto:${siteEmail('legal')}`}
                           className="text-primary-600 hover:text-primary-700 underline"
                         >
-                          legal@oslsr.oyo.gov.ng
+                          {siteEmail('legal')}
                         </a>
                       </p>
                     </address>

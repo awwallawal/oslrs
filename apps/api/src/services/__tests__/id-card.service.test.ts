@@ -97,7 +97,7 @@ describe('IDCardService', () => {
     staffId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     photoBuffer: Buffer.from('fake-image'),
     logoBuffer: Buffer.from('fake-logo'),
-    verificationUrl: 'https://oslrs.oyostate.gov.ng/verify-staff/123',
+    verificationUrl: 'https://oyotradeministry.com.ng/verify-staff/123',
   };
 
   beforeEach(() => {

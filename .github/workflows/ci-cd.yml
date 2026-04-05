@@ -592,7 +592,7 @@ jobs:
             cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 
             # Build frontend
-            VITE_API_URL=https://oyotradeministry.com.ng/api/v1 pnpm --filter @oslsr/web build
+            VITE_API_URL=${{ vars.VITE_API_URL || 'https://oyotradeministry.com.ng/api/v1' }} pnpm --filter @oslsr/web build
 
             # Deploy frontend to NGINX
             sudo cp -r apps/web/dist/* /var/www/oslsr/

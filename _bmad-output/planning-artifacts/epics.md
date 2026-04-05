@@ -2283,3 +2283,59 @@ So that every feature in the analytics specification is either live, threshold-g
 **Given** the Activation Status Panel (Story 8.7)
 **When** it renders
 **Then** it includes all remaining Phase 5 dormant hooks (T7 seasonality, T8 campaign effectiveness, S11 response entropy, S12 GPS dispersion) alongside existing dormant hooks.
+
+---
+
+## Epic 9: Platform Polish, Profile & Domain Migration
+
+**Epic Goal:** Address production polish items, fix the profile page, and prepare for a potential domain migration from `oyotradeministry.com.ng` to a cleaner domain.
+
+**Source:** `_bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md`
+
+**Context:** After 8 feature epics + 2 security hardening phases, the platform is functionally complete. This epic addresses polish, UX fixes, and infrastructure readiness for a professional domain.
+
+### Story 9.1: Profile Page & Auth/Me Fix + Editable Profile
+
+As a Staff User,
+I want `/auth/me` to return my full profile and to edit my profile via a dedicated page,
+So that my name displays correctly in the UI and I can update my details without admin help.
+
+**Status:** Done (2026-04-05)
+
+### Story 9.2: Domain Migration — oyotradeministry.com.ng to oslrs.com
+
+As the Super Admin,
+I want to migrate the platform from `oyotradeministry.com.ng` to `oslrs.com`,
+So that the system has a clean, memorable domain independent of government bureaucracy.
+
+**Status:** Deferred — blocked by domain purchase. Scope reduced by Story 9-5 (code-level domain centralization). Remaining scope: static files, documentation, VPS runbook. When domain purchased, merge with Story 9-4.
+
+### Story 9.3: Trust Section & Footer Minor Polish
+
+As a Public Visitor,
+I want the Trust section to show the correct logo and the footer Insights column to link to real pages,
+So that the website feels complete and professional.
+
+**Status:** Done (2026-04-05)
+
+### Story 9.4: Email Setup — Resend Domain Verification & Human-Facing Email
+
+As the Super Admin,
+I want transactional emails sent from the new domain with proper DNS authentication and reachable support addresses,
+So that emails are delivered reliably and recipients see a professional sender.
+
+**Status:** Deferred — blocked by domain purchase. Pure ops/configuration work (DNS, Resend, email provider). When domain purchased, merge with Story 9-2 remainder.
+
+### Story 9.5: Fix Domain/Email Bugs & Centralize Domain Configuration
+
+As the Super Admin,
+I want all broken domain and email references fixed and all domain-related values centralized to environment variables,
+So that users see correct support emails and verification links, and future domain changes are a config update, not a codebase sweep.
+
+**Acceptance Criteria:**
+
+**Given** the production codebase contains 3 wrong domain variants (`oslrs.oyostate.gov.ng`, `support@oslsr.gov.ng`, `support@oslsr.oyo.gov.ng`)
+**When** this story is complete
+**Then** all references use the correct live domain (`oyotradeministry.com.ng`) via centralized env vars, a single `site.config.ts` module serves frontend components, and `.env.example` documents the domain migration checklist.
+
+**Status:** Ready for dev

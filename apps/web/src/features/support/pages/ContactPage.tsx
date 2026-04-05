@@ -1,6 +1,10 @@
 import { Mail, Phone, Clock, MapPin, AlertTriangle, ShieldCheck, Building2, Handshake, Timer } from 'lucide-react';
 import { ContactSection } from '../components';
 import { AboutCallout } from '../../about/components/AboutCallout';
+import { supportEmail, siteEmail } from '../../../config/site';
+
+const techEmail = siteEmail('tech');
+const reportEmail = siteEmail('report');
 
 /**
  * Contact sections data
@@ -9,7 +13,7 @@ const generalInquiries = {
   title: 'General Inquiries',
   description: 'For questions about registration, verification, or the marketplace.',
   items: [
-    { icon: Mail, label: 'Email', value: 'support@oslsr.oyo.gov.ng', href: 'mailto:support@oslsr.oyo.gov.ng' },
+    { icon: Mail, label: 'Email', value: supportEmail, href: `mailto:${supportEmail}` },
     { icon: Phone, label: 'Phone', value: '+234 XXX XXX XXXX' },
     { icon: Clock, label: 'Hours', value: 'Monday - Friday, 8:00 AM - 5:00 PM' },
     { icon: Timer, label: 'Response time', value: 'We typically respond within 2-3 business days' },
@@ -20,7 +24,7 @@ const technicalSupport = {
   title: 'Technical Support',
   description: 'For website issues, login problems, or survey errors. Include screenshots if possible.',
   items: [
-    { icon: Mail, label: 'Email', value: 'tech@oslsr.oyo.gov.ng', href: 'mailto:tech@oslsr.oyo.gov.ng' },
+    { icon: Mail, label: 'Email', value: techEmail, href: `mailto:${techEmail}` },
   ],
 };
 
@@ -96,10 +100,10 @@ function ContactPage() {
                 <p className="text-sm">
                   Report to:{' '}
                   <a
-                    href="mailto:report@oslsr.oyo.gov.ng"
+                    href={`mailto:${reportEmail}`}
                     className="font-medium text-warning-700 hover:text-warning-800 underline"
                   >
-                    report@oslsr.oyo.gov.ng
+                    {reportEmail}
                   </a>
                 </p>
               </div>

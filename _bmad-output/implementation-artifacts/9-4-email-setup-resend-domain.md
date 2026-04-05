@@ -1,6 +1,12 @@
 # Story 9.4: Email Setup — Resend Domain Verification & Human-Facing Email
 
-Status: ready-for-dev
+Status: deferred
+
+> **2026-04-05 — Scope Update:** This story is entirely ops/configuration work — no code changes.
+> Story 9-5 centralized all domain references to env vars, so this story's scope is UNCHANGED.
+> When domain is purchased, merge with Story 9-2 remaining tasks (static files, docs, VPS runbook)
+> into a single migration story. All tasks below remain valid as-is.
+> **Migration runbook:** `docs/DOMAIN-MIGRATION.md` — the single checklist to follow on migration day.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { supportEmail } from '../../../config/site';
 import { BenefitCard } from '../../about/components/BenefitCard';
 import { AboutCallout } from '../../about/components/AboutCallout';
 import { FAQAccordion, VisibilityTable } from '../components';
@@ -101,7 +102,7 @@ const employerFAQs: FAQItem[] = [
   },
   {
     question: 'How do I report a fake profile?',
-    answer: 'If you suspect a profile is fraudulent, use the "Report" button on the profile page or contact support at support@oslsr.oyo.gov.ng. Our team will investigate and take appropriate action.',
+    answer: `If you suspect a profile is fraudulent, use the "Report" button on the profile page or contact support at ${supportEmail}. Our team will investigate and take appropriate action.`,
   },
   {
     question: 'Does the government guarantee worker quality?',

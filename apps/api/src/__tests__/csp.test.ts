@@ -81,7 +81,7 @@ describe('CSP Header Integration', () => {
   it('should accept and log CSP violation reports', async () => {
     const report = {
       'csp-report': {
-        'document-uri': 'https://oyotradeministry.com.ng/',
+        'document-uri': 'https://example.com/',
         'violated-directive': 'script-src',
         'blocked-uri': 'https://evil.example.com/malicious.js',
       },

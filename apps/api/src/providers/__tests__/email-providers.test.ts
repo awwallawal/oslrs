@@ -269,7 +269,8 @@ describe('Email Providers', () => {
 
       expect(config.provider).toBe('mock');
       expect(config.enabled).toBe(true);
-      expect(config.fromAddress).toBe('noreply@oyotradeministry.com.ng');
+      // Assert against the Zod schema default — not a hardcoded domain
+      expect(config.fromAddress).toMatch(/^noreply@.+\..+$/);
       expect(config.fromName).toBe('Oyo State Labour Registry');
       expect(config.tier).toBe('free');
       expect(config.monthlyOverageBudgetCents).toBe(3000);
