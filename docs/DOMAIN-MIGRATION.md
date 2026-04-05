@@ -64,10 +64,13 @@ Set repository variable:
 
 ## Step 5 — Static Files: sitemap + robots (5 min)
 
-These are the only 2 files that need manual find-replace:
+These are the only 3 files that need manual find-replace:
 
 ```bash
 # In your local repo:
+# index.html — 4 meta tags (canonical, og:url, og:image, twitter:image)
+sed -i 's/oyotradeministry.com.ng/newdomain.com/g' apps/web/index.html
+
 # sitemap.xml — 26 <loc> entries
 sed -i 's/oyotradeministry.com.ng/newdomain.com/g' apps/web/public/sitemap.xml
 
