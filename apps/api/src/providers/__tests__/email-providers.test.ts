@@ -7,6 +7,7 @@ import {
   getMockEmailProvider,
   resetMockEmailProvider,
 } from '../index.js';
+import { emailConfigSchema } from '../../../../../packages/config/src/email.js';
 
 describe('Email Providers', () => {
   const testEmail: EmailContent = {
@@ -269,8 +270,9 @@ describe('Email Providers', () => {
 
       expect(config.provider).toBe('mock');
       expect(config.enabled).toBe(true);
-      // Assert against the Zod schema default — not a hardcoded domain
-      expect(config.fromAddress).toMatch(/^noreply@.+\..+$/);
+      // Assert against the Zod schema default — not a hardcoded domain string
+      const schemaDefaults = emailConfigSchema.parse({});
+      expect(config.fromAddress).toBe(schemaDefaults.fromAddress);
       expect(config.fromName).toBe('Oyo State Labour Registry');
       expect(config.tier).toBe('free');
       expect(config.monthlyOverageBudgetCents).toBe(3000);

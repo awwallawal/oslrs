@@ -63,9 +63,9 @@ describe('Email Templates', () => {
     it('should include support URL', () => {
       const html = EmailService.getStaffInvitationHtml(sampleData);
 
-      // Assert support URL is present (derived from PUBLIC_APP_URL or default)
-      expect(html).toContain('support');
-      expect(html).toMatch(/https?:\/\/[a-z0-9.-]+/);
+      // SUPPORT_URL defaults to oyotradeministry.com.ng (or process.env.SUPPORT_URL)
+      const expectedUrl = process.env.SUPPORT_URL || 'https://oyotradeministry.com.ng';
+      expect(html).toContain(expectedUrl);
     });
 
     it('should match snapshot for HTML template', () => {
