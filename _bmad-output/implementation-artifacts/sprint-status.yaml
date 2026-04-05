@@ -287,11 +287,11 @@ development_status:
   # Added: 2026-04-04 — 4 stories covering VPS hardening, Redis centralization, app security, defense-in-depth.
   # Must complete before Epic 9 resumes. SEC2-1 is manual VPS ops (Awwal). SEC2-2/3/4 are code stories.
   # Dependencies: SEC2-1 ��� SEC2-2 → SEC2-3. SEC2-4 can parallel with SEC2-3.
-  security-hardening-2: in-progress
+  security-hardening-2: done
   sec2-1-vps-infrastructure-hardening: done  # P0 CRITICAL: Completed 2026-04-04. Redis rebound 127.0.0.1 + AUTH, Postgres rebound + rotated creds (oslsr_user/oslsr_db), DO Cloud Firewall "OSLRS" active, JWT secrets rotated (hex). DB restored from March 29 DO backup after db:push:force data loss. Docs deferred to SEC2-4. DO ticket reply pending.
   sec2-2-centralized-redis-connection-factory: done  # P1 HIGH: Completed 2026-04-04. Code review passed 2026-04-04: 10 findings (3H, 3M, 4L), all 10 auto-fixed. H1 AppError type, H2 shutdown wiring, H3 factory tests (16). 1,770 API + 2,355 web tests pass (4,125 total), 0 regressions.
   sec2-3-application-security-hardening: done  # P1 HIGH: Completed 2026-04-04. Code review passed: 9 findings (1C, 2H, 3M, 3L), all auto-fixed. CSP test added, error code fixed, CORS validation consolidated, error messages sanitized. 11 new tests (5 JWT + 6 security). 0 regressions.
-  sec2-4-defense-in-depth-documentation: ready-for-dev  # P2 MEDIUM: Token revocation on role change, DB pool config, dev route guard, architecture doc updates. Depends on SEC2-2. Story created 2026-04-04.
+  sec2-4-defense-in-depth-documentation: done  # P2 MEDIUM: Completed 2026-04-04. Code review passed: 10 findings (2H, 5M, 3L), all auto-fixed. Refresh flow timestamp check, deactivate/reset upgraded to revokeAllUserTokens, reverse index cleanup on logout, 4 new tests. 1,792 API tests pass, 0 regressions.
 
   # Epic 9: Platform Polish, Profile & Domain Migration
   # Source: _bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md

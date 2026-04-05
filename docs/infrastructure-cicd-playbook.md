@@ -588,6 +588,7 @@ docker exec -it oslsr-postgres psql -U oslsr_user -d oslsr_db
 | 14 | `pnpm db:seed` command not found at repo root | Seed script defined in `apps/api`, not root `package.json` | Use `pnpm --filter @oslsr/api db:seed` or `cd apps/api && pnpm db:seed` |
 | 15 | `tsx -e` top-level await fails | esbuild CJS output doesn't support top-level await | Wrap in async IIFE: `tsx -e "(async()=>{...})()"`, or write to a temp `.ts` file and run with `tsx /tmp/script.ts` |
 | 16 | PM2 crash-restart loop after deploy | New code requires env var not set on VPS `.env` | Pre-deploy check now catches this automatically. Fix: add var to VPS `.env` before deploying. See "Pre-Deploy Env Var Check" in Part 6. |
+| 17 | Docker-UFW bypass: Redis/Postgres publicly exposed | Docker writes iptables rules directly, bypassing UFW firewall completely | ALWAYS bind to `127.0.0.1:HOST_PORT:CONTAINER_PORT` in `docker-compose.yml`. Use DigitalOcean Cloud Firewall as the true perimeter (hypervisor-level, Docker-proof). Never rely on UFW alone for Docker services. |
 
 ---
 

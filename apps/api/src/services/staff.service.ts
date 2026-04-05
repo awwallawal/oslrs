@@ -230,9 +230,23 @@ export class StaffService {
       });
     });
 
-    // AC6: Invalidate all sessions (force re-login with new permissions)
-    await TokenService.invalidateAllUserTokens(userId);
+    // AC6: Invalidate all sessions and revoke all tokens (force re-login with new permissions)
+    const revokedCount = await TokenService.revokeAllUserTokens(userId);
     await SessionService.invalidateAllUserSessions(userId);
+
+    // Audit log for token revocation (distinct security event)
+    AuditService.logAction({
+      actorId,
+      action: 'TOKENS_REVOKED_ROLE_CHANGE',
+      targetResource: 'users',
+      targetId: userId,
+      details: {
+        oldRoleId: previousRoleId,
+        newRoleId,
+        newRoleName: role.name,
+        refreshTokensRevoked: revokedCount,
+      },
+    });
 
     logger.info({
       event: 'staff.role_changed',
@@ -242,6 +256,7 @@ export class StaffService {
       newRoleName: role.name,
       actorId,
       sessionInvalidated: true,
+      refreshTokensRevoked: revokedCount,
     });
 
     // Return updated user
@@ -313,8 +328,8 @@ export class StaffService {
       });
     });
 
-    // AC6: Invalidate all sessions
-    await TokenService.invalidateAllUserTokens(userId);
+    // AC6: Invalidate all sessions and revoke all tokens (force re-login)
+    await TokenService.revokeAllUserTokens(userId);
     await SessionService.invalidateAllUserSessions(userId);
 
     logger.info({

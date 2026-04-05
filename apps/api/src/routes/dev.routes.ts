@@ -10,9 +10,9 @@ const router = Router();
  * and allow developers to preview email templates without sending actual emails.
  */
 
-// Middleware to block access in production
+// Middleware to block access outside development/test (positive allowlist)
 const devOnlyMiddleware = (_req: Request, res: Response, next: () => void) => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
     res.status(404).json({ error: 'Not found' });
     return;
   }

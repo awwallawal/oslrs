@@ -260,8 +260,8 @@ export class PasswordResetService {
     // Invalidate all existing sessions for this user
     await SessionService.invalidateAllUserSessions(userId);
 
-    // Invalidate all tokens for this user
-    await TokenService.invalidateAllUserTokens(userId);
+    // Invalidate all tokens for this user (timestamp + refresh token deletion)
+    await TokenService.revokeAllUserTokens(userId);
   }
 
   /**

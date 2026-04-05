@@ -18,6 +18,13 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  // max: 20 — sufficient for 200 staff users + background workers.
+  // Postgres default is 100 max connections; 20 per pool leaves headroom.
+  max: 20,
+  // idleTimeoutMillis: 30000 — release idle connections after 30s to prevent exhaustion
+  idleTimeoutMillis: 30000,
+  // connectionTimeoutMillis: 2000 — fail fast on connection issues rather than hanging
+  connectionTimeoutMillis: 2000,
 });
 
 export const db = drizzle(pool, { schema });

@@ -169,6 +169,7 @@ Critical NFRs driving architectural decisions:
 **ADR-006: Defense-in-Depth Security Architecture**
 - **Decision:** Layered security model with independent, testable controls
 - **Layers:**
+  0. **Infrastructure Perimeter:** DigitalOcean Cloud Firewall (network-edge, Docker-bypass-proof), Docker localhost binding (127.0.0.1:PORT:PORT for all non-public services), Redis AUTH (--requirepass), strong database credentials
   1. **Edge:** Rate limiting (Redis, IP-based)
   2. **Application:** CAPTCHA challenges (hCaptcha)
   3. **Data:** Read-only replica (prevents direct data access)
@@ -3555,6 +3556,32 @@ export const apiRateLimit = rateLimit({
 // Usage
 app.use('/api/v1/marketplace', marketplaceRateLimit);
 app.use('/api/v1', authenticate, apiRateLimit);
+```
+
+**Redis Connection Factory Pattern:**
+
+```
+Redis Connection Pattern (SEC2-2):
+- Singleton via getRedisClient() for rate limiters, services, caching
+- Dedicated connection via createRedisConnection() for BullMQ queues/workers
+- Centralized in apps/api/src/lib/redis.ts
+- NEVER instantiate new Redis() directly outside lib/redis.ts
+- All connections use REDIS_URL env var (supports AUTH via redis://:password@host:port)
+```
+
+**Infrastructure Security Requirements:**
+
+```
+Docker Port Binding:
+- All Docker services MUST use 127.0.0.1:HOST_PORT:CONTAINER_PORT
+- Docker bypasses UFW by writing directly to iptables
+- DigitalOcean Cloud Firewall is the true perimeter (hypervisor-level)
+
+Data Store Authentication:
+- Redis MUST require AUTH (--requirepass) in all environments
+- PostgreSQL MUST use strong, unique credentials per environment
+- Connection strings with passwords MUST use REDIS_URL/DATABASE_URL env vars
+- Passwords MUST be hex-only (openssl rand -hex 32) to avoid URL encoding issues
 ```
 
 ---

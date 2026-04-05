@@ -972,7 +972,7 @@ _Source: infrastructure-cicd-playbook.md Parts 6, 7. Turbo configuration, GitHub
 
 ## 7. Operational Pitfalls & Solutions
 
-_16 pitfalls discovered during 6 epics of development and deployment. Each one cost real debugging time._
+_17 pitfalls discovered during 6 epics of development and deployment. Each one cost real debugging time._
 
 | # | Pitfall | Cause | Solution |
 |---|---------|-------|----------|
@@ -992,6 +992,7 @@ _16 pitfalls discovered during 6 epics of development and deployment. Each one c
 | 14 | `tsx -e` top-level await fails | esbuild CJS output doesn't support top-level await | Wrap in async IIFE or write to temp `.ts` file |
 | 15 | PM2 crash-restart loop after deploy | New code requires env var not set on VPS | Pre-deploy check now catches this automatically |
 | 16 | CORS_ORIGIN production crash loop | Added env var to required list, deployed without setting on VPS | Pre-deploy env var safety gate prevents this category of issue |
+| 17 | Docker-UFW bypass: services publicly exposed | Docker writes iptables rules directly, bypassing UFW firewall | ALWAYS bind to `127.0.0.1:HOST_PORT:CONTAINER_PORT`. Use cloud provider firewall as the true perimeter (hypervisor-level, Docker-proof). |
 
 ### Pitfall Prevention Principles
 

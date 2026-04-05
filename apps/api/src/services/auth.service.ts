@@ -621,6 +621,14 @@ export class AuthService {
       throw new AppError('AUTH_INVALID_TOKEN', 'Invalid or expired refresh token', 401);
     }
 
+    // Defense-in-depth: reject refresh tokens created before a revocation event (role change, password reset)
+    const refreshIssuedAt = Math.floor(new Date(tokenData.createdAt).getTime() / 1000);
+    const isRevoked = await TokenService.isTokenRevokedByTimestamp(tokenData.userId, refreshIssuedAt);
+    if (isRevoked) {
+      await TokenService.invalidateRefreshToken(refreshToken);
+      throw new AppError('AUTH_TOKEN_REVOKED', 'Please log in again', 401);
+    }
+
     // Validate session
     const sessionValidation = await SessionService.validateSession(tokenData.sessionId);
 
