@@ -4,16 +4,16 @@ import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
-import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit } from '../middleware/registration-rate-limit.js';
+import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit, activationRateLimit } from '../middleware/registration-rate-limit.js';
 import { googleAuthRateLimit } from '../middleware/google-auth-rate-limit.js';
 
 const router = Router();
 
-// Account activation (from Story 1.4)
+// Account activation (from Story 1.4) — rate limited to prevent resource exhaustion
 // Validate activation token - for frontend to check before showing wizard
-router.get('/activate/:token/validate', AuthController.validateActivationToken);
+router.get('/activate/:token/validate', activationRateLimit, AuthController.validateActivationToken);
 // Complete activation with profile data
-router.post('/activate/:token', AuthController.activate);
+router.post('/activate/:token', activationRateLimit, AuthController.activate);
 
 // Staff login - rate limited + CAPTCHA protected
 // Layer 1: strictLoginRateLimit (10/hour) - blocks sustained attacks

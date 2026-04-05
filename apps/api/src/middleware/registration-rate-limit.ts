@@ -90,6 +90,39 @@ export const resendVerificationRateLimit = rateLimit({
 });
 
 /**
+ * Rate limiter for account activation endpoints
+ * - 10 attempts per 15 minutes per IP
+ * - Applies to both token validation (GET) and activation completion (POST)
+ * - Tokens are UUIDv7 (high entropy) so brute-force is unlikely,
+ *   but rate limiting prevents resource exhaustion from spam requests
+ */
+export const activationRateLimit = rateLimit({
+  store: isTestMode() ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+    prefix: 'rl:activation:',
+  }),
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per 15 minutes per IP
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many activation attempts. Please try again later.',
+  },
+  handler: (req, res, next, options) => {
+    logger.warn({
+      event: 'activation.rate_limit_exceeded',
+      ip: req.ip,
+    });
+    res.status(429).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: isTestMode() ? false : { xForwardedForHeader: false },
+  skip: shouldSkipRateLimit,
+});
+
+/**
  * Rate limiter for email verification endpoint
  * - 10 verification attempts per 15 minutes per IP
  * - Prevents brute force token guessing
