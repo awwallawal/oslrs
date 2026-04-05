@@ -301,6 +301,6 @@ development_status:
   epic-9: in-progress  # Paused — security hardening takes priority. 0 stories were in-progress.
   9-1-profile-page-auth-me-fix-editable-profile: done  # HIGH: Fix /auth/me missing fullName + editable profile with PATCH /users/profile. Story created 2026-03-14. Implementation 2026-04-05. Code review done 2026-04-05 (8 issues fixed: 2H 5M 1L).
   9-2-domain-migration-oslrs-com: ready-for-dev  # CRITICAL: Migrate oyotradeministry.com.ng → oslrs.com (28 files, ~75+ references, NGINX, DNS). Story created 2026-03-14. Blocked by domain purchase.
-  9-3-trust-section-footer-minor-polish: ready-for-dev  # LOW: Remove one logo from Trust section (pending decision), wire footer Insights links. Story created 2026-03-14.
+  9-3-trust-section-footer-minor-polish: done  # LOW: Remove one logo from Trust section, wire footer Insights links. Story created 2026-03-14. Completed 2026-04-05. Code review done 2026-04-05 (4 issues fixed: 2M 2L).
   9-4-email-setup-resend-domain: ready-for-dev  # MEDIUM: Resend domain verification for oslrs.com, human-facing email setup. Depends on 9-2 (DNS). Story created 2026-03-14.
   epic-9-retrospective: optional

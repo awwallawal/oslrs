@@ -4,7 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 
-import { Footer, aboutLinks, participateLinks, supportLinks, legalLinks, socialLinks } from './Footer';
+import { Footer, aboutLinks, participateLinks, insightsLinks, supportLinks, legalLinks, socialLinks } from './Footer';
 
 afterEach(() => {
   cleanup();
@@ -57,9 +57,11 @@ describe('Footer', () => {
       expect(screen.getByRole('link', { name: /for employers/i })).toHaveAttribute('href', '/participate/employers');
     });
 
-    it('renders INSIGHTS column with Coming Soon placeholder', () => {
+    it('renders INSIGHTS column with working links', () => {
       renderWithRouter(<Footer />);
-      expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /labour force overview/i })).toHaveAttribute('href', '/insights');
+      expect(screen.getByRole('link', { name: /skills map/i })).toHaveAttribute('href', '/insights/skills');
+      expect(screen.getByRole('link', { name: /trends/i })).toHaveAttribute('href', '/insights/trends');
     });
 
     it('renders SUPPORT column links', () => {
@@ -162,6 +164,9 @@ describe('Footer', () => {
 
     expect(participateLinks).toBeInstanceOf(Array);
     expect(participateLinks.length).toBe(2);
+
+    expect(insightsLinks).toBeInstanceOf(Array);
+    expect(insightsLinks.length).toBe(3);
 
     expect(supportLinks).toBeInstanceOf(Array);
     expect(supportLinks.length).toBe(4);

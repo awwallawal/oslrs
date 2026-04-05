@@ -21,6 +21,15 @@ const participateLinks = [
 ];
 
 /**
+ * INSIGHTS column items per Story 9.3
+ */
+const insightsLinks = [
+  { href: '/insights', label: 'Labour Force Overview' },
+  { href: '/insights/skills', label: 'Skills Map' },
+  { href: '/insights/trends', label: 'Trends' },
+];
+
+/**
  * SUPPORT column items per Story 1.5-8 AC1
  */
 const supportLinks = [
@@ -124,12 +133,23 @@ function Footer() {
             </ul>
           </div>
 
-          {/* INSIGHTS Column - Coming Soon per AC1 */}
+          {/* INSIGHTS Column */}
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-300 mb-4">
               Insights
             </h3>
-            <p className="text-neutral-500 text-sm italic">Coming Soon</p>
+            <ul className="space-y-3">
+              {insightsLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    to={link.href}
+                    className="text-neutral-400 hover:text-white text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900 rounded"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* SUPPORT Column */}
@@ -250,4 +270,4 @@ function Footer() {
   );
 }
 
-export { Footer, aboutLinks, participateLinks, supportLinks, legalLinks, socialLinks };
+export { Footer, aboutLinks, participateLinks, insightsLinks, supportLinks, legalLinks, socialLinks };

@@ -26,16 +26,6 @@ function TrustSection() {
             height={80}
           />
 
-          {/* Ministry Logo */}
-          <img
-            src="/images/oyo-state-logo.svg"
-            alt="Ministry of Trade, Investment, Cooperatives & Industry"
-            className="h-16 w-auto"
-            loading="lazy"
-            width={64}
-            height={64}
-          />
-
           {/* NDPA Compliance Badge */}
           <div className="flex items-center gap-2 px-4 py-2 bg-success-100 rounded-full">
             <Shield className="w-5 h-5 text-success-600" />
