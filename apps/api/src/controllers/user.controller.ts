@@ -6,8 +6,11 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
+import { updateProfileSchema } from '@oslsr/types';
 import { PhotoProcessingService } from '../services/photo-processing.service.js';
 import { IDCardService } from '../services/id-card.service.js';
+import { UserService } from '../services/user.service.js';
+import { AuditService } from '../services/audit.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -142,5 +145,67 @@ export class UserController {
       } catch (error) {
           next(error);
       }
+  }
+
+  /**
+   * GET /api/v1/users/profile
+   * Get current user's full profile data with resolved LGA name (Story 9.1, AC#2)
+   */
+  static async getProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+      }
+
+      const profile = await UserService.getProfile(req.user.sub);
+
+      // Resolve S3 key to signed URL for selfie display (DB stores keys, not URLs)
+      const profileData = profile.liveSelfieOriginalUrl
+        ? { ...profile, liveSelfieOriginalUrl: await photoService.getSignedUrl(profile.liveSelfieOriginalUrl) }
+        : profile;
+
+      res.status(200).json({ data: profileData });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/users/profile
+   * Update current user's editable profile fields (Story 9.1, AC#4)
+   */
+  static async updateProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+      }
+
+      const validation = updateProfileSchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid profile data', 400, {
+          errors: validation.error.errors,
+        });
+      }
+
+      const userId = req.user.sub;
+      const data = validation.data;
+
+      const updated = await UserService.updateProfile(userId, data);
+
+      // Fire-and-forget audit log (AC#7)
+      AuditService.logAction({
+        actorId: userId,
+        action: 'user.profile_updated',
+        targetResource: 'user',
+        targetId: userId,
+        details: { changedFields: Object.keys(data) },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+
+      res.status(200).json({ data: updated });
+    } catch (error) {
+      next(error);
+    }
   }
 }

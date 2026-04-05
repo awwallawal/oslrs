@@ -120,6 +120,7 @@ interface AuthContextValue extends AuthState {
   showLogoutWarning: boolean;
   cancelLogout: () => void;
   reAuthenticate: (password: string) => Promise<boolean>;
+  refreshUser: () => Promise<void>;
   clearError: () => void;
   updateActivity: () => void;
 }
@@ -439,6 +440,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.accessToken]);
 
+  // Refresh user data from /auth/me (Story 9.1: re-sync after profile edit)
+  const refreshUser = useCallback(async () => {
+    const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) return;
+    try {
+      const userInfo = await authApi.getCurrentUser(token);
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: {
+          user: {
+            id: userInfo.id,
+            email: userInfo.email,
+            fullName: userInfo.fullName,
+            role: userInfo.role as UserRole,
+            status: userInfo.status,
+          },
+          accessToken: token,
+          rememberMe: userInfo.rememberMe,
+        },
+      });
+    } catch {
+      // Silently fail — profile data refresh is best-effort
+    }
+  }, []);
+
   // Clear error
   const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
@@ -473,9 +499,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             user: {
               id: userInfo.id,
               email: userInfo.email,
-              fullName: '', // Not returned from /me endpoint
+              fullName: userInfo.fullName,
               role: userInfo.role as UserRole,
-              status: 'active',
+              status: userInfo.status,
             },
             accessToken: response.accessToken,
             rememberMe: userInfo.rememberMe,
@@ -527,6 +553,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     showLogoutWarning,
     cancelLogout,
     reAuthenticate,
+    refreshUser,
     clearError,
     updateActivity,
   };

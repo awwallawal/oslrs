@@ -19,6 +19,9 @@ import {
   isBackOfficeRole,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
+import { db } from '../db/index.js';
+import { users, roles } from '../db/schema/index.js';
+import { eq } from 'drizzle-orm';
 
 // Cookie configuration
 const REFRESH_TOKEN_COOKIE_NAME = 'refreshToken';
@@ -439,12 +442,29 @@ export class AuthController {
         throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
       }
 
+      // Query DB for full user record (Story 9.1: /auth/me must return profile fields)
+      const [user] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          phone: users.phone,
+          status: users.status,
+          lgaId: users.lgaId,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.id, req.user.sub));
+
+      if (!user) {
+        throw new AppError('AUTH_REQUIRED', 'User not found', 401);
+      }
+
+      // Resolve role name from JWT (already available, no extra query)
       res.status(200).json({
         data: {
-          id: req.user.sub,
-          email: req.user.email,
+          ...user,
           role: req.user.role,
-          lgaId: req.user.lgaId,
           rememberMe: req.user.rememberMe,
         },
       });

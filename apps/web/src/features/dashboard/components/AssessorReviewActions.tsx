@@ -7,7 +7,7 @@
  * - Cancel button gets initial focus in reject dialog (safe default per UX spec)
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { FraudResolutionBadge } from './FraudResolutionBadge';
@@ -39,15 +39,6 @@ export function AssessorReviewActions({
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   const reviewMutation = useAssessorReview();
-
-  // Focus cancel button when reject dialog opens (safe default per UX spec)
-  useEffect(() => {
-    if (rejectDialogOpen && cancelRef.current) {
-      // Small delay to let the dialog render
-      const timeout = setTimeout(() => cancelRef.current?.focus(), 50);
-      return () => clearTimeout(timeout);
-    }
-  }, [rejectDialogOpen]);
 
   const handleApprove = () => {
     reviewMutation.mutate(
@@ -124,7 +115,12 @@ export function AssessorReviewActions({
 
       {/* Reject Confirmation Dialog */}
       <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent onOpenAutoFocus={(e) => {
+          // Focus cancel button as safe default (UX spec). Uses Radix's
+          // synchronous callback instead of setTimeout to avoid race conditions.
+          e.preventDefault();
+          cancelRef.current?.focus();
+        }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Reject Detection</AlertDialogTitle>
             <AlertDialogDescription>

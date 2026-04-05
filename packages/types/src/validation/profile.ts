@@ -56,3 +56,24 @@ export const backOfficeActivationSchema = z.object({
 });
 
 export type BackOfficeActivationPayload = z.infer<typeof backOfficeActivationSchema>;
+
+/**
+ * Profile update schema (Story 9.1)
+ * Partial updates — all fields optional, but validated when present.
+ * fullName rejects empty string. Phone must be 11 digits (Nigerian format).
+ */
+export const updateProfileSchema = z.object({
+  fullName: z.string().trim().min(1, 'Full name cannot be empty').optional(),
+  phone: z.string().length(11, 'Phone must be exactly 11 digits').regex(/^\d{11}$/, 'Phone must contain only digits').optional(),
+  homeAddress: z.string().min(5, 'Home address is too short').optional(),
+  nextOfKinName: z.string().min(2, 'Next of kin name is required').optional(),
+  nextOfKinPhone: z.string().min(10, 'Next of kin phone is required').optional(),
+  bankName: z.string().min(2, 'Bank name is required').optional(),
+  accountNumber: z.string().length(10, 'Account number must be 10 digits').regex(/^\d+$/, 'Account number must contain only digits').optional(),
+  accountName: z.string().min(2, 'Account name is required').optional(),
+}).refine(
+  (data) => Object.values(data).some((v) => v !== undefined),
+  { message: 'At least one field is required' },
+);
+
+export type UpdateProfilePayload = z.infer<typeof updateProfileSchema>;

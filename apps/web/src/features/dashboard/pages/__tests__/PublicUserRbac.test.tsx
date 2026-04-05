@@ -52,6 +52,7 @@ function createAuthValue(user: AuthUser) {
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
+    refreshUser: vi.fn(),
     confirmLogout: vi.fn().mockResolvedValue(undefined),
     unsyncedCount: 0,
     showLogoutWarning: false,

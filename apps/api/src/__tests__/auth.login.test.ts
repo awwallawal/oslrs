@@ -279,7 +279,7 @@ describe('Auth Login Integration', () => {
       accessToken = loginRes.body.data.accessToken;
     });
 
-    it('should return current user info', async () => {
+    it('should return current user info with full profile fields', async () => {
       const res = await request
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${accessToken}`);
@@ -289,6 +289,15 @@ describe('Auth Login Integration', () => {
       expect(res.body.data).toHaveProperty('email');
       expect(res.body.data.email).toBe(staffUserEmail);
       expect(res.body.data).toHaveProperty('role');
+      // Story 9.1: /auth/me must return full profile fields
+      expect(res.body.data).toHaveProperty('fullName');
+      expect(res.body.data.fullName).toBe('Staff Login Test');
+      expect(res.body.data).toHaveProperty('phone');
+      expect(res.body.data).toHaveProperty('status');
+      expect(res.body.data.status).toBe('active');
+      expect(res.body.data).toHaveProperty('lgaId');
+      expect(res.body.data).toHaveProperty('createdAt');
+      expect(res.body.data).toHaveProperty('rememberMe');
     });
 
     it('should reject without authentication', async () => {

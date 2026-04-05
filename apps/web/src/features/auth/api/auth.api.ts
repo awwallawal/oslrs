@@ -187,20 +187,28 @@ export async function reAuthenticate(
 }
 
 /**
- * Get current user info
+ * Get current user info (Story 9.1: returns full profile fields)
  */
 export async function getCurrentUser(accessToken: string): Promise<{
   id: string;
   email: string;
+  fullName: string;
+  phone: string | null;
   role: string;
   lgaId?: string;
+  status: string;
+  createdAt: string;
   rememberMe: boolean;
 }> {
   return authFetch<{
     id: string;
     email: string;
+    fullName: string;
+    phone: string | null;
     role: string;
     lgaId?: string;
+    status: string;
+    createdAt: string;
     rememberMe: boolean;
   }>(
     '/auth/me',

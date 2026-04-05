@@ -33,6 +33,27 @@ export const ninCheckRateLimit = rateLimit({
   validate: { keyGeneratorIpFallback: false },
 });
 
+export const profileUpdateRateLimit = rateLimit({
+  store: isTestEnv ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+  }),
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 profile updates per minute per user
+  keyGenerator: (req) => (req as Request & { user?: { sub: string } }).user?.sub ?? req.ip ?? 'unknown',
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many profile update requests, please try again later'
+  },
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
+});
+
 export const publicVerificationRateLimit = rateLimit({
   store: isTestEnv ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
