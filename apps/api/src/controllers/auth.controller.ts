@@ -20,7 +20,7 @@ import {
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { users, roles } from '../db/schema/index.js';
+import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 
 // Cookie configuration
