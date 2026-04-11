@@ -27,6 +27,10 @@ import analyticsRoutes from './analytics.routes.js';
 
 const router = Router();
 
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 router.use('/staff', staffRoutes);
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
