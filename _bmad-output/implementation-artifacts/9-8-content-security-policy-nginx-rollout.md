@@ -87,7 +87,9 @@ so that **XSS injection via compromised CDN, reflected input, or tampered static
   - [ ] 1.2 Read `apps/web/index.html` end-to-end. Inventory every inline `<script>` (should be zero outside the Vite module entry at line 145), every inline `<style>` block (PERF-1 block at lines 47-118), every preconnect / preload to a third-party domain (Google Fonts at lines 42-44).
   - [ ] 1.3 Run the existing test suite `pnpm vitest run apps/api/src/__tests__/csp.test.ts` to confirm current CSP state before any changes. Record pass count.
   - [ ] 1.4 Build the web app (`pnpm --filter @oslsr/web build`) and grep the emitted `apps/web/dist/index.html` for any inline script tags other than the fingerprinted module entry. Record findings — if Vite inlined anything unexpected, call it out as a blocker and add a new directive to the parity policy.
-  - [ ] 1.5 Summarize findings in Dev Notes § Discovery Results. Explicit pass/fail on "Helmet policy covers everything index.html actually does".
+  - [ ] 1.5 **Live-curl the production canonical policy** as ground truth: `curl -s -D - https://oyotradeministry.com.ng/api/v1/health | grep -i '^content-security-policy:'`. Compare directive-by-directive against the source object from 1.1. Any delta = implicit Helmet defaults that must be handled in Task 3 normalization. **Expected delta (already discovered in Story 9-7):** `script-src-attr 'none'` appears on the wire but not in source — fix by adding `scriptSrcAttr: ["'none'"]` to the source object explicitly (see sub-step 1.6).
+  - [ ] 1.6 **Make implicit Helmet defaults explicit in `apps/api/src/app.ts:103-156`.** Add `scriptSrcAttr: ["'none'"]` to the directive list, matching the wire. Re-run Task 1.5 curl after deploy (or locally via supertest against the app.ts fixture) to confirm zero delta between source and wire. Update `apps/api/src/__tests__/csp.test.ts` to expect the new directive so the existing tests don't silently pass on a wrong shape.
+  - [ ] 1.7 Summarize findings in Dev Notes § Discovery Results. Explicit pass/fail on "Helmet source object now matches the live wire policy byte-for-byte".
 
 - [ ] **Task 2: Mirror CSP to nginx (Report-Only)** (AC: #1, #2)
   - [ ] 2.1 Edit `infra/nginx/oslsr.conf`. Add a single `add_header Content-Security-Policy-Report-Only "<full policy string>" always;` at the server level, below the existing 6 security headers (around line 40). The policy string must serialize the exact Helmet directive set from Task 1.1 in CSP syntax (directives separated by `; `, values space-separated within a directive). Use `wss://oyotradeministry.com.ng` for the `connect-src` WebSocket URL (hard-coded prod value — Helmet computes this at runtime from `CORS_ORIGIN`).
@@ -99,9 +101,11 @@ so that **XSS injection via compromised CDN, reflected input, or tampered static
 - [ ] **Task 3: Drift-protection parity test** (AC: #3, #8)
   - [ ] 3.1 Create `apps/api/src/__tests__/csp-parity.test.ts`. Import the Helmet CSP directive object from `apps/api/src/app.ts` (may need to export it as a named const first — a small refactor). Read `infra/nginx/oslsr.conf` as text via `fs.readFileSync`.
   - [ ] 3.2 Parse the `Content-Security-Policy-Report-Only` directive string from the nginx config into an object: `{ directive: [sources] }`.
-  - [ ] 3.3 Write `expect(normalizeHelmet(helmetDirectives)).toEqual(normalizeNginx(nginxDirectives))`. Normalization must handle directive ordering, source-list ordering, quote-style differences, and the runtime-computed `wsUrl` in Helmet vs the hard-coded `wss://…` in nginx.
-  - [ ] 3.4 Add 3 negative tests: (a) Helmet has a source nginx doesn't → test fails with a directive-named error; (b) nginx has a directive Helmet doesn't → test fails; (c) same directive, different source lists → test fails showing the diff.
-  - [ ] 3.5 Run the test — it should pass against the Task 2 changes. If it doesn't, fix either Helmet or nginx until parity holds. Do NOT loosen the test to make it pass.
+  - [ ] 3.3 Write `expect(normalizeHelmet(helmetDirectives)).toEqual(normalizeNginx(nginxDirectives))`. Normalization must handle: (a) directive ordering (sort alphabetically), (b) source-list ordering (sort within each directive), (c) quote-style differences (normalize to single quotes), (d) the runtime-computed `wsUrl` in Helmet vs the hard-coded `wss://oyotradeministry.com.ng` in nginx (substitute `wsUrl` at compare time using a known `CORS_ORIGIN=https://oyotradeministry.com.ng` environment fixture), and (e) the conditional `upgrade-insecure-requests` (present in nginx always, present in Helmet only when `isProduction`; compare-time assume prod).
+  - [ ] 3.4 **Handle Helmet implicit defaults (discovered via Story 9-7 live curl, see Dev Notes).** After Task 1.6 lands `scriptSrcAttr: ["'none'"]` explicitly in the Helmet source object, there should be zero implicit-directive drift between source and wire. Belt-and-braces: maintain a `HELMET_IMPLICIT_DEFAULTS` allowlist at the top of the parity test (initially empty after 1.6) that the normalizer augments the Helmet object with before comparison. If Helmet upstream ever adds a new implicit default in a future release, the parity test will fail against the nginx config; the fix is to add the new directive to the allowlist AND to the nginx config. Comment the allowlist with the discovery provenance so future devs know why it exists.
+  - [ ] 3.5 Add 3 negative tests: (a) Helmet has a source nginx doesn't → test fails with a directive-named error; (b) nginx has a directive Helmet doesn't → test fails; (c) same directive, different source lists → test fails showing the diff.
+  - [ ] 3.6 **Live-curl round-trip assertion (optional but recommended).** Add a test that invokes `app.ts`'s Express instance via supertest, reads the actual `Content-Security-Policy` header from a 200 response, parses it, and asserts it equals the normalized nginx policy. This catches the case where source code says X but the runtime emits Y (the exact class of mistake I fell into in Story 9-7 when I saw `default-src 'none'` on a 404 and wrongly concluded sec2-3 hadn't deployed).
+  - [ ] 3.7 Run the test — it should pass against the Task 2 changes. If it doesn't, fix either Helmet or nginx until parity holds. Do NOT loosen the test to make it pass.
 
 - [ ] **Task 4: Local SPA smoke test against Report-Only** (AC: #4)
   - [ ] 4.1 Start `docker-compose up web-app`. Confirm the dev container boots and serves the React app on `http://localhost:{dev-port}`.
@@ -209,6 +213,51 @@ The Task 3 parity test handles this: the normalization function treats the Helme
 ### Directive that DOESN'T mirror: `upgrade-insecure-requests`
 
 Helmet adds `upgrade-insecure-requests` ONLY in production (`...(isProduction ? { upgradeInsecureRequests: [] } : {})`). nginx is always in production (the dev stack uses `docker/nginx.dev.conf`). So the nginx policy includes `upgrade-insecure-requests` unconditionally. Flag this as a legitimate asymmetry in the parity test — it's a conditional directive that only ever applies on one side in prod.
+
+### Implicit Helmet directive that doesn't appear in the source config: `script-src-attr 'none'`
+
+**Discovered 2026-04-11 via live curl** against `https://oyotradeministry.com.ng/api/v1/health` after the Story 9-7 drive-by `/api/v1/health` endpoint deployed. The live response header emits a 17-directive CSP that includes `script-src-attr 'none'` at the end — BUT this directive is NOT present in the source `directives: {...}` object at `apps/api/src/app.ts:103-156`. Helmet adds it as a built-in default on top of whatever the caller configures.
+
+This matters for the Task 3 parity test: a naive implementation that imports the Helmet directive object and serializes it will produce a 16-directive string, while the deployed response has 17. If we mirror the 16-directive source into nginx literally and test "nginx parses to the same directive set as Helmet config", we'll match the source but NOT match the wire. Three options:
+
+1. **Augment the parsed Helmet directive object with known Helmet implicit defaults before comparing.** A static allowlist of Helmet defaults: `script-src-attr: 'none'`, anything else we discover via curl. This surfaces future Helmet upstream changes (if a new major version adds another implicit directive, our static list drifts and the test fails loudly).
+2. **Exclude implicit directives from the comparison by matching only user-configured ones.** Simpler but the parity test no longer catches drift between nginx and the actual wire policy — only between nginx and the source.
+3. **Stop relying on Helmet defaults entirely — explicitly include `scriptSrcAttr: ["'none'"]` in `app.ts:103-156`** so the source and wire are 1:1. Cleanest long-term but touches api code that 9-8 otherwise doesn't need to touch.
+
+**Recommendation for Task 3 implementation:** go with **Option 3** — one-line addition to `app.ts:103-156` to make `script-src-attr 'none'` explicit — AND implement **Option 1** as a backstop (static allowlist of known Helmet implicit defaults, currently empty after Option 3 lands but scaffolded for future upstream changes). Run a live curl against `/api/v1/health` as part of the test setup and cross-check against the static allowlist — fail loud if Helmet starts emitting a directive we don't know about.
+
+**Cross-reference in parity-test comments:** note the discovery date, the live response quote from Story 9-7, and the `app.ts` line where the explicit `scriptSrcAttr` addition was made. Future devs reading the normalization function should be able to trace the "why" without excavating git history.
+
+### Live-curl confirmation of the canonical Helmet CSP (2026-04-11)
+
+From `curl -s -D - https://oyotradeministry.com.ng/api/v1/health` (post-9-7-drive-by deploy), confirming the full policy is enforcing in production:
+
+```
+Content-Security-Policy: default-src 'self';
+  script-src 'self' https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com;
+  img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.digitaloceanspaces.com;
+  font-src 'self' https://fonts.gstatic.com;
+  connect-src 'self' wss://oyotradeministry.com.ng https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com https://cdn.jsdelivr.net;
+  frame-src https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com;
+  worker-src 'self' blob:;
+  media-src 'self' blob: mediastream:;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+  frame-ancestors 'self';
+  report-uri /api/v1/csp-report;
+  report-to csp-endpoint;
+  upgrade-insecure-requests;
+  script-src-attr 'none'                    ← Helmet implicit default (NOT in source)
+```
+
+This is the literal wire output — use it as the ground truth for nginx mirroring. Copy-paste into `infra/nginx/oslsr.conf` as the `Content-Security-Policy-Report-Only` value (after Task 7 promotion: just `Content-Security-Policy`). The hard-coded `wss://oyotradeministry.com.ng` in `connect-src` is the runtime-resolved `wsUrl` from the Helmet source config; the nginx mirror MUST hard-code this same literal (see "Handling the runtime-computed wsUrl" section above).
+
+**Also visible on the live response but NOT part of CSP (contextual):**
+- `Content-Security-Policy` is enforcing, not `-Report-Only` — confirms the ternary `reportOnly: process.env.NODE_ENV !== 'production'` is evaluating correctly in prod (CORS_ORIGIN env var → NODE_ENV=production → reportOnly false).
+- `Reporting-Endpoints: csp-endpoint="/api/v1/csp-report"` — the middleware at `apps/api/src/app.ts:159-162` is active; the reporting endpoint is wired end-to-end.
+- `X-Proxy-Upstream: api` — the Story 9-7 H2 fix is still visible on /api responses, confirming the nginx location-block inheritance-break is stable across deploys.
 
 ### Policy string serialization
 
