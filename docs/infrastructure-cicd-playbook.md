@@ -263,74 +263,43 @@ pm2 startup    # auto-start on reboot
 
 ## Part 5: NGINX Configuration
 
-Create `/etc/nginx/sites-available/oslsr`:
+**Canonical source of truth:** [`infra/nginx/oslsr.conf`](../infra/nginx/oslsr.conf) in this repo.
 
-```nginx
-# HTTP → HTTPS redirect
-server {
-    listen 80;
-    server_name <YOUR_DOMAIN> www.<YOUR_DOMAIN>;
-    return 301 https://$server_name$request_uri;
-}
+Since Story 9-7 (2026-04-11), the production nginx config lives in the repo at `infra/nginx/oslsr.conf` and is deployed automatically via CI. **Do not edit `/etc/nginx/sites-available/oslsr` directly on the VPS** — any manual edit will be overwritten on the next deploy.
 
-# Main HTTPS server
-server {
-    listen 443 ssl;
-    server_name <YOUR_DOMAIN> www.<YOUR_DOMAIN>;
+**What's in `infra/nginx/oslsr.conf`:**
+- HTTP → HTTPS redirect server block
+- HTTPS main server block with `http/2` enabled
+- TLS hardening: `ssl_protocols TLSv1.2 TLSv1.3` (override of stock Ubuntu default that inherits the deprecated TLSv1/1.1)
+- `server_tokens off` — hide nginx version from `Server:` header
+- 6 security headers: HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
+- 1-year immutable cache headers on fingerprinted static assets (JS/CSS/images/fonts)
+- `/api` reverse proxy to `localhost:3000`
+- `/socket.io/` WebSocket proxy
 
-    # SSL
-    ssl_certificate /etc/letsencrypt/live/<YOUR_DOMAIN>/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/<YOUR_DOMAIN>/privkey.pem;
-
-    # Frontend — serve static React build
-    root /var/www/oslsr;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;  # SPA routing fallback
-    }
-
-    # API reverse proxy
-    location /api {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # WebSocket proxy (Socket.IO realtime notifications)
-    location /socket.io/ {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-    gzip_min_length 1000;
-}
-```
+**CI deploy wiring (see `.github/workflows/ci-cd.yml` deploy step):**
 
 ```bash
-# Enable site, remove default
-ln -s /etc/nginx/sites-available/oslsr /etc/nginx/sites-enabled/
-rm /etc/nginx/sites-enabled/default
-
-# Test and reload
-nginx -t
-systemctl restart nginx
+sudo cp infra/nginx/oslsr.conf /etc/nginx/sites-available/oslsr
+sudo nginx -t && sudo systemctl reload nginx
 ```
+
+The `nginx -t` acts as a gate — malformed config aborts reload, and the previous good config stays live. Zero site-down risk.
+
+**First-time manual bootstrap (only if provisioning a brand-new VPS before CI has run):**
+
+```bash
+# Copy the file from the repo
+sudo cp infra/nginx/oslsr.conf /etc/nginx/sites-available/oslsr
+# Enable site, remove default
+sudo ln -s /etc/nginx/sites-available/oslsr /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+After the first CI deploy, subsequent updates flow automatically — never touch the VPS file by hand.
 
 ---
 

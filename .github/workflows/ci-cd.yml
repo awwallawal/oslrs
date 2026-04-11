@@ -579,6 +579,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -eo pipefail
             cd ~/oslrs
             git pull origin main
 
@@ -596,6 +597,22 @@ jobs:
 
             # Deploy frontend to NGINX
             sudo cp -r apps/web/dist/* /var/www/oslsr/
+
+            # Deploy nginx config (Story 9-7 — security headers + TLS hardening).
+            # Strategy: backup → copy → test → reload. If test fails, restore backup
+            # so the prior good config stays on disk even for cold reloads (certbot
+            # renewal, reboots, etc.). set -eo pipefail above ensures the deploy
+            # step fails loudly if any of these fail, instead of silently proceeding
+            # to pm2 restart while leaving nginx broken.
+            sudo cp /etc/nginx/sites-available/oslsr /etc/nginx/sites-available/oslsr.bak
+            sudo cp infra/nginx/oslsr.conf /etc/nginx/sites-available/oslsr
+            if sudo nginx -t; then
+              sudo systemctl reload nginx
+            else
+              echo "::error::nginx -t failed — restoring backup config"
+              sudo cp /etc/nginx/sites-available/oslsr.bak /etc/nginx/sites-available/oslsr
+              exit 1
+            fi
 
             # Restart API
             pm2 restart oslsr-api

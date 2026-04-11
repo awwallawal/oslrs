@@ -9,6 +9,8 @@ RUN pnpm --filter @oslsr/web build
 
 FROM nginx:alpine
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Dev-container nginx config only — production VPS uses host nginx loaded from
+# infra/nginx/oslsr.conf via .github/workflows/ci-cd.yml (see Story 9-7).
+COPY docker/nginx.dev.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

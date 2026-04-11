@@ -46,6 +46,7 @@ Read these files in order for full project awareness:
 - **db:push on deploy:** CI runs `pnpm --filter @oslsr/api db:push` before build
 - **Admin seeding:** `pnpm --filter @oslsr/api db:seed --admin-from-env` (single-line inline env vars)
 - **Env var safety:** Any code adding required env vars MUST coordinate with production `.env` before deploy (SEC-3 crash loop lesson)
+- **Production nginx config lives in the repo** at [`infra/nginx/oslsr.conf`](../infra/nginx/oslsr.conf), deployed automatically via CI to `/etc/nginx/sites-available/oslsr`. Any nginx change MUST touch that file — grep for `infra/nginx/oslsr.conf` before editing anything nginx-related. The old `docker/nginx.conf` was orphan code (renamed to `docker/nginx.dev.conf` for dev-container use only in Story 9-7, 2026-04-11) — the file looked like production config but was never read by the VPS. Lesson: verify live headers via `curl -sI https://oyotradeministry.com.ng/` rather than assuming a committed file is deployed.
 
 ## Epic 7 Readiness
 

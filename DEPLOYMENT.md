@@ -57,7 +57,7 @@ If you are not using the GitHub Action yet, follow this:
 *   Check `.env`. Ensure `DATABASE_URL` matches the docker service name (e.g., `postgres://user:pass@postgres:5432/app_db`). Note: Inside Docker, host is `postgres`, not `localhost`.
 
 **"404 Not Found" on Web:**
-*   Ensure the `docker/nginx.conf` was successfully copied. You can check by running `docker exec -it <web-container-id> cat /etc/nginx/conf.d/default.conf`.
+*   Ensure the `docker/nginx.dev.conf` was successfully copied (this is the dev-container config; production uses host nginx loaded from `infra/nginx/oslsr.conf` via CI). You can check inside a dev container by running `docker exec -it <web-container-id> cat /etc/nginx/conf.d/default.conf`.
 
 **"Permission Denied" on Scripts:**
 *   Run `chmod +x docker/production-entrypoint.sh` locally and commit, or run it on the server.

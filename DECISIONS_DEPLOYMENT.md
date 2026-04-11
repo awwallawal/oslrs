@@ -11,8 +11,9 @@ Ensure "One-Click" deployment reliability to a Hetzner VPS (or similar) where th
 *   **Problem:** React Router manages URLs client-side (e.g., `/dashboard`). When a user refreshes, the request goes to the Nginx server. Default Nginx looks for a file named `dashboard`, doesn't find it, and returns 404.
 *   **Decision:** Create a custom `nginx.conf` and inject it into the `web` Docker image.
 *   **Implementation:**
-    *   Create `docker/nginx.conf` with `try_files $uri /index.html`.
+    *   Create `docker/nginx.dev.conf` with `try_files $uri /index.html` (renamed from `docker/nginx.conf` in Story 9-7, 2026-04-11 — the docker path is dev-container only).
     *   Update `Dockerfile.web` to copy this config to `/etc/nginx/conf.d/default.conf`.
+    *   **Production note:** The real VPS uses host nginx loaded from `infra/nginx/oslsr.conf` via `.github/workflows/ci-cd.yml`, not the docker container stack. See Story 9-7.
 
 ### Risk B: Database Schema Drift
 *   **Problem:** The API container starts but crashes because tables don't exist (on fresh install) or are outdated.
@@ -38,7 +39,7 @@ I will generate the following files to be committed to the repo:
 
 1.  `DEPLOYMENT.md`: A standalone manual for you.
     *   *Contents:* Prerequisites, Initial Server Setup (Docker installation), First Deployment, Updating (CI/CD vs Manual).
-2.  `docker/nginx.conf`: The fix for React routing.
+2.  `docker/nginx.dev.conf`: The fix for React routing (dev-container only — renamed from `docker/nginx.conf` in Story 9-7).
 3.  `docker/production-entrypoint.sh`: The "Migrate-then-Start" script.
 4.  `scripts/deploy.sh`: A helper script you can run on the server if you aren't using GitHub Actions (e.g., `bash scripts/deploy.sh`).
 
