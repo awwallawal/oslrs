@@ -29,12 +29,20 @@ let latencyBufferIndex = 0;
 let latencyBufferFull = false;
 
 /**
+ * Minimum number of requests before p95 is statistically meaningful.
+ * Below this threshold, getP95Latency() returns 0 to avoid false alerts
+ * on low-traffic VPS instances where a single slow request dominates.
+ */
+const MIN_SAMPLES_FOR_P95 = 50;
+
+/**
  * Get the current p95 API latency from the rolling buffer.
- * Returns 0 if no requests have been recorded yet.
+ * Returns 0 if fewer than MIN_SAMPLES_FOR_P95 requests have been recorded,
+ * since p95 is not statistically meaningful with very few samples.
  */
 export function getP95Latency(): number {
   const count = latencyBufferFull ? LATENCY_BUFFER_SIZE : latencyBufferIndex;
-  if (count === 0) return 0;
+  if (count < MIN_SAMPLES_FOR_P95) return 0;
 
   const sorted = latencyBuffer.slice(0, count).sort((a, b) => a - b);
   const p95Index = Math.floor(count * 0.95);
@@ -102,4 +110,21 @@ export function metricsMiddleware(
   } as Response['end'];
 
   next();
+}
+
+/** Reset rolling latency buffer (for testing) */
+export function resetLatencyBuffer(): void {
+  latencyBuffer.length = 0;
+  latencyBufferIndex = 0;
+  latencyBufferFull = false;
+}
+
+/** Inject a duration into the rolling latency buffer (for testing) */
+export function recordLatencySample(durationMs: number): void {
+  latencyBuffer[latencyBufferIndex] = durationMs;
+  latencyBufferIndex++;
+  if (latencyBufferIndex >= LATENCY_BUFFER_SIZE) {
+    latencyBufferIndex = 0;
+    latencyBufferFull = true;
+  }
 }
