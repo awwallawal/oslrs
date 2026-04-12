@@ -102,7 +102,7 @@ const wsUrl = isProduction
 
 /** Exported for csp-parity.test.ts — the parity test reads this object and
  *  compares it against the nginx mirror in infra/nginx/oslsr.conf. */
-export const cspDirectives: Record<string, string[] | string | boolean> = {
+export const cspDirectives = {
       defaultSrc: ["'self'"],
       scriptSrc: [
         "'self'",
