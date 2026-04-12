@@ -139,6 +139,22 @@ _(To be populated by code-review workflow if/when this story is implemented.)_
 
 ## Dev Notes
 
+### Pre-implementation: p95 false-alert fix (2026-04-12)
+
+**Problem:** Production health-digest emails fired `api_p95_latency Critical 631` every 30 minutes. The VPS is low-traffic — fewer than 50 requests between digest intervals. A single slow request (cold PM2 restart, first DB connection, or SSR hydration probe) pushed p95 to 631ms with only ~20 samples in the rolling buffer. Statistically, p95 of 20 samples is noise, not signal.
+
+**Fix:** `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95 = 50`. Below this threshold `getP95Latency()` returns 0 (no alert). Above it, the existing rolling-buffer p95 calculation runs as before. The threshold was chosen because p95 needs at least ~40-50 data points to be statistically stable (rule of thumb: 1/(1-0.95) = 20 minimum, doubled for safety margin against clustering).
+
+**Why this matters for 9-9:** The C+ operational security grade cites "no centralized logging/alerting" as the main gap. The health-digest system IS the current alerting mechanism. If it cries wolf every 30 minutes, operators learn to ignore it — exactly the alert-fatigue anti-pattern that makes breaches invisible. This fix ensures the alerts that DO fire are real.
+
+**Also fixed:** Missing `zod` dependency in `packages/config/package.json` — runtime import error for config consumers using zod schemas.
+
+**Files changed:**
+- `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95` threshold + test helpers
+- `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests (new file)
+- `packages/config/package.json` — added `zod` dependency
+- `pnpm-lock.yaml` — lockfile update
+
 ### Why this story exists
 
 During Story 9-8's dev-story session (2026-04-12), Awwal asked three questions:
@@ -212,6 +228,8 @@ _(Populated during implementation.)_
 | Date | Change | Rationale |
 |---|---|---|
 | 2026-04-12 | Story created as backlog with full security posture assessment + 6 tasks (2 P0 + 1 P1 + 2 P2 + 1 traceability). Field-readiness assessment: READY with Cloudflare recommended within first week. | Capture 9-8 session security assessment so no nuance is lost when resources become available |
+| 2026-04-12 | **Pre-implementation fix: p95 latency false-alert suppression.** `apps/api/src/middleware/metrics.ts` — added `MIN_SAMPLES_FOR_P95 = 50` threshold. `getP95Latency()` now returns 0 when sample count < 50, preventing a single slow request on the low-traffic VPS from triggering Critical health-digest alerts (was: stuck at 631ms). Added `resetLatencyBuffer()` + `recordLatencySample()` test helpers. New `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests covering zero/below-threshold/at-threshold/outlier/exact-production-scenario cases. | Production health-digest emails fired repeated `api_p95_latency Critical 631` alerts every 30 min. Root cause: on a low-traffic VPS, a single slow request (cold start or DB connection init) dominates the p95 with < 20 samples in the rolling buffer. The 50-sample minimum makes the statistic meaningful before it can trigger alerts. Directly addresses the C+ operational security grade — false-positive alert fatigue erodes trust in the monitoring system. |
+| 2026-04-12 | **Bugfix: added missing `zod` dependency to `@oslsr/config` package.** `packages/config/package.json` + `pnpm-lock.yaml` updated. | Runtime import error when `@oslsr/config` consumers used zod schemas — dependency was consumed but not declared in the package's own `package.json`. |
 
 ### File List
 

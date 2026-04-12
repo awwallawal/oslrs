@@ -349,6 +349,7 @@ Claude Opus 4.6 (1M context) — `claude-opus-4-6[1m]`
 | 2026-04-12 | Rewrote Part 5.1 of `docs/infrastructure-cicd-playbook.md` with parity test docs, domain-addition recipe, 2-minute rollback recipe, violation payload guide, corrected enforcement state | Task 8 — AC#9 |
 | 2026-04-12 | Added CSP cross-link to `docs/team-context-brief.md` | Task 8.2 |
 | 2026-04-12 | `sprint-status.yaml` 9-8 → `in-progress` | Task 9.1 |
+| 2026-04-12 | **[Cross-ref] p95 false-alert fix during 9-8 monitoring window.** `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95 = 50` threshold suppresses false Critical health-digest alerts on low-traffic VPS. Also fixed missing `zod` dep in `@oslsr/config`. Full details in Story 9-9 Dev Notes → "Pre-implementation: p95 false-alert fix". | Discovered via health-digest emails during 9-8's self-test period. Not CSP-related but documented here for audit completeness since it was fixed in the same session window. |
 
 ### File List
 

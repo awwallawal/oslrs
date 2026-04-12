@@ -454,7 +454,11 @@ importers:
         specifier: 7.4.0
         version: 7.4.0
 
-  packages/config: {}
+  packages/config:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/testing:
     dependencies:
