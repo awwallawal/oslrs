@@ -70,6 +70,11 @@ describe('CSP Header Integration', () => {
     expect(csp).toContain("worker-src");
     expect(csp).toContain("media-src");
     expect(csp).toContain("mediastream:");
+
+    // Story 9-8: script-src-attr pinned explicitly (was implicit Helmet default
+    // before 9-8 — made explicit so the csp-parity test can compare cleanly
+    // against the nginx mirror without false-positive drift).
+    expect(csp).toContain("script-src-attr 'none'");
   });
 
   it('should contain report-to directive', async () => {

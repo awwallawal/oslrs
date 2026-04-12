@@ -305,28 +305,38 @@ After the first CI deploy, subsequent updates flow automatically — never touch
 
 ## Part 5.1: Content Security Policy (CSP)
 
-**Added:** 2026-03-01 (Story SEC-2)
+**Added:** 2026-03-01 (Story SEC-2) | **Updated:** 2026-04-12 (Story 9-8 — parity test, rollback recipe, corrected enforcement state)
 
 ### Architecture: Two-Layer CSP
 
 OSLRS uses a **two-layer CSP** because NGINX and Express serve different content:
 
-| Layer | Serves | CSP Source |
-|-------|--------|------------|
-| **NGINX** | SPA `index.html`, static JS/CSS/fonts | `add_header` directive in NGINX config |
-| **Express (Helmet)** | API JSON responses (`/api/v1/*`) | `helmet({ contentSecurityPolicy })` in `app.ts` |
+| Layer | Serves | CSP Source | Enforcement |
+|-------|--------|------------|-------------|
+| **NGINX** | SPA `index.html`, static JS/CSS/fonts | `add_header` in `infra/nginx/oslsr.conf` | Report-Only (promotion to enforcing via single-line rename) |
+| **Express (Helmet)** | API JSON responses (`/api/v1/*`) | `cspDirectives` export in `apps/api/src/app.ts` | **Already enforcing in production** since sec2-3 (2026-04-04) |
 
-Both layers must have identical CSP directives. Helmet CSP only covers API responses — it does **not** protect the SPA HTML page (NGINX serves it directly).
+Both layers **must** have identical CSP directives. The `csp-parity.test.ts` test file enforces this invariant — if you edit one side without the other, CI fails.
 
-### NGINX CSP Header
+### Drift Protection: `csp-parity.test.ts`
 
-Add this inside the `server { listen 443 ... }` block, **after** the SSL directives:
+**File:** `apps/api/src/__tests__/csp-parity.test.ts` (6 tests)
 
-```nginx
-# Content Security Policy — Report-Only mode (switch to enforcing after validation)
-# Mirrors Helmet CSP config in apps/api/src/app.ts
-add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.digitaloceanspaces.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://oyotradeministry.com.ng https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com https://cdn.jsdelivr.net; frame-src https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com; worker-src 'self' blob:; media-src 'self' blob: mediastream:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; report-uri /api/v1/csp-report; report-to csp-endpoint; upgrade-insecure-requests;" always;
+Reads the `cspDirectives` export from `apps/api/src/app.ts` and the nginx conf text from `infra/nginx/oslsr.conf`, normalizes both (directive ordering, source-list sorting, `wsUrl` substitution, `upgrade-insecure-requests` conditional handling), and asserts byte-level parity. Also runs a supertest round-trip against the Express app to verify the live wire header matches the nginx config.
+
+**Example failure if someone edits Helmet but not nginx:**
 ```
+FAIL  Helmet has "https://new-service.example.com" in script-src but nginx does not
+```
+
+### How to Add a New Third-Party Domain
+
+1. Edit the `cspDirectives` object in `apps/api/src/app.ts` (add the domain to the appropriate directive's source array)
+2. Edit `infra/nginx/oslsr.conf` — add the same domain to the matching directive in BOTH the server-level and static-asset location `Content-Security-Policy` `add_header` values
+3. Run `pnpm vitest run apps/api/src/__tests__/csp-parity.test.ts` — confirm parity test passes
+4. Commit and push — CI deploys both changes atomically
+
+**When NOT to add a new source:** if the new dependency serves a JS/CSS bundle from its own CDN (e.g., a new analytics provider), prefer bundling it locally (`pnpm add` + Vite tree-shake) over allowlisting an external domain. Every domain in the allowlist is a trust anchor — a compromise of that CDN affects your users.
 
 ### `style-src 'unsafe-inline'` Justification
 
@@ -336,29 +346,77 @@ add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src '
 - Sonner toast uses inline styles for positioning
 - Google Identity Services SDK and hCaptcha widget inject inline styles
 - 25+ application components use `style={{}}` for dynamic widths/heights
+- PERF-1 critical-CSS `<style>` block in `apps/web/index.html:47-118` (LCP optimization)
 
 This is an accepted tradeoff — inline styles cannot execute code (unlike inline scripts). A nonce-based approach would require server-rendered HTML.
 
-### Switching from Report-Only to Enforcing
+### Promoting NGINX from Report-Only to Enforcing
 
-After a 2-week monitoring period with zero violations in the CSP report endpoint logs:
+**Prerequisites:** 48+ hours of monitoring with zero legitimate violations in `/api/v1/csp-report` logs (or self-testing across 2-3 browsers covering the full feature matrix).
 
-1. **NGINX:** Rename header from `Content-Security-Policy-Report-Only` to `Content-Security-Policy`
-2. **Helmet:** In `apps/api/src/app.ts`, change `reportOnly: true` to `reportOnly: false`
-3. **Deploy both changes together** — mismatched CSP modes between NGINX and Express would cause confusion in violation reports
-4. Keep the `report-uri` directive even in enforcing mode to catch future violations
+**Single-line change** — in `infra/nginx/oslsr.conf`, rename the header in BOTH the server-level and static-asset location blocks:
+
+```diff
+- add_header Content-Security-Policy-Report-Only "..." always;
++ add_header Content-Security-Policy "..." always;
+```
+
+Commit, push, CI deploys. Helmet is already enforcing in production (`reportOnly: process.env.NODE_ENV !== 'production'` evaluates to `false` on the VPS) — the nginx change is the only step needed.
+
+### 2-Minute Emergency Rollback (Enforcing → Report-Only)
+
+If a regression breaks user flows after promotion, revert in under 2 minutes:
+
+```bash
+# SSH to VPS
+ssh root@oyotradeministry.com.ng
+
+# Edit in-place: rename Content-Security-Policy back to Report-Only
+sudo sed -i 's/Content-Security-Policy "/Content-Security-Policy-Report-Only "/g' /etc/nginx/sites-available/oslsr
+
+# Validate + reload (no downtime)
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Then immediately open a hotfix PR with the same `sed` applied to `infra/nginx/oslsr.conf` so the NEXT CI deploy doesn't re-enforce.
+
+### Interpreting a CSP Violation Report
+
+Violations POST to `/api/v1/csp-report` (handled by `apps/api/src/routes/csp.routes.ts`). Payload example:
+
+```json
+{
+  "csp-report": {
+    "document-uri": "https://oyotradeministry.com.ng/dashboard",
+    "violated-directive": "script-src 'self' https://accounts.google.com ...",
+    "blocked-uri": "https://evil-extension.example.com/inject.js",
+    "source-file": "https://oyotradeministry.com.ng/assets/index-C5E2kt7y.js",
+    "line-number": 1,
+    "column-number": 42
+  }
+}
+```
+
+| Field | What it means |
+|-------|--------------|
+| `document-uri` | The page URL where the violation occurred |
+| `violated-directive` | Which CSP directive blocked the resource |
+| `blocked-uri` | The URL that was blocked (inspect this first) |
+| `source-file` + `line-number` | Where in the JS the violating request originated |
+
+**Common patterns:** browser extensions inject scripts from unknown domains (noise — document and ignore); Google/hCaptcha rotates CDN subdomains (legitimate — the `*.hcaptcha.com` wildcard handles this but new root domains need adding).
 
 ### Validating CSP is Active
 
 ```bash
-# Check API responses (Helmet)
+# Check API responses (Helmet — already enforcing)
 curl -sI https://oyotradeministry.com.ng/api/v1/health | grep -i content-security
 
-# Check SPA page (NGINX)
+# Check SPA page (NGINX — Report-Only until promoted)
 curl -sI https://oyotradeministry.com.ng/ | grep -i content-security
 ```
 
-Both should return a `Content-Security-Policy-Report-Only` header.
+API should return `Content-Security-Policy:` (enforcing). SPA should return `Content-Security-Policy-Report-Only:` (until promotion).
 
 ---
 

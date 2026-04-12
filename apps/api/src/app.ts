@@ -100,10 +100,9 @@ const wsUrl = isProduction
   ? corsOrigin.replace(/^https?:\/\//, 'wss://')
   : 'ws://localhost:3000';
 
-app.use(helmet({
-  contentSecurityPolicy: {
-    reportOnly: process.env.NODE_ENV !== 'production',
-    directives: {
+/** Exported for csp-parity.test.ts — the parity test reads this object and
+ *  compares it against the nginx mirror in infra/nginx/oslsr.conf. */
+export const cspDirectives: Record<string, string[] | string | boolean> = {
       defaultSrc: ["'self'"],
       scriptSrc: [
         "'self'",
@@ -148,10 +147,19 @@ app.use(helmet({
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],
+      // Made explicit in Story 9-8 — Helmet used to add this implicitly on top
+      // of user config. The csp-parity test (Helmet <-> nginx drift detector) would
+      // mis-flag an implicit-vs-explicit directive as drift, so we pin it here.
+      scriptSrcAttr: ["'none'"],
       reportUri: ["/api/v1/csp-report"],
       reportTo: "csp-endpoint",
-      ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
-    },
+  ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
+};
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    reportOnly: process.env.NODE_ENV !== 'production',
+    directives: cspDirectives,
   },
 }));
 
