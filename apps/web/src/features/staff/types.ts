@@ -29,6 +29,7 @@ export interface StaffMember {
   lgaName: string | null;
   createdAt: string;
   invitedAt: string | null;
+  emailStatus?: 'pending' | 'failed' | 'not_configured';
 }
 
 /**

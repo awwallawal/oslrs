@@ -225,12 +225,25 @@ export function useDownloadIdCard() {
  */
 export function useCreateStaffManual() {
   const queryClient = useQueryClient();
-  const { success, error: showError } = useToast();
+  const { success, warning, error: showError } = useToast();
 
   return useMutation({
     mutationFn: createStaffManual,
     onSuccess: (data) => {
-      success({ message: `Staff member "${data.data.fullName}" created and invitation sent` });
+      const { fullName, emailStatus } = data.data;
+      if (emailStatus === 'failed') {
+        warning({
+          message: `Staff member "${fullName}" created, but the invitation email failed to queue. Use "Resend Invitation" to retry.`,
+        });
+      } else if (emailStatus === 'not_configured') {
+        warning({
+          message: `Staff member "${fullName}" created, but the email service is unavailable. Share the activation link manually.`,
+        });
+      } else {
+        success({
+          message: `Staff member "${fullName}" created. Invitation email queued — typically arrives within a minute.`,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: staffKeys.all });
     },
     onError: (err: Error & { code?: string }) => {
