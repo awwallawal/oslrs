@@ -1301,3 +1301,100 @@ Sufficient for: 200 staff users, 1K concurrent public users, 1M records/year.
 _Generated: 2026-03-06_
 _Source project: 6 epics, 23+ weeks, 80+ stories, 3,123 tests, 590+ code review findings_
 _Playbook version: 1.0_
+
+---
+
+## Addendum (2026-04-25, version 1.1)
+
+### Pattern: BMAD `correct-course` workflow as discipline restorer
+
+**Problem:** in long working sessions, scope decisions accumulate in conversation. Each one feels small. By turn 20, six interdependent epics have been "decided" — but none of them are reflected in PRD, Architecture, UX spec, or epics.md. Future sessions inherit a confused state where the chat history disagrees with the canonical artifacts.
+
+**Pattern:** when scope drifts mid-session, **stop and run `bmad:bmm:workflows:correct-course`** in incremental mode. It produces a Sprint Change Proposal (`_bmad-output/planning-artifacts/sprint-change-proposal-<date>.md`) that:
+
+1. Catalogs every change accumulated in conversation
+2. Routes each change to the correct downstream owner (PM / Architect / UX / SM)
+3. Locks scope explicitly (no further trigger absorbed inline; second SCP required)
+4. Establishes ordering for the handoff chain via Appendix A invocation prompts
+
+**OSLRS validation:** SCP-2026-04-22 absorbed 6 change streams (Epic 10 + Epic 11 + Stories 9-10/11/12 + Story 9-9 expansion + FR21 refinement + 6 components) without losing context. Three earlier SCPs on file (2026-02-05, 2026-04-04, 2026-04-22) — pattern repeated.
+
+**When to invoke:**
+
+- 3+ scope decisions in one session that touch >1 canonical artifact
+- Operational incident triggers a re-plan (e.g. SSH brute-force attack reframing security epics)
+- Stakeholder pressure introduces new commitments mid-flight (e.g. Ministry deliverable demand)
+
+**When NOT to invoke:**
+
+- Single-story refinement (Bob's `create-story` handles)
+- Single-decision retro (the retrospective workflow handles)
+- Pure operational firefight without scope shift
+
+**Sequencing after SCP land:**
+
+1. PM (`bmad:bmm:agents:pm`) amends PRD per SCP §2.3
+2. Architect (`bmad:bmm:agents:architect`) amends Architecture + writes new ADRs
+3. UX Designer (`bmad:bmm:agents:ux-designer`) amends UX spec + new journeys + new components
+4. PM + Architect joint run `create-epics-and-stories` to formalise new epics in `epics.md`
+5. Bob (`bmad:bmm:agents:sm`) runs `create-story` per story
+6. Dev agents implement via `dev-story` per priority order
+7. Code review per existing project pattern (uncommitted working tree, before commit)
+
+**Anti-patterns observed:**
+
+- **Inline absorption:** the temptation to "just add this to the existing story" — produces undocumented scope drift; future sessions can't reconstruct what was decided when
+- **Silent scope expansion:** an agent (e.g. PM) makes additions beyond the SCP — caught in OSLRS by spot-checking John's V8.2 changelog vs SCP §2.3 (none found, but the audit was the discipline)
+- **Skipping the lock:** declaring scope-locked but then absorbing new triggers — defeats the purpose; second SCP is the right move
+
+### Pattern: Appendix-as-invocation-prompt (added 2026-04-22)
+
+**Problem:** after an SCP, you need to invoke 4–6 specialised agents in fresh CLI sessions over multiple days. Re-typing the brief for each is error-prone and the SCP itself is the source of truth.
+
+**Pattern:** add an **Appendix A** to every SCP titled "Agent Invocation Prompts" with one subsection per agent (A.1 PM, A.2 Architect, A.3 UX, A.4 create-epics-and-stories joint, A.5 SM, A.6 Dev). Each subsection contains:
+
+- Status (`Pending`, `In progress`, `Done <date>`)
+- Inputs (file paths the agent must read)
+- Task breakdown (literally what to do, mapped to SCP §2.3)
+- Output (what file to produce/amend)
+- Scope lock (what NOT to do)
+- Don't-modify list (other agents' domains)
+
+When invoking an agent, the prompt becomes:
+
+> *"Read SCP-<date> Appendix A.X and execute exactly what it says."*
+
+**Benefit:** the SCP is self-contained; the operator doesn't need to remember context. Each agent's brief travels with the artifact it's amending.
+
+### Pattern: Field Readiness Certificate as a single-page gate
+
+**Problem:** when a project is approaching a deployment gate (production launch, field-survey kickoff, customer demo), it's easy for individual decisions to shift the gate criteria without anyone noticing. By gate-day, no one is sure what "done" means.
+
+**Pattern:** at the moment a gate is identified, codify it into a **single-page Field Readiness Certificate** as a numbered checklist of 5–8 items. Stored at `_bmad-output/baseline-report/field-readiness-certificate.md` (or equivalent). Tick items only when they are demonstrably complete; do not pass the gate until all items are ticked.
+
+**OSLRS validation (SCP-2026-04-22 §5.3.1):** 6-item Field Readiness Certificate established as field-survey gate. Item 1 (Tailscale + SSH lockdown) ticked 2026-04-23. Items 2–6 remain.
+
+**Pairs naturally with:** "write report as if delivered, hold submission until true" deliverable pattern.
+
+### Pattern: Session notes as the resume-from-cold artifact
+
+**Problem:** Claude sessions hit context limits or get reset. The next session starts with auto-memory but loses session-specific nuance.
+
+**Pattern:** at the close of any rich working session (3+ hours of substantive work, multi-day arcs especially), write a **session notes file** at `docs/session-<date-range>.md` covering:
+
+- TL;DR — what shipped, what's next
+- Chronological arc — what happened day-by-day
+- Key decisions and why
+- Operational lessons memorised
+- Outstanding work at session close
+- Files touched / created in this session
+
+**OSLRS pattern:** `docs/session-2026-02-06.md`, `docs/session-2026-04-11-12.md`, `docs/session-2026-04-21-25.md`. Each pinned in MEMORY.md as "Read this file first when resuming X work."
+
+**Discipline:** at session close, before logging off, always invest the 20 minutes to write the session notes. Without it, the next session re-discovers half the context.
+
+---
+
+_Updated: 2026-04-25_
+_Addendum source: SCP-2026-04-22 + Tailscale buildout + agent chain (Sessions 2026-04-21 through 2026-04-25)_
+_Playbook version: 1.1_

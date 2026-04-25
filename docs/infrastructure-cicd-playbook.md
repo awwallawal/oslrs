@@ -702,5 +702,212 @@ To reuse this infrastructure for a different project:
 
 ---
 
+## Part 7: Tailscale Operator Access (added 2026-04-25)
+
+**Goal:** restrict SSH access to a private overlay network rather than relying on public-internet exposure.
+
+**See also:** `docs/emergency-recovery-runbook.md` for break-glass paths; `_bmad-output/planning-artifacts/architecture.md` ADR-020 for full decision rationale.
+
+### One-time setup (per VPS + per operator device)
+
+```bash
+# On VPS (existing public-IP SSH session):
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --hostname=<droplet-name>
+# Browser-auth flow; copy URL, click Connect
+tailscale status
+tailscale ip -4    # save the 100.x.x.x address
+
+# On operator laptop (Windows):
+# Download MSI: https://tailscale.com/download/windows
+# Sign in with same Google account
+# Verify both devices online: tailscale status
+```
+
+In Tailscale admin console, **enable MagicDNS** so `ssh root@<droplet-name>` works without remembering IPs.
+
+### SSH key authentication (required before firewall lockdown)
+
+```powershell
+# On laptop:
+Get-ChildItem $env:USERPROFILE\.ssh -Force
+# If no id_ed25519: ssh-keygen -t ed25519 -C "<email>" -f $env:USERPROFILE\.ssh\id_ed25519
+
+# Append public key to VPS (NOTE: >> not > — preserves existing keys like github-actions-deploy):
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@<droplet-name> "cat >> ~/.ssh/authorized_keys"
+
+# Create ~/.ssh/config:
+Set-Content -Path $env:USERPROFILE\.ssh\config -Encoding ASCII -Value @('Host <droplet-name>','    HostName <droplet-name>','    User root','    IdentityFile ~/.ssh/id_ed25519','    IdentitiesOnly yes')
+
+# Verify key-only login works:
+ssh -o PasswordAuthentication=no root@<droplet-name>
+```
+
+### sshd hardening — drop-in override is the gotcha
+
+```bash
+sudo nano /etc/ssh/sshd_config
+# Set: PermitRootLogin prohibit-password
+# Set: PasswordAuthentication no
+# Set: PubkeyAuthentication yes
+
+# CRITICAL: also check drop-ins (first-value-wins!):
+sudo grep -rE "^(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)" /etc/ssh/sshd_config.d/
+# /etc/ssh/sshd_config.d/50-cloud-init.conf often has PasswordAuthentication yes — overrides main file
+# Edit any drop-ins to match
+
+sudo sshd -t                      # silent = OK
+sudo systemctl reload ssh         # NOTE: 'ssh' not 'sshd' on Ubuntu
+```
+
+Negative test (run from laptop):
+
+```powershell
+ssh -o PubkeyAuthentication=no -o PasswordAuthentication=yes root@<droplet-name>
+# Expected: Permission denied (publickey).
+```
+
+### Firewall rule — choose the trade-off
+
+DO Cloud Firewall → SSH (TCP 22) → Sources:
+
+- **Defence-in-depth (chosen for OSLRS 2026-04-25):** `0.0.0.0/0` + `::/0` + `100.64.0.0/10`. sshd-key-only is primary control; firewall is shape, not gate. Required when CI deploys via public-IP SSH (e.g. `appleboy/ssh-action` from GitHub-hosted runners).
+- **Tailnet-only (tighter):** `100.64.0.0/10` only. Requires self-hosted GH Actions runner inside tailnet. **Caveat:** also breaks DO Web Console (Console connects via SSH from DO infrastructure IPs — must add DO published ranges too).
+
+### fail2ban defence-in-depth
+
+```bash
+sudo apt install -y fail2ban
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status sshd
+```
+
+### Verification checklist
+
+```bash
+# On VPS:
+tailscale status                                             # Both devices online
+systemctl is-active tailscaled ssh fail2ban                  # All active
+
+# From laptop:
+ssh root@<droplet-name>                                       # No password prompt
+ssh -o ConnectTimeout=10 root@<public-ip>                     # Times out OR Permission denied
+```
+
+---
+
+## Part 8: OS Patching + Reboot Procedure (added 2026-04-25)
+
+**Cadence:** monthly minimum; immediately for USN Critical/High.
+
+### Pre-flight (~5 min)
+
+```bash
+# On VPS via Tailscale SSH:
+
+sudo systemctl is-enabled tailscaled              # must be 'enabled'
+pm2 startup                                        # prints sudo command — run it
+pm2 save                                           # snapshot processes
+docker inspect oslsr-postgres oslsr-redis | grep -i restartpolicy
+# If "Name": "no":
+docker update --restart=unless-stopped oslsr-postgres oslsr-redis
+```
+
+Take a DO Snapshot from the dashboard before proceeding. Name: `pre-os-upgrade-<YYYY-MM-DD>`.
+
+### Execute (10–15 min including reboot)
+
+```bash
+sudo apt update
+sudo apt list --upgradable
+sudo apt upgrade -y
+
+# If prompted "Restart services during package upgrades?" → Yes
+# If prompted about /etc/ssh/sshd_config(.d/*) → keep YOUR version (preserves hardening)
+
+sudo reboot
+```
+
+SSH session terminates. Wait 60–90 seconds. Reconnect.
+
+### Post-reboot verification (3 min)
+
+```bash
+ssh root@<droplet-name>
+uname -r                                                  # Should show new kernel
+systemctl is-active ssh tailscaled fail2ban
+docker ps
+pm2 list
+curl -sI https://<domain>/api/v1/health
+```
+
+If anything fails: `pm2 logs <app> --lines 50` / `journalctl -u <service>` / restore from pre-upgrade snapshot.
+
+### Post-success: take a clean snapshot
+
+DO Dashboard → Droplets → Snapshots → Take Snapshot. Name: `clean-os-update-<YYYY-MM-DD>`.
+
+### Worked example (OSLRS, 2026-04-25)
+
+49 packages upgraded in one transaction (kernel 6.8.0-90 → 6.8.0-110, Ubuntu 24.04.3 → 24.04.4, systemd, apparmor, snapd, cloud-init, nodejs 20.20.0 → 20.20.2, openssh). Zero conflicts. Pre-flight + execute + reboot + verify: ~25 min. All services up. HTTPS health endpoint returned 200 with full sec2-3 CSP headers. Side-effect: **PM2 ↺ counter reset 916+ → 0**, giving clean baseline for restart-loop investigation.
+
+---
+
+## Part 9: Pitfalls (continued — added 2026-04-25)
+
+### Pitfall #16: sshd_config drop-in "first-value-wins" override
+
+`/etc/ssh/sshd_config.d/*.conf` are loaded in alphanumeric order. SSH config uses **first-match-wins**. A directive in `50-cloud-init.conf` overrides the same directive in `60-cloudimg-settings.conf` AND in the main `sshd_config`.
+
+**Mitigation:** always grep all drop-ins after editing sshd_config — `sudo grep -rE "^(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)" /etc/ssh/sshd_config.d/`.
+
+### Pitfall #17: Ubuntu service is `ssh.service`, not `sshd.service`
+
+Debian/Ubuntu uses `ssh.service`. Red Hat / CentOS / Fedora use `sshd.service`. Wrong name returns "Unit sshd.service not found." Use `sudo systemctl reload ssh` on Ubuntu.
+
+### Pitfall #18: DO Web Console is SSH-based, not hypervisor-OOB
+
+DO Console works by establishing an SSH session from DO's own infrastructure IP ranges (e.g. `162.243.0.0/16`) to your droplet's port 22, then bridging to noVNC. **If you firewall SSH to operator-only sources, Console breaks.**
+
+**Mitigation:** if narrowing the SSH firewall, also permit DO published IP ranges (`https://digitalocean.com/geo/google.csv` or DO API), OR accept Console as unavailable break-glass. Always verify break-glass paths after firewall changes.
+
+True hypervisor-OOB break-glass: DO Snapshot restore (works regardless of firewall).
+
+### Pitfall #19: PM2 doesn't survive reboot without `pm2 startup`
+
+By default PM2 does not auto-start on system boot. After installing PM2, run once:
+
+```bash
+pm2 startup    # prints a sudo command — copy and run it
+pm2 save       # snapshots current process list
+```
+
+Without this, post-reboot you log in to find your app down. The `pm2 startup` command registers `pm2-root.service` with systemd; `pm2 save` writes `/root/.pm2/dump.pm2` which `pm2 resurrect` reads on boot.
+
+### Pitfall #20: Docker containers default to `restart: no`
+
+`docker run` without `--restart` policy leaves containers in `no` (do not auto-restart). After reboot, your Postgres / Redis containers are stopped.
+
+**Fix:**
+
+```bash
+docker update --restart=unless-stopped oslsr-postgres oslsr-redis
+```
+
+`unless-stopped` survives reboots, respects manual `docker stop`. `always` survives even manual stops. Pick `unless-stopped` for production.
+
+### Pitfall #21: GitHub Actions runners cannot reach a tailnet-only firewall
+
+`appleboy/ssh-action` runs from GitHub-hosted runners on GitHub's public IP space. Tailnet-only firewall (`100.64.0.0/10`) blocks all CI deploys.
+
+**Mitigations:**
+- Widen firewall to `0.0.0.0/0` + tailnet (defence-in-depth degraded but acceptable since sshd is key-only)
+- Move CI to a self-hosted GitHub Actions runner inside the tailnet (cleaner long-term)
+
+GitHub publishes its Actions IP ranges at `https://api.github.com/meta` → `.actions[]`, but the list is ~6500+ entries — impractical for DO Cloud Firewall (typical limit ~50 rules per firewall).
+
+---
+
 *Generated: 2026-02-21*
+*Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*

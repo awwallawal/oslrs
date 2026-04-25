@@ -61,9 +61,31 @@ Read these files in order for full project awareness:
 | Document | Path | Purpose |
 |----------|------|---------|
 | Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` | Living state tracker |
-| Epic 6 Retro | `_bmad-output/implementation-artifacts/epic-6-retro-2026-03-04.md` | Latest decisions + action items |
-| Epics Definition | `_bmad-output/planning-artifacts/epics.md` | All epic/story definitions |
-| Architecture | `_bmad-output/planning-artifacts/architecture.md` | ADRs + technical design |
+| **Sprint Change Proposal 2026-04-22** | `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` | **CURRENT** — Epic 10 + Epic 11 + Stories 9-10/11/12 + Story 9-9 expansion. Appendix A has agent invocation prompts (A.4 next). |
+| Epic 6 Retro | `_bmad-output/implementation-artifacts/epic-6-retro-2026-03-04.md` | Latest formal retro decisions |
+| Epics Definition | `_bmad-output/planning-artifacts/epics.md` | All epic/story definitions (Epic 10 + 11 to be added by next create-epics-and-stories run) |
+| Architecture | `_bmad-output/planning-artifacts/architecture.md` | ADRs + technical design (V2 post 2026-04-24 with ADRs 018/019/020) |
+| PRD | `_bmad-output/planning-artifacts/prd.md` | V8.2 (post-SCP, FR21 scoped + FR24-28 + NFR9-10) |
+| UX Specification | `_bmad-output/planning-artifacts/ux-design-specification.md` | V3.0 (post-SCP, Journey 2 rewrite + 4 new journeys + 6 components) |
 | Project Context | `_bmad-output/project-context.md` | Coding patterns + rules (v2.0.0) |
 | Infrastructure Playbook | `docs/infrastructure-cicd-playbook.md` | VPS setup + deployment |
+| **Emergency Recovery Runbook** | `docs/emergency-recovery-runbook.md` | **CRITICAL** — Tailscale access, break-glass paths, panic-start procedure |
+| **Session Notes 2026-04-21–25** | `docs/session-2026-04-21-25.md` | **READ FIRST** when resuming Story 11-1, Epic 10/11, Tailscale work, or A.4+ handoff chain |
+| Transfer Protocol Template | `docs/transfer-protocol-template.md` | D2 deliverable; legal review pending |
+| Epic 10-1 Design Brief | `docs/epic-10-1-consumer-auth-design.md` | Awwal's Section 10 answers + expanded scope |
 | Previous Retros | `_bmad-output/implementation-artifacts/epic-*-retro-*.md` | Historical decisions |
+| Previous Session Notes | `docs/session-2026-04-11-12.md` | Story 9-7/9-8 marathon |
+
+## Current State Snapshot (2026-04-25)
+
+**Tailscale + SSH:** Active — `ssh root@oslsr-home-app` is the operator path. Public-IP SSH reachable but rejects all but key auth. fail2ban active.
+
+**OS:** Ubuntu 24.04.4, kernel 6.8.0-110-generic, 0 pending upgrades. Two snapshots: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`.
+
+**SCP handoff chain:** A.1 PRD ✅, A.2 architecture ✅, A.3 UX ✅. **Next: A.4 PM+Architect joint `create-epics-and-stories`**.
+
+**Field Readiness Certificate:** 1 of 6 items done (Tailscale). Remaining: 11-1 schema + composite indexes, 9-12 public wizard, prep-input-sanitisation-layer, 9-9 alerting tier, Operations Manual enumerator-section.
+
+**Story 9-10 observation window:** PM2 ↺ counter reset to 0 at 2026-04-25 08:54 UTC. Track 24/48/72h trend.
+
+**DO Console:** Working post 2026-04-25 firewall widening. Note architectural finding: Console is SSH-based, not hypervisor-OOB. See ADR-020.

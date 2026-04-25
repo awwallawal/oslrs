@@ -21,16 +21,21 @@ prdVersion: 'v8.0'
 v75Updates: 'Data Routing Matrix, Live Selfie Spec, Terminology Fix, Marketplace Security'
 v79Updates: 'Epic 2.5 Role-Based Dashboards - ADR-016 updated with strict route isolation pattern, RBAC matrix, code splitting benefits'
 v80Updates: 'SCP-2026-02-05-001: ODK Central removed, native form system replaces. ADR-001/002/004/005/007/008/009/010 amended. Database, infrastructure, and data flow sections updated.'
+v82Updates: 'SCP-2026-04-22: Multi-source registry + API governance + security hardening + field-survey UX. New Decisions 1.5 / 2.4–2.8 / 3.4 / 5.3–5.5. ADR-013 amended (Tailscale operator access). ADR-015 rewritten (single 5-step wizard + magic-link primary). New ADR-018 (multi-source registry / pending-NIN). New ADR-019 (API consumer auth model). New ADR-020 (Tailscale access architecture). Pattern Categories 5 + 7 extended.'
+prdVersionLatest: 'V8.2'
+lastRevision: '2026-04-25'
 ---
 
 # OSLSR Architecture Decision Document
 
 **Project:** Oyo State Labour & Skills Registry (OSLSR)
-**PRD Version:** v8.0
-**Date:** 2026-01-04
-**Architect:** Awwal (with Claude Code facilitation)
+**PRD Version:** V8.2 (amended 2026-04-23 per SCP-2026-04-22)
+**Date:** 2026-01-04 (initial); last revised 2026-04-25
+**Architect:** Awwal (with Claude Code facilitation); 2026-04-25 revision by Winston (architect agent)
 
 > **Amendment (2026-02-06) — SCP-2026-02-05-001:** ODK Central has been removed from the architecture. The native form system (JSONB schemas, skip-logic engine, Form Builder UI, one-question-per-screen renderer) replaces all ODK/Enketo functionality. Infrastructure reduced from 6 containers to 4, from 2 PostgreSQL databases to 1. ADRs amended inline below.
+
+> **Amendment (2026-04-25) — SCP-2026-04-22:** Multi-source registry, API governance, security hardening, and field-survey UX readiness landed against PRD V8.2. New Decision 1.5 documents the nullable-NIN + provenance schema (Story 11-1). New Decisions 2.4–2.8 add the `apiKeyAuth` middleware, magic-link primary, SMS-OTP-as-infrastructure, Tailscale operator access, and ambiguous-auth rejection. New Decision 3.4 establishes the `/api/v1/partner/*` namespace and scope taxonomy. New Decisions 5.3–5.5 capture audit-log principal dualism, per-consumer rate-limit metrics, and pending-NIN observability events. Three new ADRs: **ADR-018** (multi-source registry + pending-NIN), **ADR-019** (API consumer auth), **ADR-020** (Tailscale access architecture — as-deployed 2026-04-23). ADR-013 gains a Tailscale subsection; ADR-015 is rewritten end-to-end (Google OAuth retired; magic-link primary; pending-NIN path). Pattern Category 5 extends with consumer cache keys, principal-tagged Pino events, and the audit-log discriminated-union write helper. Pattern Category 7 extends with operator-SSH access requirements, API token storage, per-consumer Redis rate-limit keying, and timing-safe comparison. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.3 Architecture subsection for the full SCP scope.
 
 ---
 
@@ -445,6 +450,113 @@ cd packages/config && pnpm init && cd ../..
   - Marketplace read-replica (ADR-007) reduces need for aggressive caching
 - **Affects:** Rate limiting middleware, authentication blacklist, fraud detection
 
+**Decision 1.5: Multi-Source Registry Schema (SCP-2026-04-22)**
+- **Choice:** Extend `respondents` with nullable `nin`, explicit `status` column, provenance columns, and new tables `import_batches`, `api_consumers`, `api_keys`, `api_key_scopes`; extend `audit_logs` with `consumer_id`.
+- **See:** ADR-018 (schema decision rationale), ADR-019 (API consumer auth), Story 11-1 (migration authoring).
+- **Affects:** FR21 (scoped), FR24, FR25, NFR8.1, NFR10; Stories 11-1 / 11-2 / 9-11 / 10-1.
+
+#### Respondents Table — Amended Shape (Story 11-1)
+
+| Column | Type | Nullable | Constraint / Index | Purpose |
+|---|---|---|---|---|
+| `nin` | `TEXT` | **YES** (amended from NOT NULL) | `respondents_nin_unique_when_present` — `UNIQUE INDEX ON respondents(nin) WHERE nin IS NOT NULL` | Preserves FR21 dedupe for NIN-present records; allows `pending_nin_capture` / `imported_unverified` rows |
+| `status` | `TEXT` | NO — default `'active'` | `CHECK (status IN ('active', 'pending_nin_capture', 'nin_unavailable', 'imported_unverified'))` + `idx_respondents_status` | Realises FR28; values typed in Drizzle via `respondentStatusTypes` array, enforced at DB via CHECK for defence-in-depth |
+| `source` | `TEXT` | NO | existing `idx_respondents_source` (drops / recreates with extended enum) | Values extended from `['enumerator','public','clerk']` to `['enumerator','public','clerk','imported_itf_supa','imported_other']` — `respondentSourceTypes` array in Drizzle |
+| `external_reference_id` | `TEXT` | YES | none direct | External system identifier (e.g. SUPA `ADM NO`); indexed on join via `import_batch_id` |
+| `import_batch_id` | `UUID` | YES | FK → `import_batches(id) ON DELETE SET NULL`; `idx_respondents_import_batch` (partial, WHERE NOT NULL) | Links imported rows to their ingest batch — partial index keeps the index small since most rows have no batch |
+| `imported_at` | `TIMESTAMPTZ` | YES | none | Ingest timestamp; NULL for field-surveyed rows |
+
+**Composite indexes added in Story 11-1 (Akintola-risk mitigation, AC#11):**
+
+- `respondents(source, created_at)` — registry filter + time-window listing
+- `respondents(lga_id, source)` — supervisor / assessor LGA-scoped-by-source
+- `respondents(status, source)` — pending-NIN follow-up lists + status-scoped reporting
+- `respondents(status, created_at)` — stale-pending-NIN queue for supervisor review
+
+**Partial-index rationale:** chosen over `UNIQUE NULLS NOT DISTINCT` (PG 15+) because (a) production Postgres major version is not pinned at 15+, (b) partial-index pattern is more portable and self-documenting, and (c) the service layer in `SubmissionProcessingService.findOrCreateRespondent` branches on NIN presence regardless, so the DB boundary and service semantics align. Reference: ADR-018 §Options.
+
+**Drizzle-kit constraint reminder (per MEMORY.md):** schema files under `apps/api/src/db/schema/*.ts` **MUST NOT** import from `@oslsr/types` because drizzle-kit runs compiled JS and `@oslsr/types` exposes no `dist/`. Inline the enum constants (`respondentStatusTypes`, `respondentSourceTypes`) locally in each schema file. This is a project-wide invariant that predates this amendment; Story 11-1 preserves it.
+
+#### New Table — `import_batches` (Story 11-1)
+
+Provenance capture for secondary-data ingestion (Epic 11). One row per successful ingest batch; rollback flips `status` to `rolled_back` within the 14-day window.
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `UUID` | NO | Primary key (UUIDv7 per Pattern Category 1) |
+| `source` | `TEXT` | NO | Matches `respondents.source` enum values (`imported_itf_supa`, `imported_other`) |
+| `source_description` | `TEXT` | YES | Free-text description of the source for admin UI clarity |
+| `original_filename` | `TEXT` | NO | Audit / provenance |
+| `file_hash` | `TEXT` | NO — `UNIQUE` | SHA-256 hex of uploaded bytes; prevents accidental duplicate uploads |
+| `file_size_bytes` | `INTEGER` | NO | Quota / audit |
+| `parser_used` | `TEXT` | NO | `'pdf_tabular'`, `'csv'`, `'xlsx'` |
+| `rows_parsed` / `rows_inserted` / `rows_matched_existing` / `rows_skipped` / `rows_failed` | `INTEGER` | NO — default 0 | Outcome telemetry, surfaced in Story 11-3 admin UI |
+| `failure_report` | `JSONB` | YES | Per-row failure reasons for admin download / retry |
+| `lawful_basis` | `TEXT` | NO | NDPA category (e.g. `'ndpa_6_1_e'`, `'ndpa_6_1_f'`); mandatory for DPIA alignment |
+| `lawful_basis_note` | `TEXT` | YES | Free-text justification captured at upload |
+| `uploaded_by` | `UUID` | NO | FK → `users(id)` |
+| `uploaded_at` | `TIMESTAMPTZ` | NO — default `now()` | |
+| `status` | `TEXT` | NO — default `'active'` | `'active'` \| `'rolled_back'` |
+
+Indexes: `idx_import_batches_source`, `idx_import_batches_status`, `idx_import_batches_uploaded_by`.
+
+#### New Tables — API Consumer Authentication (Epic 10, Story 10-1)
+
+Three tables (+ one `audit_logs` extension) realise FR24 + NFR10. Full schema lands in Story 10-1; ADR-019 captures the decision rationale.
+
+**`api_consumers`** — one row per partner organisation (ITF-SUPA, NBS, NIMC, future MDAs).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `UUID` PK | UUIDv7 |
+| `name` | `TEXT` NOT NULL | Display name for admin UI |
+| `organisation_type` | `TEXT` NOT NULL | e.g. `'federal_mda'`, `'state_mda'`, `'research_institution'` |
+| `contact_email` | `TEXT` NOT NULL | Primary technical contact |
+| `dsa_document_url` | `TEXT` | S3 pointer to signed Data-Sharing Agreement (Story 10-5); **required** before any key with `submissions:read_pii` is provisioned |
+| `status` | `TEXT` NOT NULL DEFAULT `'active'` | `'active'` \| `'suspended'` \| `'terminated'` |
+| `created_at` / `updated_at` | `TIMESTAMPTZ` | |
+
+**`api_keys`** — one row per issued key (rotation creates new rows; superseded keys live during the 7-day overlap with `revoked_at` set on emergency rotation).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `UUID` PK | UUIDv7 |
+| `consumer_id` | `UUID` NOT NULL | FK → `api_consumers(id)` ON DELETE CASCADE |
+| `name` | `TEXT` NOT NULL | Human label e.g. `'itf-supa-prod-2026-04'` |
+| `token_hash` | `TEXT` NOT NULL UNIQUE | **SHA-256 hash of plaintext**; plaintext is shown exactly once at provisioning and is never persisted |
+| `token_prefix` | `TEXT` NOT NULL | First 8 chars for admin UI identification (full token not retrievable) |
+| `allowed_ip_cidrs` | `TEXT[]` | NULL ⇒ all IPs; non-NULL ⇒ middleware rejects non-matching source IP |
+| `issued_at` | `TIMESTAMPTZ` NOT NULL DEFAULT `now()` | |
+| `rotates_at` | `TIMESTAMPTZ` NOT NULL | `issued_at + 180 days` by default |
+| `supersedes_key_id` | `UUID` | FK → `api_keys(id)` NULL; populated during 7-day overlap |
+| `revoked_at` | `TIMESTAMPTZ` | Set on emergency / manual revocation; middleware rejects after this timestamp |
+| `last_used_at` | `TIMESTAMPTZ` | Observability / anomaly detection |
+
+**`api_key_scopes`** — per-key per-scope join table with LGA-scoping and time-bounded grants.
+
+| Column | Type | Notes |
+|---|---|---|
+| `api_key_id` | `UUID` NOT NULL | FK → `api_keys(id)` ON DELETE CASCADE |
+| `scope` | `TEXT` NOT NULL | One of `aggregated_stats:read`, `marketplace:read_public`, `registry:verify_nin`, `submissions:read_aggregated`, `submissions:read_pii` |
+| `allowed_lga_ids` | `UUID[]` | NULL ⇒ all LGAs; non-NULL ⇒ middleware filters query results to listed LGAs |
+| `granted_at` | `TIMESTAMPTZ` NOT NULL DEFAULT `now()` | |
+| `expires_at` | `TIMESTAMPTZ` | Per-scope expiry (independent of key rotation); NULL ⇒ never |
+| Primary key | `(api_key_id, scope)` | |
+
+**`audit_logs` extension (Story 9-11 / Story 10-6 prerequisite):**
+
+- Add nullable `consumer_id UUID` FK → `api_consumers(id)`.
+- Add CHECK constraint enforcing **principal exclusivity**:
+  ```sql
+  CHECK (
+    (user_id IS NOT NULL AND consumer_id IS NULL)
+    OR (user_id IS NULL AND consumer_id IS NOT NULL)
+    OR (user_id IS NULL AND consumer_id IS NULL)    -- system events
+  )
+  ```
+  Every logged event is attributed to **exactly one** principal (human actor, machine consumer, or system), never both. This is enforced at the service layer (Pattern Category 5 update, below) AND at the DB layer — defence in depth against service-layer regressions.
+- Composite indexes `audit_logs(actor_id, created_at)`, `audit_logs(consumer_id, created_at)`, `audit_logs(target_resource, target_id, created_at)`, `audit_logs(action, created_at)` are added in **Story 9-11** (Admin Audit Log Viewer), not in Story 11-1, because 9-11 validates them against the 1M-row seeded dataset.
+
 ---
 
 ### Data Routing & Ownership Matrix
@@ -539,6 +651,66 @@ All Login Flows (Staff & Public)
   → Custom App handles authentication
   → app_db (users table verification)
   → JWT issued (15-minute access token)
+```
+
+**Rule 7: Partner API Request (Epic 10, per SCP-2026-04-22)**
+```
+Partner Consumer (ITF-SUPA, NBS, NIMC, …)
+  → HTTPS request to /api/v1/partner/* with Authorization: Bearer <token>
+  → Middleware: apiKeyAuth
+      • extract token, SHA-256 hash, lookup in api_keys by token_hash
+      • reject on revoked_at ≤ now(); reject on missing
+      • timing-safe comparison via crypto.timingSafeEqual
+      • check allowed_ip_cidrs (if non-NULL) against req.ip
+  → Middleware: requireScope(scope)
+      • lookup api_key_scopes WHERE api_key_id + scope
+      • reject on missing; reject on expires_at ≤ now()
+      • attach allowed_lga_ids to req.scopeContext for downstream query scoping
+  → Middleware: per-consumer rate limit (Redis, Story 10-2)
+      • key: `ratelimit:consumer:${consumer_id}:${scope}:${minute}`
+      • atomic INCR + EXPIRE; reject on threshold exceeded
+  → Controller: apply allowed_lga_ids filter to underlying query
+  → audit_logs INSERT { actor_id: NULL, consumer_id, action, target_resource, target_id, principal_exclusive CHECK }
+  → Response: JSON via standard { code, message, data } envelope (Pattern Category 4)
+```
+
+**Rule 8: Import Batch Lifecycle (Epic 11, per SCP-2026-04-22)**
+```
+Super Admin → Admin Import UI (Story 11-3)
+  → POST /api/v1/admin/imports/dry-run  (multipart upload)
+      • file SHA-256 hashed; reject if file_hash already in import_batches
+      • ImportService parses via parser_used (pdf_tabular | csv | xlsx)
+      • per-row decision preview: { insert | match_existing_auto_skip | fail, reason }
+      • email/phone match ⇒ auto-skip (per Awwal decision, SCP §4.1 Story 11-2)
+      • respond with preview JSON + required lawful_basis selection
+  → POST /api/v1/admin/imports/confirm  (with lawful_basis)
+      • db.transaction:
+          INSERT import_batches (file_hash UNIQUE, lawful_basis, …)
+          INSERT respondents (source='imported_*', status='imported_unverified',
+                              external_reference_id, import_batch_id, imported_at, nin=NULL or value)
+      • audit_logs INSERT for batch creation
+  → Admin reviews batch in Story 11-3 UI; can trigger rollback within 14 days
+  → POST /api/v1/admin/imports/:id/rollback
+      • db.transaction: UPDATE import_batches SET status='rolled_back'
+      • SOFT delete associated respondents (status flip, not DELETE — audit trail preserved)
+      • audit_logs INSERT for rollback with rationale
+```
+
+**Rule 9: Magic-Link Email Authentication (Story 9-12, per SCP-2026-04-22)**
+```
+Public User → Wizard Step 5 (Optional Auth Setup)
+  → POST /api/v1/auth/public/magic-link { email }
+      • MagicLinkService: generate token (32 bytes, base64url), TTL 15 minutes
+      • Hash token at rest (SHA-256 in magic_link_tokens table); email carries plaintext once
+      • AWS SES send with deep link: https://…/auth/magic?token=<plaintext>
+  → User clicks email link
+  → GET /auth/magic?token=<plaintext>
+      • Controller: SHA-256 hash token, lookup magic_link_tokens, validate not-expired + not-used
+      • On valid: issue standard JWT (Rule 6), mark token used_at=now(), session cookie set
+      • Resume wizard at saved step OR redirect to authenticated dashboard
+  → Password fallback: standard public login (Rule 6) remains available for users who set one at wizard completion
+  → SMS OTP path: infrastructure built (route handler, provider adapter, audit wiring) but feature-flagged OFF
+      via settings.auth.sms_otp_enabled = false (Super Admin toggle; budget-gated until Nigerian SMS provider lands)
 ```
 
 #### Architectural Boundaries
@@ -657,6 +829,81 @@ The marketplace database is **NOT physically air-gapped**. It uses a **read-only
   - Rate limits: 30 req/min per IP (marketplace), 100 req/min (authenticated API)
   - CSP: strict-dynamic, no unsafe-inline
 - **Affects:** All API endpoints, Story 2.2 (Security Middleware)
+
+**Decision 2.4: API Consumer Authentication — `apiKeyAuth` Middleware (Epic 10, SCP-2026-04-22)**
+
+- **Choice:** Bearer-token scoped API keys, SHA-256-hashed at rest, enforced via a dedicated `apiKeyAuth` middleware on the `/api/v1/partner/*` router; separate from the JWT middleware that protects human-user routes.
+- **See:** ADR-019 (decision rationale), FR24, NFR10.
+- **Implementation:**
+  - **Token extraction:** `Authorization: Bearer <token>` header only. Query-string tokens rejected (leak via access logs).
+  - **Token lookup:** compute SHA-256 of submitted token, look up `api_keys.token_hash` via equality (index-backed). If not found → `401 API_KEY_INVALID`. Timing-safe via constant-time DB index probe (not string compare) plus `crypto.timingSafeEqual` on the returned hash before admitting the request — prevents oracle attacks that distinguish "wrong key" from "valid key, wrong scope".
+  - **Revocation check:** reject if `revoked_at IS NOT NULL AND revoked_at ≤ now()` → `401 API_KEY_REVOKED`.
+  - **Expiry check:** reject if `rotates_at ≤ now()` AND no successor within the 7-day overlap window → `401 API_KEY_EXPIRED`. During the overlap window, both old and new keys validate; lookup on the old key's hash still succeeds and is audit-logged with `meta.rollover_window = true`.
+  - **IP allowlist:** if `allowed_ip_cidrs IS NOT NULL`, reject if `req.ip` (behind trusted proxy headers, per ADR-013 reverse proxy stance) does not match any CIDR → `403 IP_NOT_ALLOWED`.
+  - **Request attribution:** attach `req.consumer = { id, name, organisation_type }` and `req.apiKey = { id, scopes: [] }` to the request context.
+- **Scope enforcement via `requireScope(scope)` helper** applied per-route:
+  - Lookup `api_key_scopes` WHERE `api_key_id = req.apiKey.id AND scope = <requested>`.
+  - Reject if missing → `403 SCOPE_INSUFFICIENT`.
+  - Reject if `expires_at IS NOT NULL AND expires_at ≤ now()` → `403 SCOPE_EXPIRED`.
+  - Attach `req.scopeContext = { allowed_lga_ids }` for downstream query-level filtering.
+- **Error taxonomy (aligned with existing `{ code, message, details? }` envelope, Pattern Category 4):**
+  - `401 API_KEY_MISSING` — no Authorization header or non-Bearer type
+  - `401 API_KEY_INVALID` — hash not found
+  - `401 API_KEY_REVOKED` — revoked_at in the past
+  - `401 API_KEY_EXPIRED` — rotation window exceeded with no successor
+  - `403 IP_NOT_ALLOWED` — source IP outside allowlist
+  - `403 SCOPE_INSUFFICIENT` — key does not hold requested scope
+  - `403 SCOPE_EXPIRED` — scope grant past `expires_at`
+  - `400 AMBIGUOUS_AUTH` — request carries **both** a JWT (cookie or header) and an API key; never valid; prevents accidental privilege blending
+  - `429 RATE_LIMITED` — per-consumer per-scope Redis bucket exceeded (emitted by Story 10-2 middleware, downstream of `apiKeyAuth`)
+- **Observability:** every partner request logged to Pino with `consumer_id`, `api_key_id`, `scope`, `latency_ms`, `outcome`. Audit-log write is mandatory (see Pattern Category 5 update, below). `last_used_at` updated asynchronously (non-blocking UPDATE) to avoid write-amplification on the hot path.
+- **Affects:** Story 10-1 (Consumer Auth), Story 10-2 (Rate Limit), Story 10-3 (Admin UI), Story 10-6 (Audit Dashboard).
+
+**Decision 2.5: Magic-Link Email Authentication (Story 9-12, primary for public users)**
+
+- **Choice:** One-time, single-use, short-TTL magic-link tokens delivered via AWS SES; primary authentication channel for public users entering the wizard or resuming a saved session.
+- **See:** ADR-015 (rewritten below), FR27.
+- **Implementation:**
+  - **Token generation:** 32 random bytes (`crypto.randomBytes(32)`) base64url-encoded.
+  - **Storage:** `magic_link_tokens` table — `{ id UUID, user_id | public_user_id, token_hash TEXT (SHA-256), purpose TEXT ('wizard_resume' | 'login' | 'pending_nin_complete'), expires_at TIMESTAMPTZ, used_at TIMESTAMPTZ NULL, created_at }`. Plaintext is never persisted.
+  - **TTL:** 15 minutes for login; 72 hours for `pending_nin_complete` (allowing field respondents to complete from a remembered email later).
+  - **Single-use enforcement:** `used_at` set atomically on first redemption; second redemption attempts rejected with `MAGIC_LINK_ALREADY_USED`.
+  - **Rate limit:** max 3 requests per email per hour (existing NFR4.4 password-reset budget; same quota pool).
+  - **Deep link:** `https://<host>/auth/magic?token=<plaintext>&purpose=<purpose>`; controller hashes, validates, issues standard JWT per Decision 2.1, and redirects to wizard saved-step OR dashboard depending on purpose.
+- **Interaction with JWT:** magic-link redemption issues the same JWT + refresh-token pair as password login. Downstream session semantics identical (15-min access, 7-day refresh, blacklist on logout).
+- **Affects:** Story 9-12 (Public Wizard), ADR-015 (rewrite).
+
+**Decision 2.6: SMS OTP Authentication — Infrastructure-Only / Budget-Gated**
+
+- **Choice:** Build the full code path (route handler, provider adapter interface, audit wiring, rate limiting) but ship with the feature flag `settings.auth.sms_otp_enabled = false` until a Nigerian SMS provider contract lands.
+- **Rationale:** field-survey UX research flagged SMS as the single most frustrating point of failure in Nigerian contexts (network, cost, deliverability). Magic-link email (Decision 2.5) is the primary channel. SMS OTP is built once and toggled later — avoids a second integration sprint post-launch.
+- **Implementation:**
+  - `SmsProviderAdapter` interface with one implementation: `NoopSmsProvider` that logs + rejects with `SMS_OTP_DISABLED`.
+  - When the flag flips ON (Super Admin action, audit-logged), the provider resolver switches to `TermiiProvider` / `AfricasTalkingProvider` (one, not both; TBD at provider-selection time) and the full code path activates with no deploys required.
+  - No partner-API scope depends on SMS OTP.
+- **Affects:** Story 9-12 (infrastructure scaffolding).
+
+**Decision 2.7: Operator SSH Access — Tailscale Overlay (As-Deployed 2026-04-23)**
+
+- **Choice:** Tailscale overlay network as the sole primary SSH access path; DigitalOcean web/recovery console as break-glass; public-internet SSH disabled at both firewall and sshd.
+- **See:** NFR9, ADR-020 (full decision rationale), Story 9-9 Change Log entry 2026-04-23, `docs/emergency-recovery-runbook.md`.
+- **Implementation (as-deployed):**
+  - DigitalOcean Cloud Firewall rule: SSH (22/tcp) source = `100.64.0.0/10` (Tailscale CGNAT range) only. Public `0.0.0.0/0` removed.
+  - Tailnet members: VPS `oslsr-home-app` @ `100.93.100.28`; operator laptop `desktop-qe4lplq` @ `100.113.78.101`; both signed in under `lawalkolade@gmail.com` Free tier.
+  - `sshd_config` main + drop-ins (`50-cloud-init.conf`, `60-cloudimg-settings.conf`) consistently set: `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`.
+  - `/root/.ssh/authorized_keys`: two keys — `github-actions-deploy` (CI; DO NOT REMOVE) and `awwallawal@gmail.com` (operator personal).
+  - fail2ban installed + enabled (default config: maxretry 5, bantime 10m, sshd jail) as defence-in-depth against any authenticated-user compromise.
+- **Break-glass path order (documented in runbook):** Tailscale SSH → Tailscale IP direct → Tailscale daemon restart → DO Web Console → DO Recovery Console → DO Snapshot restore → DO Support ticket.
+- **Operational note:** public-IP SSH returns `Connection timed out` (firewall); key-disabled SSH returns `Permission denied (publickey)` (sshd). Both are the intended states.
+- **Quarterly drill:** recovery runbook §6.1 requires exercising each break-glass path at least once per quarter, logged in the Change Log.
+- **Affects:** NFR9, Story 9-9 Tailscale subtask (delivered), all future operator access.
+
+**Decision 2.8: Ambiguous-Auth Rejection**
+
+- **Choice:** requests that carry **both** a JWT (cookie or Authorization header) **and** a `Bearer <api_key>` token MUST be rejected with `400 AMBIGUOUS_AUTH` before any controller runs.
+- **Rationale:** prevents accidental privilege blending where a human user's session token and a partner consumer's API key coexist on the same request (possible in developer environments mixing browser cookies and manual header testing). Distinct principals, distinct pipelines, no merge.
+- **Implementation:** a lightweight pre-middleware on `/api/v1/partner/*` that 400s on co-presence. The JWT middleware on non-partner routes already ignores `Authorization: Bearer <api_key>`-shaped tokens (different decode failure), so the rejection is one-sided (partner side).
+- **Affects:** Story 10-1.
 
 ---
 
@@ -957,6 +1204,27 @@ export const contactViews = pgTable('contact_views', {
   - Simple to implement and discover (no header inspection)
   - Future-proof for 7-year data retention requirement (NDPA)
 - **Affects:** All API routes, URL structure
+
+**Decision 3.4: Partner API Namespace (Epic 10, SCP-2026-04-22)**
+
+- **Choice:** Third-party MDA consumers are served from a distinct namespace `/api/v1/partner/*`, mounted under the same app server as existing human-user routes, but protected by `apiKeyAuth` (Decision 2.4) and carrying a parallel OpenAPI spec surfaced at `/developers` (Story 10-4).
+- **See:** FR24, ADR-019.
+- **Scope taxonomy (initial release — additional scopes require PRD amendment):**
+
+  | Scope | Purpose | Data Surface | Defaults |
+  |---|---|---|---|
+  | `aggregated_stats:read` | Ministry-level aggregate counts and time-series | Counts by LGA, source, profession — no PII | Rate limit: 60 req/min per consumer; adjustable in Story 10-3 |
+  | `marketplace:read_public` | Public marketplace profile read (same surface as unauthenticated `/marketplace/search`) | Anonymous profiles (profession, LGA, experience) | Rate limit: 120 req/min |
+  | `registry:verify_nin` | "Does this NIN exist in the registry?" boolean lookup | Returns `{ exists: bool, registered_at: ISO8601, source: enum }` — no PII beyond registration timestamp and source | Rate limit: 300 req/min; excludes `pending_nin_capture` / `imported_unverified` rows per FR28 downstream-exclusion clause |
+  | `submissions:read_aggregated` | Aggregated submission counts and derivations for research partners | Counts, histograms, distributions — NO row-level data | Rate limit: 30 req/min |
+  | `submissions:read_pii` | **Sensitive** — row-level respondent data including PII | Full respondent records (including phone, NIN if present) | Rate limit: 20 req/min; **provisioning gated on signed DSA (Story 10-5) AND two-person Ministry ICT approval per FR24** |
+
+- **Response envelope consistency:** all partner endpoints emit the standard `{ code, message, data }` pattern per Pattern Category 4 — no separate envelope. Error codes follow Decision 2.4 taxonomy.
+- **Rate-limit strategy:** per-consumer per-scope, Redis-backed via Story 10-2. Key format: `ratelimit:consumer:{consumer_id}:{scope}:{YYYY-MM-DDTHH:MM}` with atomic `INCR` + `EXPIRE 70` (slight overhang past the minute bucket to absorb clock drift). Quotas (daily / monthly) are separate Redis keys and evaluated after the per-minute check.
+- **LGA-scoping enforcement:** when `api_key_scopes.allowed_lga_ids` is non-NULL, the controller **MUST** apply the filter to the underlying query before returning results. This is enforced via a service-layer guard (`enforceLgaScope(req, query)`) that wraps the Drizzle query builder; partner-route controllers that skip this guard fail a static lint check (Story 10-1 adds the lint rule). Defence in depth: Story 10-2 additionally audit-logs every partner query with `applied_lga_filter` metadata.
+- **DSA precondition (FR24):** the admin UI (Story 10-3) must block scope assignment of `submissions:read_pii` unless `api_consumers.dsa_document_url IS NOT NULL`. Enforced at both UI and service layer (defence in depth). Violation attempts are audit-logged with principal = super-admin actor, event = `api_key.pii_scope_rejected_no_dsa`.
+- **Versioning for partner namespace:** follows the same `/api/v1/` convention. A future breaking-change bump to `/api/v1_partner_v2/` is reserved but not needed for MVP; additive changes (new scopes, new response fields) ship under v1 with OpenAPI changelog entries in `/developers`.
+- **Affects:** Stories 10-1, 10-2, 10-3, 10-4, 10-6.
 
 ---
 
@@ -1659,6 +1927,42 @@ Metrics now show: `fraud_detection_duration_ms{p95} = 45ms` ✅
 
 ---
 
+**Decision 5.4: Audit-Log Principal Dualism (SCP-2026-04-22)**
+
+After the Epic 10 partner-API lands, audit-log events originate from one of three distinct principal classes, and the observability surface must reflect this cleanly — confusion here directly translates to compliance ambiguity.
+
+- **Principal classes:**
+  - **Human actor** — `user_id IS NOT NULL` (staff or public user), `consumer_id IS NULL`
+  - **Machine consumer** — `consumer_id IS NOT NULL` (partner API), `user_id IS NULL`
+  - **System event** — both NULL (scheduled jobs, startup events, bulk migrations)
+- **DB-layer enforcement (Decision 1.5):** CHECK constraint on `audit_logs` guarantees exactly one of these three shapes per row — impossible for a single event to claim both a human and a consumer principal.
+- **Service-layer enforcement (Pattern Category 5 update, below):** every `auditLog.create()` call takes a discriminated union `{ kind: 'user'; user_id } | { kind: 'consumer'; consumer_id } | { kind: 'system' }`; TypeScript narrowing rejects mixed-principal writes at compile time. This is defence in depth against a future service that forgets the CHECK constraint exists.
+- **Read-side rendering (Story 9-11 Admin Audit Log Viewer):** the list UI shows a **Principal** column with an icon + name resolving to `users.full_name` OR `api_consumers.name` OR the literal `"System"`; filters support either principal class. The composite indexes required to keep the viewer at <500ms p95 are declared in Decision 1.5 and merged in Story 9-11.
+- **Per-consumer activity dashboard (Story 10-6):** a scoped view over `audit_logs` filtered by `consumer_id`, rendering request-volume time-series, scope-usage breakdown, rate-limit-rejection rate, and last-used timestamp per key. Built on the same primitives as 9-11 — 10-6 is a consumer-specific preset of the 9-11 viewer, not a parallel stack.
+
+**Decision 5.5: Per-Consumer Rate-Limit Metrics (Redis + Pino)**
+
+- **Redis counters (authoritative for enforcement, Story 10-2):** key format `ratelimit:consumer:{consumer_id}:{scope}:{YYYY-MM-DDTHH:MM}`, atomic `INCR` + `EXPIRE 70`, reject on threshold exceeded. Daily / monthly quotas as separate keys with longer TTLs.
+- **Pino events (for observability, all stories):** every partner request emits a single `api_partner_request` structured event with `{ consumer_id, consumer_name, api_key_id, scope, status_code, latency_ms, allowed_lga_filter?, rate_limit_outcome }`. Critically, these are **never** mixed with human-user request logs — Pino's `child()` logger in `apiKeyAuth` produces events tagged `principal_kind: 'consumer'` to simplify downstream parsing.
+- **Health-digest fold-in (Story 6-2 email digest):** partner-API p95 latency, rate-limit-rejection-rate, and DSA-precondition-violation attempts appear in the daily digest once Epic 10 ships. The existing `MIN_SAMPLES_FOR_P95 = 50` guard (see Change Log 2026-04-12 entry in Story 9-9) applies to the partner-API p95 as well; no false Critical alerts on a cold consumer.
+
+**Decision 5.6: Magic-Link + Pending-NIN Observability Events**
+
+New Pino event classes with structured schemas:
+
+| Event | Fields | Emitted by |
+|---|---|---|
+| `magic_link.issued` | `{ purpose, public_user_id?, email_sha256, ttl_minutes }` — email is hashed in the log to reduce PII leakage surface | `MagicLinkService` |
+| `magic_link.redeemed` | `{ purpose, public_user_id, age_seconds, session_id }` | Controller |
+| `magic_link.rejected` | `{ reason: 'expired'\|'used'\|'not_found', purpose, email_sha256? }` | Controller |
+| `respondent.pending_nin_capture_created` | `{ respondent_id, source, lga_id, channel }` | `SubmissionProcessingService` |
+| `respondent.pending_nin_capture_completed` | `{ respondent_id, age_days, channel }` | Story 9-12 completion endpoint |
+| `respondent.status_stale_transition` | `{ respondent_id, from: 'pending_nin_capture', to: 'nin_unavailable', age_days }` | Scheduled job (Story 9-12) |
+
+Health-digest additions: pending-NIN backlog size per LGA, median age of pending-NIN records, 30-day-stale transition count. Supervisor dashboards (Story 4-x) consume the same events for per-LGA pending-NIN follow-up lists.
+
+---
+
 ### ADR-011: Scale Target, Minimal Media & Infrastructure
 
 **Decision:** Target 1M records over 12 months, minimal media attachments, Hetzner Cloud infrastructure
@@ -2338,6 +2642,39 @@ trackEvent('Registration Completed', {
 
 **Affects:** All HTTP traffic routing, SSL certificate management, rate limiting implementation, traffic analytics dashboards, Story 1.1 (Infrastructure Setup), Story 4.4 (Analytics Integration)
 
+#### Tailscale Operator Access (Appended per SCP-2026-04-22)
+
+**Status:** Deployed 2026-04-23 as a Story 9-9 subtask. Recorded in the Story 9-9 Change Log entry of the same date; full decision rationale in **ADR-020** (below).
+
+**Separation of concerns — public traffic vs operator traffic:**
+
+| Concern | Layer | Trust boundary | Traffic class |
+|---|---|---|---|
+| Public HTTP(S) — web, API, marketplace | NGINX @ VPS (this ADR) + Cloudflare WAF (domain-gated, future) | Untrusted internet → TLS → nginx → app | Client → Server |
+| Partner API HTTP(S) | NGINX @ VPS (same stack) with `apiKeyAuth` on `/api/v1/partner/*` | Authenticated partner consumers → TLS → nginx → app | Machine → Server |
+| Operator SSH | **Tailscale overlay** (ADR-020) | Tailscale-authenticated device → CGNAT → sshd | Operator → Server |
+
+These three traffic classes flow through **different layers** and are governed by **different access controls**. This ADR-013 decision (reverse proxy for public traffic) is unchanged by the Tailscale addition — nginx still terminates TLS for web/API/marketplace traffic regardless of whether the operator is connected via Tailscale, and Cloudflare (when the `oslrs.com` domain lands) fronts only the public traffic class.
+
+**Why Tailscale does not touch the nginx layer:**
+
+1. Nginx serves browsers, Android PWAs, and partner consumer backends — all of which come from arbitrary public IPs and cannot be inside our tailnet.
+2. Tailscale protects the *control plane* (SSH, Portainer if re-exposed, direct database access via localhost tunnels). It does not protect the *data plane* (public HTTPS).
+3. The DigitalOcean Cloud Firewall already restricts SSH (22/tcp) to the `100.64.0.0/10` CGNAT range; nginx (80/tcp, 443/tcp) remains open to the world because it needs to be.
+
+**What operators gain:**
+
+- SSH no longer reachable from the public internet (closes the attack surface that drove the 2026-04-20 incident).
+- Laptop, phone (future), and any future secondary operator device can share the same trust boundary via Tailscale ACLs.
+- DO Web Console and DO Recovery Console remain as documented break-glass paths (see `docs/emergency-recovery-runbook.md`).
+
+**What operators must not do:**
+
+- **Do NOT** add a Tailscale subnet-router exposing the VPS's private network to the tailnet if it would expose services that are currently only bound to `127.0.0.1` — that would promote localhost-only services (Redis, Postgres, Portainer) into the tailnet broadcast domain unintentionally. Bind-address stays `127.0.0.1` for those services; operators that need them use `ssh -L` tunnels.
+- **Do NOT** treat Tailscale as a substitute for TLS on public traffic; the public surface still needs Let's Encrypt + CSP + HSTS + Cloudflare-when-available, per this ADR.
+
+**Cross-references:** NFR9, ADR-020 (full decision), Story 9-9 (Change Log 2026-04-23 — as-deployed state), `docs/emergency-recovery-runbook.md` (quarterly drill).
+
 ---
 
 ### ADR-014: Monorepo Testing & Quality Assurance Strategy
@@ -2368,100 +2705,116 @@ trackEvent('Registration Completed', {
 
 ---
 
-### ADR-015: Public User Registration & Email Verification Strategy
+### ADR-015: Public User Registration & Authentication Strategy
 
-**Decision:** Implement Google OAuth as primary registration method for public users, with email registration fallback using Hybrid Email Verification (Magic Link + OTP in same email).
+**Status:** Rewritten 2026-04-24 per SCP-2026-04-22. The original ADR-015 (Google OAuth primary + Hybrid Magic-Link/OTP fallback) is superseded — its decision context (Epic 1 retrospective, 2026-01-22) predates the field-survey UX research that drove the SCP. The original decision is preserved verbatim in §"Superseded — Original ADR-015 (2026-01-22)" at the bottom of this section for traceability.
+
+**Decision (2026-04-24):** Public registration is delivered as a **single 5-step wizard** with **email magic-link as the primary authentication channel** and **password as the optional fallback**. SMS OTP infrastructure is built but feature-flagged off (budget-gated). Google OAuth is removed from the MVP. Records may be saved with `status = pending_nin_capture` if the respondent does not have their NIN at submission time, with a `*346#` USSD retrieval hint surfaced at the input.
 
 **Context:**
-- Public users need low-friction registration to maximize adoption
-- Email verification is required but should not create unnecessary barriers
-- Google OAuth provides pre-verified email addresses at no cost
-- Traditional Magic Link OR OTP approaches each have edge-case failures
 
-**Google OAuth (Primary Registration):**
-- **"Continue with Google" button** prominently displayed on registration page
-- **Benefits:**
-  - Zero friction - single click
-  - Pre-verified email (Google handles email verification)
-  - No password to remember
-  - Faster form completion
-- **Implementation:** Standard OAuth 2.0 flow with Google Identity Services
-- **Data Captured:** Email, name, profile picture (optional)
-- **NIN Still Required:** After Google auth, user completes profile with NIN for identity verification
+The original ADR-015 (Google OAuth primary, Hybrid Magic-Link/OTP fallback) was authored in January 2026 against an assumed urban-tech-savvy public user. Field-survey UX research conducted between February and April 2026 surfaced four blocking realities that invalidated the original assumption set:
 
-**Email Registration (Fallback):**
-- For users without Google accounts or who prefer email
-- Uses Hybrid Email Verification pattern
+1. **The 4-hop flow (register → verify email → login → fill form) had a measured drop-off >50%** at the second hop in cognitive walkthroughs with non-technical respondents. Each navigation between distinct screens compounded the abandonment risk.
+2. **Google OAuth adoption among Nigerian non-technical users is low**, and the "Continue with Google" affordance was misread as a Google-government partnership claim — a NDPA / consent confound. Removing it eliminates both adoption tax and confusion vector.
+3. **NIN-at-submission-time is field-impractical** for a non-trivial fraction of respondents (NIN cards forgotten / lost / not yet issued). The original "NIN required at registration" gate either dropped these respondents entirely or pushed enumerators into making up data — both unacceptable. The `pending_nin_capture` status model (FR28, Story 11-1) replaces the gate with a deferred-capture path.
+4. **SMS deliverability and cost in Nigeria** make SMS OTP a worse primary channel than email for users with smartphones, while offering nothing to users without them. Building the infrastructure once and toggling it on later (when a Nigerian SMS provider contract lands) is cheaper than launching with SMS-OTP-as-primary and discovering deliverability issues post-pilot.
 
-**Hybrid Email Verification Pattern:**
-```
-Single Email Contains BOTH:
-┌─────────────────────────────────────────────────────────┐
-│  Subject: Verify your OSLSR account                     │
-│                                                         │
-│  Click to verify (recommended):                         │
-│  [VERIFY EMAIL] ← Magic Link (primary)                  │
-│                                                         │
-│  Or enter this code on the verification page:           │
-│  ┌───────────────────┐                                  │
-│  │     847592        │ ← 6-digit OTP (fallback)         │
-│  └───────────────────┘                                  │
-│                                                         │
-│  Both options expire in 15 minutes.                     │
-└─────────────────────────────────────────────────────────┘
-```
+**Decision (2026-04-24) in detail:**
 
-**Why Hybrid Approach:**
-| Method | When It Fails | Hybrid Solves |
-|--------|--------------|---------------|
-| Magic Link Only | Corporate email filters block links, user on different device | User enters code instead |
-| OTP Only | Users mistype codes, requires manual entry | User clicks link instead |
-| Both in Same Email | No additional cost | User chooses whichever works |
+#### Wizard structure (5 steps, single page with progress indicator)
 
-**Implementation:**
-```typescript
-// apps/api/src/services/email-verification.service.ts
-export async function sendVerificationEmail(user: User) {
-  const token = crypto.randomBytes(32).toString('hex');
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+1. **Step 1 — Welcome & consent (NDPA-compliant)**
+   - State purpose, data uses, retention, rights (per Story 1.5.3 `/about/privacy` text, restated in plain language)
+   - Two-stage consent capture: marketplace inclusion (FR2 stage 1) + enriched contact-share (FR2 stage 2)
+   - Trust badges at the bottom: ministry seal, NDPA data-protection statement, "your data stays in Nigeria"
+   - **Cannot proceed without consent acknowledgement on stage 1; stage 2 is optional**
+2. **Step 2 — Identity & contact basics**
+   - Full name, phone (Nigerian format), LGA (autocomplete from 33 Oyo LGAs)
+   - DOB picker (year-month-day or "I don't know" → declines wizard exit gently with manual-assist info)
+3. **Step 3 — NIN (with deferred-capture branch)**
+   - NIN input field with inline `NinHelpHint` component (shared across enumerator form, public wizard, clerk entry — per Story 9-12)
+   - Hint copy: *"Don't know your NIN? Dial **\*346#** on any phone linked to your NIMC record."*
+   - "I don't have my NIN right now" toggle → on activation, NIN field is greyed out and the wizard sets `respondent.status = 'pending_nin_capture'` on submit; trust copy reassures the respondent that completion is possible later via emailed reminder
+   - When NIN is provided: client-side Modulus 11 validation; pre-submission duplicate check via `POST /api/v1/forms/check-nin` (per FR21); duplicates surface with the original-registration-date message and the wizard offers "this might be a mistake — start over" or "I am the same person — contact support"
+4. **Step 4 — Survey content (skills, experience, employer/worker pathway)**
+   - Renders the published native form schema for the public-survey form (per `respondentSourceTypes` value `'public'`)
+   - Same one-question-per-screen renderer used by enumerators, but mounted inside the wizard chrome
+5. **Step 5 — Optional auth setup**
+   - "Save your registration so you can come back" — email field (pre-populated from step 2 if collected there)
+   - Two affordances: **"Email me a magic link"** (primary CTA) + **"Set a password instead"** (secondary)
+   - "Skip for now" exits the wizard with a one-time confirmation email containing a magic link (TTL 72h) for resume-and-complete
 
-  // Store both (same record, shared expiry)
-  await db.insert(verificationTokens).values({
-    userId: user.id,
-    token,
-    otp,
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
-    type: 'email_verification'
-  });
+#### Magic-link as primary (Decision 2.5 in Authentication & Security)
 
-  // Send single email with both options
-  await emailService.send({
-    to: user.email,
-    template: 'hybrid-verification',
-    data: {
-      magicLink: `${process.env.APP_URL}/verify-email?token=${token}`,
-      otpCode: otp,
-      userName: user.firstName
-    }
-  });
-}
-```
+- 32-byte token, base64url-encoded, hashed at rest (SHA-256), TTL 15 minutes for login flows / 72 hours for `pending_nin_complete` and `wizard_resume` purposes.
+- Single-use enforcement via `used_at`.
+- Rate limit: 3 requests per email per hour (shares the existing NFR4.4 password-reset budget pool).
+- Email content: short, action-oriented; uses AWS SES via the existing `EmailService`.
+- The previous "Hybrid Email Verification" (magic link + 6-digit OTP in the same email) is **discontinued**. The justification was edge-case email-filter failure; the SCP-driven trust-badge / single-CTA aesthetic prefers a single primary action over choice paralysis. Users who cannot redeem a magic link can use password fallback (set at step 5) or supervisor-mediated assistance.
 
-**Security Considerations:**
-- Both token and OTP are single-use (using one invalidates the other)
-- 15-minute expiry prevents token harvesting
-- Rate limited: 3 verification emails per hour per email address
-- Invalid attempts logged for fraud detection
+#### SMS OTP as infrastructure-only (Decision 2.6 in Authentication & Security)
 
-**Trade-offs:**
-- ✅ Maximum user convenience (choice of verification method)
-- ✅ No additional email cost (single email)
-- ✅ Covers all edge cases (corporate filters, different devices)
-- ✅ Google OAuth eliminates verification step entirely for majority of users
-- ❌ Slightly more complex email template
-- ❌ Need to track both token and OTP in database
+- The full code path exists (route, provider adapter interface, audit wiring, rate limit) — but the resolver returns a `NoopSmsProvider` while `settings.auth.sms_otp_enabled = false`.
+- When the flag flips on (Super Admin action, audit-logged), a real provider is wired in and the path activates without a redeploy.
+- **No partner-API scope (Epic 10) or wizard step depends on SMS OTP.** It is an additive channel for the future, not a current dependency.
 
-**Affects:** Story 1.8 (Public User Self-Registration), Story 3.6 (Public Homepage & Self-Registration)
+#### Pending-NIN status model interaction (Story 11-1)
+
+- The wizard sets `respondents.status` from the discriminated union `{ active | pending_nin_capture | nin_unavailable }` based on NIN presence at submit. `imported_unverified` is reserved for Epic 11 imports and is never set by the wizard.
+- A `pending_nin_capture` row triggers the FR28 reminder cadence (email at T+2d / T+7d / T+14d; transition to `nin_unavailable` at T+30d entering supervisor-review queue). The reminder email contains a magic link with `purpose = 'pending_nin_complete'` that resumes the respondent at step 3.
+- All `pending_nin_capture` and `nin_unavailable` rows are **excluded** from NIN-keyed pipelines per FR28: fraud-detection NIN dedupe, marketplace enrichment requiring NIN, and the `registry:verify_nin` partner scope (Decision 3.4) all skip them. The exclusion is enforced at the service layer with Drizzle query predicates that include `status = 'active'`; tests in Story 11-1 verify the predicate is present on every NIN-derived query.
+
+#### Migration note — backwards compatibility
+
+- **Existing `public_users` accounts continue to work unchanged.** They retain their password, can still log in via the existing `/auth/public/login` endpoint, and can opt into magic-link by requesting one from the login page. No forced re-registration, no data migration.
+- **Existing public-user respondent rows stay `status = 'active'` with their captured NIN.** No back-fill of the `status` column for these rows beyond the migration default of `'active'`.
+- **The Google OAuth route handler is retired.** Existing tests that exercise it are removed; the Google OAuth client credentials are revoked in the Google Cloud Console as part of the Story 9-12 implementation. If a future regression unintentionally invokes the route, it returns `404 Not Found` (the route is unmounted, not stubbed).
+- **The Hybrid Magic-Link/OTP email template is removed.** The new magic-link-only template ships in the same email-service codebase and reuses the same SES sending infrastructure.
+
+#### Trade-offs
+
+- ✅ Single page = single mental model = lower drop-off
+- ✅ Trust badges visible at every step (SUPA-inspired) build NDPA confidence
+- ✅ Pending-NIN path keeps respondents in the funnel who would otherwise drop off
+- ✅ SMS-OTP-deferred avoids a launch-time integration that we cannot afford and may not need
+- ✅ Single-CTA auth setup avoids choice paralysis at the highest-drop-off step
+- ❌ Existing `public_users` and Google OAuth users are a small parallel cohort during the transition period — supportable, not free
+- ❌ Magic-link-only loses the "OTP-in-same-email" hedge for corporate-email filters; mitigated by password fallback and 72h TTL on resume tokens
+- ❌ The wizard renderer is a net-new frontend surface (Story 9-12) — implementation cost is real but bounded
+
+#### Affects
+
+- Story 1.8 (Public User Self-Registration) — superseded for new users; existing accounts retained per migration note
+- Story 3.6 (Public Homepage & Self-Registration) — wizard replaces multi-step flow
+- Story 9-12 (Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email) — primary delivery story
+- Story 11-1 (Multi-Source Registry Schema Foundation) — provides the `status` enum the wizard branches on
+
+#### Cross-references
+
+- **PRD V8.2:** FR5 (softened), FR21 (scoped), FR27 (wizard), FR28 (deferred NIN)
+- **Architecture:** Decision 1.5 (schema), Decision 2.5 (magic-link), Decision 2.6 (SMS OTP infra-only)
+- **ADR-018** (multi-source registry / pending-NIN) — companion decision
+
+---
+
+#### Superseded — Original ADR-015 (2026-01-22)
+
+> The text below is preserved verbatim from the Epic 1 retrospective decision for audit traceability. **It is no longer in force.** Implementations must follow the rewritten ADR-015 above. Any future revival of Google OAuth requires a new SCP and a fresh ADR.
+
+> **Decision:** Implement Google OAuth as primary registration method for public users, with email registration fallback using Hybrid Email Verification (Magic Link + OTP in same email).
+>
+> **Context:**
+> - Public users need low-friction registration to maximize adoption
+> - Email verification is required but should not create unnecessary barriers
+> - Google OAuth provides pre-verified email addresses at no cost
+> - Traditional Magic Link OR OTP approaches each have edge-case failures
+>
+> **Google OAuth (Primary Registration):** "Continue with Google" button prominently displayed on registration page; OAuth 2.0 with Google Identity Services; pre-verified email; NIN still required after Google auth.
+>
+> **Email Registration (Fallback):** Hybrid Email Verification pattern — single email containing both a magic link (primary CTA) and a 6-digit OTP (fallback for corporate-email-filter cases), both single-use, both 15-minute expiry, rate-limited to 3 emails per hour per address.
+>
+> **Affected (now retired):** Story 1.8 (Public User Self-Registration) original spec, Story 3.6 (Public Homepage & Self-Registration) original spec.
 
 ---
 
@@ -2773,6 +3126,137 @@ export async function cleanSeededData() {
 - ❌ Must remember to set `isSeeded: true` for test data
 
 **Affects:** Story 1.2 (Database Schema), Developer workflow, CI/CD pipeline
+
+---
+
+### ADR-018: Multi-Source Registry & Pending-NIN Status Model
+
+**Decision:** Extend the existing `respondents` table with a nullable `nin` column (gated by a partial UNIQUE index) and an explicit `status` enum, rather than (a) keeping `nin NOT NULL` and forcing every multi-source ingest to invent placeholder NINs, or (b) creating a separate `external_beneficiaries` table parallel to `respondents`.
+
+**Status:** Adopted 2026-04-22 (SCP-2026-04-22). Realised by Story 11-1 schema migration.
+
+**Context:**
+
+Two distinct pressures arrived at the schema layer in the same week:
+
+1. **Field friction (FR5 / FR28):** non-trivial fraction of in-person respondents do not have their NIN at submission time (forgotten, lost, NIMC issuance delay). The hard `nin NOT NULL` constraint forced enumerators to either drop the respondent or invent a value. Both unacceptable.
+2. **Secondary-data ingestion (FR25 / Epic 11):** the ITF-SUPA Oyo public-artisan PDF carries 759KB of records with redacted phones, no NINs, email typos, and missing LGAs. The Ministry needs these records inside our registry as **acknowledged-but-low-trust** data, not parallel to it.
+
+Both pressures had the same root cause: NIN-presence was being conflated with respondent-existence. They are different concepts.
+
+**Options considered:**
+
+| Option | Approach | Rejected because |
+|---|---|---|
+| **B1** — keep `nin NOT NULL`, add a separate `external_beneficiaries` table for NIN-absent records | Two parallel registries with cross-table joins for analytics | Cross-table joins double the surface for every report, the marketplace, the dashboard; analytics consistently asks "all respondents" not "all field respondents", and a UNION view is operationally heavier than the partial-UNIQUE pattern |
+| **B2** — extend `respondents`: nullable NIN + partial UNIQUE + `status` enum + provenance columns (**SELECTED**) | Single canonical registry; FR21 enforced at the DB boundary when NIN is present; status discriminator carries semantics | (none — selected) |
+| **B3** — keep `nin NOT NULL`, generate placeholder NINs for absent records (e.g. `'PENDING-{uuid}'`) | Breaks the NIN format invariant (Modulus 11 validation); pollutes audit logs with synthetic identifiers; no path back to a real NIN later that doesn't require row updates and audit-trail rewrites | Synthetic NINs are a bug factory and would have to be filtered out of every NIN-keyed query forever |
+
+**Decision details (B2):**
+
+- `respondents.nin TEXT NULL` with `CREATE UNIQUE INDEX respondents_nin_unique_when_present ON respondents(nin) WHERE nin IS NOT NULL`. Rows with NIN keep FR21 dedupe at the DB boundary; rows without NIN do not collide.
+- `respondents.status TEXT NOT NULL DEFAULT 'active'` with `CHECK (status IN ('active', 'pending_nin_capture', 'nin_unavailable', 'imported_unverified'))`. Drizzle exports `respondentStatusTypes` array + `RespondentStatus` type; CHECK is the DB-level second layer.
+- `respondents.source` enum extended to `['enumerator', 'public', 'clerk', 'imported_itf_supa', 'imported_other']`. Existing values preserved unchanged.
+- Provenance columns `external_reference_id`, `import_batch_id`, `imported_at`. New `import_batches` table captures lawful basis per batch (mandatory for DPIA), file-hash dedupe, parse outcome stats, and rollback status.
+
+**Consequences:**
+
+- **Service layer must status-gate.** Fraud detection, marketplace enrichment, and the partner `registry:verify_nin` scope MUST exclude `pending_nin_capture` and `imported_unverified` rows. Story 11-1 wraps the existing NIN dedupe in a NIN-presence conditional; downstream stories carry the status-filter forward into their queries. Tests in 11-1 verify the predicate is present on every NIN-derived query.
+- **DPIA update required.** The new lawful-basis-per-batch column on `import_batches` is the data-protection surface for secondary ingestion; Iris updates Baseline Report Appendix H + drafts standalone D1 to reflect both pending-NIN and imported processing activities.
+- **Right-to-erasure surface widens.** PRD V8.2 §"Right to Erasure" adds an alternative verification path (phone + DOB + LGA + magic-link or supervisor attestation) for NIN-absent records. The audit trail on erasure now records which verification path was used.
+- **Postgres-version portability.** Partial unique index works on PG ≥ 9.6 (effectively forever). `UNIQUE NULLS NOT DISTINCT` (PG 15+) was rejected because production version is not pinned at 15+ and the partial-index pattern is more self-documenting.
+- **Drizzle-kit constraint preserved.** Schema files do NOT import from `@oslsr/types`; enum constants inlined locally per the project-wide invariant in MEMORY.md.
+
+**Cross-references:** FR21 (scoped), FR28 (deferred-NIN), Epic 11 (multi-source registry), Story 9-12 (public wizard consumption), Story 11-1 (schema migration), Decision 1.5 (architecture data model), Decision 5.6 (observability events).
+
+---
+
+### ADR-019: API Consumer Authentication Model
+
+**Decision:** Authenticate Epic 10 partner-API consumers via **scoped opaque API keys**, stored as SHA-256 hashes at rest, with per-key LGA scoping, IP allowlisting, time-bounded scope grants, and a 180-day rotation cadence with 7-day overlap. Reject OAuth2 client-credentials and mTLS for the MVP.
+
+**Status:** Adopted 2026-04-22 (SCP-2026-04-22). Realised by Story 10-1.
+
+**Context:**
+
+The OSLSR partner API surface (FR24) serves 3–10 expected MDA consumers (ITF-SUPA, NBS, NIMC, future integrations) with five initial scopes ranging from aggregated counts to row-level PII. Three forces shape the auth choice:
+
+1. **Consumer-side ergonomics.** Federal MDA backend integrations are written by small teams that prefer the simplest possible client model. The shorter the integration-guide section, the higher the on-time delivery rate.
+2. **Operator-side simplicity.** The OSLSR team is solo-dev / small-team during the implementation window and Ministry-ICT-handed-off post-Transfer. Authentication infrastructure that requires a separate identity-provider deployment (Keycloak, Auth0) is dead weight at this scale.
+3. **Audit and revocation discipline.** The audit log already exists (Epic 6); we need a principal type that fits cleanly into the existing infrastructure (per ADR-018 / Decision 5.4) without inventing a parallel auth subsystem.
+
+**Options considered:**
+
+| Option | Approach | Outcome |
+|---|---|---|
+| **Scoped API keys** (SELECTED) | Bearer token; SHA-256 hash at rest; per-key scopes, LGA filter, IP allowlist; 180-day rotation with 7-day overlap | Simplest consumer integration; smallest operator footprint; fits cleanly into existing audit-log principal model |
+| **OAuth2 client-credentials grant** | Consumer registers, exchanges client_id+client_secret for short-lived access tokens, refreshes periodically | Adds an `/oauth/token` endpoint, JWKS rotation, and refresh logic for negligible MVP benefit. Door open for a future amendment if a partner formally requires it |
+| **mTLS** | Mutual-TLS with consumer-issued client certificates | Best-in-class but worst DX for MDA partner teams; PKI overhead (CA, CRL, certificate rotation) is unsustainable at our team size; rejected for MVP |
+
+**Decision details:**
+
+- Tokens are 256-bit random (32 bytes from `crypto.randomBytes`), base64url-encoded, displayed exactly once at provisioning, persisted only as SHA-256 hashes (`api_keys.token_hash UNIQUE`).
+- Per-key controls: `allowed_ip_cidrs TEXT[]` (NULL ⇒ all IPs); `api_key_scopes` join table with `(api_key_id, scope)` primary key, optional per-scope `expires_at`, optional per-scope `allowed_lga_ids UUID[]`.
+- Rotation: default 180-day cadence (`rotates_at = issued_at + 180d`); 7-day overlap window where superseded and successor keys both validate (tracked via `supersedes_key_id`); emergency rotation invalidates immediately (`revoked_at = now()`) with no overlap and is audit-logged with `meta.reason = 'emergency_rotation'`.
+- Authentication errors taxonomy from Decision 2.4: `API_KEY_MISSING`, `API_KEY_INVALID`, `API_KEY_REVOKED`, `API_KEY_EXPIRED`, `IP_NOT_ALLOWED`, `SCOPE_INSUFFICIENT`, `SCOPE_EXPIRED`, `AMBIGUOUS_AUTH`, `RATE_LIMITED`.
+- Per-consumer per-scope rate limiting via Redis (Story 10-2) keyed by `ratelimit:consumer:{id}:{scope}:{minute}` with atomic `INCR + EXPIRE`. Daily and monthly quotas as parallel keys.
+- Provisioning policy for the `submissions:read_pii` scope: requires (a) signed Data-Sharing Agreement (Story 10-5) on file (`api_consumers.dsa_document_url IS NOT NULL`) and (b) two-person Ministry-ICT approval workflow (post-Transfer). Enforced at both UI and service layers per Decision 3.4.
+
+**Consequences:**
+
+- **DSA precondition is load-bearing.** Story 10-5 (legal artefact) is on the critical path for Epic 10 PII-scope release; without it, no `submissions:read_pii` key may be provisioned and Epic 10's most sensitive scope is dark.
+- **Audit-log viewer (Story 9-11) is a hard prerequisite for PII scope release.** Even with DSA on file, partner-API access to PII without a working audit-read surface is a NDPA hole. FR26 calls this out explicitly; ADR-018 / Decision 5.4 makes the principal-exclusive audit shape possible.
+- **OAuth2 door is closed but not locked.** A future partner that mandates OAuth2 client-credentials triggers a new SCP and a follow-on ADR. The api_consumers / api_keys schema can co-exist with an OAuth2 layer; the `apiKeyAuth` middleware would simply be one of two auth mechanisms on the partner namespace.
+- **mTLS door is closed and locked.** Reviving mTLS would require a new ADR with a documented partner mandate; the operational complexity is high enough that we should not slip back into it without explicit evidence.
+- **Ambiguous-auth rejection (Decision 2.8) is part of the contract.** Requests with both JWT and API key get `400 AMBIGUOUS_AUTH`; this prevents accidental privilege blending in developer environments and codifies the principal-exclusive boundary at the request layer.
+
+**Cross-references:** FR24, NFR10, Epic 10 (all stories), Story 9-11 (audit viewer prerequisite), Story 10-5 (DSA), ADR-018 (audit principal model), Decision 2.4 (apiKeyAuth middleware), Decision 3.4 (partner namespace).
+
+---
+
+### ADR-020: Tailscale Operator-Access Architecture
+
+**Decision:** Production VPS SSH access is delivered via a **Tailscale overlay network**; the DigitalOcean Cloud Firewall restricts SSH (22/tcp) to the Tailscale CGNAT range (`100.64.0.0/10`); DO Web Console + DO Recovery Console are documented break-glass paths; fail2ban runs as defence-in-depth. Cloudflare Zero Trust Tunnel and self-hosted WireGuard were rejected. Public-internet SSH is closed.
+
+**Status:** Adopted 2026-04-22 (SCP-2026-04-22). **Deployed 2026-04-23** as the Story 9-9 P0 subtask. This ADR documents the as-deployed state, not a forward proposal — the change-log entry in Story 9-9 (2026-04-23) is the implementation evidence.
+
+**Context:**
+
+Monday 2026-04-20 11:04 UTC, the production VPS sustained a distributed SSH brute-force attack from 14+ IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, `45.227.254.170`, `172.93.100.236`, `43.128.106.113`, `118.194.234.8`, `103.189.235.33`, `213.209.159.231`, `2.57.121.25`, `45.148.10.50`, `64.89.160.135`) hammering port 22 with usernames `root`, `ubuntu`, `oyotradeministry`, `test`, `user`, `hadi`, `amssys`. CPU hit 100%; memory 82%. The Story 6-2 monitoring alert fired as designed, but detection-to-response latency was 19 hours.
+
+The pre-existing Story 9-9 backlog task only contemplated Cloudflare WAF/CDN — and Cloudflare is **domain-gated** on the `oslrs.com` purchase, which has not yet happened. SSH brute-force at the IP layer was outside the scope of any in-flight protection. The SCP-2026-04-22 expanded Story 9-9 scope to put SSH lockdown at the top of the priority order; this ADR captures the resulting decision.
+
+**Options considered:**
+
+| Option | Approach | Outcome |
+|---|---|---|
+| **Tailscale overlay** (SELECTED) | Tailscale daemon on VPS + operator devices; CGNAT range firewall rule; sshd hardened; fail2ban defence-in-depth | Lowest operator overhead; rotating-ISP-IP tolerance built in; works on Free tier for our team size |
+| **Cloudflare Zero Trust Tunnel** | Cloudflared daemon on VPS; access policies in Cloudflare dashboard | Viable alternative if Cloudflare WAF (when domain lands) makes vendor consolidation attractive; deferred for now to keep operator path independent of domain availability |
+| **Self-hosted WireGuard** | WireGuard endpoint on VPS; manual peer config per device | Rejected — overkill for a 1-operator-3-device scenario; key rotation discipline is manual; no equivalent of Tailscale's MagicDNS or tailnet ACLs |
+| **DO Console only (no overlay)** | Use only DigitalOcean Web Console + Recovery Console for all operator access | Rejected for daily ops — DO Console suffers ISP/WebSocket filtering and is clunky for routine tasks; retained as break-glass only |
+
+**Decision details (as-deployed 2026-04-23):**
+
+- **Tailnet members:** VPS `oslsr-home-app` @ `100.93.100.28`; operator laptop `desktop-qe4lplq` @ `100.113.78.101`. Both signed in to `lawalkolade@gmail.com` (Free tier, 100-device cap, well within OSLSR scale).
+- **DO Cloud Firewall:** OSLRS firewall SSH (22/tcp) source narrowed from `0.0.0.0/0` + `::/0` to `100.64.0.0/10` (Tailscale CGNAT range). Public-internet SSH is unreachable.
+- **sshd configuration:** main file `/etc/ssh/sshd_config` plus drop-ins `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` consistently set `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`. Drop-in consistency matters: a single `PasswordAuthentication yes` in any drop-in overrides the main file; all three locations were aligned.
+- **`/root/.ssh/authorized_keys`:** two keys — line 1 `github-actions-deploy` (CI deployment key; **DO NOT REMOVE** or deploys break), line 2 `awwallawal@gmail.com` (operator personal `id_ed25519`).
+- **Operator laptop SSH config:** `C:\Users\DELL\.ssh\config` with `Host oslsr-home-app` block, `IdentityFile ~/.ssh/id_ed25519`, `IdentitiesOnly yes` (prevents the SSH agent from offering every available key, which would tip off attackers to held key types in the agent).
+- **fail2ban:** installed and enabled with the default sshd jail (maxretry 5, bantime 10m). At Tailscale-only access this is mostly insurance against authenticated-user compromise rather than against external brute-force, but the cost is negligible.
+- **Verification (post-deployment):** (a) public-IP SSH attempts return `Connection timed out` (firewall); (b) key-disabled SSH returns `Permission denied (publickey)` (sshd); (c) Tailscale-routed SSH returns immediate login with no password prompt. All three are the intended states.
+- **Break-glass path order** (documented in `docs/emergency-recovery-runbook.md` panic-start block): Tailscale SSH → Tailscale IP direct → Tailscale daemon restart on laptop → DO Web Console → DO Recovery Console → DO Snapshot restore → DO Support ticket.
+- **Quarterly drill:** runbook §6.1 mandates exercising each break-glass path at least once per quarter, with the result logged in the runbook Change Log. First drill due by 2026-07-23.
+
+**Consequences:**
+
+- **Operator workflow changes by one command.** `ssh root@oyotradeministry.com.ng` no longer works; `ssh root@oslsr-home-app` does. Documented in runbook §1.1.
+- **CI deploy keys are unchanged.** `github-actions-deploy` continues to authenticate over SSH. GitHub Actions runners reach the VPS over the **public IP** (`appleboy/ssh-action` in `.github/workflows/ci-cd.yml`); they are not on the tailnet. The `100.64.0.0/10`-only rule applied between 2026-04-23 14:30 UTC and 2026-04-25 (firewall amendment, see below) would have blocked GH Actions runners — but no CI deploy was attempted in that window (last run was commit `36ccfbb` on 2026-04-20), so production deploys never broke. **Resolution (2026-04-25):** the SSH firewall rule was widened back to include `0.0.0.0/0` + `::/0` alongside `100.64.0.0/10`. Public-IP SSH attempts are now reachable to sshd, but sshd is hardened (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, key-only) and fail2ban handles repeat-offender IPs. The firewall is therefore **defence-in-depth**, not the primary control. The primary control remains sshd-level key authentication. **Long-term resolution (Story 9-9 follow-up subtask):** move CI to a self-hosted GitHub Actions runner inside the tailnet, then remove `0.0.0.0/0` again. Tracked in `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` File List "Follow-up items".
+- **Phone and secondary operator devices are not yet on the tailnet.** This is a single-point-of-failure risk: if the operator laptop is unavailable, only DO Console paths work. Adding phone + secondary laptop is logged as a runbook §6.1 follow-up item.
+- **DO Web Console is SSH-based, not hypervisor-out-of-band.** Empirical finding 2026-04-25: when the SSH firewall rule was `100.64.0.0/10`-only, DO Console timed out. When `0.0.0.0/0` was re-added, Console immediately worked. The `droplet-agent` (DOTTY) logs (`SSH Manager Initialized... sshd_port:[22]`) reveal that DO Console connects via SSH from DO's own infrastructure IP ranges (e.g. `162.243.0.0/16` observed in journal entries). This means Console availability is a function of the SSH firewall posture, not of WebSocket filtering / browser / network as initially theorised. **Implication for the Story 9-9 follow-up self-hosted-runner option:** if the firewall is re-narrowed, it must additionally permit DO's published IP ranges (`https://digitalocean.com/geo/google.csv` or DO API) for Console to remain a break-glass path; otherwise Console becomes unavailable as part of the trade-off. DO Recovery Console may share the same SSH-port dependency — verification pending in the next quarterly drill.
+- **Tailscale Free-tier TOS.** The Free tier covers up to 100 devices and 3 users; OSLSR is well inside both. If Ministry adopts Tailscale post-Transfer for a larger team, an upgrade to Personal Pro or Business is required. No code changes needed.
+- **Cloudflare ZT door open.** If Cloudflare WAF lands later and Ministry prefers a single vendor for both public-traffic protection and operator access, swapping Tailscale for Cloudflare Zero Trust Tunnel is a configuration change, not an architectural one.
+
+**Cross-references:** NFR9, Story 9-9 Change Log entry 2026-04-23, `docs/emergency-recovery-runbook.md`, ADR-013 §"Tailscale Operator Access" subsection.
 
 ---
 
@@ -3303,6 +3787,92 @@ Pattern: `{domain}:{identifier}:{subresource}` (colon-separated)
 `${ipAddress}_rate_limit`                  // No domain prefix
 ```
 
+**Per-Consumer Rate-Limit Cache Keys (Epic 10, SCP-2026-04-22):**
+
+Partner-API rate-limit and quota counters share the cache-key conventions above with one additional rule: **principal kind is always part of the key prefix** so that consumer counters never collide with user-IP counters.
+
+```typescript
+// ✅ Per-consumer per-scope per-minute bucket (Story 10-2)
+`ratelimit:consumer:${consumer_id}:${scope}:${YYYY-MM-DDTHH:MM}`
+
+// ✅ Per-consumer daily / monthly quota
+`quota:consumer:${consumer_id}:${scope}:daily:${YYYY-MM-DD}`
+`quota:consumer:${consumer_id}:${scope}:monthly:${YYYY-MM}`
+
+// ❌ Never share namespace with user-IP rate limits
+`rate_limit:${consumer_id}`                // Ambiguous — is this a user IP or a consumer?
+```
+
+TTL convention: per-minute buckets `EXPIRE 70` (slight overhang absorbs clock drift); daily quotas `EXPIRE 90000` (~25h); monthly quotas `EXPIRE 2764800` (~32d). All counters use atomic `INCR` then `EXPIRE` (or `INCR` + initial `SETEX` if first write) — no read-modify-write.
+
+**Pino Event Naming — Principal-Tagged for Audit-Friendly Parsing (SCP-2026-04-22):**
+
+Every Pino event in service code MUST carry a `principal_kind` field set to one of `'user' | 'consumer' | 'system'` (matches the `audit_logs` principal-exclusive CHECK from Decision 1.5 / Decision 5.4). This lets log aggregation distinguish human-actor events from machine-consumer events without parsing the rest of the payload.
+
+```typescript
+// ✅ Human actor event (Pattern Category 5 baseline + new principal_kind tag)
+logger.info({
+  event: 'user_login',
+  principal_kind: 'user',
+  user_id: req.user.id,
+  // …
+});
+
+// ✅ Machine consumer event (new event class, Story 10-1)
+logger.info({
+  event: 'api_partner_request',
+  principal_kind: 'consumer',
+  consumer_id: req.consumer.id,
+  api_key_id: req.apiKey.id,
+  scope: req.scopeContext.scope,
+  applied_lga_filter: req.scopeContext.allowed_lga_ids ?? null,
+  status_code: res.statusCode,
+  latency_ms,
+  rate_limit_outcome: 'within' | 'rejected',
+});
+
+// ✅ System event (scheduled jobs, startup, migrations)
+logger.info({
+  event: 'pending_nin_reminder_dispatched',
+  principal_kind: 'system',
+  reminder_window: 'T+2d',
+  cohort_size: 47,
+});
+
+// ❌ Never omit principal_kind on a service-emitted event — log parsers depend on it
+logger.info({ event: 'user_login', user_id: req.user.id });
+```
+
+**Audit-log write helper — discriminated union signature (SCP-2026-04-22):**
+
+The `auditLog.create()` service helper takes a discriminated union to make it impossible to write a row that violates the principal-exclusive CHECK constraint:
+
+```typescript
+type AuditPrincipal =
+  | { kind: 'user'; user_id: string }
+  | { kind: 'consumer'; consumer_id: string }
+  | { kind: 'system' };
+
+interface AuditLogCreateInput {
+  principal: AuditPrincipal;
+  action: string;
+  target_resource: string;
+  target_id: string;
+  meta?: Record<string, unknown>;
+}
+
+// At call sites: TypeScript narrowing rejects mixed-principal writes at compile time
+await auditLog.create({
+  principal: { kind: 'consumer', consumer_id: req.consumer.id },
+  action: 'partner_query',
+  target_resource: 'respondents',
+  target_id: '<aggregated>',
+  meta: { scope: 'aggregated_stats:read', applied_lga_filter: req.scopeContext.allowed_lga_ids },
+});
+```
+
+The DB CHECK constraint (Decision 1.5) is the second layer — it catches the case where a future contributor bypasses the helper and writes to `audit_logs` directly. Defence in depth: types reject one shape, the database rejects another, and they agree on what is valid.
+
 ---
 
 ### Pattern Category 6: Process Patterns (Loading, Errors, Retries)
@@ -3583,6 +4153,116 @@ Data Store Authentication:
 - Connection strings with passwords MUST use REDIS_URL/DATABASE_URL env vars
 - Passwords MUST be hex-only (openssl rand -hex 32) to avoid URL encoding issues
 ```
+
+**Operator SSH Access (per NFR9, ADR-020):**
+
+```
+Production VPS SSH:
+- Public-internet SSH (22/tcp from 0.0.0.0/0) MUST be closed at the DO Cloud Firewall
+- SSH source MUST be restricted to Tailscale CGNAT range 100.64.0.0/10
+- sshd_config: PasswordAuthentication no (main file + every drop-in)
+- sshd_config: PermitRootLogin prohibit-password
+- sshd_config: PubkeyAuthentication yes
+- fail2ban MUST be enabled with the sshd jail
+- DigitalOcean Web Console + Recovery Console retained as documented break-glass paths
+- Quarterly recovery drill REQUIRED (per docs/emergency-recovery-runbook.md §6.1)
+```
+
+**API Consumer Token Storage (per NFR10, ADR-019, SCP-2026-04-22):**
+
+API consumer tokens are stored exclusively as SHA-256 hashes; the plaintext is shown to the provisioning operator exactly once and is never persisted, recoverable, or logged.
+
+```typescript
+// ✅ Correct — generate, hash, persist hash, return plaintext to operator once
+import { randomBytes, createHash } from 'crypto';
+
+async function provisionApiKey(consumerId: string, name: string) {
+  const plaintext = randomBytes(32).toString('base64url');  // 256 bits, URL-safe
+  const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+  const tokenPrefix = plaintext.slice(0, 8);  // For admin UI identification only
+
+  const [row] = await db.insert(apiKeys).values({
+    consumerId,
+    name,
+    tokenHash,        // ← Persisted
+    tokenPrefix,      // ← Persisted (8 chars, not enough to authenticate)
+    issuedAt: new Date(),
+    rotatesAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
+  }).returning();
+
+  return { id: row.id, plaintext };  // ← Plaintext returned to caller, ONCE
+}
+
+// ❌ NEVER store plaintext, even temporarily
+await db.insert(apiKeys).values({ token: plaintext });  // catastrophic
+
+// ❌ NEVER log plaintext
+logger.info({ event: 'api_key_provisioned', token: plaintext });  // catastrophic
+
+// ❌ NEVER return plaintext from a "get key details" endpoint — show prefix only
+GET /api/v1/admin/consumers/:id/keys → returns tokenPrefix, never plaintext
+```
+
+**Per-Consumer Redis Rate-Limit Keying (per Story 10-2, ADR-019):**
+
+Rate-limit Redis keys MUST include the consumer ID, the scope, and the time bucket. The principal namespace (`consumer:`) MUST be in the key prefix to prevent collisions with user-IP rate-limit keys.
+
+```typescript
+// ✅ Per-consumer per-scope per-minute bucket
+const key = `ratelimit:consumer:${consumerId}:${scope}:${minuteBucket()}`;
+const count = await redis.incr(key);
+if (count === 1) await redis.expire(key, 70);  // 70s overhang absorbs clock drift
+if (count > limitForScope(scope)) {
+  throw new AppError('RATE_LIMITED', 'Per-consumer rate limit exceeded', 429);
+}
+
+// ❌ Wrong — collides with user-IP rate limits and loses scope dimension
+const key = `rate_limit:${consumerId}`;
+
+// ❌ Wrong — non-atomic; under contention will undercount
+const count = await redis.get(key);
+if (count > limit) throw …;
+await redis.set(key, count + 1);
+```
+
+Daily and monthly quota counters use parallel keys (`quota:consumer:{id}:{scope}:daily:{YYYY-MM-DD}`, etc.) and are evaluated **after** the per-minute bucket — a request can be within-minute but over-day. The middleware order is: `apiKeyAuth` → `requireScope` → per-minute → daily → monthly → controller.
+
+**Timing-Safe Comparison for Token Lookup (per Decision 2.4, ADR-019):**
+
+Token lookup MUST use timing-safe comparison to prevent timing oracles that distinguish "wrong token" (fast index miss) from "valid token, wrong scope" (slower row fetch).
+
+```typescript
+// ✅ Hash submitted token, look up by indexed hash, then timing-safe compare
+import { timingSafeEqual, createHash } from 'crypto';
+
+async function authenticateApiKey(submittedToken: string) {
+  const submittedHash = createHash('sha256').update(submittedToken).digest('hex');
+  const row = await db.select().from(apiKeys).where(eq(apiKeys.tokenHash, submittedHash)).limit(1);
+
+  if (!row.length) {
+    // Don't short-circuit — perform a timingSafeEqual against a known-bad value to
+    // normalise the response time of the "miss" path against the "hit" path.
+    timingSafeEqual(Buffer.from(submittedHash), Buffer.from('0'.repeat(64)));
+    throw new AppError('API_KEY_INVALID', '…', 401);
+  }
+
+  // Even on hit, do an explicit timingSafeEqual to cover any future codepath
+  // that might compare hashes via string equality.
+  if (!timingSafeEqual(Buffer.from(submittedHash), Buffer.from(row[0].tokenHash))) {
+    throw new AppError('API_KEY_INVALID', '…', 401);
+  }
+
+  return row[0];
+}
+
+// ❌ Wrong — string equality leaks comparison time on long shared prefixes
+if (submittedHash === row.tokenHash) { … }
+
+// ❌ Wrong — no normalisation on miss path; "miss" returns faster than "hit, scope-fail"
+if (!row) throw new AppError('API_KEY_INVALID', …);
+```
+
+The "normalise miss-path timing against hit-path timing" technique is what makes the difference between "not found" and "found but wrong scope" un-distinguishable to a timing attacker. It costs ~20µs per request — negligible for the partner-API's expected volume (≤300 req/min per consumer per scope, Decision 3.4).
 
 ---
 

@@ -230,6 +230,7 @@ _(Populated during implementation.)_
 | 2026-04-12 | Story created as backlog with full security posture assessment + 6 tasks (2 P0 + 1 P1 + 2 P2 + 1 traceability). Field-readiness assessment: READY with Cloudflare recommended within first week. | Capture 9-8 session security assessment so no nuance is lost when resources become available |
 | 2026-04-12 | **Pre-implementation fix: p95 latency false-alert suppression.** `apps/api/src/middleware/metrics.ts` — added `MIN_SAMPLES_FOR_P95 = 50` threshold. `getP95Latency()` now returns 0 when sample count < 50, preventing a single slow request on the low-traffic VPS from triggering Critical health-digest alerts (was: stuck at 631ms). Added `resetLatencyBuffer()` + `recordLatencySample()` test helpers. New `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests covering zero/below-threshold/at-threshold/outlier/exact-production-scenario cases. | Production health-digest emails fired repeated `api_p95_latency Critical 631` alerts every 30 min. Root cause: on a low-traffic VPS, a single slow request (cold start or DB connection init) dominates the p95 with < 20 samples in the rolling buffer. The 50-sample minimum makes the statistic meaningful before it can trigger alerts. Directly addresses the C+ operational security grade — false-positive alert fatigue erodes trust in the monitoring system. |
 | 2026-04-12 | **Bugfix: added missing `zod` dependency to `@oslsr/config` package.** `packages/config/package.json` + `pnpm-lock.yaml` updated. | Runtime import error when `@oslsr/config` consumers used zod schemas — dependency was consumed but not declared in the package's own `package.json`. |
+| 2026-04-23 | **Subtask COMPLETE — Tailscale + SSH hardening (P0, per SCP 2026-04-22 scope expansion).** Tailscale installed on VPS (`oslsr-home-app` @ `100.93.100.28`) + laptop (`desktop-qe4lplq` @ `100.113.78.101`) under `lawalkolade@gmail.com` Free tier. Personal `id_ed25519` public key appended to `/root/.ssh/authorized_keys` (2 lines total: `github-actions-deploy` + `awwallawal@gmail.com`). Laptop `~/.ssh/config` created with `IdentitiesOnly yes` directive. `sshd_config` main + both drop-ins (`50-cloud-init.conf`, `60-cloudimg-settings.conf`) consistently set to `PasswordAuthentication no` + `PermitRootLogin prohibit-password` + `PubkeyAuthentication yes`. DO Cloud Firewall "OSLRS" SSH rule source narrowed from `0.0.0.0/0` + `::/0` to `100.64.0.0/10` (Tailscale CGNAT range only). fail2ban installed + enabled (default config: maxretry 5, bantime 10m, jail:sshd). Verified: (1) public-IP SSH → `Connection timed out` (2) key-disabled SSH → `Permission denied (publickey)` (3) Tailscale SSH → immediate login no password prompt. Emergency recovery runbook authored at `docs/emergency-recovery-runbook.md` (8 sections + panic-start block + quarterly drill). DO Web Console timed out on current ISP — confirmed as ISP WebSocket filtering issue, not VPS-side (both `serial-getty@ttyS0.service` and `droplet-agent.service` verified active). Alternative break-glass paths documented: DO Recovery Console + DO Snapshot + DO Support ticket. | Monday 2026-04-20 11:04 UTC brute-force attack from 14+ distributed IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, `45.227.254.170`, `172.93.100.236`, `43.128.106.113`, `118.194.234.8`, `103.189.235.33`, `213.209.159.231`, `2.57.121.25`, `45.148.10.50`, `64.89.160.135`) hammering port 22 trying `root`, `ubuntu`, `oyotradeministry`, `test`, `user`, `hadi`, `amssys` drove CPU to 100% + Memory to 82% — monitoring alert fired as designed (Story 6-2), but detection-to-response was 19 hours. Pre-existing Story 9-9 backlog task (Cloudflare-only) didn't cover SSH surface; SCP 2026-04-22 expanded scope to include Tailscale + OS patching + port audit + app-layer rate-limit audit + backup encryption + alerting tier + logrotate + second super-admin + activity baseline + Cloudflare (domain-gated). This entry records completion of the P0 subtask; remaining 9 subtasks deferred to Bob's formal Story 9-9 regeneration after SCP-driven PRD/Architecture/UX amendments. |
 
 ### File List
 
@@ -246,3 +247,33 @@ _(Populated during implementation.)_
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 **No code changes for Tasks 1-2 (Cloudflare dashboard config only).**
+
+### File List — Tailscale Hardening Subtask (2026-04-23)
+
+**VPS-side state changes (not committed to repo — infrastructure configuration):**
+
+- `/etc/ssh/sshd_config` — three directives enforced (see Change Log entry above)
+- `/etc/ssh/sshd_config.d/50-cloud-init.conf` — `PasswordAuthentication yes` → `no`
+- `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` — verified already `no`
+- `/root/.ssh/authorized_keys` — appended 2nd line (`awwallawal@gmail.com` public key)
+- `/usr/lib/systemd/system/tailscaled.service` — installed + enabled via `curl -fsSL https://tailscale.com/install.sh | sh`
+- `/usr/lib/systemd/system/fail2ban.service` — installed + enabled via `apt install -y fail2ban`
+- DO Cloud Firewall "OSLRS" — SSH rule source: `100.64.0.0/10` (CGNAT)
+- DO droplet Tailscale hostname: `oslsr-home-app` (IP `100.93.100.28`)
+
+**Laptop-side state changes (not committed to repo — local workstation configuration):**
+
+- `C:\Users\DELL\.ssh\config` — new file with `oslsr-home-app` host definition, `IdentityFile ~/.ssh/id_ed25519`, `IdentitiesOnly yes`
+- Tailscale Windows client installed + signed in to `lawalkolade@gmail.com`
+
+**Repo files created:**
+
+- `docs/emergency-recovery-runbook.md` — 8-section runbook + panic-start block + quarterly drill procedure
+
+**Follow-up items flagged for later:**
+
+- Remove `github_actions_deploy` private key from laptop (should exist only in GitHub Secrets — hygiene)
+- Take DO droplet snapshot named `tailscale-hardening-complete-2026-04-23` (runbook §6.1 item 1)
+- Reset + save VPS root password to password manager (runbook §6.1 item 3)
+- Apply 51 pending OS updates + kernel 6.8.0-90 → 6.8.0-110 reboot (separate Story 9-9 subtask)
+- PM2 restart counter 916+ over 89 days — separate Story 9-10 investigation

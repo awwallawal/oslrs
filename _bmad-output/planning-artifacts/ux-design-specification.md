@@ -12,9 +12,9 @@ completionDate: 2026-01-04
 
 # UX Design Specification oslr_cl
 
-**Author:** Awwal
-**Date:** 2026-01-03 (Updated: 2026-01-22)
-**Version:** 2.1 - Epic 1 Retrospective Decisions
+**Author:** Awwal (initial); 2026-04-25 revision by Sally (UX designer agent)
+**Date:** 2026-01-03 (Updated: 2026-04-25)
+**Version:** 3.0 — SCP-2026-04-22: Multi-source registry, API governance, security hardening, field-survey UX
 
 ## Change Log
 
@@ -23,6 +23,7 @@ completionDate: 2026-01-04
 | 2026-01-03 | 1.0 | Initial UX design specification completed | Awwal |
 | 2026-01-05 | 2.0 | **ADR-013 Integration:** Added Analytics & Privacy section (Plausible self-hosted analytics), Rate Limiting UX Patterns (NGINX edge protection), Performance Optimization (static asset caching, skeleton screens), Security & CSP Compliance (Content Security Policy guidelines, NDPA compliance checklist) | Awwal |
 | 2026-01-22 | 2.1 | **Epic 1 Retrospective Decisions:** Added Google OAuth as primary public registration (ADR-015), Hybrid Email Verification UX (Magic Link + OTP in same email), AuthLayout pattern for login/register pages (ADR-016 - minimal navigation with "← Back to Homepage"), Updated Journey 2 flow diagram with OAuth and email verification steps | Awwal |
+| 2026-04-25 | 3.0 | **SCP-2026-04-22 — Multi-source registry, API governance, security hardening, field-survey UX.** Journey 2 (Public Self-Registration) rewritten end-to-end as a 5-step wizard with magic-link primary auth, deferred-NIN path (`pending_nin_capture`), trust badges, and migration note for existing accounts. Original Journey 2 preserved verbatim under "Superseded — Original Journey 2 (2026-01-22)" for traceability. Three new Form Patterns: NIN Capture with Help Hint (3 variants: inline / tooltip / banner), Email-Typo Detection, Pending-NIN Toggle. New Visible Step Indicator Progress Pattern (wizard chrome — distinct from survey-content dual-layer progress). Super-admin sidebar additions: Audit Log (Story 9-11) and Import Data (Story 11-3). Six new custom components: `NinHelpHint`, `SourceBadge`, `ImportDryRunPreview`, `AuditLogFilter`, `ApiConsumerScopeEditor`, `LawfulBasisSelector` (each with full anatomy / states / variants / accessibility / props / wireframe). Partner-API Rate Limiting UX patterns added (429 with Retry-After countdown, daily quota progress bar, per-scope vs per-consumer messaging). NDPA Compliance Checklist updated with three new items (pending-NIN lawful-basis path with dual-channel erasure verification, multi-source ingestion lawful-basis-per-batch with DPIA Appendix H linkage, per-scope DSA precondition for `submissions:read_pii`). Four new user journeys authored: Journey 5 Super-Admin Data Import, Journey 6 Super-Admin Audit Log Investigation, Journey 7 Super-Admin API Consumer Provisioning, Journey 8 Public User Return-to-Complete via Magic Link. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.3 UX subsection for the full SCP scope. | Sally (UX) |
 
 ---
 
@@ -2421,123 +2422,165 @@ graph TD
 
 ### Journey 2: Public Respondent Self-Registration
 
-**Journey Goal:** Self-register via mobile device with NIN validation and two-stage consent workflow, resulting in marketplace profile opt-in decision.
+> **Rewritten 2026-04-25 per SCP-2026-04-22 / ADR-015 (revised).** The original Google-OAuth-primary + Hybrid-Magic-Link/OTP-fallback design is preserved verbatim at the bottom of this journey under "Superseded — Original Journey 2 (2026-01-22)" for traceability. **The original is no longer in force; do not implement against it.** New implementations follow the 5-step wizard below; existing `public_users` accounts continue to work via the legacy login per the migration note.
+
+**Journey Goal:** Self-register via mobile device through a single 5-step wizard with consent capture, NIN-or-defer-NIN, and an optional save-your-progress affordance at the end. Result: a respondent record with `status = 'active'` (NIN provided) or `status = 'pending_nin_capture'` (NIN deferred), and an optional authenticated session.
 
 **Entry Point:** Public Homepage → "Register Now" button
 
-**Registration Methods (ADR-015):**
-1. **Google OAuth (Primary, Recommended):** "Continue with Google" button - single click, pre-verified email, no password needed
-2. **Email Registration (Fallback):** Traditional email + password with Hybrid Email Verification
+**Why this changed (FR5 / FR27 / FR28):** The previous 4-hop flow (register → verify email → login → fill form) had measured drop-off concerns at every navigation between distinct screens, and the mandatory NIN gate excluded respondents who lacked their NIN at submission. The 5-step single-page wizard collapses the navigation cost; the deferred-NIN path keeps respondents in the funnel. Magic-link is the primary auth channel because Nigerian SMS deliverability and cost make SMS-as-primary a worse choice for the smartphone-with-email user (and offers nothing to users without smartphones).
 
-**AuthLayout Pattern (ADR-016):**
-- Minimal navigation: "← Back to Homepage" link only
-- Centered card layout on neutral background
-- No full header/footer (focused, distraction-free experience)
+**Layout:** AuthLayout-derived **WizardLayout** — minimal "← Back to Homepage" link, centered card on neutral background, no full header/footer, **persistent step indicator at the top**, **trust-badges row at the foot of every step**.
+
+#### Step structure (5 steps, single page with progress indicator)
+
+**Step 1 — Basic Info**
+- Full name (first + last; large 48px touch targets)
+- Date of birth (native `<input type="date">` on mobile; year-month-day dropdowns as fallback; "I prefer not to say" with consequence preview — disables some downstream eligibility)
+- Gender (radio: Female / Male / Prefer not to say)
+- Auto-focus on Full Name field on mount
+
+**Step 2 — Contact + LGA**
+- Phone (Nigerian format mask `080 1234 5678`, JetBrains Mono, real-time format validation per existing Form Patterns)
+- Email (with **email-typo detection** — see Form Patterns; correction suggestion on common-typo match)
+- LGA (autocomplete from 33 Oyo LGAs; large mobile-friendly combobox; if user is ineligible because outside Oyo, surface eligibility message with link to "Why Oyo only?")
+
+**Step 3 — Consent (FR2 two-stage)**
+- Plain-language NDPA consent paragraph (per Story 1.5.3 `/about/privacy` text, restated in plain English at 7th-grade reading level)
+- **Stage 1 (`consent_marketplace`):** Single radio question — "Do you consent to be listed in our anonymous skills marketplace? (Profession, LGA, Experience Level only)"
+- **Stage 2 (`consent_enriched`, only shown if Stage 1 = Yes):** "Do you also consent to allow employers to see your Name and Phone Number?"
+- Cannot proceed without Stage 1 acknowledgement (Yes or No — no skip)
+- Stage 2 default: No (privacy-preserving default)
+- Trust copy: "You can change these choices at any time after registration."
+
+**Step 4 — Questionnaire**
+- Renders the published native form schema for the public-survey form (per `respondentSourceTypes = 'public'`)
+- Reuses the same one-question-per-screen renderer used by enumerators, but mounted *inside* the wizard chrome (the persistent step indicator stays visible at the top — respondents always know they are on Step 4 of 5)
+- Auto-save to IndexedDB on every answer change (existing pattern — survives accidental refresh / connectivity drop)
+- Skip-logic engine drives question visibility (existing native form behaviour)
+
+**Step 5 — NIN + Optional Login Setup**
+- **NIN input** with `NinHelpHint` inline (see Form Patterns) — `*346#` USSD reminder visible at the field
+- "I don't have my NIN with me right now" toggle — on activation, NIN field disables, consequence preview appears: "Your registration will be saved as **pending**. We'll email you to complete it later."
+- When NIN provided: client-side Modulus 11 validation; pre-submission duplicate check via `POST /api/v1/forms/check-nin` (per FR21); duplicates surface with the original-registration-date message and the wizard offers two affordances: (a) "this might be a mistake — go back and fix the NIN", (b) "I am the same person — contact support"
+- **Optional login setup:**
+  - Email field pre-populated from Step 2
+  - Two affordances: **"Email me a magic link"** (primary CTA, recommended) + **"Set a password instead"** (secondary)
+  - "Skip for now" tertiary affordance — on skip, the system still emails a one-time magic link with TTL 72h that the respondent can use to come back and complete (or just to view their submission)
+- **Trust badges row** (always visible at foot of card): three SUPA-inspired-but-distinct badges — "🔒 Secure Registration" / "🛡️ Official Oyo State Platform" / "🆓 Free to Join"
+
+#### Pending-NIN branch (Step 5 + downstream)
+
+When the respondent activates the "I don't have my NIN" toggle on Step 5:
+- `respondents.status = 'pending_nin_capture'` is set on submission
+- Step 5 wording adapts: the optional-login-setup section is now **strongly encouraged**, not optional — copy reads "We'll email you when you can complete registration. Setting up your login now means we can resume right where you left off."
+- Default selection of "Email me a magic link" with email pre-filled
+- Confirmation screen acknowledges pending status: "Your registration is saved as pending. Look for an email from oslsr@oyotradeministry.com.ng with a link to complete it."
+- Reminder cadence (per FR28): T+2d / T+7d / T+14d emails; T+30d transition to `status = 'nin_unavailable'` and supervisor-review queue
+
+#### Magic-link return-to-complete
+
+For respondents who leave mid-wizard (or who are in `pending_nin_capture`):
+- Email subject: "Continue your Oyo State Skills Registry registration" (concise, action-oriented)
+- Body: short paragraph + single primary CTA button **"Continue Registration →"** + plaintext fallback link + 72-hour expiry note + recovery instructions ("If you don't see this email, check spam, or contact your local LGA office")
+- Click → lands on Step N where they left off; previously-entered data is preserved (server-side draft; not just IndexedDB, because the magic-link click likely happens on a different device than the original session)
+- "What if I lose the email" recovery path: from the public homepage, "Resume registration" link → enters email → if a draft exists, system re-sends the magic link (rate-limited 3/hr per email per existing NFR4.4 budget pool)
+
+#### Trust badges (SUPA-inspired but distinct)
+
+| Badge | Icon | Copy | Visual contract |
+|---|---|---|---|
+| Secure Registration | Lucide `Lock` (filled) | "Secure Registration" | Background Success-100 #DCFCE7, border Success-600 #15803D, text Success-900 |
+| Official Oyo State Platform | Oyo State logo (38×38 SVG) | "Official Oyo State Platform" | Background Primary-50 #FEF2F2, border Primary-600 #9C1E23, text Primary-900 |
+| Free to Join | Lucide `Gift` outline | "Free to Join" | Background Info-100 #DBEAFE, border Info-600 #2563EB, text Info-900 |
+
+- Layout: horizontal row at the foot of every step's card; badges stack vertically on screens <480px
+- Each badge uses an `<aside>` with `aria-label` describing the assurance (e.g. `aria-label="Secure: registration uses TLS encryption and your data stays in Nigeria"`)
+- Visual hierarchy is intentionally lower than primary CTAs — these are reassurance, not action
 
 **Flow Diagram:**
 
 ```mermaid
 graph TD
     A[Public Homepage] --> B[Tap Register Now]
-
-    B --> C[Registration Screen<br/>← Back to Homepage link<br/>AuthLayout]
-
-    C --> D1{Registration Method}
-    D1 -->|Continue with Google| D2[Google OAuth Flow]
-    D1 -->|Register with Email| D3[Email + Password Form]
-
-    D2 --> D4[Google Auth Success<br/>Email Pre-verified]
-    D4 --> E1[Complete Profile<br/>Enter NIN]
-
-    D3 --> D5[Enter Email + Password]
-    D5 --> D6[Send Verification Email<br/>Magic Link + OTP in same email]
-    D6 --> D7{Verify Email}
-    D7 -->|Click Magic Link| D8[Email Verified]
-    D7 -->|Enter 6-digit OTP| D8
-    D8 --> E1
-
-    E1 --> D[Enter NIN Field<br/>Monospace Font JetBrains Mono]
-
-    D --> E{NIN Validation}
-    E -->|Invalid Format| F[Red Error: NIN must be 11 digits]
-    E -->|Already Registered| G[Error: This NIN is already registered<br/>Sign in instead?]
-    E -->|Valid & New| H[✓ NIN Valid<br/>Success-600 Checkmark]
-
-    F --> D
-    G --> I[Sign In Link]
-
-    H --> J[Enter Phone Number<br/>Format: 080 1234 5678]
-
-    J --> K{Phone Validation}
-    K -->|Invalid| L[Error: Enter valid Nigerian number]
-    K -->|Valid| M[✓ Phone Valid]
-
-    L --> J
-
-    M --> N[Continue to Survey]
-
-    N --> O[Stage 1 Consent Screen<br/>Do you consent to join anonymous marketplace?]
-
-    O --> P{User Decision}
-    P -->|No| Q[Skip to Identity Section<br/>marketplace_consent = No]
-    P -->|Yes| R[Stage 2 Consent Screen<br/>Allow employers to view Name & Phone?]
-
-    R --> S{User Decision}
-    S -->|No| T[Anonymous Profile Only<br/>enriched_consent = No]
-    S -->|Yes| U[Full Profile with Contact<br/>enriched_consent = Yes]
-
-    Q --> V[Survey Bottom Sheet<br/>Identity & Demographics]
-    T --> V
-    U --> V
-
-    V --> W[Follow Standard Survey Flow<br/>Same as Enumerator Journey]
-
-    W --> X[Submit Survey]
-
-    X --> Y[Success Screen<br/>Thank you for registering!]
-
-    Y --> Z{Marketplace Consent?}
-    Z -->|Yes| AA[Civic Participation Message<br/>Your data helps Oyo State create jobs]
-    Z -->|No| AB[Thank You Message<br/>Registration Complete]
-
-    AA --> AC[Optional: Update Profile Link<br/>Change consent preferences]
-    AB --> AC
+    B --> C[Wizard Step 1: Basic Info<br/>Step indicator: 1 of 5<br/>Trust badges row]
+    C --> D[Wizard Step 2: Contact + LGA<br/>Step indicator: 2 of 5<br/>Email-typo detection inline]
+    D --> E[Wizard Step 3: Consent<br/>Step indicator: 3 of 5<br/>Stage 1 marketplace -> Stage 2 enriched]
+    E --> F[Wizard Step 4: Questionnaire<br/>Step indicator: 4 of 5<br/>Native form renderer in wizard chrome]
+    F --> G[Wizard Step 5: NIN + Login Setup<br/>Step indicator: 5 of 5<br/>NinHelpHint inline]
+    G --> H{NIN provided?}
+    H -->|Yes| I[Modulus 11 + duplicate check]
+    H -->|No, toggle 'I dont have NIN'| J[status = pending_nin_capture<br/>Strongly encourage login setup]
+    I -->|Valid + new| K[status = active]
+    I -->|Duplicate| L[Original-registration date message<br/>Offer: 'go back' / 'contact support']
+    L --> G
+    K --> M{Login setup choice}
+    J --> M
+    M -->|Email magic link primary| N[Magic link sent<br/>TTL 15min for login / 72h for resume]
+    M -->|Password fallback| O[Standard public login created]
+    M -->|Skip for now| P[One-time magic link sent anyway TTL 72h]
+    N --> Q[Confirmation screen<br/>Status-aware messaging]
+    O --> Q
+    P --> Q
+    Q -->|status=active| R[Thank you + civic framing<br/>'Your data helps Oyo State create jobs']
+    Q -->|status=pending_nin_capture| S[Pending acknowledgement<br/>'Look for our email to complete']
 ```
 
 **Key Interactions:**
 
-1. **Entry:** Public user taps "Register Now" from homepage → Lands on AuthLayout (minimal navigation)
-2. **Registration Method Selection:**
-   - **Google OAuth (Primary):** Large "Continue with Google" button at top (recommended, reduces friction)
-   - **Email Fallback:** "Or register with email" link below for users without Google accounts
-3. **Google OAuth Flow:** Single click → Google popup → Returns with verified email → Profile completion
-4. **Email Registration Flow:**
-   - Enter email + password
-   - Receive single email containing BOTH Magic Link AND 6-digit OTP code
-   - User chooses whichever verification method works (link or code)
-   - 15-minute expiry for both options
-5. **NIN Validation:** Real-time validation with specific error messaging
-   - Format check: Exactly 11 digits
-   - Duplicate check: Already registered → Sign in instead
-   - Monospace font (JetBrains Mono) for numeric clarity
-6. **Two-Stage Consent:** Progressive disclosure (FR2 requirement)
-   - Stage 1: Anonymous marketplace opt-in (Profession, LGA, Experience only)
-   - Stage 2: Only shown if Stage 1 = Yes, asks for Name + Phone reveal
-7. **Survey Experience:** Same bottom sheet mobile pattern as enumerator journey
-8. **Civic Framing:** Success message emphasizes contribution to state development
+1. **Single page, persistent context.** All five steps render inside a single WizardLayout shell. Step indicator stays visible at top; trust badges row stays visible at foot. Respondent always knows where they are.
+2. **Auto-save everywhere.** Every field change persists to IndexedDB locally AND to a server-side draft (debounced 2s) so a magic-link return-to-complete works across devices.
+3. **NinHelpHint at the moment of need.** The `*346#` reminder appears inline at the NIN field (not in a separate tooltip the user has to hunt for). Variants documented in Form Patterns.
+4. **Email-typo detection (Step 2).** Common typos like `gmail.vom`, `gmial.com`, `mail.com` trigger inline correction suggestion ("Did you mean gmail.com?") — never auto-corrected (respondent decides).
+5. **Two-stage consent (Step 3).** Stage 2 only renders if Stage 1 = Yes. Plain-language framing throughout.
+6. **Pending-NIN as a first-class path, not an error.** The "I don't have my NIN" toggle is a positive affordance, not an error state. Consequence preview is visible; the path forward is clear.
+7. **Magic-link primary, password fallback, skip-with-link tertiary.** No choice paralysis — one strong primary CTA, secondary affordance for users who want a password, tertiary for users who just want to be done.
+8. **Confirmation screen branches on status.** Active respondents see civic framing ("Your data helps Oyo State create jobs"); pending respondents see clear next-step messaging ("Look for our email").
 
 **Error Recovery:**
 
-- **Duplicate NIN:** Clear message with "Sign in instead?" link
-- **Invalid Phone:** Specific format guidance with example
-- **Consent Confusion:** Help text explains "Anonymous means no contact info shared"
+- **Duplicate NIN:** Original-registration date displayed; two recovery paths (fix NIN, contact support); the wizard does not punish the respondent — duplicates are usually mistakes, not fraud
+- **Invalid phone:** Specific format guidance with example mask `080 1234 5678`
+- **Email typo:** Inline correction suggestion (never auto-correct)
+- **Lost magic-link email:** "Resume registration" affordance on the homepage re-sends (rate-limited 3/hr per email)
+- **Connectivity drop mid-wizard:** IndexedDB autosave + server-side draft survive both refresh and device switch
+- **Browser back / forward:** Wizard state is URL-routed (`/register?step=3`); back/forward navigation preserves data and step position
+
+**Migration Note:**
+
+- **Existing `public_users` accounts continue to work unchanged.** They retain their password, can still log in via `/auth/public/login`, and can opt into magic-link by requesting one from the login page. No forced re-registration.
+- **Existing public-user respondent rows stay `status = 'active'` with their captured NIN.** No back-fill beyond migration default.
+- **Cutover messaging on the existing login page:** above-the-fold banner reads "**New here?** Try our new registration wizard — it takes about 5 minutes." with primary-link affordance to `/register`. Existing users see "Already registered? Sign in below" as the page header. The two affordances are visually distinct so existing users do not accidentally start over.
+- **Google OAuth route is retired.** The "Continue with Google" button is removed from all auth pages. The route handler is unmounted (returns 404 if any cached deep-link tries to invoke it). Google OAuth client credentials are revoked in the Google Cloud Console as part of Story 9-12.
+- **Hybrid Magic-Link/OTP email template is removed.** The new magic-link-only template replaces it in the same email-service codebase.
 
 **Success Criteria:**
 
-- ✅ Public user can complete registration in <10 minutes
-- ✅ NIN validation prevents duplicates (FR5 requirement)
+- ✅ Public user can complete a full wizard with NIN in <10 minutes on a 4G mobile connection
+- ✅ Public user without NIN can complete the wizard in pending status in <8 minutes (no NIN-input failure loop)
+- ✅ NIN dedupe (FR21) enforced at submission time when NIN is present; bypassed when NIN absent (per FR21 scope clause)
 - ✅ Two-stage consent clearly explained (no confusion about what's shared)
-- ✅ Mobile-optimized experience (48px touch targets, large text)
+- ✅ Mobile-optimized experience (48px touch targets, large text, persistent step indicator visible)
+- ✅ Magic-link return-to-complete tested across two devices (start on phone, finish on laptop)
+- ✅ Trust badges visible on every step
+- ✅ Existing `public_users` accounts continue to work without intervention
+- ✅ Pending-NIN reminder cadence triggers at T+2d / T+7d / T+14d and respondent can complete via emailed magic link
+
+#### Superseded — Original Journey 2 (2026-01-22)
+
+> The text below is preserved verbatim from the Epic 1 retrospective decision (ADR-015 original, 2026-01-22) for audit traceability. **It is no longer in force.** Implementations must follow the 5-step wizard above. Any future revival of Google OAuth requires a new SCP and a fresh ADR-015 amendment.
+
+> **Journey Goal (original):** Self-register via mobile device with NIN validation and two-stage consent workflow, resulting in marketplace profile opt-in decision.
+>
+> **Registration Methods (original ADR-015):** (1) Google OAuth (primary, recommended) — "Continue with Google" button, single click, pre-verified email, no password needed. (2) Email Registration (fallback) — traditional email + password with Hybrid Email Verification.
+>
+> **AuthLayout Pattern (original):** Minimal navigation with "← Back to Homepage" link only, centered card layout on neutral background, no full header/footer.
+>
+> **NIN Validation (original):** Real-time validation, format check (exactly 11 digits), duplicate check (already registered → "Sign in instead"), monospace font (JetBrains Mono) for numeric clarity.
+>
+> **Two-Stage Consent (original):** Stage 1 anonymous marketplace opt-in, Stage 2 only shown if Stage 1 = Yes, asks for Name + Phone reveal.
+>
+> **Affected stories (now retired):** original Story 1.8 (Public User Self-Registration) spec, original Story 3.6 (Public Homepage & Self-Registration) spec.
 
 ### Journey 3: Supervisor Fraud Alert Investigation
 
@@ -2710,9 +2753,436 @@ graph TD
 - ✅ Minimal cognitive load (auto-focus, auto-advance, inline validation)
 - ✅ Audit trail (all entries logged with clerk ID + timestamp)
 
+### Journey 5: Super-Admin Data Import (Story 11-3)
+
+> **New 2026-04-25 per SCP-2026-04-22.** Realises FR25 secondary-data ingestion. Reference implementation: ITF-SUPA Oyo public-artisan PDF (759KB, ~4,200 records).
+
+**Journey Goal:** Admin uploads a secondary-data file (PDF/CSV/XLSX), reviews a parsed dry-run preview, captures the lawful basis, confirms the import inside a transaction, and can roll back within 14 days if needed. Result: source-labelled respondent rows in the canonical registry with provenance traceable to the originating batch.
+
+**Entry Point:** Super-admin sidebar → **Import Data** (`/dashboard/admin/imports`) → "New Import" button.
+
+**Wizard Structure (3 steps, uses `WizardStepIndicator` component):**
+
+```
+●──○──○
+1  2  3
+Upload  Review  Confirm
+```
+
+#### Step 1 — Upload
+
+- Drag-and-drop area or "Choose file" button
+- Accepts PDF, CSV, XLSX (extensions enforced client-side; MIME check server-side)
+- File size ceiling 10MB (configurable; ITF-SUPA reference is 759KB so well under)
+- Source dropdown: required selection from `imported_itf_supa` / `imported_other` (presets future expansion: `imported_nbs`, `imported_nimc` — but only the two committed values are selectable in MVP)
+- Source description: free-text, optional but recommended ("ITF-SUPA Oyo Q1 2026 shortlist refresh")
+- On upload: SHA-256 hash computed client-side, sent to server for the `import_batches.file_hash UNIQUE` check
+  - **Duplicate file path:** if the hash matches an existing batch, surface error inline: "This file was already uploaded on 2026-04-12 by Awwal. Did you mean to roll back that batch first?" + link to the existing batch's detail page
+- Continue button enabled when file + source are selected
+
+#### Step 2 — Review (uses `ImportDryRunPreview` component #14)
+
+- Server parses the file using the appropriate parser (`pdf_tabular` / `csv` / `xlsx`)
+- Component renders: stats summary card → preview table (first 50 rows with column-mapping editor) → `LawfulBasisSelector` (component #17) → Confirm button (disabled until basis selected)
+- Admin can edit column mappings if the parser misidentified a column (e.g. swapped "Phone" and "Trade"); changes trigger a server-side dry-run re-run, preserving scroll position
+- Admin can download the parser failure report as CSV (rows that failed to parse with row-level error reasons)
+- Admin clicks "Confirm Import" → moves to Step 3
+
+#### Step 3 — Confirm
+
+- Final confirmation screen with summary:
+  - "**3,891 new respondent records** will be inserted with `source = imported_itf_supa`, `status = imported_unverified`."
+  - "**278 records will be skipped** because their email or phone matches an existing respondent."
+  - "**Lawful basis:** Public Interest (NDPA 6(1)(e))"
+  - "**You can roll back this batch within 14 days** if you discover an error."
+- Two affordances: [← Back to Review] (left) / [Commit Import] (right, Primary-600)
+- On commit:
+  - Spinner with progress text "Importing 3,891 records..." (long operation; show percentage when feasible)
+  - On success: Success toast "Import complete. Batch ID: imp_2026_04_25_a3f9. View in Batch History →" with link
+  - On transaction failure: Error toast "Import failed at row 1,247. No records were saved. See details." with link to the failure report
+
+#### Batch History view (post-Step 3)
+
+- Default landing back at `/dashboard/admin/imports` shows a list of all batches (most recent first)
+- Each row: source badge, filename, uploaded-by, date, rows inserted/matched/skipped/failed, status (`active` / `rolled_back`), rollback affordance (visible only within 14-day window)
+- Click row → detail page with full audit trail (who imported, when, lawful basis, justification, full failure report)
+
+#### Rollback Path
+
+- "Roll back this batch" button (only visible within 14-day window since import)
+- Confirmation modal:
+  - **Header:** "Roll back batch imp_2026_04_25_a3f9?"
+  - **Body:** "This will mark the batch as rolled-back and soft-delete its 3,891 imported respondents. **The records remain in the database for audit but become invisible to all read-side surfaces** (registry, marketplace, dashboards, partner API). This action is logged in the audit log and cannot itself be undone — you would have to re-import the file."
+  - **Required field:** Free-text "Reason for rollback" (minimum 20 characters)
+  - **Actions:** [Cancel] (safe default) / [Confirm Rollback] (destructive Error-700)
+- On confirm: transaction soft-deletes (status flip, not row delete); audit log entry created with `principal: { kind: 'user', user_id: ... }`, `action: 'import_batch.rolled_back'`, `meta: { batch_id, reason, rows_affected }`
+- After rollback, the batch row in Batch History shows status badge "Rolled Back 2026-05-09 by Awwal" with the reason on hover
+
+#### Error Paths
+
+| Error | UX Response |
+|---|---|
+| **Duplicate file (hash match)** | Inline error on Step 1 with link to the existing batch; allow user to "Force re-upload" (rare, requires explicit checkbox + new audit entry) |
+| **Parse failure (e.g. malformed PDF)** | Step 2 shows empty-state illustration with "We couldn't read this file. Try a different parser." + link to download parser error log |
+| **Lawful basis missing on Confirm** | Confirm button disabled with helper text under it: "Select a lawful basis to enable Confirm" |
+| **Transactional commit failure** | Error toast on Step 3 with batch ID for support reference; no partial inserts (transaction rollback at DB level) |
+| **Permission failure** (non-super-admin reaches the page) | Redirect to role's dashboard root with toast "This page is for Super Admins only" |
+| **Rollback after 14-day window** | Affordance hidden in UI; if user crafts a direct URL to the rollback endpoint, server returns 403 with "Rollback window expired (14 days from import). Contact technical support for assistance." |
+
+**Success Criteria:**
+
+- ✅ Admin can ingest a 4K-row PDF in <3 minutes (upload → review → confirm)
+- ✅ Lawful basis is captured for **every** import (no bypass path in UI)
+- ✅ Source provenance is surfaced via `SourceBadge` everywhere imported records appear (registry, detail, marketplace cards, assessor queue)
+- ✅ Duplicate uploads detected via SHA-256 hash and prevented (file_hash UNIQUE)
+- ✅ Rollback within 14 days works without manual SQL
+- ✅ All actions audit-logged with batch ID for downstream forensic traceability
+
+### Journey 6: Super-Admin Audit Log Investigation (Story 9-11)
+
+> **New 2026-04-25 per SCP-2026-04-22.** Realises FR26 super-admin audit-log viewer. Hard prerequisite for Epic 10 PII-scope partner-API release per ADR-019.
+
+**Journey Goal:** Super-admin investigates a security or compliance concern by filtering the audit log, drilling into specific events, and exporting a filtered subset for offline analysis or external sharing.
+
+**Entry Point:** Super-admin sidebar → **Audit Log** (`/dashboard/admin/audit-log`).
+
+**Layout:** Split-screen — `AuditLogFilter` (component #15) sidebar on the left (320px), results table on the right (fluid). On tablet (<1024px), filter sidebar collapses to a top sheet; on mobile (<768px), to a full-screen filter modal.
+
+#### Flow
+
+1. **Investigator arrives** at the Audit Log page. Default view: "All audit events from the last 24 hours, sorted by created_at DESC, paginated 100 per page."
+
+2. **Investigator applies filters** via the sidebar. Example use case: *"Show me all consumer activity in the last 24 hours that touched respondent PII."*
+   - Principal type: ☐ User ☑ Consumer ☐ System
+   - Target resource: `respondents`
+   - Action: `partner_query` (multi-select chip)
+   - Date range: Last 24 hours (quick preset)
+   - Click [Apply]
+
+3. **Results render.** Table columns: Timestamp, Principal (icon + name resolving to `users.full_name` OR `api_consumers.name` OR "System"), Action, Target Resource, Target ID, Outcome (success / failure inferred from `meta.status_code`).
+
+4. **Investigator sorts and paginates.** Default sort by `created_at DESC`; secondary sortable columns: Principal, Action. Pagination is constant-time (cursor-based per Decision 1.5 / Story 9-11 AC#X composite indexes; no offset-induced slowdown at page 100).
+
+5. **Investigator clicks a row.** Detail panel slides in from the right (overlay, not modal — investigator can keep scrolling the underlying table):
+   - Full event payload pretty-printed (JSON viewer)
+   - For state-change events (e.g. `respondent.updated`): inline before/after diff with changed fields highlighted
+   - Cross-references: principal name links to the principal's other recent activity ("View all events from this consumer in the last 7 days"); target ID links to the target resource detail page (e.g. respondent detail) when applicable
+
+6. **Investigator exports** the filtered results:
+   - "Export CSV" button above the table → downloads CSV with the **applied filters** baked into the filename (e.g. `audit_log_consumer-activity_respondents_2026-04-24--2026-04-25.csv`) and a header row at the top of the CSV listing the filter signature for traceability
+   - Export caps at 10,000 rows (server-enforced); larger queries prompt "Refine your filters or use the API for bulk export"
+   - Export action is **itself audit-logged** with `action: 'audit_log.exported'`, `meta: { filter_signature, row_count }` — investigators investigating investigators is a real scenario
+
+7. **Investigator shares the URL.** Filter state is URL-routed (per `AuditLogFilter` behaviour); the investigator can paste the URL into Slack/email for a colleague to see the same filtered view. (PII redaction is enforced at the API layer regardless of URL access — sharing a URL never leaks data the recipient isn't authorised to see.)
+
+#### Detail Panel Anatomy (per row click)
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ Event detail                                          [×]  │
+├────────────────────────────────────────────────────────────┤
+│ 2026-04-24 14:32:17 UTC                                    │
+│                                                            │
+│ Principal: 🖥 ITF-SUPA Backend (api_consumer)              │
+│ Action:    partner_query                                   │
+│ Target:    respondents (aggregated)                        │
+│ Outcome:   200 OK (latency 87ms)                           │
+│                                                            │
+│ Scope:               aggregated_stats:read                 │
+│ LGA filter applied:  Akinyele, Ibadan-North, Egbeda        │
+│ Source IP:           203.0.113.42 (in allowlist ✓)         │
+│ API Key prefix:      itfP-2026                             │
+│                                                            │
+│ ─────── Related events ──────────────────────────────      │
+│ → 14:32:11  partner_query (same consumer, registry:verify_nin)
+│ → 14:31:58  partner_query (same consumer, aggregated_stats)
+│ [View all events from this consumer in the last 7 days →]  │
+└────────────────────────────────────────────────────────────┘
+```
+
+#### Performance Expectations (per Story 9-11 AC#X)
+
+- Filter application + result render: p95 < 500ms with any single filter applied; < 800ms with two combined
+- Pagination: constant-time at page 1 / 100 / 1000 (no degradation)
+- Skeleton screens (per Form Patterns) cover any latency above 250ms
+
+#### Accessibility
+
+- Filter sidebar fully keyboard-navigable (per `AuditLogFilter` spec)
+- Results table is a true `<table>` with sortable column headers (`<th aria-sort="…">`), row-click = Enter on focused row
+- Detail panel opens with focus on first heading; ESC closes; focus returns to the originating row
+- Live region announces filter application: "Showing 247 events matching applied filters"
+
+**Success Criteria:**
+
+- ✅ Investigator can find a specific event in <30 seconds with a known principal + 24-hour window
+- ✅ Filter sidebar handles 1M-row audit_logs without UI lag (server-side filter; composite indexes per ADR-018 / Decision 1.5)
+- ✅ Detail panel surfaces consumer principals as clearly as user principals (no human/machine bias in the read surface)
+- ✅ Export CSV honours applied filters and bakes filter signature into both filename and CSV header row
+- ✅ Audit-log-export action is itself audit-logged
+- ✅ URL-shareable filter state survives reload
+
+### Journey 7: Super-Admin API Consumer Provisioning (Story 10-3)
+
+> **New 2026-04-25 per SCP-2026-04-22.** Realises FR24 partner-API consumer admin UI. Three-tab wizard (Identity → Access → Permissions) with dry-run summary modal and one-time token display.
+
+**Journey Goal:** Super-admin provisions a new partner-API consumer (e.g. ITF-SUPA backend, NBS analytics integration) with scoped access, IP allowlist, key rotation, per-scope LGA filters, and time-bounded grants. Result: a new `api_consumers` row, an `api_keys` row with exactly-once-displayed plaintext token, per-scope `api_key_scopes` rows, and a complete audit trail.
+
+**Entry Point:** Super-admin sidebar → **API Consumers** (`/dashboard/admin/consumers`) → "New Consumer" button.
+
+**Layout:** Three-tab wizard inside a centred card (max-width 800px on desktop). Uses `WizardStepIndicator` with three steps: Identity / Access / Permissions.
+
+#### Tab 1 — Identity
+
+- **Consumer name** (required, e.g. "ITF-SUPA Backend")
+- **Organisation type** (required, dropdown): Federal MDA / State MDA / Research Institution / Other
+- **Primary technical contact email** (required, with email-typo detection per Form Patterns)
+- **Description** (optional, free-text 500 chars)
+- **Data-Sharing Agreement upload** (optional at this step, but **required before assigning the `submissions:read_pii` scope** in Tab 3):
+  - File picker (PDF only, ≤5MB)
+  - Uploaded file shown with name + uploaded date + "Replace" / "Remove" affordances
+  - Storage: S3 (DigitalOcean Spaces); reference stored in `api_consumers.dsa_document_url`
+- **Lawful basis** (required, uses `LawfulBasisSelector` component #17 in `api_consumer` context)
+
+[← Back] / [Next: Access →]
+
+#### Tab 2 — Access
+
+- **API key name** (required, e.g. "itf-supa-prod-2026-04"): human label for admin identification; not the secret
+- **Key rotation cadence**: dropdown 30d / 60d / 90d / **180d (default)** / 365d
+- **Initial expiry**: read-only display showing `now + rotation cadence` (e.g. "2026-10-22")
+- **IP allowlist** (optional, multi-input): list of CIDRs that this key can be used from
+  - Empty = no restriction (warn admin: "Without an IP allowlist, this key works from anywhere on the public internet. Consider adding allowlist for production consumers.")
+  - Validation: each entry must be valid CIDR (e.g. `203.0.113.42/32` or `203.0.113.0/24`)
+- **Rotation overlap window** (read-only display): "7-day overlap when key rotates — both old and new keys validate during overlap to enable zero-downtime rollover by the consumer"
+
+[← Back] / [Next: Permissions →]
+
+#### Tab 3 — Permissions
+
+- One `ApiConsumerScopeEditor` (component #16) row per available scope (5 scopes per Architecture Decision 3.4):
+  - `aggregated_stats:read`
+  - `marketplace:read_public`
+  - `registry:verify_nin`
+  - `submissions:read_aggregated`
+  - `submissions:read_pii` *(disabled with DSA-precondition warning if no DSA uploaded on Tab 1)*
+- For each enabled scope: optional expiry, optional LGA-scoping
+- "Grant all scopes" / "Revoke all scopes" bulk affordances at the top (with confirmation; safer-by-default workflow)
+
+[← Back] / [Save and Generate Token]
+
+#### Step 4 — Dry-Run Summary Modal (after Save)
+
+Before any database writes happen, surface a single confirmation modal that summarises every consequence:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Confirm new API consumer                                  [×]  │
+├────────────────────────────────────────────────────────────────┤
+│ Consumer:           ITF-SUPA Backend (federal_mda)             │
+│ Contact:            tech@itf-supa.gov.ng                       │
+│ DSA on file:        ✓ Yes (uploaded just now)                  │
+│ Lawful basis:       Data-Sharing Agreement                     │
+│                                                                │
+│ API key:            itf-supa-prod-2026-04                      │
+│ Rotation cadence:   180 days (next: 2026-10-22)                │
+│ IP allowlist:       203.0.113.0/24                             │
+│                                                                │
+│ Granted scopes (5):                                            │
+│   ✓ aggregated_stats:read       — all LGAs, never expires      │
+│   ✓ marketplace:read_public     — all LGAs, never expires      │
+│   ✓ registry:verify_nin         — all LGAs, never expires      │
+│   ✓ submissions:read_aggregated — all LGAs, expires 2026-12-31 │
+│   ✓ submissions:read_pii        — Akinyele, Ibadan-North only, │
+│                                   expires 2026-12-31           │
+│                                                                │
+│ ⚠ The plaintext token will be displayed exactly once on the    │
+│   next screen. Make sure you have a way to copy it (clipboard, │
+│   password manager) before you click Confirm.                  │
+│                                                                │
+│ [← Edit details]                          [Confirm and Create] │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Why a dry-run modal:** consumer provisioning has long-lived, hard-to-undo consequences (a leaked PII-scope token can take time to detect and rotate). A friction step at the moment of creation is intentional protection.
+
+#### Step 5 — Token-Displayed-Once Screen
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ ✓ Consumer created — copy this token now                       │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│ Plaintext API token (this is the ONLY time it will be shown):  │
+│                                                                │
+│ ┌──────────────────────────────────────────────────────────┐   │
+│ │ itfP_a1b2c3d4...e5f6g7h8 (256 bits, base64url)           │   │
+│ │                                            [📋 Copy]     │   │
+│ └──────────────────────────────────────────────────────────┘   │
+│                                                                │
+│ ⚠ This token will not be retrievable from the database. If you │
+│   leave this page without copying, you'll need to rotate the   │
+│   key (which generates a new token).                           │
+│                                                                │
+│ Where to deliver the token:                                    │
+│ — Send via signed/encrypted email to tech@itf-supa.gov.ng      │
+│ — Or arrange a secure handoff per the DSA delivery clause      │
+│                                                                │
+│ [I have copied the token — Continue to Consumer Detail →]      │
+└────────────────────────────────────────────────────────────────┘
+```
+
+- Token is displayed in a monospace block with a "Copy to clipboard" button
+- The copy action triggers a brief toast ("Token copied to clipboard")
+- The continue button is intentionally labelled "I have copied the token" — explicit acknowledgement
+- If the admin clicks the back button (browser or in-app), the system warns: "If you leave now, you'll need to rotate the key to regenerate the token. Continue anyway?"
+- The token plaintext is never logged, never persisted, and is removed from the React state on unmount (per Architecture Decision 2.4 / NFR10)
+
+#### Audit Trail
+
+Every consumer-provisioning action lands in audit_logs with discriminated principal:
+- `action: 'api_consumer.created'` — `meta: { consumer_id, organisation_type, lawful_basis, scopes: [...], ip_allowlist: [...] }`
+- `action: 'api_key.provisioned'` — `meta: { consumer_id, key_id, key_prefix, rotation_at, scopes: [...] }`
+- (separately if DSA uploaded:) `action: 'api_consumer.dsa_uploaded'` — `meta: { consumer_id, dsa_url, file_size }`
+
+Surfaced via Story 9-11 audit viewer (Journey 6).
+
+#### Error Paths
+
+| Error | UX Response |
+|---|---|
+| **DSA missing for `submissions:read_pii`** | Scope row disabled with warning block (per `ApiConsumerScopeEditor`); attempt-to-check shows toast |
+| **Invalid CIDR in IP allowlist** | Inline validation error on Tab 2; cannot proceed to Tab 3 until fixed |
+| **Duplicate consumer name** | Inline error on Tab 1: "A consumer named 'X' already exists. Choose a different name or [view existing]." |
+| **Token-display-screen reload (page refresh)** | Toast: "Page refreshed. The token cannot be re-displayed. Rotate the key to generate a new token." + link to consumer detail rotation affordance |
+| **Save fails server-side (DB error)** | Error toast on dry-run modal; no consumer created (transactional) |
+
+**Success Criteria:**
+
+- ✅ Super-admin can provision a fully-scoped consumer in <5 minutes
+- ✅ DSA precondition for `submissions:read_pii` cannot be bypassed in UI
+- ✅ Token displayed exactly once; no recovery affordance; clear copy-to-clipboard
+- ✅ All actions audit-logged with `consumer_id` traceable to the new consumer
+- ✅ Lawful basis required at the consumer level (not optional)
+- ✅ Browser-back warning prevents accidental token loss
+
+### Journey 8: Public User Return-to-Complete via Magic Link (Story 9-12)
+
+> **New 2026-04-25 per SCP-2026-04-22.** Realises FR27 (magic-link primary) and FR28 (deferred-NIN completion) from the respondent's resumption perspective. Complements Journey 2 (initial wizard) — most respondents will pass through Journey 2 once and Journey 8 zero or more times.
+
+**Journey Goal:** A respondent who left mid-wizard (or who deferred NIN capture) clicks a magic-link email, lands at their saved step with their data preserved, and either completes the wizard fully or defers again.
+
+**Entry Point:** Magic-link click in email (one of three purposes: `wizard_resume` / `pending_nin_complete` / `login`).
+
+#### Magic-Link Email Anatomy
+
+**Subject:** "Continue your Oyo State Skills Registry registration"
+
+**Body** (concise, mobile-first reading):
+
+```
+Hi [first_name or 'there'],
+
+You started a registration with the Oyo State Skills Registry.
+Click the button below to pick up where you left off.
+
+[ Continue Registration → ]   ← Primary button, Oyo Red
+
+This link works for the next 72 hours. If it expires, just visit
+https://oyotradeministry.com.ng/resume and we'll send a new one.
+
+Need help? Contact your local LGA office or reply to this email.
+
+— Oyo State Ministry of Trade, Investment and Cooperatives
+```
+
+- Plaintext fallback link beneath the button (`https://...`)
+- Single primary CTA — no choice paralysis
+- 72-hour TTL clearly stated (longer than 15-min login TTL because resume is patient by nature)
+- Recovery path stated inline ("just visit /resume")
+
+#### Flow
+
+1. **Respondent clicks the magic link** in their email client.
+2. **Browser navigates to** `https://oyotradeministry.com.ng/auth/magic?token=...&purpose=...`.
+3. **Server validates the token** (SHA-256 hash lookup, expiry check, single-use check per Architecture Decision 2.5).
+4. **Server issues a JWT** (15-min access + 7-day refresh, same shape as standard public login per Architecture Rule 6).
+5. **Server resolves resumption target** based on `purpose`:
+   - `wizard_resume` → `/register?step=N` (where N is the saved step, hydrated from server-side draft)
+   - `pending_nin_complete` → `/register/complete-nin` (a dedicated narrow view, not the full wizard)
+   - `login` → `/dashboard/public/respondent` (general post-login destination)
+
+#### Branch A: `wizard_resume` (mid-wizard abandonment)
+
+- Lands at saved step (e.g. Step 3 of 5) with previously-entered data hydrated from server-side draft
+- Step indicator shows progress (per `WizardStepIndicator`): `●●○○○`
+- Trust badges visible at foot (per Journey 2)
+- Subtle banner at top: "Welcome back. We saved your progress — pick up where you left off."
+- Respondent continues normally through to Step 5; submission flows as in Journey 2
+
+#### Branch B: `pending_nin_complete` (FR28 deferred-NIN follow-up)
+
+This is a **dedicated narrow view** rather than re-mounting the full wizard, because:
+- The respondent has already completed Steps 1-4; only NIN is missing
+- A streamlined view ("just enter NIN, or defer again") respects their time
+- The `NinHelpHint` banner variant is the focal element
+
+Visual:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Welcome back, Adeyemi.                                         │
+│ Let's complete your registration by adding your NIN.           │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│ ┌─ NIN Help (banner variant) ─────────────────────────────┐    │
+│ │ ℹ️  Don't know your NIN?                                │    │
+│ │    Dial *346# on a phone linked to your NIMC record.    │    │
+│ │                       [I still don't have it — remind   │    │
+│ │                        me later →]                      │    │
+│ └──────────────────────────────────────────────────────────┘    │
+│                                                                │
+│ National Identity Number (NIN) *                               │
+│ [ ____________ ]   ← JetBrains Mono, 11-digit input            │
+│                                                                │
+│ [Save and Complete Registration]                               │
+│                                                                │
+│ ─────── Trust badges row ─────────────────────────────────     │
+└────────────────────────────────────────────────────────────────┘
+```
+
+- "I still don't have it — remind me later" link triggers a server call that **resets the reminder timer** (next reminder pushed to T+7d from now); audit-logged with `action: 'pending_nin.deferred_again'`
+- On NIN entry: client-side Modulus 11 validation; pre-submission duplicate check (FR21) — at this moment, FR21 dedupe runs against the now-supplied NIN
+- On valid + new NIN: `respondents.status` promotes from `pending_nin_capture` to `active`; success notification email confirms; respondent lands on a "Registration complete" screen with civic-framing copy (per Journey 2 Step 5)
+- On valid but duplicate NIN: surface the original-registration-date message; offer "this might be a mistake — try again" / "I am the same person — contact support" affordances (consistent with Journey 2)
+
+#### Branch C: `login` (general session establishment)
+
+- No special UI — standard post-login redirect to the respondent's dashboard (or to the destination URL they originally requested if a deep-link was being protected)
+
+#### Edge Cases
+
+| Edge case | UX Response |
+|---|---|
+| **Token expired (>72h since issue)** | Lands on an "Expired link" page with single CTA: "Send me a new link" (rate-limited 3/hr per email). Server emits `magic_link.rejected` event with `reason: 'expired'` |
+| **Token already used (single-use enforcement)** | Lands on "Link already used" page with single CTA: "Send me a new link" |
+| **Token invalid (typo'd or tampered)** | Lands on "Invalid link" page with same CTA |
+| **Wizard data already submitted (race condition)** | Lands on "You've already completed this registration" screen with link to dashboard |
+| **Respondent on different device** | Server-side draft is hydrated regardless of device (no IndexedDB dependency); seamless device switch |
+| **Respondent in `nin_unavailable` status (T+30d transition fired)** | Lands on a special view: "Your registration moved to supervisor review on [date]. A supervisor will contact you. You don't need to do anything else right now." No NIN entry affordance — too late for self-service |
+
+**Success Criteria:**
+
+- ✅ Magic link click → resume in saved state in <3 seconds
+- ✅ Server-side draft hydration works across devices
+- ✅ FR21 dedupe runs at the NIN-promotion moment (not bypassed by deferred path)
+- ✅ Status promotion `pending_nin_capture → active` triggers downstream pipeline inclusion (fraud detection, marketplace eligibility check) — verified via test
+- ✅ Reminder-timer-reset on "remind me later" works without user re-authenticating
+- ✅ All four edge cases (expired / used / invalid / already-completed) have graceful, non-confusing surfaces
+
 ### Journey Patterns
 
-Across these four critical journeys, common patterns emerge that ensure consistency:
+Across these eight journeys, common patterns emerge that ensure consistency:
 
 **Navigation Patterns:**
 
@@ -3322,6 +3792,394 @@ interface BentoTile {
 **Implementation Note (Bento UI Compatibility):**
 Bento Grid pattern does NOT conflict with Framework 5 (Split Screen Desktop) design direction. Framework 5 established "Persistent Context Panel (left, 320px) + Content Panel (right, fluid)" - Bento Grid is applied to the right content panel only. This maintains the split-screen structure while providing data-dense dashboard visualization for admin roles. Mobile views (Framework 6) remain simple list-based dashboards without Bento Grid, preserving mobile-first simplicity principle.
 
+#### 12. NinHelpHint
+
+**Purpose:** Surface NIN-retrieval help (`*346#` USSD code) and the deferred-NIN affordance at every NIN capture point. Reduces wizard abandonment and supports the FR28 pending-NIN status model.
+
+**Usage:** Public Wizard Step 5 (inline variant), Enumerator collection form (inline), Data Entry Clerk form (tooltip), Pending-NIN return-to-complete view (banner).
+
+**Anatomy:**
+- **Inline variant:** 12px Neutral-600 text below the NIN input field. The literal string `*346#` is rendered in JetBrains Mono inside a Neutral-100 inline-code background. "I don't have my NIN now" tertiary link if the parent context is the public wizard.
+- **Tooltip variant:** Lucide `Info` icon (16px, Neutral-500 default → Primary-600 on hover/focus) beside the NIN field label. On focus or click, a 240px tooltip appears with arrow pointing to the field, containing the same copy as the inline variant.
+- **Banner variant:** Full-width Info-100 #DBEAFE block above the field, Info-circle icon (24px) on the left, two-line copy with `*346#` in monospace, "I still don't have my NIN — remind me later" link right-aligned. Used in the return-to-complete view as the focal point.
+
+**States:**
+- **Default:** Hint visible (inline + banner) or icon-only (tooltip)
+- **Tooltip open:** Tooltip rendered with auto-positioning to avoid viewport overflow
+- **Pending-NIN affordance activated** (inline variant only, parent is wizard): "I don't have my NIN now" link triggers the parent's `PendingNinToggle` (separate component) — not this component's responsibility
+
+**Variants:**
+- `inline` — public wizard, enumerator form
+- `tooltip` — high-density data-entry clerk form (12px inline text would slow keyboard scanning)
+- `banner` — return-to-complete view; banner is the focal point
+
+**Accessibility:**
+- Inline: parent NIN input has `aria-describedby="nin-help-hint"`; this component renders that paragraph
+- Tooltip: `<button>` not `<icon>`, keyboard-focusable, `aria-label="NIN retrieval help"`; tooltip has `role="tooltip"`, `aria-live="polite"`
+- Banner: `<aside role="note" aria-label="How to get your NIN">`
+- Mobile (<480px): tooltip variant degrades to inline (touch targets favour inline; no hover on touch)
+
+**Props:**
+```typescript
+interface NinHelpHintProps {
+  variant: 'inline' | 'tooltip' | 'banner';
+  showDeferAffordance?: boolean; // true only on public wizard inline variant
+  onDeferClicked?: () => void;   // wired up in wizard Step 5 to toggle PendingNinToggle
+}
+```
+
+**Visual contract:**
+- USSD code styling: `font-family: JetBrains Mono; background: var(--color-neutral-100); padding: 2px 4px; border-radius: 4px; font-weight: 500;`
+- Banner left border: 4px solid Info-600 #2563EB
+- Tooltip arrow: 8px triangle pointing to field, matched to tooltip background
+
+**Used by:** Wizard Step 5 (Journey 2), Enumerator survey NIN question, Data Entry Clerk form, Pending-NIN return-to-complete view (Journey 8).
+
+#### 13. SourceBadge
+
+**Purpose:** Visually distinguish respondent provenance at a glance. After Epic 11 lands, the registry contains records from up to five sources; surfacing source provenance honestly prevents downstream consumers from treating low-trust records as field-verified.
+
+**Usage:** Registry table row (inline cell), Respondent Detail page header (large variant), Marketplace cards (corner badge — only when respondent has marketplace consent), Assessor Queue list rows.
+
+**Anatomy:**
+- Pill-shaped chip (16px height inline / 24px detail / 12px corner) with rounded-full border-radius
+- Icon (12px Lucide) + label
+- Colour-coded background, contrasting text — see table below
+
+**Source-to-visual mapping:**
+
+| `source` value | Background | Text | Icon | Label | Trust tier |
+|---|---|---|---|---|---|
+| `enumerator` | Success-100 #DCFCE7 | Success-900 #14532D | `UserCheck` | "Field-Verified" | Highest |
+| `clerk` | Teal-100 #CCFBF1 | Teal-900 #134E4A | `FileText` | "Clerk-Entered" | High |
+| `public` | Info-100 #DBEAFE | Info-900 #1E3A8A | `Globe` | "Self-Registered" | Medium |
+| `imported_itf_supa` | Amber-100 #FEF3C7 | Amber-900 #78350F | `Download` | "Imported (ITF-SUPA)" | Low |
+| `imported_other` | Neutral-200 #E5E7EB | Neutral-700 #374151 | `Download` | "Imported (Other)" | Lowest |
+
+**States:**
+- **Default:** As described above
+- **Hover (where applicable — table rows):** Background darkens by one shade, cursor pointer, tooltip describes the trust tier semantics
+- **Imported variants additionally show a status sub-badge** when respondent's `status = 'imported_unverified'`: small "⚠ Unverified" appended in Warning-700, indicating the row has not been cross-referenced against a field-verified submission yet
+
+**Variants:**
+- `inline` (16px height) — table cells
+- `detail` (24px height) — Respondent Detail page header beside the name
+- `corner` (12px height, top-right corner) — Marketplace cards (only when consent allows)
+
+**Accessibility:**
+- Each badge has `role="status"` and an `aria-label` describing the trust tier (e.g. `aria-label="Imported from ITF-SUPA, low trust tier — not yet field-verified"`)
+- Colour is never the sole information channel — the icon + label carry the meaning for users who cannot perceive colour distinction
+- Table-cell variant supports keyboard focus on hover variant (mouse hover and keyboard focus both reveal tooltip)
+
+**Props:**
+```typescript
+interface SourceBadgeProps {
+  source: 'enumerator' | 'clerk' | 'public' | 'imported_itf_supa' | 'imported_other';
+  variant: 'inline' | 'detail' | 'corner';
+  showUnverifiedSubBadge?: boolean; // true when respondent.status === 'imported_unverified'
+}
+```
+
+**Filter chip variant** (related but distinct): the same colour palette is reused as **filter chips** in the Registry filter sidebar — multi-select chips that filter the table by source. See Filter Chips pattern in UX Consistency Patterns.
+
+**Used by:** Registry Table, Respondent Detail page, Marketplace cards (when consent permits), Assessor Queue, Story 11-4 source-filter chips.
+
+#### 14. ImportDryRunPreview
+
+**Purpose:** Surface the outcome of a parsed import batch *before* the admin commits. The 14-day rollback window per Epic 11 is not a substitute for thinking — admins should know what they're about to do.
+
+**Usage:** Admin Import wizard (Story 11-3), Step 2 of 3 (Upload → **Dry-Run Preview** → Confirm).
+
+**Anatomy:**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Step 2 of 3 — Review Import (dry-run, nothing saved yet)       │
+├────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────────┐    │
+│ │ 📥 ITF-SUPA Oyo Public Artisan PDF                      │    │
+│ │ Uploaded: oslsr-shortlisted-artisans.pdf (759 KB)       │    │
+│ │                                                         │    │
+│ │ Parser:    pdf_tabular                                  │    │
+│ │ Rows parsed:        4,213                               │    │
+│ │ Will insert:        3,891 (new respondents)             │    │
+│ │ Match existing:       278 (auto-skipped)                │    │
+│ │ Skipped (rules):       38 (missing LGA, invalid phone)  │    │
+│ │ Failed (parser):        6 (see download report)         │    │
+│ └─────────────────────────────────────────────────────────┘    │
+│                                                                │
+│ ┌─ Preview (first 50 rows) ─────────────────────────────────┐  │
+│ │ Trade        | Name           | LGA    | Phone     | Match│  │
+│ │ Plumber      | Adeyemi Bolade | Akinyele| 0801…    | NEW  │  │
+│ │ Carpenter    | Lawal Ibrahim  | Ibadan N| 0703…    | SKIP │  │
+│ │ … (48 more rows; click to expand)                         │  │
+│ └────────────────────────────────────────────────────────────┘  │
+│                                                                │
+│ ┌─ Required: Lawful Basis (NDPA Article 25) ────────────────┐  │
+│ │ Lawful basis: [LawfulBasisSelector dropdown — required]   │  │
+│ │ Justification: [textarea — required when basis is 'g' or  │  │
+│ │                 'data_sharing_agreement']                 │  │
+│ └────────────────────────────────────────────────────────────┘  │
+│                                                                │
+│ [← Back to Upload]      [Cancel]      [Confirm Import →]       │
+│                                       (disabled until lawful   │
+│                                        basis selected)         │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Key sections (top to bottom):**
+
+1. **Stats summary card** (Info-50 background): file metadata + parser + counts (parsed / will-insert / will-match-skip / will-skip-rules / parser-failures). Row counts are colour-coded — Success-700 for inserts, Warning-700 for skips, Error-700 for failures.
+2. **Scrollable preview table** (first 50 rows): column headers map to detected source columns; "Match" column shows `NEW` (Success-700), `SKIP-EMAIL` (Warning-700, auto-skip on email match), `SKIP-PHONE` (Warning-700), `FAIL` (Error-700). Click a row → side drawer shows full source row + diff against any matched existing respondent.
+3. **Lawful Basis capture** (Warning-50 background — drawing intentional eye): `LawfulBasisSelector` (component #17) + free-text justification textarea (required for `g` legitimate-interest and `data_sharing_agreement` bases). The Confirm button is disabled until lawful basis is selected — this is intentional friction; without it, NDPA compliance is unenforceable.
+
+**States:**
+- **Loading:** Skeleton screens for stats card + preview table (parsing a 4K-row PDF can take 5-15s; show progress)
+- **Ready:** As shown above; Confirm button gated on lawful-basis selection
+- **Re-evaluating** (after column-mapping edit): re-run dry-run on the server; preserve scroll position
+- **Empty preview** (zero rows parsed): show empty-state illustration with "We couldn't read this file. Try a different parser." link back to Upload
+
+**Variants:**
+- Standard (desktop, ≥1024px) — as shown
+- Tablet (768-1023px) — preview table becomes horizontal-scrollable; stats card stays full-width
+- Mobile (<768px) — admin-only flow; not optimised for mobile (logged on the page: "This page works best on a desktop. Some columns may be hidden.")
+
+**Accessibility:**
+- Stats card uses `<dl>` semantic structure with `<dt>`/`<dd>` pairs
+- Preview table has full table semantics (`<thead>`, `<tbody>`, `<tr>`, `<th>` with `scope`)
+- Confirm button has `aria-disabled` + `aria-describedby` pointing to "Select a lawful basis to enable" helper text
+- Live region announces parse completion: "Dry-run complete. 3,891 will be inserted, 278 will be skipped as duplicates, 6 failed to parse."
+
+**Props:**
+```typescript
+interface ImportDryRunPreviewProps {
+  batch: ImportBatchDryRun;          // server-returned dry-run result
+  onColumnMappingEdit: (mapping: ColumnMapping) => void;   // re-runs dry-run
+  onConfirm: (basis: LawfulBasis, justification: string) => void;
+  onCancel: () => void;
+  onBack: () => void;
+}
+```
+
+**Used by:** Admin Import wizard (Story 11-3), Journey 5 step 3.
+
+#### 15. AuditLogFilter
+
+**Purpose:** Filter sidebar for the Audit Log Viewer (Story 9-11 / FR26). Investigation surface; speed and clarity over flash.
+
+**Usage:** Left sidebar (320px) of the Audit Log page (`/dashboard/admin/audit-log`); collapses to a top sheet on tablet (<1024px); becomes a full-screen modal on mobile (<768px — admin-only flow, mobile is an edge case but supported).
+
+**Anatomy:**
+
+```
+┌──────────────────────────────────┐
+│ Audit Log Filters                │
+├──────────────────────────────────┤
+│ Principal type                   │
+│ ☑ User    ☑ Consumer    ☑ System │
+│                                  │
+│ Actor                            │
+│ [Autocomplete — user OR consumer]│
+│                                  │
+│ Action                           │
+│ [Multi-select chips]             │
+│                                  │
+│ Target resource                  │
+│ [Select dropdown]                │
+│                                  │
+│ Date range                       │
+│ [From: date]   [To: date]        │
+│ Quick: Today / 7d / 30d / 90d    │
+│                                  │
+│ ─────────────────────────────────│
+│ [Reset]              [Apply]     │
+└──────────────────────────────────┘
+```
+
+**Field details:**
+
+| Field | Control | Notes |
+|---|---|---|
+| Principal type | Three checkboxes (User / Consumer / System) | Default: all three checked. Maps to the `audit_logs` principal-exclusive CHECK from Decision 1.5 / Decision 5.4 — User = `user_id IS NOT NULL`; Consumer = `consumer_id IS NOT NULL`; System = both NULL |
+| Actor | Combobox autocomplete | Searches both `users.full_name` and `api_consumers.name`; results include a small icon (`User` / `Server`) prefix indicating principal class |
+| Action | Multi-select chips | Server-provided list of distinct `action` values; chips support multi-select; selected chips highlighted Primary-600 |
+| Target resource | Single-select dropdown | Server-provided list of distinct `target_resource` values |
+| Date range | Two date pickers + quick-presets | Quick presets fill both From and To; manual selection overrides |
+
+**States:**
+- **Default:** All filters at default (all principal types checked, no actor selected, no action chips selected, no target resource, no date range)
+- **Applied:** Active filters render a count badge at the top of the sidebar ("3 filters active") with a "Clear all" link
+- **Loading:** Skeleton on the autocomplete and chip lists while server lookups complete
+- **Filter conflict:** if both User and Consumer are unchecked, show inline warning "Select at least one principal type" and disable Apply
+
+**Behaviour:**
+- **URL-routed:** active filters persist in URL query params (e.g. `?principal=user,consumer&actor=...&action=create,delete&from=2026-04-01&to=2026-04-25`) so investigations are shareable / bookmarkable
+- **Reset** clears all filters AND the URL params
+- **Apply** is debounced 300ms (autocomplete typing should not auto-fire; explicit Apply gives the investigator control)
+- **Date range presets are exclusive** with manual range — selecting "30d" overwrites both From and To
+
+**Accessibility:**
+- Sidebar is `<aside aria-label="Audit log filters">`
+- Each filter group is a `<fieldset>` with `<legend>`
+- Chips have `role="button" aria-pressed="…"` for selected state
+- Apply button has `aria-describedby` pointing to the active-filter count badge
+
+**Props:**
+```typescript
+interface AuditLogFilterProps {
+  initialFilters?: AuditLogFilterState;   // hydrated from URL query params
+  onApply: (filters: AuditLogFilterState) => void;
+  onReset: () => void;
+  availableActions: string[];             // server-provided
+  availableTargetResources: string[];     // server-provided
+}
+```
+
+**Used by:** Audit Log page (Story 9-11), Journey 6.
+
+#### 16. ApiConsumerScopeEditor
+
+**Purpose:** Per-scope row in the API Consumer Admin UI (Story 10-3, Permissions tab). One row per scope; admin enables, sets expiry, scopes to LGAs, and is reminded of the DSA precondition for `submissions:read_pii`.
+
+**Usage:** Admin UI for creating / editing an API consumer; rendered inside the Permissions tab as a vertical stack of `ApiConsumerScopeEditor` rows (one per available scope).
+
+**Anatomy (per row):**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ ☑ aggregated_stats:read                                         │
+│   Aggregated counts and time-series — no PII                   │
+│                                                                │
+│   Expires:    [Date picker — optional]                         │
+│   Scoped to:  [LGA multi-select — optional, default all]       │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│ ☑ submissions:read_pii  ⚠ DSA REQUIRED                         │
+│   Row-level respondent data including PII                      │
+│                                                                │
+│   ⚠ This consumer has no DSA on file. You cannot enable this   │
+│   scope until a signed Data-Sharing Agreement is uploaded on   │
+│   the Identity tab. [Upload DSA →]                             │
+│                                                                │
+│   (Expiry and LGA fields disabled until DSA is on file)        │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Per-row anatomy:**
+
+- **Header row:** checkbox + scope identifier in monospace + plain-language description
+- **DSA-required badge** (only on `submissions:read_pii`): Warning-100 background, Warning-700 text, "⚠ DSA REQUIRED" label
+- **DSA precondition warning block** (only on `submissions:read_pii` and only when consumer's `dsa_document_url` is null): Warning-50 background, Warning-600 left border, two-line copy + inline "Upload DSA →" link to the Identity tab
+- **Expiry date picker** (optional): default empty (= never expires); Date range picker with "in 30 days / 90 days / 180 days / 365 days" quick-presets
+- **LGA multi-select** (optional): default empty (= all LGAs); chip-style multi-select pulling from the 33 Oyo LGAs
+- **Disabled state:** when DSA precondition fails on `submissions:read_pii`, the checkbox AND the expiry AND LGA fields are all disabled
+
+**States:**
+- **Disabled (scope unchecked):** All sub-fields collapsed, only header visible
+- **Enabled (scope checked):** All sub-fields visible
+- **DSA-blocked (`submissions:read_pii` only):** Warning block visible, all controls disabled, attempt-to-check shows toast "Upload a signed DSA on the Identity tab to enable this scope"
+- **Validation error:** if expiry date is in the past, inline error "Expiry must be in the future"
+
+**Behaviour:**
+- Save is two-stage: clicking Save shows a **dry-run summary modal** (Journey 7 step 4) listing every per-scope grant and any new-token-rotation implication, requiring explicit confirmation
+- Removing a scope (unchecking) on an existing consumer triggers a confirmation: "This will revoke the consumer's access to this scope effective immediately. Continue?"
+- LGA multi-select chips support both keyboard (arrow + enter) and mouse selection
+
+**Accessibility:**
+- Each row is a `<fieldset>` with `<legend>` containing the scope identifier
+- DSA precondition warning is `role="alert"` (not `role="status"` — this is a blocking precondition, not informational)
+- Disabled state uses `aria-disabled="true"` AND the `disabled` attribute (defence in depth — some screen readers respect one but not the other)
+- Date picker is the existing shadcn/ui `DatePicker` (already accessible)
+
+**Props:**
+```typescript
+interface ApiConsumerScopeEditorProps {
+  scope: 'aggregated_stats:read' | 'marketplace:read_public' | 'registry:verify_nin' | 'submissions:read_aggregated' | 'submissions:read_pii';
+  scopeDescription: string;
+  enabled: boolean;
+  expiresAt: Date | null;
+  allowedLgaIds: string[];                  // empty = all LGAs
+  consumerHasDsa: boolean;                  // gates the read_pii scope
+  onChange: (state: ApiConsumerScopeState) => void;
+  onUploadDsa: () => void;                  // navigates to Identity tab
+}
+```
+
+**Used by:** Admin Consumer UI (Story 10-3) Permissions tab, Journey 7 step 3.
+
+#### 17. LawfulBasisSelector
+
+**Purpose:** Capture the NDPA Article 25 lawful basis for any data-processing decision that requires it. Used in two contexts: import-batch lawful-basis capture (Story 11-3 / `ImportDryRunPreview`) and partner-API consumer creation (Story 10-3, Identity tab — basis for the data-sharing relationship as a whole).
+
+**Usage:** Embedded inside `ImportDryRunPreview` (Component #14) and inside the Consumer Create form (Story 10-3).
+
+**Anatomy:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Lawful Basis (NDPA Article 25) *                            │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ [Select a lawful basis... ▼]                            │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│ Justification (required for legitimate interest and DSA)    │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ [textarea, max 1000 chars]                              │ │
+│ │                                                         │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                  0 / 1000   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Dropdown options (8 items, NDPA-aligned):**
+
+| Value | Label | Tooltip on hover |
+|---|---|---|
+| `ndpa_6_1_a` | Consent | NDPA Article 6(1)(a) — data subject has given consent to the processing of their personal data for a specific purpose |
+| `ndpa_6_1_b` | Contract | NDPA Article 6(1)(b) — processing is necessary for the performance of a contract |
+| `ndpa_6_1_c` | Legal obligation | NDPA Article 6(1)(c) — processing is necessary for compliance with a legal obligation |
+| `ndpa_6_1_d` | Vital interest | NDPA Article 6(1)(d) — processing is necessary to protect the vital interests of the data subject or another natural person |
+| `ndpa_6_1_e` | Public interest | NDPA Article 6(1)(e) — processing is necessary for the performance of a task carried out in the public interest |
+| `ndpa_6_1_f` | Public authority | NDPA Article 6(1)(f) — processing is necessary in the exercise of official authority vested in the data controller |
+| `ndpa_6_1_g` | Legitimate interest | NDPA Article 6(1)(g) — processing is necessary for the legitimate interests pursued by the data controller — **requires written justification** |
+| `data_sharing_agreement` | Data-Sharing Agreement | Processing is governed by a signed bilateral DSA (Story 10-5) — **requires written justification + DSA on file** |
+
+**States:**
+- **Default:** Placeholder "Select a lawful basis..." in the dropdown; justification textarea is hidden
+- **Selected non-justification basis** (a/b/c/d/e/f): Justification textarea remains hidden
+- **Selected justification-required basis** (g or data_sharing_agreement): Justification textarea appears; required asterisk shown; submission gated on >0 characters
+- **Validation:** justification textarea has `minLength="20"` (20 characters minimum) when shown — enforces meaningful capture, not "yes."
+
+**Behaviour:**
+- Tooltip on each option (delayed 300ms hover) shows the full NDPA article reference
+- Selecting `data_sharing_agreement` when no DSA is uploaded for the parent consumer triggers an inline error "Upload a DSA on the Identity tab first" and the option is disabled
+- The chosen basis + justification persist to the underlying record (`import_batches.lawful_basis` + `lawful_basis_note`, OR `api_consumers.lawful_basis` if used in the consumer-creation context)
+
+**Accessibility:**
+- Dropdown is the existing shadcn/ui `Select` (already accessible)
+- Tooltips on options are keyboard-accessible (focus reveals tooltip)
+- Required asterisk has `aria-label="required"` on the visual `*` character
+- Justification textarea has `aria-required="true"` when visible; character count is in a live region
+
+**Props:**
+```typescript
+interface LawfulBasisSelectorProps {
+  value: LawfulBasis | null;
+  justification: string;
+  onChange: (value: LawfulBasis, justification: string) => void;
+  context: 'import_batch' | 'api_consumer';   // affects which value is persisted
+  consumerHasDsa?: boolean;                    // gates the data_sharing_agreement option
+}
+
+type LawfulBasis =
+  | 'ndpa_6_1_a' | 'ndpa_6_1_b' | 'ndpa_6_1_c' | 'ndpa_6_1_d'
+  | 'ndpa_6_1_e' | 'ndpa_6_1_f' | 'ndpa_6_1_g'
+  | 'data_sharing_agreement';
+```
+
+**Used by:** `ImportDryRunPreview` (Component #14), Story 10-3 Consumer Create form, Journey 5 step 3, Journey 7 step 1.
+
 ### Component Implementation Strategy
 
 **Foundation Approach:**
@@ -3633,6 +4491,77 @@ Extract common logic into shared hooks:
 
 **Radio/Checkbox:** Large click target: 48px × 48px (includes label), Visual: 20px × 20px control, Keyboard: Arrow keys navigate radio, Space toggles checkboxes
 
+#### NIN Capture with Help Hint (per FR28, SCP-2026-04-22)
+
+**Purpose:** Reduce abandonment at the NIN input — many respondents do not have their NIN card on hand at submission time and need either a retrieval reminder (`*346#`) or a deferred-capture path.
+
+**Three variants** for surfacing NIN-help context, applied per context:
+
+| Variant | When to use | Visual contract |
+|---|---|---|
+| **`inline`** | Below the NIN input field on the public wizard (Step 5) and the enumerator collection form | Single-line gray text 12px under the field with `*346#` styled monospace, e.g. *"Don't know your NIN? Dial **\*346#** on a phone linked to your NIMC record."* |
+| **`tooltip`** | Beside the NIN field label as an info-icon (Lucide `Info`, 16px) — used in the data-entry clerk's high-volume keyboard form where inline text would slow scanning | Hover/focus reveals the same `*346#` copy in a 240px tooltip with arrow pointing to the field |
+| **`banner`** | Above-the-field full-width Info-100 background banner — used in pending-NIN follow-up screens (return-to-complete) where the help is the focal point | Full-width Info-100 #DBEAFE block, Info-circle icon left, two-line copy with `*346#` styled monospace, "I still don't have my NIN — remind me later" link right-aligned |
+
+**The "I don't have my NIN now" affordance** appears only on the public wizard variant — it is not surfaced in the enumerator form (enumerators are expected to capture NIN during the visit; field-protocol decision, not a UX choice).
+
+**Accessibility:**
+- Inline variant: NIN input field has `aria-describedby` pointing to the hint paragraph
+- Tooltip variant: Info icon is a `<button>` (not just an icon), keyboard-focusable, `aria-label="NIN retrieval help"`, opens on focus or click
+- Banner variant: `<aside role="note" aria-label="How to get your NIN">`
+- All variants render in <480px responsive layout (banner stacks; tooltip grows to 90vw; inline stays single-line)
+
+**Component:** `NinHelpHint` (see Component Strategy → Custom Components #12)
+
+#### Email-Typo Detection (per FR27, SCP-2026-04-22)
+
+**Purpose:** The ITF-SUPA Oyo public-artisan PDF surfaced common email typos like `gmail.vom`, `gmial.com`, `mail.com` — when respondents type these into the wizard, we surface a correction suggestion *without auto-correcting* (the respondent decides; auto-correction violates the principle of forgiveness over surprise).
+
+**Trigger:** On blur of the email input field (matches existing Form Patterns validation timing).
+
+**Visual:** Below the field, a single-line suggestion in Info-700 #1D4ED8 with the corrected domain underlined and the literal word "Did you mean" preceding it. A "Use this" inline link applies the correction; ignoring the suggestion submits the original value.
+
+**Detection dictionary:** Use a published common-typo dictionary (e.g. `mailcheck` library or curated subset). Initial Nigerian-context picks: `gmail.vom`, `gmail.con`, `gmial.com`, `gmal.com`, `gmaill.com`, `mail.com`, `yahooo.com`, `hotmial.com`, `hotmali.com`. **Do not auto-correct** — respondent confirms.
+
+**Behaviour:**
+- One suggestion per blur event; do not pop multiple suggestions
+- "Use this" link is a `<button>` (keyboard-activatable)
+- If the respondent edits the field again, the previous suggestion is dismissed
+- If the respondent submits with the un-corrected typo, the form proceeds (no block)
+
+**Accessibility:**
+- Suggestion is in a live region: `<div role="status" aria-live="polite">`
+- Screen reader announces: "Did you mean gmail.com? Press the 'Use this' button to apply, or continue typing to ignore."
+
+**Used in:** Public Wizard (Journey 2, Step 2), Staff Activation flow, Admin user-creation form.
+
+#### Pending-NIN Toggle (per FR28, SCP-2026-04-22)
+
+**Purpose:** Provide an explicit, positive affordance for the deferred-NIN path. The respondent should not feel like they have failed — they should feel like they have a clear next step.
+
+**Visual contract:**
+- Toggle component (shadcn/ui `Switch` styled with Oyo Red Primary-600 active colour) labelled **"I don't have my NIN with me right now"**
+- Position: directly under the NIN input field, separated by 12px
+- When **off**: NIN input is enabled and required for submission
+- When **on**: NIN input is disabled and visually muted (Neutral-300 border, Neutral-400 text); a **consequence preview card** appears below the toggle
+- Consequence preview card visual: Info-50 #EFF6FF background, Info-600 left border (4px), 12px padding, two lines of copy:
+  - Line 1 (medium weight): *"Your registration will be saved as **pending**."*
+  - Line 2 (regular): *"We'll email you when you can complete it. We'll also remind you in 2 days, 7 days, and 14 days."*
+- A secondary "What does this mean?" link reveals an inline expanded explanation (no modal — modals are anti-pattern per existing Modal anti-pattern guidance)
+
+**Behaviour:**
+- Toggle state is preserved if the respondent navigates back to a previous step and returns
+- Toggle activation **does not** auto-clear the NIN field — the respondent's previously typed NIN is retained but disabled, so toggling off restores it
+- The Continue/Submit button label changes from "Submit Registration" to "Save as Pending" when toggle is on (intentionality cue)
+
+**Accessibility:**
+- Toggle is `<button role="switch" aria-checked="…" aria-describedby="pending-nin-consequence">`
+- Consequence card has `id="pending-nin-consequence"` (referenced by the toggle for SR context)
+- Disabled NIN input: `aria-disabled="true"` and explanation text via `aria-describedby` pointing to the toggle's label
+- Toggle change announced in live region: "I don't have my NIN with me right now: ON. Your registration will be saved as pending."
+
+**Component:** Used inside the wizard Step 5 (see Journey 2). Reused in pending-NIN return-to-complete view (Journey 8).
+
 ### Progress Patterns
 
 **Purpose:** Maintain user orientation through multi-step processes with clear progress indicators.
@@ -3674,6 +4603,59 @@ Extract common logic into shared hooks:
 
 **Progress Percentage (Long Operations):** Horizontal progress bar, specific text "Uploading 3 of 12... 25%", ARIA progressbar role
 
+#### Visible Step Indicator (Wizard Pattern, per SCP-2026-04-22)
+
+**Purpose:** Maintain orientation across multi-step wizards (5-step Public Wizard / 3-step Staff Activation / Admin Import dry-run→confirm flow). Differs from the survey-content **Dual-Layer Progress** pattern above — this one is for the wizard *chrome*, not the survey *content*.
+
+**Visual contract (desktop / tablet ≥480px):**
+
+```
+●──●──●──○──○
+1  2  3  4  5
+Basic   Contact  Consent  Survey  NIN +
+Info    + LGA            Login
+[done]  [done]   [now]   [next]   [next]
+```
+
+- Horizontal breadcrumb-style row above the wizard card
+- Each step is a clickable circle (completed) / filled circle (current) / hollow circle (future)
+- **Completed steps:** Success-600 #15803D filled circle with checkmark inside, label below in Neutral-700, **clickable** (back-navigation, with auto-save preserved — never wipe forward state)
+- **Current step:** Primary-600 #9C1E23 filled circle with step number inside, label below in Primary-900 bold, **not clickable** (you are already here)
+- **Future steps:** Neutral-300 #D1D5DB hollow circle with step number inside, label below in Neutral-500, **disabled** (cannot leap forward without completing current)
+- Connecting lines between circles: Neutral-300 default; Success-600 between completed steps
+- Spacing: 8px grid (24px between circle centres on tablet, 32px on desktop)
+
+**Mobile responsive variant (<480px):**
+
+Collapse to single-line text only:
+
+```
+Step 3 of 5 — Consent
+```
+
+- Primary-900 bold
+- Tappable affordance: a chevron icon `<ChevronLeft>` left of the text serves as back-navigation (only when current step > 1)
+- No circles, no labels — saves vertical space on small screens
+
+**Behaviour:**
+- Step indicator stays **persistently visible** at the top of the wizard card across all steps (does not scroll away on long content; uses `position: sticky; top: 0`)
+- Auto-save runs on every step transition (no risk of data loss when navigating back via clicked step)
+- Browser back / forward buttons mirror step navigation (URL-routed: `/register?step=N`)
+
+**Accessibility:**
+- Container is `<nav role="navigation" aria-label="Registration wizard steps">`
+- Each step is a `<button>` (or `<span aria-disabled="true">` for future steps)
+- Current step has `aria-current="step"`
+- Screen reader announces on step change: "Step 3 of 5: Consent. 2 steps completed, 2 steps remaining."
+- Keyboard: Tab cycles through clickable (completed) steps; Enter activates back-navigation; future steps are skipped in the tab order
+
+**Used in:**
+- Public Wizard (Story 9-12) — Journey 2
+- Staff Activation Wizard (existing) — retro-fit on this rollout (low-risk visual polish)
+- Admin Import Wizard (Story 11-3) — three steps: Upload → Dry-Run Preview → Confirm
+
+**Component:** `WizardStepIndicator` (see Component Strategy → Custom Components)
+
 ### Navigation Patterns
 
 **Purpose:** Enable clear, predictable navigation with bidirectional flow and responsive adaptation.
@@ -3708,6 +4690,53 @@ Extract common logic into shared hooks:
 **Global Tabs:** Horizontal tabs on desktop, dropdown on mobile (<768px), active tab: Border-bottom 2px Primary-600
 
 **Content Tabs:** Underline style, active: Underline Primary-600, keyboard: Arrow keys navigate
+
+#### Super-Admin Sidebar Additions (per SCP-2026-04-22, Stories 9-11 + 11-3)
+
+The existing super-admin sidebar (per `apps/web/src/features/dashboard/config/sidebarConfig.ts`) currently has 13 items. Two new items land with this SCP:
+
+**1. Audit Log** (Story 9-11 — FR26 destination)
+
+- **Icon:** Lucide `ScrollText` (mass: balanced; the prior considered `ClipboardList` reads as "tasks", which is wrong for an investigation surface)
+- **Label:** "Audit Log"
+- **Route:** `/dashboard/admin/audit-log`
+- **Placement:** Between **System Health** and **Settings** in the existing sidebar order (operationally close to System Health — both are admin-investigation surfaces; Settings remains the last item)
+- **Access predicate:** super_admin role only — uses the existing role-isolated sidebar pattern (per ADR-016 strict route isolation). Other roles do not see this item.
+- **Badge:** none on the nav item itself (the audit log is for investigation, not for unread-counts; surfacing alert counts here would change the surface from "investigation" to "monitoring")
+
+**2. Import Data** (Story 11-3 — FR25 destination)
+
+- **Icon:** Lucide `Upload` (correct mass: this is an action surface, not a database management surface; `Database` would imply read/admin — not what this is)
+- **Label:** "Import Data"
+- **Route:** `/dashboard/admin/imports`
+- **Placement:** In the **data-management cluster**, immediately after **Submissions** (existing sidebar order: Registry → Submissions → Imports). This places the data-flow surfaces in their natural sequence: respondent records → submitted surveys → external data ingest.
+- **Access predicate:** super_admin role only (per the `api_consumers` provisioning policy — only super-admin may upload secondary-data; downstream `imported_*` source values mark provenance for everyone else's read)
+- **Badge:** dot indicator (Primary-600 6px) appears when an import batch from the past 14 days is still in the rollback window — surfacing recoverable history is operationally important; suppressed once batches age beyond rollback
+
+**Sidebar order after this rollout (super_admin view):**
+
+```
+1.  Overview
+2.  Registry
+3.  Submissions
+4.  Import Data           ← NEW (Story 11-3)
+5.  Marketplace
+6.  Forms
+7.  Users
+8.  Bulk Operations
+9.  Reports
+10. Payments
+11. Communications
+12. API Consumers         ← (Story 10-3 lands separately; not part of A.3 scope but documented here for sequence awareness)
+13. Verification Queue
+14. System Health
+15. Audit Log             ← NEW (Story 9-11)
+16. Settings
+```
+
+**Cross-role visibility:** all other roles see their existing sidebar with no changes. The Audit Log + Import Data items are gated by the super_admin RBAC predicate at the menu-config level (per `sidebarConfig.ts` pattern); attempting to deep-link to `/dashboard/admin/audit-log` or `/dashboard/admin/imports` as a non-super-admin role redirects to that role's dashboard root with a toast ("This page is for Super Admins only").
+
+**Visual contract:** both new items use the existing sidebar item style (Inter 14px, Neutral-700 default, Primary-600 on hover/active, 12px icon-to-label spacing, 40px row height — matches the 12 existing items).
 
 ### Modal & Overlay Patterns
 
@@ -4742,6 +5771,108 @@ const mutation = useMutation({
 - Clear reset times ("Resets in 14h 32m")
 - Non-punitive language ("For security..." not "You violated...")
 
+### Partner-API Rate Limit UX (per Decision 3.4 + Story 10-2 + 10-3 + 10-4, SCP-2026-04-22)
+
+The existing rate-limit UX patterns above target *human-user* IP-based limits (login throttling, marketplace scrape protection). Epic 10 introduces a new class of rate-limit consumer: **machine partner-API consumers** with per-consumer per-scope limits. Two surfaces need new UX patterns:
+
+1. **Browser-based admin views of consumer state** (Story 10-3 — super-admin viewing a consumer's quota usage)
+2. **Public Developer Portal** (Story 10-4 — consumer's own view of their quota usage)
+
+The 429 error path also needs to communicate **which scope** is exhausted, because consumers carry multiple scopes and it is not obvious which one tripped the limit.
+
+#### Pattern 1: 429 Response Display with Retry-After Countdown (Browser surfaces)
+
+**When:** A 429 from a partner-API call surfaces in any browser-based admin or developer-portal view (e.g. "test-call this scope" buttons in the dev portal).
+
+**User Experience:**
+```
+┌──────────────────────────────────────────────────────────┐
+│ ⚠️  Rate Limit Reached — submissions:read_aggregated     │
+│                                                          │
+│ This scope is currently rate-limited. The minute-bucket  │
+│ resets in 00:43.                                         │
+│                                                          │
+│ Daily quota: 1,247 / 5,000 used (still within daily)     │
+│                                                          │
+│ Retry automatically in: 00:43                            │
+│                                                          │
+│ [Cancel auto-retry]                                      │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Design Principles:**
+- **Specific:** name the exhausted scope explicitly — never "rate limited" (generic; consumer can't act on it)
+- **Hierarchical:** show both the per-minute reset AND the daily quota state, so the consumer knows whether they're hitting a transient or persistent limit
+- **Actionable:** auto-retry on the per-minute reset, but offer cancellation
+- **Non-punitive:** "currently rate-limited" not "blocked"
+
+**Trigger:** API response `429 RATE_LIMITED` with `Retry-After` header AND `X-Quota-Daily-Used` / `X-Quota-Daily-Limit` headers (per Decision 3.4 partner-API response contract).
+
+#### Pattern 2: Daily Quota Progress Bar (per scope)
+
+**Where:** Story 10-3 Consumer Detail page (admin view) AND Story 10-4 Developer Portal (consumer view of their own).
+
+**Visual contract (one row per active scope):**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ aggregated_stats:read                                        │
+│ ████████████░░░░░░░░░░░░░░░░  1,247 / 5,000 today (25%)      │
+│ Resets at midnight UTC                                       │
+│                                                              │
+│ submissions:read_pii  ⚠ Approaching limit                    │
+│ ███████████████████████░░░░░  4,234 / 5,000 today (85%)      │
+│ Resets at midnight UTC                                       │
+│                                                              │
+│ marketplace:read_public                                      │
+│ ██░░░░░░░░░░░░░░░░░░░░░░░░░░  287 / 7,200 today (4%)         │
+│ Resets at midnight UTC                                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**State thresholds:**
+- 0–70%: Success-600 fill, no warning
+- 70–85%: Warning-600 fill, no warning text
+- 85–100%: Warning-700 fill + "⚠ Approaching limit" inline label
+- 100%: Error-700 fill + "🚫 Daily quota exhausted — resets at midnight UTC" message
+
+**Behaviour:**
+- Refreshes every 30s when the page is visible (Page Visibility API; pauses when tab inactive to avoid battery drain)
+- Click on a row → drawer with last 7 days of usage as a sparkline + per-hour breakdown for today
+- In the developer portal, an additional "Request quota increase" affordance links to a contact form (consumer-side); in the admin view, it links to the existing `ApiConsumerScopeEditor` row for inline adjustment
+
+**Accessibility:**
+- Each progress bar is `<progress max="…" value="…">` with `aria-label` describing the scope and current state
+- Threshold transitions announced in a live region: "submissions:read_pii is now approaching its daily quota limit (85% used)"
+- Colour is never the sole channel — text labels carry the meaning
+
+#### Pattern 3: Per-Scope vs Per-Consumer Messaging
+
+**Problem:** When a consumer hits a per-scope cap on one scope but has headroom on another, generic "rate limited" messaging makes the consumer think their entire integration is broken.
+
+**Rule:** Every 429 emitted from the partner API MUST point to the specific exhausted scope, AND MUST clarify that other scopes for the same consumer remain available.
+
+**Error envelope (per Decision 3.4):**
+```json
+{
+  "code": "RATE_LIMITED",
+  "message": "Per-minute rate limit reached for scope 'submissions:read_pii'. Other scopes for this consumer remain available.",
+  "details": {
+    "exhausted_scope": "submissions:read_pii",
+    "scope_limit_per_minute": 20,
+    "scope_used_this_minute": 20,
+    "retry_after_seconds": 43,
+    "daily_quota_used": 4234,
+    "daily_quota_limit": 5000,
+    "other_scopes_available": ["aggregated_stats:read", "marketplace:read_public"]
+  }
+}
+```
+
+**UX implication:** the developer-portal `429` display (Pattern 1) and the admin Consumer Detail (Pattern 2) both consume this envelope and can render the "still available" hint without separate API calls. Reduces support tickets ("everything is broken!" → "no, just one scope is throttled").
+
+**Important non-pattern:** do **not** return rate-limit info on `200 OK` responses by default (response envelope bloat). Consumers who want continuous quota visibility use the dedicated `GET /api/v1/partner/quota` endpoint (lightweight, cacheable, returns the same shape as Pattern 2).
+
 ---
 
 ## Performance Optimization (ADR-013 Integration)
@@ -5224,3 +6355,9 @@ fetch('/api/v1/marketplace/profile/123', {
 - ✅ AES-256 for at-rest encryption
 - ✅ Defense-in-depth: Edge rate limiting, CSP, HSTS, X-Frame-Options
 - ✅ 7-year retention policy (NFR4.2)
+
+**Multi-Source Registry & Pending-NIN (per SCP-2026-04-22, FR25 / FR28):**
+
+- ✅ **`pending_nin_capture` records** — lawful basis path documented: respondents who submit without NIN consent at submission to the same NDPA Article 25(1)(a) basis as full submitters; the deferred-NIN path does not change consent semantics. Right-to-erasure verification path for these records is **explicit and dual-channel**: phone + DOB + LGA match + (a) the magic-link email address on file, OR (b) supervisor attestation countersigned by the assigned LGA Supervisor (per PRD V8.2 Right to Erasure clause, Architecture ADR-018 cross-ref). Verification path is captured in `audit_logs.meta.verification_path` per Decision 5.4 principal model. UI surface: Story 9-11 audit viewer renders both the request and the verification-path metadata.
+- ✅ **Multi-source ingestion** — per-batch `lawful_basis` capture is **mandatory** at the import-confirm step (gated by `LawfulBasisSelector` component #17; Confirm button disabled until basis is selected). Each `import_batches` row carries the basis identifier (NDPA Article reference) plus a free-text justification (required for `g` legitimate-interest and `data_sharing_agreement` bases). DPIA Appendix H captures each source's processing activity, including the ITF-SUPA reference implementation. Source provenance is surfaced to all read-side users via `SourceBadge` (component #13) so trust tier is never hidden.
+- ✅ **Per-scope DSA precondition for `submissions:read_pii`** — the partner API scope that exposes row-level PII (`submissions:read_pii`) cannot be assigned to any consumer without (a) a signed Data-Sharing Agreement (`api_consumers.dsa_document_url IS NOT NULL`) AND (b) two-person Ministry-ICT approval. UI enforcement: `ApiConsumerScopeEditor` (component #16) disables the scope row when the DSA precondition is unmet, surfaces the precondition warning prominently, and links to the DSA upload flow on the Identity tab. Service-layer enforcement (defence in depth) per Architecture Decision 3.4. Provisioning attempts that bypass the UI surface fail with `api_key.pii_scope_rejected_no_dsa` audit event.
