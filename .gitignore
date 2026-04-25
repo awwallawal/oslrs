@@ -55,6 +55,9 @@ tmpclaude-*
 new_error.txt
 new_errorr.txt
 new_errorrr.txt
+new_err*.txt
+new_erroor*.txt
+ssh_analysis*.txt
 nul
 api-test-output.txt
 debug.log
@@ -80,3 +83,6 @@ docs/Retrospective Workflow bmadbmm.txt
 docs/Lawal Awwal*
 docs/cv-awwal.html
 docs/PageSpeed Insights*
+
+# Local test prep — not part of OSLRS
+aptitude-tests/
