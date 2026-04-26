@@ -12,6 +12,13 @@ completionDate: 2026-01-05
 
 # Oyo State Labour & Skills Registry (OSLSR) - Epic Breakdown
 
+## Change Log
+
+| Date | Updates | Author |
+|------|---------|--------|
+| 2026-01-05 | Initial epic breakdown for Epics 1–8 | Awwal (with Bob facilitation) |
+| 2026-04-25 | **SCP-2026-04-22 — Multi-source registry, API governance, security hardening, field-survey UX readiness, admin audit visibility.** Added Epic 10 (API Governance & Third-Party Data Sharing, 6 stories: 10-1 Consumer Auth / 10-2 Per-Consumer Rate Limiting / 10-3 Consumer Admin UI / 10-4 Developer Portal / 10-5 DSA Template + Onboarding SOP / 10-6 Consumer Audit Dashboard). Added Epic 11 (Multi-Source Registry & Secondary Data Ingestion, 4 stories: 11-1 Schema Foundation / 11-2 Import Service + Parsers / 11-3 Admin Import UI / 11-4 Source Badges + Filter Chips). Refreshed Epic 9 goal statement to span polish + domain migration + security hardening + field-survey UX readiness + admin audit visibility. Added 3 new Epic 9 stories: 9-10 PM2 Restart-Loop Investigation, 9-11 Admin Audit Log Viewer, 9-12 Public Wizard + Pending-NIN + Magic-Link Email. Backfilled previously undocumented Epic 9 stories 9-6 / 9-7 / 9-8 (drift between sprint-status.yaml and epics.md prior to this pass). Documented Story 9-9 expanded scope as a 10-subtask matrix with current as-deployed state (Tailscale + SSH hardening done 2026-04-23; OS patching done 2026-04-25; 8 subtasks remaining). Added standalone `prep-input-sanitisation-layer` prep task (centralised normalisation utilities at every input boundary, schema strengthening DOB TEXT→DATE + phone CHECK, slot before field survey). Cross-referenced the Field Readiness Certificate (SCP §5.3.1) — six-item field-survey go/no-go gate. **Scope locked:** no stories added beyond the 14 enumerated in SCP §5.2; Epics 1–8 preserved unchanged. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.1 + §4.1 for full SCP context. Inputs: PRD V8.2 (post-John A.1) + Architecture revision (post-Winston A.2; Decisions 1.5 / 2.4–2.8 / 3.4 / 5.4–5.6 + ADRs 018/019/020) + UX revision (post-Sally A.3; Journey 2 rewrite + Journeys 5–8 + 6 components + Form Patterns + NDPA Compliance Checklist updates). | John (PM) |
+
 ## Overview
 
 This document provides the complete epic and story breakdown for Oyo State Labour & Skills Registry (OSLSR), decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
@@ -195,6 +202,48 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **FRs covered:** FR22, FR23
 **Dependencies:** Epic 3 (Submissions pipeline), Epic 4 (Supervisor/Enumerator hierarchy), Epic 5 (Back-Office dashboards), Epic 7 (Marketplace profiles)
 **Source Documents:** `docs/survey-analytics-spec.md`
+
+### Epic 9: Platform Polish, Profile, Domain Migration, Security Hardening, Field-Survey UX Readiness & Admin Audit Visibility
+**Goal:** _(Refreshed 2026-04-25 per SCP-2026-04-22)_ Platform polish + domain migration + security hardening + field-survey UX readiness + admin audit visibility prior to Transfer.
+**User Outcome:** Production VPS hardened against the 2026-04-20 SSH brute-force vector; field survey can launch on a 5-step wizard with deferred-NIN path; super-admin can investigate any audit event including partner-API consumer activity; Transfer-readiness baseline established.
+**FRs covered:** FR21 (scoped), FR26, FR27, FR28, NFR9
+**Dependencies:** Story 11-1 schema (HARD prerequisite for Story 9-12); Epic 6 audit infrastructure (foundation for Story 9-11)
+**Status:** In-progress — 9-1/9-3/9-5/9-6/9-7 done; 9-8 in-progress; 9-2/9-4 deferred (domain-gated); 9-9 in-progress (2 subtasks done, 8 remaining); 9-10/9-11/9-12 backlog
+
+### Epic 10: API Governance & Third-Party Data Sharing _(Added 2026-04-25 per SCP-2026-04-22)_
+**Goal:** Establish an authenticated, scoped, rate-limited, audit-logged partner-API substrate so that third-party MDA consumers can access the registry under formal agreement without compromising NDPA compliance or operator visibility.
+**User Outcome:** Ministry can onboard ITF-SUPA, NBS, NIMC, and future MDA partners onto a government-grade data-sharing platform with per-consumer rate limits, LGA scoping, IP allowlist, time-bounded scope grants, and full audit traceability.
+**FRs covered:** FR24, NFR10
+**Dependencies:** Story 9-11 (audit viewer — HARD prerequisite for PII scope release); Architecture ADR-019; Story 10-5 DSA template (legal precondition for `submissions:read_pii` scope)
+**Source Documents:** `docs/epic-10-1-consumer-auth-design.md`, Architecture Decisions 2.4 / 2.8 / 3.4 / 5.4 + ADR-019, UX Journey 7
+**Field-Survey Relationship:** Post-field — does NOT block field-survey start. Story 10-5 drafted is the only Epic 10 item adjacent to FRC.
+
+### Epic 11: Multi-Source Registry & Secondary Data Ingestion _(Added 2026-04-25 per SCP-2026-04-22)_
+**Goal:** Enable ingestion of secondary data sources (ITF-SUPA Oyo public artisan list, future MDA exports) into the canonical respondent registry with source-labelled provenance, batch-level lawful-basis documentation, and a 14-day rollback window — without creating a parallel registry.
+**User Outcome:** OSLSR becomes the single source of truth for skilled-worker registration in Oyo State, regardless of origin (field, public, clerk, secondary import). Source provenance is honestly surfaced via `SourceBadge` so consumers never confuse low-trust imports for field-verified records.
+**FRs covered:** FR21 (scoped), FR25
+**Dependencies:** Story 9-12 depends on Story 11-1 (status enum) — Epic 9 critical path runs through Epic 11's foundation story
+**Source Documents:** `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` (working draft), Architecture Decision 1.5 + ADR-018, UX Journey 5
+**Field-Survey Relationship:** Story 11-1 is on the Field Readiness Certificate (FRC §5.3.1 item 2). Stories 11-2/11-3/11-4 are post-field.
+
+---
+
+## Field Readiness Certificate (FRC)
+
+_Per SCP-2026-04-22 §5.3.1, the field survey commences only after **all six items** below are verified true. The Certificate is the single-page artefact attached as an appendix to Baseline Report v2 and retained at `_bmad-output/baseline-report/field-readiness-certificate.md`._
+
+| # | Item | Story | Status |
+|---|---|---|---|
+| 1 | Tailscale live + SSH public-port closed | 9-9 (Tailscale subtask) | ✅ Done 2026-04-23 |
+| 2 | Story 11-1 schema + Akintola-risk composite indexes (AC#11) merged | 11-1 | ⏳ Backlog |
+| 3 | Story 9-12 Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email live | 9-12 | ⏳ Backlog |
+| 4 | `prep-input-sanitisation-layer` merged | prep task | ⏳ Backlog |
+| 5 | Alerting tier with at least one push channel live | 9-9 (subtask 6) | ⏳ Backlog |
+| 6 | Operations Manual enumerator-section (D4 subset) drafted and printed | Iris / Gabe | ⏳ Backlog |
+
+**Tier B items** (Stories 9-10, 9-11, DPIA filing, backup encryption, OS patching) can ship during the first weeks of field operation without blocking start.
+
+**Epic 10 (API Governance) and Epic 11 Stories 11-2/11-3/11-4** can ship post-field.
 
 ---
 
@@ -2286,13 +2335,13 @@ So that every feature in the analytics specification is either live, threshold-g
 
 ---
 
-## Epic 9: Platform Polish, Profile & Domain Migration
+## Epic 9: Platform Polish, Profile, Domain Migration, Security Hardening, Field-Survey UX Readiness & Admin Audit Visibility
 
-**Epic Goal:** Address production polish items, fix the profile page, and prepare for a potential domain migration from `oyotradeministry.com.ng` to a cleaner domain.
+**Epic Goal:** Platform polish + domain migration + security hardening + field-survey UX readiness + admin audit visibility prior to transfer. _(Goal statement refreshed 2026-04-25 per SCP-2026-04-22 §2.1; original goal scoped only polish + domain migration.)_
 
-**Source:** `_bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md`
+**Source:** `_bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md`; expanded scope per `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.1.
 
-**Context:** After 8 feature epics + 2 security hardening phases, the platform is functionally complete. This epic addresses polish, UX fixes, and infrastructure readiness for a professional domain.
+**Context:** After 8 feature epics + 2 security hardening phases, the platform is functionally complete. This epic addresses polish, UX fixes, infrastructure readiness for a professional domain, **security hardening (incl. Tailscale operator-access overlay deployed 2026-04-23 + OS upgrade 2026-04-25)**, **field-survey UX readiness (5-step wizard + pending-NIN + magic-link)**, and **admin audit visibility prior to Transfer**. The expanded scope is driven by the Monday 2026-04-20 distributed SSH brute-force incident, ITF-SUPA secondary-data ingestion request, and field-friction findings on NIN capture.
 
 ### Story 9.1: Profile Page & Auth/Me Fix + Editable Profile
 
@@ -2302,10 +2351,10 @@ So that my name displays correctly in the UI and I can update my details without
 
 **Status:** Done (2026-04-05)
 
-### Story 9.2: Domain Migration — oyotradeministry.com.ng to oslrs.com
+### Story 9.2: Domain Migration — oyotradeministry.com.ng to oyoskills.com
 
 As the Super Admin,
-I want to migrate the platform from `oyotradeministry.com.ng` to `oslrs.com`,
+I want to migrate the platform from `oyotradeministry.com.ng` to `oyoskills.com`,
 So that the system has a clean, memorable domain independent of government bureaucracy.
 
 **Status:** Deferred — blocked by domain purchase. Scope reduced by Story 9-5 (code-level domain centralization). Remaining scope: static files, documentation, VPS runbook. When domain purchased, merge with Story 9-4.
@@ -2338,4 +2387,431 @@ So that users see correct support emails and verification links, and future doma
 **When** this story is complete
 **Then** all references use the correct live domain (`oyotradeministry.com.ng`) via centralized env vars, a single `site.config.ts` module serves frontend components, and `.env.example` documents the domain migration checklist.
 
-**Status:** Ready for dev
+**Status:** Done
+
+### Story 9.6: Fix Supervisor Analytics + Registry Bugs
+
+As a Supervisor,
+I want the analytics and registry pages to load my LGA data correctly,
+So that I can do my oversight work without seeing "Unable to load data" errors.
+
+**Context:** Hotfix discovered post-9.1 deploy. Three bugs: missing LGA fallback in analytics-scope middleware, `ANY(${array})` Drizzle/pg type error (7 occurrences across 3 services), text=uuid join mismatch.
+
+**Status:** Done (2026-04-05) — All 3 bugs fixed, zero regressions across the 4,191-test baseline.
+
+### Story 9.7: Security Hotfix — Nginx Forward-Fix + Drizzle 0.30→0.45 Validation
+
+As the Super Admin,
+I want production nginx security headers brought back into the repo, the Drizzle 0.30→0.45 CVE patch validated at runtime, and CI deploys to wire the nginx config so that ad-hoc orphan commits cannot drift production again,
+So that securityheaders.com grade A is preserved and traceability is restored.
+
+**Context:** Two orphan commits (b352b41 nginx headers + 51cceea drizzle CVE patch) had been applied directly on the VPS but never reached `docker/nginx.conf` in the repo. This story brings prod nginx config into the repo, validates the Drizzle upgrade live, and wires the nginx layer into CI deploy.
+
+**Status:** Done (2026-04-11) — All 11 ACs met via 3 merge commits (f3bd895 + f5ed89d + 8a91df8). Live-verified: 6 security headers, securityheaders.com grade A, TLS 1.2+ hardened, Socket.IO + hCaptcha + Google OAuth + `/api/v1/health` all green. 11 code review findings resolved across 7 commits. Bonus discovery (now in MEMORY.md Key Patterns): Helmet CSP on 404/error responses uses `default-src 'none'` fallback, NOT the user-configured directive set.
+
+### Story 9.8: Content Security Policy — Nginx Mirror Rollout
+
+As the Super Admin,
+I want the production-vetted Helmet CSP mirrored to the nginx static-HTML layer with a Report-Only → Enforcing two-phase rollout and a parity test for drift protection,
+So that static HTML pages enforce the same CSP as the API responses without breaking real user traffic.
+
+**Context:** Forward-fix for Story 9-7 code review finding M4. Scope narrowed from initial multi-day nonce-wiring estimate once discovery confirmed Helmet CSP is already prod-enforcing and `/api/v1/csp-report` endpoint exists.
+
+**Status:** In-progress — Tasks 1-4 + Task 8 complete. Report-Only CSP live on prod static HTML. Awaiting Awwal's 48-hour browser self-test (DevTools Console walk-through in Firefox + Chrome searching for `csp` violations). After clean → single-line rename to enforcing → done.
+
+### Story 9.9: Infrastructure Security Hardening (Expanded Scope per SCP-2026-04-22)
+
+As the Super Admin,
+I want the production VPS hardened against the 2026-04-20 distributed SSH brute-force attack vector and the broader infrastructure surface tightened ahead of the Transfer phase,
+So that the platform meets a B+ → A- security posture without requiring the `oyoskills.com` domain to land first.
+
+**Context:** Original scope was Cloudflare-only. SCP-2026-04-22 expanded to 10 subtasks after the Mon 2026-04-20 11:04 UTC brute-force attack from 14+ distributed IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, …) drove CPU to 100% and Memory to 82% with 19h detection-to-response. Cloudflare alone is **domain-gated** on `oyoskills.com` purchase; the SSH attack surface needed addressing first.
+
+**Subtask state (as of 2026-04-25):**
+
+| # | Subtask | Status |
+|---|---|---|
+| 1 | Tailscale VPN + SSH lockdown | ✅ **Done 2026-04-23.** Tailscale overlay deployed (laptop `100.113.78.101` + VPS `100.93.100.28`). sshd hardened across main file + both drop-ins (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`). fail2ban installed + sshd jail active. Emergency recovery runbook authored at `docs/emergency-recovery-runbook.md`. **Note (2026-04-25):** DO Cloud Firewall SSH rule was widened from `100.64.0.0/10`-only to `0.0.0.0/0 + 100.64.0.0/10` after discovering DO Web Console uses SSH from DO infrastructure IPs (not WebSockets — earlier theory wrong); **sshd hardening is now the primary control**, firewall is defence-in-depth. Documented in ADR-020 Consequences + runbook §1.1 + §2.2. Verified post-config: public-IP SSH with password = refused; key-disabled SSH = refused; Tailscale SSH = no-prompt success. |
+| 2 | OS patching + scheduled monthly reboots | ✅ **Done 2026-04-25.** Ubuntu 24.04.3 → 24.04.4; kernel 6.8.0-90 → 6.8.0-110; 49 packages upgraded including systemd / apparmor / snapd / cloud-init / nodejs / openssh. Pre-flight verified: tailscaled enabled-on-boot, PM2 startup hook (pm2-root.service via systemd) + pm2 save executed, Docker `restart: unless-stopped`. Reboot 08:54:37 UTC. Post-reboot all services up; HTTPS health 200 with full sec2-3 CSP. Two snapshots: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`. **PM2 ↺ counter reset 916+ → 0 establishes baseline for Story 9-10 investigation observability window.** |
+| 3 | Public port audit (`ss -tlnp`); close/restrict Portainer | ⏳ Backlog |
+| 4 | App-layer rate-limit audit on `/auth/*` endpoints | ⏳ Backlog |
+| 5 | Backup client-side encryption (AES-256 pre-S3) + quarterly restore drill | ⏳ Backlog |
+| 6 | Incident-response tier for CRITICAL alerts (SMS/WhatsApp/paged) | ⏳ Backlog |
+| 7 | Logrotate for PM2 logs + journalctl retention | ⏳ Backlog |
+| 8 | Second super-admin account (break-glass) | ⏳ Backlog |
+| 9 | SOC-style activity baseline / SSH log differentiation | ⏳ Backlog |
+| 10 | Cloudflare WAF/CDN + rate-limiting | ⏳ **Domain-gated** — proceed when `oyoskills.com` lands |
+
+**Field-Readiness gate impact:** Subtask #1 (done) and Subtask #6 alerting tier are on the Field Readiness Certificate (FRC §5.3.1 items 1 + 5). Other subtasks are Tier B — can ship during the first weeks of field operation without blocking start.
+
+**Status:** In-progress — 2 subtasks done (Tailscale, OS patching), 8 remaining. Story remains open until subtasks 3-9 are delivered (Cloudflare deferred to domain availability).
+
+### Story 9.10: PM2 Restart-Loop Investigation & Stabilisation
+
+As the Super Admin,
+I want the PM2 restart counter that hit 916+ over 89 days uptime investigated and root-caused,
+So that the API process stops thrashing and the alerting noise stops drowning out real incidents.
+
+**Context:** SCP-2026-04-22 surfaced the long-standing PM2 ↺ count anomaly. Suspected ioredis reconnect churn from sec2-2 factory gaps. **PM2 ↺ counter RESET to 0 at 2026-04-25 08:54 UTC reboot — observation window now open**; Dev Notes should capture the 7-day post-reboot trajectory as evidence.
+
+**Acceptance Criteria (summary; full ACs from create-story):**
+- AC#1-3: Investigation, root-cause hypothesis, targeted fix, restart count falls to near-zero over 7-day observation window post-reboot
+- **AC#4 (Akintola-risk Move 2):** EXPLAIN ANALYZE audit of top 10 most-invoked API endpoints against the 500K-respondent + 1M-submission + 100K-audit-log seeded dataset from Story 11-1 Task 2.5. Any plan with Seq Scan on a table >100K rows OR cost >10,000 is flagged; either fix in this story's migration OR route as documented hand-off to the owning epic/story. Output: `apps/api/src/db/explain-reports/9-10-top-endpoints.md` committed with the story.
+
+**Dependencies:** Independent / parallelisable with Story 9-9. AC#4 prefers Story 11-1 to land first (seeder reuse); falls back to docker-compose scratch DB if 9-10 starts earlier.
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 9.11: Admin Audit Log Viewer
+
+As a Super Admin,
+I want a UI to investigate the existing write-side audit log by principal (user OR consumer), action, target resource, and time range,
+So that I can answer compliance questions without opening psql, and so the Epic 10 PII-scope partner-API can launch with credible NDPA oversight.
+
+**Context:** SCP-2026-04-22. Realises FR26. Surfaces the audit infrastructure already built in Epic 6 (write-side) via a super-admin read-side UI. **Hard prerequisite for Epic 10 PII-scope partner-API release** (per ADR-019 + Decision 5.4 — partner-API access to PII without a working audit-read surface is an NDPA hole).
+
+**Acceptance Criteria (summary):**
+- List + filter + paginate audit logs by principal-type (User / Consumer / System), actor (autocomplete across users + consumers), action (multi-select), target resource, date range
+- URL-routed filter state for shareable investigation links; CSV export with applied filters baked into the filename
+- Sidebar nav item **Audit Log** added between System Health and Settings (per Sally's UX A.3 spec) — super-admin-only via existing role-isolated sidebar pattern
+- **AC (Akintola-risk Move 3):** Audit-viewer-at-1M-rows verification using the Story 11-1 seeder; list query p95 < 500ms with any single filter; < 800ms with two combined; pagination constant-time at page 1 / 100 / 1000
+- **Composite indexes added in this story's migration:** `audit_logs(actor_id, created_at)`, `audit_logs(target_resource, target_id, created_at)`, `audit_logs(action, created_at)`. EXPLAIN (ANALYZE, BUFFERS) output captured at `apps/api/src/db/explain-reports/9-11-audit-viewer.md`
+- Audit-log-export action is itself audit-logged with `action: 'audit_log.exported'`, `meta: { filter_signature, row_count }`
+
+**Dependencies:** Epic 6 audit write infrastructure (done); Story 11-1 seed infrastructure (for AC scale verification).
+**Unblocks:** Epic 10-1 DPIA credibility gate.
+
+**UX:** Sally's Journey 6 (Super-Admin Audit Log Investigation) + `AuditLogFilter` component (#15).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 9.12: Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email
+
+As a Public Respondent,
+I want to register through a single 5-step wizard with the option to defer NIN capture if I don't have it on me right now,
+So that I can complete registration in one continuous flow on my phone, and pick up where I left off via emailed magic link.
+
+**Context:** SCP-2026-04-22. Realises FR27 + FR28. Collapses the existing 4-hop public registration (register → verify email → login → fill form) into a single 5-step wizard. Magic-link email is the primary auth channel; SMS OTP infrastructure is built but feature-flagged off (budget-gated until Nigerian SMS provider lands).
+
+**Scope:**
+- 5-step WizardLayout: Basic Info → Contact + LGA → Consent → Questionnaire → NIN + Optional Login Setup
+- `NinHelpHint` shared component (3 variants: inline / tooltip / banner) surfacing `*346#` USSD retrieval reminder
+- Pending-NIN explicit toggle ("I don't have my NIN with me right now") — sets `respondent.status = 'pending_nin_capture'`
+- Magic-link email service (per Architecture Decision 2.5) — primary auth channel; 15-min TTL for login / 72-hour TTL for `wizard_resume` and `pending_nin_complete` purposes; SHA-256 hashed at rest; single-use enforcement
+- SMS OTP infrastructure built (route + provider adapter interface + audit wiring + rate limit) but feature-flagged OFF via `settings.auth.sms_otp_enabled`
+- Reminder cadence (FR28): T+2d / T+7d / T+14d emails to `pending_nin_capture` respondents; T+30d transition to `nin_unavailable` with supervisor-review queue entry
+- Trust-badges row at the foot of every wizard step (3 badges: Secure Registration, Official Oyo State Platform, Free to Join)
+- **Bundled task: Staff activation wizard step-indicator polish** (visible step indicator retro-fitted on the existing staff activation flow; low-risk visual consistency)
+- Migration note: existing `public_users` accounts continue to work via `/auth/public/login`; only new registrations flow through the wizard. Google OAuth route retired (404). Hybrid Magic-Link/OTP email template removed.
+
+**Dependencies:** Story 11-1 schema foundation (`status` enum, partial UNIQUE on `nin`).
+**Unblocks:** Field-survey UX readiness (Field Readiness Certificate item #3).
+
+**UX:** Sally's Journey 2 rewrite + Journey 8 (Return-to-Complete via Magic Link) + Form Patterns (NinHelpHint, Email-Typo Detection, Pending-NIN Toggle) + Visible Step Indicator pattern.
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+---
+
+### Prep Task: prep-input-sanitisation-layer
+
+As a Developer,
+I want centralised input-normalisation utilities (email, Nigerian phone E.164, full-name casing, date parsing, trade vocabulary) applied at every input boundary (submission, import, registration, staff provisioning),
+So that the field survey does not surface ITF-SUPA-style data hygiene problems (email typos like `gmail.vom`, inconsistent phone formats, name-casing drift, date-format ambiguity).
+
+**Context:** SCP-2026-04-22. Standalone prep task — same shape as previous prep tasks (`prep-typescript-strict-mode`, `prep-test-baseline-stabilisation`). NOT part of any epic; consumed by every input-boundary service.
+
+**Scope:**
+- `apps/api/src/lib/normalise/{email,phone,name,date,trade}.ts` modules with shared schemas
+- Wired into: submission ingest pipeline, Story 11-2 import service, Story 9-12 public wizard, staff provisioning bulk-CSV import
+- **Schema strengthening:** `respondents.date_of_birth TEXT → DATE` migration; phone CHECK constraint enforcing E.164; back-fill script for existing rows with audit-log entries for any normalisation-induced changes
+- Test coverage: unit tests per normaliser + integration tests at every consuming boundary
+- DO NOT include trade-vocabulary auto-correction in this task — that requires UX work on suggestion display (out of scope)
+
+**Slot:** Before field survey (FRC item #4). Independent / parallelisable with all Epic 9-11 stories.
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+---
+
+## Epic 10: API Governance & Third-Party Data Sharing
+
+**Epic Goal:** Establish an authenticated, scoped, rate-limited, audit-logged partner-API substrate so that third-party MDA consumers (ITF-SUPA, NBS, NIMC, future integrations) can access the registry under formal agreement without compromising NDPA compliance or operator visibility.
+
+**Source:** SCP-2026-04-22 §2.1 + §4.1 Story 10-1; design brief at `docs/epic-10-1-consumer-auth-design.md`.
+
+**Business Outcome:** OSLSR transitions from a single-tenant internal tool to a **government-grade data-sharing platform** that the Ministry can operate as a public asset post-Transfer. Each MDA consumer is a named, auditable principal; PII access is gated on signed Data-Sharing Agreements and two-person Ministry-ICT approval; rate limits and quotas are enforced per consumer per scope.
+
+**Success Criteria:**
+- 5 initial scopes deployed: `aggregated_stats:read`, `marketplace:read_public`, `registry:verify_nin`, `submissions:read_aggregated`, `submissions:read_pii`
+- Token storage is SHA-256-hashed-only (plaintext shown exactly once at provisioning)
+- 180-day rotation cadence with 7-day overlap window (zero-downtime rotation by consumer)
+- LGA-scoping + IP allowlist + per-scope `expires_at` enforced at middleware AND service layer (defence in depth)
+- DSA precondition for `submissions:read_pii` enforced at UI + service layer (no provisioning bypass)
+- Per-consumer per-scope Redis rate-limit + daily/monthly quotas
+- Every partner request audit-logged with `consumer_id` principal (per Architecture Decision 5.4 principal-exclusive CHECK)
+- Public Developer Portal at `/developers` with OpenAPI/Swagger UI + request-access form
+- Consumer Audit Dashboard renders per-consumer activity (extends Story 9-11 viewer foundation)
+
+**Dependencies:**
+- Story 9-11 Admin Audit Log Viewer (HARD prerequisite — no PII-scope release without working audit-read surface)
+- Architecture Decisions 2.4 / 2.8 / 3.4, ADR-019
+- PRD V8.2 FR24 + NFR10
+
+**Scope Boundaries (out of scope for Epic 10):**
+- OAuth2 client-credentials grant — explicitly deferred (door open if a future partner mandates; would trigger a new SCP + ADR)
+- mTLS — explicitly rejected for MVP (PKI overhead unsustainable at current team size; would require new ADR if revived)
+- Self-service consumer onboarding (consumers do not provision themselves; Super Admin provisions per Journey 7)
+- Per-scope billing or metering (counts captured for audit; commercial billing is post-Transfer Ministry concern)
+
+**Field-Survey Relationship:** Epic 10 is **post-field**. Does NOT block field-survey start. Field-readiness gates only on Story 10-5 (legal template) being **drafted** — not on Epic 10 implementation completion. Implementation can ship on a stage-by-stage basis after the Field Readiness Certificate is signed.
+
+**Cross-References:** PRD V8.2 FR24 + NFR10 / Architecture Decisions 2.4, 2.8, 3.4, 5.4 + ADR-019 / UX Journey 7 (API Consumer Provisioning) + Components #16 `ApiConsumerScopeEditor` + #17 `LawfulBasisSelector`.
+
+### Story 10.1: Consumer Authentication Layer
+
+As a Super Admin,
+I want to provision named partner-API consumers with scoped API keys (LGA-scoped, IP-allowlisted, time-bounded per scope, 180-day rotation),
+So that I can give third-party MDAs (ITF-SUPA, NBS, NIMC) controlled access to the registry under formal agreement.
+
+**Scope:**
+- New tables: `api_consumers`, `api_keys`, `api_key_scopes` (per Architecture Decision 1.5)
+- Audit_logs extension: nullable `consumer_id` FK + principal-exclusive CHECK constraint
+- `apiKeyAuth` middleware on `/api/v1/partner/*` (per Decision 2.4): bearer extraction, SHA-256 lookup, timing-safe comparison, revocation/expiry checks, IP allowlist check, ambiguous-auth rejection (`AMBIGUOUS_AUTH` 400)
+- `requireScope(scope)` per-route helper: scope check + per-scope expiry + LGA filter context attachment
+- 5 initial scopes: `aggregated_stats:read`, `marketplace:read_public`, `registry:verify_nin`, `submissions:read_aggregated`, `submissions:read_pii`
+- Token provisioning service: 256-bit random token, SHA-256 hash at rest, plaintext returned once and never persisted
+- 180-day rotation with 7-day overlap window (`api_keys.supersedes_key_id` linkage)
+- Emergency rotation flow (immediate revoke, audit-logged with `meta.reason = 'emergency_rotation'`)
+- Error taxonomy: `API_KEY_MISSING`/`INVALID`/`REVOKED`/`EXPIRED`/`SCOPE_INSUFFICIENT`/`SCOPE_EXPIRED`/`IP_NOT_ALLOWED`/`AMBIGUOUS_AUTH`
+
+**Dependencies:** Story 9-11 (audit viewer foundation — partner activity must be inspectable before PII scope can be released).
+
+**Cross-References:** Architecture ADR-019 + Decision 2.4. Design brief at `docs/epic-10-1-consumer-auth-design.md`.
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 10.2: Per-Consumer Rate Limiting & Quotas
+
+As an Operator,
+I want partner-API requests rate-limited per consumer per scope with daily and monthly quotas,
+So that a runaway consumer integration cannot exhaust shared resources or hide its activity in noise.
+
+**Scope:**
+- Redis-backed per-minute bucket: key `ratelimit:consumer:{consumer_id}:{scope}:{YYYY-MM-DDTHH:MM}`, atomic `INCR + EXPIRE 70` (overhang for clock drift)
+- Daily and monthly quota counters: parallel keys with longer TTL
+- Middleware order: `apiKeyAuth` → `requireScope` → per-minute → daily → monthly → controller
+- 429 response includes `Retry-After`, `X-Quota-Daily-Used`, `X-Quota-Daily-Limit`, `X-Exhausted-Scope` headers
+- Per-scope default limits per Architecture Decision 3.4 table; admin-adjustable per consumer in Story 10-3
+- Surfaces partner-API rate-limit metrics in Pino events (`api_partner_request` with `rate_limit_outcome`) for observability per Architecture Decision 5.5
+
+**Dependencies:** Story 10-1 (`req.consumer` + `req.apiKey` populated by `apiKeyAuth`).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 10.3: Consumer Admin UI
+
+As a Super Admin,
+I want a 3-tab UI to create, edit, and inspect API consumers with one row per scope showing enabled/expiry/LGA-scope state,
+So that I can provision partners in <5 minutes without psql, and so I can audit any consumer's current access posture at a glance.
+
+**Scope:**
+- 3-tab consumer detail / create wizard: **Identity** (name, organisation type, contact, lawful basis, optional DSA upload) → **Access** (key name, rotation cadence, IP allowlist) → **Permissions** (per-scope `ApiConsumerScopeEditor` rows)
+- Sidebar item **API Consumers** (super-admin-only) — placement before **Verification Queue** in the existing role-isolated sidebar
+- Dry-run summary modal before any database write — shows every per-scope grant + rotation implication; admin must explicitly confirm
+- Token-displayed-once screen with copy-to-clipboard + browser-back warning (per Sally's Journey 7)
+- Per-consumer activity drawer (last 7 days quota usage sparkline + per-hour breakdown for today)
+- DSA precondition enforced in UI (per `ApiConsumerScopeEditor` component): `submissions:read_pii` row disabled when `consumer.dsa_document_url IS NULL`
+- Lawful basis required at consumer level (per `LawfulBasisSelector` component)
+
+**Dependencies:** Story 10-1 (data model); Sally's components #16 (`ApiConsumerScopeEditor`) + #17 (`LawfulBasisSelector`).
+
+**UX:** Sally's Journey 7 (API Consumer Provisioning).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 10.4: Developer Portal
+
+As a Partner Developer,
+I want a public `/developers` page with OpenAPI/Swagger documentation, scope reference, and a request-access form,
+So that I can self-serve API integration without back-and-forth emails with the Ministry.
+
+**Scope:**
+- Public route `/developers` (unauthenticated; PublicLayout per ADR-016)
+- OpenAPI/Swagger UI rendering the full `/api/v1/partner/*` namespace per Architecture Decision 3.4
+- Scope reference table with descriptions, default rate limits, DSA precondition flags
+- "Request Access" form: organisation name, contact, intended use case, requested scopes, lawful basis (uses `LawfulBasisSelector`); submission creates an internal Super-Admin task (no auto-provisioning)
+- Quota visibility for authenticated consumers viewing their own state (per Sally's Pattern 2 daily quota progress bar)
+
+**Dependencies:** Story 10-1 (OpenAPI spec generation), Story 10-2 (quota state), Story 10-3 (admin onboarding workflow).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 10.5: Data-Sharing Agreement Template + Consumer Onboarding SOP
+
+As Iris and Gabe,
+I want a standard Data-Sharing Agreement template and a Consumer Onboarding SOP that the Ministry can hand to incoming MDA partners,
+So that the legal precondition for `submissions:read_pii` scope provisioning is satisfiable in days, not months, and so onboarding is repeatable post-Transfer.
+
+**Scope:**
+- DSA template (legal artefact — Iris + Gabe lead; not engineering work):
+  - NDPA Article 25 alignment, processing scope, retention, sub-processing, breach notification, audit rights, termination
+  - Schedule 1 enumerates: consumer organisation, scopes granted, LGA scope, IP allowlist, key rotation cadence, DPIA reference
+  - Signed PDF stored in DigitalOcean Spaces; reference recorded in `api_consumers.dsa_document_url` per Story 10-1
+- Consumer Onboarding SOP — operational runbook for Super Admin:
+  - Step-by-step from "request received via /developers form" through to "consumer in production with key in hand"
+  - Two-person Ministry-ICT approval workflow for `submissions:read_pii` scope
+  - Token delivery channel (signed/encrypted email or in-person handoff per DSA delivery clause)
+  - Quarterly DSA review cadence + termination procedure
+- Cross-link to Baseline Report Appendix H DPIA (which captures the processing-activity per consumer)
+
+**Dependencies:** None (parallel track; can ship before Story 10-3 admin UI).
+
+**FRC Impact:** **Story 10-5 drafted** is on the Field Readiness Certificate adjacent gate — not strictly blocking field survey start, but required before any production `submissions:read_pii` scope can be provisioned.
+
+**Status:** Backlog (per SCP-2026-04-22). Owners: Iris (DPIA / NDPA), Gabe (legal review).
+
+### Story 10.6: Consumer Audit Dashboard
+
+As a Super Admin,
+I want a per-consumer view of audit-log activity filtered to that consumer's `consumer_id`,
+So that I can investigate a specific partner's behaviour over time without filtering the whole audit log manually each time.
+
+**Scope:**
+- Scoped view over `audit_logs` filtered by `consumer_id` — built on the same primitives as Story 9-11 (which provides the underlying viewer + `AuditLogFilter` component)
+- Per-consumer dashboard renders: request-volume time-series, scope-usage breakdown, rate-limit-rejection rate, last-used timestamp per key, top targeted resources, anomaly markers (e.g. >2σ from rolling 7d mean)
+- Linked from Story 10-3 Consumer Detail page as a tab/affordance
+
+**Dependencies:** Story 9-11 (audit viewer foundation), Story 10-1 (`consumer_id` principal model), Story 10-2 (rate-limit metrics in Pino events).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+---
+
+## Epic 11: Multi-Source Registry & Secondary Data Ingestion
+
+**Epic Goal:** Enable ingestion of secondary data sources (ITF-SUPA Oyo public artisan list, future MDA exports) into the **canonical respondent registry** with source-labelled provenance, batch-level lawful-basis documentation, and a 14-day rollback window — without creating a parallel registry.
+
+**Source:** SCP-2026-04-22 §2.1 + §4.1; reference implementation against ITF-SUPA Oyo public-artisan PDF (759KB, ~4,200 records) at `C:\Users\DELL\Downloads\Oyo_shortlisted_artisans.pdf`.
+
+**Business Outcome:** OSLSR becomes the **single source of truth** for skilled-worker registration in Oyo State, regardless of whether records originated from field collection, public self-registration, clerk paper-form digitization, or secondary import. Source provenance is honestly surfaced via `SourceBadge` so consumers (admins, supervisors, marketplace searchers, partner APIs) never confuse imported low-trust records for field-verified ones.
+
+**Success Criteria:**
+- `respondents.nin` becomes nullable; FR21 dedupe preserved via partial UNIQUE index `WHERE nin IS NOT NULL`
+- New `respondents.status` enum: `active | pending_nin_capture | nin_unavailable | imported_unverified` (CHECK constraint at DB layer + Drizzle enum at app layer)
+- Extended `respondents.source` enum: existing `enumerator | public | clerk` + new `imported_itf_supa | imported_other`
+- New table `import_batches` with file-hash UNIQUE, parser stats, lawful-basis capture, rollback status
+- Import service supports PDF (tabular extractor) / CSV / XLSX with dry-run preview → confirm → 14-day rollback window
+- Admin Import UI surfaces parse stats, per-row decision preview, column-mapping editor, lawful-basis capture (mandatory before Confirm enables)
+- Source badges + filter chips wired into Registry Table, Respondent Detail, Marketplace cards (when consent permits), Assessor Queue
+- Composite indexes added in Story 11-1 migration cover Akintola-risk hot paths (verified at projected scale via AC#11)
+
+**Dependencies:**
+- Architecture Decision 1.5 (schema), ADR-018 (decision rationale)
+- PRD V8.2 FR21 (scoped) + FR25
+- Sally's `SourceBadge`, `ImportDryRunPreview`, `LawfulBasisSelector` components
+- Story 9-12 depends on Story 11-1 (status enum) — Epic 9 critical path runs through Epic 11's foundation story
+
+**Scope Boundaries (out of scope for Epic 11):**
+- Auto-merge of imported records into existing field-verified respondents — explicitly **NOT** done (`imported_unverified` rows coexist with field-verified rows; merge requires manual action by Super Admin, out of MVP)
+- Real-time ingestion (e.g. webhook from ITF-SUPA) — explicitly batch-only for MVP; future enhancement
+- Trade-vocabulary normalisation for imported records — covered by `prep-input-sanitisation-layer` prep task
+- Cross-MDA conflict resolution beyond email/phone auto-skip — Super Admin handles edge cases manually via supervisor review queue
+
+**Field-Survey Relationship:**
+- **Story 11-1 schema is a HARD prerequisite for Story 9-12 Public Wizard** (the `pending_nin_capture` status enum lives in 11-1's migration)
+- **Story 11-1 is on the Field Readiness Certificate** (FRC §5.3.1 item 2)
+- Stories 11-2, 11-3, 11-4 are post-field — can ship during the first weeks of field operation
+
+**Cross-References:** PRD V8.2 FR21 (scoped) + FR25 / Architecture Decision 1.5 + ADR-018 / UX Journey 5 (Super-Admin Data Import) + Form Patterns (NinHelpHint, Pending-NIN Toggle) + Components #13 `SourceBadge` + #14 `ImportDryRunPreview` + #17 `LawfulBasisSelector`.
+
+### Story 11.1: Multi-Source Registry Schema Foundation
+
+As a Platform Operator,
+I want the `respondents` table to accept records from multiple sources with nullable NIN, explicit status tracking, and a dedicated `import_batches` table for provenance,
+So that the system can (a) onboard respondents mid-field without blocking on a forgotten NIN, (b) ingest secondary data without creating a parallel canonical registry, (c) preserve FR21's dedupe guarantee for records that do carry NIN, and (d) expose a unified registry with per-record source labelling to downstream UI and analytics.
+
+**Scope:** Schema migration only — no business logic, no UI. 11 ACs (full text in working draft):
+- AC#1 NIN nullable + partial UNIQUE index `WHERE nin IS NOT NULL`
+- AC#2 `status` column with CHECK + Drizzle enum
+- AC#3 `source` enum extended
+- AC#4 Provenance columns + indexes
+- AC#5 `import_batches` table created
+- AC#6 Drizzle types regenerated and exported
+- AC#7 `SubmissionProcessingService.findOrCreateRespondent` — NIN dedupe wrapped in NIN-presence conditional (FR21 preserved when NIN present; bypassed when absent)
+- AC#8 Existing 4,191-test baseline passes unchanged
+- AC#9 Minimum 7 new tests (4 service-layer + 3 DB-constraint)
+- AC#10 Sprint status updated
+- **AC#11 Akintola-risk Move 1:** Composite-index audit at projected scale (500K respondents + 1M submissions + 100K audit_logs + 100K marketplace_profiles seeded; EXPLAIN (ANALYZE, BUFFERS) on 10 hot queries; thresholds: no Seq Scan on >100K tables, cost <10,000, p95 <500ms; composite indexes added in this migration: `respondents(source, created_at)`, `(lga_id, source)`, `(status, source)`, `(status, created_at)`; output captured to `apps/api/src/db/explain-reports/11-1-projected-scale.md`)
+
+**Working draft:** `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` — Bob to regenerate via `create-story` preserving all 11 ACs and the seed-projected-scale infrastructure (used by Stories 9-10 and 9-11 for their own Akintola-risk verifications).
+
+**Dependencies:** Story 9-7 (baseline security posture) — done.
+**Unblocks:** Stories 9-12, 11-2, 11-3, 11-4.
+
+**Status:** Backlog (working draft on file; awaits create-story regeneration).
+
+### Story 11.2: Import Service + PDF/CSV/XLSX Parsers + Endpoints
+
+As a Super Admin,
+I want a backend import service that parses PDF/CSV/XLSX files, runs a dry-run preview, commits inside a transaction, and supports 14-day rollback,
+So that secondary-data ingestion is auditable, reversible, and cannot accidentally overwrite field-verified records.
+
+**Scope:**
+- `ImportService` with three parsers: `pdf_tabular` (reference impl: ITF-SUPA Oyo PDF), `csv`, `xlsx`
+- Endpoints (per Architecture Decision §"Data Routing & Ownership Matrix" Rule 8):
+  - `POST /api/v1/admin/imports/dry-run` (multipart upload; SHA-256 hash check; per-row decision preview; lawful-basis requirement returned)
+  - `POST /api/v1/admin/imports/confirm` (transactional; lawful-basis required)
+  - `POST /api/v1/admin/imports/:id/rollback` (14-day window; soft-delete via status flip, not row delete; audit-logged with rationale)
+  - `GET /api/v1/admin/imports`, `GET /api/v1/admin/imports/:id` (batch history)
+- ITF-SUPA source config as first reference implementation (column mapping, parser tuning)
+- **Auto-skip policy on email/phone match** (per Awwal's decision, SCP §4.1): match against existing respondent → skip with logged reason (not insert duplicate)
+- **Fraud + marketplace pipelines status-gated:** `imported_unverified` rows are excluded from NIN-keyed fraud dedupe and marketplace enrichment requiring NIN (per FR28 + Story 11-1 AC#7 service-layer enforcement)
+- Failure report downloadable as CSV (rows that failed to parse with row-level error reasons)
+- All actions audit-logged with super-admin `actor_id` principal
+
+**Dependencies:** Story 11-1 (schema foundation including `import_batches` table).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 11.3: Admin Import UI
+
+As a Super Admin,
+I want a 3-step wizard to upload a file, review its parsed dry-run preview with column mapping and lawful-basis capture, and commit the import,
+So that I can ingest a 4K-row PDF in under 3 minutes without ever touching psql.
+
+**Scope:**
+- Sidebar item **Import Data** (super-admin-only) — placement after **Submissions** in the data-management cluster (per Sally's UX A.3 Navigation Patterns spec)
+- 3-step WizardLayout (uses Sally's Visible Step Indicator pattern):
+  - **Step 1 — Upload:** drag-drop / file picker; SHA-256 client-side hash; source dropdown (`imported_itf_supa | imported_other`); duplicate-file detection
+  - **Step 2 — Review:** uses `ImportDryRunPreview` component (#14) — stats summary card + scrollable preview table with column-mapping editor + `LawfulBasisSelector`
+  - **Step 3 — Confirm:** final summary + commit; success toast with batch ID + link to detail page
+- Batch History view at `/dashboard/admin/imports` — list of all batches with rollback affordance (visible only within 14-day window)
+- Rollback flow per Sally's Journey 5: confirmation modal with required reason (min 20 chars); soft-delete via status flip
+- Error paths handled per Sally's Journey 5 error matrix (duplicate file, parse failure, missing lawful basis, transactional commit failure, permission failure, expired rollback window)
+
+**Dependencies:** Story 11-2 (import endpoints), Sally's components #14 (`ImportDryRunPreview`) + #17 (`LawfulBasisSelector`) + Visible Step Indicator pattern.
+
+**UX:** Sally's Journey 5 (Super-Admin Data Import).
+
+**Status:** Backlog (per SCP-2026-04-22).
+
+### Story 11.4: Source Badges + Filter Chips
+
+As an Admin / Supervisor / Assessor / Marketplace Searcher,
+I want to see at a glance which records came from which source (field-verified vs imported vs self-registered) and to filter the registry by source,
+So that I can apply appropriate trust-tier thinking to each record without misreading low-trust imports as field-verified.
+
+**Scope:**
+- `SourceBadge` component (#13) wired into:
+  - **Registry Table** (inline variant, per row)
+  - **Respondent Detail** page (detail variant, beside the name)
+  - **Marketplace Cards** (corner variant, when respondent has marketplace consent)
+  - **Assessor Queue** (inline variant, per row)
+- **Source filter chip** on Registry page — multi-select chips with the same colour palette as the badges; URL-routed for shareable filter state
+- Imported variants additionally show "⚠ Unverified" sub-badge when `respondent.status = 'imported_unverified'`
+- Trust-tier semantics documented in tooltip on hover/focus: `enumerator > clerk > public > imported_cross_referenced > imported_unverified`
+
+**Dependencies:** Story 11-1 (extended source enum + status column), Sally's component #13 (`SourceBadge`).
+
+**Status:** Backlog (per SCP-2026-04-22).

@@ -381,6 +381,13 @@ To be filled by implementer. Expected files:
 
 To be filled at story close.
 
+## Change Log
+
+| Date | Change | Rationale |
+|---|---|---|
+| 2026-04-22 | Story drafted from decisions locked over four turns: B2 schema approach (extend `respondents`, not separate table), Path A pending-NIN status model, auto-skip on import email/phone match, SUPA design improvements banked as downstream backlog. 11 ACs including AC#11 composite-index audit at projected scale (Akintola-risk Move 1). | Foundational migration for Epic 11 (Multi-Source Registry) AND prerequisite for Story 9-12 (Public Wizard + Pending-NIN status enum). Unblocks Stories 11-2, 11-3, 11-4, and 9-12. |
+| 2026-04-25 | **Story validated by Bob (SM) per SCP-2026-04-22 §A.5.** All 11 ACs preserved verbatim — esp. AC#11 composite-index audit at projected scale (the Akintola-risk lessons are load-bearing). All 10 canonical queries in Technical Notes "Query Plan Audit" preserved verbatim. Tasks 2.1-2.5 (migration + seeding + EXPLAIN ANALYZE workflow) preserved verbatim. File List preserved verbatim. Cross-validated against epics.md §Story 11.1 (post-John A.4 pass) — content aligns; no drift between story summary in epics.md and AC details here. Cross-validated against architecture Decision 1.5 (post-Winston A.2 pass) — schema spec aligns: nullable `nin` + partial UNIQUE index + status CHECK + extended `source` enum + provenance columns + composite indexes all match. Cross-validated against UX Form Patterns + Story 9-12 (pending-NIN consumer) — `pending_nin_capture` status enum value matches. Status remains `ready-for-dev` (no change required from existing state — Awwal authored as `ready-for-dev` on draft). | A.5 special-handling instruction: do NOT delete the AC#11 + Technical Notes section. This validation pass confirms the original draft survives the post-A.4 documentation reconciliation; story is canonically the foundation that Stories 11-2 / 11-3 / 11-4 / 9-12 build on. Bob did not regenerate — only validated and added this Change Log entry. |
+
 ---
 
-*Story drafted 2026-04-22 from decisions locked over four turns: B2 schema approach, Path A pending-NIN status model, auto-skip on import match, SUPA design improvements banked as downstream backlog. Unblocks Stories 11-2, 11-3, 11-4, and 9-12.*
+*Story drafted 2026-04-22 from decisions locked over four turns: B2 schema approach, Path A pending-NIN status model, auto-skip on import match, SUPA design improvements banked as downstream backlog. Unblocks Stories 11-2, 11-3, 11-4, and 9-12. Validated 2026-04-25 by Bob (SM) per SCP-2026-04-22 §A.5 — 11 ACs + Query Plan Audit preserved verbatim.*

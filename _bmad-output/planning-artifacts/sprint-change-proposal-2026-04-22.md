@@ -66,7 +66,7 @@ The cascade unfolded in a single working session:
   - Logrotate for PM2 logs + journalctl retention
   - Second super-admin account (break-glass)
   - SOC-style activity baseline / SSH log differentiation
-  - Cloudflare WAF/CDN + rate-limiting (domain-gated; proceed when `oslrs.com` lands)
+  - Cloudflare WAF/CDN + rate-limiting (domain-gated; proceed when `oyoskills.com` lands)
   - Incident report for 2026-04-20 attack appended as Evidence
 - **Story 9-10** (new) PM2 Restart-Loop Investigation & Stabilisation — independent, parallelisable
 - **Story 9-11** (new) Admin Audit Log Viewer — prerequisite for Epic 10 PII scope release
@@ -284,7 +284,7 @@ NEW:
   7. Logrotate for PM2 logs + journalctl retention
   8. Second super-admin account (break-glass)
   9. SOC-style activity baseline / SSH log differentiation
-  10. Cloudflare WAF/CDN + rate-limiting (domain-gated; proceed when oslrs.com lands)
+  10. Cloudflare WAF/CDN + rate-limiting (domain-gated; proceed when oyoskills.com lands)
   + Incident 2026-04-20 report appended as Evidence
 
 Rationale: Monday 2026-04-20 brute-force attack evidenced that SSH lockdown
@@ -596,7 +596,7 @@ post-field.
 ### 5.4 Dependencies and blockers
 
 - **Tailscale Phase 0–8** — Awwal hands-on, currently unexecuted; blocks 9-9 completion
-- **Domain purchase (`oslrs.com`)** — blocks 9-2, 9-4, 9-9 Cloudflare subtask
+- **Domain purchase (`oyoskills.com`)** — blocks 9-2, 9-4, 9-9 Cloudflare subtask
 - **External commissions (C1/C2/C3)** — contingent on Ministry budget
 - **Ministry counter-signature of Transfer Protocol** — blocks formal Transfer phase start
 
@@ -662,7 +662,7 @@ Tailscale subtask complete; 9 subtasks remaining:
 - [ ] Logrotate for PM2 logs + journalctl retention
 - [ ] Second super-admin account (break-glass)
 - [ ] SOC-style activity baseline / SSH log differentiation
-- [ ] Cloudflare WAF/CDN + rate-limiting (domain-gated on `oslrs.com` purchase)
+- [ ] Cloudflare WAF/CDN + rate-limiting (domain-gated on `oyoskills.com` purchase)
 
 ### 7.4 Immediate loose ends (from runbook §6.1)
 
@@ -675,8 +675,8 @@ Tailscale subtask complete; 9 subtasks remaining:
 - [x] John (PM) — amend PRD V7.8 → V8.2 per §2.3 PRD subsection _(completed 2026-04-23; versioned V8.2 because V7.9/V8.0/V8.1 already in changelog; added FR24–FR28, NFR9–NFR10, new "Identity, Access & Data Sharing" Technical Assumptions block, Epic 10 + Epic 11 in Epic List, scoped FR21, softened FR5, partial-UNIQUE-index NFR8.1, alt Right-to-Erasure verification path)_
 - [x] Winston (Architect) — amend architecture.md per §2.3 Architecture subsection; author ADRs 018, 019, 020 _(completed 2026-04-25; new Decisions 1.5 / 2.4–2.8 / 3.4 / 5.3–5.5; ADR-013 Tailscale subsection appended; ADR-015 rewritten end-to-end with original preserved as Superseded; ADRs 018/019/020 authored. Pattern Categories 5 + 7 extended. Frontmatter updated with V8.2 alignment + 2026-04-25 revision marker. Three flagged scope-lock items from PRD V8.2 — FR28 cadence T+2/7/14/30, supervisor-attestation alt erasure path — architected to as PRD-canonical; flagged for Awwal review and potential Bob-time relocation.)_
 - [x] Sally (UX Designer) — amend ux-design-specification.md per §2.3 UX subsection; author Journeys 5–8 _(completed 2026-04-25; Journey 2 rewritten end-to-end with original preserved as Superseded; 3 new Form Patterns; visible step-indicator Progress Pattern; super-admin sidebar additions Audit Log + Import Data; 6 custom components NinHelpHint / SourceBadge / ImportDryRunPreview / AuditLogFilter / ApiConsumerScopeEditor / LawfulBasisSelector with full anatomy/states/variants/accessibility/props; Partner-API Rate Limiting UX patterns; NDPA Compliance Checklist updated with 3 new items; Journeys 5–8 authored. Change Log V3.0. No scope-lock flags from Winston's architecture or John's PRD V8.2 — all UX implications tracked back to SCP §2.3.)_
-- [ ] PM + Architect — run `create-epics-and-stories` to formalise Epic 10 + Epic 11 in `epics.md`
-- [ ] Bob (SM) — run `create-story` per §5.2 item 5 list (14 stories, including Story 9-9 regeneration reflecting the completed Tailscale subtask above)
+- [x] PM + Architect — run `create-epics-and-stories` to formalise Epic 10 + Epic 11 in `epics.md` _(completed 2026-04-25 by John (PM); epics.md grew 2,341 → 2,830 lines (+489); Epic 9 goal statement refreshed; 9-6/9-7/9-8 backfilled (pre-existing drift); 9-9 documented as 10-subtask matrix with Tailscale + OS-patching marked done; 9-10/9-11/9-12 added; Epic 10 + Epic 11 added with full epic-level summaries + per-story scope summaries; prep-input-sanitisation-layer added as standalone prep task; Field Readiness Certificate cross-referenced. **Two scope-lock flags raised:** (a) drift between SCP §A.4 written narrative (firewall 100.64.0.0/10-only) and as-deployed state per sprint-status §10-11 (firewall widened to 0.0.0.0/0 + 100.64.0.0/10 to permit DO Console + GH Actions; sshd hardening is primary control). Architecture ADR-020 may need a follow-up amendment from Winston to reflect this. (b) SCP §A.4 said "9 remaining 9-9 subtasks" but sprint-status confirms OS patching done 2026-04-25 → 8 remaining; epics.md uses the more recent (correct) state.)_
+- [x] Bob (SM) — run `create-story` per §5.2 item 5 list (14 stories, including Story 9-9 regeneration reflecting the completed Tailscale subtask above) _(completed 2026-04-25; **all 14 story files landed in `_bmad-output/implementation-artifacts/`**: 9-9 regenerated (Change Log + File List preserved; 10-subtask matrix with subtasks 1+2 done); 11-1 validated (11 ACs + Query Plan Audit + Tasks 2.1-2.5 preserved verbatim per special-handling instruction); 12 net-new — 9-12 (Public Wizard, FRC #3) / 9-11 (Audit Log Viewer, Akintola Move 3) / 9-10 (PM2 Investigation, Akintola Move 2) / prep-input-sanitisation-layer (FRC #4) / 11-2/11-3/11-4 (Epic 11 ingest stories) / 10-5 (DSA Template, FRC adjacent) / 10-1/10-2/10-3/10-4/10-6 (Epic 10 partner-API stories). Total ~6,500 lines of story content. Sprint-status.yaml flipped 14 keys backlog → ready-for-dev (9-9 stays in-progress per existing partial completion); two new comment-block entries record the V8.2-a1 follow-up amendment + the A.5 chain completion. **Documentation chain is now fully consistent: PRD V8.3 + Architecture V8.2-a1 + UX V3.0 + Epics + 14 stories** — no drift, no scope-lock flags raised. **A.5 COMPLETE — Awwal can verify before invoking A.6 dev-story chain per §5.2 item 7 priority order.**)_
 - [ ] Dev agents — implement per §5.2 item 7 priority order
 
 ---
@@ -917,11 +917,161 @@ Canonical prompts for each downstream agent in the handoff chain. Paste into a n
 
 ### A.4 PM + Architect joint — create-epics-and-stories
 
-**Status:** ⏳ Pending. Invoke `bmad:bmm:workflows:create-epics-and-stories` after Sally completes. Produces formal Epic 10 and Epic 11 definitions in `_bmad-output/planning-artifacts/epics.md` and updates Epic 9.
+**Status:** ⏳ Pending invocation. (A.1 PRD V8.2 ✅, A.2 architecture +679 lines + ADRs 018/019/020 ✅, A.3 UX +1137 lines + 6 components + 4 journeys ✅ all complete.)
+
+**Workflow purpose:** transform amended PRD + Architecture + UX into formal Epic + story definitions in `epics.md`. Produces the document that Bob (SM) reads when running `create-story` per story (Appendix A.5). Do NOT generate full story files here — that is Bob's job; this workflow produces the epic-and-story-summary level.
+
+> Invoke the BMM PM agent (`bmad:bmm:agents:pm`) and run `bmad:bmm:workflows:create-epics-and-stories`. PM holds the chair because the output is an updated `epics.md`, but the workflow consumes both Architecture and UX as inputs.
+>
+> **Inputs:**
+> - `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` — read **Section 2.1 Epic impact**, **Section 4.1 Story changes**, and **Section 7 Completion Log** (the §7.1 Tailscale-subtask-done entry must be reflected in the Epic 9 section)
+> - `_bmad-output/planning-artifacts/prd.md` — V8.2 (post-John). FRs 24–28 + NFRs 9–10 are the requirement basis for Epics 10 and 11; refined FR21 + new FR27/FR28 ground the new Epic 9 stories
+> - `_bmad-output/planning-artifacts/architecture.md` — post-Winston revision. Decision 1.5 (nullable-NIN schema), Decisions 2.4–2.8 (auth + Tailscale), Decision 3.4 (`/api/v1/partner/*` namespace), Decisions 5.3–5.5 (audit observability), ADRs 018/019/020. Story-level ACs must align to these decisions
+> - `_bmad-output/planning-artifacts/ux-design-specification.md` — post-Sally revision. Journey 2 rewrite + Journeys 5–8 + 6 components map to specific stories; user-experience ACs flow from here
+> - `_bmad-output/planning-artifacts/epics.md` — current file, target revision
+> - `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` — pre-existing story draft. The epic-and-stories pass should reference this file as the canonical Story 11-1 working draft (Bob will regenerate via create-story while preserving its AC#11 composite-index audit)
+> - `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` — Change Log entry 2026-04-23 records Tailscale subtask as already DELIVERED. Epic 9's section in epics.md must reflect this — frame the Tailscale subtask as done, not as forward-planned work
+> - `_bmad-output/implementation-artifacts/sprint-status.yaml` — read for context on existing story keys and current state. The 2026-04-22 through 2026-04-25 comment blocks document what landed
+>
+> **Task — amend `epics.md` per SCP Section 2.1.** Specifically:
+>
+> 1. **Add new Epic 10: API Governance & Third-Party Data Sharing.**
+>    - Epic-level summary, business outcome, success criteria, dependencies, scope boundaries
+>    - 6 stories enumerated with one-paragraph summary each — full ACs come from Bob's create-story pass:
+>      - **10-1** Consumer Authentication Layer (expanded scope per Awwal's Section 10 answers in `docs/epic-10-1-consumer-auth-design.md`): scoped API keys (NOT OAuth2/mTLS), 5 initial scopes, LGA-scoping per key, IP allowlist, time-bounded per-scope grants, 180-day rotation with 7-day overlap. Dependency: Story 9-11 (audit viewer).
+>      - **10-2** Per-Consumer Rate Limiting & Quotas (Redis-backed per-scope; depends on 10-1 `req.apiConsumer`)
+>      - **10-3** Consumer Admin UI (3-tab detail view: Identity / Access / Permissions; uses `ApiConsumerScopeEditor` + `LawfulBasisSelector` from Sally's UX work)
+>      - **10-4** Developer Portal (public `/developers` page, OpenAPI/Swagger UI, request-access form)
+>      - **10-5** Data-Sharing Agreement Template + Consumer Onboarding SOP (legal artifact — Iris + Gabe; CRITICAL prerequisite for `submissions:read_pii` scope provisioning)
+>      - **10-6** Consumer Audit Dashboard (filters audit_logs by `consumer_id`; depends on Story 9-11 audit viewer foundation)
+>    - Cross-refs: FR24, NFR10, ADR-019, Architecture Decision 3.4, UX Journey 7
+>    - Field-survey relationship: Epic 10 is post-field — does NOT block field survey start; gating field-readiness only on Story 10-5 (legal template) being drafted, not on Epic 10 implementation completion
+>
+> 2. **Add new Epic 11: Multi-Source Registry & Secondary Data Ingestion.**
+>    - Epic-level summary, business outcome, success criteria, dependencies, scope boundaries
+>    - 4 stories:
+>      - **11-1** Multi-Source Registry Schema Foundation (pre-existing draft at `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` — referenced as canonical; Bob to regenerate via create-story preserving the 11 ACs including AC#11 composite-index audit at projected scale)
+>      - **11-2** Import Service + PDF/CSV/XLSX Parsers + dry-run/confirm/rollback endpoints; ITF-SUPA reference config; auto-skip on email/phone match; fraud + marketplace pipelines status-gated
+>      - **11-3** Admin Import UI (Super Admin sidebar Import Data nav item; upload + dry-run preview using Sally's `ImportDryRunPreview` component + `LawfulBasisSelector` + batch history page)
+>      - **11-4** Source Badges + Filter Chips (Sally's `SourceBadge` component wired into Registry / Respondent Detail / Marketplace cards / Assessor Queue + source filter chip on Registry)
+>    - Cross-refs: FR25, ADR-018, Architecture Decision 1.5, UX Journey 5 + Form Patterns
+>    - Field-survey relationship: Story 11-1 schema is a HARD prerequisite for Story 9-12 (`pending_nin_capture` status enum lives in 11-1 migration). Stories 11-2/11-3/11-4 are post-field
+>
+> 3. **Update Epic 9 section.**
+>    - Goal statement refresh: "Platform polish + domain migration + security hardening + field-survey UX readiness + admin audit visibility prior to transfer"
+>    - Add new stories:
+>      - **9-10** PM2 Restart-Loop Investigation & Stabilisation (independent / parallelisable; AC#4 Akintola-risk EXPLAIN ANALYZE audit of top 10 endpoints; PM2 ↺ counter reset to 0 at 2026-04-25 reboot — observation window now open, capture as part of Dev Notes evidence)
+>      - **9-11** Admin Audit Log Viewer (super-admin UI over Epic 6 audit infrastructure; sidebar nav item Audit Log per Sally's UX; Akintola-risk audit-viewer-at-1M-rows verification AC; composite indexes `audit_logs(actor_id, created_at)` + `(target_resource, target_id, created_at)` + `(action, created_at)`; HARD prerequisite for Epic 10 PII-scope release per FR26)
+>      - **9-12** Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email (collapses 4-hop public registration into 5-step wizard per Sally's Journey 2 rewrite; depends on Story 11-1 schema; staff wizard step-indicator polish bundled as task)
+>    - Update Story 9-9 description per SCP §2.1 expanded scope — but **mark Tailscale + SSH hardening subtask as ALREADY DONE** with cross-reference to Story 9-9 Change Log entry 2026-04-23 + `docs/emergency-recovery-runbook.md`. Also mark OS-patching subtask as DONE (2026-04-25). The remaining 8 subtasks are the forward-planned work (port audit, app-rate-limit audit, backup encryption, alerting tier, logrotate, 2nd super-admin, activity baseline, Cloudflare WAF [domain-gated]).
+>    - Stories 9-2 + 9-4 remain `deferred` (domain-gated). Story 9-8 remains `in-progress` (CSP nginx rollout). Stories 9-1, 9-3, 9-5, 9-6, 9-7 remain `done`.
+>
+> 4. **Add new prep task: `prep-input-sanitisation-layer`.**
+>    - Centralised normalisation utilities (email, Nigerian phone E.164, name, date, trade vocab) at every input boundary
+>    - Schema strengthening: `respondents.date_of_birth TEXT → DATE`, phone CHECK constraint
+>    - Back-fill script for existing rows
+>    - Slot before field survey to prevent ITF-SUPA-style data hygiene problems
+>    - Frame as standalone prep task (not part of an epic) — same shape as previous prep tasks in sprint-status.yaml
+>
+> 5. **Cross-reference the Field Readiness Certificate (SCP §5.3.1)** in epics.md preamble or top-level summary so reviewers see the 6-item field-survey gate alongside the epic structure.
+>
+> 6. **Preserve all existing epic content for Epics 1–8.** Do NOT rewrite or trim them — the SCP is additive, not a regeneration of historical context.
+>
+> 7. **Author a Change Log entry** at the top of `epics.md` (or wherever the existing changelog lives — preserve format) noting the 2026-04-2X revision, SCP-2026-04-22 cross-reference, and a one-paragraph summary of what's added.
+>
+> **Output:** amended `epics.md` saved to the same path. Story-level summaries should be detailed enough that Bob can run `create-story` against each summary without re-reading the SCP.
+>
+> **Scope lock:** do NOT introduce stories beyond the 14 enumerated in SCP §5.2 item 5 list (9-9 regen + 9-10 + 9-11 + 9-12 + 11-1/2/3/4 + 10-1..10-6 + prep-input-sanitisation-layer). If any story summary requires breaking down into sub-stories that are not in SCP §4.1, flag for Awwal rather than splitting unilaterally. Move 4 (`prep-query-performance-gate`) is explicitly PARKED — do NOT include it in this pass.
+>
+> **Do not modify:** PRD (John's domain), architecture.md (Winston's domain), ux-design-specification.md (Sally's domain), implementation-artifact stories (Bob's domain via create-story per A.5). This pass affects ONLY `epics.md`.
 
 ### A.5 Bob (SM) — create-story per story
 
-**Status:** ⏳ Pending. Invoke `bmad:bmm:workflows:create-story` once per story in §5.2 item 5 list. Story 9-9 regeneration must incorporate §7.1 completed Tailscale subtask as baseline state (not re-scope it).
+**Status:** ⏳ Pending invocation. (A.1 PRD V8.2 ✅, A.2 architecture +ADRs 018/019/020 ✅, A.3 UX +6 components +4 journeys ✅, A.4 epics.md +476 lines incl. Epic 10/11 + Stories 9-10/11/12 + prep-input-sanitisation-layer ✅.)
+
+**Workflow purpose:** generate one detailed story file per story in `_bmad-output/implementation-artifacts/`. Each invocation of `bmad:bmm:workflows:create-story` produces ONE file with full ACs, tasks, technical notes, and risk register. Bob iterates through the 14 stories in dependency order. Two stories already have working drafts on disk that MUST be preserved (9-9 + 11-1 — see special handling below).
+
+> Invoke the BMM SM agent (`bmad:bmm:agents:sm`) and run `bmad:bmm:workflows:create-story` once per story in the order below. Bob is responsible for sequencing the 14 invocations within this single CLI session.
+>
+> **Inputs (reference materials read once at the start, then per-story as needed):**
+>
+> - `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` — read **§4.1 Story changes** (story-by-story spec), **§7.1 Completion Log** (what's already shipped), **§7.3 Outstanding Story 9-9 subtasks** (the 8 remaining subtasks for the 9-9 regeneration)
+> - `_bmad-output/planning-artifacts/epics.md` — **PRIMARY SOURCE** for each story's epic-level summary, business outcome, dependencies, FRC relationship. John populated this in A.4 and it is the authoritative bridge between high-level scope and detailed ACs
+> - `_bmad-output/planning-artifacts/prd.md` — V8.2 (post-John). FRs 24-28 + NFRs 9-10 are the requirement basis; refined FR21 + new FR27/FR28 ground 9-12 and 11-1
+> - `_bmad-output/planning-artifacts/architecture.md` — post-Winston. Decisions 1.5 / 2.4-2.8 / 3.4 / 5.3-5.5 + ADRs 018/019/020 are the technical basis
+> - `_bmad-output/planning-artifacts/ux-design-specification.md` — post-Sally. Journey 2 rewrite + Journeys 5-8 + 6 components map to specific stories
+> - `docs/epic-10-1-consumer-auth-design.md` — pre-existing design brief consumed by Story 10-1 (LGA scoping + IP allowlist + time-bounded scopes)
+> - `_bmad-output/implementation-artifacts/sprint-status.yaml` — current state tracker; flip story status as you create each one (`backlog` → `ready-for-dev`)
+> - `docs/emergency-recovery-runbook.md` — operational state of Tailscale + fail2ban; Story 9-9 should reference rather than duplicate
+>
+> **Special handling — two stories already have working drafts on disk:**
+>
+> 1. **Story 9-9** — file already exists at `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` with:
+>    - Change Log entry **2026-04-12** (initial creation — preserve)
+>    - Change Log entry **2026-04-23** (Tailscale + SSH hardening subtask DONE — preserve verbatim)
+>    - File List "Tailscale Hardening Subtask (2026-04-23)" block — preserve verbatim
+>    - Original 6 ACs scoped to Cloudflare-only (now superseded — refactor)
+>    - Update for the 10-task expanded scope per SCP §2.1: Tailscale ✅, OS patching ✅, plus 8 remaining (port audit, app-rate-limit audit, backup encryption, alerting tier, logrotate, 2nd super-admin, activity baseline, Cloudflare WAF [domain-gated]). Note: SCP §A.4 originally said "9 remaining" — corrected to 8 because OS patching landed 2026-04-25.
+>    - Status transition: `backlog` → `in-progress` (since Tailscale + OS-patching subtasks already done)
+>    - PRESERVE: do NOT delete or rewrite the Change Log; ADD new entries for the regenerated structure
+>
+> 2. **Story 11-1** — file already exists at `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` with:
+>    - 11 ACs including **AC#11 composite-index audit at projected scale** (Akintola-risk Move 1) — preserve verbatim
+>    - Technical Notes "Query Plan Audit" with 10 canonical queries — preserve verbatim
+>    - Tasks 2.1-2.5 (migration + seeding + EXPLAIN ANALYZE workflow) — preserve verbatim
+>    - File List with new files (`db/seed-projected-scale.ts`, `db/explain-reports/11-1-projected-scale.md`, etc.) — preserve verbatim
+>    - The status transition: `backlog` → `ready-for-dev` once you've validated content against epics.md
+>    - PRESERVE: do NOT delete the AC#11 + Technical Notes section. The Akintola-risk lessons are load-bearing
+>
+> **Recommended invocation order (dependency-driven, 14 invocations):**
+>
+> 1. **9-9** (regenerate existing file per Special Handling above — adds the 8 remaining subtasks as ACs while preserving the Tailscale subtask Change Log)
+> 2. **11-1** (regenerate existing file per Special Handling above — preserves AC#11 + Query Plan Audit)
+> 3. **9-12** Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email (depends on 11-1 status enum; pull UX from Journey 2 rewrite + 6 components; pull schema from architecture Decision 1.5; reference *346# USSD + magic-link primary + SMS OTP infra-only)
+> 4. **9-11** Admin Audit Log Viewer (independent; sidebar nav per Sally; 3 composite indexes per architecture Decision 5.4; AC for audit-viewer-at-1M-rows scale verification — Akintola-risk Move 3)
+> 5. **9-10** PM2 Restart-Loop Investigation (independent; PM2 ↺ counter reset to 0 at 2026-04-25 08:54 UTC — observation-window evidence baseline; AC#4 EXPLAIN ANALYZE audit of top 10 endpoints — Akintola-risk Move 2; reuses Story 11-1 seeder)
+> 6. **prep-input-sanitisation-layer** (standalone prep task; centralised normalisation utils for email + Nigerian phone E.164 + name + date + trade vocab; schema strengthening `respondents.date_of_birth TEXT → DATE`; back-fill script; slot before field survey)
+> 7. **11-2** Import Service + PDF/CSV/XLSX Parsers (depends on 11-1; ITF-SUPA reference config; auto-skip on email/phone match; status-gating for fraud + marketplace; dry-run/confirm/rollback endpoints)
+> 8. **11-3** Admin Import UI (depends on 11-2; Sally's `ImportDryRunPreview` + `LawfulBasisSelector` components; Super Admin sidebar Import Data nav)
+> 9. **11-4** Source Badges + Filter Chips (depends on 11-1; Sally's `SourceBadge` component wired into Registry / Respondent Detail / Marketplace cards / Assessor Queue + filter chip)
+> 10. **10-5** Data-Sharing Agreement Template + Consumer Onboarding SOP (independent legal artifact; Iris + Gabe owners; CRITICAL prerequisite for `submissions:read_pii` scope provisioning; FRC adjacent gate)
+> 11. **10-1** Consumer Authentication Layer (depends on 9-11 audit viewer; expanded scope per `docs/epic-10-1-consumer-auth-design.md`: scoped API keys + LGA scoping + IP allowlist + time-bounded scope grants + 180-day rotation; ADR-019)
+> 12. **10-2** Per-Consumer Rate Limiting & Quotas (depends on 10-1 `req.apiConsumer`; Redis-backed per-scope; atomic INCR/EXPIRE keying)
+> 13. **10-3** Consumer Admin UI (depends on 10-1 service layer; Sally's `ApiConsumerScopeEditor` + 3-tab detail view: Identity / Access / Permissions)
+> 14. **10-4** Developer Portal (depends on 10-1 + 10-2; public `/developers` page + OpenAPI/Swagger UI + request-access form)
+> 15. **10-6** Consumer Audit Dashboard (depends on 9-11 viewer foundation + 10-1 audit-log `consumer_id` writes; filters audit_logs by consumer principal)
+>
+> *(Note: 14 stories total counted; numbering above goes 1–15 because 11-1 + 9-9 are regenerations of existing drafts, but they still occupy create-story slots in the sequence.)*
+>
+> **For each invocation, the create-story workflow should produce a story file with:**
+>
+> - Story narrative (As a / I want / So that)
+> - Acceptance Criteria (numbered AC#1, AC#2, ...) — derived from epics.md story summary + PRD requirements + Architecture decisions + UX specs
+> - Tasks (numbered 1, 2, 3, ...) — implementation steps the dev agent will execute
+> - Technical Notes (architecture context, design decisions, edge cases)
+> - Dependencies (other stories that must complete first)
+> - Field Readiness Certificate impact (which FRC item this story affects, if any)
+> - Risks (named risks specific to this story; reference SCP §5.5 risks if applicable)
+> - File List (expected created/modified files; populated by dev during implementation)
+> - Change Log (date + description for each iteration on the story)
+> - Initial status: `ready-for-dev` (or `in-progress` for Story 9-9 since 2 subtasks are done)
+>
+> **After each create-story invocation:**
+>
+> - Update `_bmad-output/implementation-artifacts/sprint-status.yaml` to flip the story key from `backlog` → `ready-for-dev` (or `in-progress` for 9-9). The sprint-status comment block at the top should gain a single-line entry per batch (e.g., "2026-04-2X — Stories 9-9 + 11-1 regenerated; Stories 9-10/11/12 + prep-input-sanitisation-layer + 11-2/3/4 created via Bob create-story workflow").
+> - Cross-reference the story file path in the relevant epic section of `epics.md` if Bob's workflow does not auto-populate that.
+>
+> **Output:** 14 story files in `_bmad-output/implementation-artifacts/` (12 newly created, 2 regenerated-with-preservation: 9-9 + 11-1). sprint-status.yaml updated with status transitions + new comment block.
+>
+> **Scope lock:** do NOT introduce stories beyond the 14 enumerated. Do NOT add new ACs that aren't grounded in epics.md / PRD / architecture / UX (the four canonical inputs). Move 4 (`prep-query-performance-gate`) is explicitly PARKED — do NOT include it. If any story requires breaking down further than the SCP/epics.md anticipated, flag for Awwal rather than splitting unilaterally (e.g. into 11-2a + 11-2b).
+>
+> **Do not modify:**
+> - PRD (John's domain)
+> - architecture.md (Winston's domain) — but DO note in Story 9-9 if you encounter the ADR-020 firewall-state drift flagged by John in his A.4 notes (sprint-status §10-11 has the current `0.0.0.0/0 + 100.64.0.0/10` state; ADR-020 opening still says tailnet-only). Bob does not patch architecture; just flag for the next architectural touch.
+> - ux-design-specification.md (Sally's domain)
+> - epics.md (PM domain — your output is implementation-artifacts only, NOT epics)
+>
+> **After all 14 stories are filed, signal completion to Awwal so he can verify before the dev agent chain (A.6) starts.**
 
 ### A.6 Dev agents — dev-story per story
 

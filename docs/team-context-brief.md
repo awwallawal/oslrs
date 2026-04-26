@@ -70,8 +70,12 @@ Read these files in order for full project awareness:
 | Project Context | `_bmad-output/project-context.md` | Coding patterns + rules (v2.0.0) |
 | Infrastructure Playbook | `docs/infrastructure-cicd-playbook.md` | VPS setup + deployment |
 | **Emergency Recovery Runbook** | `docs/emergency-recovery-runbook.md` | **CRITICAL** — Tailscale access, break-glass paths, panic-start procedure |
-| **Session Notes 2026-04-21–25** | `docs/session-2026-04-21-25.md` | **READ FIRST** when resuming Story 11-1, Epic 10/11, Tailscale work, or A.4+ handoff chain |
-| Transfer Protocol Template | `docs/transfer-protocol-template.md` | D2 deliverable; legal review pending |
+| **Session Notes 2026-04-21–26** | `docs/session-2026-04-21-25.md` | **READ FIRST** when resuming Story 11-1, Epic 10/11, Tailscale work, A.4+ handoff chain, or turnkey hand-off strategy |
+| Transfer Protocol Template (D2) | `docs/transfer-protocol-template.md` | D2 deliverable; legal review pending |
+| Transfer Protocol Schedule 1 | `docs/transfer-protocol-schedule-1-asset-enumeration.md` | 52-asset enumeration across 9 categories; refactored 2026-04-26 for turnkey strategy. Becomes legal-instrument Schedule 1 at Transfer Day. |
+| Account Migration Tracker | `docs/account-migration-tracker.md` | Operational tracker for SaaS-account migration; refactored 2026-04-26 for turnkey strategy. `admin@oyoskills.com` canonical anchor. |
+| Story 9-8 CSP Promotion Checklist | `docs/9-8-csp-enforcement-promotion-checklist.md` | Single-line nginx change procedure to close Story 9-8. ~15 min. |
+| OSLRS Glossary | `docs/oslsr-glossary.md` | Register vs Registry vs Registration, role names, NDPA terms; Schedule 6 of D2 once finalised |
 | Epic 10-1 Design Brief | `docs/epic-10-1-consumer-auth-design.md` | Awwal's Section 10 answers + expanded scope |
 | Previous Retros | `_bmad-output/implementation-artifacts/epic-*-retro-*.md` | Historical decisions |
 | Previous Session Notes | `docs/session-2026-04-11-12.md` | Story 9-7/9-8 marathon |
@@ -82,7 +86,9 @@ Read these files in order for full project awareness:
 
 **OS:** Ubuntu 24.04.4, kernel 6.8.0-110-generic, 0 pending upgrades. Two snapshots: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`.
 
-**SCP handoff chain:** A.1 PRD ✅, A.2 architecture ✅, A.3 UX ✅. **Next: A.4 PM+Architect joint `create-epics-and-stories`**.
+**SCP handoff chain:** A.1 PRD ✅, A.2 architecture ✅ (incl. V8.2-a1 follow-up on dual-source firewall), A.3 UX ✅, A.4 epics.md ✅, A.5 Bob create-story ✅ (15 story files filed). **Next: A.6 Dev `dev-story` per story** in priority order per SCP §5.2 item 7.
+
+**Hand-off strategy (decided 2026-04-26):** TURNKEY PACKAGE — Builder personally provisions `oyoskills.com` domain + project SIM + Cloudflare account on free tier; hands complete package to Ministry at Transfer Day in one orchestrated session. **`admin@oyoskills.com`** is the canonical migration anchor — flipping the Cloudflare Email Routing destination migrates ALL SaaS account ownership in one operation. Replaces earlier Ministry-Workspace-coordinated parallel-migration plan.
 
 **Field Readiness Certificate:** 1 of 6 items done (Tailscale). Remaining: 11-1 schema + composite indexes, 9-12 public wizard, prep-input-sanitisation-layer, 9-9 alerting tier, Operations Manual enumerator-section.
 

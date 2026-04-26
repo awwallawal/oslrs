@@ -8,7 +8,7 @@
 
 ## Pre-requisites
 
-- [ ] New domain purchased (e.g., `oslrs.com`)
+- [ ] New domain purchased (e.g., `oyoskills.com`)
 - [ ] DNS A record pointed to VPS IP
 - [ ] DNS propagated (`dig newdomain.com` returns VPS IP)
 

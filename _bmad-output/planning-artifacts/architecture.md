@@ -22,8 +22,9 @@ v75Updates: 'Data Routing Matrix, Live Selfie Spec, Terminology Fix, Marketplace
 v79Updates: 'Epic 2.5 Role-Based Dashboards - ADR-016 updated with strict route isolation pattern, RBAC matrix, code splitting benefits'
 v80Updates: 'SCP-2026-02-05-001: ODK Central removed, native form system replaces. ADR-001/002/004/005/007/008/009/010 amended. Database, infrastructure, and data flow sections updated.'
 v82Updates: 'SCP-2026-04-22: Multi-source registry + API governance + security hardening + field-survey UX. New Decisions 1.5 / 2.4–2.8 / 3.4 / 5.3–5.5. ADR-013 amended (Tailscale operator access). ADR-015 rewritten (single 5-step wizard + magic-link primary). New ADR-018 (multi-source registry / pending-NIN). New ADR-019 (API consumer auth model). New ADR-020 (Tailscale access architecture). Pattern Categories 5 + 7 extended.'
+v82a1Updates: 'Follow-up amendment 2026-04-25: ADR-020 Decision header + Decision details + fail2ban descriptor rewritten to reflect dual-source SSH firewall (0.0.0.0/0 + 100.64.0.0/10) per as-deployed 2026-04-25 amendment; new ADR-020 §"DO Console Access Vector" subsection capturing DOTTY/droplet-agent-as-SSH-from-DO-IPs empirical correction; ADR-020 Consequences rewritten with OS-upgrade subtask (Story 9-9 #2 done 2026-04-25) + PM2 ↺ counter reset baseline for Story 9-10 + fail2ban-as-load-bearing semantics + monthly-reboot pre-flight checklist; Decision 2.7 + ADR-013 §Tailscale subsection + Pattern Category 7 §Operator SSH block all aligned to dual-source firewall narrative. Triggered by drift between SCP §A.4 written narrative and as-deployed state per sprint-status.yaml §10-11 (2026-04-25 entries). PRD V8.2 NFR9 + Operator Access bullet under Technical Assumptions still describe the tailnet-only firewall — flagged for John (PM) to bump V8.2 → V8.3.'
 prdVersionLatest: 'V8.2'
-lastRevision: '2026-04-25'
+lastRevision: '2026-04-25 (V8.2-a1 follow-up amendment)'
 ---
 
 # OSLSR Architecture Decision Document
@@ -34,6 +35,8 @@ lastRevision: '2026-04-25'
 **Architect:** Awwal (with Claude Code facilitation); 2026-04-25 revision by Winston (architect agent)
 
 > **Amendment (2026-02-06) — SCP-2026-02-05-001:** ODK Central has been removed from the architecture. The native form system (JSONB schemas, skip-logic engine, Form Builder UI, one-question-per-screen renderer) replaces all ODK/Enketo functionality. Infrastructure reduced from 6 containers to 4, from 2 PostgreSQL databases to 1. ADRs amended inline below.
+
+> **Amendment (2026-04-25, follow-up V8.2-a1) — Bob's pre-create-story sequence flag:** ADR-020 Decision section + Decision 2.7 + ADR-013 §"Tailscale Operator Access" subsection + Pattern Category 7 §Operator SSH block all rewritten to reflect the as-deployed 2026-04-25 dual-source SSH firewall (`0.0.0.0/0` + `100.64.0.0/10`) — supersedes the original 2026-04-23 tailnet-only narrative. New ADR-020 §"DO Console Access Vector" subsection captures the empirical correction that DO Web Console is SSH-based via DOTTY/`droplet-agent` from DO infrastructure IPs (e.g. `162.243.0.0/16`), not WebSocket-based as initially theorised. ADR-020 Consequences rewritten to elevate fail2ban from "insurance" to "load-bearing second-line defence" (since public-internet SSH is now reachable), to add the OS-upgrade subtask landed 2026-04-25 (Story 9-9 #2), to flag the PM2 ↺ counter reset as the deliberate observability baseline for Story 9-10 (do not reboot prematurely), and to add the monthly-reboot pre-flight checklist. Triggered by drift between SCP §A.4 written narrative and as-deployed state per sprint-status.yaml §10-11. **Outstanding follow-up: PRD V8.2 NFR9 + Operator Access bullet under Technical Assumptions §Infrastructure & Deployment still describe the original tailnet-only firewall posture — flagged for John (PM) to bump V8.2 → V8.3 at the next PRD touch.**
 
 > **Amendment (2026-04-25) — SCP-2026-04-22:** Multi-source registry, API governance, security hardening, and field-survey UX readiness landed against PRD V8.2. New Decision 1.5 documents the nullable-NIN + provenance schema (Story 11-1). New Decisions 2.4–2.8 add the `apiKeyAuth` middleware, magic-link primary, SMS-OTP-as-infrastructure, Tailscale operator access, and ambiguous-auth rejection. New Decision 3.4 establishes the `/api/v1/partner/*` namespace and scope taxonomy. New Decisions 5.3–5.5 capture audit-log principal dualism, per-consumer rate-limit metrics, and pending-NIN observability events. Three new ADRs: **ADR-018** (multi-source registry + pending-NIN), **ADR-019** (API consumer auth), **ADR-020** (Tailscale access architecture — as-deployed 2026-04-23). ADR-013 gains a Tailscale subsection; ADR-015 is rewritten end-to-end (Google OAuth retired; magic-link primary; pending-NIN path). Pattern Category 5 extends with consumer cache keys, principal-tagged Pino events, and the audit-log discriminated-union write helper. Pattern Category 7 extends with operator-SSH access requirements, API token storage, per-consumer Redis rate-limit keying, and timing-safe comparison. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.3 Architecture subsection for the full SCP scope.
 
@@ -883,20 +886,21 @@ The marketplace database is **NOT physically air-gapped**. It uses a **read-only
   - No partner-API scope depends on SMS OTP.
 - **Affects:** Story 9-12 (infrastructure scaffolding).
 
-**Decision 2.7: Operator SSH Access — Tailscale Overlay (As-Deployed 2026-04-23)**
+**Decision 2.7: Operator SSH Access — Tailscale Overlay + sshd-Hardened Public Surface (As-Deployed 2026-04-25)**
 
-- **Choice:** Tailscale overlay network as the sole primary SSH access path; DigitalOcean web/recovery console as break-glass; public-internet SSH disabled at both firewall and sshd.
-- **See:** NFR9, ADR-020 (full decision rationale), Story 9-9 Change Log entry 2026-04-23, `docs/emergency-recovery-runbook.md`.
-- **Implementation (as-deployed):**
-  - DigitalOcean Cloud Firewall rule: SSH (22/tcp) source = `100.64.0.0/10` (Tailscale CGNAT range) only. Public `0.0.0.0/0` removed.
-  - Tailnet members: VPS `oslsr-home-app` @ `100.93.100.28`; operator laptop `desktop-qe4lplq` @ `100.113.78.101`; both signed in under `lawalkolade@gmail.com` Free tier.
-  - `sshd_config` main + drop-ins (`50-cloud-init.conf`, `60-cloudimg-settings.conf`) consistently set: `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`.
-  - `/root/.ssh/authorized_keys`: two keys — `github-actions-deploy` (CI; DO NOT REMOVE) and `awwallawal@gmail.com` (operator personal).
-  - fail2ban installed + enabled (default config: maxretry 5, bantime 10m, sshd jail) as defence-in-depth against any authenticated-user compromise.
+- **Choice:** Tailscale overlay network as the **operator daily-driver SSH path**; public-internet SSH **reachable but key-only** at sshd (firewall is dual-source `0.0.0.0/0` + `100.64.0.0/10` per ADR-020 amendment 2026-04-25); fail2ban is load-bearing second-line defence; DigitalOcean web/recovery console as break-glass (DO Console is itself SSH-based via DOTTY/`droplet-agent` from DO infrastructure IPs — see ADR-020 §"DO Console Access Vector").
+- **See:** NFR9, **ADR-020** (full decision rationale + 2026-04-25 amendment + DO Console Access Vector subsection), Story 9-9 Change Log entries 2026-04-23 + 2026-04-25, `docs/emergency-recovery-runbook.md`.
+- **Implementation (as-deployed 2026-04-25):**
+  - **DigitalOcean Cloud Firewall:** SSH (22/tcp) inbound permitted from **both** `0.0.0.0/0` + `::/0` **and** `100.64.0.0/10` (Tailscale CGNAT range). The `0.0.0.0/0` source is intentional — required for GitHub Actions CI deploys (`appleboy/ssh-action`) and for DO Web Console (DOTTY-from-DO-IPs). The firewall is **defence-in-depth + DDoS attenuation**, not the primary access control.
+  - **Primary access control = sshd-level key auth.** `sshd_config` main + drop-ins (`50-cloud-init.conf`, `60-cloudimg-settings.conf`) consistently set: `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`. **Drop-in alignment is load-bearing**; a single `PasswordAuthentication yes` in any drop-in defeats the primary control.
+  - **Tailnet members:** VPS `oslsr-home-app` @ `100.93.100.28`; operator laptop `desktop-qe4lplq` @ `100.113.78.101`; both signed in under `lawalkolade@gmail.com` Free tier.
+  - **`/root/.ssh/authorized_keys`:** two keys — `github-actions-deploy` (CI; DO NOT REMOVE) and `awwallawal@gmail.com` (operator personal).
+  - **fail2ban:** installed and enabled (default config: maxretry 5, bantime 10m, sshd jail). With public-internet SSH reachable, fail2ban is now **active brute-force attenuation against the public attack surface**, not nominal insurance. Steady-state ban-list non-emptiness is health, not anomaly.
+  - **OS patching:** Story 9-9 subtask #2 done 2026-04-25 (Ubuntu 24.04.3 → 24.04.4, kernel 6.8.0-90 → 6.8.0-110, 49 packages including `openssh-server`). Pre-flight verification required for every monthly reboot per runbook §6.1.
 - **Break-glass path order (documented in runbook):** Tailscale SSH → Tailscale IP direct → Tailscale daemon restart → DO Web Console → DO Recovery Console → DO Snapshot restore → DO Support ticket.
-- **Operational note:** public-IP SSH returns `Connection timed out` (firewall); key-disabled SSH returns `Permission denied (publickey)` (sshd). Both are the intended states.
-- **Quarterly drill:** recovery runbook §6.1 requires exercising each break-glass path at least once per quarter, logged in the Change Log.
-- **Affects:** NFR9, Story 9-9 Tailscale subtask (delivered), all future operator access.
+- **Operational verification (post-2026-04-25 amendment):** (a) public-IP SSH with **password** returns `Permission denied (publickey)` (sshd primary control); (b) public-IP SSH with **wrong key** returns `Permission denied` and triggers fail2ban ban after threshold; (c) Tailscale SSH returns immediate login no-prompt; (d) DO Web Console reachable from any browser regardless of operator network. All four are the intended states.
+- **Quarterly drill:** recovery runbook §6.1 requires exercising each break-glass path at least once per quarter, logged in the Change Log. Drill now additionally verifies (i) fail2ban steady-state ban list non-empty (active not nominal); (ii) sshd drop-in alignment unchanged (no `PasswordAuthentication yes` regression); (iii) OS package patch backlog under monthly-reboot threshold.
+- **Affects:** NFR9, Story 9-9 Tailscale + OS-patching subtasks (both delivered), all future operator access, Story 9-10 PM2 investigation observability baseline (PM2 ↺ counter reset by 2026-04-25 reboot).
 
 **Decision 2.8: Ambiguous-Auth Rejection**
 
@@ -2654,19 +2658,20 @@ trackEvent('Registration Completed', {
 | Partner API HTTP(S) | NGINX @ VPS (same stack) with `apiKeyAuth` on `/api/v1/partner/*` | Authenticated partner consumers → TLS → nginx → app | Machine → Server |
 | Operator SSH | **Tailscale overlay** (ADR-020) | Tailscale-authenticated device → CGNAT → sshd | Operator → Server |
 
-These three traffic classes flow through **different layers** and are governed by **different access controls**. This ADR-013 decision (reverse proxy for public traffic) is unchanged by the Tailscale addition — nginx still terminates TLS for web/API/marketplace traffic regardless of whether the operator is connected via Tailscale, and Cloudflare (when the `oslrs.com` domain lands) fronts only the public traffic class.
+These three traffic classes flow through **different layers** and are governed by **different access controls**. This ADR-013 decision (reverse proxy for public traffic) is unchanged by the Tailscale addition — nginx still terminates TLS for web/API/marketplace traffic regardless of whether the operator is connected via Tailscale, and Cloudflare (when the `oyoskills.com` domain lands) fronts only the public traffic class.
 
 **Why Tailscale does not touch the nginx layer:**
 
 1. Nginx serves browsers, Android PWAs, and partner consumer backends — all of which come from arbitrary public IPs and cannot be inside our tailnet.
-2. Tailscale protects the *control plane* (SSH, Portainer if re-exposed, direct database access via localhost tunnels). It does not protect the *data plane* (public HTTPS).
-3. The DigitalOcean Cloud Firewall already restricts SSH (22/tcp) to the `100.64.0.0/10` CGNAT range; nginx (80/tcp, 443/tcp) remains open to the world because it needs to be.
+2. Tailscale protects the *operator control plane as a daily driver* (SSH, Portainer if re-exposed, direct database access via localhost tunnels). It does not protect the *data plane* (public HTTPS).
+3. The DigitalOcean Cloud Firewall permits SSH (22/tcp) from `0.0.0.0/0` + `100.64.0.0/10` (dual-source post-2026-04-25 amendment per ADR-020 — `0.0.0.0/0` is required for GitHub Actions CI deploys and DO Console which is itself SSH-based). The **primary access control is sshd-level key-only authentication**, not the firewall; the firewall is defence-in-depth + DDoS attenuation. Nginx (80/tcp, 443/tcp) remains open to the world because it needs to be (data plane).
 
 **What operators gain:**
 
-- SSH no longer reachable from the public internet (closes the attack surface that drove the 2026-04-20 incident).
+- SSH **daily-driver path** is Tailscale (faster routing, MagicDNS, consistent access trail with other operator activity). Public-IP SSH still works for the operator's personal key but is not the recommended path.
+- The 2026-04-20 brute-force attack surface is **closed at the sshd layer** (key-only authentication; passwords disabled); fail2ban handles repeat-offender IPs as a load-bearing second-line defence.
 - Laptop, phone (future), and any future secondary operator device can share the same trust boundary via Tailscale ACLs.
-- DO Web Console and DO Recovery Console remain as documented break-glass paths (see `docs/emergency-recovery-runbook.md`).
+- DO Web Console and DO Recovery Console remain as documented break-glass paths (see `docs/emergency-recovery-runbook.md`); both are SSH-based via DOTTY/`droplet-agent` and depend on the firewall permitting DO infrastructure IPs (currently covered by the dual-source `0.0.0.0/0` rule — see ADR-020 §"DO Console Access Vector").
 
 **What operators must not do:**
 
@@ -3216,15 +3221,15 @@ The OSLSR partner API surface (FR24) serves 3–10 expected MDA consumers (ITF-S
 
 ### ADR-020: Tailscale Operator-Access Architecture
 
-**Decision:** Production VPS SSH access is delivered via a **Tailscale overlay network**; the DigitalOcean Cloud Firewall restricts SSH (22/tcp) to the Tailscale CGNAT range (`100.64.0.0/10`); DO Web Console + DO Recovery Console are documented break-glass paths; fail2ban runs as defence-in-depth. Cloudflare Zero Trust Tunnel and self-hosted WireGuard were rejected. Public-internet SSH is closed.
+**Decision:** Production VPS SSH access is delivered via a **Tailscale overlay network** as the **operator daily-driver path**; the DigitalOcean Cloud Firewall permits SSH (22/tcp) from `0.0.0.0/0` plus the Tailscale CGNAT range (`100.64.0.0/10`) — **wide-open at the firewall layer is intentional** and bounded by **sshd-level key-only hardening as the primary access control**, with **fail2ban as a load-bearing second-line defence** and DO Web Console + DO Recovery Console as documented break-glass paths. Cloudflare Zero Trust Tunnel and self-hosted WireGuard were rejected. **Public-internet SSH is reachable but unauthenticated-attempts cannot succeed.**
 
-**Status:** Adopted 2026-04-22 (SCP-2026-04-22). **Deployed 2026-04-23** as the Story 9-9 P0 subtask. This ADR documents the as-deployed state, not a forward proposal — the change-log entry in Story 9-9 (2026-04-23) is the implementation evidence.
+**Status:** Adopted 2026-04-22 (SCP-2026-04-22). **Initially deployed 2026-04-23** as the Story 9-9 P0 subtask with a `100.64.0.0/10`-only firewall rule. **Amended 2026-04-25** when the firewall rule was widened back to dual-source (`0.0.0.0/0` + `100.64.0.0/10`) after the empirical discovery that DO Web Console is SSH-based (see §"DO Console Access Vector" below). This ADR documents the as-deployed state at the close of 2026-04-25 — not a forward proposal — with both the 2026-04-23 deployment and the 2026-04-25 amendment as primary evidence.
 
 **Context:**
 
 Monday 2026-04-20 11:04 UTC, the production VPS sustained a distributed SSH brute-force attack from 14+ IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, `45.227.254.170`, `172.93.100.236`, `43.128.106.113`, `118.194.234.8`, `103.189.235.33`, `213.209.159.231`, `2.57.121.25`, `45.148.10.50`, `64.89.160.135`) hammering port 22 with usernames `root`, `ubuntu`, `oyotradeministry`, `test`, `user`, `hadi`, `amssys`. CPU hit 100%; memory 82%. The Story 6-2 monitoring alert fired as designed, but detection-to-response latency was 19 hours.
 
-The pre-existing Story 9-9 backlog task only contemplated Cloudflare WAF/CDN — and Cloudflare is **domain-gated** on the `oslrs.com` purchase, which has not yet happened. SSH brute-force at the IP layer was outside the scope of any in-flight protection. The SCP-2026-04-22 expanded Story 9-9 scope to put SSH lockdown at the top of the priority order; this ADR captures the resulting decision.
+The pre-existing Story 9-9 backlog task only contemplated Cloudflare WAF/CDN — and Cloudflare is **domain-gated** on the `oyoskills.com` purchase, which has not yet happened. SSH brute-force at the IP layer was outside the scope of any in-flight protection. The SCP-2026-04-22 expanded Story 9-9 scope to put SSH lockdown at the top of the priority order; this ADR captures the resulting decision.
 
 **Options considered:**
 
@@ -3233,30 +3238,85 @@ The pre-existing Story 9-9 backlog task only contemplated Cloudflare WAF/CDN —
 | **Tailscale overlay** (SELECTED) | Tailscale daemon on VPS + operator devices; CGNAT range firewall rule; sshd hardened; fail2ban defence-in-depth | Lowest operator overhead; rotating-ISP-IP tolerance built in; works on Free tier for our team size |
 | **Cloudflare Zero Trust Tunnel** | Cloudflared daemon on VPS; access policies in Cloudflare dashboard | Viable alternative if Cloudflare WAF (when domain lands) makes vendor consolidation attractive; deferred for now to keep operator path independent of domain availability |
 | **Self-hosted WireGuard** | WireGuard endpoint on VPS; manual peer config per device | Rejected — overkill for a 1-operator-3-device scenario; key rotation discipline is manual; no equivalent of Tailscale's MagicDNS or tailnet ACLs |
-| **DO Console only (no overlay)** | Use only DigitalOcean Web Console + Recovery Console for all operator access | Rejected for daily ops — DO Console suffers ISP/WebSocket filtering and is clunky for routine tasks; retained as break-glass only |
+| **DO Console only (no overlay)** | Use only DigitalOcean Web Console + Recovery Console for all operator access | Rejected for daily ops — DO Console is SSH-based and clunky for routine tasks (see §"DO Console Access Vector" below for the architectural correction to the original 2026-04-23 ISP/WebSocket-filtering hypothesis); retained as break-glass only |
 
-**Decision details (as-deployed 2026-04-23):**
+**Decision details (as-deployed 2026-04-25, supersedes 2026-04-23 deployment):**
 
 - **Tailnet members:** VPS `oslsr-home-app` @ `100.93.100.28`; operator laptop `desktop-qe4lplq` @ `100.113.78.101`. Both signed in to `lawalkolade@gmail.com` (Free tier, 100-device cap, well within OSLSR scale).
-- **DO Cloud Firewall:** OSLRS firewall SSH (22/tcp) source narrowed from `0.0.0.0/0` + `::/0` to `100.64.0.0/10` (Tailscale CGNAT range). Public-internet SSH is unreachable.
-- **sshd configuration:** main file `/etc/ssh/sshd_config` plus drop-ins `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` consistently set `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`. Drop-in consistency matters: a single `PasswordAuthentication yes` in any drop-in overrides the main file; all three locations were aligned.
-- **`/root/.ssh/authorized_keys`:** two keys — line 1 `github-actions-deploy` (CI deployment key; **DO NOT REMOVE** or deploys break), line 2 `awwallawal@gmail.com` (operator personal `id_ed25519`).
+- **DO Cloud Firewall (dual-source SSH rule):** OSLRS firewall permits SSH (22/tcp) inbound from **both** `0.0.0.0/0` + `::/0` **and** `100.64.0.0/10` (Tailscale CGNAT range). The `0.0.0.0/0` source is intentional and necessary for two non-Tailscale access vectors:
+  1. **GitHub Actions CI deploys** (`appleboy/ssh-action` in `.github/workflows/ci-cd.yml`) — runners reach the VPS over its public IP; runner IPs are not in the Tailscale CGNAT range and are not Tailscale-eligible
+  2. **DO Web Console + DO Recovery Console** — these are SSH-based via DOTTY/`droplet-agent` and originate from DO's own infrastructure IP ranges (e.g. `162.243.0.0/16`), not WebSockets as initially theorised (see §"DO Console Access Vector" below for the empirical journal-evidence trail)
+  Public-internet SSH is **reachable** but **unauthenticated attempts cannot succeed** because sshd is hardened to key-only (next bullet). The firewall is no longer the primary access control — it is **defence-in-depth and DDoS attenuation**, not the access boundary.
+- **sshd configuration (PRIMARY ACCESS CONTROL):** main file `/etc/ssh/sshd_config` plus drop-ins `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` consistently set `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`. **Drop-in consistency is load-bearing**: a single `PasswordAuthentication yes` in any drop-in overrides the main file; all three locations were aligned during the 2026-04-23 deployment and re-verified during the 2026-04-25 OS upgrade post-reboot. Without the firewall as the primary control, sshd hardening is the single load-bearing security boundary — drift in this area is now a P0 incident, not a polish item.
+- **`/root/.ssh/authorized_keys`:** two keys — line 1 `github-actions-deploy` (CI deployment key; **DO NOT REMOVE** or deploys break), line 2 `awwallawal@gmail.com` (operator personal `id_ed25519`). Adding more keys requires a Story-9-9-style change-log entry; rotation cadence is captured in the runbook §6.1 quarterly drill checklist.
 - **Operator laptop SSH config:** `C:\Users\DELL\.ssh\config` with `Host oslsr-home-app` block, `IdentityFile ~/.ssh/id_ed25519`, `IdentitiesOnly yes` (prevents the SSH agent from offering every available key, which would tip off attackers to held key types in the agent).
-- **fail2ban:** installed and enabled with the default sshd jail (maxretry 5, bantime 10m). At Tailscale-only access this is mostly insurance against authenticated-user compromise rather than against external brute-force, but the cost is negligible.
-- **Verification (post-deployment):** (a) public-IP SSH attempts return `Connection timed out` (firewall); (b) key-disabled SSH returns `Permission denied (publickey)` (sshd); (c) Tailscale-routed SSH returns immediate login with no password prompt. All three are the intended states.
-- **Break-glass path order** (documented in `docs/emergency-recovery-runbook.md` panic-start block): Tailscale SSH → Tailscale IP direct → Tailscale daemon restart on laptop → DO Web Console → DO Recovery Console → DO Snapshot restore → DO Support ticket.
-- **Quarterly drill:** runbook §6.1 mandates exercising each break-glass path at least once per quarter, with the result logged in the runbook Change Log. First drill due by 2026-07-23.
+- **fail2ban (LOAD-BEARING SECOND-LINE DEFENCE):** installed and enabled with the default sshd jail (maxretry 5, bantime 10m). With public-internet SSH reachable at the firewall layer (per the dual-source rule above), fail2ban moved from "insurance against authenticated-user compromise" (the 2026-04-23 framing when the firewall was tailnet-only) to **active brute-force attenuation against the public-internet attack surface**. journalctl evidence post-2026-04-25 amendment confirms steady-state fail2ban activity banning repeat offenders attempting `root` / `ubuntu` / `admin` user enumeration. **Tuning the maxretry/bantime is now a real operational lever**, not a configuration tickbox; revisit cadence is per quarterly recovery drill.
+- **OS patching baseline (Story 9-9 subtask #2, done 2026-04-25):** Ubuntu 24.04.3 → 24.04.4; kernel 6.8.0-90 → 6.8.0-110; 49 packages upgraded including `systemd`, `apparmor`, `snapd`, `cloud-init`, `nodejs`, `openssh-server`. Pre-flight verified before reboot: `tailscaled` enabled-on-boot, PM2 startup hook (`pm2-root.service` via systemd) registered + `pm2 save` executed, Docker `restart: unless-stopped`. Reboot at 08:54:37 UTC. Post-reboot all services up; HTTPS health 200 with full sec2-3 CSP. Two snapshots taken: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`. **PM2 ↺ counter reset 916+ → 0 establishes a clean baseline for Story 9-10's restart-loop investigation observability window** (this is a deliberate side-effect, not just incidental — Story 9-10 AC#1 evidence collection starts from this reset).
+- **Verification (post-2026-04-25 amendment):** (a) public-IP SSH attempts with **password** return `Permission denied (publickey)` (sshd primary control rejecting non-key auth); (b) public-IP SSH attempts with **wrong key** return `Permission denied (publickey)` after enough attempts triggers fail2ban ban from the source IP; (c) Tailscale-routed SSH returns immediate login with no password prompt; (d) DO Web Console and DO Recovery Console both reachable from any browser regardless of operator network (per §"DO Console Access Vector"). All four are the intended states.
+- **Break-glass path order** (documented in `docs/emergency-recovery-runbook.md` panic-start block): Tailscale SSH → Tailscale IP direct → Tailscale daemon restart on laptop → DO Web Console → DO Recovery Console → DO Snapshot restore → DO Support ticket. The post-2026-04-25 dual-source firewall makes paths 4-5 robust (they are no longer firewall-conditional).
+- **Quarterly drill:** runbook §6.1 mandates exercising each break-glass path at least once per quarter, with the result logged in the runbook Change Log. **First drill due by 2026-07-23.** Drill must additionally now include: (i) confirm fail2ban steady-state ban list is non-empty (presence is health, not anomaly); (ii) confirm sshd drop-ins still align (no `PasswordAuthentication yes` regression); (iii) confirm OS package patch backlog under the monthly-reboot threshold (next OS upgrade window 2026-05-25).
+
+#### DO Console Access Vector (Empirical Architectural Correction, 2026-04-25)
+
+The original 2026-04-23 deployment narrative carried an incorrect mental model of how DO Web Console reaches the droplet. The correction matters enough to capture as a first-class subsection because it constrains every future "narrow the firewall" decision.
+
+**Original (incorrect) hypothesis (2026-04-23):**
+
+> DO Web Console connects via WebSocket from the operator's browser through DO's web infrastructure. When the firewall narrowed SSH to `100.64.0.0/10`-only and Console timed out, the failure was attributed to the operator's ISP filtering WebSocket frames at the network edge — i.e. a network-side issue independent of the VPS firewall posture.
+
+**Empirical correction (2026-04-25):**
+
+DO Web Console is **SSH-based**, not hypervisor-out-of-band. The droplet-side service that handles Console connections is `droplet-agent` (codename "DOTTY"), which is preinstalled on every DO droplet and runs as a systemd unit. journalctl evidence on `oslsr-home-app`:
+
+```
+droplet-agent: SSH Manager Initialized... sshd_port:[22]
+droplet-agent: Accepted DOTTY ssh keys from <DO infrastructure IP>
+sshd[…]: Accepted publickey for root from <DO infrastructure IP> port <ephemeral> ssh2
+```
+
+The DO infrastructure IP ranges observed in production journals include `162.243.0.0/16`. DO publishes the canonical list (`https://digitalocean.com/geo/google.csv` for some products; the public-facing canonical source for droplet-agent IP ranges is documented in DO's API but not yet pinned in this ADR — flagged for next-quarter follow-up).
+
+**What this means architecturally:**
+
+1. **DO Console availability is a function of the SSH firewall posture**, not of WebSocket filtering / browser / network. The 2026-04-23 narrowing to `100.64.0.0/10`-only blocked DO infrastructure IPs from reaching sshd, which made Console time out.
+2. **The 2026-04-25 firewall amendment (re-add `0.0.0.0/0`)** restored Console availability as a side-effect of restoring all public-internet SSH reachability. It was not a Console-specific fix — it was a recognition that a tailnet-only firewall sacrifices Console as a break-glass path.
+3. **DO Recovery Console** likely shares the same SSH-port dependency (it boots a recovery OS but the Console connection to that OS still flows through DOTTY/sshd-equivalent on the recovery image). **Verification pending in the next quarterly drill** — flagged as drill check #4.
+
+**Implication for the Story 9-9 follow-up "self-hosted GitHub Actions runner" option:**
+
+If we move CI to a self-hosted runner inside the tailnet to remove the GitHub Actions runner dependency on `0.0.0.0/0`, the firewall could in principle re-narrow to `100.64.0.0/10` + DO infrastructure ranges. To preserve DO Console as a break-glass path under that posture, the firewall must additionally permit DO's published IP ranges, refreshed on a cadence (DO can rotate them). Three sub-options:
+
+| Sub-option | Firewall sources after re-narrowing | Console available? | Maintenance cost |
+|---|---|---|---|
+| **Tailnet-only** (most restrictive) | `100.64.0.0/10` only | ❌ No (Console blocked) | Low one-time, but loses Console break-glass |
+| **Tailnet + DO IP ranges** (recommended) | `100.64.0.0/10` + DO published IPs | ✅ Yes | Medium — requires periodic refresh of DO IP allowlist (DO rotates) |
+| **Tailnet + DO IP ranges + GitHub Actions IPs** (no self-hosted runner) | `100.64.0.0/10` + DO IPs + GH Actions IPs | ✅ Yes | High — both DO and GitHub rotate ranges; cron-driven sync needed |
+
+The current dual-source `0.0.0.0/0` posture is a **deliberate trade-off** chosen for operator simplicity given current team scale. Self-hosted-runner + DO-IP-allowlist is the next architectural step when team scale or threat model justifies the maintenance cost — tracked in Story 9-9 follow-up subtasks.
+
+**Why this matters for the next architect:**
+
+A future engineer reading "SSH firewall = `0.0.0.0/0`" might assume sloppiness or a TODO and "fix" it to tailnet-only. They would silently break Console + GH Actions. **The wide-open firewall is a load-bearing decision**, not laziness — sshd hardening + fail2ban + Tailscale-as-daily-driver compensates. Any future narrowing must replace the lost capability, not just remove it.
 
 **Consequences:**
 
-- **Operator workflow changes by one command.** `ssh root@oyotradeministry.com.ng` no longer works; `ssh root@oslsr-home-app` does. Documented in runbook §1.1.
-- **CI deploy keys are unchanged.** `github-actions-deploy` continues to authenticate over SSH. GitHub Actions runners reach the VPS over the **public IP** (`appleboy/ssh-action` in `.github/workflows/ci-cd.yml`); they are not on the tailnet. The `100.64.0.0/10`-only rule applied between 2026-04-23 14:30 UTC and 2026-04-25 (firewall amendment, see below) would have blocked GH Actions runners — but no CI deploy was attempted in that window (last run was commit `36ccfbb` on 2026-04-20), so production deploys never broke. **Resolution (2026-04-25):** the SSH firewall rule was widened back to include `0.0.0.0/0` + `::/0` alongside `100.64.0.0/10`. Public-IP SSH attempts are now reachable to sshd, but sshd is hardened (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, key-only) and fail2ban handles repeat-offender IPs. The firewall is therefore **defence-in-depth**, not the primary control. The primary control remains sshd-level key authentication. **Long-term resolution (Story 9-9 follow-up subtask):** move CI to a self-hosted GitHub Actions runner inside the tailnet, then remove `0.0.0.0/0` again. Tracked in `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` File List "Follow-up items".
-- **Phone and secondary operator devices are not yet on the tailnet.** This is a single-point-of-failure risk: if the operator laptop is unavailable, only DO Console paths work. Adding phone + secondary laptop is logged as a runbook §6.1 follow-up item.
-- **DO Web Console is SSH-based, not hypervisor-out-of-band.** Empirical finding 2026-04-25: when the SSH firewall rule was `100.64.0.0/10`-only, DO Console timed out. When `0.0.0.0/0` was re-added, Console immediately worked. The `droplet-agent` (DOTTY) logs (`SSH Manager Initialized... sshd_port:[22]`) reveal that DO Console connects via SSH from DO's own infrastructure IP ranges (e.g. `162.243.0.0/16` observed in journal entries). This means Console availability is a function of the SSH firewall posture, not of WebSocket filtering / browser / network as initially theorised. **Implication for the Story 9-9 follow-up self-hosted-runner option:** if the firewall is re-narrowed, it must additionally permit DO's published IP ranges (`https://digitalocean.com/geo/google.csv` or DO API) for Console to remain a break-glass path; otherwise Console becomes unavailable as part of the trade-off. DO Recovery Console may share the same SSH-port dependency — verification pending in the next quarterly drill.
+- **Operator workflow changes by one command.** `ssh root@oyotradeministry.com.ng` is no longer the daily driver; `ssh root@oslsr-home-app` (Tailscale MagicDNS) is. Documented in runbook §1.1. Public-IP SSH still **technically works** for the operator's personal key (firewall now permits it post-2026-04-25 amendment), but it is not the recommended path — Tailscale is faster (no CGNAT routing through DO edge), gives MagicDNS, and keeps the access trail consistent with the rest of operator activity.
+- **CI deploys are unchanged.** `github-actions-deploy` SSH key authenticates over the public IP via `appleboy/ssh-action` in `.github/workflows/ci-cd.yml`. The 2026-04-25 dual-source firewall posture explicitly preserves this path (one of the two reasons for re-adding `0.0.0.0/0` — see Decision details). Self-hosted-runner-on-tailnet is the future option to permit firewall re-narrowing; tracked in Story 9-9 File List "Follow-up items".
+- **fail2ban moved from insurance to load-bearing.** With public-internet SSH reachable post-2026-04-25, fail2ban is now the active brute-force attenuator (it was nominal under the original tailnet-only firewall). The default `maxretry 5 / bantime 10m` configuration is the current setting; tuning is now a real operational lever and revisit cadence is captured in the quarterly drill checklist (drill item #2).
+- **Phone and secondary operator devices are not yet on the tailnet.** This is a single-point-of-failure risk: if the operator laptop is unavailable, the operator falls back to Tailscale-from-phone (not yet enrolled) or DO Console. Adding phone + secondary laptop is logged as a runbook §6.1 follow-up item — partially mitigated by the 2026-04-25 dual-source firewall (operator can SSH from any device with the personal key over public IP as last-resort), but Tailscale-from-phone remains the right answer.
+- **OS upgrade automation is no longer optional.** Story 9-9 subtask #2 (OS patching done 2026-04-25) introduced 49 packages including `openssh-server` — a single regression in this codepath would silently undo the sshd hardening that is now the primary control. **Pre-flight verification pattern is now mandatory** for every monthly reboot: confirm `tailscaled` enabled-on-boot, PM2 startup hook registered + `pm2 save` executed, Docker `restart: unless-stopped`, sshd drop-in alignment unchanged, and a fresh DO snapshot taken before the upgrade. Tracked in runbook §6.1 monthly-reboot checklist.
+- **PM2 ↺ counter reset is a feature.** The 2026-04-25 reboot reset PM2 ↺ from 916+ to 0. This is the deliberate observability baseline for Story 9-10 (PM2 Restart-Loop Investigation) — the 7-day post-reboot trajectory is the canonical evidence dataset for that story. **Do not reboot the production VPS again before Story 9-10 evidence is captured** unless an emergency demands it; the rebooth would re-zero the counter and destroy the evidence window.
 - **Tailscale Free-tier TOS.** The Free tier covers up to 100 devices and 3 users; OSLSR is well inside both. If Ministry adopts Tailscale post-Transfer for a larger team, an upgrade to Personal Pro or Business is required. No code changes needed.
-- **Cloudflare ZT door open.** If Cloudflare WAF lands later and Ministry prefers a single vendor for both public-traffic protection and operator access, swapping Tailscale for Cloudflare Zero Trust Tunnel is a configuration change, not an architectural one.
+- **Cloudflare ZT door open.** If Cloudflare WAF lands later and Ministry prefers a single vendor for both public-traffic protection and operator access, swapping Tailscale for Cloudflare Zero Trust Tunnel is a configuration change, not an architectural one. Cloudflare ZT would also offer access policies that could substitute for the dual-source firewall posture (per-identity ACLs at the Cloudflare edge).
 
-**Cross-references:** NFR9, Story 9-9 Change Log entry 2026-04-23, `docs/emergency-recovery-runbook.md`, ADR-013 §"Tailscale Operator Access" subsection.
+**Cross-references:**
+
+- **NFR9** (architecture), and PRD V8.2 NFR9 + Operator Access bullet under Technical Assumptions §Infrastructure & Deployment — note: PRD NFR9 + the bullet still describe the original tailnet-only firewall posture as of architecture revision date 2026-04-25; **flagged for John (PM) to bump PRD V8.2 → V8.3** at the next PRD touch
+- **Story 9-9 implementation artifact** — Change Log entries 2026-04-23 (Tailscale + SSH hardening subtask) and 2026-04-25 (OS upgrade subtask + DO Console finding + firewall amendment); File List captures both deployments
+- **Sprint-status §10-11** — 2026-04-25 entries record the OS upgrade and the DO Console architectural finding
+- **`docs/emergency-recovery-runbook.md`** — §1.1 (current infrastructure state, must reflect dual-source firewall + DOTTY-as-Console-mechanism) and §2.2 (DO Console access path details), §6.1 (quarterly drill + monthly-reboot checklist)
+- **ADR-013 §"Tailscale Operator Access" subsection** — reflects the same dual-source posture
+- **Decision 2.7** (Authentication & Security) — the operator-facing summary cross-references this ADR for the full rationale
 
 ---
 
@@ -4154,18 +4214,31 @@ Data Store Authentication:
 - Passwords MUST be hex-only (openssl rand -hex 32) to avoid URL encoding issues
 ```
 
-**Operator SSH Access (per NFR9, ADR-020):**
+**Operator SSH Access (per NFR9, ADR-020 — as-deployed 2026-04-25 with dual-source firewall):**
 
 ```
-Production VPS SSH:
-- Public-internet SSH (22/tcp from 0.0.0.0/0) MUST be closed at the DO Cloud Firewall
-- SSH source MUST be restricted to Tailscale CGNAT range 100.64.0.0/10
-- sshd_config: PasswordAuthentication no (main file + every drop-in)
+Production VPS SSH (PRIMARY ACCESS CONTROL = sshd-level key auth):
+- DO Cloud Firewall SSH (22/tcp) MUST permit BOTH 0.0.0.0/0 (+ ::/0) AND 100.64.0.0/10
+  - 0.0.0.0/0 is intentional and load-bearing — required for:
+    (a) GitHub Actions CI deploys (appleboy/ssh-action over public IP)
+    (b) DO Web Console + DO Recovery Console (SSH-based via DOTTY from DO IPs)
+  - 100.64.0.0/10 is the Tailscale CGNAT range (operator daily-driver path)
+  - Firewall is DEFENCE-IN-DEPTH + DDoS attenuation, NOT the primary access control
+- sshd_config: PasswordAuthentication no (main file + EVERY drop-in — alignment is load-bearing)
 - sshd_config: PermitRootLogin prohibit-password
 - sshd_config: PubkeyAuthentication yes
 - fail2ban MUST be enabled with the sshd jail
+  - With public-internet SSH reachable, fail2ban is ACTIVE brute-force attenuation,
+    not nominal insurance; steady-state ban-list non-emptiness is health, not anomaly
+  - Tuning maxretry/bantime is a real operational lever (revisit per quarterly drill)
 - DigitalOcean Web Console + Recovery Console retained as documented break-glass paths
 - Quarterly recovery drill REQUIRED (per docs/emergency-recovery-runbook.md §6.1)
+- Monthly OS reboot pre-flight checklist REQUIRED — confirm tailscaled enabled-on-boot,
+  PM2 startup hook + pm2 save executed, Docker restart:unless-stopped, sshd drop-in
+  alignment unchanged, DO snapshot taken before reboot
+- DO NOT re-narrow the SSH firewall to tailnet-only without first replacing the lost
+  capability (self-hosted GH Actions runner inside tailnet + DO IP allowlist refresh
+  cadence). See ADR-020 §"DO Console Access Vector" for the trade-off matrix.
 ```
 
 **API Consumer Token Storage (per NFR10, ADR-019, SCP-2026-04-22):**

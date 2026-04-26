@@ -1393,8 +1393,111 @@ When invoking an agent, the prompt becomes:
 
 **Discipline:** at session close, before logging off, always invest the 20 minutes to write the session notes. Without it, the next session re-discovers half the context.
 
+### Pattern: Snapshot-bracket every operationally significant change
+
+**Problem:** when something goes wrong during/after an operational change (firewall edit, OS upgrade, schema migration), you want a known-good restore point that's strictly newer than your last good state and strictly older than your change. Without that bracket, rolling back means losing more than you wanted.
+
+**Pattern:** for any operational change with possible breakage, snapshot **before AND after**:
+
+- **Before:** `pre-<change>-<date>` — the pre-change rollback target
+- **After (success):** `clean-<change>-<date>` — the new known-good
+
+If the change goes wrong, restore to `pre-<change>-<date>`. If it goes right and the next change goes wrong, restore to `clean-<change>-<date>` instead — you don't lose the work that succeeded.
+
+**OSLRS validation (2026-04-25 OS upgrade):** `pre-os-upgrade-2026-04-25` taken before `apt upgrade`. After successful reboot + verification, `clean-os-update-2026-04-25` taken. Both retained. Either is a valid restore target depending on what's going wrong.
+
+**Cost:** ~3 min per snapshot, ~$0.06/GB/month storage (DO). Cheap insurance against multi-hour debug sessions.
+
+**Cadence on top of bracketing:**
+
+- Weekly during high-change periods (field surveys, migrations, security work)
+- Monthly during steady state
+- Always before/after: OS upgrades, firewall changes, schema migrations, root-cred rotations
+
+### Pattern: Validate the deploy chain immediately after firewall/sshd changes
+
+**Problem:** firewall and sshd changes can silently break your CI deploy pipeline without breaking your operator access. You don't know it's broken until the next merge fails — sometimes days later, with stress.
+
+**Pattern:** after ANY change to firewall rules or sshd_config, **push a tiny doc-only commit** within 30 minutes to exercise the deploy pipeline. If it fails, you catch it now while context is fresh.
+
+**OSLRS validation (2026-04-25):** after the firewall widening from `100.64.0.0/10`-only back to `0.0.0.0/0` (Option A), pushed commit `096987e` (SCP persistence, 29 docs files). Deploy succeeded ✅. Immediately confirmed pipeline still works. Then pushed `1010d64` (.gitignore chore) — second confirmation. Two test pushes in 24h proved durability.
+
+**Anti-pattern observed elsewhere:** narrow firewall on Friday afternoon → discover Monday morning that deploys are broken when trying to ship a hotfix. The clean-up under pressure is much worse than the 60-second test push that would have caught it.
+
+**Build into runbook:** make "test push within 30 min" an explicit step after any firewall/sshd change, alongside the change itself.
+
 ---
 
-_Updated: 2026-04-25_
+_Updated: 2026-04-25 (evening) — patterns 5 and 6 added: snapshot-bracket, validate-deploy-after-firewall_
 _Addendum source: SCP-2026-04-22 + Tailscale buildout + agent chain (Sessions 2026-04-21 through 2026-04-25)_
-_Playbook version: 1.1_
+_Playbook version: 1.2_
+
+---
+
+## Addendum (2026-04-26, version 1.3)
+
+### Pattern 7: `admin@<project-domain>` as canonical migration anchor
+
+**Problem:** in Build-Operate-Transfer arrangements, the Builder accumulates SaaS account ownership during Build + Operate phases. At Transfer Day, every account (DigitalOcean, Tailscale, Cloudflare, hCaptcha, GitHub Org, Resend, etc.) needs ownership migration to the Ministry / acquiring entity. If each account was registered to the Builder's personal email, migration is a per-account ceremony — change primary email, rotate password, re-do MFA, on every vendor's site, often with a verification delay. 12+ steps over weeks.
+
+**Pattern:** at the start of the project, register a custom-domain email — `admin@<project-domain>` — backed by a free email-forwarding service (Cloudflare Email Routing on free tier; ImprovMX as alternative). The forwarder routes `admin@oyoskills.com` → Builder's actual inbox during Operate phase. **Every** project SaaS account is registered with `admin@<project-domain>` from creation forward.
+
+At Transfer Day, the forwarder destination flips from Builder inbox to acquiring-entity inbox. **One change migrates every SaaS account ownership simultaneously.** No per-account ceremony. The email address itself is permanent; only its routing changes.
+
+**OSLRS validation (decided 2026-04-26):** `admin@oyoskills.com` adopted as canonical anchor. Cloudflare Email Routing backs it. Pre-existing accounts (DO, Tailscale, hCaptcha, Resend) get rotated FROM `lawalkolade@gmail.com` TO `admin@oyoskills.com` during Operate phase; new accounts (Cloudflare itself, GitHub Org, etc.) registered to it from creation. At Transfer Day the forwarder flips from Builder Gmail to Ministry-provided email. Captured in `docs/account-migration-tracker.md` + `docs/transfer-protocol-schedule-1-asset-enumeration.md`.
+
+**When to invoke:**
+- At project start (before any SaaS account is created).
+- Retroactively (Operate phase) by rotating each existing account's primary email to the anchor address. Time-cost: ~5 min per account, plus vendor verification delays.
+
+**Cost:** zero additional beyond the project domain registration (~$10–15/year). Cloudflare Email Routing free tier supports 200 destination addresses; Resend free tier handles outbound transactional. Gmail "Send mail as" lets you compose AS the project address from a personal Gmail UI — also free.
+
+**Anti-patterns observed elsewhere:**
+
+- **Builder personal email everywhere.** Migration becomes per-vendor ceremony at Transfer; high coordination overhead with acquiring entity.
+- **Acquiring-entity email everywhere from day one.** Sounds clean but blocks Builder from operating during Build/Operate phases when acquiring-entity IT is slow to provision (the OSLRS scenario before this pattern was adopted).
+- **Free-Gmail "ProjectName@gmail.com" as anchor.** Looks like a bridge but doesn't actually migrate ownership at Transfer — just renames a Builder-personal account. Doesn't solve the problem.
+
+**Required guardrails for the anchor account:**
+- TOTP 2FA mandatory.
+- Recovery codes in two locations (password manager + sealed paper to a third party).
+- Document the anchor pattern in the migration tracker explicitly so future operators don't accidentally re-route the forwarder during routine maintenance.
+
+### Pattern 8: BOT turnkey package vs partial-migration choice
+
+**Problem:** Build-Operate-Transfer projects in regulated environments (government, regulated industries) face a coordination dilemma during Operate phase. Either:
+
+- **Partial migration:** acquiring entity sets up their accounts (Workspace email, GitHub Org, etc.) in parallel; Builder migrates each account from personal ownership to acquiring-entity ownership over Operate phase. **Requires acquiring-entity IT availability.** When that IT is bureaucratic / slow / understaffed, the project schedule is held hostage.
+- **Turnkey package:** Builder personally provisions ALL missing project assets (domain, phone, free-tier accounts) using their own resources during Operate phase. Hands the complete package to acquiring entity at Transfer Day in a single orchestrated session. **No acquiring-entity IT dependency** during Operate.
+
+**The choice depends on:**
+- Acquiring entity's IT-procurement velocity (slow → turnkey)
+- Total out-of-pocket exposure (low → turnkey acceptable)
+- Whether D2 retainer / contract has reimbursement clauses (yes → turnkey defensible)
+- Scale of accounts to migrate (≤10 → turnkey easy; ≥50 → may force partial)
+
+**OSLRS validation (decided 2026-04-26):** Awwal as Project Lead for Chemiroy Nigeria Ltd. Oyo State ICT-procurement bureaucracy was blocking timely Workspace provisioning. Out-of-pocket exposure bounded <₦100K total project lifetime (₦15K domain + ₦500 SIM + ~₦5K/mo airtime). D2 §6.4 retainer rate has reimbursement clause. Account count ~10-15 (manageable). **Turnkey adopted.**
+
+**Iris (legal) take from OSLRS session:** Turnkey is STRONGER for BOT compliance than partial migration — every asset traces to one source at signature; Schedule 1 of Transfer Protocol becomes unambiguous. No partial-state ambiguity at Transfer Day.
+
+**Fiona (BA) take:** Builder controls schedule; acquiring-entity IT is in critical path only for ONE Transfer-Day input (the destination email). Project velocity preserved.
+
+**When to invoke:**
+- Acquiring-entity IT is bureaucratic (typical: governments, large enterprises with strict procurement).
+- Total out-of-pocket recoverable via retainer or written off as goodwill.
+- Account count manageable.
+- Builder has personal credit + provisioning bandwidth.
+
+**When to AVOID:**
+- Acquiring-entity has cybersecurity policies that prohibit Builder-funded accounts (e.g., must be enterprise-vetted from day one).
+- Out-of-pocket exposure exceeds Builder tolerance.
+- Account count too large (>50 SaaS accounts → migration cost exceeds turnkey complexity).
+- Acquiring entity refuses to accept Builder-provisioned domains (some regulated sectors require domain be acquired through their procurement).
+
+**Compatibility with Pattern 7:** turnkey package is the WHY; `admin@<project-domain>` anchor is the HOW. Both decided together at OSLRS 2026-04-26.
+
+---
+
+_Updated: 2026-04-26 — patterns 7 and 8 added: admin-anchor, BOT-turnkey-vs-partial_
+_Addendum source: OSLRS 2026-04-26 hand-off strategy decision_
+_Playbook version: 1.3_

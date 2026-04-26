@@ -1,159 +1,318 @@
-# Story 9.9: Infrastructure Security Hardening — WAF, Alerting & Field-Readiness
+# Story 9.9: Infrastructure Security Hardening — Tailscale, OS Patching, Field-Readiness, WAF (Expanded Scope per SCP-2026-04-22)
 
-Status: backlog
+Status: in-progress
 
-<!-- Created 2026-04-12 during Story 9-8 dev-story session. Captures the full security posture assessment performed after Stories 9-7 (nginx headers + TLS hardening) and 9-8 (CSP nginx mirror). This story is BACKLOG — pick it up when computing resources and budget allow. Tasks are independently deployable: Task 1 alone delivers massive value in 30-60 minutes. -->
+<!--
+REGENERATED 2026-04-25 by Bob (SM) per SCP-2026-04-22 §A.5 + epics.md §Story 9.9.
+
+This story file was originally created 2026-04-12 with a Cloudflare-only scope (6 ACs, P0/P1/P2 prioritization). SCP-2026-04-22 expanded the scope to 10 subtasks after the Mon 2026-04-20 distributed SSH brute-force incident. The regenerated structure below carries the 10-subtask matrix; subtasks #1 (Tailscale + SSH hardening) and #2 (OS patching) are already DONE per Change Log entries 2026-04-23 + 2026-04-25 respectively.
+
+Preservation discipline:
+  • All Change Log entries from the original file preserved verbatim
+  • File List "Tailscale Hardening Subtask (2026-04-23)" block preserved verbatim
+  • New File List block added for OS upgrade subtask (2026-04-25)
+  • Original Cloudflare-focused Dev Notes preserved as "Original Field-Readiness Assessment (2026-04-12)" subsection — the B+ assessment + Cloudflare-as-2-problems-solved insight is institutional knowledge that should not be lost
+  • Field Readiness Certificate cross-reference added (FRC items #1 and #5 are this story)
+-->
 
 ## Story
 
 As the **Super Admin / platform operator**,
-I want **the infrastructure security gaps identified in the 2026-04-12 security posture assessment closed — starting with Cloudflare WAF/CDN (30-min quick win), then centralized alerting, then automated vulnerability scanning**,
-so that **the production site has defense-in-depth beyond code-level security: HTTP payload filtering blocks probing attacks, DDoS mitigation protects the 2GB VPS from volumetric floods, centralized alerting surfaces breaches within minutes instead of days, and recurring vulnerability scans catch regressions before attackers do**.
+I want **the production VPS hardened against the 2026-04-20 distributed SSH brute-force vector and the broader infrastructure surface tightened ahead of the Transfer phase — Tailscale operator-access overlay (✅ done), OS patching cadence (✅ done), public port audit, app-layer rate-limit audit, backup client-side encryption, alerting tier with push channel, log rotation, second super-admin (break-glass), SOC-style activity baseline, and Cloudflare WAF (domain-gated)**,
+so that **the platform meets a B+ → A- security posture without requiring the `oyoskills.com` domain to land first, the field survey can launch under FRC item #1 + #5 coverage, and the Ministry inherits a defensible operational posture at Transfer**.
 
-## Security Posture Assessment (2026-04-12)
+## Expanded Scope (per SCP-2026-04-22)
 
-### Current Grade: B+
+This story's scope was expanded from "Cloudflare WAF + alerting" (6 ACs) to **10 infrastructure-hardening subtasks** after Monday 2026-04-20 11:04 UTC sustained a distributed SSH brute-force attack from 14+ IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, `45.227.254.170`, `172.93.100.236`, `43.128.106.113`, `118.194.234.8`, `103.189.235.33`, `213.209.159.231`, `2.57.121.25`, `45.148.10.50`, `64.89.160.135`) hammering port 22 with usernames `root`, `ubuntu`, `oyotradeministry`, `test`, `user`, `hadi`, `amssys`. CPU hit 100%; memory 82%. The Story 6-2 monitoring alert fired as designed, but **detection-to-response latency was 19 hours**.
 
-Assessed after Stories sec2-1 through sec2-4 (Security Hardening Phase 2), Story 9-7 (nginx forward-fix + TLS hardening), and Story 9-8 (CSP nginx mirror). The code-level security is genuinely strong — the gaps are infrastructure and operational.
+The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoskills.com` and could not be deployed against the immediate threat. The SCP-2026-04-22 expansion put SSH lockdown at the top of the priority order — Tailscale + sshd hardening + fail2ban + DO Console architecture (per ADR-020 V8.2-a1) replaced the Cloudflare-first plan.
 
-| Layer | Grade | What's covered | What's missing |
+**Subtask state (as of 2026-04-25):**
+
+| # | Subtask | Status | Authoritative source |
 |---|---|---|---|
-| **Code-level** | **A-** | RBAC per-route/controller with role isolation; JWT + httpOnly/secure/sameSite refresh cookies; Zod validation on all endpoints; CORS origin-locked; per-endpoint rate limiting (global + activation-specific); IDOR prevention (submission-respondent ownership checks); fraud detection engine with configurable thresholds; mass-assignment hardening (SEC-3); CSP enforcing on /api/* via Helmet (17 directives, sec2-3); CSP Report-Only on static HTML via nginx (9-8); dependency audit gate in CI; NIN uniqueness enforcement; offline-queue user isolation; Redis AUTH + localhost bind; Postgres localhost bind + credential rotation; Cloud Firewall (DO); 6 security headers + server_tokens off + TLS 1.2+ only. **25+ security stories/fixes across 9 epics.** | No Subresource Integrity (SRI) on third-party CDN resources (Google Fonts, hCaptcha JS loads without integrity hashes — a CDN compromise would inject code that CSP allows because the domain is allowlisted). No `'strict-dynamic'` CSP (requires nonce wiring through Vite build — multi-week effort, not this story). |
-| **Infrastructure** | **B-** | TLS 1.2+/1.3 only (TLSv1 and TLSv1.1 disabled at nginx server block); `server_tokens off`; DO Cloud Firewall "OSLRS" active (port-level filtering); Redis rebound to 127.0.0.1 with AUTH; Postgres rebound to localhost with rotated credentials (`oslsr_user`/`oslsr_db`); CI deploy with `set -eo pipefail` + backup-test-reload nginx pattern; DO Spaces backups (daily + monthly). | **No WAF** — nginx exposed directly, no HTTP payload filtering (SQL injection in URL params, XSS in headers, path traversal attempts all reach Express unfiltered — Zod catches most but not all). **No DDoS mitigation** — rate limiting exists per-endpoint but a volumetric L3/L4 flood on the 2GB VPS would saturate bandwidth before rate limits engage. **Single-VPS SPOF** — no redundancy, no failover, no load balancer. |
-| **Operational** | **C+** | 2-minute CSP rollback recipe documented; DO Spaces backups on schedule; infrastructure playbook (`docs/infrastructure-cicd-playbook.md`) covers deploy, nginx, CSP, CI; `docs/team-context-brief.md` has critical deployment notes; PM2 process management with auto-restart. | **No centralized logging/alerting** — PM2 logs to stdout on the VPS, no aggregation (ELK/Grafana Loki/Papertrail), no alerting on error rate spikes or anomalous patterns. The `/api/v1/csp-report` endpoint logs-and-drops — violations are invisible unless someone SSHs in and greps PM2 logs manually. A data breach or sustained attack would take hours to notice. **No recurring vulnerability scanning** — the pre-field security sweep (2026-04-06) was a one-time manual effort; no ZAP/Nuclei/OWASP Dependency-Check in CI. **No secrets management** — `.env` files on the VPS disk; if the VPS is compromised, all secrets (DB credentials, JWT signing keys, hCaptcha secret, S3 keys) are plaintext-readable. **Backup restore only tested once** (the 2026-04-04 `db:push:force` incident) — no regular restore drills. |
+| 1 | Tailscale VPN + SSH lockdown | ✅ **Done 2026-04-23** | Change Log 2026-04-23 + File List "Tailscale Hardening Subtask" block + ADR-020 + `docs/emergency-recovery-runbook.md` |
+| 2 | OS patching + scheduled monthly reboots | ✅ **Done 2026-04-25** | Change Log 2026-04-25 + File List "OS Upgrade Subtask" block + sprint-status.yaml §10 |
+| 3 | Public port audit (`ss -tlnp`); close/restrict Portainer | ⏳ Backlog | AC#3 below |
+| 4 | App-layer rate-limit audit on `/auth/*` endpoints | ⏳ Backlog | AC#4 below |
+| 5 | Backup client-side encryption (AES-256 pre-S3) + quarterly restore drill | ⏳ Backlog | AC#5 below |
+| 6 | Incident-response tier for CRITICAL alerts (SMS/WhatsApp/paged) | ⏳ Backlog | AC#6 below — **FRC item #5** |
+| 7 | Logrotate for PM2 logs + journalctl retention | ⏳ Backlog | AC#7 below |
+| 8 | Second super-admin account (break-glass) | ⏳ Backlog | AC#8 below |
+| 9 | SOC-style activity baseline / SSH log differentiation | ⏳ Backlog | AC#9 below |
+| 10 | Cloudflare WAF/CDN + rate-limiting | ⏳ **Domain-gated** — proceed when `oyoskills.com` lands | AC#10 below — preserved from original story scope |
 
-### Field-Readiness Assessment: READY
-
-The site is field-ready for its current use case (Oyo State labour & skills registry with government staff + registered enumerators). Rationale:
-
-1. **Attack surface is bounded** — no payment processing, PII limited to NIN/name/phone, user base is credentialed government staff (not open internet), domain is `.com.ng` (lower target profile than `.gov` or `.com`)
-2. **Code-level security is comprehensive** — an attacker hitting the app layer faces RBAC + JWT + Zod + CORS + rate limiting + CSP + fraud detection. More hardened than most production government apps
-3. **Remaining gaps are about SCALE, not BASELINE** — WAF and DDoS matter when you're a target; a labour registry in Oyo State is unlikely to attract sophisticated attackers before you have time to add Cloudflare
-4. **Recovery is fast** — CSP rollback in 2 minutes, nginx backup-restore automatic, DO snapshots available, PM2 auto-restart on crash
-5. **The CSP Report-Only phase IS field monitoring** — once real enumerators use the app, `/api/v1/csp-report` collects violations from real devices and browsers. Real signal for free
-6. **VPS headroom exists** — 26% RAM utilization as of 2026-03-03. Current droplet supports initial field operations; upgrade only when monitoring triggers
-
-**Recommended field launch sequence:**
-1. Push to field now with current security posture
-2. Add Cloudflare free tier within the first week (Task 1 below — 30 min, not blocking)
-3. After 48 hours of field usage, promote CSP from Report-Only to enforcing (Story 9-8 Task 7)
-4. Monitor CSP report endpoint for first 2 weeks — if clean, the CSP story is fully closed
-5. Pick up Tasks 2-4 below when sprint capacity allows (nice-to-have, not blocking)
+**Field Readiness Certificate impact:** Subtask #1 (done) covers FRC item #1 (Tailscale live + SSH public-port closed). Subtask #6 covers FRC item #5 (alerting tier with at least one push channel live). Other subtasks are Tier B — can ship during the first weeks of field operation without blocking start.
 
 ## Acceptance Criteria
 
-1. **AC#1 — Cloudflare WAF/CDN active:** `curl -sI https://oyotradeministry.com.ng/ | grep -i 'cf-ray'` returns a Cloudflare ray ID, confirming traffic routes through Cloudflare's edge. `Server:` header shows `cloudflare` (or nginx behind CF, depending on config). The site loads correctly in a browser with no mixed-content or certificate errors.
+### Subtasks done (preserved as historical evidence)
 
-2. **AC#2 — DDoS protection baseline:** Cloudflare dashboard shows "Under Attack Mode" toggle available and functional (test by enabling for 5 seconds, confirm the JS challenge page appears, then disable). Bot Fight Mode enabled. Rate limiting rules configured for `/api/v1/auth/*` (login/register — the most DDoS-able endpoints).
+1. **AC#1 — Tailscale VPN + SSH lockdown (DONE 2026-04-23):** Tailscale overlay deployed (laptop `100.113.78.101` + VPS `100.93.100.28`); sshd hardened across main file + both drop-ins (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`); fail2ban installed + sshd jail active; DO Cloud Firewall SSH rule **dual-source `0.0.0.0/0` + `100.64.0.0/10`** (amended 2026-04-25 from original `100.64.0.0/10`-only after empirical discovery that DO Console depends on public-IP SSH via DOTTY/`droplet-agent`); emergency recovery runbook authored at `docs/emergency-recovery-runbook.md` (8 sections + panic-start block + quarterly drill). Verified post-2026-04-25 amendment: (a) public-IP SSH with password = `Permission denied (publickey)` (sshd primary control); (b) public-IP SSH with wrong key = `Permission denied` then fail2ban ban; (c) Tailscale SSH = no-prompt success; (d) DO Web Console reachable from any browser. **Authoritative state in ADR-020 V8.2-a1 (`_bmad-output/planning-artifacts/architecture.md` §"DO Console Access Vector").**
 
-3. **AC#3 — Alerting pipeline wired (deferrable):** A new `/api/v1/admin/security-events` endpoint (super-admin only) returns the last 100 CSP violation reports + rate-limit trigger events + failed auth attempts, with timestamp + source IP + user-agent. Awwal can check this dashboard daily without SSHing into the VPS. Alternatively: Sentry free tier or Papertrail integration that emails on error-rate spikes.
+2. **AC#2 — OS patching baseline (DONE 2026-04-25):** Ubuntu 24.04.3 → 24.04.4; kernel 6.8.0-90 → 6.8.0-110; 49 packages upgraded including `systemd`, `apparmor`, `snapd`, `cloud-init`, `nodejs`, `openssh-server`. Pre-flight verified before reboot: `tailscaled` enabled-on-boot, PM2 startup hook (`pm2-root.service` via systemd) registered + `pm2 save` executed, Docker `restart: unless-stopped`. Reboot at 08:54:37 UTC. Post-reboot all services up; HTTPS health 200 with full sec2-3 CSP. Two snapshots taken: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`. **PM2 ↺ counter reset 916+ → 0 establishes baseline for Story 9-10 restart-loop investigation observability window.** Monthly reboot pre-flight checklist documented at runbook §6.1.
 
-4. **AC#4 — Automated vulnerability scan in CI (deferrable):** A new CI job runs `zap-baseline.py` (OWASP ZAP Docker baseline scan) against the staging/preview URL on every PR. Results are posted as a PR comment. Critical/High findings block the merge. Low/Medium findings are informational. False positives are suppressed via a `.zap-rules.conf` file in the repo.
+### Remaining subtasks (forward-planned)
 
-5. **AC#5 — Secrets rotation runbook (deferrable):** `docs/infrastructure-cicd-playbook.md` gains a new Part 8: Secrets Management section documenting: current secret inventory (DB creds, JWT keys, hCaptcha, S3, CORS_ORIGIN), rotation procedure for each, and a recommendation for eventual migration to DO App Platform secrets or HashiCorp Vault (when budget allows).
+3. **AC#3 — Public port audit & Portainer hardening:** Run `ss -tlnp` on the VPS and document every listening port + bound interface. Verify all non-public services (Postgres 5432, Redis 6379) are bound to `127.0.0.1` only. **Portainer's exposure must be reviewed:** if currently bound to `0.0.0.0:9000`, either rebind to `127.0.0.1` (operator accesses via `ssh -L 9000:127.0.0.1:9000`) OR keep public but add basic-auth via NGINX proxy. Capture audit output as `docs/port-audit-2026-04-XX.md` with one-line justification per listening port. DO Cloud Firewall ingress rules cross-checked against `ss -tlnp`; any public ports without firewall rules = misconfiguration; any firewall rules without listening ports = stale.
 
-6. **AC#6 — Zero regressions:** Full test suite passes after each task. Cloudflare proxy does not break any existing functionality (WebSocket upgrade through CF requires specific CF settings — verified in Task 1).
+4. **AC#4 — App-layer rate-limit audit on `/auth/*` endpoints:** Inventory every `/api/v1/auth/*` and `/api/v1/staff/activate/*` endpoint and verify each has a per-IP rate limit configured in `apps/api/src/middleware/rate-limit.ts` (or equivalent). Confirm thresholds are aligned with PRD NFR4.4 (login: 5/15min, password reset: 3/hour, profile edit token: 3/NIN/day). Add unit tests that assert each endpoint enforces the documented limit (existing tests cover only the `loginRateLimiter` happy path). Capture findings + delta in `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts`.
+
+5. **AC#5 — Backup client-side encryption + quarterly restore drill:** Modify `apps/api/scripts/backup-to-s3.sh` (or wherever the daily pg_dump lives) to encrypt the dump with AES-256 *before* upload to S3 — using `openssl enc -aes-256-cbc -salt -pbkdf2` with a key from a new env var `BACKUP_ENCRYPTION_KEY` (hex, 32 bytes, generated with `openssl rand -hex 32`, stored in `.env` on VPS only). Document the restore procedure (decrypt + restore) in `docs/infrastructure-cicd-playbook.md` Part 9. Run a one-shot restore drill against a scratch Postgres instance, capture output as evidence in Dev Notes. Schedule quarterly restore drills via runbook §6.1.
+
+6. **AC#6 — Alerting tier with push channel (FRC item #5):** Implement at least **one push-notification channel** for CRITICAL severity alerts emitted by the existing health-digest system (`apps/api/src/middleware/metrics.ts` + `apps/api/src/services/health-digest.service.ts`). Options: (a) Telegram bot (free, instant, no email cap), (b) WhatsApp Business API (Twilio or Meta direct), (c) SMS via Termii (Nigerian provider — same provider OSLSR may use later for SMS OTP per Decision 2.6, dual-purpose), (d) email-to-SMS gateway (cheap, slow, carrier-dependent). Pick (a) Telegram for MVP — fastest setup, no cost, works on operator's phone. Wire into `health-digest.service.ts` to fire CRITICAL on: API p95 >1000ms (sustained 5min), database connection failures (>3 in 1min), fail2ban ban-list size delta >10/hour (sudden brute-force spike), CSP violation rate >100/min. Document the alert routing matrix.
+
+7. **AC#7 — Log rotation for PM2 + journalctl retention:** Configure `pm2-logrotate` module to rotate `/root/.pm2/logs/*.log` at 50MB or daily (whichever first), retain 14 rotations, compress with gzip. Configure `/etc/systemd/journald.conf` with `SystemMaxUse=2G`, `MaxRetentionSec=30d` (currently unbounded — risks filling `/` partition). Verify both with `pm2 logrotate --status` and `journalctl --disk-usage`. Capture configuration in runbook §1.4 + infrastructure playbook.
+
+8. **AC#8 — Second super-admin account (break-glass):** Provision a second super-admin user account (e.g. `awwal-breakglass@oyotradeministry.com.ng`) with a strong password stored in the operator's password manager + a unique `id_ed25519` SSH key on a second physical device (ideally the operator's phone with Termius or similar). The account is **not used for daily operations** — it exists so that if the primary `awwallawal@gmail.com` account is locked out (forgotten password, lost phone, magic-link email compromised), the operator has a recovery path that doesn't require Awwal manually editing the database via DO Console. Document the break-glass account in runbook §1.5 with explicit "do not use for daily ops" warning + quarterly drill check that the credentials still work.
+
+9. **AC#9 — SOC-style activity baseline / SSH log differentiation:** Establish a baseline of "normal" sshd activity post-2026-04-25 firewall amendment (which exposes public-IP SSH) so that anomalous patterns are visible. Run `journalctl -u ssh --since "2026-04-25"` weekly for 4 weeks, capture: (a) accepted-publickey rate per source IP class (operator IPs vs GH Actions IPs vs DO infrastructure IPs vs unknown — the unknowns are the brute-force tail), (b) Failed-publickey rate per source IP class, (c) fail2ban ban-list churn rate, (d) any successful logins outside the operator/CI IP classes (= P0 incident). Capture as `docs/ssh-activity-baseline-2026-05-XX.md` after 4 weeks of data; add to monthly review cadence.
+
+10. **AC#10 — Cloudflare WAF/CDN + edge rate-limiting (DOMAIN-GATED):** When `oyoskills.com` is purchased and DNS migrated, set up Cloudflare free tier per the original 2026-04-12 task plan (preserved verbatim in §"Original Field-Readiness Assessment (2026-04-12)" Dev Notes below). Cloudflare provides edge WAF (OWASP Top 10 patterns), DDoS mitigation, CDN caching, Bot Fight Mode, and edge rate limiting on `/api/v1/auth/*` and `/api/v1/csp-report`. **Open question for the future**: with Cloudflare in front, can the DO Cloud Firewall SSH rule be re-narrowed to `100.64.0.0/10` + DO infrastructure ranges + Cloudflare IP ranges? If yes, we recover the original 2026-04-23 firewall posture (tailnet + DO Console only) with Cloudflare as the public-traffic edge. Tracked as a Story 9-9 follow-up sub-decision.
+
+11. **AC#11 — Zero regressions:** Full test suite passes after each subtask. Existing 4,191-test baseline maintained or grown.
 
 ## Acceptance Criteria Priority Map
 
-| AC | Priority | Effort | Can defer? | Why |
-|---|---|---|---|---|
-| AC#1 (Cloudflare) | **P0** | 30-60 min | No — do within first week of field launch | Closes the two biggest infrastructure gaps (WAF + DDoS) in one DNS change. Free tier. |
-| AC#2 (DDoS config) | **P0** | 15 min | No — part of Cloudflare setup | Just toggling CF dashboard settings after AC#1 |
-| AC#5 (Secrets runbook) | **P1** | 1-2 hours | Yes — document-only, no code | Captures institutional knowledge. Do before any team member leaves. |
-| AC#3 (Alerting) | **P2** | 4-8 hours | Yes | Makes breaches visible. Important but not blocking field ops. |
-| AC#4 (Vuln scanning) | **P2** | 4-6 hours | Yes | Catches future regressions. Important but not blocking field ops. |
+| AC | Status | Priority | Effort | FRC item | Why this priority |
+|---|---|---|---|---|---|
+| AC#1 (Tailscale + SSH) | ✅ Done | P0 | (delivered) | **#1** | Closed the active SSH brute-force vector |
+| AC#2 (OS patching) | ✅ Done | P0 | (delivered) | — | 49 packages including `openssh-server` patched; PM2 ↺ baseline established |
+| AC#3 (Port audit) | Backlog | P1 | 2-4 hours | — | Closes Portainer SPOF; cheap one-time audit |
+| AC#4 (Auth rate-limit audit) | Backlog | P1 | 4-8 hours | — | Defence-in-depth on the most-attacked surface |
+| AC#5 (Backup encryption) | Backlog | P1 | 1 day | — | Compliance + operator confidence; required for Transfer |
+| AC#6 (Alerting push channel) | Backlog | **P0** | 1-2 days | **#5** | **Field-readiness blocking** per FRC §5.3.1 item #5 |
+| AC#7 (Log rotation) | Backlog | P2 | 1 hour | — | Prevents disk-fill incident; cheap to do |
+| AC#8 (2nd super-admin) | Backlog | P1 | 2 hours | — | Eliminates single-account-lockout SPOF |
+| AC#9 (Activity baseline) | Backlog | P2 | 4 weeks elapsed (passive) | — | Establishes normal so anomalies are visible |
+| AC#10 (Cloudflare) | Backlog | P0 | 30-60 min | — | **Domain-gated** — proceeds when `oyoskills.com` lands |
 
 ## Prerequisites / Blockers
 
-- **Cloudflare account** — Awwal needs to sign up at cloudflare.com (free tier sufficient). Requires access to the domain's DNS registrar to change nameservers.
-- **DNS registrar access** — whoever controls `oyotradeministry.com.ng` DNS needs to update nameservers to Cloudflare's (CF provides the specific NS records during onboarding).
-- **Story 9-8 CSP promotion** — ideally complete the CSP enforcing promotion before adding Cloudflare, to avoid debugging two changes at once. But not a hard blocker — Report-Only CSP works fine through Cloudflare.
-- **No code blockers** — Tasks 1-2 are pure ops. Tasks 3-5 have no dependency on external services (Sentry/Papertrail are optional enhancements, not requirements).
+- **AC#1, AC#2:** Already delivered. No blockers.
+- **AC#3 (Port audit):** No blockers. Awwal can run `ss -tlnp` over SSH any time.
+- **AC#4 (Auth rate-limit audit):** No blockers. Pure code work.
+- **AC#5 (Backup encryption):** No blockers. Awwal generates `BACKUP_ENCRYPTION_KEY` and adds to VPS `.env`.
+- **AC#6 (Alerting):** No blockers. Telegram bot setup is 5 minutes; integration is the bulk of the work.
+- **AC#7 (Log rotation):** No blockers.
+- **AC#8 (2nd super-admin):** No blockers — but operator must have a second physical device for the recovery key.
+- **AC#9 (Activity baseline):** Passive — accumulates 4 weeks of data.
+- **AC#10 (Cloudflare):** Blocked on `oyoskills.com` domain purchase — out of scope for this story; proceeds when domain lands.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Cloudflare WAF + CDN setup** (AC: #1, #2, #6) — **P0, 30-60 min, no code changes**
+### Subtask 1: Tailscale + SSH hardening — DONE 2026-04-23
 
-  - [ ] 1.1 Sign up at cloudflare.com (free plan). Add `oyotradeministry.com.ng` as a site.
-  - [ ] 1.2 Cloudflare will scan existing DNS records. Verify all records match what's currently configured at the registrar (A record → DO VPS IP `159.89.146.93`, any MX records for email, any TXT records for domain verification). Add any missing records.
-  - [ ] 1.3 Update nameservers at the domain registrar to Cloudflare's NS records (CF provides these during onboarding — typically `NAME.ns.cloudflare.com` and `NAME2.ns.cloudflare.com`). DNS propagation takes 5 min to 48 hours (usually <1 hour for .com.ng).
-  - [ ] 1.4 In Cloudflare dashboard → SSL/TLS → set mode to **Full (strict)** (the VPS already has a valid Let's Encrypt cert — CF validates it end-to-end). Do NOT use "Flexible" (that would serve HTTP between CF and the VPS, breaking HSTS).
-  - [ ] 1.5 Enable **Always Use HTTPS** (SSL/TLS → Edge Certificates). This replaces the nginx HTTP→HTTPS redirect for clients that hit CF's edge first.
-  - [ ] 1.6 Enable **Bot Fight Mode** (Security → Bots). Free tier includes basic bot detection.
-  - [ ] 1.7 Verify **WebSocket support** — Cloudflare free tier supports WebSocket by default since 2014. Confirm by opening the live site in a browser, checking DevTools Network tab for `wss://oyotradeministry.com.ng/socket.io/` → 101 Switching Protocols. If CF blocks the upgrade, check CF dashboard → Network → WebSockets → ensure "On".
-  - [ ] 1.8 **Critical: verify existing security headers survive CF proxy.** Run `curl -sI https://oyotradeministry.com.ng/` after DNS propagation. All 6 security headers + CSP Report-Only + Reporting-Endpoints should still be present. Cloudflare does NOT strip custom headers — but verify anyway. If any header is missing, check CF's "Transform Rules" for conflicting rules.
-  - [ ] 1.9 **Verify Let's Encrypt cert renewal still works.** Certbot on the VPS uses HTTP-01 challenge (port 80). With Cloudflare proxying, the challenge request goes CF → VPS. This works IF Cloudflare's SSL mode is "Full (strict)" AND the `.well-known/acme-challenge/` path is not cached. Add a CF Page Rule: `oyotradeministry.com.ng/.well-known/*` → Cache Level: Bypass. Alternatively, switch certbot to DNS-01 challenge using the Cloudflare DNS API token (more robust long-term but requires API token setup).
-  - [ ] 1.10 Test "Under Attack Mode" — enable in CF dashboard for 10 seconds. Confirm the JS challenge page appears in a fresh browser tab. Disable immediately. This validates the emergency DDoS button works. Document the toggle location in the playbook.
-  - [ ] 1.11 Update `docs/infrastructure-cicd-playbook.md` with a new Part 7: Cloudflare section documenting: account credentials (who owns the CF account), DNS architecture (registrar → CF nameservers → CF proxy → VPS origin), SSL mode (Full strict), the Under Attack Mode toggle location, WebSocket verification procedure, cert renewal path, and any Page Rules created.
-  - [ ] 1.12 Update `docs/team-context-brief.md` Critical Deployment Notes with: "Traffic routes through Cloudflare (free tier) — WAF + DDoS + CDN active. Under Attack Mode toggle in CF dashboard for emergencies. See Part 7 of the playbook."
+✅ See Change Log entry 2026-04-23 + File List "Tailscale Hardening Subtask (2026-04-23)" block. **Authoritative as-deployed state: ADR-020 V8.2-a1 (architecture.md) + runbook §1.1 + §1.4 + §2.2 + §6.1.**
 
-- [ ] **Task 2: Cloudflare rate limiting for auth endpoints** (AC: #2) — **P0, 15 min, Cloudflare dashboard only**
+### Subtask 2: OS patching baseline — DONE 2026-04-25
 
-  - [ ] 2.1 In Cloudflare dashboard → Security → WAF → Rate Limiting Rules, create a rule: `URI Path contains /api/v1/auth/` → Rate limit: 20 requests per 10 seconds per IP → Action: Block for 60 seconds. This supplements Express's per-endpoint rate limiting with a network-edge layer that blocks before traffic even reaches the VPS.
-  - [ ] 2.2 Create a second rule: `URI Path contains /api/v1/csp-report` → Rate limit: 50 requests per 10 seconds per IP → Action: Block for 300 seconds. Prevents abuse of the CSP report endpoint as a reflection vector.
-  - [ ] 2.3 Test by triggering a rate limit (rapid-fire `curl` in a loop) and confirming the CF block page appears. Document the rules in the playbook Part 7.
+✅ See Change Log entry 2026-04-25 + File List "OS Upgrade Subtask (2026-04-25)" block. Monthly-reboot pre-flight checklist captured in runbook §6.1.
 
-- [ ] **Task 3: Security event visibility dashboard** (AC: #3) — **P2, deferrable, 4-8 hours**
+### Subtask 3: Public port audit & Portainer hardening (AC#3)
 
-  > This task is deferrable. The current system logs CSP violations and rate-limit events to PM2 stdout. Task 3 makes them visible without SSH access. Pick this up when sprint capacity allows.
+- [ ] 3.1 SSH to VPS and run `ss -tlnp` — capture full output with column headers
+- [ ] 3.2 Run `iptables -L -n` and `iptables -t nat -L -n` (Docker writes here directly, bypassing UFW) — capture
+- [ ] 3.3 Cross-reference: every public-listening port (non-`127.0.0.1`) MUST have a corresponding DO Cloud Firewall ingress rule
+- [ ] 3.4 Identify Portainer binding (likely `0.0.0.0:9000`). Decide:
+  - **Option A (preferred):** rebind to `127.0.0.1:9000`; operator accesses via SSH tunnel `ssh -L 9000:127.0.0.1:9000 oslsr-home-app` then `http://localhost:9000`
+  - **Option B (fallback):** keep public but add NGINX basic-auth proxy — adds complexity, weaker than Option A
+- [ ] 3.5 Document audit output as `docs/port-audit-2026-04-XX.md` (date stamp at run)
+- [ ] 3.6 Add to runbook §1.4 a one-liner per listening port + justification
 
-  - [ ] 3.1 Create `apps/api/src/services/security-events.service.ts` — in-memory ring buffer (last 500 events) with types: `csp-violation`, `rate-limit-triggered`, `auth-failed`, `auth-locked-out`. Events are written by the existing `/api/v1/csp-report` handler, the rate-limit `handler` callbacks, and the auth controller's catch blocks.
-  - [ ] 3.2 Create `apps/api/src/routes/security-events.routes.ts` — `GET /api/v1/admin/security-events` (super-admin only, rate-limited to 12/min). Returns the ring buffer contents as JSON, newest-first.
-  - [ ] 3.3 Create `apps/web/src/features/admin/pages/SecurityEventsPage.tsx` — simple table with columns: timestamp, type, source IP, user-agent, details. Auto-refresh every 30 seconds via TanStack Query `refetchInterval`. Add a nav link under the super-admin dashboard's System section.
-  - [ ] 3.4 Tests: service unit tests (ring buffer push/evict/query), route integration test (auth guard + response shape), web component test (renders table, shows empty state).
-  - [ ] 3.5 **Alternative (simpler):** skip the in-app dashboard and wire Papertrail or Sentry free tier instead. Papertrail: `remote_syslog2` daemon on VPS → Papertrail endpoint → email alerts on `"csp_violation"` or `"RATE_LIMIT_EXCEEDED"` patterns. Sentry: `@sentry/node` SDK, capture CSP violations as Sentry events, configure alert rules in Sentry dashboard. Either option is <1 hour setup. Document the choice in Dev Notes.
+### Subtask 4: App-layer rate-limit audit on `/auth/*` (AC#4)
 
-- [ ] **Task 4: Automated vulnerability scanning in CI** (AC: #4) — **P2, deferrable, 4-6 hours**
+- [ ] 4.1 Inventory `/api/v1/auth/*` and `/api/v1/staff/activate/*` endpoints — confirm via `apps/api/src/routes/auth.routes.ts` + `staff.routes.ts`
+- [ ] 4.2 For each endpoint, identify the rate-limit middleware applied (per-IP, per-NIN, per-email)
+- [ ] 4.3 Cross-check thresholds against PRD NFR4.4: login 5/15min, password reset 3/hour, profile edit token 3/NIN/day
+- [ ] 4.4 Add `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` — assert each documented endpoint enforces the documented limit; failure surfaces drift
+- [ ] 4.5 Document delta + remediation in Dev Notes
 
-  > This task is deferrable. The pre-field security sweep (2026-04-06) was a one-time effort. Task 4 makes it recurring. Pick up when CI budget allows (ZAP Docker image adds ~2 min to CI runtime).
+### Subtask 5: Backup client-side encryption + restore drill (AC#5)
 
-  - [ ] 4.1 Add a new CI job `security-scan` in `.github/workflows/ci-cd.yml` that runs after `test-api` passes (but does NOT block deploy — informational initially). Uses `ghcr.io/zaproxy/zaproxy:stable` Docker image with `zap-baseline.py -t https://oyotradeministry.com.ng -r report.html`.
-  - [ ] 4.2 Create `.zap-rules.conf` in repo root to suppress known false positives (e.g., the `Server: nginx` information disclosure that we've accepted, the `X-Content-Type-Options` duplicate warning from static-asset location block headers).
-  - [ ] 4.3 Parse ZAP output and post as a GitHub Actions job summary (or PR comment if running on PRs). Critical/High findings produce a `::warning` annotation. Low/Medium are informational.
-  - [ ] 4.4 **Future upgrade path (when budget allows):** replace baseline scan with full active scan against a staging environment (not production — active scans send attack payloads). Requires a staging VPS or Docker-compose-based local stack.
+- [ ] 5.1 Add `BACKUP_ENCRYPTION_KEY` to `.env.example` (with comment noting it's a 32-byte hex from `openssl rand -hex 32`)
+- [ ] 5.2 Generate the key on the VPS: `openssl rand -hex 32 | tee -a /root/oslsr-backup-key.txt` (also save to operator's password manager)
+- [ ] 5.3 Modify `apps/api/scripts/backup-to-s3.sh` (or current daily-backup script):
+  - Pre-upload: `pg_dump ... | openssl enc -aes-256-cbc -salt -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY | aws s3 cp ...`
+  - Filename suffix: change from `.sql.gz` to `.sql.gz.enc`
+- [ ] 5.4 Test restore against scratch Postgres: `aws s3 cp ... | openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY | psql ...`
+- [ ] 5.5 Document restore procedure as `docs/infrastructure-cicd-playbook.md` Part 9 — Encrypted Backup Restore
+- [ ] 5.6 Update existing monthly backup script if it differs from daily
+- [ ] 5.7 Schedule quarterly restore drill in runbook §6.1
+- [ ] 5.8 Capture one-shot restore drill output as Dev Notes evidence
 
-- [ ] **Task 5: Secrets management runbook** (AC: #5) — **P1, deferrable, 1-2 hours, documentation only**
+### Subtask 6: Alerting tier with push channel (AC#6, FRC item #5)
 
-  - [ ] 5.1 Audit current secrets: enumerate every secret in `.env` on the VPS. Expected inventory (from project memory + infrastructure playbook):
-    - `DATABASE_URL` (Postgres connection string with `oslsr_user` credentials)
-    - `REDIS_URL` (with AUTH password)
-    - `JWT_SECRET` + `JWT_REFRESH_SECRET` (hex, rotated 2026-04-04 in sec2-1)
-    - `HCAPTCHA_SECRET_KEY`
-    - `S3_ACCESS_KEY_ID` + `S3_SECRET_ACCESS_KEY` + `S3_BUCKET` + `S3_ENDPOINT` + `S3_REGION` (DO Spaces)
-    - `CORS_ORIGIN`
-    - `SUPPORT_URL`
-    - `NODE_ENV`
-    - Any others discovered during audit
-  - [ ] 5.2 For each secret, document: last rotation date (if known), rotation procedure (step-by-step), blast radius if compromised (what an attacker gains), and rotation frequency recommendation.
-  - [ ] 5.3 Add to `docs/infrastructure-cicd-playbook.md` as Part 8: Secrets Management.
-  - [ ] 5.4 **Future upgrade path:** migrate secrets from `.env` files to either (a) DigitalOcean App Platform (if we move off raw VPS), (b) HashiCorp Vault (if we stay on VPS and need rotation automation), or (c) GitHub Actions secrets + SSH environment injection (lighter touch, already partially used for deploy). Document the trade-offs of each option.
+- [ ] 6.1 Create Telegram bot via @BotFather (5 minutes; record `TELEGRAM_BOT_TOKEN`)
+- [ ] 6.2 Get operator's Telegram `chat_id` (via @userinfobot or sending /start to the new bot then GET `https://api.telegram.org/bot<token>/getUpdates`)
+- [ ] 6.3 Add `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` to `.env.example` + VPS `.env`
+- [ ] 6.4 Add `apps/api/src/services/alerting/telegram-channel.ts` — single function `sendCriticalAlert(message, severity, context)` posting to `/sendMessage`
+- [ ] 6.5 Wire into `apps/api/src/services/health-digest.service.ts` — fire `sendCriticalAlert` for: p95 >1000ms sustained 5min, DB connection failures >3/min, fail2ban ban-delta >10/hour, CSP violation rate >100/min
+- [ ] 6.6 Add `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — mock fetch + assert payload shape
+- [ ] 6.7 Wire one test alert in production at deploy time to confirm channel works
+- [ ] 6.8 Document alert routing matrix in runbook §1.6 — Alert Routing
+- [ ] 6.9 Update FRC table in `epics.md` Field Readiness Certificate section: item #5 status `⏳ Backlog → ✅ Done <date>`
 
-- [ ] **Task 6: Traceability** (AC: none — process hygiene)
-  - [ ] 6.1 `sprint-status.yaml`: transition `9-9-*` entry through status lifecycle as tasks are completed.
-  - [ ] 6.2 Note in the entry comment which tasks were completed and which remain deferred, with reasoning.
+### Subtask 7: Log rotation (AC#7)
+
+- [ ] 7.1 `pm2 install pm2-logrotate` then `pm2 set pm2-logrotate:max_size 50M`, `pm2 set pm2-logrotate:retain 14`, `pm2 set pm2-logrotate:compress true`, `pm2 set pm2-logrotate:rotateInterval '0 0 * * *'`
+- [ ] 7.2 Edit `/etc/systemd/journald.conf`: `SystemMaxUse=2G`, `MaxRetentionSec=30d`. Then `systemctl restart systemd-journald`
+- [ ] 7.3 Verify: `pm2 logrotate --status` (or `pm2 conf pm2-logrotate`), `journalctl --disk-usage`
+- [ ] 7.4 Add to runbook §1.4 — Log retention policy
+
+### Subtask 8: Second super-admin account (AC#8)
+
+- [ ] 8.1 Generate `awwal-breakglass@oyotradeministry.com.ng` user record via existing `pnpm --filter @oslsr/api db:seed --admin-from-env` flow with a distinct env-var-set
+- [ ] 8.2 Store password in operator's password manager (Bitwarden / 1Password / etc.) tagged "OSLSR break-glass"
+- [ ] 8.3 Generate a second `id_ed25519` SSH key for the operator's phone (Termius app or equivalent). Add public key to `/root/.ssh/authorized_keys` line 3 with comment `awwal-breakglass-phone-2026-04-XX`
+- [ ] 8.4 Test: log in as breakglass account once via the app; confirm full super-admin dashboard accessible. Then *do not use this account again* for daily ops.
+- [ ] 8.5 Test: SSH to VPS using phone + Termius via Tailscale (phone needs to be on the tailnet — see follow-up item below)
+- [ ] 8.6 Document in runbook §1.5 — Key accounts: add break-glass row with explicit "do not use for daily ops" warning
+- [ ] 8.7 Add quarterly drill check item: confirm break-glass credentials still work + password unchanged in manager
+
+### Subtask 9: SOC-style activity baseline (AC#9)
+
+- [ ] 9.1 Establish baseline via `journalctl -u ssh --since "2026-04-25" | grep -E "(Accepted|Failed)"` weekly for 4 weeks
+- [ ] 9.2 Categorize source IPs:
+  - **Operator** (Awwal's home/office IPs over time)
+  - **GH Actions** (rotating GitHub IP ranges per `https://api.github.com/meta`)
+  - **DO Infrastructure** (`162.243.0.0/16` and other DO ranges per ADR-020 §"DO Console Access Vector")
+  - **fail2ban-banned** (sample from `fail2ban-client status sshd`)
+  - **Unknown** (everything else — the brute-force tail)
+- [ ] 9.3 Capture weekly snapshots in `docs/ssh-activity-baseline-week-N-2026-05-XX.md`
+- [ ] 9.4 After 4 weeks: synthesize as `docs/ssh-activity-baseline-2026-05-XX.md` — establish "normal" volumes per category
+- [ ] 9.5 Add monthly review cadence to runbook §6.1 — review baseline, flag anomalies
+- [ ] 9.6 **Any successful login outside operator/CI categories = P0 incident** — document the incident response procedure in runbook §3 (Incident Response)
+
+### Subtask 10: Cloudflare WAF/CDN (AC#10) — DOMAIN-GATED
+
+- [ ] 10.1 Wait for `oyoskills.com` domain purchase (Story 9-2 dependency)
+- [ ] 10.2 Once domain lands, follow the original 2026-04-12 Cloudflare task plan preserved in §"Original Field-Readiness Assessment (2026-04-12)" Dev Notes below — Tasks 1.1-1.12 + 2.1-2.3
+- [ ] 10.3 **Open follow-up question:** with Cloudflare in front of public traffic, can the DO Cloud Firewall SSH rule be re-narrowed back to `100.64.0.0/10` + DO infrastructure ranges + Cloudflare IP ranges? Decision pending — ADR-020 V8.2-a1 §"DO Console Access Vector" trade-off matrix has the framing.
+
+### Subtask 11: Traceability (AC#11 — process hygiene)
+
+- [ ] 11.1 `sprint-status.yaml`: 9-9 entry remains `in-progress` until all subtasks except AC#10 (domain-gated) are done. Single-line comment per subtask completion.
+- [ ] 11.2 Field Readiness Certificate (epics.md): flip item #1 status (already ✅ done) and item #5 status when AC#6 completes.
 
 ### Review Follow-ups (AI)
 
-_(To be populated by code-review workflow if/when this story is implemented.)_
+_(To be populated by code-review workflow per subtask implementation.)_
+
+## Dependencies
+
+- **Story 9-7 (done)** — security baseline (nginx headers, TLS hardening); precedes any infrastructure hardening
+- **Story 9-8 (in-progress)** — CSP nginx rollout; AC#6 alerting routes CSP violation rate, so 9-8 enforcing-mode must land for CSP-violation-rate alerts to be meaningful
+- **Story 9-2 (deferred)** — `oyoskills.com` domain migration; **blocks AC#10 only**
+- **No story dependencies for AC#3 through AC#9** — all are infrastructure-level and parallelisable
+
+## Field Readiness Certificate Impact
+
+This story is on the **Field Readiness Certificate (FRC §5.3.1)** at two items:
+
+- **FRC item #1** (Tailscale live + SSH public-port closed) — ✅ **Satisfied 2026-04-23** by AC#1 + the 2026-04-25 firewall amendment (ADR-020 V8.2-a1: SSH primary control is sshd-key-only, firewall is dual-source defence-in-depth + DDoS attenuation; the FRC item reads correctly under the as-deployed posture even though "public-port closed" is no longer literal — the operative semantics is "public-port unauthenticated-attempts cannot succeed", which sshd hardening guarantees)
+- **FRC item #5** (Alerting tier with at least one push channel live) — ⏳ **Outstanding** — AC#6 satisfies this; **field-blocking until done**
+
+## Risks
+
+1. **AC#1/AC#2 documentation drift.** The dual-source firewall posture (post-2026-04-25 amendment) is counter-intuitive — a future engineer reading "SSH firewall = 0.0.0.0/0" might "fix" it to tailnet-only and silently break Console + GH Actions. **Mitigation:** ADR-020 V8.2-a1 §"DO Console Access Vector" prominently flags this as a load-bearing decision; runbook §1.4 + §6.1 quarterly drill enforce the explanation. PRD V8.3 NFR9 documents the same.
+
+2. **AC#6 channel choice locks in operator phone-number.** If we pick Telegram (recommended) and the operator changes phones, the chat_id needs updating. **Mitigation:** document chat_id retrieval in runbook §1.6; quarterly drill test sends a heartbeat alert to confirm channel still works.
+
+3. **AC#5 backup encryption key loss.** If `BACKUP_ENCRYPTION_KEY` is lost AND the only copy is on the destroyed VPS, all encrypted backups become unreadable. **Mitigation:** mandatory password-manager copy + paper backup in physically secure location + test the restore procedure from password-manager-only key during quarterly drill.
+
+4. **AC#3 Portainer rebinding could lock out current users.** If Portainer is currently in use by other team members on `0.0.0.0:9000`, rebinding to `127.0.0.1` requires them to set up SSH tunnels. **Mitigation:** announce 24h before rebinding; provide ssh-tunnel one-liner in announcement.
+
+5. **AC#9 activity baseline takes 4 weeks elapsed.** This means subtask 9 cannot be "done" before week 4 of field operation. **Mitigation:** mark AC#9 explicitly as Tier B per FRC table — does not block field start; baseline accumulates during early field weeks.
+
+6. **AC#10 (Cloudflare) is domain-gated.** Indefinite blocker until `oyoskills.com` lands. **Mitigation:** Story 9-9 stays `in-progress` indefinitely if AC#10 is the only outstanding item; this is acceptable because AC#10 is enhancement-not-baseline (the 2026-04-25 ADR-020 posture provides the security baseline without Cloudflare).
+
+## File List
+
+**Subtasks 1-2 (already delivered) — see preserved blocks below.**
+
+**Subtasks 3-9 (forward-planned) — expected created/modified:**
+
+- `docs/port-audit-2026-04-XX.md` — new (Subtask 3)
+- `docs/ssh-activity-baseline-week-1-…-2026-05-XX.md` — new x4 (Subtask 9)
+- `docs/ssh-activity-baseline-2026-05-XX.md` — new (Subtask 9 synthesis)
+- `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` — new (Subtask 4)
+- `apps/api/scripts/backup-to-s3.sh` (or current daily-backup script) — modified (Subtask 5)
+- `apps/api/src/services/alerting/telegram-channel.ts` — new (Subtask 6)
+- `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — new (Subtask 6)
+- `apps/api/src/services/health-digest.service.ts` — modified (Subtask 6)
+- `.env.example` — modified (Subtasks 5 + 6)
+- `docs/infrastructure-cicd-playbook.md` — modified (Parts 9 + alert-routing matrix)
+- `docs/emergency-recovery-runbook.md` — modified (§1.4 logs, §1.5 break-glass, §1.6 alert routing, §6.1 quarterly drill expansion)
+- `_bmad-output/planning-artifacts/epics.md` — modified (FRC table item #5 status flip, when AC#6 completes)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified
+
+**Subtask 10 (Cloudflare, domain-gated) — see original 2026-04-12 task plan preserved in Dev Notes below.**
+
+### File List — Tailscale Hardening Subtask (2026-04-23)
+
+**VPS-side state changes (not committed to repo — infrastructure configuration):**
+
+- `/etc/ssh/sshd_config` — three directives enforced (see Change Log entry above)
+- `/etc/ssh/sshd_config.d/50-cloud-init.conf` — `PasswordAuthentication yes` → `no`
+- `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` — verified already `no`
+- `/root/.ssh/authorized_keys` — appended 2nd line (`awwallawal@gmail.com` public key)
+- `/usr/lib/systemd/system/tailscaled.service` — installed + enabled via `curl -fsSL https://tailscale.com/install.sh | sh`
+- `/usr/lib/systemd/system/fail2ban.service` — installed + enabled via `apt install -y fail2ban`
+- DO Cloud Firewall "OSLRS" — SSH rule source: `100.64.0.0/10` (CGNAT) — **amended 2026-04-25 to dual-source `0.0.0.0/0` + `100.64.0.0/10`** per ADR-020 V8.2-a1
+- DO droplet Tailscale hostname: `oslsr-home-app` (IP `100.93.100.28`)
+
+**Laptop-side state changes (not committed to repo — local workstation configuration):**
+
+- `C:\Users\DELL\.ssh\config` — new file with `oslsr-home-app` host definition, `IdentityFile ~/.ssh/id_ed25519`, `IdentitiesOnly yes`
+- Tailscale Windows client installed + signed in to `lawalkolade@gmail.com`
+
+**Repo files created:**
+
+- `docs/emergency-recovery-runbook.md` — 8-section runbook + panic-start block + quarterly drill procedure (subsequently amended 2026-04-25 §1.1 + §1.4 + §2.2 + §6.1 with dual-source firewall + DOTTY-as-Console-mechanism)
+
+**Follow-up items flagged for later (some now resolved by 2026-04-25 OS upgrade or by ADR-020 V8.2-a1):**
+
+- Remove `github_actions_deploy` private key from laptop (should exist only in GitHub Secrets — hygiene)
+- Take DO droplet snapshot named `tailscale-hardening-complete-2026-04-23` (runbook §6.1 item 1) — **superseded** by 2026-04-25 snapshots `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`
+- Reset + save VPS root password to password manager (runbook §6.1 item 3)
+- ~~Apply 51 pending OS updates + kernel 6.8.0-90 → 6.8.0-110 reboot (separate Story 9-9 subtask)~~ — **done 2026-04-25** (49 packages including kernel; see OS Upgrade Subtask File List below)
+- ~~PM2 restart counter 916+ over 89 days — separate Story 9-10 investigation~~ — **observation window opened 2026-04-25** when reboot reset PM2 ↺ to 0; Story 9-10 takes it from here
+- Self-hosted GitHub Actions runner inside tailnet → would allow re-narrowing firewall back to `100.64.0.0/10` + DO IPs (per ADR-020 V8.2-a1 §"DO Console Access Vector" trade-off matrix)
+
+### File List — OS Upgrade Subtask (2026-04-25)
+
+**VPS-side state changes:**
+
+- Ubuntu 24.04.3 → 24.04.4 (49 packages upgraded including `systemd`, `apparmor`, `snapd`, `cloud-init`, `nodejs`, `openssh-server`)
+- Kernel 6.8.0-90 → 6.8.0-110
+- Reboot 08:54:37 UTC; uptime counter reset
+- PM2 ↺ counter reset 916+ → 0 (Story 9-10 observability baseline)
+- All Docker containers up post-reboot (`oslsr-redis`, `oslsr-postgres`, `portainer`); restart policy = `unless-stopped` confirmed pre-reboot
+- `pm2 oslsr-api` online post-reboot (PM2 startup hook `pm2-root.service` + `pm2 save` confirmed pre-reboot)
+- `tailscaled.service` enabled-on-boot confirmed pre-reboot
+- HTTPS health endpoint 200 with full sec2-3 CSP confirmed post-reboot
+- `fail2ban.service` + sshd jail active post-reboot
+
+**Pre-flight verification (mandatory for every monthly reboot, per runbook §6.1):**
+
+- `systemctl is-enabled tailscaled.service` → enabled
+- `systemctl status pm2-root.service` → active
+- `pm2 save` (idempotent — re-saves current process list to `~/.pm2/dump.pm2`)
+- `docker inspect <container> --format '{{.HostConfig.RestartPolicy.Name}}'` → `unless-stopped` for all containers
+- `cat /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf | grep -E '^(PasswordAuth|PermitRoot|PubkeyAuth)'` → consistent across files
+- DO snapshot taken before `apt-get dist-upgrade` (`pre-os-upgrade-2026-04-25`)
+
+**DO snapshots taken (retained for 30 days per DO default):**
+
+- `pre-os-upgrade-2026-04-25` — pre-upgrade rollback point
+- `clean-os-update-2026-04-25` — post-upgrade clean baseline
+
+**Repo files modified:**
+
+- `docs/emergency-recovery-runbook.md` — §1.1 (current state) + §1.4 (firewall + fail2ban semantics) + §2.2 (Console access path) + §6.1 (quarterly drill expanded with monthly-reboot pre-flight checklist) — all updated 2026-04-25 to reflect dual-source firewall + DOTTY architectural correction
 
 ## Dev Notes
-
-### Pre-implementation: p95 false-alert fix (2026-04-12)
-
-**Problem:** Production health-digest emails fired `api_p95_latency Critical 631` every 30 minutes. The VPS is low-traffic — fewer than 50 requests between digest intervals. A single slow request (cold PM2 restart, first DB connection, or SSR hydration probe) pushed p95 to 631ms with only ~20 samples in the rolling buffer. Statistically, p95 of 20 samples is noise, not signal.
-
-**Fix:** `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95 = 50`. Below this threshold `getP95Latency()` returns 0 (no alert). Above it, the existing rolling-buffer p95 calculation runs as before. The threshold was chosen because p95 needs at least ~40-50 data points to be statistically stable (rule of thumb: 1/(1-0.95) = 20 minimum, doubled for safety margin against clustering).
-
-**Why this matters for 9-9:** The C+ operational security grade cites "no centralized logging/alerting" as the main gap. The health-digest system IS the current alerting mechanism. If it cries wolf every 30 minutes, operators learn to ignore it — exactly the alert-fatigue anti-pattern that makes breaches invisible. This fix ensures the alerts that DO fire are real.
-
-**Also fixed:** Missing `zod` dependency in `packages/config/package.json` — runtime import error for config consumers using zod schemas.
-
-**Files changed:**
-- `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95` threshold + test helpers
-- `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests (new file)
-- `packages/config/package.json` — added `zod` dependency
-- `pnpm-lock.yaml` — lockfile update
 
 ### Why this story exists
 
@@ -162,58 +321,79 @@ During Story 9-8's dev-story session (2026-04-12), Awwal asked three questions:
 2. "How do you grade the security?"
 3. "Can we push to the field?"
 
-The answers (B+ overall grade, field-ready NOW, with 4 infrastructure gaps that can be closed incrementally) warranted a dedicated story to capture the assessment and the actionable remediation plan so that when computing resources become available, no nuance is lost.
+The answers (B+ overall grade, field-ready NOW with caveats, with infrastructure gaps that can be closed incrementally) warranted a dedicated story. SCP-2026-04-22 expanded that story's scope after the 2026-04-20 brute-force incident.
 
-### The "Cloudflare solves two problems at once" insight
+### As-deployed primary access control
 
-The two biggest infrastructure gaps — **no WAF** and **no DDoS mitigation** — are both closed by a single DNS change to Cloudflare's free tier. This is unusually high ROI:
+Per ADR-020 V8.2-a1 (architecture.md), the **primary SSH access control is sshd-level key-only authentication**, not the network firewall. The firewall is dual-source `0.0.0.0/0` + `100.64.0.0/10` (defence-in-depth + DDoS attenuation only). This is a deliberate trade-off — see ADR-020 §"DO Console Access Vector" for the rationale and the future re-narrowing options. **AC#1 and AC#2 are done under this posture.**
+
+### Pre-implementation: p95 false-alert fix (2026-04-12)
+
+**Problem:** Production health-digest emails fired `api_p95_latency Critical 631` every 30 minutes. The VPS is low-traffic — fewer than 50 requests between digest intervals. A single slow request (cold PM2 restart, first DB connection, or SSR hydration probe) pushed p95 to 631ms with only ~20 samples in the rolling buffer. Statistically, p95 of 20 samples is noise, not signal.
+
+**Fix:** `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95 = 50`. Below this threshold `getP95Latency()` returns 0 (no alert). Above it, the existing rolling-buffer p95 calculation runs as before.
+
+**Why this matters for 9-9:** AC#6 builds on the health-digest system. If the alerting baseline cries wolf every 30 minutes, the new push channel inherits the noise — exactly the alert-fatigue anti-pattern. The 50-sample minimum makes sure the alerts that DO fire are real.
+
+**Files changed:**
+- `apps/api/src/middleware/metrics.ts` — `MIN_SAMPLES_FOR_P95` threshold + test helpers
+- `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests (new file)
+- `packages/config/package.json` — added `zod` dependency
+- `pnpm-lock.yaml` — lockfile update
+
+### Original Field-Readiness Assessment (2026-04-12)
+
+> **PRESERVED FROM ORIGINAL STORY** — this assessment underpinned the 2026-04-23 + 2026-04-25 deployments. The Cloudflare-as-2-problems-solved insight remains correct for AC#10 when domain lands.
+
+**Current Grade: B+** (assessed after Stories sec2-1 through sec2-4 + 9-7 + 9-8). Code-level security is genuinely strong (A-); gaps were infrastructure (B-) and operational (C+). 25+ security stories/fixes across 9 epics.
+
+**Field-Readiness Assessment: READY** — Site was field-ready for current use case (Oyo State labour & skills registry, government staff + registered enumerators). Rationale:
+
+1. Attack surface bounded — no payment processing, PII limited to NIN/name/phone, credentialed user base (not open internet)
+2. Code-level security comprehensive — RBAC + JWT + Zod + CORS + rate limiting + CSP + fraud detection
+3. Remaining gaps about SCALE not BASELINE — WAF/DDoS matter when you're a target
+4. Recovery is fast — CSP rollback in 2 min, nginx backup-restore automatic, DO snapshots
+5. CSP Report-Only IS field monitoring — `/api/v1/csp-report` collects real signal
+6. VPS headroom — 26% RAM as of 2026-03-03
+
+**The "Cloudflare solves two problems at once" insight (preserved for AC#10):**
 
 | Gap | Without Cloudflare | With Cloudflare (free tier) |
 |---|---|---|
 | WAF | nginx exposes Express directly; SQL injection / XSS / path traversal in URL params reach the app (Zod catches most but not all) | CF's managed WAF rules filter OWASP Top 10 attack patterns at the edge before traffic hits the VPS |
 | DDoS | Rate limiting exists per-endpoint but a volumetric L3/L4 flood saturates the 2GB VPS's bandwidth | CF absorbs volumetric traffic at their edge; only clean requests reach the VPS. "Under Attack Mode" adds a JS challenge during active attacks |
 | CDN | All static assets served from the single VPS in DigitalOcean's datacenter | CF caches static assets at 300+ edge locations globally; reduces VPS bandwidth and improves LCP for geographically distant users |
-| Bot detection | None | CF's Bot Fight Mode identifies and challenges automated traffic (scrapers, credential stuffers) |
-| Analytics | None beyond PM2 logs | CF dashboard shows request volume, bandwidth, threat map, cached vs uncached ratio — instant visibility into traffic patterns |
+| Bot detection | None | CF's Bot Fight Mode identifies and challenges automated traffic |
+| Analytics | None beyond PM2 logs | CF dashboard shows request volume, bandwidth, threat map, cached vs uncached ratio |
 | Cost | $0 | $0 (free tier) |
 | Time to implement | N/A | 30-60 minutes (DNS change + dashboard config) |
 
-The only gotcha: **Let's Encrypt cert renewal** through Cloudflare requires either a Page Rule to bypass CF's cache on `.well-known/acme-challenge/` OR switching certbot from HTTP-01 to DNS-01 challenge (using CF's DNS API token). Task 1.9 covers this explicitly.
+**The only gotcha:** Let's Encrypt cert renewal through Cloudflare requires either a Page Rule to bypass CF cache on `.well-known/acme-challenge/` OR switching certbot from HTTP-01 to DNS-01 challenge (using CF's DNS API token). AC#10 Subtask 10.2 covers this when domain lands.
 
-### Why NOT to wait for Cloudflare before field launch
-
-The assessment concludes "push to field now, add Cloudflare within the first week" rather than "add Cloudflare BEFORE field launch" because:
-
-1. **DNS propagation is unpredictable** for `.com.ng` domains — could be 5 minutes, could be 48 hours. Blocking field launch on DNS propagation wastes calendar time.
-2. **The code-level security is sufficient for initial field operations** — the user base during initial rollout is small (government staff, not the general public), the attack surface is bounded, and the fraud engine catches data-integrity attacks.
-3. **Cloudflare's free WAF is probabilistic, not deterministic** — it catches common attack patterns but doesn't guarantee blocking all probes. Code-level defenses (Zod, RBAC, rate limiting) are the real protection layer; CF is belt-on-top-of-suspenders.
-4. **Adding CF and fixing CF-related regressions simultaneously with field launch creates two variables** — better to launch first (one variable: "does the app work for real users?"), then add CF (second variable: "does CF proxy break anything?"), verifying each independently.
-
-### What "B+" means in practice
-
-The B+ grade is relative to the site's **threat model**, not to an abstract security standard:
-
-- **Government labour registry in Oyo State** — not a financial institution, not a healthcare system, not a defense contractor. The data (NIN, name, phone, skills, survey responses) is sensitive but not high-value to sophisticated threat actors.
-- **User base is credentialed** — enumerators, supervisors, clerks, and admins all require invitation + activation. Public users self-register but access is limited to their own profile + marketplace. No anonymous access to sensitive data.
-- **The "A-" code security** means an attacker who gets past the infrastructure layer (no WAF) still faces 5+ independent code-level defenses. Compromising the app requires chaining multiple vulnerabilities (XSS bypass CSP AND bypass Zod validation AND escalate from their role to another role AND bypass IDOR checks) — this is a high bar.
-- **The "C+" operational security** is the real risk — not that an attacker gets in, but that we **don't notice** for hours/days if they do. That's what Tasks 3 (alerting) and 4 (scanning) address.
+**Why "B+" in practice:** The grade is relative to the site's threat model, not an abstract security standard:
+- Government labour registry — not financial / healthcare / defense; PII is sensitive but not high-value
+- User base is credentialed — public users self-register but access is limited
+- "A-" code security: an attacker past infrastructure faces 5+ independent code-level defenses; chaining bypasses is a high bar
+- "C+" operational: the real risk isn't that an attacker gets in, but that we **don't notice** for hours/days. AC#6 (alerting) addresses this.
 
 ### References
 
 - Security Hardening Phase 2 (2026-04-04): sec2-1 through sec2-4 in sprint-status.yaml
-- Story 9-7 (2026-04-11): nginx headers + TLS hardening, code review 11 findings all resolved
-- Story 9-8 (2026-04-12): CSP nginx mirror, parity test, Report-Only deployed
+- Story 9-7 (done 2026-04-11): nginx headers + TLS hardening, code review 11 findings all resolved
+- Story 9-8 (in-progress): CSP nginx mirror, parity test, Report-Only deployed
 - Pre-field security sweep (2026-04-06): `security-sweep-pre-field-2026-04-06` in sprint-status.yaml
-- Infrastructure playbook: `docs/infrastructure-cicd-playbook.md` (Parts 1-6, to be extended with Parts 7-8)
+- Architecture ADR-020 V8.2-a1: `_bmad-output/planning-artifacts/architecture.md` §ADR-020 + §"DO Console Access Vector"
+- Architecture Decision 2.7: `architecture.md` §"Authentication & Security" Decision 2.7
+- PRD V8.3 NFR9: `_bmad-output/planning-artifacts/prd.md` §NFR9 (rewritten 2026-04-25 to align with as-deployed dual-source firewall)
+- Emergency recovery runbook: `docs/emergency-recovery-runbook.md`
+- Infrastructure playbook: `docs/infrastructure-cicd-playbook.md` (Parts 1-6, to be extended with Parts 7-9)
 - Project memory: VPS credentials (`project_vps_credentials.md`), backup storage (`project_backup_storage.md`), db:push:force data loss lesson (`feedback_db_push_force.md`)
-- Cloudflare free tier docs: https://developers.cloudflare.com/fundamentals/
-- OWASP ZAP baseline scan: https://www.zaproxy.org/docs/docker/baseline-scan/
 
 ## Dev Agent Record
 
 ### Agent Model Used
 
-_(Populated when story enters dev.)_
+_(Populated when each subtask enters dev.)_
 
 ### Debug Log References
 
@@ -231,49 +411,6 @@ _(Populated during implementation.)_
 | 2026-04-12 | **Pre-implementation fix: p95 latency false-alert suppression.** `apps/api/src/middleware/metrics.ts` — added `MIN_SAMPLES_FOR_P95 = 50` threshold. `getP95Latency()` now returns 0 when sample count < 50, preventing a single slow request on the low-traffic VPS from triggering Critical health-digest alerts (was: stuck at 631ms). Added `resetLatencyBuffer()` + `recordLatencySample()` test helpers. New `apps/api/src/middleware/__tests__/metrics.test.ts` — 7 tests covering zero/below-threshold/at-threshold/outlier/exact-production-scenario cases. | Production health-digest emails fired repeated `api_p95_latency Critical 631` alerts every 30 min. Root cause: on a low-traffic VPS, a single slow request (cold start or DB connection init) dominates the p95 with < 20 samples in the rolling buffer. The 50-sample minimum makes the statistic meaningful before it can trigger alerts. Directly addresses the C+ operational security grade — false-positive alert fatigue erodes trust in the monitoring system. |
 | 2026-04-12 | **Bugfix: added missing `zod` dependency to `@oslsr/config` package.** `packages/config/package.json` + `pnpm-lock.yaml` updated. | Runtime import error when `@oslsr/config` consumers used zod schemas — dependency was consumed but not declared in the package's own `package.json`. |
 | 2026-04-23 | **Subtask COMPLETE — Tailscale + SSH hardening (P0, per SCP 2026-04-22 scope expansion).** Tailscale installed on VPS (`oslsr-home-app` @ `100.93.100.28`) + laptop (`desktop-qe4lplq` @ `100.113.78.101`) under `lawalkolade@gmail.com` Free tier. Personal `id_ed25519` public key appended to `/root/.ssh/authorized_keys` (2 lines total: `github-actions-deploy` + `awwallawal@gmail.com`). Laptop `~/.ssh/config` created with `IdentitiesOnly yes` directive. `sshd_config` main + both drop-ins (`50-cloud-init.conf`, `60-cloudimg-settings.conf`) consistently set to `PasswordAuthentication no` + `PermitRootLogin prohibit-password` + `PubkeyAuthentication yes`. DO Cloud Firewall "OSLRS" SSH rule source narrowed from `0.0.0.0/0` + `::/0` to `100.64.0.0/10` (Tailscale CGNAT range only). fail2ban installed + enabled (default config: maxretry 5, bantime 10m, jail:sshd). Verified: (1) public-IP SSH → `Connection timed out` (2) key-disabled SSH → `Permission denied (publickey)` (3) Tailscale SSH → immediate login no password prompt. Emergency recovery runbook authored at `docs/emergency-recovery-runbook.md` (8 sections + panic-start block + quarterly drill). DO Web Console timed out on current ISP — confirmed as ISP WebSocket filtering issue, not VPS-side (both `serial-getty@ttyS0.service` and `droplet-agent.service` verified active). Alternative break-glass paths documented: DO Recovery Console + DO Snapshot + DO Support ticket. | Monday 2026-04-20 11:04 UTC brute-force attack from 14+ distributed IPs (`2.57.122.x`, `144.31.234.20`, `92.118.39.x`, `45.227.254.170`, `172.93.100.236`, `43.128.106.113`, `118.194.234.8`, `103.189.235.33`, `213.209.159.231`, `2.57.121.25`, `45.148.10.50`, `64.89.160.135`) hammering port 22 trying `root`, `ubuntu`, `oyotradeministry`, `test`, `user`, `hadi`, `amssys` drove CPU to 100% + Memory to 82% — monitoring alert fired as designed (Story 6-2), but detection-to-response was 19 hours. Pre-existing Story 9-9 backlog task (Cloudflare-only) didn't cover SSH surface; SCP 2026-04-22 expanded scope to include Tailscale + OS patching + port audit + app-layer rate-limit audit + backup encryption + alerting tier + logrotate + second super-admin + activity baseline + Cloudflare (domain-gated). This entry records completion of the P0 subtask; remaining 9 subtasks deferred to Bob's formal Story 9-9 regeneration after SCP-driven PRD/Architecture/UX amendments. |
-
-### File List
-
-**Expected created (Task 3 only, if implemented):**
-- `apps/api/src/services/security-events.service.ts`
-- `apps/api/src/routes/security-events.routes.ts`
-- `apps/web/src/features/admin/pages/SecurityEventsPage.tsx`
-- `.zap-rules.conf` (Task 4)
-
-**Expected modified:**
-- `docs/infrastructure-cicd-playbook.md` — Parts 7 (Cloudflare) + 8 (Secrets)
-- `docs/team-context-brief.md` — Cloudflare note in Critical Deployment Notes
-- `.github/workflows/ci-cd.yml` — new `security-scan` job (Task 4)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml`
-
-**No code changes for Tasks 1-2 (Cloudflare dashboard config only).**
-
-### File List — Tailscale Hardening Subtask (2026-04-23)
-
-**VPS-side state changes (not committed to repo — infrastructure configuration):**
-
-- `/etc/ssh/sshd_config` — three directives enforced (see Change Log entry above)
-- `/etc/ssh/sshd_config.d/50-cloud-init.conf` — `PasswordAuthentication yes` → `no`
-- `/etc/ssh/sshd_config.d/60-cloudimg-settings.conf` — verified already `no`
-- `/root/.ssh/authorized_keys` — appended 2nd line (`awwallawal@gmail.com` public key)
-- `/usr/lib/systemd/system/tailscaled.service` — installed + enabled via `curl -fsSL https://tailscale.com/install.sh | sh`
-- `/usr/lib/systemd/system/fail2ban.service` — installed + enabled via `apt install -y fail2ban`
-- DO Cloud Firewall "OSLRS" — SSH rule source: `100.64.0.0/10` (CGNAT)
-- DO droplet Tailscale hostname: `oslsr-home-app` (IP `100.93.100.28`)
-
-**Laptop-side state changes (not committed to repo — local workstation configuration):**
-
-- `C:\Users\DELL\.ssh\config` — new file with `oslsr-home-app` host definition, `IdentityFile ~/.ssh/id_ed25519`, `IdentitiesOnly yes`
-- Tailscale Windows client installed + signed in to `lawalkolade@gmail.com`
-
-**Repo files created:**
-
-- `docs/emergency-recovery-runbook.md` — 8-section runbook + panic-start block + quarterly drill procedure
-
-**Follow-up items flagged for later:**
-
-- Remove `github_actions_deploy` private key from laptop (should exist only in GitHub Secrets — hygiene)
-- Take DO droplet snapshot named `tailscale-hardening-complete-2026-04-23` (runbook §6.1 item 1)
-- Reset + save VPS root password to password manager (runbook §6.1 item 3)
-- Apply 51 pending OS updates + kernel 6.8.0-90 → 6.8.0-110 reboot (separate Story 9-9 subtask)
-- PM2 restart counter 916+ over 89 days — separate Story 9-10 investigation
+| 2026-04-25 | **Subtask COMPLETE — OS patching baseline (P0).** Ubuntu 24.04.3 → 24.04.4; kernel 6.8.0-90 → 6.8.0-110; 49 packages upgraded including `systemd`, `apparmor`, `snapd`, `cloud-init`, `nodejs`, `openssh-server`. Pre-flight verified before reboot: `tailscaled` enabled-on-boot, PM2 startup hook (`pm2-root.service` via systemd) registered + `pm2 save` executed, Docker `restart: unless-stopped`. Reboot at 08:54:37 UTC. Post-reboot all services up; HTTPS health 200 with full sec2-3 CSP. Two snapshots taken: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`. PM2 ↺ counter reset 916+ → 0 establishes baseline for Story 9-10 restart-loop investigation observability window. | OS update backlog had grown to 51 packages including kernel during the run-up to field survey. The existing C+ operational grade flagged "no patching cadence" as a real risk; doing this subtask before AC#6 alerting establishes a clean baseline for the new alert thresholds. The PM2 ↺ reset is the deliberate side-effect — Story 9-10's restart-loop investigation needs a known-zero starting point. |
+| 2026-04-25 | **Architectural finding — DO Console is SSH-based.** Empirical discovery during 2026-04-23 → 2026-04-25 Console outage investigation: when the SSH firewall was `100.64.0.0/10`-only (per original 2026-04-23 deployment), DO Console timed out. journalctl evidence on `oslsr-home-app` revealed `droplet-agent` (DOTTY) connects via SSH from DO infrastructure IP ranges (e.g. `162.243.0.0/16`). When firewall was widened to dual-source `0.0.0.0/0` + `100.64.0.0/10`, Console immediately worked. **The original 2026-04-23 ISP/WebSocket-filtering hypothesis was wrong.** Architecture ADR-020 amended (V8.2-a1) with new §"DO Console Access Vector" subsection capturing the correction; runbook §1.1, §1.4, §2.2, §6.1 all updated; PRD V8.3 NFR9 + Operator Access bullet rewritten. Firewall is now defence-in-depth + DDoS attenuation; sshd-level key-only auth is the primary access control; fail2ban is load-bearing second-line defence. **This is the as-deployed posture going into Story 9-9 forward subtasks.** | Ensures future engineers understand the wide-open SSH firewall as a load-bearing decision (not laziness). Critical for AC#3 (port audit) interpretation, AC#4 (auth rate-limit audit) threat model, AC#9 (activity baseline) source-IP categorisation, and AC#10 (Cloudflare) future re-narrowing decisions. |
+| 2026-04-25 | **Story regenerated by Bob (SM) per SCP-2026-04-22 §A.5.** Original 6-AC Cloudflare-only structure refactored to 10-subtask expanded scope (8 remaining + 2 done). All preceding Change Log entries preserved verbatim. File List "Tailscale Hardening Subtask (2026-04-23)" preserved verbatim; new File List block added for "OS Upgrade Subtask (2026-04-25)". Original 2026-04-12 Field-Readiness Assessment preserved as Dev Notes subsection (the B+ assessment + Cloudflare-as-2-problems-solved insight are institutional knowledge). Status: `backlog → in-progress`. | A.5 special-handling instruction: do NOT delete or rewrite the Change Log; ADD new entries for the regenerated structure. Preservation discipline ensures the Tailscale + OS-upgrade subtask evidence remains the canonical record. |

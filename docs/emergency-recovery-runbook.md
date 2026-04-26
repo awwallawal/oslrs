@@ -1,8 +1,8 @@
 # OSLRS VPS — Emergency Recovery Runbook
 
 **Owner:** Awwal (lawalkolade@gmail.com)
-**System:** `oslsr-home-app` — DigitalOcean droplet, Ubuntu 24.04.3 LTS, Ibadan/Oyo State Labour & Skills Registry production
-**Last updated:** 2026-04-23
+**System:** `oslsr-home-app` — DigitalOcean droplet, Ubuntu 24.04.4 LTS (kernel 6.8.0-110-generic), Ibadan/Oyo State Labour & Skills Registry production
+**Last updated:** 2026-04-25
 **Review cadence:** Quarterly, and after any infrastructure change
 
 ---
@@ -43,9 +43,9 @@
 |---|---|---|
 | **Tailscale SSH** (primary) | ✅ Active | Laptop → Tailscale mesh → VPS. Key auth only. Firewall: SSH (TCP 22) reachable from `0.0.0.0/0` + `::/0` AND `100.64.0.0/10` — public reachability is intentional **defence-in-depth shape**, not primary control. Primary control is sshd `PasswordAuthentication no` + key-only + fail2ban. Firewall widened from `100.64.0.0/10`-only to current state on 2026-04-25 to permit GitHub Actions deploys (long-term plan: self-hosted runner inside tailnet, then re-narrow). |
 | **DO Web Console** | ✅ Active (post 2026-04-25 firewall widening) | Browser-based terminal. **CRITICAL: Console works by establishing an SSH session from DO's own infrastructure IP ranges to your droplet's port 22.** This means the SSH firewall must permit DO's IP space (currently covered by `0.0.0.0/0`). Earlier "ISP WebSocket filtering" theory was incorrect — Console was failing because the firewall was `100.64.0.0/10`-only and blocked DO's own Console SSH endpoint. If you ever re-narrow the firewall (Story 9-9 follow-up), add DO's published IP ranges (`https://digitalocean.com/geo/google.csv` or DO API) alongside `100.64.0.0/10`, OR accept that Console becomes unavailable as part of the trade-off. |
-| **DO Recovery Console** | ✅ Available | Separate feature from regular Console. Boots recovery OS. |
-| **DO Droplet Snapshot** | ⚠️ Not yet taken | **TODO:** Take snapshot before field survey begins. See §6.1. |
-| **Public IP SSH** | ❌ Disabled | Firewall blocks; sshd disallows password auth. Intentional. |
+| **DO Recovery Console** | ✅ Available (verification pending) | Separate feature from regular Console. Boots recovery OS. Likely shares the SSH-port dependency of regular Console (verify in next quarterly drill — runbook §7). |
+| **DO Droplet Snapshot** | ✅ 2 in store | `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25` (latter is canonical good-known state). Re-snapshot weekly during field survey, monthly during steady state. |
+| **Public IP SSH** | ⚠️ Reachable to sshd, but key-only | Firewall (DO Cloud Firewall "OSLRS") permits SSH from `0.0.0.0/0` + `::/0` + `100.64.0.0/10`. Public reachability is intentional defence-in-depth shape — required for GitHub Actions CI deploys + DO Web Console. **Primary control is sshd-level key-only authentication** (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`). fail2ban is load-bearing second-line defence. Brute-force attempts CANNOT succeed but DO reach sshd and consume nominal CPU; fail2ban bans repeat offenders. Long-term plan: self-hosted GitHub Actions runner inside tailnet, then re-narrow firewall to `100.64.0.0/10` + DO IP ranges only (Story 9-9 follow-up subtask). |
 
 ### 1.2 Machines on Tailscale tailnet
 
@@ -58,12 +58,13 @@ Add phone + secondary laptop later for redundancy.
 
 ### 1.3 SSH configuration
 
-**On laptop (`C:\Users\DELL\.ssh\`):**
+**On laptop (`C:\Users\DELL\.ssh\`):** clean post-2026-04-25, 5 files
 
 - `id_ed25519` / `id_ed25519.pub` — Awwal's personal key (created 2026-01-19)
-- `github_actions_deploy` / `.pub` — CI deploy key (also in GitHub Secrets; **clean up laptop copy** as a follow-up hygiene task)
 - `config` — maps `oslsr-home-app` to `id_ed25519` via `IdentitiesOnly yes`
-- `known_hosts` — cached fingerprints
+- `known_hosts` / `known_hosts.old` — cached fingerprints + pre-Tailscale historical entries
+- _(Removed 2026-04-25):_ `github_actions_deploy` private+public removed; CI deploy key now lives only in GitHub Secrets (canonical). Quarterly rotation cadence per §4 still applies.
+- _(Removed 2026-04-25):_ `config.txt` orphan from Notepad save — only `config` (no extension) is read by SSH.
 
 **On VPS (`/root/.ssh/authorized_keys`):**
 
@@ -82,8 +83,8 @@ Both `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `60-cloudimg-settings.conf`
 
 ### 1.4 Other security layers
 
-- **fail2ban** — installed, active, watching sshd journal (default config: maxretry 5, bantime 10m)
-- **DO Cloud Firewall "OSLRS"** — SSH restricted to `100.64.0.0/10`; other ports per app needs
+- **fail2ban** — installed, active, watching sshd journal (default config: maxretry 5, bantime 10m). **Load-bearing second-line defence** post-2026-04-25 firewall amendment (no longer nominal insurance — see §1.1 + §2.2 + ADR-020 §"DO Console Access Vector"). Steady-state ban-list non-emptiness is health, not anomaly.
+- **DO Cloud Firewall "OSLRS"** — SSH (22/tcp) inbound permitted from **both** `0.0.0.0/0` (+ `::/0`) **and** `100.64.0.0/10` (Tailscale CGNAT). The `0.0.0.0/0` source is intentional and load-bearing — required for GitHub Actions CI deploys (`appleboy/ssh-action`) and DO Web Console (SSH-based via DOTTY/`droplet-agent` from DO infrastructure IPs). Firewall is **defence-in-depth + DDoS attenuation**, not the primary access control. Primary control = sshd-level key-only authentication (see §1.3). Other ports per app needs.
 - **Helmet CSP** on app layer — full sec2-3 CSP enforcing on 200 responses
 
 ### 1.5 Key accounts & contacts
@@ -93,10 +94,69 @@ Both `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `60-cloudimg-settings.conf`
 | DigitalOcean | `lawalkolade@gmail.com` + Google SSO + TOTP 2FA | Droplet owner. Set up 2FA if not already. |
 | Tailscale | `lawalkolade@gmail.com` + Google SSO | Free Personal tier. Admin console: `https://login.tailscale.com/admin/machines`. |
 | GitHub | personal account | Owns `github_actions_deploy` private key in Secrets. |
-| Resend | lawalkolade@gmail.com | Transactional email sender. |
-| Cloudflare | (not yet enrolled) | Pending `oslrs.com` domain purchase. |
+| Resend | lawalkolade@gmail.com | Transactional email sender. **Sending domain `oyoskills.com` swapped 2026-04-26** (was `oyotradeministry.com.ng`); free tier = 1 domain. From: `noreply@oyoskills.com` (DKIM/SPF/DMARC verified). |
+| Cloudflare | lawalkolade@gmail.com | Holds `oyoskills.com` DNS zone (purchased 2026-04-26 at Go54). DNS-only mode currently; WAF subtask in Story 9-9. |
+| Go54 | lawalkolade@gmail.com | Domain registrar for `oyoskills.com`. |
+| ImprovMX | lawalkolade@gmail.com | **Inbound email forwarder** for `oyoskills.com` (5 aliases: info/admin/support/noreply/awwal → Builder Gmail). Chosen over Cloudflare Email Routing 2026-04-26 due to Cloudflare flapping during bootstrap; kept as permanent inbound. |
 
-### 1.6 Critical credentials — where stored
+### 1.6 Project Email Architecture (added 2026-04-26; Resend swap LIVE 2026-04-26)
+
+**3-vendor split (decided 2026-04-26 after Cloudflare flapping during bootstrap):**
+
+```
+Registrar: Go54 (oyoskills.com purchased 2026-04-26, ~₦15K/year)
+   │
+   └── Nameservers: Cloudflare (kia.ns.cloudflare.com, nero.ns.cloudflare.com)
+         │
+         ├── DNS provider: Cloudflare (FREE tier — DNS only, no proxying yet)
+         │     • All records DNS-only (grey-cloud) per email-deliverability constraints
+         │     • Phase 3 WAF/proxying deferred to Story 9-9
+         │
+         ├── INBOUND email: ImprovMX (FREE) — chose over Cloudflare Email Routing
+         │     • MX records: mx1.improvmx.com (10) + mx2.improvmx.com (20)
+         │     • SPF apex: v=spf1 include:spf.improvmx.com ~all
+         │     • 5 aliases all forwarding to Builder's Gmail (~2 min delay observed):
+         │         - admin@oyoskills.com    (canonical migration anchor)
+         │         - info@oyoskills.com     (public-facing)
+         │         - support@oyoskills.com  (user issues)
+         │         - awwal@oyoskills.com    (Builder-personal; REMOVED at Transfer Day)
+         │         - noreply@oyoskills.com  (catch-all for replies-to-no-reply)
+         │
+         └── OUTBOUND email: Resend (FREE tier, in budget) — LIVE 2026-04-26
+               • Verified domain: oyoskills.com (free tier = 1 domain max)
+               • Region: us-east-1 (North Virginia)
+               • Custom Return-Path: send.oyoskills.com
+               • DNS records on Cloudflare:
+                   - MX send → feedback-smtp.us-east-1.amazonses.com
+                   - TXT send → v=spf1 include:amazonses.com ~all
+                   - TXT resend._domainkey → p=MIGfMA0G... (DKIM)
+               • DMARC: v=DMARC1; p=none; rua=mailto:dmarc@oyoskills.com (apex TXT)
+               • App transactional From: noreply@oyoskills.com (env: EMAIL_FROM_ADDRESS)
+               • Verified live 2026-04-26: dkim=pass / spf=pass / dmarc=pass
+
+Composition: Gmail "Send mail as"
+   • Configured with smtp.resend.com:587 + Resend API key as password
+   • Lets Builder compose AS info@oyoskills.com from Gmail UI
+```
+
+**Canonical migration anchor: `admin@oyoskills.com`.** Every project SaaS account (DigitalOcean, Tailscale, Cloudflare, hCaptcha, GitHub Org, Resend) is registered to `admin@oyoskills.com`. At Transfer Day, ONE change — flipping the **ImprovMX forwarder destination** from Builder Gmail to Ministry-provided email — migrates ALL SaaS account ownership in a single operation. See `docs/account-migration-tracker.md` for the operational sequence.
+
+**Critical pitfalls:**
+
+1. **MX records MUST stay DNS-only (grey-cloud).** Proxying MX records breaks email delivery — Cloudflare cannot proxy SMTP traffic. Both ImprovMX MX (apex) and Resend MX (`send` subdomain) must remain grey-cloud.
+2. **Resend DKIM TXT (`resend._domainkey`) MUST stay DNS-only.** TXT records can't be proxied anyway, but worth stating explicitly: changing this record breaks DKIM signing.
+3. **SPF: apex covers ImprovMX only; `send` subdomain covers Resend only.** Apex `v=spf1 include:spf.improvmx.com ~all` is for inbound bounces; `send` subdomain `v=spf1 include:amazonses.com ~all` is the actual outbound MAIL FROM. Don't merge them — apex MAIL FROM isn't used for outbound from Resend (uses Custom Return-Path = `send`).
+4. **Cloudflare account is load-bearing for DNS only.** Holds the zone, future WAF (Story 9-9). Inbound email is on ImprovMX (separate vendor). **TOTP 2FA mandatory on Cloudflare.** Recovery codes in Builder password manager + sealed envelope to Mrs Lagbaja (Chemiroy MD) for redundancy.
+5. **Don't proxy A records before HTTPS at edge is sorted.** Phase 2 of the DO/Domain/Cloudflare wiring is grey-cloud (DNS-only) with origin Let's Encrypt. Phase 3 is Cloudflare proxied with SSL/TLS = Full (strict). Skipping Phase 2 → broken HTTPS or "too many redirects".
+6. **Resend free tier = 1 domain max.** When migrating sending domain, must DELETE old before ADDING new (5-min production-impact window mitigated by pre-staging Cloudflare DNS records).
+
+**3-phase deployment plan** (cross-reference: session-2026-04-21-25.md Day 6):
+
+- **Phase 1: Email-only on `oyoskills.com`** — Cloudflare DNS + ImprovMX inbound + Resend outbound. **DONE 2026-04-26.** Independently useful.
+- **Phase 2: DNS-Only website (grey cloud)** — A records, expand Let's Encrypt cert to cover both `oyotradeministry.com.ng` + `oyoskills.com`, dual-domain nginx. Stories 9-2 + 9-4 territory.
+- **Phase 3: Cloudflare Proxied (orange cloud)** — Story 9-9 Cloudflare WAF subtask. Full (strict) SSL, WAF rules, DDoS attenuation.
+
+### 1.7 Critical credentials — where stored
 
 | Credential | Where stored | DO NOT |
 |---|---|---|
@@ -334,30 +394,39 @@ Email yourself the output files. Then:
 
 ---
 
-## 6. Outstanding action items (as of 2026-04-23)
+## 6. Outstanding action items (as of 2026-04-25)
 
-### 6.1 Immediate (this week)
+### 6.1 Immediate (closed 2026-04-25)
 
-- [ ] **Take a DO droplet snapshot** — first one. Sets the baseline for restore-based recovery. Repeat weekly during field survey.
-- [ ] **Verify DO Web Console** works from at least one network/browser combo (try mobile hotspot). If confirmed broken, document and rely on Recovery Console + Snapshot as primary break-glass.
-- [ ] **Set/reset VPS root password** via DO → Access → Reset root password. Save to password manager. Needed for Console access.
+- [x] **Take a DO droplet snapshot** — done 2026-04-25. Two snapshots: `pre-os-upgrade-2026-04-25` (before OS upgrade) + `clean-os-update-2026-04-25` (post-upgrade canonical good-known state). Re-snapshot weekly during field survey.
+- [x] **Verify DO Web Console** — done 2026-04-25. Console initially failed under `100.64.0.0/10`-only firewall (architectural finding: Console is SSH-based via DO infrastructure IPs, not hypervisor-OOB). Console works after firewall widening to include `0.0.0.0/0`. Captured in §1.1 + §2.2 above + Change Log.
+- [x] **VPS root password** — explicitly retained 2026-04-25. Initial password set during DO droplet creation is strong; Awwal declined to reset. Password is in his password manager. Quarterly rotation cadence (§4) still applies.
+- [x] **Clean up `github_actions_deploy` private key from laptop** — done 2026-04-25. Both private and public removed. Key now lives only in GitHub Secrets (canonical) + on VPS as public key in `authorized_keys` line 1. Confirmed CI deploys still work via two test commits (`096987e` + `1010d64`).
 
-### 6.2 Short-term (next 2 weeks, part of Story 9-9 subtasks)
+### 6.2 Short-term (Story 9-9 remaining subtasks — 8 of 10 still open)
 
-- [ ] Clean up `github_actions_deploy` private key from laptop (keep in GitHub Secrets only)
-- [ ] Add phone to Tailscale tailnet (Tailscale SSH iOS/Android app) — secondary access device
-- [ ] Apply 51 pending OS updates + reboot (schedule low-traffic window)
-- [ ] Install OS packages: `dbus`, `docker`, `systemd-logind`, `unattended-upgrades` services are all flagged for deferred restart
+OS patching ✅ done 2026-04-25 (kernel 6.8.0-90 → 110, 49 packages, reboot clean). Tailscale + SSH hardening ✅ done 2026-04-23.
+
+- [ ] Add phone to Tailscale tailnet (Tailscale SSH iOS/Android app) — secondary access device, single-point-of-failure mitigation
 - [ ] Configure fail2ban with stricter `jail.local` (optional — `bantime = 1h`, `findtime = 10m`, `maxretry = 3`)
 - [ ] Add a second super-admin break-glass account (per Story 9-9 subtask)
 - [ ] Enable backup client-side encryption before S3 upload (per Story 9-9 subtask)
-- [ ] Port audit: restrict Portainer public access (per Story 9-9 subtask)
+- [ ] Port audit: `ss -tlnp`, restrict Portainer public access (per Story 9-9 subtask)
 - [ ] Alerting tier: SMS/WhatsApp/paged channel for CRITICAL alerts (per Story 9-9 subtask)
+- [ ] Logrotate for PM2 logs + journalctl retention (per Story 9-9 subtask)
+- [ ] SOC-style activity baseline / SSH log differentiation (per Story 9-9 subtask)
+- [ ] Self-hosted GitHub Actions runner inside tailnet (Story 9-9 follow-up — would allow re-narrowing firewall to tailnet-only; ADR-020 line 3253)
+- [ ] Verify DO Recovery Console works — pending next quarterly drill (suspected to share SSH-port dependency with regular Console; verify in drill)
 
-### 6.3 Domain-gated (pending `oslrs.com` purchase)
+### 6.3 Domain-gated (pending `oyoskills.com` purchase)
 
 - [ ] Cloudflare WAF + CDN + rate limiting enrollment
 - [ ] Domain migration per Story 9-2 + 9-4
+- [ ] When firewall is narrowed (after self-hosted runner), DO published IP ranges (`https://digitalocean.com/geo/google.csv`) must be added alongside `100.64.0.0/10` to preserve Console as break-glass
+
+### 6.4 Story 9-10 observation window (opened 2026-04-25 08:54 UTC)
+
+- [ ] Track PM2 ↺ counter at 24h, 48h, 72h post-reboot. Reset baseline = 0. If counter climbs >10/day: ioredis-reconnect-churn pattern likely persists (matches pre-reboot trend of ~10/day over 89 days). If stays at/near 0: pattern was OS-level (likely libc/systemd) and Story 9-10 may close as resolved by Story 9-9 OS-patching subtask.
 
 ---
 
@@ -384,6 +453,7 @@ If any step fails or takes >5 min to figure out, that's a finding — update thi
 | 2026-04-23 | Initial runbook created. Tailscale primary-access setup (Phases 0–6), fail2ban installed, DO Console verified broken on current ISP, runbook authored to cover gap. | Awwal + Claude |
 | 2026-04-25 | §1.1 access-paths table updated: SSH firewall widened from `100.64.0.0/10`-only to `0.0.0.0/0` + `100.64.0.0/10`. Driver: GH Actions CI deploys reach VPS over public IP and would be blocked by tailnet-only rule. Architecture clarification: firewall is defence-in-depth; primary control is sshd-level key-only auth + fail2ban. Long-term resolution (Story 9-9 follow-up): self-hosted GH Actions runner inside tailnet; re-narrow firewall when that lands. ADR-020 in `_bmad-output/planning-artifacts/architecture.md` updated to reflect. | Awwal + Claude |
 | 2026-04-25 | **Architectural correction:** the earlier "DO Console fails due to ISP/WebSocket filtering" theory was wrong. Empirical finding: Console started working the moment SSH firewall was widened to permit `0.0.0.0/0`. **DO Console is SSH-based** — it establishes an SSH session from DO's own infrastructure IP ranges to the droplet's port 22 and bridges to noVNC. The `100.64.0.0/10`-only firewall was blocking DO's own Console infrastructure. §1.1 + §2.2 updated to reflect actual mechanism + revised recovery troubleshooting order (firewall first, ISP last). Implication for future Story 9-9 self-hosted-runner work: firewall must permit DO published IP ranges in addition to `100.64.0.0/10`, OR accept Console as unavailable. | Awwal + Claude |
+| 2026-04-25 (evening) | **Stale-state cleanup pass.** §1.1 access paths table refreshed: DO Droplet Snapshot row updated to reflect 2 snapshots in store (no longer "Not yet taken"); Public IP SSH row corrected — was incorrectly marked "Disabled" but actually firewall permits it intentionally as defence-in-depth shape with sshd-key-only as primary control. §1.3 updated: github_actions_deploy laptop key cleanup completed 2026-04-25 (removed both private+public; canonical now in GitHub Secrets only). Header updated: kernel 6.8.0-110, Last updated 2026-04-25. Bob (SM) had separately updated §1.4 (fail2ban load-bearing language) during A.5 invocation; this entry covers the rest. | Awwal + Claude |
 
 ---
 

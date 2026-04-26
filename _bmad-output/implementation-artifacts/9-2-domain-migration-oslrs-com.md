@@ -1,4 +1,4 @@
-# Story 9.2: Domain Migration — oyotradeministry.com.ng → oslrs.com
+# Story 9.2: Domain Migration — oyotradeministry.com.ng → oyoskills.com
 
 Status: deferred
 
@@ -13,37 +13,37 @@ Status: deferred
 ## Story
 
 As the **Super Admin**,
-I want to **migrate the entire platform from oyotradeministry.com.ng to oslrs.com**,
+I want to **migrate the entire platform from oyotradeministry.com.ng to oyoskills.com**,
 so that **the system has a clean, memorable domain that is independent of government bureaucracy and consistent across all codebase, configuration, and deployment references**.
 
 ## Acceptance Criteria
 
-1. **AC#1 — Source code domain references updated:** All hardcoded domain references in source code (`email.service.ts`, `providers/index.ts`, `packages/config/src/email.ts`, `user.controller.ts`, `staff.service.ts`) use `oslrs.com` or `PUBLIC_APP_URL` env var. Zero hardcoded `oyotradeministry.com.ng` references remain in `apps/api/src/` or `packages/`.
+1. **AC#1 — Source code domain references updated:** All hardcoded domain references in source code (`email.service.ts`, `providers/index.ts`, `packages/config/src/email.ts`, `user.controller.ts`, `staff.service.ts`) use `oyoskills.com` or `PUBLIC_APP_URL` env var. Zero hardcoded `oyotradeministry.com.ng` references remain in `apps/api/src/` or `packages/`.
 
-2. **AC#2 — Frontend meta tags & SEO files updated:** `index.html` canonical/og:url/og:image/twitter:image use `https://oslrs.com`. `robots.txt` sitemap URL points to `https://oslrs.com/sitemap.xml`. All 26 `sitemap.xml` URL entries use `https://oslrs.com/...`. No hardcoded `oyotradeministry.com.ng` in `apps/web/`.
+2. **AC#2 — Frontend meta tags & SEO files updated:** `index.html` canonical/og:url/og:image/twitter:image use `https://oyoskills.com`. `robots.txt` sitemap URL points to `https://oyoskills.com/sitemap.xml`. All 26 `sitemap.xml` URL entries use `https://oyoskills.com/...`. No hardcoded `oyotradeministry.com.ng` in `apps/web/`.
 
-3. **AC#3 — CI/CD pipeline updated:** `.github/workflows/ci-cd.yml` build command uses `VITE_API_URL=https://oslrs.com/api/v1`. Production deploy step references the correct domain.
+3. **AC#3 — CI/CD pipeline updated:** `.github/workflows/ci-cd.yml` build command uses `VITE_API_URL=https://oyoskills.com/api/v1`. Production deploy step references the correct domain.
 
-4. **AC#4 — Test assertions updated:** All test files using domain strings (`csp.test.ts`, `csp.routes.test.ts`, `email-providers.test.ts`, `email-templates.test.ts`, `ViewAsDashboardPage.test.tsx`, `ViewAsBanner.test.tsx`) use `oslrs.com` or a test-appropriate domain. Email template snapshots regenerated. All tests pass.
+4. **AC#4 — Test assertions updated:** All test files using domain strings (`csp.test.ts`, `csp.routes.test.ts`, `email-providers.test.ts`, `email-templates.test.ts`, `ViewAsDashboardPage.test.tsx`, `ViewAsBanner.test.tsx`) use `oyoskills.com` or a test-appropriate domain. Email template snapshots regenerated. All tests pass.
 
-5. **AC#5 — Verification URL typo fixed:** The `oslrs.oyostate.gov.ng` typo in `user.controller.ts:99` and `staff.service.ts:505` is replaced with `${process.env.PUBLIC_APP_URL || 'https://oslrs.com'}/verify-staff/${user.id}` — using env var with correct fallback.
+5. **AC#5 — Verification URL typo fixed:** The `oslrs.oyostate.gov.ng` typo in `user.controller.ts:99` and `staff.service.ts:505` is replaced with `${process.env.PUBLIC_APP_URL || 'https://oyoskills.com'}/verify-staff/${user.id}` — using env var with correct fallback.
 
-6. **AC#6 — Support email updated:** `ActivationWizard.tsx` `mailto:` link uses the new domain email (e.g., `support@oslrs.com`).
+6. **AC#6 — Support email updated:** `ActivationWizard.tsx` `mailto:` link uses the new domain email (e.g., `support@oyoskills.com`).
 
 7. **AC#7 — SUPER_ADMIN_EMAIL typo fixed:** Any reference to `alerts@oslsr.gov.ng` (reversed "oslsr" vs "oslrs") is corrected or removed.
 
-8. **AC#8 — Documentation updated:** All developer guides, architecture docs, infrastructure playbook, and team-context-brief reflect `oslrs.com`. At minimum: `docs/team-context-brief.md`, `docs/infrastructure-cicd-playbook.md`, and `_bmad-output/planning-artifacts/architecture.md`.
+8. **AC#8 — Documentation updated:** All developer guides, architecture docs, infrastructure playbook, and team-context-brief reflect `oyoskills.com`. At minimum: `docs/team-context-brief.md`, `docs/infrastructure-cicd-playbook.md`, and `_bmad-output/planning-artifacts/architecture.md`.
 
-9. **AC#9 — VPS configuration documented:** Story provides a clear VPS migration runbook section with exact commands for: NGINX `server_name` update, Let's Encrypt SSL cert for `oslrs.com`, `.env` updates (`PUBLIC_APP_URL`, `EMAIL_FROM_ADDRESS`, `SUPER_ADMIN_EMAIL`, `VITE_API_URL`), and Resend domain verification.
+9. **AC#9 — VPS configuration documented:** Story provides a clear VPS migration runbook section with exact commands for: NGINX `server_name` update, Let's Encrypt SSL cert for `oyoskills.com`, `.env` updates (`PUBLIC_APP_URL`, `EMAIL_FROM_ADDRESS`, `SUPER_ADMIN_EMAIL`, `VITE_API_URL`), and Resend domain verification.
 
 10. **AC#10 — Zero test regressions:** Full test suite passes (`pnpm test`). No broken imports, no missing domain references, no snapshot mismatches.
 
 ## Prerequisites / Blockers
 
-- **BLOCKING:** Domain `oslrs.com` must be purchased and DNS A record pointed to the VPS IP before VPS-side deployment.
-- **Awwal must confirm:** Email domain preference — `noreply@oslrs.com` or keep `oyotradeministry.com.ng` for emails?
-- **Awwal must confirm:** 301 redirect from `oyotradeministry.com.ng` → `oslrs.com` during transition?
-- **Awwal must confirm:** ODK Central subdomain strategy — `odkcentral.oslrs.com` or keep separate?
+- **BLOCKING:** Domain `oyoskills.com` must be purchased and DNS A record pointed to the VPS IP before VPS-side deployment.
+- **Awwal must confirm:** Email domain preference — `noreply@oyoskills.com` or keep `oyotradeministry.com.ng` for emails?
+- **Awwal must confirm:** 301 redirect from `oyotradeministry.com.ng` → `oyoskills.com` during transition?
+- **Awwal must confirm:** ODK Central subdomain strategy — `odkcentral.oyoskills.com` or keep separate?
 
 ## Tasks / Subtasks
 
@@ -101,26 +101,26 @@ This is a **bulk find-and-replace story** with surgical precision. The changes a
 
 | File | Line(s) | Current Value | New Value |
 |------|---------|---------------|-----------|
-| `apps/api/src/services/email.service.ts` | 33 | `'https://oyotradeministry.com.ng'` | `process.env.PUBLIC_APP_URL \|\| 'https://oslrs.com'` |
-| `apps/api/src/providers/index.ts` | 105 | `'noreply@oyotradeministry.com.ng'` | `'noreply@oslrs.com'` |
-| `packages/config/src/email.ts` | 106 | `'noreply@oyotradeministry.com.ng'` | `'noreply@oslrs.com'` |
-| `apps/api/src/controllers/user.controller.ts` | 99 | `'https://oslrs.oyostate.gov.ng'` (TYPO) | `process.env.PUBLIC_APP_URL \|\| 'https://oslrs.com'` |
-| `apps/api/src/services/staff.service.ts` | 505 | `'https://oslrs.oyostate.gov.ng'` (TYPO) | `process.env.PUBLIC_APP_URL \|\| 'https://oslrs.com'` |
-| `apps/web/index.html` | 19,24,27,34 | `oyotradeministry.com.ng` | `oslrs.com` |
-| `apps/web/public/robots.txt` | 14 | `oyotradeministry.com.ng` | `oslrs.com` |
-| `apps/web/public/sitemap.xml` | 26 entries | `oyotradeministry.com.ng` | `oslrs.com` |
+| `apps/api/src/services/email.service.ts` | 33 | `'https://oyotradeministry.com.ng'` | `process.env.PUBLIC_APP_URL \|\| 'https://oyoskills.com'` |
+| `apps/api/src/providers/index.ts` | 105 | `'noreply@oyotradeministry.com.ng'` | `'noreply@oyoskills.com'` |
+| `packages/config/src/email.ts` | 106 | `'noreply@oyotradeministry.com.ng'` | `'noreply@oyoskills.com'` |
+| `apps/api/src/controllers/user.controller.ts` | 99 | `'https://oslrs.oyostate.gov.ng'` (TYPO) | `process.env.PUBLIC_APP_URL \|\| 'https://oyoskills.com'` |
+| `apps/api/src/services/staff.service.ts` | 505 | `'https://oslrs.oyostate.gov.ng'` (TYPO) | `process.env.PUBLIC_APP_URL \|\| 'https://oyoskills.com'` |
+| `apps/web/index.html` | 19,24,27,34 | `oyotradeministry.com.ng` | `oyoskills.com` |
+| `apps/web/public/robots.txt` | 14 | `oyotradeministry.com.ng` | `oyoskills.com` |
+| `apps/web/public/sitemap.xml` | 26 entries | `oyotradeministry.com.ng` | `oyoskills.com` |
 
 **Frontend component — 1 file:**
 
 | File | Line(s) | Current Value | New Value |
 |------|---------|---------------|-----------|
-| `ActivationWizard.tsx` | 136, 270 | `mailto:support@oslsr.gov.ng` | `mailto:support@oslrs.com` |
+| `ActivationWizard.tsx` | 136, 270 | `mailto:support@oslsr.gov.ng` | `mailto:support@oyoskills.com` |
 
 **CI/CD — 1 file:**
 
 | File | Line | Current Value | New Value |
 |------|------|---------------|-----------|
-| `.github/workflows/ci-cd.yml` | 595 | `VITE_API_URL=https://oyotradeministry.com.ng/api/v1` | `VITE_API_URL=https://oslrs.com/api/v1` |
+| `.github/workflows/ci-cd.yml` | 595 | `VITE_API_URL=https://oyotradeministry.com.ng/api/v1` | `VITE_API_URL=https://oyoskills.com/api/v1` |
 
 **Tests — 6 files, ~15 references:**
 
@@ -144,7 +144,7 @@ Two files have a typo `oslrs.oyostate.gov.ng` (note: "oslrs" not "oslsr"). Both 
 verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oslrs.oyostate.gov.ng'}/verify-staff/${user.id}`
 
 // AFTER:
-verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oslrs.com'}/verify-staff/${user.id}`
+verificationUrl: `${process.env.PUBLIC_APP_URL || 'https://oyoskills.com'}/verify-staff/${user.id}`
 ```
 
 ### SUPPORT_URL Pattern Fix
@@ -155,7 +155,7 @@ The `email.service.ts` hardcodes SUPPORT_URL. Change to use env var so it works 
 private static readonly SUPPORT_URL = 'https://oyotradeministry.com.ng';
 
 // AFTER:
-private static readonly SUPPORT_URL = process.env.PUBLIC_APP_URL || 'https://oslrs.com';
+private static readonly SUPPORT_URL = process.env.PUBLIC_APP_URL || 'https://oyoskills.com';
 ```
 
 ### Snapshot Regeneration
@@ -165,33 +165,33 @@ Delete `apps/api/src/services/__tests__/__snapshots__/email-templates.test.ts.sn
 ### VPS Migration Runbook (for Awwal — execute AFTER code deploys)
 
 ```bash
-# 1. DNS: Point oslrs.com A record to VPS IP (via domain registrar)
+# 1. DNS: Point oyoskills.com A record to VPS IP (via domain registrar)
 
 # 2. SSL Certificate (on VPS):
-sudo certbot certonly --nginx -d oslrs.com -d www.oslrs.com
+sudo certbot certonly --nginx -d oyoskills.com -d www.oyoskills.com
 
 # 3. Update NGINX config:
 sudo nano /etc/nginx/sites-available/oslsr.conf
-# Change: server_name oyotradeministry.com.ng → server_name oslrs.com www.oslrs.com
-# Change: ssl_certificate paths to /etc/letsencrypt/live/oslrs.com/
+# Change: server_name oyotradeministry.com.ng → server_name oyoskills.com www.oyoskills.com
+# Change: ssl_certificate paths to /etc/letsencrypt/live/oyoskills.com/
 # Add 301 redirect server block (optional):
-# server { listen 80; server_name oyotradeministry.com.ng; return 301 https://oslrs.com$request_uri; }
+# server { listen 80; server_name oyotradeministry.com.ng; return 301 https://oyoskills.com$request_uri; }
 sudo nginx -t && sudo systemctl reload nginx
 
 # 4. Update .env on VPS (BEFORE deploying new code — SEC-3 lesson):
-# PUBLIC_APP_URL=https://oslrs.com
-# EMAIL_FROM_ADDRESS=noreply@oslrs.com
-# SUPER_ADMIN_EMAIL=admin@oslrs.com
+# PUBLIC_APP_URL=https://oyoskills.com
+# EMAIL_FROM_ADDRESS=noreply@oyoskills.com
+# SUPER_ADMIN_EMAIL=admin@oyoskills.com
 # (Then deploy code, then rebuild):
-# VITE_API_URL=https://oslrs.com/api/v1 pnpm --filter @oslsr/web build
+# VITE_API_URL=https://oyoskills.com/api/v1 pnpm --filter @oslsr/web build
 
 # 5. Resend domain verification:
-# Add SPF, DKIM, MX records for oslrs.com in domain registrar
+# Add SPF, DKIM, MX records for oyoskills.com in domain registrar
 # Verify in Resend dashboard
 
 # 6. Verify:
-curl -I https://oslrs.com  # Should return 200
-curl -I https://oslrs.com/api/v1/health  # Should return 200
+curl -I https://oyoskills.com  # Should return 200
+curl -I https://oyoskills.com/api/v1/health  # Should return 200
 ```
 
 ### What NOT to Touch
@@ -206,7 +206,7 @@ curl -I https://oslrs.com/api/v1/health  # Should return 200
 Per SEC-3 crash loop lesson and project-context.md:
 1. **Set all env vars on VPS BEFORE deploying the code change**
 2. **Specifically:** `PUBLIC_APP_URL`, `EMAIL_FROM_ADDRESS`, `SUPER_ADMIN_EMAIL` must be updated in `.env` on VPS before `git pull` + `pnpm build`
-3. **DNS propagation:** Verify `oslrs.com` resolves to VPS IP before deploying (`dig oslrs.com`)
+3. **DNS propagation:** Verify `oyoskills.com` resolves to VPS IP before deploying (`dig oyoskills.com`)
 4. **SSL cert:** Must be generated on VPS before NGINX config references it
 5. **Rollback plan:** Keep old NGINX config as `.conf.bak`, keep old `.env` as `.env.bak`
 

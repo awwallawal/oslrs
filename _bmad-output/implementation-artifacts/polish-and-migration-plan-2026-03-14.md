@@ -78,13 +78,13 @@ After session restore (page refresh), the profile page shows an empty name. The 
 
 ---
 
-## 3. Domain Migration: `oyotradeministry.com.ng` -> `oslrs.com` (CRITICAL PATH)
+## 3. Domain Migration: `oyotradeministry.com.ng` -> `oyoskills.com` (CRITICAL PATH)
 
 ### Rationale
 
 - `oslrs.gov.ng` was the intended domain but `.gov.ng` has bureaucratic red tape
 - `oyotradeministry.com.ng` is the current live/testing domain
-- `oslrs.com` is the target — clean TLD, no government dependency
+- `oyoskills.com` is the target — clean TLD, no government dependency
 
 ### Impact Assessment: 28 files, ~75+ references
 
@@ -128,10 +128,10 @@ After session restore (page refresh), the profile page shows an empty name. The 
 
 ### Decisions Needed
 
-1. **ODK Central** — does `odkcentral.oyotradeministry.com.ng` become `odkcentral.oslrs.com`?
-2. **Redirect** — 301 redirect from `oyotradeministry.com.ng` to `oslrs.com` during transition?
-3. **Email domain** — `noreply@oslrs.com` or keep `.com.ng` for emails?
-4. **Has `oslrs.com` been purchased?**
+1. **ODK Central** — does `odkcentral.oyotradeministry.com.ng` become `odkcentral.oyoskills.com`?
+2. **Redirect** — 301 redirect from `oyotradeministry.com.ng` to `oyoskills.com` during transition?
+3. **Email domain** — `noreply@oyoskills.com` or keep `.com.ng` for emails?
+4. **Has `oyoskills.com` been purchased?**
 
 ### Note: Typo in `.env`
 
@@ -141,15 +141,15 @@ After session restore (page refresh), the profile page shows an empty name. The 
 
 ## 4. Email Setup with Resend
 
-### Transactional Email (`noreply@oslrs.com`)
+### Transactional Email (`noreply@oyoskills.com`)
 
-1. Add `oslrs.com` as a domain in Resend dashboard
+1. Add `oyoskills.com` as a domain in Resend dashboard
 2. Add DNS records Resend provides (SPF, DKIM, MX for bounce handling)
 3. Verify the domain
-4. Update `EMAIL_FROM_ADDRESS` in `.env` to `noreply@oslrs.com`
+4. Update `EMAIL_FROM_ADDRESS` in `.env` to `noreply@oyoskills.com`
 5. Update default in `packages/config/src/email.ts`
 
-### Human-Facing Email (`admin@oslrs.com`, `support@oslrs.com`)
+### Human-Facing Email (`admin@oyoskills.com`, `support@oyoskills.com`)
 
 Options:
 - **Zoho Mail free tier** — up to 5 users, custom domain
@@ -173,7 +173,7 @@ Recommendation: Zoho or Cloudflare forwarding to start.
 
 ## Recommended Execution Order
 
-1. **Buy `oslrs.com`** — blocks domain migration and email setup
+1. **Buy `oyoskills.com`** — blocks domain migration and email setup
 2. **Profile page story** — editable profile + `/auth/me` fix (independent of domain)
 3. **Domain migration story** — all 28 files + DNS + NGINX + Resend verification
 4. **Trust section + footer fix** — bundle as small polish chore alongside migration
@@ -184,8 +184,8 @@ Recommendation: Zoho or Cloudflare forwarding to start.
 ## Open Questions for Awwal
 
 - [ ] Which logo to remove from Trust section? (Coat of Arms or Ministry Logo)
-- [ ] Has `oslrs.com` been purchased/secured?
-- [ ] ODK Central subdomain — migrate to `oslrs.com` or keep separate?
+- [ ] Has `oyoskills.com` been purchased/secured?
+- [ ] ODK Central subdomain — migrate to `oyoskills.com` or keep separate?
 - [ ] 301 redirect from old domain — yes or no?
-- [ ] Email addresses on `oslrs.com` or keep `.com.ng`?
+- [ ] Email addresses on `oyoskills.com` or keep `.com.ng`?
 - [ ] Human-facing email preference: Zoho free, Cloudflare forwarding, or other?

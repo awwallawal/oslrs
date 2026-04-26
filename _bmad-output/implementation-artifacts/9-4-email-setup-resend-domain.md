@@ -13,52 +13,52 @@ Status: deferred
 ## Story
 
 As the **Super Admin**,
-I want **transactional emails sent from `noreply@oslrs.com` via Resend with proper DNS authentication, and human-facing email addresses (`admin@oslrs.com`, `support@oslrs.com`) set up for correspondence**,
+I want **transactional emails sent from `noreply@oyoskills.com` via Resend with proper DNS authentication, and human-facing email addresses (`admin@oyoskills.com`, `support@oyoskills.com`) set up for correspondence**,
 so that **emails are delivered reliably (not flagged as spam), recipients see a professional sender domain, and there are reachable addresses for support and admin communication**.
 
 ## Acceptance Criteria
 
-1. **AC#1 — Resend domain verified:** `oslrs.com` is added and verified in the Resend dashboard. SPF, DKIM (3 CNAME records), and MX (for bounce handling) DNS records are configured at the domain registrar and passing Resend's verification checks.
+1. **AC#1 — Resend domain verified:** `oyoskills.com` is added and verified in the Resend dashboard. SPF, DKIM (3 CNAME records), and MX (for bounce handling) DNS records are configured at the domain registrar and passing Resend's verification checks.
 
-2. **AC#2 — Transactional emails work:** A test staff invitation email sent via `POST /api/v1/dev/email-preview/staff-invitation` (or production trigger) is delivered successfully from `noreply@oslrs.com`. The email arrives in inbox (not spam), with correct DKIM/SPF signatures visible in email headers.
+2. **AC#2 — Transactional emails work:** A test staff invitation email sent via `POST /api/v1/dev/email-preview/staff-invitation` (or production trigger) is delivered successfully from `noreply@oyoskills.com`. The email arrives in inbox (not spam), with correct DKIM/SPF signatures visible in email headers.
 
 3. **AC#3 — Production env vars updated:** VPS `.env` updated with:
    - `EMAIL_PROVIDER=resend`
-   - `EMAIL_FROM_ADDRESS=noreply@oslrs.com`
+   - `EMAIL_FROM_ADDRESS=noreply@oyoskills.com`
    - `EMAIL_FROM_NAME=Oyo State Labour & Skills Registry`
-   - `RESEND_API_KEY=re_...` (new key for oslrs.com domain)
+   - `RESEND_API_KEY=re_...` (new key for oyoskills.com domain)
    - `EMAIL_TIER=free` (or upgraded tier if needed)
 
 4. **AC#4 — Human-facing email configured:** At least one of these approaches is operational:
-   - **Option A (Zoho Mail free):** `admin@oslrs.com` and `support@oslrs.com` mailboxes created via Zoho Mail free tier (up to 5 users)
-   - **Option B (Cloudflare Email Routing):** `admin@oslrs.com` and `support@oslrs.com` forwarded to Awwal's personal inbox
+   - **Option A (Zoho Mail free):** `admin@oyoskills.com` and `support@oyoskills.com` mailboxes created via Zoho Mail free tier (up to 5 users)
+   - **Option B (Cloudflare Email Routing):** `admin@oyoskills.com` and `support@oyoskills.com` forwarded to Awwal's personal inbox
    - **Option C (Other):** Per Awwal's preference
 
    Awwal can send/receive from these addresses.
 
-5. **AC#5 — ActivationWizard support email updated:** `ActivationWizard.tsx` `mailto:` link points to the live `support@oslrs.com` address (or whichever address is configured in AC#4). This is a code change — covered in Story 9-2 but verified here.
+5. **AC#5 — ActivationWizard support email updated:** `ActivationWizard.tsx` `mailto:` link points to the live `support@oyoskills.com` address (or whichever address is configured in AC#4). This is a code change — covered in Story 9-2 but verified here.
 
 6. **AC#6 — Documentation updated:** `docs/RESEND-SETUP.md` reflects the new domain, DNS records, and any provider-specific setup steps for human-facing email. Include the exact DNS records added for future reference.
 
-7. **AC#7 — DMARC record added:** A DMARC DNS record is published for `oslrs.com` to prevent domain spoofing. At minimum: `v=DMARC1; p=quarantine; rua=mailto:admin@oslrs.com` as a TXT record on `_dmarc.oslrs.com`.
+7. **AC#7 — DMARC record added:** A DMARC DNS record is published for `oyoskills.com` to prevent domain spoofing. At minimum: `v=DMARC1; p=quarantine; rua=mailto:admin@oyoskills.com` as a TXT record on `_dmarc.oyoskills.com`.
 
 ## Prerequisites / Blockers
 
-- **BLOCKING:** Domain `oslrs.com` must be purchased and DNS must be accessible (depends on Story 9-2 DNS setup).
-- **BLOCKING:** Story 9-2 (domain migration) should be deployed first so code references `noreply@oslrs.com`.
+- **BLOCKING:** Domain `oyoskills.com` must be purchased and DNS must be accessible (depends on Story 9-2 DNS setup).
+- **BLOCKING:** Story 9-2 (domain migration) should be deployed first so code references `noreply@oyoskills.com`.
 - **Awwal must confirm:** Human-facing email preference — Zoho Mail free, Cloudflare Email Routing, or other?
 - **Awwal must confirm:** Which tier for Resend — stay on `free` (3K/mo, 100/day) or upgrade?
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add oslrs.com domain to Resend (AC: #1)
-  - [ ] 1.1 Log into Resend dashboard → Domains → Add Domain → Enter `oslrs.com`
+- [ ] Task 1: Add oyoskills.com domain to Resend (AC: #1)
+  - [ ] 1.1 Log into Resend dashboard → Domains → Add Domain → Enter `oyoskills.com`
   - [ ] 1.2 Resend will provide DNS records to add. Copy them.
   - [ ] 1.3 Typical records Resend requires:
-    - SPF: TXT record on `oslrs.com` → `v=spf1 include:_spf.resend.com ~all`
+    - SPF: TXT record on `oyoskills.com` → `v=spf1 include:_spf.resend.com ~all`
     - DKIM: 3 CNAME records (Resend provides exact values)
     - MX: MX record for bounce handling (Resend provides)
-  - [ ] 1.4 Add all records at domain registrar (Namecheap, Cloudflare, or wherever oslrs.com is registered)
+  - [ ] 1.4 Add all records at domain registrar (Namecheap, Cloudflare, or wherever oyoskills.com is registered)
   - [ ] 1.5 Wait for DNS propagation (usually 1-24 hours, up to 48)
   - [ ] 1.6 Click "Verify" in Resend dashboard — confirm all checks pass (green checkmarks)
 
@@ -66,7 +66,7 @@ so that **emails are delivered reliably (not flagged as spam), recipients see a 
   - [ ] 2.1 In Resend dashboard → API Keys → Create Key
   - [ ] 2.2 Name: `oslrs-production`
   - [ ] 2.3 Permission: "Sending access" (not Full — principle of least privilege)
-  - [ ] 2.4 Domain restriction: `oslrs.com` only
+  - [ ] 2.4 Domain restriction: `oyoskills.com` only
   - [ ] 2.5 Copy the key (starts with `re_`) — it's shown only once
 
 - [ ] Task 3: Update VPS environment variables (AC: #3)
@@ -76,7 +76,7 @@ so that **emails are delivered reliably (not flagged as spam), recipients see a 
     EMAIL_PROVIDER=resend
     EMAIL_ENABLED=true
     RESEND_API_KEY=re_new_key_here
-    EMAIL_FROM_ADDRESS=noreply@oslrs.com
+    EMAIL_FROM_ADDRESS=noreply@oyoskills.com
     EMAIL_FROM_NAME=Oyo State Labour & Skills Registry
     EMAIL_TIER=free
     ```
@@ -89,42 +89,42 @@ so that **emails are delivered reliably (not flagged as spam), recipients see a 
   - [ ] 4.3 Inspect email headers — confirm DKIM and SPF pass:
     - `dkim=pass`
     - `spf=pass`
-  - [ ] 4.4 Verify sender shows as `noreply@oslrs.com`
-  - [ ] 4.5 Verify links in email use `https://oslrs.com/...` (not old domain)
+  - [ ] 4.4 Verify sender shows as `noreply@oyoskills.com`
+  - [ ] 4.5 Verify links in email use `https://oyoskills.com/...` (not old domain)
   - [ ] 4.6 Check Resend dashboard → Logs — confirm delivery status
 
 - [ ] Task 5: Add DMARC DNS record (AC: #7)
   - [ ] 5.1 Add TXT record at domain registrar:
-    - Host: `_dmarc.oslrs.com` (or `_dmarc` depending on registrar)
-    - Value: `v=DMARC1; p=quarantine; rua=mailto:admin@oslrs.com`
-  - [ ] 5.2 Verify via `dig _dmarc.oslrs.com TXT` or online DMARC checker
+    - Host: `_dmarc.oyoskills.com` (or `_dmarc` depending on registrar)
+    - Value: `v=DMARC1; p=quarantine; rua=mailto:admin@oyoskills.com`
+  - [ ] 5.2 Verify via `dig _dmarc.oyoskills.com TXT` or online DMARC checker
 
 - [ ] Task 6: Set up human-facing email (AC: #4)
   - [ ] 6.1 Confirm Awwal's preference: Zoho Mail free, Cloudflare forwarding, or other
   - [ ] 6.2 **If Zoho Mail free:**
-    - Sign up at zoho.com/mail → Add domain `oslrs.com`
+    - Sign up at zoho.com/mail → Add domain `oyoskills.com`
     - Add Zoho MX records to DNS (may conflict with Resend MX — use subdomain strategy if needed)
-    - Create mailboxes: `admin@oslrs.com`, `support@oslrs.com`
+    - Create mailboxes: `admin@oyoskills.com`, `support@oyoskills.com`
     - Note: Zoho free = 5 users, 5GB/user, web-only access
   - [ ] 6.3 **If Cloudflare Email Routing:**
     - DNS must be on Cloudflare (proxy)
     - Enable Email Routing → Add routes:
-      - `admin@oslrs.com` → Awwal's personal email
-      - `support@oslrs.com` → Awwal's personal email
+      - `admin@oyoskills.com` → Awwal's personal email
+      - `support@oyoskills.com` → Awwal's personal email
     - No MX conflict with Resend (Cloudflare handles routing separately)
     - Limitation: Can only receive/forward, cannot send FROM these addresses (use "reply-to" workaround)
-  - [ ] 6.4 Test: Send email to `admin@oslrs.com` — verify it arrives
+  - [ ] 6.4 Test: Send email to `admin@oyoskills.com` — verify it arrives
 
 - [ ] Task 7: Update documentation (AC: #6)
   - [ ] 7.1 Update `docs/RESEND-SETUP.md`:
-    - Change domain examples from `oyotradeministry.com.ng` to `oslrs.com`
+    - Change domain examples from `oyotradeministry.com.ng` to `oyoskills.com`
     - Add the exact DNS records that were configured
     - Document which human-facing email provider was chosen
     - Add DMARC setup instructions
   - [ ] 7.2 Update `docs/infrastructure-cicd-playbook.md` if it references email setup
 
 - [ ] Task 8: Verify AC#5 — support email in codebase (AC: #5)
-  - [ ] 8.1 Confirm `ActivationWizard.tsx` mailto link was updated in Story 9-2 to `support@oslrs.com`
+  - [ ] 8.1 Confirm `ActivationWizard.tsx` mailto link was updated in Story 9-2 to `support@oyoskills.com`
   - [ ] 8.2 If Story 9-2 hasn't been deployed yet, note this as a dependency
 
 ## Dev Notes
@@ -169,20 +169,20 @@ The email system is fully operational with these components:
 
 ### DNS Record Checklist
 
-After adding `oslrs.com` to Resend, you'll need these DNS records:
+After adding `oyoskills.com` to Resend, you'll need these DNS records:
 
 | Type | Host | Value | Purpose |
 |------|------|-------|---------|
-| TXT | `oslrs.com` | `v=spf1 include:_spf.resend.com ~all` | SPF — authorize Resend to send |
+| TXT | `oyoskills.com` | `v=spf1 include:_spf.resend.com ~all` | SPF — authorize Resend to send |
 | CNAME | (Resend provides) | (Resend provides) | DKIM signature 1 |
 | CNAME | (Resend provides) | (Resend provides) | DKIM signature 2 |
 | CNAME | (Resend provides) | (Resend provides) | DKIM signature 3 |
-| MX | `oslrs.com` | (Resend provides) | Bounce handling |
-| TXT | `_dmarc.oslrs.com` | `v=DMARC1; p=quarantine; rua=mailto:admin@oslrs.com` | Anti-spoofing |
+| MX | `oyoskills.com` | (Resend provides) | Bounce handling |
+| TXT | `_dmarc.oyoskills.com` | `v=DMARC1; p=quarantine; rua=mailto:admin@oyoskills.com` | Anti-spoofing |
 
 **Important:** If using Zoho Mail for human-facing email, MX records may conflict. Solutions:
 - Use Cloudflare Email Routing instead (no MX conflict)
-- Or set Resend return-path to a subdomain (`bounces.oslrs.com`)
+- Or set Resend return-path to a subdomain (`bounces.oyoskills.com`)
 
 ### Resend Tier Decision
 
@@ -203,7 +203,7 @@ Per SEC-3 crash loop lesson and project deployment patterns:
 
 ### Rollback Plan
 
-If email delivery fails after switching to `oslrs.com`:
+If email delivery fails after switching to `oyoskills.com`:
 1. Revert `EMAIL_FROM_ADDRESS` to `noreply@oyotradeministry.com.ng` in VPS `.env`
 2. Restart API: `pm2 restart oslsr-api`
 3. Old Resend domain verification should still be active
