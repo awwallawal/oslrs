@@ -11,6 +11,7 @@ import cspRoutes from './routes/csp.routes.js';
 import publicInsightsRoutes from './routes/public-insights.routes.js';
 import { AppError } from '@oslsr/utils';
 import { metricsMiddleware } from './middleware/metrics.js';
+import { realIpMiddleware } from './middleware/real-ip.js';
 import { CLOUDFLARE_IPS } from './constants/cloudflare-ips.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -109,6 +110,12 @@ export const app = express();
 // This still works for direct-to-VPS traffic (oyotradeministry.com.ng): chain is
 // real-client → nginx → Express, and req.ip resolves to real-client as before.
 app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal', ...CLOUDFLARE_IPS]);
+
+// Real-client-IP resolver — must run BEFORE any middleware that reads req.ip
+// (rate limiters, captcha, audit logging). Reads CF-Connecting-IP when the
+// request came through a verified Cloudflare edge; otherwise falls through to
+// Express's default trust-proxy behavior. See middleware/real-ip.ts for details.
+app.use(realIpMiddleware);
 
 // CSP violation report endpoint — registered BEFORE helmet so it's never blocked by CSP enforcement
 app.use('/api/v1', cspRoutes);
