@@ -9,7 +9,10 @@ import { cspDirectives } from '../app.js';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const NGINX_CONF_PATH = resolve(__dirname, '../../../../infra/nginx/oslsr.conf');
 
-const PROD_WS_URL = 'wss://oyotradeministry.com.ng';
+// Dual-domain (Phase 2): Helmet's connectSrc has BOTH prod wss URLs in production but only
+// the single ws://localhost:3000 fallback in test mode. To make the test-mode Helmet output
+// match the nginx prod string for parity, the dev fallback expands to the full prod list.
+const PROD_WS_URLS = ['wss://oyotradeministry.com.ng', 'wss://oyoskills.com'];
 
 type NormalizedPolicy = Record<string, string[]>;
 
@@ -29,9 +32,9 @@ function normalizeHelmetDirectives(): NormalizedPolicy {
       if (value.length === 0) {
         result[directive] = [];
       } else {
-        const sources = value.map((s) => {
-          if (s === 'ws://localhost:3000') return PROD_WS_URL;
-          return s;
+        const sources = value.flatMap((s) => {
+          if (s === 'ws://localhost:3000') return PROD_WS_URLS;
+          return [s];
         });
         result[directive] = sources.sort();
       }
@@ -162,8 +165,9 @@ describe('CSP Parity: Helmet <-> nginx', () => {
       const trimmed = part.trim();
       if (!trimmed) continue;
       const tokens = trimmed.split(/\s+/);
-      liveDirectives[tokens[0]] = tokens.slice(1)
-        .map((s) => (s === 'ws://localhost:3000' ? PROD_WS_URL : s))
+      liveDirectives[tokens[0]] = tokens
+        .slice(1)
+        .flatMap((s) => (s === 'ws://localhost:3000' ? PROD_WS_URLS : [s]))
         .sort();
     }
 

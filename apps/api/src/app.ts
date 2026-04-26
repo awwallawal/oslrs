@@ -55,14 +55,25 @@ const validateEnvironment = () => {
       process.exit(1);
     }
 
-    // CORS origin format validation (existence already validated via requiredProdVars)
-    if (process.env.CORS_ORIGIN === '*') {
-      console.error('[SECURITY] CORS_ORIGIN cannot be wildcard (*) in production. Set a specific origin.');
+    // CORS origin format validation (existence already validated via requiredProdVars).
+    // CORS_ORIGIN may be a single origin or comma-separated list (Phase 2 dual-domain).
+    const originList = (process.env.CORS_ORIGIN || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (originList.length === 0) {
+      console.error('[SECURITY] CORS_ORIGIN must contain at least one origin in production.');
       process.exit(1);
     }
-    if (!/^https?:\/\//.test(process.env.CORS_ORIGIN!)) {
-      console.error('[SECURITY] CORS_ORIGIN must start with http:// or https:// in production.');
-      process.exit(1);
+    for (const origin of originList) {
+      if (origin === '*') {
+        console.error('[SECURITY] CORS_ORIGIN cannot include wildcard (*) in production. Set specific origins.');
+        process.exit(1);
+      }
+      if (!/^https?:\/\//.test(origin)) {
+        console.error(`[SECURITY] CORS_ORIGIN entry "${origin}" must start with http:// or https:// in production.`);
+        process.exit(1);
+      }
     }
   }
 };
@@ -94,11 +105,17 @@ app.use('/api/v1', cspRoutes);
 
 // CSP configuration — report-only mode for initial deployment (SEC-2)
 const isProduction = process.env.NODE_ENV === 'production';
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
-const wsUrl = isProduction
-  ? corsOrigin.replace(/^https?:\/\//, 'wss://')
-  : 'ws://localhost:3000';
+// CORS_ORIGIN is comma-separated to support dual-domain (Phase 2: oyotradeministry.com.ng + oyoskills.com).
+// Each entry produces a corresponding wss:// origin for CSP connect-src.
+export const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const wsUrls = isProduction
+  ? corsOrigins.map((o) => o.replace(/^https?:\/\//, 'wss://'))
+  : ['ws://localhost:3000'];
 
 /** Exported for csp-parity.test.ts — the parity test reads this object and
  *  compares it against the nginx mirror in infra/nginx/oslsr.conf. */
@@ -130,7 +147,7 @@ export const cspDirectives = {
       ],
       connectSrc: [
         "'self'",
-        wsUrl,
+        ...wsUrls,
         "https://accounts.google.com",
         "https://hcaptcha.com",
         "https://*.hcaptcha.com",
@@ -169,7 +186,7 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(cors({
-  origin: corsOrigin,
+  origin: corsOrigins,
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());

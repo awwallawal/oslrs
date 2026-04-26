@@ -33,9 +33,15 @@ export function getIO(): SocketServer | null {
  * Handles: JWT auth handshake, LGA-scoped room joining, structured logging.
  */
 export function initializeRealtime(httpServer: HttpServer): SocketServer {
+  // CORS_ORIGIN is comma-separated to support dual-domain (Phase 2 mirror of app.ts logic).
+  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+      origin: corsOrigins,
       credentials: true,
     },
     // Websocket-only — polling disabled to eliminate CSRF attack surface (SEC2-3)

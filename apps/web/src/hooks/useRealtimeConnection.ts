@@ -4,17 +4,20 @@ import { useOnlineStatus } from './useOnlineStatus';
 
 const ACCESS_TOKEN_KEY = 'oslsr_access_token';
 
-/** Extract origin from API URL, falling back to localhost */
+/** Extract origin from API URL, falling back to current page origin (dual-domain) or localhost */
 function getSocketUrl(): string {
   const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
-  if (apiUrl) {
-    try {
-      return new URL(apiUrl).origin;
-    } catch {
-      return apiUrl.replace(/\/api\/v\d+\/?$/, '');
-    }
+  // Relative URL (Phase 2 dual-domain: /api/v1) or unset — use current page origin so the
+  // socket connects back to whichever host the user is loaded from.
+  if (!apiUrl || apiUrl.startsWith('/')) {
+    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
   }
-  return 'http://localhost:3000';
+  // Absolute URL (e.g. local dev pointing at remote API)
+  try {
+    return new URL(apiUrl).origin;
+  } catch {
+    return apiUrl.replace(/\/api\/v\d+\/?$/, '');
+  }
 }
 
 const SOCKET_URL = getSocketUrl();

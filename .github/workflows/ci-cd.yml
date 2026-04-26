@@ -592,8 +592,11 @@ jobs:
             # Run idempotent migration scripts (safe to re-run on every deploy)
             cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 
-            # Build frontend
-            VITE_API_URL=${{ vars.VITE_API_URL || 'https://oyotradeministry.com.ng/api/v1' }} pnpm --filter @oslsr/web build
+            # Build frontend — relative VITE_API_URL so XHR + WS resolve against whichever
+            # domain the user loaded from (Phase 2 dual-domain: oyotradeministry.com.ng + oyoskills.com).
+            # Hardcoded (not from vars.VITE_API_URL) so a stale GH Actions Variable cannot
+            # override and re-introduce a single canonical absolute URL.
+            VITE_API_URL=/api/v1 pnpm --filter @oslsr/web build
 
             # Deploy frontend to NGINX
             sudo cp -r apps/web/dist/* /var/www/oslsr/
