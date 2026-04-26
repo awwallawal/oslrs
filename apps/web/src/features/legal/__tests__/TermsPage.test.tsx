@@ -91,7 +91,7 @@ describe('TermsPage', () => {
     renderWithRouter(<TermsPage />);
     expect(screen.getByText('Contact Information')).toBeInTheDocument();
     expect(screen.getByText('Ministry of Trade, Investment, Cooperatives & Industry')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /legal@oyotradeministry\.com\.ng/ })).toHaveAttribute('href', 'mailto:legal@oyotradeministry.com.ng');
+    expect(screen.getByRole('link', { name: /legal@oyoskills\.com/ })).toHaveAttribute('href', 'mailto:legal@oyoskills.com');
   });
 
   it('renders related links section', () => {

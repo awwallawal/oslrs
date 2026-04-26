@@ -1,12 +1,15 @@
 # Story 9.4: Email Setup — Resend Domain Verification & Human-Facing Email
 
-Status: deferred
+Status: done
 
-> **2026-04-05 — Scope Update:** This story is entirely ops/configuration work — no code changes.
-> Story 9-5 centralized all domain references to env vars, so this story's scope is UNCHANGED.
-> When domain is purchased, merge with Story 9-2 remaining tasks (static files, docs, VPS runbook)
-> into a single migration story. All tasks below remain valid as-is.
-> **Migration runbook:** `docs/DOMAIN-MIGRATION.md` — the single checklist to follow on migration day.
+> **2026-04-26 — DONE.** All 7 ACs satisfied via Phase 1 email architecture (commit `1e65e9f`).
+> oyoskills.com domain purchased at Go54 + 3-vendor split deployed: Cloudflare (DNS, free) +
+> ImprovMX (inbound forwarding, free, 5 aliases) + Resend (outbound transactional, free).
+> SPF/DKIM/DMARC all pass; verified end-to-end via real password-reset email.
+>
+> **Earlier 2026-04-05 scope note (preserved for history):** This story was entirely
+> ops/configuration work — no code changes. Story 9-5 centralized all domain references
+> to env vars, so the scope was unchanged when domain finally landed.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -224,12 +227,47 @@ If email delivery fails after switching to `oyoskills.com`:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude (Anthropic) — used as ops collaborator for Phase 1 email architecture deployment 2026-04-26.
 
 ### Debug Log References
 
+- Real password-reset email triggered from prod app showed `dkim=pass header.i=@oyoskills.com header.s=resend / spf=pass smtp.mailfrom=...send.oyoskills.com / dmarc=pass header.from=oyoskills.com` over TLS 1.3, 1-second delivery.
+- `scripts/test-resend-oyoskills.sh` — one-shot Resend send via local .env API key.
+
 ### Completion Notes List
+
+- **AC#1 Resend domain verified ✅** — `oyoskills.com` added to Resend dashboard 2026-04-26. Resend domain swapped from `oyotradeministry.com.ng` → `oyoskills.com` (free tier limit = 1 domain max; old removed before adding new). DNS records: SPF (`v=spf1 include:amazonses.com ~all` on `send` subdomain), DKIM (`resend._domainkey` CNAME), MX (`send` subdomain → `feedback-smtp.us-east-1.amazonses.com`). All DNS-only/grey-cloud in Cloudflare per pitfall: proxying breaks email.
+- **AC#2 Transactional emails work ✅** — Production `EMAIL_FROM_ADDRESS=noreply@oyoskills.com` flipped on VPS via `pm2 restart oslsr-api --update-env`. Validated via real password-reset email with all auth checks passing.
+- **AC#3 Production env vars ✅** — VPS `.env` updated with `EMAIL_PROVIDER=resend`, `EMAIL_FROM_ADDRESS=noreply@oyoskills.com`, `EMAIL_FROM_NAME` retained, `RESEND_API_KEY` rotated for new domain.
+- **AC#4 Human-facing email ✅** — **Option B chosen (ImprovMX free)** instead of Cloudflare Email Routing (Cloudflare flapped during bootstrap; ImprovMX more stable on free tier). 5 aliases configured (`admin@/info@/support@/awwal@/noreply@oyoskills.com` → Builder Gmail forwarding, ~2 min delivery delay observed).
+- **AC#5 ActivationWizard support email ✅** — Centralized to `apps/web/src/config/site.ts` via Story 9-5; today's commit (Story 9-2 closure) flipped default `SITE_DOMAIN` from `oyotradeministry.com.ng` → `oyoskills.com` so all derived emails (`support@`, `tech@`, `legal@`, `report@`) now resolve to oyoskills.com automatically.
+- **AC#6 Documentation updated ✅** — `docs/account-migration-tracker.md`, `docs/transfer-protocol-schedule-1-asset-enumeration.md`, `docs/emergency-recovery-runbook.md` (§1.5 + §1.6), `docs/oslsr-glossary.md` all reflect new email architecture (commit `1e65e9f`).
+- **AC#7 DMARC ✅** — TXT record on `_dmarc.oyoskills.com`: `v=DMARC1; p=none; rua=mailto:dmarc@oyoskills.com;` (monitor mode initially; tighten to `quarantine` once 30 days of clean reports observed).
+
+**Bonus (not in original ACs):**
+- `admin@oyoskills.com` chosen as **canonical migration anchor** for the OSLRS project — every project SaaS account registers to this address from now forward; one ImprovMX destination flip migrates ALL ownership at Transfer Day.
+- Second super_admin user account `admin@oyoskills.com` created via staff-invite UI 2026-04-26, validated end-to-end via real activation flow. System health digests now deliver to BOTH super_admins.
 
 ### Change Log
 
+| Date | Change | Commit |
+|------|--------|--------|
+| 2026-04-26 | Phase 1 email architecture deployed (DNS + Resend + ImprovMX) | `1e65e9f` |
+| 2026-04-26 | Story status: deferred → done | (this commit) |
+
 ### File List
+
+Primary changes (commit `1e65e9f`):
+- `docs/account-migration-tracker.md`
+- `docs/transfer-protocol-schedule-1-asset-enumeration.md`
+- `docs/emergency-recovery-runbook.md`
+- `docs/oslsr-glossary.md`
+- `docs/portable-playbook.md`
+- `scripts/test-resend-oyoskills.sh` (NEW)
+- VPS `.env` updates (off-repo)
+- Cloudflare DNS records (off-repo, registrar-side)
+- Resend dashboard domain swap (off-repo, vendor-side)
+- ImprovMX alias setup (off-repo, vendor-side)
+
+Secondary (today's commit, Story 9-2 closure):
+- `apps/web/src/config/site.ts` — default `SITE_DOMAIN` flipped to `oyoskills.com`

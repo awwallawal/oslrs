@@ -7,7 +7,7 @@
  * @see docs/DOMAIN-MIGRATION.md for the migration checklist.
  */
 
-export const SITE_DOMAIN = import.meta.env.VITE_SITE_DOMAIN || 'oyotradeministry.com.ng';
+export const SITE_DOMAIN = import.meta.env.VITE_SITE_DOMAIN || 'oyoskills.com';
 
 export const publicUrl = import.meta.env.VITE_PUBLIC_URL || `https://${SITE_DOMAIN}`;
 

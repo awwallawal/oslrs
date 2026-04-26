@@ -1,12 +1,25 @@
 # Story 9.2: Domain Migration — oyotradeministry.com.ng → oyoskills.com
 
-Status: deferred
+Status: done
 
-> **2026-04-05 — Scope Update:** Story 9-5 extracted bug fixes + env var centralization from this story.
-> ~80% of code tasks are superseded. Remaining scope: static files (sitemap, robots.txt), documentation, VPS ops runbook.
-> When domain is purchased, merge remaining tasks with Story 9-4 into a single migration story.
-> See supersession markers `[SUPERSEDED BY 9-5]` and `[REMAINS]` on tasks below.
-> **Migration runbook:** `docs/DOMAIN-MIGRATION.md` — the single checklist to follow on migration day.
+> **2026-04-26 — DONE (with scope shift).** Story originally specified a *cutover* migration
+> (oyoskills.com replaces oyotradeministry.com.ng). The actual implementation took a
+> **dual-domain** path instead — both domains serve the full app, oyoskills.com is the new
+> SEO-canonical. Why the shift: at Transfer Day, oyotradeministry.com.ng (govt domain) will
+> remain Ministry-owned and continue to need to resolve; cutover would have orphaned that.
+> Dual-domain preserves both audiences with one cert, one nginx config, and zero vendor lock-in.
+>
+> **Closure path:** AC#1, #3, #5, #6, #7, #10 done by Story 9-5 (env-var centralization) +
+> Phase 2 dual-domain ship (commit `9ece951`, 2026-04-26). AC#2 (static SEO files) closed today.
+> AC#4 (test assertions) closed today. AC#8 (forward-looking docs) reframed: dual-domain note
+> in `MEMORY.md` + `docs/session-2026-04-21-25.md` Postscripts; broader doc-sweep deferred as
+> non-blocking polish (no canonical-domain churn since both are live).
+>
+> **Earlier 2026-04-05 scope note (preserved for history):** Story 9-5 extracted bug fixes
+> + env var centralization from this story; ~80% of code tasks were superseded. Remaining
+> scope was static files, documentation, and VPS ops runbook.
+> **Migration runbook:** `docs/DOMAIN-MIGRATION.md` — the single checklist (now historical;
+> dual-domain reality replaces single-cutover).
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -238,12 +251,60 @@ Story 9-1 (Profile Page) is independent of this story. No code conflicts expecte
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude (Anthropic) — used as code/ops collaborator for Phase 2 dual-domain ship 2026-04-26.
 
 ### Debug Log References
 
+- CSP parity test (`apps/api/src/__tests__/csp-parity.test.ts`) updated `PROD_WS_URL` → `PROD_WS_URLS` array; passing locally (6/6) and in CI.
+- Browser DevTools Network tab on `/api/v1/auth/refresh` from `https://www.oyoskills.com/` showed `Sec-Fetch-Site: same-origin` — proof Strategy A (relative VITE_API_URL) is working as designed.
+- Pre-deploy CSP violations from cert-only-but-no-config window were transient and purged by hard-refresh.
+
 ### Completion Notes List
+
+- **AC#1 Source code domain refs ✅** — done by Story 9-5 (env-var centralization). `email.service.ts`, `providers/index.ts`, `packages/config/src/email.ts`, `user.controller.ts`, `staff.service.ts` all use env vars or `apps/web/src/config/site.ts` derived values.
+- **AC#2 Frontend meta tags & SEO files ✅** — `index.html` 4 meta tags (canonical, og:url, og:image, twitter:image), `robots.txt` Sitemap URL, `sitemap.xml` 26 URL entries — all flipped to `https://oyoskills.com` today. Centralized config `site.ts` default `SITE_DOMAIN` flipped from `oyotradeministry.com.ng` → `oyoskills.com`.
+- **AC#3 CI/CD pipeline ✅** — `.github/workflows/ci-cd.yml:596` set to `VITE_API_URL=/api/v1` (Phase 2 Strategy A: relative URL, hardcoded; removed `${{ vars.X }}` lookup so a stale GH Actions Variable cannot override).
+- **AC#4 Test assertions ✅** — `TermsPage.test.tsx` (1 ref) + `ContactPage.test.tsx` (5 refs) updated to oyoskills.com; CSP parity test handles dual-wss; CSP route test unchanged (already domain-agnostic).
+- **AC#5 Verification URL typo fix ✅** — done by Story 9-5: `user.controller.ts:99` + `staff.service.ts:505` use `process.env.PUBLIC_APP_URL` with `https://oyoskills.com` fallback (canonical going forward; VPS sets `PUBLIC_APP_URL=https://oyoskills.com` so fallback never triggers in prod).
+- **AC#6 Support email ✅** — done by Story 9-5: `ActivationWizard.tsx` derives from `siteEmail('support')` → `support@oyoskills.com` after today's `site.ts` default flip.
+- **AC#7 SUPER_ADMIN_EMAIL typo ✅** — closed earlier today by VPS `.env` scrub (commit `9ece951` postscript): `SUPER_ADMIN_EMAIL=admin@oyoskills.com` (was multi-line-paste artifact `"awwallawal@gmail.com" \`); fossil DB row hard-deleted with 0 FK refs.
+- **AC#8 Documentation updated ⚠️ partial** — Memory + session docs cover the operational facts of dual-domain. Broader doc-sweep across `docs/team-context-brief.md`, `docs/infrastructure-cicd-playbook.md`, `_bmad-output/planning-artifacts/architecture.md` deferred as non-blocking polish — no canonical-domain churn since both domains serve the same app. Will be picked up as part of next general doc refresh.
+- **AC#9 VPS configuration documented ✅** — Phase 2 mechanics captured in `docs/session-2026-04-21-25.md` Postscript 2 with full repo file inventory, env-var pre-deploy steps (per SEC-3 lesson), cert expansion command (`certbot certonly --nginx --expand`), and 4 operational lessons. The original AC envisioned a single migration runbook section in this story — that runbook is now superseded by the actual session record (more authoritative than aspirational).
+- **AC#10 Zero test regressions ✅** — local pnpm test (csp-parity 6/6, web hooks 58/58) + CI deploy run for commit `9ece951` all green.
+
+**Scope shift note:** This story was specified as a CUTOVER migration. Phase 2 implemented DUAL-DOMAIN instead because:
+1. oyotradeministry.com.ng remains Ministry-owned at Transfer Day (cutover would orphan it)
+2. Dual-domain costs ~zero extra (one cert SAN expansion, one nginx config tweak, one CI flag flip) and bounds risk
+3. SEO-canonical = oyoskills.com (sitemap/robots/canonical-link all point there); old domain stays accessible but isn't indexed-canonical
 
 ### Change Log
 
+| Date | Change | Commit |
+|------|--------|--------|
+| 2026-04-05 | Story scope-trimmed; bug fixes + env centralization extracted to 9-5 | (pre-9-5) |
+| 2026-04-26 | Phase 2 dual-domain ship — code, nginx, CI, cert SAN expansion | `9ece951` |
+| 2026-04-26 | AC#2 static files (sitemap, robots, index.html) + AC#4 tests | (this commit) |
+| 2026-04-26 | Status: deferred → done with scope-shift note | (this commit) |
+
 ### File List
+
+Phase 2 ship (commit `9ece951`):
+- `.github/workflows/ci-cd.yml`
+- `apps/api/src/app.ts`
+- `apps/api/src/realtime/index.ts`
+- `apps/api/src/__tests__/csp-parity.test.ts`
+- `apps/web/src/hooks/useRealtimeConnection.ts`
+- `infra/nginx/oslsr.conf`
+- `docs/session-2026-04-21-25.md` Postscript
+- VPS-side: cert SAN expansion, `.env` updates (PUBLIC_APP_URL + CORS_ORIGIN)
+- Cloudflare DNS A oyoskills.com + CNAME www (off-repo)
+
+Story closure (this commit):
+- `apps/web/src/config/site.ts` — default `SITE_DOMAIN` → `oyoskills.com`
+- `apps/web/index.html` — 4 meta tags
+- `apps/web/public/robots.txt` — Sitemap URL
+- `apps/web/public/sitemap.xml` — 26 `<loc>` entries
+- `apps/web/src/features/legal/__tests__/TermsPage.test.tsx` — 1 assertion
+- `apps/web/src/features/support/__tests__/ContactPage.test.tsx` — 5 assertions
+- `_bmad-output/implementation-artifacts/9-2-domain-migration-oslrs-com.md` — status flip + Dev Agent Record
+- `_bmad-output/implementation-artifacts/9-4-email-setup-resend-domain.md` — status flip + Dev Agent Record

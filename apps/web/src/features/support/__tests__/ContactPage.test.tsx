@@ -32,7 +32,7 @@ describe('ContactPage', () => {
   it('renders General Inquiries section with contact details and response time', () => {
     renderWithRouter(<ContactPage />);
     expect(screen.getByText('General Inquiries')).toBeInTheDocument();
-    expect(screen.getByText('support@oyotradeministry.com.ng')).toBeInTheDocument();
+    expect(screen.getByText('support@oyoskills.com')).toBeInTheDocument();
     expect(screen.getByText('Monday - Friday, 8:00 AM - 5:00 PM')).toBeInTheDocument();
     // Per AC4: response time added
     expect(screen.getByText('We typically respond within 2-3 business days')).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('ContactPage', () => {
   it('renders Technical Support section', () => {
     renderWithRouter(<ContactPage />);
     expect(screen.getByText('Technical Support')).toBeInTheDocument();
-    expect(screen.getByText('tech@oyotradeministry.com.ng')).toBeInTheDocument();
+    expect(screen.getByText('tech@oyoskills.com')).toBeInTheDocument();
   });
 
   it('renders Data & Privacy Requests section', () => {
@@ -60,7 +60,7 @@ describe('ContactPage', () => {
     renderWithRouter(<ContactPage />);
     expect(screen.getByText('Report Abuse or Fraud')).toBeInTheDocument();
     expect(screen.getByText(/OSLSR registration is completely FREE/)).toBeInTheDocument();
-    expect(screen.getByText('report@oyotradeministry.com.ng')).toBeInTheDocument();
+    expect(screen.getByText('report@oyoskills.com')).toBeInTheDocument();
   });
 
   it('renders Office Location section', () => {
@@ -80,7 +80,7 @@ describe('ContactPage', () => {
 
   it('renders email links with correct mailto hrefs', () => {
     renderWithRouter(<ContactPage />);
-    expect(screen.getByRole('link', { name: 'support@oyotradeministry.com.ng' })).toHaveAttribute('href', 'mailto:support@oyotradeministry.com.ng');
-    expect(screen.getByRole('link', { name: 'tech@oyotradeministry.com.ng' })).toHaveAttribute('href', 'mailto:tech@oyotradeministry.com.ng');
+    expect(screen.getByRole('link', { name: 'support@oyoskills.com' })).toHaveAttribute('href', 'mailto:support@oyoskills.com');
+    expect(screen.getByRole('link', { name: 'tech@oyoskills.com' })).toHaveAttribute('href', 'mailto:tech@oyoskills.com');
   });
 });
