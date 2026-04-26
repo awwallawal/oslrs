@@ -11,6 +11,7 @@ import cspRoutes from './routes/csp.routes.js';
 import publicInsightsRoutes from './routes/public-insights.routes.js';
 import { AppError } from '@oslsr/utils';
 import { metricsMiddleware } from './middleware/metrics.js';
+import { CLOUDFLARE_IPS } from './constants/cloudflare-ips.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,8 +98,17 @@ export const logger = pino({
 
 export const app = express();
 
-// Trust first proxy (NGINX) — required for accurate IP-based rate limiting (SEC-2 review fix)
-app.set('trust proxy', 1);
+// Trust proxy chain — whitelist nginx loopback + Cloudflare's published edge IPs
+// (Phase 3, 2026-04-26). With Cloudflare proxying oyoskills.com:
+//   real-client → CF edge → nginx (127.0.0.1) → Express
+// Express walks X-Forwarded-For from the right, skipping trusted hops, until it
+// hits an untrusted entry (the real client). Whitelist form (vs `trust proxy: 2`)
+// prevents X-F-F spoofing from arbitrary upstream — only nginx loopback + known
+// Cloudflare ranges can extend the trust chain.
+//
+// This still works for direct-to-VPS traffic (oyotradeministry.com.ng): chain is
+// real-client → nginx → Express, and req.ip resolves to real-client as before.
+app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal', ...CLOUDFLARE_IPS]);
 
 // CSP violation report endpoint — registered BEFORE helmet so it's never blocked by CSP enforcement
 app.use('/api/v1', cspRoutes);
