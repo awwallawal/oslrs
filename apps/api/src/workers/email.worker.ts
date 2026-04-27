@@ -476,9 +476,17 @@ emailWorker.on('error', (err) => {
 });
 
 /**
- * Close the worker connection (for graceful shutdown)
+ * Close the worker connection (for graceful shutdown).
+ *
+ * Note: `connection` is also tracked by `closeAllConnections()` in lib/redis.ts which
+ * does its own safe quit-with-catch. The .catch() here protects the SIGINT/SIGTERM
+ * Promise.all chain in workers/index.ts:closeAllWorkers — if ioredis's reconnect
+ * handler closed the connection mid-shutdown, the explicit quit() throws "Connection
+ * is closed" and would crash the process. (Story 9-10 AC#2: 2026-04-27.)
  */
 export async function closeEmailWorker(): Promise<void> {
   await emailWorker.close();
-  await connection.quit();
+  // Connection may already be closed by ioredis's reconnect handler; the catch
+  // matches the safe-double-quit pattern in lib/redis.ts:closeAllConnections.
+  await connection.quit().catch(() => { /* already closed — safe */ });
 }

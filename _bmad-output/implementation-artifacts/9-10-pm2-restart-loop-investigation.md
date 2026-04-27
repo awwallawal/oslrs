@@ -23,6 +23,24 @@ As the **Super Admin / platform operator**,
 I want **the PM2 restart counter that hit 916+ over 89 days uptime root-caused and stabilised, plus the top 10 most-invoked API endpoints query-plan-audited at projected scale**,
 so that **the API process stops thrashing (alerting noise → real signal), the suspected ioredis reconnect churn from sec2-2 factory gaps is closed, and the Akintola-risk lessons learned during Story 11-1 schema work extend to the hot endpoint paths before field survey**.
 
+## 2026-04-27 evidence injection — partial AC#1/AC#2 work shipped
+
+After Phase 3 Cloudflare ship, system health digest fired CRITICAL on 2026-04-27 06:32 UTC (cpu 100%, memory 91%). Triage found:
+
+**The ↺ counter was NOT spontaneous.** All 3 morning restarts (pid 39949 at 05:56, pid 41053 at 06:32, pid 42191 at 07:15 UTC) correlate exactly with deploy times for commits `1383373`, `7015601`, `0ea5fa1` (each CI deploy completes ~7 min after push). PM2 has no `ecosystem.config.*` so `max_memory_restart` is unlimited — confirming PM2 isn't killing the process for memory either.
+
+**The CRITICAL alert at 06:32 UTC was a deploy-build resource spike**, not a runtime symptom. CI runs `pnpm install` + `pnpm --filter @oslsr/web build` (vite + tsc) ON the 2GB VPS as part of deploy. The build alone uses 700MB-1GB RAM and 70-90% CPU for 2-3 minutes. Add the running API + Postgres + Redis Docker containers and we're at 91-100% briefly per deploy.
+
+**The real bug DID surface in the err log:** `email.worker.ts:483` calls `connection.quit()` on a Redis connection that's already been closed by ioredis's reconnect handler, throwing "Connection is closed" inside a `Promise.all` in `closeAllWorkers`. The unhandled rejection crashes the shutdown sequence, which PM2 then sees as a non-clean exit. **Same redundant `.quit()` pattern exists in 4 queue files.** All 5 already redundant with `closeAllConnections()` in `lib/redis.ts` (which catches "already closed" silently). Fix shipped this commit: wrap each `.quit()` in `.catch(() => {})` matching the lib/redis.ts pattern. This closes part of AC#2.
+
+**What this changes for the rest of the story:**
+- AC#1 7-day trajectory analysis still needs to complete (window opened 2026-04-25 08:54 UTC, target 2026-05-02 minimum, 2026-05-09 ideal). The follow-up at `docs/follow-ups/2026-05-04-cloudflare-waf-pm2-csp-review.md` covers the trajectory capture + spontaneous-vs-deploy decomposition.
+- AC#2 fix is partially shipped (ioredis shutdown crashes in 5 files). Other AC#2 work (deeper SEC2-2 factory completion if needed) waits on the post-fix trajectory data showing whether ↺ drops below 5/week target.
+- AC#3 7-day post-fix observation re-anchors at this commit's deploy timestamp.
+- AC#7 regression test for the shutdown crash is a separate follow-up — would require mocking ioredis's reconnect handler to deterministically reproduce the race condition; deferred to keep this hot-fix surgical.
+
+**Architectural follow-up (separate story scope):** Move builds off the 2GB VPS. CI should build on GH Actions runner (2-core, 7GB RAM) and only `rsync dist/` + nginx config + pm2 restart on the VPS. This eliminates the deploy-time resource spike entirely and would close AC#3 the cleanest way. Tracked alongside the "self-hosted GH Actions runner inside tailnet" line item from Story 9-9.
+
 ## Background — PM2 ↺ baseline observability window
 
 **On 2026-04-23**, Story 9-9 Tailscale subtask Change Log entry flagged: "PM2 restart counter 916+ over 89 days — separate Story 9-10 investigation."

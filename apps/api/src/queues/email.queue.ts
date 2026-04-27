@@ -512,7 +512,9 @@ export async function closeEmailQueue(): Promise<void> {
     emailQueueInstance = null;
   }
   if (connection) {
-    await connection.quit();
+    // Story 9-10 AC#2: catch matches lib/redis.ts:closeAllConnections safe-quit pattern.
+    // Connection may already be closed by ioredis's reconnect handler at shutdown.
+    await connection.quit().catch(() => { /* already closed — safe */ });
     connection = null;
   }
 }
