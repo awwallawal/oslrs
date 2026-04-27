@@ -33,7 +33,7 @@ export function realIpMiddleware(req: Request, _res: Response, next: NextFunctio
     typeof cfIp === 'string' &&
     cfIp.length > 0 &&
     typeof xRealIp === 'string' &&
-    isCloudflareEdge(xRealIp)
+    isCloudflareEdge(xRealIp, 0)
   ) {
     Object.defineProperty(req, 'ip', {
       get: () => cfIp,
