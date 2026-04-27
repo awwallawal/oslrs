@@ -38,9 +38,9 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 | 5 | Backup client-side encryption (AES-256 pre-S3) + quarterly restore drill | ⏳ Backlog | AC#5 below |
 | 6 | Incident-response tier for CRITICAL alerts (SMS/WhatsApp/paged) | ⏳ Backlog | AC#6 below — **FRC item #5** |
 | 7 | Logrotate for PM2 logs + journalctl retention | ⏳ Backlog | AC#7 below |
-| 8 | Second super-admin account (break-glass) | ⏳ Backlog | AC#8 below |
+| 8 | Second super-admin account (break-glass) | ✅ **Done 2026-04-26** | `admin@oyoskills.com` created via staff-invite UI; Resend → ImprovMX → Gmail flow validated end-to-end via real activation email |
 | 9 | SOC-style activity baseline / SSH log differentiation | ⏳ Backlog | AC#9 below |
-| 10 | Cloudflare WAF/CDN + rate-limiting | ⏳ **Domain-gated** — proceed when `oyoskills.com` lands | AC#10 below — preserved from original story scope |
+| 10 | Cloudflare WAF/CDN + rate-limiting | ✅ **Done 2026-04-27** | DNS A oyoskills.com + CNAME www flipped grey → orange; SSL/TLS = Full (strict); Always Use HTTPS + Auto HTTPS Rewrites ON; WAF Managed Rules Always Active; WS through CF verified (101 status); real-IP middleware (`apps/api/src/middleware/real-ip.ts`) reads CF-Connecting-IP — verified `req.ip` = real client (197.211.52.65) post-deploy. Commits `4c2d909` + `bf98931` + `1383373` |
 
 **Field Readiness Certificate impact:** Subtask #1 (done) covers FRC item #1 (Tailscale live + SSH public-port closed). Subtask #6 covers FRC item #5 (alerting tier with at least one push channel live). Other subtasks are Tier B — can ship during the first weeks of field operation without blocking start.
 
@@ -83,9 +83,9 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 | AC#5 (Backup encryption) | Backlog | P1 | 1 day | — | Compliance + operator confidence; required for Transfer |
 | AC#6 (Alerting push channel) | Backlog | **P0** | 1-2 days | **#5** | **Field-readiness blocking** per FRC §5.3.1 item #5 |
 | AC#7 (Log rotation) | Backlog | P2 | 1 hour | — | Prevents disk-fill incident; cheap to do |
-| AC#8 (2nd super-admin) | Backlog | P1 | 2 hours | — | Eliminates single-account-lockout SPOF |
+| AC#8 (2nd super-admin) | **Done 2026-04-26** | P1 | 30 min actual | — | `admin@oyoskills.com` break-glass account live; both super_admins receive system health digests |
 | AC#9 (Activity baseline) | Backlog | P2 | 4 weeks elapsed (passive) | — | Establishes normal so anomalies are visible |
-| AC#10 (Cloudflare) | Backlog | P0 | 30-60 min | — | **Domain-gated** — proceeds when `oyoskills.com` lands |
+| AC#10 (Cloudflare) | **Done 2026-04-27** | P0 | ~2 hours actual (incl. real-IP plumbing dual-deploy) | — | DNS proxied + Full(strict) + WAF + real-IP middleware. See Postscript 3 in `docs/session-2026-04-21-25.md` for full mechanics + 4 lessons learned (#5-8) |
 
 ## Prerequisites / Blockers
 
@@ -184,11 +184,11 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 - [ ] 9.5 Add monthly review cadence to runbook §6.1 — review baseline, flag anomalies
 - [ ] 9.6 **Any successful login outside operator/CI categories = P0 incident** — document the incident response procedure in runbook §3 (Incident Response)
 
-### Subtask 10: Cloudflare WAF/CDN (AC#10) — DOMAIN-GATED
+### Subtask 10: Cloudflare WAF/CDN (AC#10) — DONE 2026-04-27
 
-- [ ] 10.1 Wait for `oyoskills.com` domain purchase (Story 9-2 dependency)
-- [ ] 10.2 Once domain lands, follow the original 2026-04-12 Cloudflare task plan preserved in §"Original Field-Readiness Assessment (2026-04-12)" Dev Notes below — Tasks 1.1-1.12 + 2.1-2.3
-- [ ] 10.3 **Open follow-up question:** with Cloudflare in front of public traffic, can the DO Cloud Firewall SSH rule be re-narrowed back to `100.64.0.0/10` + DO infrastructure ranges + Cloudflare IP ranges? Decision pending — ADR-020 V8.2-a1 §"DO Console Access Vector" trade-off matrix has the framing.
+- [x] 10.1 ~~Wait for `oyoskills.com` domain purchase (Story 9-2 dependency)~~ — **Done 2026-04-26 (Phase 1 email)**
+- [x] 10.2 ~~Follow the original 2026-04-12 Cloudflare task plan~~ — **Done 2026-04-27**: DNS records flipped grey → orange; SSL/TLS = Full (strict); Always Use HTTPS + Automatic HTTPS Rewrites enabled; WAF Managed Rules baseline Always Active. Email DNS records (MX/SPF/DKIM/DMARC) verified DNS-only/grey-cloud — must remain so forever. WS through CF proxy verified working (101 status). Commits `4c2d909` (trust proxy whitelist) + `bf98931` (CF-Connecting-IP middleware, failed CI build) + `1383373` (CI build fix: `@types/proxy-addr` + 2-arg trust fn call). Real-client IP plumbing verified post-deploy: `req.ip` = `197.211.52.65` (real Nigerian-ISP IP) on captcha + login events, not CF edge IPs. Full mechanics + 4 lessons learned (#5-8) captured in `docs/session-2026-04-21-25.md` Postscript 3.
+- [ ] 10.3 **Still open follow-up question:** with Cloudflare in front of public traffic, can the DO Cloud Firewall SSH rule be re-narrowed back to `100.64.0.0/10` + DO infrastructure ranges + Cloudflare IP ranges? Decision pending — ADR-020 V8.2-a1 §"DO Console Access Vector" trade-off matrix has the framing. Note: SSH traffic doesn't flow through Cloudflare regardless (CF only proxies HTTP/HTTPS), so adding CF IPs to firewall does NOT help SSH — the 100.64.0.0/10 + DO infra ranges remains the right answer for SSH lockdown when GH Actions self-hosted runner replaces public deploys.
 
 ### Subtask 11: Traceability (AC#11 — process hygiene)
 
