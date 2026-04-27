@@ -232,16 +232,21 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 
 _Per SCP-2026-04-22 §5.3.1, the field survey commences only after **all six items** below are verified true. The Certificate is the single-page artefact attached as an appendix to Baseline Report v2 and retained at `_bmad-output/baseline-report/field-readiness-certificate.md`._
 
+_**Revised 2026-04-27** per cost-aware roadmap session with Awwal: item #5 (alerting tier with push channel) demoted to Ministry hand-off recommendation; backup AES-256 client-side encryption (9-9 AC#5) promoted to FRC. Reasoning captured in `docs/post-handover-security-recommendations.md` and PM session notes._
+
 | # | Item | Story | Status |
 |---|---|---|---|
 | 1 | Tailscale live + SSH public-port closed | 9-9 (Tailscale subtask) | ✅ Done 2026-04-23 |
 | 2 | Story 11-1 schema + Akintola-risk composite indexes (AC#11) merged | 11-1 | ⏳ Backlog |
 | 3 | Story 9-12 Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email live | 9-12 | ⏳ Backlog |
 | 4 | `prep-input-sanitisation-layer` merged | prep task | ⏳ Backlog |
-| 5 | Alerting tier with at least one push channel live | 9-9 (subtask 6) | ⏳ Backlog |
+| 5 | Backup AES-256 client-side encryption + restore drill executed (9-9 AC#5) **[REVISED 2026-04-27]** | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section (D4 subset) drafted and printed | Iris / Gabe | ⏳ Backlog |
 
-**Tier B items** (Stories 9-10, 9-11, DPIA filing, backup encryption, OS patching) can ship during the first weeks of field operation without blocking start.
+**Tier B items** (Stories 9-10, 9-11, DPIA filing, OS patching, super-admin TOTP MFA Story 9-13) can ship during the first weeks of field operation without blocking start. Note: Story 9-13 is Tier B per FRC but is slotted in Wave 0 because it's zero-cost and small (~1-2 days) — recommended to land before field rather than during.
+
+**Demoted from FRC to Ministry hand-off recommendation 2026-04-27:**
+- **Push-channel alerting tier (SMS/WhatsApp/paged)** — original FRC #5. Rejected on cost grounds (~₦500-2K/mo Twilio). Email + solo-operator attentiveness deemed field-survivable. Captured as recommendation in `docs/post-handover-security-recommendations.md` for Ministry/State ICT consideration post-handover. Builder (Awwal) operates in email-attentive mode during Operate phase; SMS/paged tier becomes valuable when operator-pool grows beyond one person.
 
 **Epic 10 (API Governance) and Epic 11 Stories 11-2/11-3/11-4** can ship post-field.
 
