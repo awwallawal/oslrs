@@ -1,7 +1,8 @@
-# A.6 Dev-Story Sequence — 14 stories ready for `dev-story` workflow
+# A.6 Dev-Story Sequence — 16 stories ready for `dev-story` workflow
 
 **Authored:** 2026-04-27
-**Anchor:** SCP-2026-04-22 §A.6 (Dev agents run `bmad:bmm:workflows:dev-story` per story); 14 stories validated ready-for-dev by Bob (SM) per A.5 (commit `1e65e9f`).
+**Updated:** 2026-04-27 (Wave 0 added — build-off-VPS + tsc pre-commit hook)
+**Anchor:** SCP-2026-04-22 §A.6 (Dev agents run `bmad:bmm:workflows:dev-story` per story); 14 stories validated ready-for-dev by Bob (SM) per A.5 (commit `1e65e9f`); 2 prep-stories added Wave 0 2026-04-27 carving out CI hygiene work surfaced during Phase 3 ship.
 **Why this doc:** sprint-status.yaml has the per-story state but doesn't encode dependency-aware ORDER. Without an explicit sequence the next builder picks alphabetically (10-1 first?) or by epic order (Epic 9 first?), both of which violate hard dependencies. This doc is the running source of truth for which story to start next.
 
 ## Three principles
@@ -27,7 +28,24 @@ prep-input-sanitisation ──┐
 9-10 PM2 trajectory (passive observation, AC#2 fix shipped 2026-04-27) ───┘
 ```
 
-## Wave 1 — start now (3 parallel tracks)
+## Wave 0 — CI hygiene (start FIRST, before any Wave 1+ work)
+
+Two CI-tooling prep-stories carved out 2026-04-27 after Phase 3 triage proved the 2026-04-26/27 CRITICAL system-health alerts were deploy-build resource spikes, not runtime symptoms. Landing Wave 0 BEFORE Wave 1 makes the rest of A.6 cleaner: deploys stop tripping false alarms, type errors caught locally instead of in CI, Story 9-10 trajectory data unpolluted by deploy noise.
+
+| Story | Track | FRC? | Size | Why this wave |
+|---|---|---|---|---|
+| **prep-build-off-vps-cloud-runner** | CI/Infra | — | M (~half day) | Eliminates the deploy-time CPU/memory spike on the 2GB VPS. Cloud runner already builds dist; this story stops discarding it and ships it as artifact. **Zero additional cost** (uses existing GH-hosted free-tier minutes). |
+| **prep-tsc-pre-commit-hook** | CI/Infra | — | S (~1 hour) | Catches strict `tsc` errors at commit-time instead of CI-time. Prevents the "vitest passes locally + CI build fails" round-trip pattern (commits `bf98931` → `1383373` this session). |
+
+**Why start with these:**
+- Both are independent of every Wave 1+ story.
+- Both prevent friction on every future commit/deploy.
+- `prep-build-off-vps-cloud-runner` directly improves the data quality of Story 9-10 AC#3 trajectory analysis.
+- `prep-tsc-pre-commit-hook` is so small (~1 hour) it can run in parallel with Wave 1 without friction.
+
+**Definition of done for Wave 0:** both prep-stories merged. First post-Wave-0 deploy verified to not trigger CRITICAL alert (AC#10 of `prep-build-off-vps-cloud-runner`). At least one TS-error-blocked commit demonstrated locally for `prep-tsc-pre-commit-hook`.
+
+## Wave 1 — start as Wave 0 lands (3 parallel tracks)
 
 | Story | Track | FRC? | Size | Why this wave |
 |---|---|---|---|---|
@@ -74,7 +92,7 @@ prep-input-sanitisation ──┐
 ## Background tracks (passive throughout all waves)
 
 - **Story 9-9 remaining 6 subtasks:** port audit, app-layer rate-limit audit on `/auth/*`, backup AES-256 client-side encryption + quarterly restore drill, alerting tier (FRC #5 — SMS/WhatsApp/paged for CRITICAL), logrotate for PM2 + journalctl retention, SOC-style activity baseline. None block A.6.
-- **Architectural: build off-VPS** via self-hosted GH Actions runner inside tailnet. Eliminates the 2GB VPS deploy-build resource spike (cause of the 2026-04-26/27 CRITICAL alerts), and lets us re-narrow the SSH firewall back to `100.64.0.0/10` + DO infra ranges. Pairs with Story 9-9 follow-up. ~half-day of work; defer to between waves.
+- **Architectural: self-hosted GH Actions runner inside tailnet** (Story 9-9 follow-up, separate from Wave 0). Once a tailnet-resident runner exists, deploy SSH no longer needs the public-IP firewall rule — `0.0.0.0/0` can be dropped, leaving only `100.64.0.0/10` + DO infrastructure ranges. Optional. Cost: $4/mo nano droplet OR a laptop-availability arrangement. Decoupled from Wave 0 (which uses cloud runners and is zero-cost).
 - **Manual ops checklists:** `docs/follow-ups/2026-05-04-...md` (WAF + PM2 + CSP review) and `docs/follow-ups/2026-06-22-...md` (cert auto-renew preflight). User actions, not dev-story work.
 
 ## How to use this doc
