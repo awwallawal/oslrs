@@ -1,6 +1,6 @@
 # Prep Story: Build Off-VPS via Cloud-Runner Artifact Handoff (Wave 0)
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Created 2026-04-27 by Awwal+Claude after Phase 3 ship triage. The 2026-04-27 06:32 UTC CRITICAL system-health digest (cpu 100%, memory 91%) was triaged as deploy-driven, not runtime. Root cause: `pnpm install` + `pnpm --filter @oslsr/web build` runs on the 2GB VPS as part of every deploy, consuming 700MB-1GB RAM + 70-90% CPU for 2-3 min. CI's `lint-and-build` job ALREADY builds the same dist on a cloud runner and discards the output. This story stops discarding it. -->
 
@@ -59,10 +59,10 @@ None. Story 9-7 nginx config is in place; Phase 2/3 architecture is shipped; CI 
 
 ## Tasks / Subtasks
 
-### Task 1 — Wire artifact download in deploy job (AC#1)
+### Task 1 — Wire artifact download in deploy job (AC#1) — [x]
 
-1.1. Read current `.github/workflows/ci-cd.yml` deploy job (lines 548 onward).
-1.2. Add new step BEFORE the existing "Pre-deploy env var safety check":
+1.1. Read current `.github/workflows/ci-cd.yml` deploy job (lines 548 onward). [x]
+1.2. Add new step BEFORE the existing "Pre-deploy env var safety check": [x]
    ```yaml
    - name: Download build artifacts
      uses: actions/download-artifact@v4
@@ -70,11 +70,11 @@ None. Story 9-7 nginx config is in place; Phase 2/3 architecture is shipped; CI 
        name: build-artifacts
        path: ./build-artifacts/
    ```
-1.3. The artifact already includes `apps/*/dist` per the existing `lint-and-build` upload step (line 60-70). After download, `./build-artifacts/apps/web/dist/` exists locally on the runner.
+1.3. The artifact already includes `apps/*/dist` per the existing `lint-and-build` upload step (line 60-70). After download, `./build-artifacts/apps/web/dist/` exists locally on the runner. [x]
 
-### Task 2 — Ship web dist to VPS via scp-action (AC#2)
+### Task 2 — Ship web dist to VPS via scp-action (AC#2) — [x]
 
-2.1. Add new step BETWEEN "Download build artifacts" and "Pre-deploy env var safety check":
+2.1. Add new step BETWEEN "Download build artifacts" and "Pre-deploy env var safety check": [x]
    ```yaml
    - name: SCP web dist to VPS
      uses: appleboy/scp-action@v0.1.7
@@ -86,55 +86,115 @@ None. Story 9-7 nginx config is in place; Phase 2/3 architecture is shipped; CI 
        target: "/tmp/oslrs-web-dist-${{ github.sha }}"
        strip_components: 4
    ```
-2.2. `strip_components: 4` strips `build-artifacts/apps/web/dist/` from the path so files land directly in `/tmp/oslrs-web-dist-${{ github.sha }}/index.html`, `/assets/`, etc. (rather than nested under the original path structure).
-2.3. `appleboy/scp-action@v0.1.7` is the canonical action for runner→VPS file transfer; tested + maintained alongside the ssh-action we already use. SSH key reused.
+2.2. `strip_components: 4` strips `build-artifacts/apps/web/dist/` from the path so files land directly in `/tmp/oslrs-web-dist-${{ github.sha }}/index.html`, `/assets/`, etc. (rather than nested under the original path structure). [x]
+2.3. `appleboy/scp-action@v0.1.7` is the canonical action for runner→VPS file transfer; tested + maintained alongside the ssh-action we already use. SSH key reused. [x]
 
-### Task 3 — Remove VPS-side build, replace with cp from temp dir (AC#3, AC#5)
+### Task 3 — Remove VPS-side build, replace with cp from temp dir (AC#3, AC#5) — [x]
 
-3.1. Modify the "Deploy to DigitalOcean VPS" ssh-action `script:` block:
-   - **REMOVE** lines 595-599 (the `VITE_API_URL=/api/v1 pnpm --filter @oslsr/web build` block + its preceding comment).
-   - **MODIFY** line 601-602: change `sudo cp -r apps/web/dist/* /var/www/oslsr/` to:
+3.1. Modify the "Deploy to DigitalOcean VPS" ssh-action `script:` block: [x]
+   - **REMOVE** lines 595-599 (the `VITE_API_URL=/api/v1 pnpm --filter @oslsr/web build` block + its preceding comment). [x]
+   - **MODIFY** line 601-602: change `sudo cp -r apps/web/dist/* /var/www/oslsr/` to: [x]
      ```bash
      # Frontend dist comes from CI artifact (Wave 0 prep — built on cloud runner, not VPS)
      sudo cp -r /tmp/oslrs-web-dist-${{ github.sha }}/* /var/www/oslsr/
      sudo rm -rf /tmp/oslrs-web-dist-${{ github.sha }}
      ```
-3.2. **PRESERVE** all other steps in the script: `git pull origin main`, `pnpm install --frozen-lockfile`, `pnpm --filter @oslsr/api db:push`, `pnpm tsx scripts/migrate-audit-immutable.ts`, nginx backup-copy-test-reload, `pm2 restart oslsr-api`.
+3.2. **PRESERVE** all other steps in the script: `git pull origin main`, `pnpm install --frozen-lockfile`, `pnpm --filter @oslsr/api db:push`, `pnpm tsx scripts/migrate-audit-immutable.ts`, nginx backup-copy-test-reload, `pm2 restart oslsr-api`. [x]
 
-### Task 4 — Local pre-flight test BEFORE pushing CI change (AC#6 verification)
+### Task 3b (added during implementation) — Bake VITE_API_URL=/api/v1 into lint-and-build artifact — [x]
 
-4.1. On laptop: build locally — `cd apps/web && VITE_API_URL=/api/v1 pnpm build` to produce a fresh `dist/`.
-4.2. SCP to a temp dir on the VPS manually:
+3b.1. Discovered during implementation: the `lint-and-build` job runs `pnpm build` WITHOUT `VITE_API_URL`, so the uploaded artifact bakes in the `'http://localhost:3000/api/v1'` fallback from `apps/web/src/lib/api-client.ts`. Production needs `/api/v1`. [x]
+3b.2. Added `env: VITE_API_URL: /api/v1` to the lint-and-build `Build` step. Vite consumes only `VITE_*` vars in apps/web, so this is a no-op for @oslsr/api / @oslsr/types / other packages. Test jobs are unaffected (vitest re-compiles from source). [x]
+3b.3. This is the Wave 0 architectural completion of the deploy-time `VITE_API_URL=/api/v1` env that previously lived in the SSH script — the value now travels with the artifact. [x]
+
+### Task 3c (surfaced during pre-flight) — Wire VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID through CI — [x]
+
+3c.1. Awwal's manual pre-flight (Task 4) succeeded on the structural checks (HTTP/2 200 on all 4 domains, /api/v1/health JSON, PM2 online), then **the browser smoke test exposed the bug**: hCaptcha rendered with the "for testing purposes only — contact admin" banner and login POST returned `CAPTCHA verification failed`. [x]
+3c.2. Root cause: `apps/web/src/features/auth/components/HCaptcha.tsx:5` falls back to the hCaptcha **public test sitekey** (`10000000-ffff-ffff-ffff-000000000001`) when `VITE_HCAPTCHA_SITE_KEY` is undefined. Same pattern at `GoogleOAuthWrapper.tsx:4` — falls back to `''` empty string. Vite previously picked up the real values from VPS-side `/root/oslrs/.env` during the VPS-side build; cloud runner has no `.env` so the fallbacks won lit up. [x]
+3c.3. Test-secret/prod-secret mismatch is a defence-in-depth feature, not a bug — hCaptcha's server-side verify endpoint refuses the test sitekey signature when the production secret key is configured server-side, so the auth POST fails-closed. (Confirmed Task 4 caught this only because Awwal actually tried to log in — the AC#6 functional checks of `curl -sI` and `curl /api/v1/health` would have stayed green.) [x]
+3c.4. Awwal SSH'd to VPS, grepped real values from `/root/oslrs/.env`, added both as **GitHub Actions Repository Variables** (Settings → Secrets and variables → Actions → Variables tab). Variables not Secrets because both values are PUBLIC by design — they're embedded in every browser page; redaction would add no security and would cost debugging clarity. [x]
+3c.5. `.github/workflows/ci-cd.yml` lint-and-build `Build` step's `env:` block now wires all three: `VITE_API_URL` (hardcoded `/api/v1`), `VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}`, `VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}`. [x]
+3c.6. Documented as Pitfall #23 in `docs/infrastructure-cicd-playbook.md` — "Moving Vite build off-VPS silently swaps real VITE_* keys for code fallbacks" — with the canonical 4-step inventory procedure when adding a new `VITE_*` var (GH Variables → workflow `env:` → VPS `.env` → `.env.example`). [x]
+3c.7. Pre-flight rolled back via the `mv /var/www/oslsr.bak-pre-prepwave0` path (site restored, login working, `/api/v1/health` JSON green at 2026-04-27T15:30:31Z). The first post-merge CI deploy is now the proper verification. [x]
+
+### Task 4 — Local pre-flight test BEFORE pushing CI change (AC#6 verification) — [x]
+
+> **Executed 2026-04-27** during the Task 3c discovery cycle (story lines 110–118). The manual SCP + manual cp + browser smoke test ran end-to-end and surfaced the silent VITE_* fallback bug that became Pitfall #23. Site rolled back via `mv /var/www/oslsr.bak-pre-prepwave0` at 2026-04-27T15:30:31Z. Architecture viability proven; the first post-merge CI deploy completes the AC#6 verification with the corrected workflow. No additional pre-flight needed.
+
+4.1. ~~On laptop: build locally — `cd apps/web && VITE_API_URL=/api/v1 pnpm build` to produce a fresh `dist/`.~~ DONE 2026-04-27. [x]
+4.2. ~~SCP to a temp dir on the VPS manually.~~ DONE 2026-04-27. [x]
+4.3. ~~SSH to VPS, run a manual deploy script that mimics the new behavior.~~ DONE 2026-04-27 (smoke test caught test-sitekey fallback before CI push). [x]
+4.4. ~~Verify all 4 domains return 200 + `/api/v1/health` JSON.~~ DONE 2026-04-27 post-rollback at T15:30:31Z. [x]
+
+### Task 5 — Close-out via auto-measurement + 2-deploy gate (AC#7, AC#8, AC#9, AC#10) — [ ] PENDING DEPLOYS
+
+> **Restructured 2026-04-29 per code review.** Original design required live-SSH-during-deploy stopwatch toil across 3 deploys. Replaced with: (a) measurement block baked into deploy script (`.github/workflows/ci-cd.yml` `WAVE-0-MEASUREMENT START/END` lines), (b) 2-deploy strong gate (down from 3 — robustness margin recovered via the always-on measurement block giving free regression monitoring on every future deploy), (c) 7-day soft-path fallback so the story can't drift open indefinitely.
+
+5.1. **(operator: this session)** Commit Wave 0 (this commit). Push to main. CI runs full pipeline including the new deploy job with measurement bookends. [ ]
+
+5.2. **(operator: post-deploy 1)** Read row 1 from GH Actions logs:
    ```bash
-   scp -r apps/web/dist/* root@oslsr-home-app:/tmp/oslrs-manual-test-dist/
+   gh run view --log --job=deploy | awk '/WAVE-0-MEASUREMENT/,0'
    ```
-4.3. SSH to VPS, run a manual deploy script that mimics the new behavior:
-   ```bash
-   ssh root@oslsr-home-app "
-     sudo cp -r /tmp/oslrs-manual-test-dist/* /var/www/oslsr/ && \
-     sudo rm -rf /tmp/oslrs-manual-test-dist && \
-     pm2 restart oslsr-api
-   "
-   ```
-4.4. Verify all 4 domains return 200 + `/api/v1/health` JSON. If yes, the architecture works — proceed to push the CI change.
+   Eyeball peak `%Cpu(s)` user+sys, peak `MiB Mem :  used`, and the `duration=Ns` wall-clock. Save the values for commit 3 close-out — DO NOT update the table mid-flow. [ ]
 
-### Task 5 — Push, observe, measure (AC#7, AC#8, AC#9, AC#10)
+5.3. **(operator: ≤2 days later, separate session)** Develop `prep-tsc-pre-commit-hook` (Wave 0 carve-out, ready-for-dev, ~1 hour). Code review pre-commit (BMAD method cornerstone). Fix. Commit 2. Push. Read row 2 from deploy logs same way. [ ]
 
-5.1. Commit the workflow changes. Push.
-5.2. While CI runs, SSH to VPS in another window and tail PM2 + run `top -bn1 | head -10` every 30 seconds during the deploy step. Capture:
-   - Peak `%Cpu(s)` user+sys during deploy
-   - Peak `MiB Mem :  used` during deploy
-   - Wall-clock from `pm2 restart` log entry to next process pid steady state
-5.3. Verify post-deploy: all 4 domains 200, browser test (login + WS), no fresh CSP violations, no crashes in PM2 err log.
-5.4. Repeat for 2 more deploys (could be follow-up doc commits if no functional changes pending). Average the metrics. Report.
+5.4. **(operator: same session as 5.3)** Commit 3 close-out — fills rows 1 + 2 in the table below, flips story Status `done`, flips sprint-status `done`. Push. Commit 3's own deploy = silent confirmation row 3 (recorded post-hoc only if it exceeds thresholds; otherwise no further action needed). [ ]
 
-### Task 6 — Documentation (AC#11)
+**Close-out gate (decision logic):**
 
-6.1. Update `docs/infrastructure-cicd-playbook.md`:
-   - **Part 6** gains a new "6.2: Build Off-VPS Artifact Handoff" subsection. Describes the upload-artifact in lint-and-build → download-artifact in deploy → scp-action to VPS → cp to /var/www/oslsr/ flow. Includes a "before vs after" text diagram.
-   - **Pitfall #22 added:** "VPS-side build on small droplets causes alert noise" — symptom (CRITICAL alerts during deploy windows), cause (build consumes ~70-90% CPU + 700MB-1GB RAM on a 2GB VPS), fix (ship dist as artifact from cloud runner).
-6.2. Update `docs/a6-dev-story-sequence.md` to mark Wave 0 as DONE once this story merges.
-6.3. Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: flip `prep-build-off-vps-cloud-runner` from `ready-for-dev` → `in-progress` at PR open, → `review` at code review, → `done` at merge.
+| Path | Trigger | Action |
+|---|---|---|
+| ✅ Strong (preferred) | 2 measured rows, both with CPU <30% AND mem <1Gi AND wall-clock <4 min AND no CRITICAL system-health digest within deploy window | Story → `done` via commit 3 |
+| ✅ Soft (fallback) | 7 days elapsed since Wave 0 merge AND deploys-that-did-happen all show wall-clock <4 min in GH Actions UI AND no CRITICAL digests fired | Story → `done` via commit 3; AC#7+AC#8 inferred from "no CRITICAL fired" (digest threshold = 80%, well above the AC#7+AC#8 thresholds) |
+| ❌ Failure | Any deploy fires CRITICAL OR shows >50% CPU OR >1.2Gi memory OR >5 min wall-clock | Re-open with spike-investigation follow-up. `pnpm install` becomes the next-likely candidate (story risk-table line 263 named this); scope a future story to bundle the API via tsup/esbuild (Option (b)). |
+
+**Calendar gate:** if commits 2 + 3 haven't both landed by **2026-05-06** (7 days post-Wave-0 merge), trigger Soft Path closure.
+
+### Task 7 — Apply review fixes BEFORE commit (Wave 0 code review, 2026-04-29) — [x]
+
+> Adversarial code review on uncommitted working tree (BMAD method cornerstone — `feedback_review_before_commit.md`) surfaced 3 High + 4 Medium + 3 Low findings. All H/M findings fixed in this commit (except M4 deferred as documented exception). Full action-item record under "Review Follow-ups (AI)" below.
+
+7.1. H1: Trap-cleanup `/tmp/oslrs-web-dist-${SHA}` on EXIT in deploy script. [x] `ci-cd.yml` `Deploy to DigitalOcean VPS` step line ~620.
+7.2. H2: Fail-fast `[[ -f /var/www/oslsr/index.html ]]` guard after dist copy. [x] `ci-cd.yml` line ~647.
+7.3. H3: `team-context-brief.md` added to File List below; `package.json` + `pnpm-lock.yaml` (`js-yaml` + `markdown-it` for unrelated baseline-report tooling) stashed via `git stash push` to keep them out of the Wave 0 commit. [x]
+7.4. M1: Pitfall #10 in playbook cross-referenced to Part 6.2 + Pitfall #23 (post-Wave-0 pattern). [x]
+7.5. M2: Manual Redeploy snippet in playbook hardened with all 3 VITE_* vars sourced from VPS `.env` + emergency-only callout. [x]
+7.6. M3: Backup-before-overwrite for `/var/www/oslsr` → `/var/www/oslsr.bak.prev` in deploy script (mirrors nginx backup-test-restore pattern). [x] `ci-cd.yml` line ~640.
+7.7. M4: Lighthouse job redundant rebuild — DEFERRED. Documented as known exception (lighthouse needs its own dist for perf measurement). Not Wave 0 scope. [ ] DEFERRED
+7.8. L1: Task 6 [x] / Task 6.2 [ ] inconsistency reconciled in this rewrite. [x]
+7.9. L2: Quarterly `/tmp/oslrs-web-dist-*` cleanup line added to playbook Daily Operations → Periodic Maintenance subsection. [x]
+7.10. L3: Status gate explicit — story stays `in-progress` post-Wave-0-commit; flips `done` only at commit 3 close-out per Task 5 gate logic above. [x]
+7.11. Wave 0 close-out infrastructure: measurement block (`WAVE-0-MEASUREMENT START/END` bookends) added to deploy script. Captures pre/post `top` + `free -h` + wall-clock duration. Permanent — provides free regression monitoring on every future deploy. [x] `ci-cd.yml` Deploy step.
+
+### Task 6 — Documentation (AC#11) — [~] PARTIAL (6.2 deferred per design)
+
+6.1. Update `docs/infrastructure-cicd-playbook.md`: [x]
+   - **Part 6** gains a new "6.2: Build Off-VPS Artifact Handoff" subsection. [x]
+   - **Pitfall #22 added** (VPS-side build on small droplets causes alert noise). [x]
+   - **Pitfall #23 added** (Moving Vite build off-VPS silently swaps real VITE_* keys for code fallbacks) — captured during pre-flight. [x]
+   - **Pitfall #10 cross-referenced** to Part 6.2 + Pitfall #23 (M1 fix, 2026-04-29). [x]
+   - **Manual Redeploy snippet hardened** with all 3 VITE_* vars + emergency-only callout (M2 fix, 2026-04-29). [x]
+   - **Periodic Maintenance subsection added** with `/tmp/oslrs-web-dist-*` quarterly sweep + `/var/www/oslsr.bak.prev` audit (L2 fix, 2026-04-29). [x]
+6.2. Update `docs/a6-dev-story-sequence.md` to mark Wave 0 as DONE once this story merges. [ ] DEFERRED — post-Wave-0 action; Wave 0 has 4 stories, marker should land when the wave is fully done, not on this single story merge.
+6.3. Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: flip `prep-build-off-vps-cloud-runner` from `ready-for-dev` → `in-progress` at PR open, → `review` at code review, → `done` at merge. [x] (in-progress flipped 2026-04-27; stays in-progress through Wave 0 commit; flips `done` at commit 3 close-out per Task 5)
+6.4. Update `docs/team-context-brief.md` with the post-Wave-0 VITE_* env-var inventory pattern. [x] (M-related: this file IS Wave 0–scope but was originally missed from the File List — now corrected per H3.)
+
+### Review Follow-ups (AI) — Adversarial Code Review 2026-04-29
+
+> Findings catalogue from `/bmad:bmm:workflows:code-review` adversarial pass on uncommitted working tree. All HIGH + MEDIUM (except M4) fixed in this commit. Cross-reference this list with Task 7 above for the corresponding fix locations.
+
+- [x] [AI-Review][HIGH] H1 — Orphaned `/tmp/oslrs-web-dist-<sha>/` on early-failure deploys (set -eo pipefail exits before rm -rf cleanup). FIX: trap-on-EXIT cleanup. `.github/workflows/ci-cd.yml:620`
+- [x] [AI-Review][HIGH] H2 — No fail-fast guard for empty/missing dist after copy (silent 404-page deploy possible if scp ships zero files). FIX: `[[ -f /var/www/oslsr/index.html ]]` check post-cp. `.github/workflows/ci-cd.yml:647`
+- [x] [AI-Review][HIGH] H3 — Story File List omits `docs/team-context-brief.md` (on-topic), `package.json` + `pnpm-lock.yaml` (scope-creep: js-yaml + markdown-it for baseline-report tooling). FIX: team-context-brief.md added to File List below; package.json + pnpm-lock.yaml git-stashed for separate commit.
+- [x] [AI-Review][MED] M1 — Pitfall #10 in playbook stale post-Wave-0 (still teaches old VPS-side build pattern). FIX: cross-reference to Part 6.2 + Pitfall #23. `docs/infrastructure-cicd-playbook.md` Pitfall #10 row
+- [x] [AI-Review][MED] M2 — Manual Redeploy snippet (Part 7) teaches deprecated pattern AND will trip Pitfall #23 (no VITE_HCAPTCHA_SITE_KEY / VITE_GOOGLE_CLIENT_ID in the build line). FIX: source from `/root/oslrs/.env`, all 3 VITE_* on the build line, emergency-only callout. `docs/infrastructure-cicd-playbook.md` Manual Redeploy section
+- [x] [AI-Review][MED] M3 — No backup of `/var/www/oslsr/` before cp (no rollback path). FIX: backup-before-overwrite to `/var/www/oslsr.bak.prev` (mirrors nginx backup-test-restore pattern). `.github/workflows/ci-cd.yml:640`
+- [ ] [AI-Review][MED] M4 — Lighthouse job rebuilds dist redundantly (lines 502-503). DEFERRED: lighthouse needs its own dist for perf measurement; not Wave 0 scope. Documented as known exception. Future cleanup: drop redundant rebuild OR document the exception in Part 6.2.
+- [x] [AI-Review][LOW] L1 — Task 6 [x] / Task 6.2 [ ] DEFERRED inconsistency. FIX: parent task changed to [~] PARTIAL.
+- [x] [AI-Review][LOW] L2 — No periodic /tmp cleanup documented. FIX: Periodic Maintenance subsection added to playbook with quarterly sweep snippet.
+- [x] [AI-Review][LOW] L3 — Status gate clarity. FIX: Task 5 close-out gate makes the in-progress → done transition explicit and time-bounded.
 
 ## Dev Notes
 
@@ -268,12 +328,94 @@ Option (a)/(b)/(c) all meaningful improvements that would close `pnpm install`'s
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-opus-4-7[1m] (Claude Opus 4.7, 1M context) — 2026-04-27
 
 ### Debug Log References
 
+- `apps/web/src/lib/api-client.ts:1` — confirmed default fallback `'http://localhost:3000/api/v1'` when `VITE_API_URL` undefined; this is what motivated Task 3b (bake VITE_API_URL=/api/v1 into the artifact, not just at deploy time).
+- `apps/web/src/hooks/useRealtimeConnection.ts:9` — confirmed relative-URL handling already in place (Phase 2 Strategy A) so the artifact-baked `/api/v1` works for both XHR and WS without per-domain rebuild.
+
 ### Completion Notes List
+
+**Tasks 1-3 + Task 3b (CI workflow) — DONE 2026-04-27**
+
+- Task 1 (AC#1): `actions/download-artifact@v4` step added at start of `deploy` job in `.github/workflows/ci-cd.yml:567-571`. Downloads `build-artifacts` to `./build-artifacts/` on the runner.
+- Task 2 (AC#2): `appleboy/scp-action@v0.1.7` step at `.github/workflows/ci-cd.yml:577-585`. Copies `build-artifacts/apps/web/dist/*` → `/tmp/oslrs-web-dist-${{ github.sha }}/` on VPS. `strip_components: 4` flattens path.
+- Task 3 (AC#3, AC#5): VPS-side `pnpm --filter @oslsr/web build` removed from `Deploy to DigitalOcean VPS` ssh-action script. Replaced with `sudo cp -r /tmp/oslrs-web-dist-${{ github.sha }}/* /var/www/oslsr/` + `sudo rm -rf /tmp/oslrs-web-dist-${{ github.sha }}`. All other VPS steps preserved (pnpm install, db:push, migrate-audit-immutable, nginx backup-test-reload, pm2 restart).
+- Task 3b (correctness fix discovered during impl): `VITE_API_URL: /api/v1` added to `lint-and-build` `Build` step's `env:` block at `.github/workflows/ci-cd.yml:60-63`. Without this the artifact would bake in the `localhost:3000` fallback and production would break post-deploy. The `VITE_API_URL=/api/v1` value now travels with the artifact instead of being applied at deploy time.
+- Task 3c (correctness fix surfaced during Awwal's pre-flight browser test): `VITE_HCAPTCHA_SITE_KEY` + `VITE_GOOGLE_CLIENT_ID` added as GH Actions Repository Variables and wired into the same `Build` step. Without these the artifact falls back to the hCaptcha public test sitekey (login captcha breaks) and an empty Google OAuth client ID. New Pitfall #23 in playbook captures the trap + the canonical 4-step procedure for adding any future `VITE_*` var.
+
+**Task 6 (Documentation) — DONE 2026-04-27**
+
+- `docs/infrastructure-cicd-playbook.md` Part 6.2 added (Build Off-VPS Artifact Handoff) with before/after text diagrams + the four "why" explanations (VITE_API_URL placement, SHA namespacing, scp-action vs rsync, pnpm install preservation).
+- `docs/infrastructure-cicd-playbook.md` Pitfall #22 added (VPS-side build on small droplets causes alert noise).
+- Existing Part 6 deploy-step example (line ~530) updated to show the new artifact-cp pattern.
+- `docs/a6-dev-story-sequence.md` Wave 0 done-marker DEFERRED to post-Wave-0 (this is 1 of 4 stories in Wave 0 — premature to mark wave done).
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` flipped from `ready-for-dev` → `in-progress`.
+
+**Tasks 4 + 5 — PENDING USER (Awwal)**
+
+These ACs require live VPS observation:
+
+- **Task 4 (AC#6 pre-flight):** manual SCP + manual cp on VPS to ground-truth the architecture before pushing the workflow change. Recommended before merging.
+- **Task 5 (AC#7-AC#10 measurements):** SSH-to-VPS during 3 successive deploys to capture peak CPU%, peak memory, wall-clock duration. Acceptance thresholds: <30% CPU, <1Gi memory, <4 min wall-clock, zero CRITICAL digests during deploy windows.
+
+**Measurement table (to be filled by Awwal during Task 5):**
+
+| Deploy # | Commit SHA | Peak CPU% | Peak Mem (GiB) | Wall-clock | CRITICAL alert? | Notes |
+|---|---|---|---|---|---|---|
+| 1 (post-merge) | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ | First deploy after this story merges |
+| 2 | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ | |
+| 3 | _tbd_ | _tbd_ | _tbd_ | _tbd_ | _tbd_ | |
+| **Median** | — | _tbd_ | _tbd_ | _tbd_ | — | Acceptance: <30% / <1.0 / <4min / 0 |
+| **Pre-fix baseline** | (any prior) | 70-90% | 1.5-1.8 | ~7 min | YES (every deploy) | From 2026-04-27 06:32 UTC triage |
 
 ### Change Log
 
+| Date | Change | Files |
+|---|---|---|
+| 2026-04-27 | Wave 0 prep-story implementation. CI workflow: download-artifact + scp-action steps added to deploy job; VPS-side build removed; VITE_API_URL=/api/v1 baked into lint-and-build artifact. Playbook Part 6.2 + Pitfall #22 added. | `.github/workflows/ci-cd.yml`, `docs/infrastructure-cicd-playbook.md`, `_bmad-output/implementation-artifacts/sprint-status.yaml`, this story file |
+| 2026-04-27 | Pre-flight browser test surfaced silent VITE_* fallback: hCaptcha rendered the test-purposes sitekey, login broke. Wired `VITE_HCAPTCHA_SITE_KEY` + `VITE_GOOGLE_CLIENT_ID` (both public-by-design, added as GH Actions Variables) into lint-and-build Build step. Playbook gained Pitfall #23 with canonical 4-step procedure for adding future `VITE_*` vars. Site rolled back to backup; first post-merge CI deploy is the verification. | `.github/workflows/ci-cd.yml`, `docs/infrastructure-cicd-playbook.md`, this story file |
+| 2026-04-29 | Adversarial code review pre-commit (BMAD method cornerstone — `feedback_review_before_commit.md`). 3 High + 4 Medium + 3 Low findings; all H/M (except M4 deferred) fixed in this commit. Deploy script gains: trap-on-EXIT cleanup of /tmp/oslrs-web-dist-<sha> (H1), fail-fast `[[ -f /var/www/oslsr/index.html ]]` guard after dist copy (H2), backup-before-overwrite for /var/www/oslsr → /var/www/oslsr.bak.prev (M3), and WAVE-0-MEASUREMENT START/END bookends (close-out automation — captures pre/post `top` + `free -h` + wall-clock duration on every deploy permanently). Playbook: Pitfall #10 cross-referenced to Part 6.2 + Pitfall #23 (M1), Manual Redeploy snippet hardened with all 3 VITE_* vars + emergency-only callout (M2), Periodic Maintenance subsection added with /tmp/oslrs-web-dist-* quarterly sweep (L2). Story: Task 4 retroactively closed (executed 2026-04-27 during Task 3c), Task 5 restructured around 2-deploy strong gate + 7-day soft-path fallback (down from 3 deploys; robustness margin recovered via always-on measurement block), Task 7 added documenting all H/M/L fix locations, Review Follow-ups (AI) subsection added per workflow option [2]. team-context-brief.md added to File List (was on-topic but missing — H3 partial fix). package.json + pnpm-lock.yaml (js-yaml + markdown-it for unrelated baseline-report tooling) git-stashed to keep them out of the Wave 0 commit (H3 scope-creep separation). | `.github/workflows/ci-cd.yml`, `docs/infrastructure-cicd-playbook.md`, `docs/team-context-brief.md`, this story file |
+
 ### File List
+
+- `.github/workflows/ci-cd.yml` — modified
+  - lint-and-build `Build` step: added `env:` block with `VITE_API_URL: /api/v1` (Task 3b) + `VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}` + `VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}` (Task 3c)
+  - deploy job: added `Download build artifacts` step (Task 1)
+  - deploy job: added `SCP web dist to VPS` step (Task 2)
+  - deploy job: `Deploy to DigitalOcean VPS` script — removed `VITE_API_URL=/api/v1 pnpm --filter @oslsr/web build`, replaced `cp -r apps/web/dist/*` with `cp -r /tmp/oslrs-web-dist-<sha>/*` (Task 3)
+  - deploy job: trap-on-EXIT cleanup of `/tmp/oslrs-web-dist-<sha>` (Wave 0 review H1)
+  - deploy job: backup-before-overwrite `/var/www/oslsr` → `/var/www/oslsr.bak.prev` before dist cp (Wave 0 review M3)
+  - deploy job: fail-fast `[[ -f /var/www/oslsr/index.html ]]` guard after dist cp (Wave 0 review H2)
+  - deploy job: `WAVE-0-MEASUREMENT START` block before deploy + `WAVE-0-MEASUREMENT END` block after pm2 restart (Task 5 close-out automation; permanent regression-monitoring infrastructure)
+- **GitHub repo configuration (out-of-tree, manual)**: two new repository variables under Settings → Secrets and variables → Actions → Variables tab:
+  - `VITE_HCAPTCHA_SITE_KEY` (public hCaptcha sitekey, same value as `/root/oslrs/.env`)
+  - `VITE_GOOGLE_CLIENT_ID` (public Google OAuth client ID, same value as `/root/oslrs/.env`)
+- `docs/infrastructure-cicd-playbook.md` — modified
+  - Part 6 deploy-step code example updated to show artifact-cp pattern
+  - Part 6.2 (Build Off-VPS Artifact Handoff) new subsection added
+  - Pitfall #22 (VPS-side build on small droplets causes alert noise) added
+  - Pitfall #23 (Moving Vite build off-VPS silently swaps real VITE_* keys for code fallbacks) added — captures the pre-flight finding + 4-step procedure for adding future `VITE_*` vars
+  - Pitfall #10 cross-referenced to Part 6.2 + Pitfall #23 — flags the post-Wave-0 pattern boundary (Wave 0 review M1)
+  - Manual Redeploy snippet (Part 7) hardened: all 3 VITE_* vars sourced from `/root/oslrs/.env`, emergency-only callout (Wave 0 review M2)
+  - Periodic Maintenance subsection added under Daily Operations: quarterly `/tmp/oslrs-web-dist-*` sweep + `/var/www/oslsr.bak.prev` audit (Wave 0 review L2)
+  - Footer `Updated: 2026-04-27` + `Updated: 2026-04-29` lines added
+- `docs/team-context-brief.md` — modified (Wave 0 review H3 — was on-topic but originally missed from File List)
+  - Critical Deployment Notes: VITE_API_URL bullet rewritten to reflect post-Wave-0 cloud-runner build pattern (3 VITE_* vars, GH Actions Variable origin, 4-step add-new-var procedure, cross-ref Pitfall #23)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified
+  - `prep-build-off-vps-cloud-runner` flipped `ready-for-dev` → `in-progress` (will flip → `done` at commit 3 close-out per Task 5 gate)
+- `_bmad-output/implementation-artifacts/prep-build-off-vps-cloud-runner.md` — modified
+  - Status `ready-for-dev` → `in-progress`
+  - Tasks 1, 2, 3, 3b, 3c marked `[x]`
+  - Task 4 retroactively closed `[x]` with evidence pointer to Task 3c.7 (Wave 0 review L3)
+  - Task 5 restructured around 2-deploy Strong Gate + 7-day Soft Path + Failure Path; auto-measurement block in CI script feeds the gate
+  - Task 6 reconciled `[x]` → `[~]` PARTIAL (sub-item 6.2 deferred per design; 6.4 added documenting team-context-brief.md update) (Wave 0 review L1)
+  - Task 7 added documenting all H/M/L fix locations from this code review pass
+  - Review Follow-ups (AI) subsection added — adversarial code review findings catalogue with status markers
+  - Dev Agent Record extended: 2026-04-29 Change Log entry, this expanded File List
+
+**Out-of-commit (git-stashed for separate scope):**
+- `package.json` + `pnpm-lock.yaml` — adds `js-yaml@^4.1.0` + `markdown-it@^14.1.0` to root devDependencies. These are for the `_bmad-output/baseline-report/assets/build.js` tooling, NOT Wave 0. Stashed via `git stash push -m "wave0-scope-creep: ..." -- package.json pnpm-lock.yaml` so the Wave 0 commit stays focused. Recover with `git stash pop` when committing the baseline-report tooling. (Wave 0 review H3 scope-separation fix)
+
+No changes in `apps/api/src` or `apps/web/src`. No new automated tests required (CI architecture change, not application code).

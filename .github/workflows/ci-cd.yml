@@ -54,7 +54,20 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # All VITE_* vars are baked into apps/web/dist at build time.
+      # - VITE_API_URL=/api/v1: relative URL so XHR + WS resolve against whichever
+      #   domain the page loaded from (Phase 2 dual-domain Strategy A). Hardcoded.
+      # - VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID: public client-side keys.
+      #   Read from GH Actions repo variables. Without these the build falls back to
+      #   the hCaptcha public test key (login captcha shows "for testing" banner +
+      #   POST verify always fails) and an empty Google client ID. Previously these
+      #   were picked up by Vite from the VPS-side `.env` during the VPS-side build —
+      #   now that the build runs on the cloud runner, they're injected here.
       - name: Build
+        env:
+          VITE_API_URL: /api/v1
+          VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
         run: pnpm build
 
       # Upload build artifacts for parallel test jobs
@@ -555,6 +568,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Download the build artifact produced by lint-and-build (cloud runner).
+      # The artifact contains apps/*/dist + packages/*/dist + services/*/dist + .turbo.
+      # We only ship apps/web/dist to the VPS (next step) — the build was already
+      # done on the runner, so the VPS no longer needs to run vite+tsc itself.
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./build-artifacts/
+
+      # SCP web dist to VPS using a SHA-namespaced temp dir so concurrent or
+      # retried deploys never collide. strip_components: 4 strips
+      # build-artifacts/apps/web/dist/ from the path so files land directly under
+      # /tmp/oslrs-web-dist-<sha>/index.html, /assets/, etc.
+      - name: SCP web dist to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "build-artifacts/apps/web/dist/*"
+          target: "/tmp/oslrs-web-dist-${{ github.sha }}"
+          strip_components: 4
+
       - name: Pre-deploy env var safety check
         uses: appleboy/ssh-action@v1.2.5
         with:
@@ -580,10 +617,30 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -eo pipefail
+            # H1 fix: trap-cleanup the SHA-namespaced temp dir on ANY exit path
+            # (success, error, or unexpected interrupt). Without this, a failure in
+            # git pull / pnpm install / db:push / migrate-audit leaves the temp dir
+            # orphaned on /tmp until manual cleanup. With github.sha namespacing,
+            # leaks would accumulate over time. trap is idempotent — runs once on EXIT.
+            trap 'sudo rm -rf /tmp/oslrs-web-dist-${{ github.sha }} || true' EXIT
             cd ~/oslrs
+
+            # Wave-0 close-out measurement block (start). Captures pre-deploy resource
+            # baseline so AC#7-AC#10 can be verified from GH Actions logs without
+            # live-SSH-during-deploy stopwatch toil. Permanent in deploy script —
+            # provides free regression monitoring on every future deploy.
+            echo "=== WAVE-0-MEASUREMENT START sha=${{ github.sha }} ==="
+            date -u +%FT%TZ
+            top -bn1 | head -5
+            free -h | head -3
+            DEPLOY_START=$(date +%s)
+
             git pull origin main
 
-            # Install dependencies if package.json changed
+            # Install dependencies if package.json changed.
+            # Kept on VPS because the API runs via `pnpm tsx` at runtime and
+            # tsx resolves modules through node_modules/. Future option: bundle
+            # the API into a single file via tsup/esbuild and drop pnpm install.
             pnpm install --frozen-lockfile
 
             # Push any schema changes to production DB
@@ -592,14 +649,29 @@ jobs:
             # Run idempotent migration scripts (safe to re-run on every deploy)
             cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 
-            # Build frontend — relative VITE_API_URL so XHR + WS resolve against whichever
-            # domain the user loaded from (Phase 2 dual-domain: oyotradeministry.com.ng + oyoskills.com).
-            # Hardcoded (not from vars.VITE_API_URL) so a stale GH Actions Variable cannot
-            # override and re-introduce a single canonical absolute URL.
-            VITE_API_URL=/api/v1 pnpm --filter @oslsr/web build
+            # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
+            # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
+            # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern
+            # already in use below. Only retains the IMMEDIATELY-prior dist (one
+            # generation), not full history — disk-bounded.
+            sudo rm -rf /var/www/oslsr.bak.prev || true
+            sudo mv /var/www/oslsr /var/www/oslsr.bak.prev
+            sudo mkdir -p /var/www/oslsr
 
-            # Deploy frontend to NGINX
-            sudo cp -r apps/web/dist/* /var/www/oslsr/
+            # Frontend dist comes from CI artifact (Wave 0 prep-build-off-vps-cloud-runner).
+            # lint-and-build job runs `pnpm build` with VITE_API_URL=/api/v1, then
+            # actions/upload-artifact ships build-artifacts; this deploy job downloads
+            # it and scp-action lands it under /tmp/oslrs-web-dist-<sha>/.
+            # The 2GB VPS no longer runs vite+tsc, eliminating the deploy-time CPU/memory
+            # spike that triggered CRITICAL system-health digests.
+            sudo cp -r /tmp/oslrs-web-dist-${{ github.sha }}/* /var/www/oslsr/
+
+            # H2 fix: fail-fast if dist copy is empty/broken. Without this, a future
+            # scp-action path/glob misconfig (or zero-file artifact) would silently
+            # serve a 404-page-only /var/www/oslsr while pm2 restart still runs. The
+            # M3 backup at /var/www/oslsr.bak.prev gives the operator a one-step
+            # restore path when this guard trips.
+            [[ -f /var/www/oslsr/index.html ]] || { echo "::error::dist copy missing index.html — restore via 'sudo mv /var/www/oslsr.bak.prev /var/www/oslsr'"; exit 1; }
 
             # Deploy nginx config (Story 9-7 — security headers + TLS hardening).
             # Strategy: backup → copy → test → reload. If test fails, restore backup
@@ -619,3 +691,13 @@ jobs:
 
             # Restart API
             pm2 restart oslsr-api
+
+            # Wave-0 close-out measurement block (end). Captures post-deploy resource
+            # peak + total wall-clock. Story acceptance: CPU <30%, mem <1Gi peak,
+            # wall-clock <4 min, no CRITICAL system-health digest within deploy
+            # window. Eyeball from GH Actions logs after each deploy. Block stays
+            # in place after Wave 0 close-out for free regression monitoring.
+            echo "=== WAVE-0-MEASUREMENT END duration=$(($(date +%s) - DEPLOY_START))s ==="
+            date -u +%FT%TZ
+            top -bn1 | head -5
+            free -h | head -3

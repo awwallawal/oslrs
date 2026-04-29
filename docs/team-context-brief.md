@@ -41,7 +41,7 @@ Read these files in order for full project awareness:
 
 ## Critical Deployment Notes
 
-- **VITE_API_URL** must be set at build time: `VITE_API_URL=https://oyotradeministry.com.ng/api/v1 pnpm build`
+- **All `VITE_*` vars are baked at build time on the GitHub-hosted cloud runner** (NOT on the VPS as of Wave 0 prep-story `prep-build-off-vps-cloud-runner`, 2026-04-27). Three values flow into `lint-and-build`'s Build step: `VITE_API_URL=/api/v1` (hardcoded relative URL — Phase 2 dual-domain Strategy A), `VITE_HCAPTCHA_SITE_KEY` (from GH Actions repo Variable), `VITE_GOOGLE_CLIENT_ID` (from GH Actions repo Variable). Adding a new `VITE_*` var = (1) GH Actions Variables tab, (2) workflow `env:` block, (3) VPS `.env` for one-off recovery builds, (4) `.env.example`. Skipping any silently swaps for the code fallback — see Pitfall #23 in the infrastructure-cicd-playbook for the canonical procedure.
 - **hCaptcha env var:** Code expects `HCAPTCHA_SECRET_KEY` (not `HCAPTCHA_SECRET`)
 - **db:push on deploy:** CI runs `pnpm --filter @oslsr/api db:push` before build
 - **Admin seeding:** `pnpm --filter @oslsr/api db:seed --admin-from-env` (single-line inline env vars)

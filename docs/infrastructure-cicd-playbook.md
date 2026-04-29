@@ -527,14 +527,81 @@ git pull origin main
 pnpm install --frozen-lockfile
 pnpm --filter @oslsr/api db:push              # Push schema changes (added 2026-02-23)
 cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs  # Idempotent migration (added 2026-02-26)
-VITE_API_URL=https://<YOUR_DOMAIN>/api/v1 pnpm --filter @oslsr/web build  # VITE_ vars are build-time only
-sudo cp -r apps/web/dist/* /var/www/oslsr/
+sudo cp -r /tmp/oslrs-web-dist-${GITHUB_SHA}/* /var/www/oslsr/  # Wave 0: dist from cloud-runner artifact
+sudo rm -rf /tmp/oslrs-web-dist-${GITHUB_SHA}
 pm2 restart oslsr-api
 ```
 
 > **Why `VITE_API_URL` at build time?** Vite replaces `import.meta.env.VITE_*` during build, not at
 > runtime. If omitted, the frontend bakes in `http://localhost:3000` from `.env` and all API calls
-> fail with CORS errors in production.
+> fail with CORS errors in production. Now baked in by the cloud-runner build (`VITE_API_URL=/api/v1`)
+> per Part 6.2 below — the VPS no longer runs vite+tsc.
+
+### Part 6.2: Build Off-VPS Artifact Handoff (added 2026-04-27, Wave 0)
+
+**Problem:** Until Wave 0, every deploy ran `pnpm --filter @oslsr/web build` on the 2GB VPS,
+consuming 700MB-1GB RAM + 70-90% CPU for 2-3 minutes. The system-health digest tripped CRITICAL
+thresholds on every deploy and trained operators to ignore alerts. Triage of the 2026-04-27 06:32
+UTC alert (commit `718f84e` Story 9-10 evidence) confirmed PM2 ↺ counter inflation was deploy-driven,
+not spontaneous.
+
+**Solution:** The `lint-and-build` job already builds `dist/` on a GitHub-hosted cloud runner and
+uploads it as the `build-artifacts` artifact (consumed by the test-* jobs). The deploy job now
+downloads the same artifact and ships `apps/web/dist` to the VPS via `appleboy/scp-action`. The VPS
+side runs `cp` instead of `vite+tsc`.
+
+```text
+push to main
+   │
+   ▼
+lint-and-build (cloud runner, GH-hosted)
+   - pnpm install
+   - pnpm lint
+   - VITE_API_URL=/api/v1 pnpm build         ← bakes relative URL into apps/web/dist
+   - upload-artifact build-artifacts          ← apps/*/dist + packages/*/dist + .turbo
+   │
+   ▼
+test-unit / test-api / test-web / lighthouse  (cloud runners, parallel — unchanged)
+   │
+   ▼
+deploy (cloud runner, then SSH to VPS)
+   - download-artifact build-artifacts                              ← NEW, ~10s
+   - scp-action: build-artifacts/apps/web/dist → /tmp/oslrs-web-dist-<sha>  ← NEW, ~30s
+   - SSH:
+       git pull origin main
+       pnpm install --frozen-lockfile          (kept — runtime tsx needs node_modules)
+       pnpm --filter @oslsr/api db:push
+       pnpm tsx scripts/migrate-audit-immutable.ts
+       sudo cp -r /tmp/oslrs-web-dist-<sha>/* /var/www/oslsr/      ← NEW, no vite/tsc
+       sudo rm -rf /tmp/oslrs-web-dist-<sha>
+       nginx backup → copy → test → reload
+       pm2 restart oslsr-api
+```
+
+**Why `VITE_API_URL=/api/v1` at the lint-and-build step:** Vite bakes `import.meta.env.VITE_*` at
+build time. Setting `VITE_API_URL: /api/v1` in the `Build` step's `env:` block makes the relative
+URL the canonical artifact value. Test jobs don't care (vitest re-compiles from source), and
+lighthouse rebuilds its own dist for perf measurement, so this doesn't affect either.
+
+**Why `${{ github.sha }}` namespacing on the temp dir:** Concurrent or retried deploys never collide,
+and a failed deploy leaves the leftover dir tagged with its own SHA — easy to identify and clean up
+later (`rm -rf /tmp/oslrs-web-dist-*` is safe between deploys).
+
+**Why scp-action and not rsync:** Same maintainer as `appleboy/ssh-action` we already use →
+consistent auth + retry semantics. `strip_components: 4` flattens
+`build-artifacts/apps/web/dist/index.html` to `index.html` on the VPS side. Fall back to
+`rsync -az` over SSH only if scp-action is measured slow (cloud runner backbone is fast; expect
+<30s for ~50MB dist).
+
+**Why `pnpm install` is preserved on VPS:** The API runs via `pnpm tsx src/index.ts` at runtime;
+`tsx` resolves modules through `node_modules/`. To eliminate the install we'd need to either ship
+a `node_modules` tarball (~500MB+, fragile) or bundle the API into a single file via tsup/esbuild
+(multi-day work; deferred to a future story if 9-10 trajectory data still shows residual spikes).
+The `pnpm install` peak is ~400MB — bounded and far below the ~1GB build-step peak we eliminated.
+
+**Resource impact:** During-deploy CPU drops from 70-90% to <30% (1-min load avg <0.5); memory peak
+drops from ~1.5-1.8Gi to <1Gi; total wall-clock from ~7 min to <4 min. CRITICAL system-health
+digests during deploy windows stop firing.
 
 ---
 
@@ -566,13 +633,29 @@ docker restart oslsr-postgres oslsr-redis  # DB + Cache
 
 ### Manual Redeploy
 
+> **Use only for emergency recovery when CI is unreachable.** Routine deploys go through CI
+> (`git push origin main`) which runs the cloud-runner artifact handoff per Part 6.2 — no
+> VPS-side build, no CPU/memory spike. The manual snippet below INTENTIONALLY runs vite+tsc on
+> the VPS and WILL trip the CRITICAL system-health digest (Pitfall #22). Accept the spike only
+> when the alternative is downtime.
+
 ```bash
 cd ~/oslrs
 git pull origin main
 pnpm install
 pnpm --filter @oslsr/api db:push
 cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
-VITE_API_URL=https://<YOUR_DOMAIN>/api/v1 pnpm --filter @oslsr/web build
+
+# All three VITE_* values must be set on the same line (Vite bakes them at build time
+# and the VPS .env supplies the canonical source). Skipping VITE_HCAPTCHA_SITE_KEY or
+# VITE_GOOGLE_CLIENT_ID falls back to the hCaptcha public test sitekey + empty Google
+# client ID — login captcha breaks silently. See Pitfall #23.
+set -a; source /root/oslrs/.env; set +a
+VITE_API_URL=https://<YOUR_DOMAIN>/api/v1 \
+  VITE_HCAPTCHA_SITE_KEY="${VITE_HCAPTCHA_SITE_KEY}" \
+  VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID}" \
+  pnpm --filter @oslsr/web build
+
 sudo cp -r apps/web/dist/* /var/www/oslsr/
 pm2 restart oslsr-api
 ```
@@ -593,6 +676,19 @@ cd ~/oslrs && pnpm --filter @oslsr/api db:seed:clean
 docker exec -it oslsr-postgres psql -U oslsr_user -d oslsr_db
 ```
 
+### Periodic Maintenance (quarterly)
+
+```bash
+# Sweep orphaned Wave 0 artifact temp dirs. Each deploy creates
+# /tmp/oslrs-web-dist-<sha>/ and the deploy script's EXIT trap cleans up
+# normally — but a hard kill mid-deploy could leak one. Idempotent.
+ssh root@oslsr-home-app 'rm -rf /tmp/oslrs-web-dist-* 2>/dev/null; ls -la /tmp/oslrs-* 2>/dev/null || echo "clean"'
+
+# Sweep the previous-dist backup (M3 — the deploy script keeps only one
+# generation, so this is normally a no-op verifier, not a cleaner).
+ssh root@oslsr-home-app 'du -sh /var/www/oslsr.bak.prev 2>/dev/null || echo "no backup present"'
+```
+
 ---
 
 ## Part 8: Pitfalls & Solutions
@@ -608,7 +704,7 @@ docker exec -it oslsr-postgres psql -U oslsr_user -d oslsr_db
 | 7 | `db:push` hangs in CI | drizzle-kit 0.21.x interactive prompt | Use `db:push:force` (custom wrapper) |
 | 8 | Drizzle schema import fails | `@oslsr/types` has no `dist/` | Inline enum constants in schema files |
 | 9 | `column "X" does not exist` after deploy | CI deploy didn't run `db:push` | Add `pnpm --filter @oslsr/api db:push` to deploy step before build. Now fixed in CI. |
-| 10 | Frontend calls `localhost:3000` in production | `VITE_API_URL` not set at build time | Pass `VITE_API_URL=https://domain/api/v1` as inline env var during `pnpm build`. Vite bakes `VITE_*` at build time, not runtime. Now fixed in CI. |
+| 10 | Frontend calls `localhost:3000` in production | `VITE_API_URL` not set at build time | Pass `VITE_API_URL=https://domain/api/v1` as inline env var during `pnpm build`. Vite bakes `VITE_*` at build time, not runtime. **Updated 2026-04-29:** VPS-side build was removed in Wave 0 (`prep-build-off-vps-cloud-runner`). The `VITE_*` values now flow through the cloud-runner `Build` step's `env:` block — see Part 6.2 (cloud-runner artifact handoff) and Pitfall #23 (full inventory of VITE_* fallbacks). Pitfall #10 retains relevance only for emergency manual recovery on the VPS itself. |
 | 11 | `HCAPTCHA_SECRET_KEY` missing, API crash-loops | `.env` has `HCAPTCHA_SECRET` but code expects `HCAPTCHA_SECRET_KEY` | Rename in `.env`: `sed -i 's/HCAPTCHA_SECRET=/HCAPTCHA_SECRET_KEY=/' .env && pm2 restart oslsr-api` |
 | 12 | `db:seed` email stored with literal quotes — **and inserted into `users` table as a real super_admin row** that the digest sender will then try to deliver to | Multi-line shell command with `"` wrapping; VPS terminal inserts whitespace + trailing `\` on line-wrap. Both `.env` AND any seed run that consumed it are corrupted — `--admin-from-env` INSERTs the broken value as a `users` row that `getActiveSuperAdminEmails()` returns to the digest sender (silent bounce target). | (a) Always use single-line commands for seed: `SUPER_ADMIN_EMAIL=x SUPER_ADMIN_PASSWORD=y pnpm --filter @oslsr/api db:seed --admin-from-env`. No quotes around simple values. (b) After ANY `--admin-from-env` run, audit: `SELECT email FROM users INNER JOIN roles ON users.role_id=roles.id WHERE roles.name='super_admin'` — any email containing `"`, leading/trailing whitespace, or `\` is a fossil. Sweep FK refs via `information_schema` (12 tables FK to `users.id` as of 2026-04-26), then hard-delete. Validated 2026-04-26: 1 fossil row purged from prod, 0 FK refs. |
 | 13 | WebSocket `wss://` connection refused | NGINX missing `/socket.io/` proxy block | Add `location /socket.io/ { proxy_pass ...; proxy_set_header Connection "upgrade"; }` to NGINX config. See Part 5. |
@@ -910,8 +1006,70 @@ docker update --restart=unless-stopped oslsr-postgres oslsr-redis
 
 GitHub publishes its Actions IP ranges at `https://api.github.com/meta` → `.actions[]`, but the list is ~6500+ entries — impractical for DO Cloud Firewall (typical limit ~50 rules per firewall).
 
+### Pitfall #22: VPS-side build on small droplets causes alert noise
+
+**Symptom:** System-health digest emails fire CRITICAL (cpu ≥80%, memory ≥80%) every deploy. Operators
+learn to ignore them, masking real signals (e.g., the actual ioredis-shutdown bug found in Story 9-10
+err-log triage).
+
+**Cause:** Running `pnpm --filter @oslsr/web build` (vite + tsc) on a 2GB droplet during deploy
+consumes 700MB-1GB RAM + 70-90% CPU for 2-3 minutes. The build-step peak briefly dwarfs runtime
+workload, but is purely operational (not user-facing).
+
+**Fix:** Ship the `dist/` artifact from the GitHub-hosted cloud runner instead of rebuilding on the
+VPS. See Part 6.2 above. The cloud runner already builds `dist/` (uploaded as `build-artifacts` for
+test jobs); the deploy job downloads that artifact and `scp-action`s it to the VPS. Implemented in
+prep-story `prep-build-off-vps-cloud-runner` (Wave 0, 2026-04-27).
+
+**Why this matters beyond noise:** Story 9-10 AC#3 post-fix observation requires clean trajectory
+data — every deploy-driven CRITICAL alert that registers as a "spontaneous" PM2 restart corrupts
+the 7-day window. Eliminating the build-spike makes Wave 1+ stories' observation data trustworthy.
+
+### Pitfall #23: Moving Vite build off-VPS silently swaps real `VITE_*` keys for code fallbacks
+
+**Symptom:** After Wave 0 (build moved to cloud runner), login fails with "CAPTCHA verification
+failed" and the hCaptcha widget shows the small "for testing purposes only — contact admin" banner.
+Google OAuth button silently breaks too.
+
+**Cause:** Vite auto-loads `VITE_*` vars from the closest `.env` at build time. The OLD VPS-side
+build ran inside `/root/oslrs/` whose `.env` had real `VITE_HCAPTCHA_SITE_KEY` + `VITE_GOOGLE_CLIENT_ID`,
+so they were silently baked into `dist/`. The cloud runner has no `.env` for these vars → Vite
+falls back to whatever default the source code defines:
+
+| Var | Code fallback | What it breaks |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:3000/api/v1` | All API calls (CORS errors) |
+| `VITE_HCAPTCHA_SITE_KEY` | `10000000-ffff-ffff-ffff-000000000001` (hCaptcha **public test key**) | Login + any captcha-gated POST: hCaptcha JS renders the test widget; backend POST verify ALWAYS fails because the secret key on the server is the real-prod secret, not the test secret. Defence in depth — silent test/prod mismatch. |
+| `VITE_GOOGLE_CLIENT_ID` | `''` (empty) | Google OAuth button non-functional |
+
+`grep -rn "import.meta.env.VITE_" apps/web/src` is the canonical inventory of what gets baked.
+
+**Fix:** Set every required `VITE_*` value as a GitHub Actions **Variable** (NOT Secret — these are
+public values embedded in every browser page; redaction in workflow logs adds zero security and
+costs debugging clarity), then reference each one in the cloud-runner `Build` step's `env:` block:
+
+```yaml
+- name: Build
+  env:
+    VITE_API_URL: /api/v1                                          # hardcoded (relative)
+    VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}     # GH Actions Variable
+    VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}       # GH Actions Variable
+  run: pnpm build
+```
+
+**Verification when adding a new `VITE_*` var to source code:**
+
+1. Add to GH Actions Variables (Settings → Secrets and variables → Actions → Variables tab)
+2. Add to `Build` step's `env:` block in `.github/workflows/ci-cd.yml`
+3. Add to the VPS `.env` (still useful for any one-off VPS-side build, e.g., manual recovery)
+4. Add to `.env.example` so future operators know the var exists
+
+Skipping any of these silently breaks production. Step 1 is the easiest to forget.
+
 ---
 
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
+*Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
+*Updated: 2026-04-29 — Wave 0 code review: Pitfall #10 cross-referenced to Part 6.2 + Pitfall #23 (post-Wave-0 pattern); Manual Redeploy snippet flagged as emergency-only with Pitfall #23 hardening (all 3 VITE_* vars sourced from VPS .env); Periodic Maintenance subsection added with /tmp/oslrs-web-dist-* sweep + dist-backup audit*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*
