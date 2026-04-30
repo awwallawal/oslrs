@@ -2539,6 +2539,30 @@ So that the field survey does not surface ITF-SUPA-style data hygiene problems (
 
 ---
 
+### Prep Task: prep-settings-landing-and-feature-flags
+
+As the Super Admin (and future operator handed the Registry by Ministry ICT),
+I want a single Settings landing page that aggregates all system feature flags + links to existing settings-shaped surfaces, backed by a generic `system_settings` key-value table with audit-logged flips,
+So that future feature flags land in 5-line PRs without schema migrations, Story 9-12's SMS OTP toggle has a defined UI home, admin tooling is discoverable in one place rather than scattered across `/settings/` and `/security/` URL segments, and every settings change is NDPA-traceable through the existing audit-log infrastructure.
+
+**Context:** Surfaced 2026-04-30 during Wave 2 retrofit pass — Sally's UX Nav Patterns spec mentioned a "Settings" sidebar item, but no landing page, no backend infrastructure, and no `system_settings` storage existed. Story 9-11's "between System Health and Settings" placement was aspirational; Story 9-12 AC#7 SMS OTP toggle had no UI surface; Story 10-1 AC#8 audit-viewer-prerequisite flag had no settings home. Awwal directive Path B 2026-04-30: build it properly now to avoid technical debt accumulation rather than ad-hoc per-feature settings hacks.
+
+**Scope:**
+- New `system_settings` table — generic key-value (`key TEXT PK, value JSONB, description TEXT, updated_by UUID FK users, updated_at, created_at`); per-feature columns rejected (each future flag would need a migration)
+- `apps/api/src/lib/settings.ts` typed accessor — `getSetting<T>(key)`, `setSetting(key, value, actorId)`, `listSettings()` with Redis 60s cache + cache-bust on write
+- `apps/api/src/services/settings.service.ts` — wraps lib with audit-logged flips via `AuditService.logAction({ action: 'settings.flipped' })`
+- `apps/api/src/routes/settings.routes.ts` — `GET /api/v1/admin/settings` (list) + `PATCH /api/v1/admin/settings/:key` (update; super-admin only) + `GET /api/v1/admin/settings/:key`
+- New frontend feature dir `apps/web/src/features/settings/` — landing page at `/dashboard/super-admin/settings` with v1 contents (intentionally minimal): SMS OTP toggle (closes 9-12 AC#7) + link card to existing Fraud Thresholds page + link card to existing MFA Settings page (Story 9-13). Reserved space for future feature flags.
+- Sidebar nav entry "Settings" appended to super_admin array (after Audit Log per Story 9-11; insertions commutative within array — coordination via sprint-status)
+- Initial seed: `auth.sms_otp_enabled = false` (consumed by Story 9-12 AC#7); `audit_log_viewer_available = false` (consumed by Story 10-1 AC#8 — Story 9-11 deploy script flips to `true` post-deploy)
+- DO NOT migrate existing URLs (`/dashboard/super-admin/settings/fraud-thresholds`, `/dashboard/super-admin/security/mfa`) into Settings landing in v1 — landing is an INDEX/aggregator with link cards. Future "URL convention cleanup" story can consolidate when the value/risk balance is clearer.
+
+**Slot:** Wave 1 alongside `prep-input-sanitisation-layer`. Independent / parallelisable. HARD dependency for Story 9-12 (SMS OTP toggle UI) and Story 10-1 (audit-viewer-prerequisite flag).
+
+**Status:** Backlog (per Wave 2 retrofit cascade 2026-04-30 — Awwal Path B decision).
+
+---
+
 ## Epic 10: API Governance & Third-Party Data Sharing
 
 **Epic Goal:** Establish an authenticated, scoped, rate-limited, audit-logged partner-API substrate so that third-party MDA consumers (ITF-SUPA, NBS, NIMC, future integrations) can access the registry under formal agreement without compromising NDPA compliance or operator visibility.

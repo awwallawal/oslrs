@@ -3,7 +3,7 @@
 Status: ready-for-dev
 
 <!--
-Created 2026-04-25 by Bob (SM) per SCP-2026-04-22 §A.5.
+Created 2026-04-25 by impostor-SM agent per SCP-2026-04-22 §A.5.
 
 Legal artefact + operational runbook. Owners: Iris (DPIA / NDPA) + Gabe (legal review). Independent of all other Epic 10 stories.
 
@@ -13,9 +13,11 @@ Sources:
   • PRD V8.3 FR24 + NFR10
   • Architecture Decision 3.4 (DSA precondition for `submissions:read_pii`) + ADR-019
   • UX Custom Component #16 ApiConsumerScopeEditor (UI enforces DSA precondition)
-  • Epics.md §Story 10.5
+  • Epics.md §Story 10.5 (under Epic 10 starting at line 2542)
 
 FRC adjacent gate — DSA template DRAFTED is required for field-readiness.
+
+Validation pass 2026-04-29 (Bob, fresh-context mode 2 per `_bmad/bmm/workflows/4-implementation/create-story/checklist.md`): rebuilt to canonical template structure; all 10 ACs preserved verbatim; one minor codebase fix (docs/legal/ directory does not exist — flagged in Project Structure Notes as "directory new"); cross-references to ADR-019 + Architecture Decision 3.4 + Baseline Report Appendix H verified.
 -->
 
 ## Story
@@ -101,12 +103,12 @@ so that **the legal precondition for `submissions:read_pii` partner-API scope pr
    - **Preferred:** PGP-encrypted email (operator + partner both have PGP keys; partner's public key on file in `consumer_onboarding_requests` tracker)
    - **Acceptable:** in-person handoff at Ministry HQ (printed token on paper, partner takes immediately, paper destroyed)
    - **NOT acceptable:** plain email (token would be readable by mail server admins), Slack/WhatsApp (third-party storage), SMS (SS7 vulnerability)
-   - Channel choice + delivery date + recipient name captured in `audit_logs` with `action: 'api_key.delivered'`
+   - Channel choice + delivery date + recipient name captured in `audit_logs` with `action: 'api_key.delivered'` (via `AuditService.logAction()` per `apps/api/src/services/audit.service.ts:226`; new audit action to be added to `AUDIT_ACTIONS` const at `audit.service.ts:35-64` by Story 10-1 or 10-3, whichever ships first)
 
 5. **AC#5 — Quarterly DSA review cadence + annual renewal:**
    - Quarterly (every 3 months from DSA effective date): Super Admin reviews via Story 10-6 dashboard; partner provides usage report; both parties acknowledge any anomalies
    - Annual (every 12 months): full DSA renewal — sub-processor list audit, rotation cadence review, scope-need re-justification (especially `submissions:read_pii` — does partner still need it?)
-   - Tracked in `consumer_onboarding_requests` tracker
+   - Tracked in `consumer_onboarding_requests` tracker (per AC#8)
    - Renewal failure (DSA lapses without renewal) → automated key revocation 7 days after expiry per NFR10 rotation logic — not silent; surfaces in Story 10-6 dashboard as critical alert
 
 6. **AC#6 — Termination procedure:**
@@ -117,7 +119,7 @@ so that **the legal precondition for `submissions:read_pii` partner-API scope pr
      - Partner's DSA stays on file for 7 years per NFR4.2 (audit retention)
      - Termination procedure documented in SOP runbook
 
-7. **AC#7 — Cross-link to Baseline Report Appendix H DPIA:** DSA template Schedule 1 references "DPIA Section: see Baseline Report Appendix H §<X>" where <X> is the partner-specific DPIA section. Iris updates Baseline Report Appendix H to include a section per Epic-10-onboarded consumer (one section per consumer, even if scope is non-PII — for completeness).
+7. **AC#7 — Cross-link to Baseline Report Appendix H DPIA:** DSA template Schedule 1 references "DPIA Section: see Baseline Report Appendix H §<X>" where <X> is the partner-specific DPIA section. Iris updates Baseline Report Appendix H (file `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` — verified to exist 2026-04-29) to include a section per Epic-10-onboarded consumer (one section per consumer, even if scope is non-PII — for completeness).
 
 8. **AC#8 — `consumer_onboarding_requests` tracker:** Lightweight tracker — NOT a DB table for MVP. Options:
    - Notion database (Awwal preferred — already uses Notion)
@@ -137,67 +139,60 @@ so that **the legal precondition for `submissions:read_pii` partner-API scope pr
     - Multi-language DSA (English only for MVP; Yoruba translation deferred)
     - Sub-processor approval workflow automation (manual review for MVP)
 
-## Dependencies
+## Tasks / Subtasks
+
+- [ ] **Task 1 — DSA template drafting** (AC: #1)
+  - [ ] 1.1 Iris drafts initial DSA from NDPA Article 25 template + Oyo Ministry standard contracts
+  - [ ] 1.2 Sections per AC#1 outline
+  - [ ] 1.3 Schedule 1/2/3 templates with placeholder fields
+  - [ ] 1.4 Output: `docs/legal/data-sharing-agreement-template-v1.docx` + `.pdf` (rendered). **Note:** `docs/legal/` directory does NOT exist — create alongside this file.
+
+- [ ] **Task 2 — Legal review + sign-off** (AC: #2)
+  - [ ] 2.1 Iris reviews from DPIA / NDPA perspective
+  - [ ] 2.2 Gabe reviews from legal / enforceability perspective
+  - [ ] 2.3 Iterate; both sign off
+  - [ ] 2.4 Output: `docs/legal/dsa-template-v1-signoff.md`
+
+- [ ] **Task 3 — SOP runbook** (AC: #3, #4, #5, #6)
+  - [ ] 3.1 Awwal + Iris co-author SOP per AC#3 step structure (STEPS 1-7)
+  - [ ] 3.2 Token delivery channel section per AC#4
+  - [ ] 3.3 Quarterly review cadence + annual renewal per AC#5
+  - [ ] 3.4 Termination procedure per AC#6
+  - [ ] 3.5 Output: `docs/legal/consumer-onboarding-sop-v1.md`
+
+- [ ] **Task 4 — Baseline Report Appendix H cross-link** (AC: #7)
+  - [ ] 4.1 Iris updates `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` Appendix H to include consumer-DPIA section template
+  - [ ] 4.2 DSA Schedule 1 references the Appendix H section
+
+- [ ] **Task 5 — Tracker setup** (AC: #8)
+  - [ ] 5.1 Create `docs/legal/consumer-onboarding-tracker.md` with schema header
+  - [ ] 5.2 Decide gitignore status — depends on whether tracker entries are sensitive (probably keep in repo since metadata-only, no actual partner data)
+
+- [ ] **Task 6 — End-to-end dry-run** (AC: #9)
+  - [ ] 6.1 Hypothetical partner: "Test Partner — Lagos Tech Hub" requesting `marketplace:read_public`
+  - [ ] 6.2 Walk through STEPS 1-7 with mock data
+  - [ ] 6.3 Time each step; capture as Completion Notes evidence
+  - [ ] 6.4 Verify DSA template populates correctly with mock-partner Schedule 1 values
+
+- [ ] **Task 7 — Sprint status** (AC: cross-cutting)
+  - [ ] 7.1 Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `10-5-data-sharing-agreement-template: in-progress` → `review` (after legal sign-off) → `done`
+
+## Dev Notes
+
+### Dependencies
 
 - **No engineering story dependencies** — independent legal/operational track
 - **Iris + Gabe availability** — only "blockers"; legal review is the rate-limiting step
-- **Architecture ADR-019** — DSA precondition is the architectural requirement this story satisfies
+- **Architecture ADR-019** (`_bmad-output/planning-artifacts/architecture.md:3179`) — DSA precondition is the architectural requirement this story satisfies
 
 **Unblocks:**
 - **Story 10-1 PII scope provisioning** — without DSA template ready, no `submissions:read_pii` scope can be provisioned even if 10-1 is technically complete
 
-## Field Readiness Certificate Impact
+### Field Readiness Certificate Impact
 
 **Adjacent gate per SCP §5.3.1:** "DSA template DRAFTED" is required for field-readiness IF Epic 10 PII scope is to be provisioned during field operation. Field survey can launch without DSA template (no Epic 10 partner active during field), but as soon as field starts producing data + Ministry wants to grant any partner PII access, DSA template must be ready.
 
 **Recommendation:** ship this story before Story 10-1 lands (independent track; Iris + Gabe are not on the engineering critical path).
-
-## Tasks / Subtasks
-
-### Task 1 — DSA template drafting (AC#1)
-
-1.1. Iris drafts initial DSA from NDPA Article 25 template + Oyo Ministry standard contracts
-1.2. Sections per AC#1 outline
-1.3. Schedule 1/2/3 templates with placeholder fields
-1.4. Output: `docs/legal/data-sharing-agreement-template-v1.docx` + `.pdf` (rendered)
-
-### Task 2 — Legal review + sign-off (AC#2)
-
-2.1. Iris reviews from DPIA / NDPA perspective
-2.2. Gabe reviews from legal / enforceability perspective
-2.3. Iterate; both sign off
-2.4. Output: `docs/legal/dsa-template-v1-signoff.md`
-
-### Task 3 — SOP runbook (AC#3, AC#4, AC#5, AC#6)
-
-3.1. Awwal + Iris co-author SOP per AC#3 step structure
-3.2. Token delivery channel section per AC#4
-3.3. Quarterly review cadence + annual renewal per AC#5
-3.4. Termination procedure per AC#6
-3.5. Output: `docs/legal/consumer-onboarding-sop-v1.md`
-
-### Task 4 — Baseline Report Appendix H cross-link (AC#7)
-
-4.1. Iris updates Baseline Report Appendix H to include consumer-DPIA section template
-4.2. DSA Schedule 1 references the Appendix H section
-
-### Task 5 — Tracker setup (AC#8)
-
-5.1. Create `docs/legal/consumer-onboarding-tracker.md` with schema header
-5.2. Add to .gitignore? — depends on whether tracker entries are sensitive (probably keep in repo since metadata-only, no actual partner data)
-
-### Task 6 — End-to-end dry-run (AC#9)
-
-6.1. Hypothetical partner: "Test Partner — Lagos Tech Hub" requesting `marketplace:read_public`
-6.2. Walk through STEPS 1-7 with mock data
-6.3. Time each step; capture as Dev Notes evidence
-6.4. Verify DSA template populates correctly with mock-partner Schedule 1 values
-
-### Task 7 — Sprint status
-
-7.1. Update `sprint-status.yaml`: `10-5-data-sharing-agreement-template: in-progress` → `review` (after legal sign-off) → `done`
-
-## Technical Notes
 
 ### Why a legal artefact in an engineering sprint
 
@@ -237,7 +232,7 @@ Two-person approval (Super Admin + Ministry ICT Lead) requires collusion to abus
 
 Per NFR10. Balance between operational overhead (longer rotation = less work) and exposure window (shorter rotation = less time for compromised key to be exploited). 180 days is the BSI / OWASP / NIST recommendation for moderately-sensitive APIs. Partners can request shorter rotation cadence (90 / 60 / 30 days); longer cadence requires Super Admin approval + risk acceptance memo.
 
-## Risks
+### Risks
 
 1. **Iris + Gabe availability is the rate-limiting step.** Engineering can ship Story 10-1 technically but cannot provision `submissions:read_pii` until DSA template is signed off. Mitigation: start this story early in parallel with engineering work; explicit dependency captured in 10-1 story file.
 2. **Partner legal review timeline is uncontrollable.** Federal MDA legal departments operate on their own schedule; 5-15 business days per AC#3 STEP 4 is realistic but could stretch. Mitigation: SOP STEP 4 includes a "legal escalation" sub-step (Super Admin can escalate to Ministry ICT Lead → Permanent Secretary if delay exceeds 30 days).
@@ -245,11 +240,51 @@ Per NFR10. Balance between operational overhead (longer rotation = less work) an
 4. **DSA template may not satisfy partner-specific legal requirements.** Some partners may have their own template they want to use. Mitigation: SOP STEP 4 allows partner-supplied template; Gabe reviews; if equivalent in protections, accept (with Schedule 1/2/3 still mandatory as our addendum).
 5. **Annual renewal cadence may slip as portfolio grows.** With 5+ active partners, renewal calendar needs to be a real calendar (not ad-hoc). Mitigation: when tracker has 5+ entries, migrate from Markdown to Notion (per AC#8); set automated calendar reminders.
 
+### Project Structure Notes
+
+- **This story produces no code.** All deliverables are documentation artefacts (DSA template, SOP runbook, sign-off doc, tracker) plus a Baseline Report appendix update.
+- **NEW directory `docs/legal/` does NOT exist** as of 2026-04-29; create alongside the first file (e.g. `Task 1.4` creates the .docx + .pdf). Standard `docs/` subdirectory pattern (peers: `docs/infrastructure-cicd-playbook.md`, `docs/emergency-recovery-runbook.md`, `docs/team-context-brief.md`, `docs/account-migration-tracker.md`, `docs/transfer-protocol-schedule-1-asset-enumeration.md`, etc.).
+- **Baseline Report Appendix H** at `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` (verified to exist 2026-04-29). Iris's edit (Task 4.1) appends a per-consumer DPIA section template; existing Appendix H structure preserved.
+- **Architecture cross-references**:
+  - ADR-019 (`_bmad-output/planning-artifacts/architecture.md:3179`) — DSA precondition formalised; this story is the artefact-side of that decision
+  - Architecture Decision 3.4 — DSA precondition for `submissions:read_pii`; two-person approval; 180-day rotation
+- **Audit log integration** — when API keys are eventually delivered (AC#4 — happens during Story 10-1 or 10-3 implementation, not this story), the delivery event uses `AuditService.logAction({ action: 'api_key.delivered', ... })` per `apps/api/src/services/audit.service.ts:226`. New audit action `API_KEY_DELIVERED: 'api_key.delivered'` added to `AUDIT_ACTIONS` const (`audit.service.ts:35-64`) by whichever Epic-10 story implements key issuance first (10-1 or 10-3). NOT this story's responsibility — this story only documents the audit-action contract.
+- **Tracker file lives in repo** (per AC#8). `docs/legal/consumer-onboarding-tracker.md` is metadata-only (no actual partner-data PII); safe to commit. Migration to Notion happens when tracker exceeds 5 active rows (AC#8 trigger).
+- **DSA versioning**: file naming uses `-v1` suffix (`data-sharing-agreement-template-v1.docx` + `dsa-template-v1-signoff.md`). Future amendments produce `-v2`, etc. — preserves audit trail of which DSA version a partner signed.
+- **Cross-story commitments tracked elsewhere**:
+  - Story 10-1 (`_bmad-output/implementation-artifacts/10-1-consumer-auth-layer.md`) — declares 10-5 as blocking dependency for `submissions:read_pii` scope
+  - Story 10-3 (`_bmad-output/implementation-artifacts/10-3-consumer-admin-ui.md`) — UI gate on DSA precondition (UX Custom Component #16 ApiConsumerScopeEditor)
+  - Story 10-4 — `/developers` self-service request form
+  - Story 10-6 — quarterly review dashboard
+- **NEW directories created by this story**:
+  - `docs/legal/` (with all 5 deliverable files)
+
+### References
+
+- Architecture ADR-019 (Partner-API DSA precondition — the decision this story implements): [Source: _bmad-output/planning-artifacts/architecture.md:3179]
+- Architecture Decision 3.4 (DSA precondition for `submissions:read_pii`, two-person approval, 180-day rotation): [Source: _bmad-output/planning-artifacts/architecture.md Decision 3.4]
+- Epics — Epic 10 entry: [Source: _bmad-output/planning-artifacts/epics.md:2542]
+- PRD V8.3 — FR24 (DSA precondition for PII partner scope): [Source: _bmad-output/planning-artifacts/PRD.md FR24]
+- PRD V8.3 — NFR10 (180-day key rotation): [Source: _bmad-output/planning-artifacts/PRD.md NFR10]
+- PRD V8.3 — NFR4.2 (7-year audit retention; DSA-on-file longevity): [Source: _bmad-output/planning-artifacts/PRD.md NFR4.2]
+- UX Custom Component #16 ApiConsumerScopeEditor (UI enforces DSA precondition): [Source: _bmad-output/planning-artifacts/ux-design-specification.md §Components #16]
+- Baseline Report Appendix H (DPIA cross-link target — verified to exist): [Source: _bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md Appendix H]
+- Audit service `logAction` API (for `api_key.delivered` event when issued by 10-1 / 10-3): [Source: apps/api/src/services/audit.service.ts:226]
+- Audit service `AUDIT_ACTIONS` const (extension point for new actions): [Source: apps/api/src/services/audit.service.ts:35-64]
+- Story 10-1 (downstream consumer of this template): [Source: _bmad-output/implementation-artifacts/10-1-consumer-auth-layer.md]
+- Story 10-3 (downstream consumer — Consumer Admin UI with DSA precondition gate): [Source: _bmad-output/implementation-artifacts/10-3-consumer-admin-ui.md]
+- NDPA (Nigeria Data Protection Act) Article 25 — Data Processor obligations: external regulatory reference
+- NDPA Article 26 — Termination data deletion: external regulatory reference
+- NDPA Article 39 — Security of processing: external regulatory reference
+- NDPA Article 47 — Breach notification: external regulatory reference
+- NDPA Article 6(1)(e) — Public Interest lawful basis: external regulatory reference
+- MEMORY.md project pattern: process patterns + handover strategy: [Source: MEMORY.md "Hand-off strategy: TURNKEY PACKAGE"]
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-_(Populated when story enters dev — but for this story, "agent" is Iris + Gabe + Awwal, not a software engineer.)_
+_(Populated when story enters dev — but for this story, "agent" is Iris + Gabe + Awwal, not a software engineer. No code review subagent applies; legal-review sign-off in `dsa-template-v1-signoff.md` is the equivalent gate.)_
 
 ### Debug Log References
 
@@ -257,7 +292,14 @@ _(Not applicable — legal artefact.)_
 
 ### Completion Notes List
 
-_(Populated during implementation.)_
+_(Populated during implementation. Implementer must include:)_
+
+- DSA template version (v1; future amendments increment)
+- Iris + Gabe sign-off dates from `dsa-template-v1-signoff.md`
+- End-to-end SOP dry-run: timing per step (Task 6.3)
+- Tracker file initial state (empty schema header + dry-run row)
+- Baseline Report Appendix H section number assigned to consumer-DPIA template (Task 4.2)
+- Annual review next-due-date scheduled in calendar/tracker
 
 ### File List
 
@@ -272,8 +314,23 @@ _(Populated during implementation.)_
 - `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` (Appendix H — consumer-DPIA section template added by Iris)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
-## Change Log
+**Out of scope (explicitly NOT modified — happens in downstream Epic 10 stories):**
+- `apps/api/src/services/audit.service.ts` — new `AUDIT_ACTIONS.API_KEY_DELIVERED` action added by Story 10-1 or 10-3, NOT this story
+- API consumer / API key tables, controllers, services — Story 10-1
+- Consumer Admin UI — Story 10-3
+- /developers self-service portal — Story 10-4
+- Quarterly review dashboard — Story 10-6
+
+**NEW directory created by this story:**
+- `docs/legal/` (peer of `docs/infrastructure-cicd-playbook.md`, etc.)
+
+### Change Log
 
 | Date | Change | Rationale |
 |---|---|---|
-| 2026-04-25 | Story created by Bob (SM) per SCP-2026-04-22 §A.5. Status `ready-for-dev`. 10 ACs covering DSA template + legal sign-off + SOP runbook + token delivery channel + quarterly/annual review cadence + termination procedure + Baseline Report Appendix H cross-link + tracker setup + end-to-end dry-run + out-of-scope flagging. Owners: Iris (DPIA / NDPA) + Gabe (legal). | Independent track from engineering. CRITICAL prerequisite for `submissions:read_pii` scope provisioning per FR24 + ADR-019. FRC adjacent gate. |
+| 2026-04-25 | Story drafted by impostor-SM agent per SCP-2026-04-22 §A.5. Status `ready-for-dev`. 10 ACs covering DSA template + legal sign-off + SOP runbook + token delivery channel + quarterly/annual review cadence + termination procedure + Baseline Report Appendix H cross-link + tracker setup + end-to-end dry-run + out-of-scope flagging. Owners: Iris (DPIA / NDPA) + Gabe (legal). | Independent track from engineering. CRITICAL prerequisite for `submissions:read_pii` scope provisioning per FR24 + ADR-019. FRC adjacent gate. |
+| 2026-04-29 | Validation pass (Bob, fresh-context mode 2 per `_bmad/bmm/workflows/4-implementation/create-story/checklist.md`). Rebuilt to canonical template structure: created `## Dev Notes` section (was entirely absent) and folded top-level "Dependencies", "Field Readiness Certificate Impact", "Technical Notes" (preserving all 5 subsections — Why a legal artefact in an engineering sprint / NDPA Article 25 reference / Why English only for MVP / Why two-person Ministry ICT approval for PII scope / Why 180-day key rotation default), "Risks" under it; created `### Project Structure Notes` subsection covering the doc-only scope, the new `docs/legal/` directory creation, Baseline Report Appendix H cross-link, audit log integration contract (deferred to 10-1/10-3), tracker file gitignore decision, DSA versioning convention, and cross-story commitments to 10-1/10-3/10-4/10-6; created `### References` subsection with 14 verified `[Source: ...]` cites including ADR-019 line ref + audit service line refs + downstream story file paths + NDPA article external refs. Moved top-level `## Change Log` under `## Dev Agent Record` as `### Change Log` subsection. Added `### Review Follow-ups (AI)` placeholder under Dev Agent Record. Converted task headings (`### Task N — Title` + `1.1.` numbered subitems) to canonical `[ ] Task N (AC: #X)` checkbox format with `[ ] N.M` subtasks. **One minor codebase fix:** flagged that `docs/legal/` directory does not exist — added explicit "directory new; create alongside first file" note to Task 1.4 + Project Structure Notes. AC#4 token-delivery audit-log reference clarified: the `api_key.delivered` audit action is added to `AUDIT_ACTIONS` const by Story 10-1 or 10-3 (whichever implements key issuance first), NOT by this story; this story documents the contract only. All 10 ACs preserved verbatim including the SOP STEPS 1-7 block. Status `ready-for-dev` preserved. | Story v1 was authored by impostor-SM agent without canonical workflow load — same drift pattern as Stories 9-13 / prep-tsc / prep-build-off-vps / 11-1 / prep-input-sanitisation-layer. This is a doc-only legal/operational story so codebase verification was minimal: ADR-019 line ref verified at architecture.md:3179; Baseline Report Appendix H file verified to exist; audit service API surface verified. The drift was purely structural — no factual codebase errors beyond the missing `docs/legal/` directory. |
+
+### Review Follow-ups (AI)
+
+_(Populated by code-review agent during/after legal-review execution. Note: this is a documentation story with no code; "code review" maps to the `dsa-template-v1-signoff.md` Iris+Gabe sign-off gate per AC#2. AI-Review findings, if any, would target the SOP runbook clarity / DSA template structural consistency / cross-reference accuracy.)_
