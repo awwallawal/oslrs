@@ -1,4 +1,12 @@
 #!/usr/bin/env sh
+# H1 fix (prep-tsc-pre-commit-hook code review 2026-04-30): without set -e,
+# `pnpm lint` failures don't abort the script — the hook continues to the tsc
+# step, and if tsc passes, the commit proceeds despite the lint failure. AC#6
+# claims "commit aborts on any failure" but that was silently false. set -e
+# fixes this and defends future hook additions from the same trap. The existing
+# `|| true` patterns (env grep, secrets grep, STAGED_TS_FILES grep) and `if !`
+# blocks remain compatible — set -e is suppressed inside conditional contexts.
+set -e
 
 # =============================================================================
 # SECURITY: Block commits containing .env files or secrets
@@ -44,3 +52,37 @@ fi
 
 # Run lint on staged files (fast check)
 pnpm lint
+
+# =============================================================================
+# Type check: tsc --noEmit on TS changes (catches what vitest's tsx misses)
+# =============================================================================
+STAGED_TS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^apps/(api|web)/.*\.(ts|tsx)$" || true)
+
+if [ -n "$STAGED_TS_FILES" ]; then
+  STAGED_API=$(echo "$STAGED_TS_FILES" | grep -E "^apps/api/" || true)
+  STAGED_WEB=$(echo "$STAGED_TS_FILES" | grep -E "^apps/web/" || true)
+
+  if [ -n "$STAGED_API" ]; then
+    echo ""
+    echo "[pre-commit] Running tsc --noEmit on @oslsr/api..."
+    if ! pnpm --filter @oslsr/api exec tsc --noEmit --incremental; then
+      echo ""
+      echo "COMMIT BLOCKED: TypeScript errors in @oslsr/api"
+      echo "Fix the errors above, re-stage, and retry."
+      echo "(To bypass for emergency: git commit --no-verify)"
+      exit 1
+    fi
+  fi
+
+  if [ -n "$STAGED_WEB" ]; then
+    echo ""
+    echo "[pre-commit] Running tsc --noEmit on @oslsr/web..."
+    if ! pnpm --filter @oslsr/web exec tsc --noEmit --incremental; then
+      echo ""
+      echo "COMMIT BLOCKED: TypeScript errors in @oslsr/web"
+      echo "Fix the errors above, re-stage, and retry."
+      echo "(To bypass for emergency: git commit --no-verify)"
+      exit 1
+    fi
+  fi
+fi
