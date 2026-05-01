@@ -1066,6 +1066,57 @@ costs debugging clarity), then reference each one in the cloud-runner `Build` st
 
 Skipping any of these silently breaks production. Step 1 is the easiest to forget.
 
+### Pitfall #24: `pnpm/action-setup@v4` rejects dual version source-of-truth
+
+**Symptom:** CI lint-and-build job fails at the very first pnpm step with:
+
+```
+Error: Multiple versions of pnpm specified:
+  - version 9 in the GitHub Action config with the key "version"
+  - version pnpm@9.15.0 in the package.json with the key "packageManager"
+Remove one of these versions to avoid version mismatch errors like ERR_PNPM_BAD_PM_VERSION
+```
+
+The lint-and-build failure cascades: every downstream job (test-unit, test-api, test-web, lighthouse, deploy) is **skipped** because it `needs: lint-and-build`. CI looks like a complete outage.
+
+**Cause:** `pnpm/action-setup@v3` happily accepted a `with: version: 9` input even when `package.json` had `"packageManager": "pnpm@9.15.0"`. The v4 release made this an error to prevent silent drift.
+
+**Fix:** drop the `with: version` block from each `pnpm/action-setup@v4` step in workflows. The action reads `pnpm@X.Y.Z` from the `packageManager` field in `package.json` instead — single source of truth. To bump pnpm, update `packageManager` in package.json (one place, not 6 workflow steps).
+
+**Pattern lesson:** action major-version bumps need an isolated single-purpose PR, never bundled with feature work. Today's mistake (commits `4d43274` + `9d4081b`) bundled the action bump with feature commits — when the bump broke, the features failed to deploy too. Single-purpose CI commits surface incompatibilities without blocking release work.
+
+### Pitfall #25: Action `using: node20` warnings even after major-version bump — SHA-pin to main when stable tags lag
+
+**Symptom:** After bumping `actions/upload-artifact@v4` → `@v5` (and similar bumps for download-artifact, pnpm/action-setup), GitHub still shows annotations:
+
+```
+! Node.js 20 actions are deprecated. The following actions are running on Node.js 20...
+```
+
+**Cause:** GitHub-owned actions like `actions/upload-artifact` shipped `@v5` releases that intentionally **kept** `using: node20` in their `action.yml` for compatibility — they migrate Node 24 on `main` first, then tag a Node 24 stable later. As of 2026-05-01 there is no Node 24-declared stable tag for upload-artifact / download-artifact / pnpm-action-setup; the migration has happened on main but not in any tagged release.
+
+**Three escalating fixes (in order of cleanliness):**
+
+1. **`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` env var** at workflow level — runs JS actions on Node 24 at runtime even though their `action.yml` declares Node 20. Bridge solution; warning text changes from "running on Node 20" to "target Node 20 but forced to run on Node 24" (cosmetic, less alarming).
+
+2. **SHA-pin to a Node 24 commit on `main`** — verify via `https://raw.githubusercontent.com/{owner}/{repo}/main/action.yml` that `runs.using: node24`, then pin to the latest commit SHA from `https://github.com/{owner}/{repo}/commits/main`. Eliminates the warning entirely AND is GitHub's recommended security best practice (avoids tag-mutation supply-chain attacks). Trade-off: future re-evaluation needed when the action ships a tagged Node 24 release.
+
+3. **Wait for tagged Node 24 release + re-bump tag** — cleanest long-term but lacks a deadline (depends on author cadence). Hard ceiling: 2026-09-16 (Node 20 removed from runner image entirely; bridge stops working).
+
+OSLRS chose path #2 (SHA-pin) on 2026-05-01 to fully close the warnings before the 2026-06-02 forced-default cutover. SHA pins live in `.github/workflows/ci-cd.yml` + `e2e.yml`; comments at each pin site document the re-evaluation trigger.
+
+**Verification recipe** (use it before SHA-pinning any new action):
+
+```sh
+# Check what main declares
+curl -s https://raw.githubusercontent.com/<owner>/<repo>/main/action.yml | grep -E '^\s*using:'
+
+# Get latest main SHA
+curl -s https://api.github.com/repos/<owner>/<repo>/commits/main | jq -r .sha
+```
+
+If the `using:` line is `node24` (or `composite` / `docker` — both safe), pin to the SHA. If still `node20`, fall back to env-var bridge.
+
 ---
 
 *Generated: 2026-02-21*
@@ -1073,4 +1124,5 @@ Skipping any of these silently breaks production. Step 1 is the easiest to forge
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
 *Updated: 2026-04-29 — Wave 0 code review: Pitfall #10 cross-referenced to Part 6.2 + Pitfall #23 (post-Wave-0 pattern); Manual Redeploy snippet flagged as emergency-only with Pitfall #23 hardening (all 3 VITE_* vars sourced from VPS .env); Periodic Maintenance subsection added with /tmp/oslrs-web-dist-* sweep + dist-backup audit*
 *Updated: 2026-04-30 — prep-tsc-pre-commit-hook landed: table row #18 Fix column rewritten with hook reference + cache-recovery one-liner (`rm apps/*/tsconfig.tsbuildinfo`); the unrelated `### Pitfall #18:` heading at line ~975 (DO Web Console SSH-based) deliberately untouched — the playbook's two #18 numberings stay independent*
+*Updated: 2026-05-01 — Pitfalls #24-25 added: pnpm/action-setup v3→v4 dual-source-of-truth contract change + Node 24 SHA-pinning recipe for actions whose stable tags lag main branch (verified workflow used to eliminate all warnings before the 2026-06-02 forced-default cutover)*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*

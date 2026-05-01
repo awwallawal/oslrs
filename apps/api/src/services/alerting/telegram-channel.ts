@@ -1,10 +1,21 @@
 /**
  * Telegram Push Channel for CRITICAL Alerts
  *
- * Story 9-9 AC#6 (FRC item #5). Sends push-notification alerts to the operator's
- * phone via a Telegram bot when a metric transitions to CRITICAL severity. Layered
- * alongside the existing email digest in alert.service.ts — Telegram is instant
- * push (phone vibrates), email is the slower audit trail.
+ * Story 9-9 AC#6 (NOT an FRC item — see below). Sends push-notification alerts
+ * to the operator's phone via a Telegram bot when a metric transitions to CRITICAL
+ * severity. Layered alongside the existing email digest in alert.service.ts —
+ * Telegram is instant push (phone vibrates), email is the slower audit trail.
+ *
+ * FRC framing note: the original Story 9-9 plan called this AC#6 = FRC item #5
+ * ("alerting tier with push channel"). On 2026-04-27 the FRC was revised in
+ * `_bmad-output/planning-artifacts/epics.md` — push-channel alerting was
+ * DEMOTED to a Ministry hand-off recommendation (cost rejection: ~₦500-2K/mo
+ * Twilio for SMS). Backup AES-256 client-side encryption (9-9 AC#5) was
+ * promoted into the FRC #5 slot instead. This Telegram implementation is
+ * still valuable — it closes the 19-hour detection-to-response gap from the
+ * 2026-04-20 brute-force incident — but it is "above and beyond", not
+ * field-blocking. Builder operates in email-attentive mode; Telegram is a
+ * zero-cost upgrade on top.
  *
  * Configuration via env vars: TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID.
  * Both must be set, OR the channel cleanly skips with no errors. This makes
@@ -88,14 +99,20 @@ export async function sendCriticalTelegramAlert(
 }
 
 function formatAlertMessage(ctx: CriticalAlertContext): string {
-  const ts = ctx.timestamp.toISOString();
+  // Defensive: an Invalid Date (e.g. `new Date(NaN)`) would render as the literal
+  // string "Invalid Date" in the alert. Fall back to the current time and flag
+  // the substitution so a malformed caller is visible in the message itself.
+  const validTimestamp =
+    ctx.timestamp instanceof Date && !isNaN(ctx.timestamp.getTime());
+  const ts = (validTimestamp ? ctx.timestamp : new Date()).toISOString();
+  const tsNote = validTimestamp ? '' : ' (caller-supplied timestamp invalid — substituted now)';
   const escalation = ctx.previousLevel ? ` (was ${ctx.previousLevel})` : '';
   return [
     '🚨 CRITICAL ALERT — OSLRS',
     '',
     `Metric: ${ctx.metricKey}${escalation}`,
     `Value: ${ctx.value}`,
-    `Time: ${ts}`,
+    `Time: ${ts}${tsNote}`,
     '',
     'Investigate via SSH (Tailscale) or the System Health dashboard.',
   ].join('\n');

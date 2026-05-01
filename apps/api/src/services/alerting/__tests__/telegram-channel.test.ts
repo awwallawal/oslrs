@@ -159,4 +159,23 @@ describe('sendCriticalTelegramAlert', () => {
     expect(body.text).toContain('queue_waiting:email');
     expect(body.text).toContain('215');
   });
+
+  it('substitutes current time when caller passes an Invalid Date (defensive — F2)', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(NaN),
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // Should NOT contain the literal "Invalid Date" string from a broken
+    // toISOString() rendering — that's the symptom we're defending against.
+    expect(body.text).not.toContain('Invalid Date');
+    // Should flag the substitution so a malformed caller is visible in the alert.
+    expect(body.text).toContain('caller-supplied timestamp invalid');
+    // Should still contain a valid ISO timestamp (substituted from now)
+    expect(body.text).toMatch(/Time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
 });

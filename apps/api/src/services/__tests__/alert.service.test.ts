@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockDbSelect, mockSendGenericEmail } = vi.hoisted(() => ({
+const { mockDbSelect, mockSendGenericEmail, mockSendTelegramAlert } = vi.hoisted(() => ({
   mockDbSelect: vi.fn(),
   mockSendGenericEmail: vi.fn(),
+  mockSendTelegramAlert: vi.fn(),
 }));
 
 vi.mock('../../db/index.js', () => ({
@@ -28,6 +29,10 @@ vi.mock('../email.service.js', () => ({
   EmailService: {
     sendGenericEmail: (...args: any[]) => mockSendGenericEmail(...args),
   },
+}));
+
+vi.mock('../alerting/telegram-channel.js', () => ({
+  sendCriticalTelegramAlert: (...args: any[]) => mockSendTelegramAlert(...args),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -76,6 +81,12 @@ beforeEach(() => {
   AlertService.clearStates();
   mockDbSelect.mockResolvedValue([{ email: 'admin@test.com' }]);
   mockSendGenericEmail.mockResolvedValue({ success: true });
+  // Telegram dispatch is fire-and-forget in alert.service.ts (`.catch()` on the
+  // returned promise). After vi.resetAllMocks(), the mock returns undefined and
+  // calling .catch() on undefined throws TypeError. Re-arm with a resolved
+  // promise so the existing critical-transition tests don't break, AND so the
+  // wiring tests below have a clean default they can override per-test.
+  mockSendTelegramAlert.mockResolvedValue(undefined);
 });
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -220,6 +231,68 @@ describe('AlertService', () => {
       const states = AlertService.getAlertStates();
       const queueState = states.get('queue_waiting:email-notification');
       expect(queueState!.level).toBe('warning');
+    });
+  });
+
+  // Story 9-9 AC#6 wiring (added 2026-05-01 per retrospective code review F4/F10).
+  // Verifies that the alert.service.ts → telegram-channel.ts dispatch happens on
+  // critical state transitions and does NOT happen on warnings/resolves. The
+  // telegram-channel module is mocked at the import boundary above; we assert
+  // call counts + payload shape on the mock.
+  describe('Telegram dispatch wiring (AC#6)', () => {
+    it('should fire sendCriticalTelegramAlert when a metric transitions to critical', async () => {
+      const health = createHealthData({
+        cpu: { usagePercent: 95, cores: 4 },
+      });
+
+      await AlertService.evaluateAlerts(health);
+
+      expect(mockSendTelegramAlert).toHaveBeenCalledTimes(1);
+      const ctx = mockSendTelegramAlert.mock.calls[0][0];
+      expect(ctx.metricKey).toBe('cpu');
+      expect(ctx.value).toBe(95);
+      expect(ctx.timestamp).toBeInstanceOf(Date);
+    });
+
+    it('should NOT fire sendCriticalTelegramAlert on warning-only transitions', async () => {
+      const health = createHealthData({
+        cpu: { usagePercent: 75, cores: 4 }, // above warning (70) but below critical (90)
+      });
+
+      await AlertService.evaluateAlerts(health);
+
+      expect(mockSendTelegramAlert).not.toHaveBeenCalled();
+    });
+
+    it('should NOT fire sendCriticalTelegramAlert on resolved transitions (good news does not ping)', async () => {
+      // First: enter critical
+      await AlertService.evaluateAlerts(createHealthData({
+        cpu: { usagePercent: 95, cores: 4 },
+      }));
+      expect(mockSendTelegramAlert).toHaveBeenCalledTimes(1);
+
+      // Two consecutive OK checks to trigger resolve via hysteresis
+      await AlertService.evaluateAlerts(createHealthData({
+        cpu: { usagePercent: 30, cores: 4 },
+      }));
+      await AlertService.evaluateAlerts(createHealthData({
+        cpu: { usagePercent: 30, cores: 4 },
+      }));
+
+      // Should still be 1 — the resolve path does not ping Telegram
+      expect(mockSendTelegramAlert).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not propagate Telegram errors to the alert subsystem', async () => {
+      mockSendTelegramAlert.mockRejectedValueOnce(new Error('Telegram API down'));
+
+      const health = createHealthData({
+        cpu: { usagePercent: 95, cores: 4 },
+      });
+
+      // Should not throw despite Telegram failure
+      await expect(AlertService.evaluateAlerts(health)).resolves.toBeUndefined();
+      expect(mockSendTelegramAlert).toHaveBeenCalledTimes(1);
     });
   });
 });

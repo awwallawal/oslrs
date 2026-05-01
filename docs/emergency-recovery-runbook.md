@@ -170,7 +170,9 @@ Composition: Gmail "Send mail as"
 | JWT secret | `/root/oslrs/.env` on VPS | Expose |
 | Telegram bot token (alerting) | Password manager + `/root/oslrs/.env` on VPS as `TELEGRAM_BOT_TOKEN` | Commit to git; if leaked rotate via `/revoke` to @BotFather |
 
-### 1.8 Alert routing matrix (Story 9-9 AC#6 — FRC item #5; live 2026-05-01)
+### 1.8 Alert routing matrix (Story 9-9 AC#6 — Telegram push channel; live 2026-05-01)
+
+> **FRC framing note:** This implementation is "above and beyond", NOT field-blocking. The original Story 9-9 plan tagged AC#6 as FRC item #5 ("alerting tier with push channel"). On 2026-04-27 the FRC was revised in `_bmad-output/planning-artifacts/epics.md` — push-channel alerting was demoted to a Ministry hand-off recommendation (cost: SMS path ~₦500-2K/mo Twilio not justified for solo-operator email-attentive workflow); backup AES-256 client-side encryption (9-9 AC#5) was promoted into the FRC #5 slot instead. Telegram push remains valuable (closes the 19-hour detection-to-response gap from the 2026-04-20 brute-force incident at zero ongoing cost), but it does not gate field survey start.
 
 **Channels in use:**
 
