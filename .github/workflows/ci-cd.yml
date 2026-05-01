@@ -15,6 +15,17 @@ env:
   NODE_ENV: test
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  # Opt JS-actions into Node 24 immediately rather than waiting for the
+  # 2026-06-02 forced-default cutover. Three actions in this workflow still
+  # declare `using: node20` in their action.yml as of 2026-05-01:
+  #   - actions/upload-artifact@v5
+  #   - actions/download-artifact@v5
+  #   - pnpm/action-setup@v4
+  # Their authors haven't published Node-24-declared majors yet. This env
+  # var forces Node 24 anyway so we surface any incompatibility now (4+
+  # months of fix runway) instead of on 2026-06-03 when CI silently breaks.
+  # Drop this var once all three actions ship Node-24-declared releases.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ============================================
