@@ -1,6 +1,9 @@
 # Story 9.8: Content Security Policy — NGINX Static-HTML Rollout & Helmet Parity
 
-Status: in-progress
+Status: review
+
+<!-- Status: in-progress → review (2026-05-01). Per BMAD lifecycle, `review` = current iteration code-complete + reviewed + deployed, paused for external verification. The 2026-05-01 commit (4f430bc — Task 7.1 allowlist refinement + 10-finding code-review fixes) shipped successfully via CI/CD and is now in the 48-hour re-monitoring window. Tasks 7.5-7.7 (single-line enforcing flip) + Task 9 (sprint-status close) are a future micro-iteration that opens when the re-monitoring window closes clean. -->
+
 
 <!-- Created 2026-04-11 as a follow-up to Story 9-7 code review finding M4 (CSP deferred). Scope narrowed significantly once discovery confirmed that Express Helmet already defines and enforces a production-vetted CSP for /api/* in apps/api/src/app.ts:103-156. This story closes the static-HTML gap only — it does NOT redesign the policy. -->
 

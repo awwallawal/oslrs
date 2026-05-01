@@ -1,6 +1,9 @@
 # Story 9.10: PM2 Restart-Loop Investigation & Stabilisation
 
-Status: ready-for-dev
+Status: in-progress
+
+<!-- Status: ready-for-dev → in-progress (2026-05-01 status-discipline pass). AC#2 partial fix already shipped via commit 718f84e (2026-04-27 — ioredis shutdown crash wrap in safe-catch). Remaining work calendar-gated on the 7-day post-fix observation window (target close 2026-05-04). -->
+
 
 <!--
 Created 2026-04-25 by Bob (SM) per SCP-2026-04-22 §A.5.
@@ -39,7 +42,7 @@ After Phase 3 Cloudflare ship, system health digest fired CRITICAL on 2026-04-27
 - AC#3 7-day post-fix observation re-anchors at this commit's deploy timestamp.
 - AC#7 regression test for the shutdown crash is a separate follow-up — would require mocking ioredis's reconnect handler to deterministically reproduce the race condition; deferred to keep this hot-fix surgical.
 
-**Architectural follow-up (separate story scope):** Move builds off the 2GB VPS. CI should build on GH Actions runner (2-core, 7GB RAM) and only `rsync dist/` + nginx config + pm2 restart on the VPS. This eliminates the deploy-time resource spike entirely and would close AC#3 the cleanest way. Tracked alongside the "self-hosted GH Actions runner inside tailnet" line item from Story 9-9.
+**Architectural follow-up — DELIVERED Wave 0 (commit `e799104`, closed 2026-04-30):** Move builds off the 2GB VPS. CI now builds on GH Actions runner (2-core, 7GB RAM) and only ships `apps/web/dist` artifact + runs nginx config + pm2 restart on the VPS. The deploy-time resource spike is eliminated. Verified Row 1 (commit `e799104`) wall-clock 44s + 0.66 GiB peak + 0 CRITICAL alerts; Row 2 (commit `6932ac0`) 43s + 0.65 GiB peak + 0 CRITICAL. **This closes the deploy-spike root cause that drove the 2026-04-27 false-CRITICAL alerts.** AC#3 ceiling can be tightened from "<5 restarts/7d" to "≤2 restarts/7d" because deploy-attributable restarts no longer carry resource-pressure side-effects. The "self-hosted GH Actions runner inside tailnet" line item from Story 9-9 remains a separate concern (closes SSH firewall re-narrowing, not VPS resource pressure).
 
 ## Background — PM2 ↺ baseline observability window
 
@@ -68,8 +71,9 @@ After Phase 3 Cloudflare ship, system health digest fired CRITICAL on 2026-04-27
 
 3. **AC#3 — Restart count falls to near-zero over 7-day post-fix observation window:**
    - After fix lands in production, observe PM2 ↺ for 7 days
-   - **Target:** ↺ count remains <5 over the 7-day window (occasional restart from CI deploy is normal; 5 is a generous ceiling)
-   - **If ↺ count exceeds 5:** document remaining causes; either iterate the fix OR scope a Story 9-10b for residual issues
+   - **Target:** ↺ count remains ≤2 over the 7-day window. _(Tightened 2026-05-01 from the original "<5" ceiling. Wave 0 build-off-VPS deploy now eliminates the deploy-time resource spike, so each CI deploy = 1 graceful pm2 restart with no side effects. Generous ceiling = 2 to allow margin for one legitimate exit during the window.)_
+   - **Anchor timestamp:** 7-day window starts at deploy completion of commit `718f84e` (ioredis shutdown crash fix, 2026-04-27 ~07:30 UTC). Target close: **2026-05-04**.
+   - **If ↺ count exceeds 2:** document remaining causes; either iterate the fix OR scope a Story 9-10b for residual issues
    - Capture trajectory in `apps/api/src/docs/9-10-pm2-restart-post-fix-trajectory.md`
 
 4. **AC#4 — Akintola-risk Move 2: EXPLAIN ANALYZE audit of top 10 most-invoked API endpoints:**
