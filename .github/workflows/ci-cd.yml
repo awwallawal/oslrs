@@ -15,17 +15,6 @@ env:
   NODE_ENV: test
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-  # Opt JS-actions into Node 24 immediately rather than waiting for the
-  # 2026-06-02 forced-default cutover. Three actions in this workflow still
-  # declare `using: node20` in their action.yml as of 2026-05-01:
-  #   - actions/upload-artifact@v5
-  #   - actions/download-artifact@v5
-  #   - pnpm/action-setup@v4
-  # Their authors haven't published Node-24-declared majors yet. This env
-  # var forces Node 24 anyway so we surface any incompatibility now (4+
-  # months of fix runway) instead of on 2026-06-03 when CI silently breaks.
-  # Drop this var once all three actions ship Node-24-declared releases.
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ============================================
@@ -38,7 +27,10 @@ jobs:
         with:
           fetch-depth: 2  # Needed for change detection
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -81,7 +73,10 @@ jobs:
 
       # Upload build artifacts for parallel test jobs
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: build-artifacts
           path: |
@@ -108,7 +103,10 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -116,7 +114,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: build-artifacts
           path: .
@@ -156,7 +157,10 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: test-results-${{ matrix.package }}
           path: |
@@ -211,7 +215,10 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -219,7 +226,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: build-artifacts
           path: .
@@ -261,7 +271,10 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: test-results-api
           path: |
@@ -283,7 +296,10 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -291,7 +307,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: build-artifacts
           path: .
@@ -330,7 +349,10 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: test-results-web
           path: |
@@ -356,7 +378,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -368,28 +393,40 @@ jobs:
 
       # Download all test results
       - name: Download test results (utils)
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: test-results-utils
           path: .
         continue-on-error: true
 
       - name: Download test results (testing)
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: test-results-testing
           path: .
         continue-on-error: true
 
       - name: Download test results (api)
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: test-results-api
           path: .
         continue-on-error: true
 
       - name: Download test results (web)
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: test-results-web
           path: .
@@ -399,7 +436,10 @@ jobs:
         run: pnpm test:dashboard
 
       - name: Upload Test Dashboard
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: test-dashboard
           path: |
@@ -482,7 +522,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main. The v4 stable tag still declares
+      # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
+      # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -490,7 +533,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: build-artifacts
           path: .
@@ -572,7 +618,10 @@ jobs:
       # We only ship apps/web/dist to the VPS (next step) — the build was already
       # done on the runner, so the VPS no longer needs to run vite+tsc itself.
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        # SHA-pinned to a Node 24 commit on main. The v5 stable tag still declares
+        # `using: node20` as of 2026-05-01. Re-bump to a tagged Node 24 release
+        # when one ships (likely v6.x).
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           name: build-artifacts
           path: ./build-artifacts/

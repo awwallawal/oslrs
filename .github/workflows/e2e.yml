@@ -11,12 +11,6 @@ concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Opt JS-actions into Node 24 immediately — see ci-cd.yml env block for the
-  # full rationale. Mirror here so e2e workflow surfaces the same compatibility
-  # signal before the 2026-06-02 forced-default cutover.
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   test-e2e:
     name: E2E Tests (Playwright)
@@ -62,7 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
 
       - uses: actions/setup-node@v5
         with:
@@ -106,7 +101,8 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -114,7 +110,8 @@ jobs:
 
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v5
+        # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: e2e-test-results
           path: apps/web/test-results/
