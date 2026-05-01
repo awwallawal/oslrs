@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { EmailService } from './email.service.js';
+import { sendCriticalTelegramAlert } from './alerting/telegram-channel.js';
 import type { SystemHealthResponse } from '@oslsr/types';
 import pino from 'pino';
 
@@ -252,6 +253,18 @@ export class AlertService {
 
   /**
    * Add alert to pending digest batch (replaces immediate email sending)
+   *
+   * Story 9-9 AC#6 (FRC item #5): on CRITICAL severity, ALSO fire an instant
+   * Telegram push notification to the operator's phone. The email digest still
+   * fires per the existing 30-min cooldown for full audit trail. Telegram is
+   * fire-and-forget — failures logged but never propagated, so a Telegram
+   * outage cannot break the alert subsystem.
+   *
+   * Telegram inherits the per-metric cooldown + hourly rate-limit from
+   * queueAlertWithCooldown (the only caller of queueAlert that uses the
+   * 'critical' level via a state transition). The 'resolved' path also calls
+   * queueAlert directly with level='resolved' on the OK transition, which
+   * skips the Telegram branch by design (we don't want to ping for good news).
    */
   private static queueAlert(
     metricKey: string,
@@ -260,6 +273,21 @@ export class AlertService {
     previousLevel?: AlertLevel,
   ): void {
     pendingDigest.set(metricKey, { level, value, previousLevel });
+
+    if (level === 'critical') {
+      sendCriticalTelegramAlert({
+        metricKey,
+        value,
+        previousLevel,
+        timestamp: new Date(),
+      }).catch((err) => {
+        logger.warn({
+          event: 'alert.telegram_dispatch_failed',
+          error: (err as Error).message,
+          metricKey,
+        });
+      });
+    }
   }
 
   /**

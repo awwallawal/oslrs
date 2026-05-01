@@ -168,6 +168,59 @@ Composition: Gmail "Send mail as"
 | Redis AUTH password | `/root/oslrs/.env` on VPS | Expose to public internet |
 | S3/DO Spaces API keys | `/root/oslrs/.env` on VPS | Commit to git, share outside team |
 | JWT secret | `/root/oslrs/.env` on VPS | Expose |
+| Telegram bot token (alerting) | Password manager + `/root/oslrs/.env` on VPS as `TELEGRAM_BOT_TOKEN` | Commit to git; if leaked rotate via `/revoke` to @BotFather |
+
+### 1.8 Alert routing matrix (Story 9-9 AC#6 — FRC item #5; live 2026-05-01)
+
+**Channels in use:**
+
+| Channel | Latency | Purpose | Configured via |
+|---|---|---|---|
+| Email digest | 0-30 min (cooldown gate) | Full audit trail, ALL severities including resolved | `EMAIL_FROM_ADDRESS` + active super_admin records (Builder + break-glass) |
+| Telegram push | 1-3 sec | Instant phone notification for **CRITICAL only** | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` env vars on VPS |
+
+**Severity → channel matrix:**
+
+| Metric → state transition | Email digest | Telegram push |
+|---|---|---|
+| OK → warning | ✅ (next 30-min digest) | ❌ |
+| warning → critical (escalation) | ✅ | ✅ instant |
+| OK → critical (direct) | ✅ | ✅ instant |
+| critical sustained (after 5-min cooldown) | ✅ | ✅ (capped at 3/hour per metric) |
+| critical → resolved | ✅ | ❌ (good news doesn't ping) |
+
+**What triggers a CRITICAL alert** (thresholds in `apps/api/src/services/alert.service.ts`):
+
+| Metric | Critical threshold | Why |
+|---|---|---|
+| `cpu` | >90% | Sustained → service degradation |
+| `memory` | >90% | Risk of OOM-killer |
+| `disk_free` | <10% (free) | Risk of out-of-disk |
+| `api_p95_latency` | >500ms | User-perceptible slowness |
+| `db_status` | error | Database unreachable |
+| `redis_status` | error | Queue + cache unreachable |
+| `queue_waiting:<name>` | >200 | Queue backed up |
+
+The 50-sample minimum on p95 (`MIN_SAMPLES_FOR_P95` in metrics.ts) prevents false alerts on low-traffic windows. fail2ban / CSP-violation-rate alerts are deferred follow-ups (would require new metric collectors).
+
+**Quarterly drill (incorporated into §6.1 quarterly checks):**
+
+1. SSH to VPS via Tailscale (`ssh root@oslsr-home-app`)
+2. Send a heartbeat: `curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d "chat_id=$TELEGRAM_OPERATOR_CHAT_ID" -d "text=Heartbeat $(date -u +%FT%TZ)"` (loads vars from `/root/oslrs/.env` — `set -a; source /root/oslrs/.env; set +a` first)
+3. Confirm phone vibrates within 3 seconds with the heartbeat message
+4. If silent: check (a) bot token still valid (token rotation? leaked?), (b) chat_id still valid (operator changed Telegram account?), (c) phone notifications enabled for the bot conversation, (d) `pnpm logs oslsr-api | grep telegram` for `telegram.api_error` events
+
+**If operator changes Telegram account or phone:**
+
+1. New phone: install Telegram, sign in with same account → notifications resume automatically (no env change needed)
+2. New Telegram account: get new chat_id via @userinfobot, update `TELEGRAM_OPERATOR_CHAT_ID` in `/root/oslrs/.env`, run `pm2 restart oslsr-api --update-env`
+
+**If Telegram bot is compromised** (token leaked):
+
+1. In Telegram, message @BotFather: send `/revoke` → select your bot → confirm
+2. BotFather replies with a NEW token; old token immediately invalid
+3. Update `TELEGRAM_BOT_TOKEN` in `/root/oslrs/.env`; run `pm2 restart oslsr-api --update-env`
+4. Heartbeat-test per quarterly drill above
 
 ---
 

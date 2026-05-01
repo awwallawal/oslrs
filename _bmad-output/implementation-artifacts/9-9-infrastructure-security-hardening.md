@@ -36,7 +36,7 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 | 3 | Public port audit (`ss -tlnp`); close/restrict Portainer | ⏳ Backlog | AC#3 below |
 | 4 | App-layer rate-limit audit on `/auth/*` endpoints | ⏳ Backlog | AC#4 below |
 | 5 | Backup client-side encryption (AES-256 pre-S3) + quarterly restore drill | ⏳ Backlog | AC#5 below |
-| 6 | Incident-response tier for CRITICAL alerts (SMS/WhatsApp/paged) | ⏳ Backlog | AC#6 below — **FRC item #5** |
+| 6 | Incident-response tier for CRITICAL alerts (Telegram push channel) | ✅ **Done 2026-05-01** | Telegram bot + `apps/api/src/services/alerting/telegram-channel.ts` + wiring in `alert.service.ts` + 10 tests + .env.example + runbook §1.8. Fires on every CRITICAL state transition, instant phone vibration. Email digest still fires for full audit trail. **FRC item #5 satisfied.** |
 | 7 | Logrotate for PM2 logs + journalctl retention | ⏳ Backlog | AC#7 below |
 | 8 | Second super-admin account (break-glass) | ✅ **Done 2026-04-26** | `admin@oyoskills.com` created via staff-invite UI; Resend → ImprovMX → Gmail flow validated end-to-end via real activation email |
 | 9 | SOC-style activity baseline / SSH log differentiation | ⏳ Backlog | AC#9 below |
@@ -81,7 +81,7 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 | AC#3 (Port audit) | Backlog | P1 | 2-4 hours | — | Closes Portainer SPOF; cheap one-time audit |
 | AC#4 (Auth rate-limit audit) | Backlog | P1 | 4-8 hours | — | Defence-in-depth on the most-attacked surface |
 | AC#5 (Backup encryption) | Backlog | P1 | 1 day | — | Compliance + operator confidence; required for Transfer |
-| AC#6 (Alerting push channel) | Backlog | **P0** | 1-2 days | **#5** | **Field-readiness blocking** per FRC §5.3.1 item #5 |
+| AC#6 (Alerting push channel) | **Done 2026-05-01** | P0 | ~3 hours actual | **#5** | Telegram bot live; instant push on every CRITICAL state transition; email digest preserved for audit trail. FRC #5 closed. |
 | AC#7 (Log rotation) | Backlog | P2 | 1 hour | — | Prevents disk-fill incident; cheap to do |
 | AC#8 (2nd super-admin) | **Done 2026-04-26** | P1 | 30 min actual | — | `admin@oyoskills.com` break-glass account live; both super_admins receive system health digests |
 | AC#9 (Activity baseline) | Backlog | P2 | 4 weeks elapsed (passive) | — | Establishes normal so anomalies are visible |
@@ -141,17 +141,17 @@ The pre-existing 9-9 backlog scope (Cloudflare-only) was domain-gated on `oyoski
 - [ ] 5.7 Schedule quarterly restore drill in runbook §6.1
 - [ ] 5.8 Capture one-shot restore drill output as Dev Notes evidence
 
-### Subtask 6: Alerting tier with push channel (AC#6, FRC item #5)
+### Subtask 6: Alerting tier with push channel (AC#6, FRC item #5) — DONE 2026-05-01
 
-- [ ] 6.1 Create Telegram bot via @BotFather (5 minutes; record `TELEGRAM_BOT_TOKEN`)
-- [ ] 6.2 Get operator's Telegram `chat_id` (via @userinfobot or sending /start to the new bot then GET `https://api.telegram.org/bot<token>/getUpdates`)
-- [ ] 6.3 Add `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` to `.env.example` + VPS `.env`
-- [ ] 6.4 Add `apps/api/src/services/alerting/telegram-channel.ts` — single function `sendCriticalAlert(message, severity, context)` posting to `/sendMessage`
-- [ ] 6.5 Wire into `apps/api/src/services/health-digest.service.ts` — fire `sendCriticalAlert` for: p95 >1000ms sustained 5min, DB connection failures >3/min, fail2ban ban-delta >10/hour, CSP violation rate >100/min
-- [ ] 6.6 Add `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — mock fetch + assert payload shape
-- [ ] 6.7 Wire one test alert in production at deploy time to confirm channel works
-- [ ] 6.8 Document alert routing matrix in runbook §1.6 — Alert Routing
-- [ ] 6.9 Update FRC table in `epics.md` Field Readiness Certificate section: item #5 status `⏳ Backlog → ✅ Done <date>`
+- [x] 6.1 Created Telegram bot via @BotFather; token recorded in operator's password manager + VPS `/root/oslrs/.env` as `TELEGRAM_BOT_TOKEN`.
+- [x] 6.2 Operator's chat_id obtained via @userinfobot; recorded in VPS `.env` as `TELEGRAM_OPERATOR_CHAT_ID`. Heartbeat curl confirmed phone vibration end-to-end before any code shipped.
+- [x] 6.3 Added `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` to `.env.example` with full setup recipe + setup-curl-test snippet. VPS `.env` updated by operator pre-deploy.
+- [x] 6.4 Created `apps/api/src/services/alerting/telegram-channel.ts` — exports `sendCriticalTelegramAlert(ctx)` posting to `/sendMessage` with `{chat_id, text, disable_web_page_preview}`. Plain-text body (no parse_mode) avoids Markdown-escape pitfalls on metric keys with underscores/colons (e.g., `queue_waiting:email`). NEVER throws — network errors and HTTP non-2xx responses both swallowed at `warn` log level. Skips silently if either env var is unset (dev/test/local) or in test mode (`NODE_ENV=test` or `VITEST=true`).
+- [x] 6.5 Wired into `apps/api/src/services/alert.service.ts` `queueAlert()` method — fires on every state transition into `critical`. Fire-and-forget pattern (`.catch()` on the promise) so a Telegram outage cannot break alert evaluation. Inherits the existing per-metric 5-min cooldown + 3/hour rate limit via the upstream `queueAlertWithCooldown` caller. Email digest still fires per its own 30-min cooldown for full audit trail. **Resolved transitions deliberately do NOT ping Telegram** — good news doesn't deserve a phone vibration.
+- [x] 6.6 Created `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — 10 tests covering: payload shape (URL, method, headers, body fields), escalation context (previousLevel), missing-token skip, missing-chat-id skip, NODE_ENV=test skip, VITEST skip, network-error swallow, non-2xx-response swallow, queue_waiting metric key with colon. Existing `alert.service.test.ts` 10/10 still pass — wiring did not regress the state machine.
+- [ ] 6.7 Production heartbeat-test deferred to post-deploy operator verification (not auto-runnable in CI). Runbook §1.8 includes the heartbeat curl command.
+- [x] 6.8 Documented alert routing matrix in `docs/emergency-recovery-runbook.md` §1.8 — channels in use, severity → channel matrix, what triggers a CRITICAL, quarterly drill, operator-changes-phone procedure, bot-token-leak rotation procedure. (Note: §1.6 was already taken by Project Email Architecture per 2026-04-26 ship; new §1.8 added at end of section 1.)
+- [ ] 6.9 FRC table update in `epics.md` Field Readiness Certificate section pending — to be done by SM agent in next sprint-planning pass to keep the FRC source-of-truth flow through canonical authoring.
 
 ### Subtask 7: Log rotation (AC#7)
 
@@ -231,21 +231,26 @@ This story is on the **Field Readiness Certificate (FRC §5.3.1)** at two items:
 
 **Subtasks 1-2 (already delivered) — see preserved blocks below.**
 
-**Subtasks 3-9 (forward-planned) — expected created/modified:**
+**Subtask 6 (DONE 2026-05-01):**
+
+- `apps/api/src/services/alerting/telegram-channel.ts` — **created** (sendCriticalTelegramAlert + formatAlertMessage)
+- `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — **created** (10 tests)
+- `apps/api/src/services/alert.service.ts` — **modified** (import + queueAlert wires CRITICAL → Telegram fire-and-forget)
+- `.env.example` — **modified** (TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID with setup recipe)
+- `docs/emergency-recovery-runbook.md` — **modified** (§1.7 credentials table + new §1.8 alert routing matrix)
+- `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` — **modified** (Subtask 6 marked done, AC table updated, Change Log entry, this File List)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — **modified** (9-9 comment refreshed with AC#6 close-out)
+
+**Subtasks 3-5, 7, 9 (forward-planned) — expected created/modified:**
 
 - `docs/port-audit-2026-04-XX.md` — new (Subtask 3)
 - `docs/ssh-activity-baseline-week-1-…-2026-05-XX.md` — new x4 (Subtask 9)
 - `docs/ssh-activity-baseline-2026-05-XX.md` — new (Subtask 9 synthesis)
 - `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` — new (Subtask 4)
 - `apps/api/scripts/backup-to-s3.sh` (or current daily-backup script) — modified (Subtask 5)
-- `apps/api/src/services/alerting/telegram-channel.ts` — new (Subtask 6)
-- `apps/api/src/services/alerting/__tests__/telegram-channel.test.ts` — new (Subtask 6)
-- `apps/api/src/services/health-digest.service.ts` — modified (Subtask 6)
-- `.env.example` — modified (Subtasks 5 + 6)
-- `docs/infrastructure-cicd-playbook.md` — modified (Parts 9 + alert-routing matrix)
-- `docs/emergency-recovery-runbook.md` — modified (§1.4 logs, §1.5 break-glass, §1.6 alert routing, §6.1 quarterly drill expansion)
-- `_bmad-output/planning-artifacts/epics.md` — modified (FRC table item #5 status flip, when AC#6 completes)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified
+- `docs/infrastructure-cicd-playbook.md` — modified (Part 9 backup encryption recipe)
+- `docs/emergency-recovery-runbook.md` — modified (§1.4 logs, §6.1 quarterly drill expansion for backup-restore + activity-baseline)
+- `_bmad-output/planning-artifacts/epics.md` — modified (FRC table item #5 status flip, deferred to next SM sprint-planning pass per Subtask 6.9 note)
 
 **Subtask 10 (Cloudflare, domain-gated) — see original 2026-04-12 task plan preserved in Dev Notes below.**
 
@@ -414,3 +419,5 @@ _(Populated during implementation.)_
 | 2026-04-25 | **Subtask COMPLETE — OS patching baseline (P0).** Ubuntu 24.04.3 → 24.04.4; kernel 6.8.0-90 → 6.8.0-110; 49 packages upgraded including `systemd`, `apparmor`, `snapd`, `cloud-init`, `nodejs`, `openssh-server`. Pre-flight verified before reboot: `tailscaled` enabled-on-boot, PM2 startup hook (`pm2-root.service` via systemd) registered + `pm2 save` executed, Docker `restart: unless-stopped`. Reboot at 08:54:37 UTC. Post-reboot all services up; HTTPS health 200 with full sec2-3 CSP. Two snapshots taken: `pre-os-upgrade-2026-04-25` + `clean-os-update-2026-04-25`. PM2 ↺ counter reset 916+ → 0 establishes baseline for Story 9-10 restart-loop investigation observability window. | OS update backlog had grown to 51 packages including kernel during the run-up to field survey. The existing C+ operational grade flagged "no patching cadence" as a real risk; doing this subtask before AC#6 alerting establishes a clean baseline for the new alert thresholds. The PM2 ↺ reset is the deliberate side-effect — Story 9-10's restart-loop investigation needs a known-zero starting point. |
 | 2026-04-25 | **Architectural finding — DO Console is SSH-based.** Empirical discovery during 2026-04-23 → 2026-04-25 Console outage investigation: when the SSH firewall was `100.64.0.0/10`-only (per original 2026-04-23 deployment), DO Console timed out. journalctl evidence on `oslsr-home-app` revealed `droplet-agent` (DOTTY) connects via SSH from DO infrastructure IP ranges (e.g. `162.243.0.0/16`). When firewall was widened to dual-source `0.0.0.0/0` + `100.64.0.0/10`, Console immediately worked. **The original 2026-04-23 ISP/WebSocket-filtering hypothesis was wrong.** Architecture ADR-020 amended (V8.2-a1) with new §"DO Console Access Vector" subsection capturing the correction; runbook §1.1, §1.4, §2.2, §6.1 all updated; PRD V8.3 NFR9 + Operator Access bullet rewritten. Firewall is now defence-in-depth + DDoS attenuation; sshd-level key-only auth is the primary access control; fail2ban is load-bearing second-line defence. **This is the as-deployed posture going into Story 9-9 forward subtasks.** | Ensures future engineers understand the wide-open SSH firewall as a load-bearing decision (not laziness). Critical for AC#3 (port audit) interpretation, AC#4 (auth rate-limit audit) threat model, AC#9 (activity baseline) source-IP categorisation, and AC#10 (Cloudflare) future re-narrowing decisions. |
 | 2026-04-25 | **Story regenerated by Bob (SM) per SCP-2026-04-22 §A.5.** Original 6-AC Cloudflare-only structure refactored to 10-subtask expanded scope (8 remaining + 2 done). All preceding Change Log entries preserved verbatim. File List "Tailscale Hardening Subtask (2026-04-23)" preserved verbatim; new File List block added for "OS Upgrade Subtask (2026-04-25)". Original 2026-04-12 Field-Readiness Assessment preserved as Dev Notes subsection (the B+ assessment + Cloudflare-as-2-problems-solved insight are institutional knowledge). Status: `backlog → in-progress`. | A.5 special-handling instruction: do NOT delete or rewrite the Change Log; ADD new entries for the regenerated structure. Preservation discipline ensures the Tailscale + OS-upgrade subtask evidence remains the canonical record. |
+| 2026-05-01 | **Status-discipline pass + AC#10 stale-qualifier cleanup.** AC#10 heading "(DOMAIN-GATED)" → "(DONE 2026-04-27)" with full Cloudflare deployment evidence + commit hashes (`4c2d909`, `bf98931`, `1383373`). AC#11 baseline updated 4,191 → 4,193 (Story 9-8 Task 7.1 added 2 tests). Self-hosted GH Actions runner re-narrowing follow-up flagged as separate SM-authored story (recommend Story 9-14). | BMAD methodology hygiene — keep status documents accurately reflect as-shipped state. Stale qualifiers misdirect future operators. |
+| 2026-05-01 | **Subtask 6 COMPLETE — Telegram push channel for CRITICAL alerts (AC#6, FRC item #5).** Created `apps/api/src/services/alerting/telegram-channel.ts` (sendCriticalTelegramAlert) with 10-test coverage (`__tests__/telegram-channel.test.ts` — payload shape, escalation context, missing-token skip, missing-chat-id skip, NODE_ENV=test skip, VITEST skip, network-error swallow, non-2xx-response swallow, queue_waiting metric key with colon). Wired into `apps/api/src/services/alert.service.ts` `queueAlert()` — fires on every state transition into `critical`, fire-and-forget, inherits per-metric 5-min cooldown + 3/hour rate limit from upstream `queueAlertWithCooldown` caller. Resolved transitions deliberately do NOT ping Telegram. Email digest preserved per its own 30-min cooldown for full audit trail. Operator validated transport end-to-end via curl heartbeat from VPS before any code shipped (phone vibrated within 1-3 sec). `.env.example` extended with `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` (with full setup recipe + curl verification snippet). Runbook `docs/emergency-recovery-runbook.md` §1.7 credentials table + new §1.8 alert routing matrix (channels in use, severity → channel matrix, CRITICAL thresholds reference, quarterly drill, operator-changes-phone procedure, bot-token-leak rotation). Tests: 10/10 new + 10/10 existing alert.service unchanged + full API suite 1,833 passed + 7 skipped (1,840 total — +10 net from telegram tests, zero regressions). | **FRC item #5 closed** — field-readiness-blocking alerting tier delivered. The 2026-04-20 incident's 19-hour detection-to-response gap is now closed at the channel level. CRITICAL alerts → operator's phone vibrates in 1-3 seconds. fail2ban + CSP-violation-rate alert sources deferred as follow-up (require new metric collectors not yet in place). FRC table flip in `epics.md` deferred to next SM sprint-planning pass to keep canonical authoring flow. |
