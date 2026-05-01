@@ -24,6 +24,26 @@ describe('CSP Header Integration', () => {
     expect(csp).toContain('https://*.hcaptcha.com');
   });
 
+  // Story 9-8 promotion gate: violations from the 18-day Report-Only window
+  // identified two missing allowlist entries needed before flipping to enforcing.
+  // Assertions are positional (regex-anchored to the specific directive) so a
+  // future regression that moves the URL into a different directive would fail.
+  it('should allowlist Cloudflare Browser Insights beacon in script-src', async () => {
+    const res = await request(app).get('/health');
+    const csp = res.headers['content-security-policy-report-only'];
+    const scriptSrcMatch = csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
+    expect(scriptSrcMatch).not.toBeNull();
+    expect(scriptSrcMatch![1]).toContain('https://static.cloudflareinsights.com');
+  });
+
+  it('should allowlist Google Sign-In stylesheet in style-src', async () => {
+    const res = await request(app).get('/health');
+    const csp = res.headers['content-security-policy-report-only'];
+    const styleSrcMatch = csp.match(/(?:^|;)\s*style-src\s+([^;]+)/);
+    expect(styleSrcMatch).not.toBeNull();
+    expect(styleSrcMatch![1]).toContain('https://accounts.google.com');
+  });
+
   it('should contain object-src none', async () => {
     const res = await request(app).get('/health');
     const csp = res.headers['content-security-policy-report-only'];
@@ -73,8 +93,13 @@ describe('CSP Header Integration', () => {
 
     // Story 9-8: script-src-attr pinned explicitly (was implicit Helmet default
     // before 9-8 — made explicit so the csp-parity test can compare cleanly
-    // against the nginx mirror without false-positive drift).
-    expect(csp).toContain("script-src-attr 'none'");
+    // against the nginx mirror without false-positive drift). Anchored regex
+    // ensures the value is genuinely in the script-src-attr directive (a naked
+    // toContain would pass even if "script-src-attr 'none'" appeared as a
+    // substring of an unrelated directive).
+    const scriptSrcAttrMatch = csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/);
+    expect(scriptSrcAttrMatch).not.toBeNull();
+    expect(scriptSrcAttrMatch![1].trim()).toBe("'none'");
   });
 
   it('should contain report-to directive', async () => {

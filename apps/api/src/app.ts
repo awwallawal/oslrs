@@ -143,11 +143,13 @@ export const cspDirectives = {
         "https://accounts.google.com",
         "https://hcaptcha.com",
         "https://*.hcaptcha.com",
+        "https://static.cloudflareinsights.com",
       ],
       styleSrc: [
         "'self'",
         "'unsafe-inline'",
         "https://fonts.googleapis.com",
+        "https://accounts.google.com",
         "https://hcaptcha.com",
         "https://*.hcaptcha.com",
       ],
@@ -186,7 +188,12 @@ export const cspDirectives = {
       // mis-flag an implicit-vs-explicit directive as drift, so we pin it here.
       scriptSrcAttr: ["'none'"],
       reportUri: ["/api/v1/csp-report"],
-      reportTo: "csp-endpoint",
+      // Helmet's directives type is `Iterable<string>`. A bare string is
+      // technically iterable (over characters) and Helmet special-cases it,
+      // but the array shape is the canonical form and matches every other
+      // directive — change made by L4 (code-review 2026-05-01) to reduce
+      // upgrade fragility.
+      reportTo: ["csp-endpoint"],
   ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
 };
 
