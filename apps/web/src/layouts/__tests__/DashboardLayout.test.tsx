@@ -48,6 +48,7 @@ function createMockAuthValue(user: AuthUser | null, isLoading = false) {
     requiresReAuth: false,
     reAuthAction: null,
     loginStaff: vi.fn(),
+    completeStaffLoginAfterMfa: vi.fn(),
     loginPublic: vi.fn(),
     loginWithGoogle: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
