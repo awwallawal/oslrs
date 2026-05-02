@@ -46,10 +46,12 @@ describe('NIN Schema', () => {
   });
 
   it('should fail on invalid NIN checksum', () => {
-    const result = ninSchema.safeParse('12345678901'); // Invalid checksum
+    const result = ninSchema.safeParse('12345678901'); // Invalid Modulus 11 checksum
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.errors[0].message).toContain('checksum');
+      // Error message was reworded to UX-friendlier "please check for typos"
+      // instead of mentioning the technical "checksum" word.
+      expect(result.error.errors[0].message).toContain('Invalid NIN');
     }
   });
 });

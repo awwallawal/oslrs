@@ -57,6 +57,7 @@ function mockAuth(role: string) {
     unsyncedCount: 0,
     showLogoutWarning: false,
     cancelLogout: vi.fn(),
+    completeStaffLoginAfterMfa: vi.fn(),
   } as unknown as ReturnType<typeof AuthContext.useAuth>);
 }
 

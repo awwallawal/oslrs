@@ -65,6 +65,8 @@ full-test.log
 table_discussion.txt
 test-output-v2.txt
 test-run-output.txt
+# Scratch files at repo root (baseline-report tooling, dev experiments, etc.)
+_tmp_*
 
 # Build artifacts (generated)
 *.tsbuildinfo

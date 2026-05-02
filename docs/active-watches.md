@@ -72,6 +72,18 @@
 
 **Story 9-10 H2** — AC#7 ioredis regression test deferred. Either write before AC#3 closes (2026-05-04 window) OR explicitly accept as long-term LOW with rationale documented at story closure.
 
+**`prep-input-sanitisation-layer` operator step** (added 2026-05-02 from code-review F4): after deploy lands, SSH to VPS via Tailscale and run:
+```sh
+ssh root@oslsr-home-app
+cd ~/oslrs/apps/api
+pnpm exec tsx src/scripts/backfill-input-sanitisation.ts --dry-run   # review planned changes first
+pnpm exec tsx src/scripts/backfill-input-sanitisation.ts             # run for real
+pnpm exec tsx src/scripts/report-backfill-failures.ts                # check zero failures
+# Optionally tighten the constraint on legacy rows after back-fill clean:
+# psql $DATABASE_URL -c "ALTER TABLE respondents VALIDATE CONSTRAINT chk_respondents_phone_number_e164;"
+```
+This is what gates **FRC item #4** flip in `epics.md` (per AC#10). Cannot be auto-deployed because it writes PII fields and must be operator-approved.
+
 **Story 9-13 deferred follow-ups** (added 2026-05-02 from AC#13 code-review of uncommitted working tree):
 - **F5 [MEDIUM]**: Controller integration test suite (~10-15 tests) — Task 6.2 originally deferred; ~2-hour pass before story → done
 - **F9 [MEDIUM]**: Backup-code-used email notification (AC#4 partial) — needs template-pattern decision; story Change Log corrected to reflect "10 of 11 ACs" not "11 of 11"

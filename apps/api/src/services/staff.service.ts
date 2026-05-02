@@ -9,6 +9,11 @@ import { AppError, generateInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
 import { AuditService } from './audit.service.js';
+import {
+  normaliseEmail,
+  normaliseNigerianPhone,
+  normaliseFullName,
+} from '../lib/normalise/index.js';
 import { eq, ilike, or, count, and, SQL, notInArray } from 'drizzle-orm';
 import { queueStaffInvitationEmail } from '../queues/email.queue.js';
 import { EmailService } from './email.service.js';
@@ -586,12 +591,26 @@ export class StaffService {
     data: CreateStaffDto,
     actorId: string
   ): Promise<{ user: typeof users.$inferSelect; emailStatus: EmailStatus }> {
-    const validation = createStaffSchema.safeParse(data);
+    // Pre-normalise PII fields so the DB always holds canonical values.
+    // Warnings are logged (no metadata column on `users`); back-fill flow
+    // for legacy rows lives in scripts/backfill-input-sanitisation.ts.
+    const normalised = StaffService.normaliseStaffPii({
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+    });
+
+    const validation = createStaffSchema.safeParse({
+      ...data,
+      fullName: normalised.fullName,
+      email: normalised.email,
+      phone: normalised.phone,
+    });
     if (!validation.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid staff data', 400, { errors: validation.error.errors });
     }
 
-    const { fullName, email, phone, roleId, lgaId } = data;
+    const { fullName, email, phone, roleId, lgaId } = validation.data;
 
     // Fetch role to verify LGA requirement
     const roleRecord = await db.query.roles.findFirst({
@@ -745,6 +764,45 @@ export class StaffService {
           roleId: roleRecord.id,
           lgaId: lgaId
       }, actorId);
+  }
+
+  /**
+   * Normalise staff PII fields (full name, email, phone) using the central
+   * normalisation library. Warnings are logged via pino — `users` has no
+   * metadata column, so the audit trail for staff-side warnings lives in
+   * application logs (Pino structured events).
+   *
+   * Returns canonical values; never throws. Used by `createManual` and (via
+   * `processImportRow → createManual`) the bulk CSV import path.
+   */
+  private static normaliseStaffPii(input: {
+    fullName: string;
+    email: string;
+    phone: string;
+  }): { fullName: string; email: string; phone: string } {
+    const nameRes = normaliseFullName(input.fullName);
+    const emailRes = normaliseEmail(input.email);
+    const phoneRes = normaliseNigerianPhone(input.phone);
+
+    const warnings = [
+      ...nameRes.warnings.map((w) => `full_name:${w}`),
+      ...emailRes.warnings.map((w) => `email:${w}`),
+      ...phoneRes.warnings.map((w) => `phone:${w}`),
+    ];
+
+    if (warnings.length > 0) {
+      logger.warn({
+        event: 'staff.input_normalisation_warnings',
+        email: emailRes.value || input.email,
+        warnings,
+      });
+    }
+
+    return {
+      fullName: nameRes.value || input.fullName,
+      email: emailRes.value || input.email,
+      phone: phoneRes.value || input.phone,
+    };
   }
 
   /**

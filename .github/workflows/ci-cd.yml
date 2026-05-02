@@ -705,6 +705,12 @@ jobs:
             # script exits 0 even if EmailService is degraded so deploy doesn't break.
             cd apps/api && pnpm tsx scripts/notify-mfa-grace.ts || true && cd ~/oslrs
 
+            # prep-input-sanitisation-layer: applies the chk_respondents_phone_number_e164
+            # NOT VALID constraint that Drizzle's db:push cannot express. Idempotent.
+            # Back-fill script is operator-gated (NOT auto-run from deploy) — see
+            # docs/active-watches.md for the operator runbook entry.
+            cd apps/api && pnpm tsx scripts/migrate-input-sanitisation-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

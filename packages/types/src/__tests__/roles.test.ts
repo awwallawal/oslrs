@@ -30,10 +30,14 @@ describe('Shared Role Constants', () => {
   });
 
   describe('FIELD_ROLES', () => {
-    it('contains exactly ENUMERATOR and SUPERVISOR', () => {
-      expect(FIELD_ROLES).toHaveLength(2);
+    it('contains ENUMERATOR, SUPERVISOR, and DATA_ENTRY_CLERK', () => {
+      // DATA_ENTRY_CLERK was added by commit 9ffe45c (prep-8 role-based
+      // activation wizard) — field roles are now LGA-bound roles that go
+      // through the full 5-step activation wizard.
+      expect(FIELD_ROLES).toHaveLength(3);
       expect(FIELD_ROLES).toContain(UserRole.ENUMERATOR);
       expect(FIELD_ROLES).toContain(UserRole.SUPERVISOR);
+      expect(FIELD_ROLES).toContain(UserRole.DATA_ENTRY_CLERK);
     });
   });
 

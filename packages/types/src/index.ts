@@ -23,3 +23,4 @@ export * from './monitoring.js';
 export * from './marketplace.js';
 export * from './analytics.js';
 export * from './skills-taxonomy.js';
+export * from './normalised.js';

@@ -15,7 +15,12 @@ import { eq } from 'drizzle-orm';
 import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
-import type { RespondentSource } from '../db/schema/respondents.js';
+import type { RespondentMetadata, RespondentSource } from '../db/schema/respondents.js';
+import {
+  normaliseFullName,
+  normaliseNigerianPhone,
+  normaliseDate,
+} from '../lib/normalise/index.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -80,6 +85,72 @@ interface ExtractedRespondentData {
   lgaId?: string;
   consentMarketplace: boolean;
   consentEnriched: boolean;
+}
+
+/**
+ * Normalise the PII fields on extracted respondent data prior to insert.
+ *
+ * Returns the canonical values plus a metadata object containing any
+ * normalisation warnings (or `null` if no warnings fired). Exported for
+ * direct unit testing; consumed by `findOrCreateRespondent`.
+ *
+ * Warning codes are field-prefixed (`first_name:all_caps`, `phone_number:...`)
+ * so the audit-log viewer (Story 9-11) can filter by `(field, code)` tuple.
+ */
+export function normaliseRespondentPii(data: ExtractedRespondentData): {
+  canonical: {
+    firstName: string | null;
+    lastName: string | null;
+    dateOfBirth: string | null;
+    phoneNumber: string | null;
+  };
+  metadata: RespondentMetadata | null;
+} {
+  const warnings: string[] = [];
+  const canonical = {
+    firstName: data.firstName ?? null,
+    lastName: data.lastName ?? null,
+    dateOfBirth: data.dateOfBirth ?? null,
+    phoneNumber: data.phoneNumber ?? null,
+  };
+
+  // `firstName` and `lastName` are stored as separate columns, so the
+  // `single_word` warning from `normaliseFullName` is a guaranteed false
+  // positive for these fields — we suppress it. All other warnings (e.g.
+  // `all_caps`) remain meaningful and pass through.
+  if (data.firstName) {
+    const r = normaliseFullName(data.firstName);
+    canonical.firstName = r.value || null;
+    for (const w of r.warnings) {
+      if (w !== 'single_word') warnings.push(`first_name:${w}`);
+    }
+  }
+  if (data.lastName) {
+    const r = normaliseFullName(data.lastName);
+    canonical.lastName = r.value || null;
+    for (const w of r.warnings) {
+      if (w !== 'single_word') warnings.push(`last_name:${w}`);
+    }
+  }
+  if (data.phoneNumber) {
+    const r = normaliseNigerianPhone(data.phoneNumber);
+    canonical.phoneNumber = r.value || null;
+    for (const w of r.warnings) warnings.push(`phone_number:${w}`);
+  }
+  if (data.dateOfBirth) {
+    const r = normaliseDate(data.dateOfBirth, 'DMY');
+    // Persist as canonical ISO YYYY-MM-DD string; column stays TEXT until
+    // the deferred strict-type migration runs after back-fill is verified.
+    canonical.dateOfBirth = r.value
+      ? r.value.toISOString().slice(0, 10)
+      : (data.dateOfBirth ?? null);
+    for (const w of r.warnings) warnings.push(`date_of_birth:${w}`);
+  }
+
+  const metadata: RespondentMetadata | null =
+    warnings.length > 0 ? { normalisation_warnings: warnings } : null;
+
+  return { canonical, metadata };
 }
 
 /**
@@ -335,19 +406,25 @@ export class SubmissionProcessingService {
       );
     }
 
+    // Normalise incoming PII before insert so the DB always holds canonical
+    // values; non-blocking warnings are merged into `respondents.metadata`
+    // for super-admin review (Audit Log Viewer — Story 9-11).
+    const { canonical, metadata } = normaliseRespondentPii(data);
+
     // Create new respondent
     try {
       const [created] = await db.insert(respondents).values({
         nin: data.nin,
-        firstName: data.firstName ?? null,
-        lastName: data.lastName ?? null,
-        dateOfBirth: data.dateOfBirth ?? null,
-        phoneNumber: data.phoneNumber ?? null,
+        firstName: canonical.firstName,
+        lastName: canonical.lastName,
+        dateOfBirth: canonical.dateOfBirth,
+        phoneNumber: canonical.phoneNumber,
         lgaId: data.lgaId ?? null,
         consentMarketplace: data.consentMarketplace,
         consentEnriched: data.consentEnriched,
         source,
         submitterId: submitterId ?? null,
+        metadata,
       }).returning();
 
       return { id: created.id, _isNew: true };

@@ -70,6 +70,8 @@ export const AUDIT_ACTIONS = {
   SYSTEM_BACKUP: 'system.backup',
   SYSTEM_RESTORE: 'system.restore',
   SYSTEM_MIGRATION: 'system.migration',
+  // Data Hygiene (prep-input-sanitisation-layer)
+  RESPONDENT_BACKFILLED_NORMALISATION: 'respondent.backfilled_normalisation',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

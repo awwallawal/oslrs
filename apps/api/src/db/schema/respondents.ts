@@ -10,11 +10,21 @@
  * - submitterId tracks who first submitted data for this respondent
  */
 
-import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, jsonb, index } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 
 export const respondentSourceTypes = ['enumerator', 'public', 'clerk'] as const;
 export type RespondentSource = typeof respondentSourceTypes[number];
+
+/**
+ * Shape of the `respondents.metadata` JSONB column.
+ * Currently records input-normalisation warnings and back-fill failure flags.
+ * Extend as new metadata categories are added; treat as merge-on-write.
+ */
+export interface RespondentMetadata {
+  normalisation_warnings?: string[];
+  backfill_failed?: true;
+}
 
 export const respondents = pgTable('respondents', {
   id: uuid('id').primaryKey().$defaultFn(() => uuidv7()),
@@ -34,6 +44,11 @@ export const respondents = pgTable('respondents', {
   // Source tracking
   source: text('source', { enum: respondentSourceTypes }).notNull().default('enumerator'),
   submitterId: text('submitter_id'), // First submitter user ID
+
+  // Free-form metadata — currently used to surface input-normalisation warnings
+  // (`normalisation_warnings: string[]`) and back-fill failure flags
+  // (`backfill_failed: true`). Pattern matches audit.ts:11, fraud-detections.ts:69-73.
+  metadata: jsonb('metadata').$type<RespondentMetadata>(),
 
   // Standard timestamps
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),
