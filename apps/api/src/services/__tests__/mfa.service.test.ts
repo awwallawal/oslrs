@@ -208,17 +208,26 @@ describe('MfaService', () => {
       const userId = await createSuperAdminUser(uniqueEmail());
       await MfaService.enrollSecret(userId, 'lockout@example.com');
 
-      // 4 wrong attempts — should NOT lock.
+      // F24 (code-review 2026-05-02): each wrong attempt MUST be a distinct
+      // code because F7's replay-protection (sha256 of code stored in Redis
+      // with EX 30) rejects the SAME code's second submission with
+      // MFA_REPLAY_REJECTED instead of MFA_INVALID_CODE. Original test used
+      // '111111' four times then '222222' which only registered as 1+1=2
+      // failures (replay-rejected attempts don't increment the lockout
+      // counter), so the 5th-failure threshold was never hit.
+      const wrongCodes = ['111111', '222222', '333333', '444444', '555555'];
+
+      // 4 wrong (distinct) attempts — should NOT lock.
       for (let i = 0; i < 4; i++) {
-        await expect(MfaService.verifyCode(userId, '111111')).rejects.toMatchObject({
+        await expect(MfaService.verifyCode(userId, wrongCodes[i])).rejects.toMatchObject({
           code: 'MFA_INVALID_CODE',
         });
       }
       let fresh = await db.query.users.findFirst({ where: eq(users.id, userId) });
       expect(fresh?.mfaLockedUntil).toBeNull();
 
-      // 5th wrong attempt trips the lockout
-      await expect(MfaService.verifyCode(userId, '222222')).rejects.toMatchObject({
+      // 5th wrong attempt (distinct code) trips the lockout
+      await expect(MfaService.verifyCode(userId, wrongCodes[4])).rejects.toMatchObject({
         code: 'MFA_INVALID_CODE',
       });
       fresh = await db.query.users.findFirst({ where: eq(users.id, userId) });

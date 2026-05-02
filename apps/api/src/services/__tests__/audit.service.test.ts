@@ -162,8 +162,12 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 23 total action types across all categories', () => {
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(23);
+    it('should have 31 total action types across all categories', () => {
+      // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
+      // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
+      // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
+      // Future stories: bump this count + comment when adding new audit actions.
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(31);
     });
   });
 
