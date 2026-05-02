@@ -18,10 +18,25 @@
  * `migrate-audit-immutable.ts` runner. Runs AFTER `db:push`.
  *
  * Local invocation: `pnpm --filter @oslsr/api exec tsx scripts/migrate-mfa-init.ts`
+ *
+ * F14 (cross-story fix from prep-input-sanitisation code-review 2026-05-02):
+ * uses `pg` package (already in apps/api deps) instead of the `postgres`
+ * package which was NOT a project dep. Original implementation imported
+ * `import postgres from 'postgres'` and crashed at runtime in CI deploy:
+ *   ERR_MODULE_NOT_FOUND: Cannot find package 'postgres'
+ * Story 9-13's Dev Agent Record DID flag this ("import-of-postgres package
+ * broken on local; applied via tsx one-shot using existing pg pool") but
+ * never fixed the underlying script — so every deploy after Story 9-13's
+ * commit silently failed at the migrate-mfa-init step. Pattern now matches
+ * the working migrate-audit-immutable.ts (pg.Pool with raw SQL strings).
  */
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { sql } from 'drizzle-orm';
+import pg from 'pg';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -29,14 +44,13 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const client = postgres(databaseUrl, { max: 1 });
-const db = drizzle(client);
+const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
 
 async function run(): Promise<void> {
   console.log('[migrate-mfa-init] Starting Story 9-13 MFA init migration...');
 
   // 1. Partial index for fast unused-backup-code lookups.
-  await db.execute(sql`
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_user_backup_codes_unused
       ON user_backup_codes (user_id, used_at)
       WHERE used_at IS NULL;
@@ -45,20 +59,20 @@ async function run(): Promise<void> {
 
   // 2. Seed 7-day grace_until for active super_admins missing one.
   // Idempotent — only fires when grace_until IS NULL.
-  const seeded = await db.execute(sql`
+  const seeded = await pool.query<{ id: string; email: string }>(`
     UPDATE users
        SET mfa_grace_until = NOW() + interval '7 days'
      WHERE role_id IN (SELECT id FROM roles WHERE name = 'super_admin')
        AND status = 'active'
        AND mfa_grace_until IS NULL
        AND mfa_enabled = false
-    RETURNING id, email;
+    RETURNING id, email
   `);
 
-  const seededRows = seeded.length ?? 0;
+  const seededRows = seeded.rowCount ?? 0;
   if (seededRows > 0) {
     console.log(`[migrate-mfa-init] ✓ Seeded mfa_grace_until for ${seededRows} super_admin row(s):`);
-    for (const row of seeded as Array<{ email: string }>) {
+    for (const row of seeded.rows) {
       console.log(`[migrate-mfa-init]   - ${row.email}`);
     }
   } else {
@@ -74,5 +88,5 @@ run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await client.end();
+    await pool.end();
   });

@@ -12,13 +12,24 @@
  *
  * Local invocation: `pnpm --filter @oslsr/api exec tsx scripts/migrate-input-sanitisation-init.ts`
  *
+ * F14 (code-review 2026-05-02): uses `pg` package (already in apps/api deps)
+ * instead of the missing `postgres` package that the original implementation
+ * borrowed from migrate-mfa-init.ts. Pattern matches the working
+ * migrate-audit-immutable.ts. The `postgres` package is NOT a project dep;
+ * Story 9-13's Dev Agent Record flagged this but never fixed the underlying
+ * script — both runners now use the canonical pg.Pool path.
+ *
  * Note: this runner does NOT run the back-fill script — back-fill is operator-
  * gated (must run with `--dry-run` first, then operator decides). See
  * `docs/active-watches.md` for the operator runbook entry.
  */
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { sql } from 'drizzle-orm';
+import pg from 'pg';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -26,8 +37,7 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const client = postgres(databaseUrl, { max: 1 });
-const db = drizzle(client);
+const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
 
 async function run(): Promise<void> {
   console.log('[migrate-input-sanitisation-init] Starting prep-input-sanitisation-layer migration...');
@@ -35,7 +45,7 @@ async function run(): Promise<void> {
   // CHECK constraint for phone E.164 — NOT VALID so legacy non-canonical rows
   // aren't immediately rejected. Operator runs the back-fill script + then
   // VALIDATE CONSTRAINT separately when ready.
-  await db.execute(sql`
+  await pool.query(`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -68,5 +78,5 @@ run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await client.end();
+    await pool.end();
   });
