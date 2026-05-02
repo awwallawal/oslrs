@@ -72,6 +72,12 @@
 
 **Story 9-10 H2** — AC#7 ioredis regression test deferred. Either write before AC#3 closes (2026-05-04 window) OR explicitly accept as long-term LOW with rationale documented at story closure.
 
+**Story 9-13 deferred follow-ups** (added 2026-05-02 from AC#13 code-review of uncommitted working tree):
+- **F5 [MEDIUM]**: Controller integration test suite (~10-15 tests) — Task 6.2 originally deferred; ~2-hour pass before story → done
+- **F9 [MEDIUM]**: Backup-code-used email notification (AC#4 partial) — needs template-pattern decision; story Change Log corrected to reflect "10 of 11 ACs" not "11 of 11"
+- **F10 [LOW]**: Cookie path `/api/v1/auth` duplicated between `mfa.controller.ts` + `auth.controller.ts` — extract to `lib/cookie.ts` shared constant when convenient
+- **F13 [LOW]**: `mfa_secret` plaintext storage with `TODO(9-9)` marker — **auto-converts when Story 9-9 AC#5 (backup AES-256 encryption) ships**. Update this entry on that day.
+
 ---
 
 ## 🎯 Field Readiness Certificate — current state

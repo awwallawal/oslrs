@@ -153,6 +153,8 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Survey Analytics', href: '/dashboard/super-admin/survey-analytics', icon: BarChart3 },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
+    // Story 9-13 — TOTP MFA enrollment + management
+    { label: 'MFA Settings', href: '/dashboard/super-admin/security/mfa', icon: Shield },
   ],
 };
 

@@ -99,10 +99,23 @@ async function authFetch<T>(
 }
 
 /**
- * Staff login
+ * Story 9-13 — staff login may return either a normal `LoginResponse` or a
+ * 2-step pending challenge when MFA is enrolled. The discriminator is
+ * `requiresMfa: true`.
  */
-export async function staffLogin(request: LoginRequest): Promise<LoginResponse> {
-  return authFetch<LoginResponse>('/auth/staff/login', {
+export interface MfaChallengeResponse {
+  requiresMfa: true;
+  mfaChallengeToken: string;
+  expiresIn: number;
+}
+
+export type StaffLoginResponse = LoginResponse | MfaChallengeResponse;
+
+/**
+ * Staff login. May return a 2-step MFA challenge — see `StaffLoginResponse`.
+ */
+export async function staffLogin(request: LoginRequest): Promise<StaffLoginResponse> {
+  return authFetch<StaffLoginResponse>('/auth/staff/login', {
     method: 'POST',
     body: JSON.stringify(request),
   });
@@ -187,9 +200,11 @@ export async function reAuthenticate(
 }
 
 /**
- * Get current user info (Story 9.1: returns full profile fields)
+ * Get current user info (Story 9.1: returns full profile fields).
+ * Story 9-13 — `mfaEnabled` and `mfaGraceUntil` added so the dashboard can
+ * render the grace banner without a separate request.
  */
-export async function getCurrentUser(accessToken: string): Promise<{
+export interface CurrentUserResponse {
   id: string;
   email: string;
   fullName: string;
@@ -199,18 +214,12 @@ export async function getCurrentUser(accessToken: string): Promise<{
   status: string;
   createdAt: string;
   rememberMe: boolean;
-}> {
-  return authFetch<{
-    id: string;
-    email: string;
-    fullName: string;
-    phone: string | null;
-    role: string;
-    lgaId?: string;
-    status: string;
-    createdAt: string;
-    rememberMe: boolean;
-  }>(
+  mfaEnabled?: boolean;
+  mfaGraceUntil?: string | null;
+}
+
+export async function getCurrentUser(accessToken: string): Promise<CurrentUserResponse> {
+  return authFetch<CurrentUserResponse>(
     '/auth/me',
     {
       method: 'GET',

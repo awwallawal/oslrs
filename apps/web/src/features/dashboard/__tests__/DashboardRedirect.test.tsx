@@ -64,6 +64,7 @@ function TestWrapper({ user, isLoading = false, initialEntries = ['/dashboard'] 
     unsyncedCount: 0,
     showLogoutWarning: false,
     cancelLogout: vi.fn(),
+    completeStaffLoginAfterMfa: vi.fn(),
   };
 
   return (

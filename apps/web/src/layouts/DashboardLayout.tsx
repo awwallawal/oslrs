@@ -28,6 +28,8 @@ import { useAuth } from '../features/auth/context/AuthContext';
 import { useServiceWorker } from '../hooks/useServiceWorker';
 import { getSidebarItems } from '../features/dashboard/config/sidebarConfig';
 import { useUnreadCount } from '../features/dashboard/hooks/useMessages';
+import { useMfaStatus } from '../features/security/mfa/hooks/useMfaStatus';
+import { MfaGraceBanner } from '../features/security/mfa/components/MfaGraceBanner';
 import { DashboardHeader } from './components/DashboardHeader';
 import { DashboardSidebar } from './components/DashboardSidebar';
 import { DashboardBottomNav } from './components/DashboardBottomNav';
@@ -42,6 +44,24 @@ import {
 import { cn } from '../lib/utils';
 import { LAYOUT } from '../lib/constants';
 import { toast } from 'sonner';
+
+/**
+ * Story 9-13 AC#5c — persistent banner during MFA grace period (super_admin only).
+ * Renders nothing for other roles, when MFA is already enabled, or when no
+ * grace deadline is set.
+ */
+function MfaGraceBannerSlot() {
+  const { user } = useAuth();
+  const { data } = useMfaStatus();
+  if (!user || user.role !== 'super_admin') return null;
+  if (!data || data.mfaEnabled) return null;
+  if (!data.mfaGraceUntil) return null;
+  return (
+    <div className="px-4 pt-4">
+      <MfaGraceBanner graceUntil={data.mfaGraceUntil} />
+    </div>
+  );
+}
 
 /**
  * Skip to main content link for accessibility (WCAG 2.1 AA requirement)
@@ -149,6 +169,7 @@ export function DashboardLayout() {
               )}
               tabIndex={-1}
             >
+              <MfaGraceBannerSlot />
               <Outlet />
             </main>
           </div>

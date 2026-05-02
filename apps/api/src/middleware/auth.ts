@@ -91,6 +91,15 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     // Attach user to request
     req.user = decoded;
 
+    // Story 9-13 — MFA grace-period gate. After grace expires for a super_admin
+    // who hasn't enrolled, every route is blocked except the MFA enrollment +
+    // session-basic endpoints. Skip the DB hit for non-super_admin roles.
+    if (decoded.role === 'super_admin') {
+      const { mfaGraceCheck } = await import('./mfa-grace.js');
+      const graceError = await mfaGraceCheck(req);
+      if (graceError) return next(graceError);
+    }
+
     // Attach View-As state for Super Admins (Story 6-7 — server-side safety net)
     // Only Super Admins can have View-As sessions; skip Redis lookup for all other roles
     if (decoded.role === 'super_admin') {

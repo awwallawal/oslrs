@@ -133,6 +133,19 @@ export class AuthController {
         userAgent
       );
 
+      // Story 9-13 — 2-step pending: hand the challenge token back to the
+      // client, no JWT yet. Step-2 issues the actual access/refresh tokens.
+      if ('requiresMfa' in result && result.requiresMfa) {
+        res.status(200).json({
+          data: {
+            requiresMfa: true,
+            mfaChallengeToken: result.mfaChallengeToken,
+            expiresIn: result.expiresIn,
+          },
+        });
+        return;
+      }
+
       // Set refresh token as httpOnly cookie
       const refreshCookieMaxAge = rememberMe
         ? 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -452,6 +465,9 @@ export class AuthController {
           status: users.status,
           lgaId: users.lgaId,
           createdAt: users.createdAt,
+          // Story 9-13 — MFA state surfaced for the dashboard grace banner.
+          mfaEnabled: users.mfaEnabled,
+          mfaGraceUntil: users.mfaGraceUntil,
         })
         .from(users)
         .where(eq(users.id, req.user.sub));

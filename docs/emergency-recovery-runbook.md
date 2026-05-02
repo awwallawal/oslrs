@@ -398,6 +398,55 @@ Email yourself the output files. Then:
 | Revoke old laptop's public key from VPS `authorized_keys` | Same day |
 | Change DO account password | Same day (2FA TOTP seed may have been on laptop) |
 
+### 3.6 Lost authenticator device (MFA recovery)
+
+**Scenario:** A super_admin (Builder primary or `admin@oyoskills.com` break-glass) has lost their authenticator app — phone reset, app uninstalled without backup, device stolen — and either has no backup codes saved OR has consumed all 8.
+
+**Decision tree:**
+
+1. **Have backup codes?** → log in with one (10-digit code instead of 6-digit TOTP at the challenge page). Once in, regenerate the backup-code set immediately and re-enrol your authenticator app. Done.
+
+2. **No backup codes, but the OTHER super_admin is reachable** → that's the load-bearing recovery path. The reachable super_admin signs in normally and runs the admin-tool reset:
+
+   ```bash
+   ssh root@oslsr-home-app
+   cd /root/oslrs
+   pnpm --filter @oslsr/api exec tsx -e "
+     import { db } from './apps/api/src/db/index.js';
+     import { users, userBackupCodes } from './apps/api/src/db/schema/index.js';
+     import { eq } from 'drizzle-orm';
+     const targetEmail = 'TARGET_EMAIL_HERE';
+     const target = await db.query.users.findFirst({ where: eq(users.email, targetEmail) });
+     if (!target) { console.error('user not found'); process.exit(1); }
+     await db.transaction(async (tx) => {
+       await tx.delete(userBackupCodes).where(eq(userBackupCodes.userId, target.id));
+       await tx.update(users).set({ mfaEnabled: false, mfaSecret: null, mfaLockedUntil: null, mfaGraceUntil: new Date(Date.now() + 7*24*60*60*1000) }).where(eq(users.id, target.id));
+     });
+     console.log('MFA reset for', targetEmail);
+     process.exit(0);
+   "
+   ```
+
+   The reset is itself audit-logged via the `users.update` audit event chain. The target user can now log in with password alone, then re-enrol within the new 7-day grace window.
+
+3. **Both super_admins lost authenticators with no backup codes** → SSH directly to the VPS and run the script above against either account. This is the documented escape valve for the "single active super_admin" failure mode flagged in Story 9-13 Risks #5.
+
+**Pre-flight sanity check** (the kind that fails silently after a kernel-related clock reset):
+
+```bash
+ssh root@oslsr-home-app
+timedatectl status
+```
+
+Look for `System clock synchronized: yes` and `NTP service: active`. TOTP codes are time-based; if the VPS clock drifts more than 30 seconds, every legitimate code becomes invalid and recovery looks identical to "lost device". Re-enable NTP with:
+
+```bash
+timedatectl set-ntp true
+systemctl restart systemd-timesyncd
+```
+
+**MFA recovery is the load-bearing reason to maintain TWO active super_admin accounts** (Story 9-9 AC#8 + this section). If headcount drops to one, escalate immediately — the next lost-device incident becomes a DB-direct-recovery operation that requires the script above.
+
 ---
 
 ## 4. Regular hygiene tasks

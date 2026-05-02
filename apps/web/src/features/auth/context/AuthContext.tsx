@@ -109,10 +109,20 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   }
 }
 
+/**
+ * Story 9-13 — staff login may resolve with an MFA challenge instead of a
+ * full session. The caller should branch on `requiresMfa` to navigate to the
+ * MFA challenge page.
+ */
+export type StaffLoginOutcome =
+  | { requiresMfa: false }
+  | { requiresMfa: true; mfaChallengeToken: string; expiresIn: number };
+
 // Context interface
 interface AuthContextValue extends AuthState {
-  loginStaff: (request: LoginRequest) => Promise<void>;
+  loginStaff: (request: LoginRequest) => Promise<StaffLoginOutcome>;
   loginPublic: (request: LoginRequest) => Promise<void>;
+  completeStaffLoginAfterMfa: (response: LoginResponse, rememberMe: boolean) => Promise<void>;
   loginWithGoogle: (response: LoginResponse) => Promise<void>;
   logout: () => Promise<void>;
   confirmLogout: () => Promise<void>;
@@ -273,27 +283,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await claimLegacyRecords(userId);
   }, []);
 
-  // Staff login
-  const loginStaff = useCallback(async (request: LoginRequest) => {
+  // Staff login — may pause for MFA challenge before issuing tokens
+  const loginStaff = useCallback(async (request: LoginRequest): Promise<StaffLoginOutcome> => {
     dispatch({ type: 'AUTH_START' });
 
     try {
       const response = await authApi.staffLogin(request);
 
-      saveToken(response.accessToken);
+      // Story 9-13 — 2-step pending. Don't dispatch AUTH_SUCCESS; let caller
+      // navigate to /auth/mfa-challenge where step-2 completes the login.
+      if ('requiresMfa' in response && response.requiresMfa) {
+        dispatch({ type: 'CLEAR_ERROR' });
+        return {
+          requiresMfa: true,
+          mfaChallengeToken: response.mfaChallengeToken,
+          expiresIn: response.expiresIn,
+        };
+      }
+
+      // Type-narrow: at this point response is the LoginResponse branch
+      // (not the MfaChallengeResponse branch).
+      const loginResponse = response as LoginResponse;
+      saveToken(loginResponse.accessToken);
       updateActivity();
 
       dispatch({
         type: 'AUTH_SUCCESS',
         payload: {
-          user: response.user,
-          accessToken: response.accessToken,
+          user: loginResponse.user,
+          accessToken: loginResponse.accessToken,
           rememberMe: request.rememberMe || false,
         },
       });
 
-      scheduleTokenRefresh(response.expiresIn);
-      await initOfflineForUser(response.user.id);
+      scheduleTokenRefresh(loginResponse.expiresIn);
+      await initOfflineForUser(loginResponse.user.id);
+      return { requiresMfa: false };
     } catch (error) {
       const message = error instanceof AuthApiError
         ? error.message
@@ -302,6 +327,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   }, [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
+
+  // Story 9-13 — finalise staff login after a successful MFA verify on the
+  // challenge page. Wraps the same post-success bookkeeping as `loginStaff`
+  // so the MFA branch and the no-MFA branch end up in identical state.
+  const completeStaffLoginAfterMfa = useCallback(
+    async (response: LoginResponse, rememberMe: boolean) => {
+      saveToken(response.accessToken);
+      updateActivity();
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: {
+          user: response.user,
+          accessToken: response.accessToken,
+          rememberMe,
+        },
+      });
+      scheduleTokenRefresh(response.expiresIn);
+      await initOfflineForUser(response.user.id);
+    },
+    [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser],
+  );
 
   // Public login
   const loginPublic = useCallback(async (request: LoginRequest) => {
@@ -547,6 +593,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginStaff,
     loginPublic,
     loginWithGoogle,
+    completeStaffLoginAfterMfa,
     logout,
     confirmLogout,
     unsyncedCount,

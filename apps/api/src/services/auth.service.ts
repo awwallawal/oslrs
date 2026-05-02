@@ -8,7 +8,22 @@ import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
 import { AuditService } from './audit.service.js';
+import { MfaService } from './mfa.service.js';
 import pino from 'pino';
+
+/**
+ * Story 9-13 — `loginStaff` returns one of two shapes:
+ *   - normal: full session + tokens (when MFA is not required)
+ *   - 2-step pending: a short-lived challenge token (when MFA is enrolled)
+ *
+ * The login controller branches on `requiresMfa` to render the right HTTP
+ * response. Tests can discriminate via the same property.
+ */
+export type StaffLoginResult =
+  | (LoginResponse & { refreshToken: string; sessionId: string; requiresMfa?: false })
+  | { requiresMfa: true; mfaChallengeToken: string; expiresIn: number };
+
+const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
 
 const logger = pino({ name: 'auth-service' });
 
@@ -230,7 +245,7 @@ export class AuthService {
     rememberMe = false,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
+  ): Promise<StaffLoginResult> {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Find user by email
@@ -361,7 +376,66 @@ export class AuthService {
       );
     }
 
+    // Story 9-13 — MFA branch: when enrolled, defer JWT issuance to step-2.
+    // Reset failed-login counter here too; password was correct, only MFA remains.
+    if (user.mfaEnabled) {
+      await db.update(users)
+        .set({
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      const mfaChallengeToken = await MfaService.mintChallengeToken({
+        userId: user.id,
+        email: user.email,
+        rememberMe,
+      });
+
+      logger.info({
+        event: 'auth.login_mfa_required',
+        userId: user.id,
+        rememberMe,
+        ipAddress,
+      });
+
+      return {
+        requiresMfa: true,
+        mfaChallengeToken,
+        expiresIn: MFA_CHALLENGE_TTL_SECONDS,
+      };
+    }
+
     // Success - create session and tokens
+    return this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+  }
+
+  /**
+   * Story 9-13 — complete a staff login after a successful TOTP verify on
+   * the login step-2 endpoint. Re-validates the user (status / lockout could
+   * have flipped between step-1 and step-2) and creates the session.
+   */
+  static async completeStaffLoginAfterMfa(
+    userId: string,
+    rememberMe: boolean,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      with: { role: true },
+    });
+    if (!user) {
+      throw new AppError('AUTH_INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    }
+    if (user.status === 'suspended' || user.status === 'deactivated') {
+      throw new AppError(
+        'AUTH_ACCOUNT_SUSPENDED',
+        'Your account has been suspended. Please contact support.',
+        403,
+      );
+    }
     return this.createLoginSession(user, rememberMe, ipAddress, userAgent);
   }
 

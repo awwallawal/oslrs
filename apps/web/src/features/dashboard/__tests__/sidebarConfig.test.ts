@@ -75,9 +75,10 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has exactly 13 sidebar items', () => {
+    it('super_admin has exactly 14 sidebar items', () => {
+      // 13 base items + MFA Settings (Story 9-13)
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBe(13);
+      expect(items.length).toBe(14);
     });
 
     // Story 6.5: Payments sidebar item for enumerator and supervisor

@@ -48,6 +48,13 @@ export const users = pgTable('users', {
   failedLoginAttempts: integer('failed_login_attempts').default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
 
+  // MFA (Story 9-13). mfaLockedUntil is a SEPARATE concern from lockedUntil above
+  // — that one tracks failed-password lockout; this one tracks failed-TOTP lockout.
+  mfaEnabled: boolean('mfa_enabled').notNull().default(false),
+  mfaSecret: text('mfa_secret'), // base32; TODO(9-9): encrypt at rest once AES-256 helper from Story 9-9 AC#5 lands
+  mfaGraceUntil: timestamp('mfa_grace_until', { withTimezone: true }),
+  mfaLockedUntil: timestamp('mfa_locked_until', { withTimezone: true }),
+
   // Seed data identification (ADR-017)
   isSeeded: boolean('is_seeded').default(false).notNull(),
 

@@ -79,6 +79,7 @@ function RBACTestWrapper({ user, initialPath }: TestWrapperProps) {
     unsyncedCount: 0,
     showLogoutWarning: false,
     cancelLogout: vi.fn(),
+    completeStaffLoginAfterMfa: vi.fn(),
   };
 
   return (

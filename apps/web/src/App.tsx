@@ -30,6 +30,10 @@ const RegistrationPage = lazy(() => import('./features/auth/pages/RegistrationPa
 const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage'));
 const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVerificationPage'));
 
+// Story 9-13 — TOTP MFA pages
+const MfaChallengePage = lazy(() => import('./features/security/mfa/pages/MfaChallengePage'));
+const MfaEnrollmentPage = lazy(() => import('./features/security/mfa/pages/MfaEnrollmentPage'));
+
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
 
@@ -567,6 +571,17 @@ function App() {
                   </PublicOnlyRoute>
                 }
               />
+              {/* Story 9-13 — login step-2 challenge (unauthenticated, gated by router state) */}
+              <Route
+                path="mfa-challenge"
+                element={
+                  <PublicOnlyRoute redirectTo="/dashboard">
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <MfaChallengePage />
+                    </Suspense>
+                  </PublicOnlyRoute>
+                }
+              />
             </Route>
 
             {/* ============================================
@@ -792,6 +807,15 @@ function App() {
                         <ViewAsDashboardPage />
                       </Suspense>
                     </ViewAsProvider>
+                  }
+                />
+                {/* Story 9-13 — MFA enrollment wizard (super_admin only) */}
+                <Route
+                  path="security/mfa"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <MfaEnrollmentPage />
+                    </Suspense>
                   }
                 />
                 <Route path="*" element={<Suspense fallback={<DashboardLoadingFallback />}><NotFoundPage /></Suspense>} />

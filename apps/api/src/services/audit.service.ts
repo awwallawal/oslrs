@@ -52,6 +52,15 @@ export const AUDIT_ACTIONS = {
   AUTH_LOGOUT: 'auth.logout',
   AUTH_PASSWORD_CHANGE: 'auth.password_change',
   AUTH_TOKEN_REFRESH: 'auth.token_refresh',
+  // MFA (Story 9-13)
+  MFA_ENROLLED: 'mfa.enrolled',
+  MFA_VERIFY_SUCCESS: 'mfa.verify_success',
+  MFA_VERIFY_FAILURE: 'mfa.verify_failure',
+  MFA_BACKUP_USED: 'mfa.backup_used',
+  MFA_DISABLED: 'mfa.disabled',
+  MFA_REGENERATED: 'mfa.regenerated',
+  MFA_LOCKOUT: 'mfa.lockout',
+  MFA_GRACE_EXPIRED_REDIRECT: 'mfa.grace_expired_redirect',
   // Admin Actions
   ADMIN_USER_DEACTIVATE: 'admin.user_deactivate',
   ADMIN_USER_REACTIVATE: 'admin.user_reactivate',

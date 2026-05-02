@@ -697,6 +697,14 @@ jobs:
             # Run idempotent migration scripts (safe to re-run on every deploy)
             cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 
+            # Story 9-13 MFA init: partial index + grace_until seed for super_admins
+            cd apps/api && pnpm tsx scripts/migrate-mfa-init.ts && cd ~/oslrs
+
+            # Story 9-13 deploy-time email: notify any super_admin still in grace
+            # window that MFA enrollment is required by `<deadline>`. Fire-and-forget;
+            # script exits 0 even if EmailService is degraded so deploy doesn't break.
+            cd apps/api && pnpm tsx scripts/notify-mfa-grace.ts || true && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

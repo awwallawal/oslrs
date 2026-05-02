@@ -114,8 +114,24 @@ export function useLogin({ type, redirectTo = '/' }: UseLoginOptions): UseLoginR
     }
 
     try {
-      const loginFn = type === 'staff' ? loginStaff : loginPublic;
-      await loginFn(validation.data);
+      if (type === 'staff') {
+        const outcome = await loginStaff(validation.data);
+        // Story 9-13 — staff with MFA enrolled: pause for challenge.
+        if (outcome.requiresMfa) {
+          navigate('/auth/mfa-challenge', {
+            state: {
+              mfaChallengeToken: outcome.mfaChallengeToken,
+              expiresIn: outcome.expiresIn,
+              rememberMe: validation.data.rememberMe || false,
+              redirectTo,
+            },
+            replace: true,
+          });
+          return;
+        }
+      } else {
+        await loginPublic(validation.data);
+      }
 
       // Navigate to redirect URL on success
       navigate(redirectTo, { replace: true });
