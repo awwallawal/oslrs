@@ -239,7 +239,7 @@ _**Revised 2026-04-27** per cost-aware roadmap session with Awwal: item #5 (aler
 | 1 | Tailscale live + SSH public-port closed | 9-9 (Tailscale subtask) | ✅ Done 2026-04-23 |
 | 2 | Story 11-1 schema + Akintola-risk composite indexes (AC#11) merged | 11-1 | ⏳ Backlog |
 | 3 | Story 9-12 Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email live | 9-12 | ⏳ Backlog |
-| 4 | `prep-input-sanitisation-layer` merged | prep task | ⏳ Backlog |
+| 4 | `prep-input-sanitisation-layer` merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill executed (9-9 AC#5) **[REVISED 2026-04-27]** | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section (D4 subset) drafted and printed | Iris / Gabe | ⏳ Backlog |
 

@@ -72,18 +72,6 @@
 
 **Story 9-10 H2** — AC#7 ioredis regression test deferred. Either write before AC#3 closes (2026-05-04 window) OR explicitly accept as long-term LOW with rationale documented at story closure.
 
-**`prep-input-sanitisation-layer` operator step** (added 2026-05-02 from code-review F4): after deploy lands, SSH to VPS via Tailscale and run:
-```sh
-ssh root@oslsr-home-app
-cd ~/oslrs/apps/api
-pnpm exec tsx src/scripts/backfill-input-sanitisation.ts --dry-run   # review planned changes first
-pnpm exec tsx src/scripts/backfill-input-sanitisation.ts             # run for real
-pnpm exec tsx src/scripts/report-backfill-failures.ts                # check zero failures
-# Optionally tighten the constraint on legacy rows after back-fill clean:
-# psql $DATABASE_URL -c "ALTER TABLE respondents VALIDATE CONSTRAINT chk_respondents_phone_number_e164;"
-```
-This is what gates **FRC item #4** flip in `epics.md` (per AC#10). Cannot be auto-deployed because it writes PII fields and must be operator-approved.
-
 **Story 9-13 deferred follow-ups** (added 2026-05-02 from AC#13 code-review of uncommitted working tree):
 - **F5 [MEDIUM]**: Controller integration test suite (~10-15 tests) — Task 6.2 originally deferred; ~2-hour pass before story → done
 - **F9 [MEDIUM]**: Backup-code-used email notification (AC#4 partial) — needs template-pattern decision; story Change Log corrected to reflect "10 of 11 ACs" not "11 of 11"
@@ -101,11 +89,11 @@ Per `_bmad-output/planning-artifacts/epics.md` § FRC (revised 2026-04-27):
 | 1 | Tailscale live + SSH public-port closed | 9-9 (Tailscale subtask) | ✅ Done 2026-04-23 |
 | 2 | Story 11-1 schema + Akintola composite indexes | 11-1 | ⏳ Backlog (ready-for-dev) |
 | 3 | Story 9-12 Public Wizard + Pending-NIN + Magic-Link | 9-12 | ⏳ Backlog (ready-for-dev) |
-| 4 | prep-input-sanitisation-layer merged | prep task | ⏳ Backlog (ready-for-dev) |
+| 4 | prep-input-sanitisation-layer merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section drafted + printed | Iris / Gabe | ⏳ Backlog (legal/ops, off-engineering) |
 
-**Score: 1/6 done. 5 outstanding.** All 5 outstanding items are zero-cost (no out-of-pocket spending required).
+**Score: 2/6 done. 4 outstanding.** All 4 outstanding items are zero-cost (no out-of-pocket spending required).
 
 **Note:** Story 9-9 AC#6 Telegram alerting was originally tagged FRC #5 but **demoted to Ministry hand-off recommendation 2026-04-27**; that slot now holds AC#5 backup encryption. AC#6 Telegram is "above-and-beyond improvement" (already shipped 2026-05-01), not field-blocking.
 
