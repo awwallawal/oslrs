@@ -12,6 +12,7 @@ import { dailyProductivitySnapshots } from './daily-productivity-snapshots.js';
 import { productivityTargets } from './productivity-targets.js';
 import { paymentBatches, paymentRecords, paymentFiles, paymentDisputes } from './remuneration.js';
 import { marketplaceProfiles } from './marketplace.js';
+import { importBatches } from './import-batches.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   role: one(roles, {
@@ -110,12 +111,26 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
   }),
 }));
 
-// Respondents relations (Story 3.4, extended Story 7.1)
+// Respondents relations (Story 3.4, extended Story 7.1, extended Story 11-1)
 export const respondentsRelations = relations(respondents, ({ one, many }) => ({
   submissions: many(submissions),
   marketplaceProfile: one(marketplaceProfiles, {
     fields: [respondents.id],
     references: [marketplaceProfiles.respondentId],
+  }),
+  // Story 11-1: link an imported respondent back to its ingest batch
+  importBatch: one(importBatches, {
+    fields: [respondents.importBatchId],
+    references: [importBatches.id],
+  }),
+}));
+
+// Import batch relations (Story 11-1)
+export const importBatchesRelations = relations(importBatches, ({ one, many }) => ({
+  respondents: many(respondents),
+  uploadedByUser: one(users, {
+    fields: [importBatches.uploadedBy],
+    references: [users.id],
   }),
 }));
 

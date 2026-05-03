@@ -1180,6 +1180,64 @@ await pool.end();
 
 **Process lesson:** when a Dev Agent Record explicitly flags **"X is broken on local; worked around with Y"**, treat that as a HIGH-severity follow-up — NOT a debug log note. Either fix-or-escalate before committing. The bug was visible in the dev-story summary at every commit but never escalated until adversarial code-review caught it post-deploy.
 
+### Pitfall #28: `db:push` aggressively reconciles — drops anything not in the Drizzle schema
+
+**Symptom:** After running `pnpm --filter @oslsr/api db:push:force` on a local dev DB, previously-applied CHECK constraints, partial unique indexes, and any indexes added outside the Drizzle schema *silently disappear*. Examples: `chk_respondents_phone_number_e164`, `respondents_status_check`, `respondents_nin_unique_when_present`, `idx_submissions_enumerator_submitted_at` — all four were dropped by a single `db:push:force` during Story 11-1 development.
+
+**Cause:** `drizzle-kit push` reconciles the database against the Drizzle schema as the source of truth. Anything Drizzle doesn't know about is treated as an *extra* and dropped. Drizzle 0.45 cannot express:
+- CHECK constraints (no `check()` builder in `pgTable`)
+- Partial unique indexes (`.unique()` doesn't take a `WHERE` clause)
+- Some custom index types
+
+These objects therefore live in `apps/api/scripts/migrate-*-init.ts` runners, applied AFTER `db:push` in production CI (`.github/workflows/ci-cd.yml`). Locally, anyone running `db:push` standalone is left without those objects until they remember to re-run the runners manually.
+
+**Fix:** use the umbrella `db:push:full` script (added 2026-05-03 per Story 11-1 follow-up):
+
+```bash
+pnpm --filter @oslsr/api db:push:full         # interactive (safe by default)
+pnpm --filter @oslsr/api db:push:full:force   # auto-approve drops
+```
+
+The umbrella runs `drizzle-kit push` plus auto-discovers and runs every `apps/api/scripts/migrate-*-init.ts` file in alphabetical order. Adding a new init runner? Just drop it in `apps/api/scripts/` matching the glob — no plumbing changes needed.
+
+**When to use which:**
+| Scenario | Command |
+|---|---|
+| Local dev — apply schema + all init objects | `db:push:full` (or `:force`) |
+| Local dev — schema only, you'll run inits manually | `db:push` / `db:push:force` |
+| Production CI deploy | Existing `.github/workflows/ci-cd.yml` step ordering — explicit for audit-trail clarity |
+
+**Process lesson:** Drizzle's "schema is the source of truth" model is a CONVENIENCE in steady state but a FOOTGUN when raw-SQL constraints exist alongside. Document init-script-managed objects in their owning story's Dev Agent Record so the next dev agent knows to look for them post-push.
+
+### Pitfall #29: Local DB seed scripts with destructive flags need explicit env-var gates, not just env-name guards
+
+**Symptom:** A seed script's `--reset` flag did `TRUNCATE` on 5 tables of a local docker Postgres. The script's existing 3 guards (DATABASE_URL set, NODE_ENV ≠ production, hostname doesn't contain `prod`/`oyotrade`/`oyoskills`) all passed cleanly because the local DB was, by definition, NOT production. The TRUNCATE wiped 874 real audit_logs rows that had been restored from a prod backup snapshot for local debugging.
+
+**Cause:** Env-name guards only protect against pointing at the prod hostname. They do NOT protect against the local dev DB containing real prod-derived data — which it routinely does (backup-restore, audit-replay debugging, capacity planning). A non-prod DB is not the same as an empty-or-disposable DB.
+
+**Fix:** any script that does `TRUNCATE`, `DELETE` without `WHERE`, or `DROP TABLE` on a non-prod DB should require an additional explicit env-var gate. Example from `apps/api/src/db/seed-projected-scale.ts` (added 2026-05-03):
+
+```typescript
+const RESET = process.argv.includes('--reset');
+
+if (RESET && process.env.SEED_PROJECTED_SCALE_RESET_CONFIRM !== 'yes') {
+  console.error('[seed-projected-scale] --reset will TRUNCATE 5 tables...');
+  console.error('[seed-projected-scale] To proceed, re-run with the explicit confirmation env var:');
+  console.error('[seed-projected-scale]   $env:SEED_PROJECTED_SCALE_RESET_CONFIRM = "yes"   # PowerShell');
+  console.error('[seed-projected-scale]   export SEED_PROJECTED_SCALE_RESET_CONFIRM=yes      # bash');
+  console.error('[seed-projected-scale] Aborting.');
+  process.exit(1);
+}
+```
+
+The thinking-pause-before-typing-the-string is the safety. Costs ~5 lines and zero runtime overhead in the legitimate case.
+
+**Stronger variants** (worth considering for higher-stakes scripts):
+- **Row-marker filter:** insert every synthetic row with a JSONB `_seed_marker` field; have `--reset` `DELETE WHERE _seed_marker IS NOT NULL` instead of `TRUNCATE`. Real data is untouchable.
+- **Pre-truncate dump:** before `TRUNCATE`, `pg_dump` the affected tables to a timestamped `.sql.gz` in a scratch directory and print the path. One-command rollback always available.
+
+**Process lesson:** "is this DB production?" and "is this DB safe to wipe?" are two different questions. The first protects the customer; the second protects the developer. Both gates are cheap.
+
 ---
 
 *Generated: 2026-02-21*
@@ -1189,4 +1247,5 @@ await pool.end();
 *Updated: 2026-04-30 — prep-tsc-pre-commit-hook landed: table row #18 Fix column rewritten with hook reference + cache-recovery one-liner (`rm apps/*/tsconfig.tsbuildinfo`); the unrelated `### Pitfall #18:` heading at line ~975 (DO Web Console SSH-based) deliberately untouched — the playbook's two #18 numberings stay independent*
 *Updated: 2026-05-01 — Pitfalls #24-25 added: pnpm/action-setup v3→v4 dual-source-of-truth contract change + Node 24 SHA-pinning recipe for actions whose stable tags lag main branch (verified workflow used to eliminate all warnings before the 2026-06-02 forced-default cutover)*
 *Updated: 2026-05-03 — Pitfalls #26-27 added: raw-SQL migrations need a tsx runner (db:push doesn't apply them) + postgres-vs-pg package mistake (postgres pkg not a project dep). Pattern caught after Story 9-13's migrate-mfa-init.ts shipped with `import postgres from 'postgres'`, silently breaking 5+ deploys until prep-input-sanitisation code-review surfaced the bug as F14. Also captures the Dev-Agent-Record lesson: "X is broken on local; worked around with Y" must be treated as HIGH-severity follow-up, not a debug log note.*
+*Updated: 2026-05-03 — Pitfalls #28-29 added per Story 11-1 follow-up: db:push aggressively reconciles + drops init-script objects (CHECK constraints, partial unique indexes, raw-SQL composite indexes) → introduces `pnpm db:push:full` umbrella that auto-discovers every `migrate-*-init.ts` runner and chains them after push; `--reset` flags on seed scripts need explicit env-var gates because env-name guards only protect against prod hostnames, not local dev DBs holding real backup-restored data. Caught after Story 11-1's `seed-projected-scale.ts --reset` wiped 874 audit_logs rows on first run; fix-forward shipped both the env-var gate and the umbrella in the same story.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*

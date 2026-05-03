@@ -711,6 +711,12 @@ jobs:
             # docs/active-watches.md for the operator runbook entry.
             cd apps/api && pnpm tsx scripts/migrate-input-sanitisation-init.ts && cd ~/oslrs
 
+            # Story 11-1 multi-source registry: applies respondents_status_check + the
+            # partial unique index respondents_nin_unique_when_present that Drizzle's
+            # db:push cannot express. Also drops the legacy inline NIN UNIQUE constraint
+            # if db:push left it behind. Idempotent.
+            cd apps/api && pnpm tsx scripts/migrate-multi-source-registry-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

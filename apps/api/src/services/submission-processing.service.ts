@@ -15,7 +15,7 @@ import { eq } from 'drizzle-orm';
 import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
-import type { RespondentMetadata, RespondentSource } from '../db/schema/respondents.js';
+import type { RespondentMetadata, RespondentSource, RespondentStatus } from '../db/schema/respondents.js';
 import {
   normaliseFullName,
   normaliseNigerianPhone,
@@ -77,7 +77,12 @@ interface ProcessingResult {
 }
 
 interface ExtractedRespondentData {
-  nin: string;
+  // NIN is optional at this layer post Story 11-1 — `extractRespondentData()`
+  // still requires it (the field-survey path), but the public-wizard /
+  // pending-NIN code path (Story 9-12) calls `findOrCreateRespondent` directly
+  // without NIN, producing a `pending_nin_capture` respondent. FR21 stays in
+  // force for every NIN-carrying row via the partial unique index.
+  nin?: string;
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
@@ -377,33 +382,44 @@ export class SubmissionProcessingService {
    * Find respondent by NIN, or create a new one.
    * Rejects duplicate NINs with PermanentProcessingError (Story 3.7).
    * Handles race condition: if unique constraint violation on NIN, reject.
+   *
+   * Story 11-1: NIN is now optional at this entry point. When `data.nin` is
+   * undefined, the dedup checks are skipped and a `pending_nin_capture`
+   * respondent is created. FR21 still applies to every NIN-carrying row via
+   * the `respondents_nin_unique_when_present` partial unique index.
    */
   static async findOrCreateRespondent(
     data: ExtractedRespondentData,
     source: RespondentSource,
     submitterId?: string
   ): Promise<{ id: string; _isNew: boolean }> {
-    // Check respondents table for existing NIN — reject if found (AC 3.7.1)
-    const existing = await db.query.respondents.findFirst({
-      where: eq(respondents.nin, data.nin),
-    });
+    // FR21 dedup branch — only when the incoming submission carries a NIN.
+    // The public-wizard / pending-NIN flow (Story 9-12) calls into this method
+    // without a NIN; FR21 will run later when the respondent completes
+    // registration and a NIN is attached.
+    if (data.nin) {
+      // Check respondents table for existing NIN — reject if found (AC 3.7.1)
+      const existing = await db.query.respondents.findFirst({
+        where: eq(respondents.nin, data.nin),
+      });
 
-    if (existing) {
-      throw new PermanentProcessingError(
-        `NIN_DUPLICATE: This individual was already registered on ${existing.createdAt.toISOString()} via ${existing.source}`
-      );
-    }
+      if (existing) {
+        throw new PermanentProcessingError(
+          `NIN_DUPLICATE: This individual was already registered on ${existing.createdAt.toISOString()} via ${existing.source}`
+        );
+      }
 
-    // Check users table for existing NIN — reject if staff member (AC 3.7.2)
-    const staffUser = await db.query.users.findFirst({
-      where: eq(users.nin, data.nin),
-      columns: { id: true },
-    });
+      // Check users table for existing NIN — reject if staff member (AC 3.7.2)
+      const staffUser = await db.query.users.findFirst({
+        where: eq(users.nin, data.nin),
+        columns: { id: true },
+      });
 
-    if (staffUser) {
-      throw new PermanentProcessingError(
-        'NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member'
-      );
+      if (staffUser) {
+        throw new PermanentProcessingError(
+          'NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member'
+        );
+      }
     }
 
     // Normalise incoming PII before insert so the DB always holds canonical
@@ -411,10 +427,16 @@ export class SubmissionProcessingService {
     // for super-admin review (Audit Log Viewer — Story 9-11).
     const { canonical, metadata } = normaliseRespondentPii(data);
 
+    // Status reflects the lifecycle stage of this row: NIN-carrying rows are
+    // 'active' immediately; rows without NIN start in 'pending_nin_capture'
+    // and graduate to 'active' once the respondent completes registration via
+    // the Story 9-12 magic-link flow.
+    const status: RespondentStatus = data.nin ? 'active' : 'pending_nin_capture';
+
     // Create new respondent
     try {
       const [created] = await db.insert(respondents).values({
-        nin: data.nin,
+        nin: data.nin ?? null,
         firstName: canonical.firstName,
         lastName: canonical.lastName,
         dateOfBirth: canonical.dateOfBirth,
@@ -424,15 +446,17 @@ export class SubmissionProcessingService {
         consentEnriched: data.consentEnriched,
         source,
         submitterId: submitterId ?? null,
+        status,
         metadata,
       }).returning();
 
       return { id: created.id, _isNew: true };
     } catch (error: unknown) {
       // Handle race condition: PostgreSQL unique constraint violation (code 23505)
-      // Reject instead of linking (AC 3.7.7)
+      // Reject instead of linking (AC 3.7.7). Only meaningful when NIN was
+      // supplied — pending-NIN inserts cannot trip the partial unique index.
       const pgError = error as { code?: string };
-      if (pgError.code === '23505') {
+      if (pgError.code === '23505' && data.nin) {
         const retried = await db.query.respondents.findFirst({
           where: eq(respondents.nin, data.nin),
         });

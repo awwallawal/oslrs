@@ -5,6 +5,7 @@ export * from './audit.js';
 export * from './relations.js';
 export * from './questionnaires.js';
 export * from './submissions.js';
+export * from './import-batches.js';
 export * from './respondents.js';
 export * from './fraud-thresholds.js';
 export * from './fraud-detections.js';

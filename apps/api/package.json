@@ -18,6 +18,8 @@
     "db:push": "tsc && drizzle-kit push",
     "db:push:force": "tsc && tsx scripts/db-push.ts --force",
     "db:push:force:verbose": "tsc && tsx scripts/db-push.ts --force --verbose",
+    "db:push:full": "tsc && tsx scripts/db-push-full.ts",
+    "db:push:full:force": "tsc && tsx scripts/db-push-full.ts --force",
     "db:studio": "drizzle-kit studio",
     "db:check": "tsc && drizzle-kit check",
     "db:seed": "tsx src/db/seeds/index.ts",
@@ -26,7 +28,9 @@
     "db:reset": "tsx scripts/db-reset.ts",
     "db:custom": "tsx src/db/custom-sql/apply.ts",
     "backfill:input-sanitisation": "tsx src/scripts/backfill-input-sanitisation.ts",
-    "report:backfill-failures": "tsx src/scripts/report-backfill-failures.ts"
+    "report:backfill-failures": "tsx src/scripts/report-backfill-failures.ts",
+    "seed:projected-scale": "tsx src/db/seed-projected-scale.ts",
+    "verify:projected-scale": "tsx src/db/verify-projected-scale-explains.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",

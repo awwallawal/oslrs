@@ -95,6 +95,14 @@ export const submissions = pgTable('submissions', {
   // Story 3.4: Respondent + Enumerator indexes
   respondentIdIdx: index('idx_submissions_respondent_id').on(table.respondentId),
   enumeratorIdIdx: index('idx_submissions_enumerator_id').on(table.enumeratorId),
+  // Story 11-1: composite for productivity aggregations + lineage queries.
+  // Story 11-1 AC#11 EXPLAIN audit found Q4 (Epic 5.6a productivity grouping)
+  // tripped the cost-<10K threshold at 1M submissions; this composite collapses
+  // scan + sort + group into a streaming aggregate. Declared here so `db:push`
+  // preserves it across local-dev re-runs (the migrate-multi-source-registry-init
+  // runner also creates it idempotently as defense-in-depth for first-deploy
+  // ordering).
+  enumeratorSubmittedAtIdx: index('idx_submissions_enumerator_submitted_at').on(table.enumeratorId, table.submittedAt),
 }));
 
 export type Submission = typeof submissions.$inferSelect;
