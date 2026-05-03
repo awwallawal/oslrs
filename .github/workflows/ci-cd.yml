@@ -238,7 +238,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup Database
-        run: pnpm --filter @oslsr/api db:push:force
+        # M5 (code-review 2026-05-03): use db:push:full:force so the test-api
+        # job applies BOTH the Drizzle schema AND every migrate-*-init.ts
+        # runner. Previously this step ran `db:push:force` only, which left
+        # the test DB without the raw-SQL constraints (chk_respondents_phone_
+        # number_e164, respondents_status_check, respondents_nin_unique_when_
+        # present, import_batches_status_check). DB-constraint tests
+        # (apps/api/src/db/schema/__tests__/respondents.constraints.test.ts)
+        # silently failed in CI even when passing locally because the
+        # constraints didn't exist for them to validate. Closes the local-vs-CI
+        # parity gap. See playbook Pitfall #28 (the local-dev counterpart).
+        run: pnpm --filter @oslsr/api db:push:full:force
 
       # Optimization 3: Skip unchanged packages on PRs
       - name: Run API tests
