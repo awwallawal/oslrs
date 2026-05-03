@@ -87,13 +87,13 @@ Per `_bmad-output/planning-artifacts/epics.md` § FRC (revised 2026-04-27):
 | # | Item | Story | Status |
 |---|---|---|---|
 | 1 | Tailscale live + SSH public-port closed | 9-9 (Tailscale subtask) | ✅ Done 2026-04-23 |
-| 2 | Story 11-1 schema + Akintola composite indexes | 11-1 | ⏳ Backlog (ready-for-dev) |
+| 2 | Story 11-1 schema + Akintola composite indexes | 11-1 | ✅ Done 2026-05-03 |
 | 3 | Story 9-12 Public Wizard + Pending-NIN + Magic-Link | 9-12 | ⏳ Backlog (ready-for-dev) |
 | 4 | prep-input-sanitisation-layer merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section drafted + printed | Iris / Gabe | ⏳ Backlog (legal/ops, off-engineering) |
 
-**Score: 2/6 done. 4 outstanding.** All 4 outstanding items are zero-cost (no out-of-pocket spending required).
+**Score: 3/6 done. 3 outstanding.** All 3 outstanding items are zero-cost on the engineering side (item #6 is Iris/Gabe non-engineering work).
 
 **Note:** Story 9-9 AC#6 Telegram alerting was originally tagged FRC #5 but **demoted to Ministry hand-off recommendation 2026-04-27**; that slot now holds AC#5 backup encryption. AC#6 Telegram is "above-and-beyond improvement" (already shipped 2026-05-01), not field-blocking.
 
