@@ -1117,6 +1117,69 @@ curl -s https://api.github.com/repos/<owner>/<repo>/commits/main | jq -r .sha
 
 If the `using:` line is `node24` (or `composite` / `docker` — both safe), pin to the SHA. If still `node20`, fall back to env-var bridge.
 
+### Pitfall #26: Raw-SQL migrations need a tsx runner — `db:push` does NOT apply them
+
+**Symptom:** A new `apps/api/drizzle/<NNNN>_*.sql` file ships in a story commit. `db:push` runs in CI deploy without errors. But the raw-SQL contents (CHECK constraints, partial indexes, DO blocks, `ALTER TABLE … ADD CONSTRAINT … NOT VALID`) **never reach production**. Tests pass locally because the dev agent applied the SQL via a one-shot tsx invocation against their local DB. Production deploy completes "successfully" but the schema is silently incomplete.
+
+**Cause:** `pnpm --filter @oslsr/api db:push` runs `drizzle-kit push` which only diffs the **Drizzle TypeScript schema** (`apps/api/src/db/schema/*.ts`) against the live DB. It adds/drops columns + tables + indexes that are expressed in the schema. It **does NOT execute SQL files** in `apps/api/drizzle/`. Those files are documentation + raw-SQL escape valve; running them requires either:
+- A dedicated tsx runner script (e.g. `migrate-audit-immutable.ts`, `migrate-mfa-init.ts`, `migrate-input-sanitisation-init.ts`), OR
+- Manual `psql $DATABASE_URL -f apps/api/drizzle/<NNNN>_*.sql` invocation by the operator
+
+**Fix:** Every new SQL file in `apps/api/drizzle/` MUST have a matching `apps/api/scripts/migrate-<name>-init.ts` runner that:
+1. Reads `DATABASE_URL` from env
+2. Uses `pg.Pool` (the project's existing dep — NOT `postgres` which is not installed; see Pitfall #27)
+3. Executes the SQL with `IF NOT EXISTS` / `DO $$ … END $$` guards so re-runs are idempotent
+4. Wires into `.github/workflows/ci-cd.yml` deploy step alongside `migrate-audit-immutable.ts`
+
+Reference: `apps/api/scripts/migrate-audit-immutable.ts` (canonical pattern, Story 6-1).
+
+**Pre-commit checklist** when adding a SQL migration:
+```sh
+# 1. Schema diff is in Drizzle schema (will be picked up by db:push):
+ls apps/api/src/db/schema/<table>.ts | xargs git diff
+# 2. Raw SQL has a runner:
+ls apps/api/scripts/migrate-<name>-init.ts || echo "MISSING — write one"
+# 3. Runner is in deploy script:
+grep "migrate-<name>-init.ts" .github/workflows/ci-cd.yml || echo "MISSING — wire it"
+```
+
+If any of those three checks come back empty, the SQL file is dead-letter on production deploy.
+
+### Pitfall #27: Don't use `postgres` package — use `pg` (already a project dep)
+
+**Symptom:** A migration runner script imports `from 'postgres'` (the [postgres.js](https://github.com/porsager/postgres) package). Locally the import works because `tsx` resolves it via dev pnpm cache or because the operator manually `pnpm add`'d it. CI deploy crashes:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'postgres' imported from
+  /***/oslrs/apps/api/scripts/migrate-<name>-init.ts
+```
+
+**Cause:** `postgres` is **not** an `apps/api` dependency. The project's canonical Postgres client is **`pg`** (`apps/api/package.json` → `"pg": "^8.11.5"`). Adding `postgres` would split the connection-pool surface across two libraries with subtly different behaviors (especially around `bigint` and `jsonb` parsing).
+
+**Fix:** Always use the `pg` pattern from `migrate-audit-immutable.ts`:
+
+```typescript
+import pg from 'pg';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL!, max: 1 });
+
+await pool.query(`
+  -- your DDL here, idempotent
+`);
+
+await pool.end();
+```
+
+**Process leak this came from:** Story 9-13's `migrate-mfa-init.ts` was authored with `import postgres from 'postgres'`. The Dev Agent Record explicitly noted "import-of-postgres package broken on local; applied via tsx one-shot using existing pg pool" — but never fixed the underlying script. Every CI deploy after Story 9-13 silently exited at this point (`set -eo pipefail` killed the deploy script mid-way; nginx never reloaded; pm2 never restarted; web `dist/` scp'd to `/tmp` but never copied to `/var/www/oslsr/`). 5+ "successful" CI runs landed nothing on the VPS until commit `25efd84` (2026-05-02) rewrote both runners to use `pg`.
+
+**Process lesson:** when a Dev Agent Record explicitly flags **"X is broken on local; worked around with Y"**, treat that as a HIGH-severity follow-up — NOT a debug log note. Either fix-or-escalate before committing. The bug was visible in the dev-story summary at every commit but never escalated until adversarial code-review caught it post-deploy.
+
 ---
 
 *Generated: 2026-02-21*
@@ -1125,4 +1188,5 @@ If the `using:` line is `node24` (or `composite` / `docker` — both safe), pin 
 *Updated: 2026-04-29 — Wave 0 code review: Pitfall #10 cross-referenced to Part 6.2 + Pitfall #23 (post-Wave-0 pattern); Manual Redeploy snippet flagged as emergency-only with Pitfall #23 hardening (all 3 VITE_* vars sourced from VPS .env); Periodic Maintenance subsection added with /tmp/oslrs-web-dist-* sweep + dist-backup audit*
 *Updated: 2026-04-30 — prep-tsc-pre-commit-hook landed: table row #18 Fix column rewritten with hook reference + cache-recovery one-liner (`rm apps/*/tsconfig.tsbuildinfo`); the unrelated `### Pitfall #18:` heading at line ~975 (DO Web Console SSH-based) deliberately untouched — the playbook's two #18 numberings stay independent*
 *Updated: 2026-05-01 — Pitfalls #24-25 added: pnpm/action-setup v3→v4 dual-source-of-truth contract change + Node 24 SHA-pinning recipe for actions whose stable tags lag main branch (verified workflow used to eliminate all warnings before the 2026-06-02 forced-default cutover)*
+*Updated: 2026-05-03 — Pitfalls #26-27 added: raw-SQL migrations need a tsx runner (db:push doesn't apply them) + postgres-vs-pg package mistake (postgres pkg not a project dep). Pattern caught after Story 9-13's migrate-mfa-init.ts shipped with `import postgres from 'postgres'`, silently breaking 5+ deploys until prep-input-sanitisation code-review surfaced the bug as F14. Also captures the Dev-Agent-Record lesson: "X is broken on local; worked around with Y" must be treated as HIGH-severity follow-up, not a debug log note.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*
