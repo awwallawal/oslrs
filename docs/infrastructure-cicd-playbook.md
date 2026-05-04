@@ -1240,6 +1240,54 @@ The thinking-pause-before-typing-the-string is the safety. Costs ~5 lines and ze
 
 ---
 
+### Pitfall #30: Parallel doc-track ‖ code-track work isn't "contamination" when overlap is zero
+
+**Symptom:** Story 10-5 (legal/policy doc-only — `docs/legal/*.md`) and Story 9-11 (audit-log-viewer code — `apps/api/src/{db,services,routes,middleware}/`) were both being developed in parallel. When the 10-5 code-review pass ran on the uncommitted working tree, it surfaced the 17 unrelated 9-11 files as a HIGH-severity "cross-story contamination" finding, recommending the two be untangled before commit.
+
+**Cause:** the reviewer's instinct (correctly trained by `feedback_review_before_commit.md` to be wary of mixed-story working trees) fired on file count alone — without checking whether the two stories actually had overlap. They didn't:
+
+| Axis | 10-5 | 9-11 | Overlap? |
+|---|---|---|---|
+| File paths touched | `docs/legal/*.md`, Baseline Report Appendix H | `apps/api/src/{db,services,routes,middleware}/*` | **None** |
+| Schema dependencies | None (doc-only) | New `api-consumers.ts` schema, `audit-principal-dualism` migration | **None** |
+| Reviewer dimension | Legal/policy (Iris/Gabe persona) | API code (adversarial code-review persona) | **Different — no bottleneck either way** |
+| Story-of-record reference | DSA Schedule 2 §2 mentions "Story 10-1 auth scheme" | n/a | **No 9-11 reference in 10-5** |
+| Critical-path dependency | Both are post-field; neither blocks FRC | — | **Equal urgency floor** |
+
+A genuine contamination case is something like "Story X edits the same file as Story Y but for different reasons" — that produces unreviewable blame, hard merges, and split-brain change-logs. Two stories that share zero files, zero semantics, and zero reviewer surface produce no such hazards. They're just two clean diffs that happen to live in the same working tree.
+
+**Fix:** before flagging mixed-story working trees, **prove the overlap exists**. The check is one shell pipe:
+
+```bash
+# List files modified or added that aren't part of Story X
+git status --porcelain | awk '{print $2}' | grep -v '^docs/legal/' | grep -v 'BASELINE-STUDY-REPORT'
+# If everything that comes back is plausibly some other story → that's parallelism, not contamination
+# If anything comes back that touches Story X's territory → that's actual contamination — investigate
+```
+
+If the diff genuinely is two cleanly-separable stories, the discipline is **selective staging at commit time**, not a working-tree blocker:
+
+```bash
+# Story 10-5 commit (selective stage):
+git add docs/legal/ _bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md \
+        _bmad-output/implementation-artifacts/10-5-*.md _bmad-output/implementation-artifacts/sprint-status.yaml
+git commit -m "..."
+
+# Story 9-11 files stay unstaged until its own code-review pass finishes
+```
+
+**Process lesson:** the BMAD code-review workflow's bias toward "review on uncommitted working tree" is correct (it catches drift before commit), but it pairs naturally with "selective staging at commit time" rather than "one story per working tree at all times." For doc-track ‖ code-track parallelism specifically, the no-overlap guarantee is provable from `git status` alone in <10 seconds. **Don't reflexively call it contamination — measure first.**
+
+**When parallel IS a problem:**
+- Same file edited by both stories (forces resolve order + intertwined diffs)
+- Story X depends on a schema change Story Y is still iterating on (forces Story X to ship-or-rollback Y's intermediate state)
+- Story X's tests would fail until Story Y lands (test-state-leak across stories)
+- Reviewer must context-switch between stories during a single review pass (cognitive load tax)
+
+None of those applied to 10-5 ‖ 9-11. They DO apply to e.g. two API stories both editing `audit.service.ts` — which is the actual case the heuristic was trained on. Distinguish the cases.
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1248,4 +1296,5 @@ The thinking-pause-before-typing-the-string is the safety. Costs ~5 lines and ze
 *Updated: 2026-05-01 — Pitfalls #24-25 added: pnpm/action-setup v3→v4 dual-source-of-truth contract change + Node 24 SHA-pinning recipe for actions whose stable tags lag main branch (verified workflow used to eliminate all warnings before the 2026-06-02 forced-default cutover)*
 *Updated: 2026-05-03 — Pitfalls #26-27 added: raw-SQL migrations need a tsx runner (db:push doesn't apply them) + postgres-vs-pg package mistake (postgres pkg not a project dep). Pattern caught after Story 9-13's migrate-mfa-init.ts shipped with `import postgres from 'postgres'`, silently breaking 5+ deploys until prep-input-sanitisation code-review surfaced the bug as F14. Also captures the Dev-Agent-Record lesson: "X is broken on local; worked around with Y" must be treated as HIGH-severity follow-up, not a debug log note.*
 *Updated: 2026-05-03 — Pitfalls #28-29 added per Story 11-1 follow-up: db:push aggressively reconciles + drops init-script objects (CHECK constraints, partial unique indexes, raw-SQL composite indexes) → introduces `pnpm db:push:full` umbrella that auto-discovers every `migrate-*-init.ts` runner and chains them after push; `--reset` flags on seed scripts need explicit env-var gates because env-name guards only protect against prod hostnames, not local dev DBs holding real backup-restored data. Caught after Story 11-1's `seed-projected-scale.ts --reset` wiped 874 audit_logs rows on first run; fix-forward shipped both the env-var gate and the umbrella in the same story.*
+*Updated: 2026-05-03 — Pitfall #30 added: doc-track ‖ code-track parallelism (Story 10-5 legal docs + Story 9-11 audit-viewer code) is safe when zero file overlap + zero semantic coupling — don't reflexively flag mixed working trees as "contamination" without measuring overlap first. Discipline is selective staging at commit time, not a working-tree blocker.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*

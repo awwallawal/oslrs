@@ -2,7 +2,7 @@
 
 **Living dashboard.** Single source of truth for all calendar gates, follow-ups, and SM-blocked items across Epics 9, 10, 11. Items appear when active; **items are deleted when closed** (this is not a history log — sprint-status.yaml + story Change Logs hold history).
 
-**Last updated:** 2026-05-01 (post 12-commit session: AC#6 + Node 24 cleanup + retrospective audits)
+**Last updated:** 2026-05-04 (Story 9-8 enforcing flip applied locally — operator push pending; 48h re-monitoring window 2026-05-01→2026-05-03 closed clean)
 
 **Update protocol:** at the end of every session that creates new monitoring items, edit this file. When watching this file, sort entries by date ascending within each section. Keep it ≤1 screen.
 
@@ -12,11 +12,13 @@
 
 | Date | What | Where to act | Why it matters |
 |---|---|---|---|
-| **2026-05-03 ~10:00 UTC** | **Story 9-8 48h CSP re-monitoring window closes** | `ssh root@oslsr-home-app` → pull `/api/v1/csp-report` violations + nginx access logs. Then re-invoke `/bmad:bmm:workflows:code-review` on `9-8-content-security-policy-nginx-rollout.md` per the embedded "Next Code-Review Invocation" checklist | Decision: clean window → flip to enforcing CSP (single-line edit in `infra/nginx/oslsr.conf:53,77`); else loop back per Branch B |
+<!-- Story 9-8 watch removed 2026-05-04: 48h window closed CLEAN (0 violations); enforcing flip committed locally; operator push starts a 1-hour browser-soak window (see new entry below). -->
+| **2026-05-04 (post-push)** | **Story 9-8 enforcing-flip browser-soak — 1 hour after operator pushes the local commit** | `git push` triggers CI redeploy (~6 min). Then: `curl -sI https://oyotradeministry.com.ng/ \| grep -i 'content-security'` should show `content-security-policy:` (no `-report-only`). Browser DevTools Console clean for 1 hour on golden-path flows (homepage, login, register, dashboard, marketplace, insights). `pm2 logs oslsr-api \| grep csp_violation` should remain quiet. | If any new violation fires, 2-min rollback recipe documented in `infra/nginx/oslsr.conf` comment block lines 51–52 (rename header back to Report-Only, commit, push). |
+| **2026-05-03 → ?** | **Story 9-11 (Audit Log Viewer) — incoming code review** | When Awwal signals 9-11 dev is feature-complete, invoke `/bmad:bmm:workflows:code-review` on `9-11-audit-log-viewer.md` against the uncommitted working tree (per `feedback_review_before_commit.md`). Working tree already carries 17 9-11 files alongside 10-5 docs (Pitfall #30 — parallelism, not contamination); selective stage at commit. | 9-11 is upstream of Stories 10-1 + 10-6 in the dependency chain (see Cross-story chain section). |
 | **2026-05-04** | **Story 9-10 7-day post-fix trajectory pull** | `ssh root@oslsr-home-app && pm2 status` — read ↺ counter; reference commit `718f84e` deploy completion 2026-04-27 ~07:30 UTC | If ↺ ≤2: AC#1 + AC#3 satisfied → write `apps/api/src/docs/9-10-pm2-restart-post-fix-trajectory.md`. If >2: iterate fix or scope 9-10b |
 | **2026-05-04** | **Story 9-10 AC#5 pino log noise audit** (2-hour timebox) | `pm2 logs oslsr-api --lines 5000` — categorize repeated patterns; adjust log levels in code | Done criteria: 2-hour timebox spent OR all surfaced patterns addressed; remaining patterns become new `[AI-Review][LOW]` follow-ups in 9-10. **No infinite-tinker scope.** |
 | **2026-05-04** | **Cloudflare WAF / PM2 / CSP follow-up checklist** | `docs/follow-ups/2026-05-04-cloudflare-waf-pm2-csp-review.md` (existing checklist file) | Trajectory capture + spontaneous-vs-deploy decomposition for Story 9-10 |
-| **2026-05-08** | **Story 9-10 AC#4 decision gate: 11-1 dependency** | If Story 11-1 (schema foundation) NOT merged by EOD 2026-05-08 → split AC#4 into `9-10b-akintola-endpoint-audit` (requires Bob/SM) and proceed with 9-10 closure on remaining ACs | Unblocks 9-10's calendar gate from the SCP-2026-04-22 chain |
+| **2026-05-08** | **Story 9-10 AC#4 decision gate: 11-1 dependency** | ✅ **RESOLVED FAVOURABLY** — Story 11-1 closed Done 2026-05-03. The conditional split into `9-10b-akintola-endpoint-audit` is therefore *not* triggered; 9-10 AC#4 can proceed against 11-1's shipped schema. Confirm at this gate that AC#4 EXPLAIN audit work has actually started against the new tables. | The conditional fork is closed; proceed with 9-10's regular AC#4 path. |
 
 ---
 
@@ -57,7 +59,8 @@
 |---|---|---|
 | **Story 9-9a / 9-9b split** | 9-9 is `in-progress` since 2026-04-25 with 5/10 ACs done. Per `feedback_canonical_create_story_workflow.md` cannot ad-hoc create stories; sprint-status comment honestly reflects "DONE 5/10" as mitigation. | Next session that resumes 9-9 backlog work (ACs #3 port audit, #4 auth rate-limit, #5 backup encryption, #7 logrotate) |
 | **Story 9-14 — self-hosted GH Actions runner inside tailnet** | Architectural unblocker referenced in 5+ places (9-9 AC#10 follow-up, 9-10 AC#3, runbook §6.1, ADR-020, memory). Slot 9-14 open (9-13 = TOTP MFA). | When you want to re-narrow SSH firewall back to `100.64.0.0/10` + DO infra ranges OR eliminate any remaining VPS resource pressure |
-| **Story 9-10b — akintola-endpoint-audit** (conditional) | Only fires if 11-1 not merged by 2026-05-08 decision gate above | 2026-05-08 decision gate |
+<!-- Story 9-10b row removed 2026-05-03: condition (11-1 not merged by 2026-05-08) did not trigger — 11-1 closed Done 2026-05-03. -->
+| **Story 10-5 ratification — real-Iris + real-Gabe sign-off on v1.1** | DSA template + SOP + signoff doc all bumped to v1.1 incorporating R1 (6M+4L) + R2 (5H+8M+4L) findings. AI-agent persona drafts in place; two `_pending real-human ratification_` rows in `dsa-template-v1-signoff.md` Sign-off table need real-human countersignatures before any partner-facing use. | When real-Iris + real-Gabe are identified and onboarded (likely Operate-phase Ministry counsel, post-Transfer). Until then 10-5 sits in `review` status — operational deliverables ready, ratification gate open. |
 
 ---
 
@@ -91,9 +94,9 @@ Per `_bmad-output/planning-artifacts/epics.md` § FRC (revised 2026-04-27):
 | 3 | Story 9-12 Public Wizard + Pending-NIN + Magic-Link | 9-12 | ⏳ Backlog (ready-for-dev) |
 | 4 | prep-input-sanitisation-layer merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
-| 6 | Operations Manual enumerator-section drafted + printed | Iris / Gabe | ⏳ Backlog (legal/ops, off-engineering) |
+| 6 | Operations Manual enumerator-section drafted + printed | Iris / Gabe | ⏳ Backlog (legal/ops, off-engineering) — *adjacent material from Story 10-5 (DSA v1.1 + SOP v1.1, 1,555 lines) is now on file under `docs/legal/`; this is **not** the enumerator section itself but is in the same author/voice and reduces drafting effort when real-Iris + real-Gabe pick up the Operations Manual* |
 
-**Score: 3/6 done. 3 outstanding.** All 3 outstanding items are zero-cost on the engineering side (item #6 is Iris/Gabe non-engineering work).
+**Score: 3/6 done. 3 outstanding.** All 3 outstanding items are zero-cost on the engineering side (item #6 is Iris/Gabe non-engineering work; Story 10-5's legal/ops material is adjacent prior art that Iris/Gabe can draw on but does not itself satisfy this gate).
 
 **Note:** Story 9-9 AC#6 Telegram alerting was originally tagged FRC #5 but **demoted to Ministry hand-off recommendation 2026-04-27**; that slot now holds AC#5 backup encryption. AC#6 Telegram is "above-and-beyond improvement" (already shipped 2026-05-01), not field-blocking.
 
