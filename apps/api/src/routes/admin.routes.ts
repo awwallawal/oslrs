@@ -7,10 +7,17 @@ import { EmailBudgetService } from '../services/email-budget.service.js';
 import { getEmailConfigFromEnv } from '../providers/index.js';
 import { getEmailQueueStats, getDeferredCount } from '../queues/email.queue.js';
 import { db } from '../db/index.js';
+import auditLogViewerRoutes from './audit-log-viewer.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
 const router = Router();
+
+// Story 9-11 — sub-router for read-side audit log viewer at /admin/audit-logs/*.
+// Distinct from the existing top-level /audit-logs (write-side / hash-chain
+// verification, Story 6-1). All endpoints are super-admin-gated inside the
+// sub-router itself.
+router.use('/audit-logs', auditLogViewerRoutes);
 
 /**
  * GET /api/v1/admin/email-budget

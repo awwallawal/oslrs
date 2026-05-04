@@ -30,7 +30,10 @@
     "backfill:input-sanitisation": "tsx src/scripts/backfill-input-sanitisation.ts",
     "report:backfill-failures": "tsx src/scripts/report-backfill-failures.ts",
     "seed:projected-scale": "tsx src/db/seed-projected-scale.ts",
-    "verify:projected-scale": "tsx src/db/verify-projected-scale-explains.ts"
+    "verify:projected-scale": "tsx src/db/verify-projected-scale-explains.ts",
+    "seed:audit-bench": "tsx scripts/seed-audit-bench.ts",
+    "bench:audit-viewer": "tsx scripts/bench-audit-viewer.ts",
+    "cleanup:audit-bench": "tsx scripts/cleanup-audit-bench.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",

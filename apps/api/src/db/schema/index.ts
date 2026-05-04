@@ -1,6 +1,9 @@
 export * from './roles.js';
 export * from './lgas.js';
 export * from './users.js';
+// Story 9-11 (Schema Down Payment) — api_consumers must export BEFORE audit
+// because audit.ts now references apiConsumers for the consumer_id FK.
+export * from './api-consumers.js';
 export * from './audit.js';
 export * from './relations.js';
 export * from './questionnaires.js';

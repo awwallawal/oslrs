@@ -40,6 +40,7 @@ import {
   Eye,
   Search,
   BarChart3,
+  ScrollText,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -153,6 +154,11 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Survey Analytics', href: '/dashboard/super-admin/survey-analytics', icon: BarChart3 },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
+    // Story 9-11 — Super Admin audit log viewer (between System Health and MFA Settings;
+    // when prep-settings-landing-and-feature-flags lands, Settings inserts after Audit Log)
+    // R3-F1: end:true prevents accidental highlight on nested routes
+    // (e.g. /dashboard/super-admin/audit-log/detail/:id when future stories add them)
+    { label: 'Audit Log', href: '/dashboard/super-admin/audit-log', icon: ScrollText, end: true },
     // Story 9-13 — TOTP MFA enrollment + management
     { label: 'MFA Settings', href: '/dashboard/super-admin/security/mfa', icon: Shield },
   ],

@@ -727,6 +727,14 @@ jobs:
             # if db:push left it behind. Idempotent.
             cd apps/api && pnpm tsx scripts/migrate-multi-source-registry-init.ts && cd ~/oslrs
 
+            # Story 9-11 schema down payment: applies audit_logs_principal_exclusive_check
+            # (Decision 5.4 audit-log principal dualism) + api_consumers_status_check +
+            # api_consumers_organisation_type_check. Drizzle 0.45 cannot express CHECK
+            # constraints inline; this runner closes the gap. Idempotent. Also lays down
+            # the api_consumers table that Story 10-1 (Consumer Authentication Layer)
+            # will own the auth surface for — schema-ahead split per ADR-019.
+            cd apps/api && pnpm tsx scripts/migrate-audit-principal-dualism-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

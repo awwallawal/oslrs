@@ -72,6 +72,8 @@ export const AUDIT_ACTIONS = {
   SYSTEM_MIGRATION: 'system.migration',
   // Data Hygiene (prep-input-sanitisation-layer)
   RESPONDENT_BACKFILLED_NORMALISATION: 'respondent.backfilled_normalisation',
+  // Audit Log Viewer (Story 9-11)
+  AUDIT_LOG_EXPORTED: 'audit_log.exported',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

@@ -34,6 +34,9 @@ const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVe
 const MfaChallengePage = lazy(() => import('./features/security/mfa/pages/MfaChallengePage'));
 const MfaEnrollmentPage = lazy(() => import('./features/security/mfa/pages/MfaEnrollmentPage'));
 
+// Story 9-11 — Super Admin audit log viewer
+const AuditLogPage = lazy(() => import('./features/audit-log/pages/AuditLogPage'));
+
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
 
@@ -815,6 +818,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <MfaEnrollmentPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 9-11 — Audit Log Viewer (super_admin only) */}
+                <Route
+                  path="audit-log"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <AuditLogPage />
                     </Suspense>
                   }
                 />

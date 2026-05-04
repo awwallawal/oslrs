@@ -75,10 +75,21 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has exactly 14 sidebar items', () => {
-      // 13 base items + MFA Settings (Story 9-13)
+    it('super_admin has exactly 15 sidebar items', () => {
+      // 13 base items + MFA Settings (Story 9-13) + Audit Log (Story 9-11)
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBe(14);
+      expect(items.length).toBe(15);
+    });
+
+    it('super_admin has Audit Log sidebar item between System Health and MFA Settings', () => {
+      const items = sidebarConfig.super_admin;
+      const auditIdx = items.findIndex((i) => i.label === 'Audit Log');
+      const systemIdx = items.findIndex((i) => i.label === 'System Health');
+      const mfaIdx = items.findIndex((i) => i.label === 'MFA Settings');
+      expect(auditIdx).toBeGreaterThan(-1);
+      expect(items[auditIdx].href).toBe('/dashboard/super-admin/audit-log');
+      expect(auditIdx).toBeGreaterThan(systemIdx);
+      expect(auditIdx).toBeLessThan(mfaIdx);
     });
 
     // Story 6.5: Payments sidebar item for enumerator and supervisor
