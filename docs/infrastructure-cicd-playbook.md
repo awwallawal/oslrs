@@ -1059,12 +1059,68 @@ costs debugging clarity), then reference each one in the cloud-runner `Build` st
 
 **Verification when adding a new `VITE_*` var to source code:**
 
-1. Add to GH Actions Variables (Settings → Secrets and variables → Actions → Variables tab)
+1. Add to GH Actions Variables (Settings → Secrets and variables → Actions → **Variables tab** — NOT the Secrets tab; see addendum below)
 2. Add to `Build` step's `env:` block in `.github/workflows/ci-cd.yml`
 3. Add to the VPS `.env` (still useful for any one-off VPS-side build, e.g., manual recovery)
 4. Add to `.env.example` so future operators know the var exists
 
 Skipping any of these silently breaks production. Step 1 is the easiest to forget.
+
+**Addendum 2026-05-04 — vars-vs-secrets ambiguity (real production outage):**
+
+After the 2026-05-04 5-commit push (commits ac903c8..541b9a6), the live hCaptcha widget started rendering the "for testing purposes only" banner; login POSTs failed for ~35 minutes (11:11→11:46 UTC) before recovery. **None of the 4 verification steps above had been skipped on this codebase** — the workflow was correct, the `Build` env: block was correct, the VPS `.env` had the right values. The failure mode was subtler: **the values were stored as GH Actions repo Secrets, while the workflow read them via `${{ vars.X }}`**. Two different scopes, both work mechanically, **`vars.X` returns empty when the value lives in `secrets.X`**. The build silently baked empty → Vite fell back to the hCaptcha public test key → live site broken.
+
+Diagnosis sequence (run in this order if test-key fallback symptom appears):
+
+```bash
+# 1. Are the values where the workflow expects them? (Variables tab)
+gh variable list --repo <owner>/<repo>
+# Expect: both VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID listed with values
+# If empty: values are missing from Variables. Check Secrets next.
+
+# 2. Are they sitting in the wrong scope? (Secrets tab — read-only via gh, names visible)
+gh secret list --repo <owner>/<repo> | grep -i VITE
+# If they appear here AND step 1 was empty → vars-vs-secrets mismatch detected.
+# This is the production-outage class.
+
+# 3. What did the build actually bake? (read the Build step env-line from the latest CI run)
+gh run view <run-id> --log | grep -i 'VITE_HCAPTCHA'
+# Expect: "VITE_HCAPTCHA_SITE_KEY: 9772af14-..." (real value)
+# If you see: "VITE_HCAPTCHA_SITE_KEY: " (trailing whitespace, no value) → vars empty at build time.
+```
+
+**Recovery (one-time, when the mismatch is confirmed):**
+
+```bash
+# Get the authoritative values from the VPS .env (canonical source of prod truth)
+ssh root@oslsr-home-app "grep -E '^VITE_HCAPTCHA_SITE_KEY|^VITE_GOOGLE_CLIENT_ID' /root/oslrs/.env"
+
+# Re-set them as Variables (the scope the workflow expects)
+gh variable set VITE_HCAPTCHA_SITE_KEY --body '<value-from-vps>' --repo <owner>/<repo>
+gh variable set VITE_GOOGLE_CLIENT_ID --body '<value-from-vps>' --repo <owner>/<repo>
+
+# Trigger a re-build (empty commit is the simplest re-trigger that creates an audit trail)
+git commit --allow-empty -m "ci: re-trigger build to pick up restored VITE_* GH Actions Variables"
+git push origin main
+
+# After CI green, delete the now-redundant Secrets to prevent the same ambiguity from recurring
+gh secret delete VITE_HCAPTCHA_SITE_KEY --repo <owner>/<repo>
+gh secret delete VITE_GOOGLE_CLIENT_ID --repo <owner>/<repo>
+```
+
+**Permanent guard against recurrence:** the 2026-05-04 fix added a `Pre-build env guard (Pitfall #23 — vars-vs-secrets / test-key fallback)` step in `.github/workflows/ci-cd.yml` that runs BEFORE the `Build` step. It fails the build at minute 1 of CI if any of:
+1. `VITE_HCAPTCHA_SITE_KEY` is empty (variable missing OR in wrong scope)
+2. `VITE_HCAPTCHA_SITE_KEY` matches the hCaptcha public test key `10000000-ffff-ffff-ffff-000000000001`
+3. `VITE_GOOGLE_CLIENT_ID` is empty
+
+Cost: ~10s per build. Benefit: turns a class of silent production outages into loud build failures with actionable error messages (`::error::` annotations point straight at the recovery recipe). **Pattern worth replicating for any new `VITE_*` var with a "fallback to hardcoded default" risk** — add the var to the guard's env: block + add a check.
+
+**Why Variables and not Secrets for these specific values?** All `VITE_*` vars are baked into the public JS bundle and visible to anyone who opens DevTools. Secrecy is moot. Practical differences:
+- **Secrets:** auto-redacted in workflow logs (shown as `***`). Annoying for debugging — when CI fails for build reasons, the env-line readout shows masked values, you can't tell if the right value was set vs. wrong value vs. empty.
+- **Variables:** visible in workflow logs. You can see exactly what got baked. For public values, this is what you want.
+- **Both:** can be set per-environment (Production/Staging/Preview) for environment-aware deployments.
+
+The convention "public values → Variables, secret values → Secrets" is widely documented (GitHub's own docs + Vite's own docs both call this out). Following it avoids the 2026-05-04 outage class entirely.
 
 ### Pitfall #24: `pnpm/action-setup@v4` rejects dual version source-of-truth
 

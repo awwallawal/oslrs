@@ -64,6 +64,37 @@ jobs:
       #   POST verify always fails) and an empty Google client ID. Previously these
       #   were picked up by Vite from the VPS-side `.env` during the VPS-side build —
       #   now that the build runs on the cloud runner, they're injected here.
+      #
+      # 2026-05-04: vars-vs-secrets ambiguity caught in production after the values
+      # were stored as Secrets (where they're invisible to `vars.X` template lookup)
+      # while the workflow expected Variables. Result: empty bake → hCaptcha test
+      # widget on the live site → 35-min login outage (11:11→11:46 UTC). The guard
+      # below catches this class of regression at minute 1 of CI rather than after
+      # deploy. Failure modes covered:
+      #   1. Variable missing entirely (typo in workflow OR variable deleted from repo)
+      #   2. Variable set but value is the public hCaptcha test key (operator pasted
+      #      the example value from docs by mistake)
+      #   3. VITE_GOOGLE_CLIENT_ID empty (less catastrophic — silently breaks Google
+      #      OAuth button but doesn't surface as a captcha banner)
+      # Pitfall #23 in docs/infrastructure-cicd-playbook.md has the full diagnostic.
+      - name: Pre-build env guard (Pitfall #23 — vars-vs-secrets / test-key fallback)
+        env:
+          VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+        run: |
+          if [ -z "$VITE_HCAPTCHA_SITE_KEY" ]; then
+            echo "::error::VITE_HCAPTCHA_SITE_KEY is empty. Likely cause: stored as a GH Actions Secret instead of Variable. Set via 'gh variable set VITE_HCAPTCHA_SITE_KEY --body \"<value>\" --repo awwallawal/oslrs' OR add via Settings → Secrets and variables → Actions → Variables tab. Pitfall #23 in docs/infrastructure-cicd-playbook.md."
+            exit 1
+          fi
+          if [ "$VITE_HCAPTCHA_SITE_KEY" = "10000000-ffff-ffff-ffff-000000000001" ]; then
+            echo "::error::VITE_HCAPTCHA_SITE_KEY is set to the hCaptcha PUBLIC TEST KEY (10000000-ffff-...). The live site would render the 'for testing purposes only' widget and login POSTs would fail because the server holds the prod secret. Set the real prod sitekey via 'gh variable set'."
+            exit 1
+          fi
+          if [ -z "$VITE_GOOGLE_CLIENT_ID" ]; then
+            echo "::error::VITE_GOOGLE_CLIENT_ID is empty. Google OAuth button will be non-functional. Set via 'gh variable set' as above."
+            exit 1
+          fi
+          echo "✅ VITE_* env guard passed: hCaptcha sitekey set + non-test, Google client ID set."
       - name: Build
         env:
           VITE_API_URL: /api/v1
