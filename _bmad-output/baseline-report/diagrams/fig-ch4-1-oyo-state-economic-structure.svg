@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 242" preserveAspectRatio="xMidYMid meet">
+  <rect width="630" height="242" fill="#fbf9f2"/>
+  <text x="30" y="38" font-family='"Inter", sans-serif' font-size="14" font-weight="600" fill="#1a1a1a">OYO STATE ECONOMIC STRUCTURE (Estimated)</text>
+  <text x="142" y="77" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Agriculture</text>
+  <rect x="150" y="64" width="380.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="538" y="77" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">~35%</text>
+  <text x="142" y="103" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Commerce</text>
+  <rect x="150" y="90" width="277.7" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="435.6923076923077" y="103" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">~25%</text>
+  <text x="142" y="129" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Services</text>
+  <rect x="150" y="116" width="204.6" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="362.61538461538464" y="129" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">~20%</text>
+  <text x="142" y="155" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Manufacturing</text>
+  <rect x="150" y="142" width="131.5" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="289.53846153846155" y="155" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">~12%</text>
+  <text x="142" y="181" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Construction</text>
+  <rect x="150" y="168" width="87.7" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="245.69230769230768" y="181" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">~8%</text>
+  <text x="600" y="228" font-family='"Inter", sans-serif' font-size="9" fill="#6b6b6b" text-anchor="end">(Estimated)</text>
+</svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 480" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="480" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Layer 1: Point-of-Entry Validation, Detailed Rules</text>
+  <rect x="60" y="80" width="360" height="160" fill="white" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="92" width="12" height="32" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="108" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#9C1E23">Identity</text>
+  <text x="76" y="136" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NIN: Modulus-11 checksum</text>
+  <text x="76" y="151.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NIN dedup at insert</text>
+  <text x="76" y="167.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• BVN: not collected (compliance)</text>
+  <text x="76" y="183.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Phone: NG format (+234, 080…)</text>
+  <rect x="440" y="80" width="360" height="160" fill="white" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="452" y="92" width="12" height="32" fill="#1864ab" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="476" y="108" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1864ab">Demographic</text>
+  <text x="456" y="136" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Age: 15+ (working age)</text>
+  <text x="456" y="151.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Gender: M/F/Other (PII)</text>
+  <text x="456" y="167.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• LGA: dropdown (33 options)</text>
+  <text x="456" y="183.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Address: required free text</text>
+  <rect x="60" y="260" width="360" height="160" fill="white" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="272" width="12" height="32" fill="#b58105" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="288" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#b58105">Employment</text>
+  <text x="76" y="316" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• ICLS-19 status: Q3.1–Q3.4 cascade</text>
+  <text x="76" y="331.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Sector: 20-option dropdown</text>
+  <text x="76" y="347.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Skill: from 150-skill taxonomy</text>
+  <text x="76" y="363.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Income: ranges (no exact)</text>
+  <rect x="440" y="260" width="360" height="160" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="452" y="272" width="12" height="32" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="476" y="288" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#2b8a3e">Consent</text>
+  <text x="456" y="316" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Tier 1: required</text>
+  <text x="456" y="331.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Tier 2: optional Q6.1</text>
+  <text x="456" y="347.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Tier 3: optional Q6.2</text>
+  <text x="456" y="363.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Withdrawal flow available</text>
+</svg>

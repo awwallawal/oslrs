@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6.00 -14.00 1188.00 693.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="6.00" y="-14.00" width="1188.00" height="693.00" fill="white"/>
+  <rect x="30" y="55" width="1140" height="175" rx="14" ry="14" fill="#ebf5fb" stroke="#74b9ff" stroke-width="2" opacity="1"/>
+  <text x="40" y="60" fill="#2980b9" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="40" dy="0">CLIENT LAYER</tspan></text>
+  <rect x="80" y="90" width="300" height="120" rx="9.6" ry="9.6" fill="#d6eaf8" stroke="#2980b9" stroke-width="2" opacity="1"/>
+  <text x="230" y="115" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="24" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="230" dy="0">📱</tspan></text>
+  <text x="230" y="142.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="230" dy="0">Mobile PWA</tspan></text>
+  <text x="230" y="170" fill="#636e72" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="230" dy="0">(Enumerators, Offline-Capable)</tspan></text>
+  <rect x="450" y="90" width="300" height="120" rx="9.6" ry="9.6" fill="#d6eaf8" stroke="#2980b9" stroke-width="2" opacity="1"/>
+  <text x="600" y="115" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="24" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="600" dy="0">💻</tspan></text>
+  <text x="600" y="142.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="600" dy="0">Desktop Web</tspan></text>
+  <text x="600" y="170" fill="#636e72" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="600" dy="0">(Staff Portal)</tspan></text>
+  <rect x="820" y="90" width="300" height="120" rx="9.6" ry="9.6" fill="#d6eaf8" stroke="#2980b9" stroke-width="2" opacity="1"/>
+  <text x="970" y="115" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="24" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="970" dy="0">🌐</tspan></text>
+  <text x="970" y="142.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="970" dy="0">Public Website</tspan></text>
+  <text x="970" y="170" fill="#636e72" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="970" dy="0">(Self-Registration + Marketplace)</tspan></text>
+  <polyline points="230.00,210.00 600.00,258.00" fill="none" stroke="#2980b9" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#2980b9"/>
+  <polyline points="600.00,210.00 600.00,258.00" fill="none" stroke="#2980b9" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#2980b9"/>
+  <polyline points="970.00,210.00 600.00,258.00" fill="none" stroke="#2980b9" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#2980b9"/>
+  <rect x="80" y="263" width="1040" height="50" rx="4" ry="4" fill="#aed6f1" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <text x="600" y="287.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="15" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="600" dy="0">NGINX: SSL Termination  |  Rate Limiting  |  CSP Headers  |  Static Assets</tspan></text>
+  <polyline points="600.00,313.00 600.00,350.00" fill="none" stroke="#27ae60" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#27ae60"/>
+  <rect x="30" y="355" width="1140" height="300" rx="24" ry="24" fill="#eafaf1" stroke="#27ae60" stroke-width="2" opacity="1"/>
+  <text x="40" y="360" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="40" dy="0">APPLICATION SERVER (Express + Node.js)</tspan></text>
+  <rect x="55" y="390" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="182.5" y="416.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="182.5" dy="0">Auth Module</tspan><tspan x="182.5" dy="17.5">(JWT + Redis)</tspan></text>
+  <rect x="325" y="390" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="452.5" y="416.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="452.5" dy="0">Staff Management</tspan><tspan x="452.5" dy="17.5">(RBAC, Lifecycle)</tspan></text>
+  <rect x="595" y="390" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="722.5" y="416.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="722.5" dy="0">Survey Engine</tspan><tspan x="722.5" dy="17.5">(Forms, Offline, Ingestion)</tspan></text>
+  <rect x="865" y="390" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="992.5" y="416.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="992.5" dy="0">Marketplace</tspan><tspan x="992.5" dy="17.5">(Search, FTS, Contact)</tspan></text>
+  <rect x="55" y="475" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="182.5" y="501.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="182.5" dy="0">Fraud Detection</tspan><tspan x="182.5" dy="17.5">(GPS, Speed, Pattern)</tspan></text>
+  <rect x="325" y="475" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="452.5" y="501.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="452.5" dy="0">Remuneration</tspan><tspan x="452.5" dy="17.5">(Payments, Dispute)</tspan></text>
+  <rect x="595" y="475" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="722.5" y="501.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="722.5" dy="0">Audit Trails</tspan><tspan x="722.5" dy="17.5">(SHA-256, Immutable)</tspan></text>
+  <rect x="865" y="475" width="255" height="70" rx="5.6000000000000005" ry="5.6000000000000005" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="992.5" y="501.25" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="992.5" dy="0">Monitoring</tspan><tspan x="992.5" dy="17.5">(Metrics, Alerts)</tspan></text>
+  <text x="40" y="565" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="40" dy="0">DATA STORES</tspan></text>
+  <rect x="100" y="590" width="220" height="55" rx="4.4" ry="4.4" fill="#aed6f1" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <text x="210" y="610" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="210" dy="0">PostgreSQL 15</tspan><tspan x="210" dy="15">(Primary DB, FTS, UUIDv7)</tspan></text>
+  <ellipse cx="210" cy="590" rx="110" ry="10" fill="#85c1e9" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <rect x="490" y="590" width="220" height="55" rx="4.4" ry="4.4" fill="#f5b7b1" stroke="#c0392b" stroke-width="2" opacity="1"/>
+  <text x="600" y="610" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="600" dy="0">Redis 7</tspan><tspan x="600" dy="15">(Cache, Sessions, Rate Limit)</tspan></text>
+  <ellipse cx="600" cy="590" rx="110" ry="10" fill="#e74c3c" stroke="#c0392b" stroke-width="2" opacity="1"/>
+  <rect x="880" y="590" width="220" height="55" rx="4.4" ry="4.4" fill="#fdebd0" stroke="#d68910" stroke-width="2" opacity="1"/>
+  <text x="990" y="610" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="990" dy="0">S3 Backup</tspan><tspan x="990" dy="15">(Daily Encrypted, 7-Year)</tspan></text>
+  <ellipse cx="990" cy="590" rx="110" ry="10" fill="#f39c12" stroke="#d68910" stroke-width="2" opacity="1"/>
+  <polyline points="210.00,555.00 210.00,580.00" fill="none" stroke="#2471a3" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#2471a3"/>
+  <polyline points="600.00,555.00 600.00,580.00" fill="none" stroke="#c0392b" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#c0392b"/>
+  <polyline points="990.00,555.00 990.00,580.00" fill="none" stroke="#d68910" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#d68910"/>
+</svg>

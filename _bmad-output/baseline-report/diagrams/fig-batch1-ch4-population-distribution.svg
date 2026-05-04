@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 360" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect width="700" height="360" fill="#fbf9f2"/>
+  <text x="350" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Oyo State, Population Distribution</text>
+  <text x="350" y="44" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">By Geographic Zone (Estimated)</text>
+  <text x="168" y="96" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Ibadan Metro</text>
+  <rect x="180" y="80" width="380" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="568" y="96" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~30%</text>
+  <text x="168" y="128" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Oke-Ogun</text>
+  <rect x="180" y="112" width="278.66666666666663" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="466.66666666666663" y="128" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~22%</text>
+  <text x="168" y="160" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Ibadan Periphery</text>
+  <rect x="180" y="144" width="228" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="416" y="160" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~18%</text>
+  <text x="168" y="192" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Ogbomosho</text>
+  <rect x="180" y="176" width="152" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="340" y="192" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~12%</text>
+  <text x="168" y="224" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Oyo</text>
+  <rect x="180" y="208" width="126.66666666666666" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="314.66666666666663" y="224" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~10%</text>
+  <text x="168" y="256" font-family='"Inter", sans-serif' font-size="12" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#1a1a1a">Ibarapa</text>
+  <rect x="180" y="240" width="101.33333333333333" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="2" ry="2" opacity="1"/>
+  <text x="289.3333333333333" y="256" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">~8%</text>
+  <line x1="150" y1="300" x2="670" y2="300" stroke="#c9bba6" stroke-width="1"/>
+  <text x="350" y="325" font-family='"Inter", sans-serif' font-size="11" font-weight="600" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">TOTAL: ~8.5–9.2 million (2024 NPC projection)</text>
+</svg>

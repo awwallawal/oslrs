@@ -1,8 +1,8 @@
-# CHAPTER 21: MONITORING & EVALUATION FRAMEWORK — KEY PERFORMANCE INDICATORS
+# 18. Monitoring and Evaluation Framework: Key Performance Indicators
 
 ---
 
-## 21.1 Introduction
+## 18.1 Introduction
 
 This chapter establishes the **Monitoring and Evaluation (M&E) Framework** for the Oyo State Skilled Labour Register, comprising a set of **Key Performance Indicators (KPIs)** that provide quantifiable measures of project progress, data quality, and registry outcomes. The KPI framework enables objective assessment at each Stage Gate review (Chapter 19) and supports evidence-based decision-making throughout the remaining project phases.
 
@@ -10,40 +10,40 @@ The framework is structured across five KPI domains, with each indicator assigne
 
 ---
 
-## 21.2 KPI Framework Structure
+## 18.2 KPI Framework Structure
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              KPI FRAMEWORK — 5 DOMAINS                        │
+│              KPI FRAMEWORK, 5 DOMAINS                        │
 │                                                               │
 │  ┌─────────────────────────────────────────────────────┐     │
 │  │  DOMAIN 1: ENUMERATION PROGRESS                     │     │
 │  │  How much data are we collecting?                    │     │
-│  │  7 KPIs — Daily/Weekly measurement                  │     │
+│  │  7 KPIs, Daily/Weekly measurement                  │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌─────────────────────────────────────────────────────┐     │
 │  │  DOMAIN 2: DATA QUALITY                              │     │
 │  │  How good is the data we are collecting?             │     │
-│  │  8 KPIs — Daily/Weekly measurement                  │     │
+│  │  8 KPIs, Daily/Weekly measurement                  │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌─────────────────────────────────────────────────────┐     │
 │  │  DOMAIN 3: FIELD OPERATIONS                          │     │
 │  │  How effectively are field teams performing?          │     │
-│  │  6 KPIs — Daily measurement                         │     │
+│  │  6 KPIs, Daily measurement                         │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌─────────────────────────────────────────────────────┐     │
 │  │  DOMAIN 4: PLATFORM PERFORMANCE                      │     │
 │  │  Is the technology infrastructure performing?        │     │
-│  │  7 KPIs — Continuous/Daily measurement              │     │
+│  │  7 KPIs, Continuous/Daily measurement              │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌─────────────────────────────────────────────────────┐     │
 │  │  DOMAIN 5: REGISTRY OUTCOMES                         │     │
 │  │  Are we achieving the registry's policy objectives?  │     │
-│  │  6 KPIs — Weekly/Gate measurement                   │     │
+│  │  6 KPIs, Weekly/Gate measurement                   │     │
 │  └─────────────────────────────────────────────────────┘     │
 │                                                               │
 │  TOTAL: 34 KPIs across 5 domains                             │
@@ -52,7 +52,7 @@ The framework is structured across five KPI domains, with each indicator assigne
 
 ---
 
-## 21.3 Domain 1: Enumeration Progress KPIs
+## 18.3 Domain 1: Enumeration Progress KPIs
 
 These indicators track the volume and geographic distribution of data collection.
 
@@ -63,12 +63,12 @@ These indicators track the volume and geographic distribution of data collection
 | EP-3 | **Cumulative registry count** | Running total of verified registry entries | 23,760 by Day 30 | < 70% of pro-rata target | Daily | Registry database |
 | EP-4 | **LGA coverage (% of 33 LGAs active)** | Percentage of LGAs with ≥ 1 submission in current week | 100% | < 90% (3+ LGAs inactive) | Weekly | Platform analytics |
 | EP-5 | **LGA equity ratio** | Ratio of highest to lowest LGA submission count | < 5:1 | > 8:1 | Weekly | Platform analytics |
-| EP-6 | **Self-registration volume** | Public web self-registrations (non-enumerator) | Supplementary (no target) | — | Weekly | Channel analytics |
+| EP-6 | **Self-registration volume** | Public web self-registrations (non-enumerator) | Supplementary (no target) |, | Weekly | Channel analytics |
 | EP-7 | **Offline sync backlog** | Number of submissions pending sync from offline devices | < 50 statewide | > 200 statewide | Daily | Sync queue |
 
 ---
 
-## 21.4 Domain 2: Data Quality KPIs
+## 18.4 Domain 2: Data Quality KPIs
 
 These indicators assess the integrity and reliability of collected data.
 
@@ -85,7 +85,7 @@ These indicators assess the integrity and reliability of collected data.
 
 ---
 
-## 21.5 Domain 3: Field Operations KPIs
+## 18.5 Domain 3: Field Operations KPIs
 
 These indicators monitor the operational effectiveness of field teams.
 
@@ -100,7 +100,7 @@ These indicators monitor the operational effectiveness of field teams.
 
 ---
 
-## 21.6 Domain 4: Platform Performance KPIs
+## 18.6 Domain 4: Platform Performance KPIs
 
 These indicators ensure the technology infrastructure supports operational needs.
 
@@ -116,7 +116,7 @@ These indicators ensure the technology infrastructure supports operational needs
 
 ---
 
-## 21.7 Domain 5: Registry Outcomes KPIs
+## 18.7 Domain 5: Registry Outcomes KPIs
 
 These indicators assess whether the registry is achieving its policy objectives.
 
@@ -131,9 +131,9 @@ These indicators assess whether the registry is achieving its policy objectives.
 
 ---
 
-## 21.8 KPI Dashboard Integration
+## 18.8 KPI Dashboard Integration
 
-All 34 KPIs are designed to be measured using **data already captured by the OSLSR platform** — no additional data collection infrastructure is required. The platform's built-in analytics dashboard (Chapter 13) provides real-time or daily computation of these indicators.
+All 34 KPIs are designed to be measured using **data already captured by the OSLSR platform**, no additional data collection infrastructure is required. The platform's built-in analytics dashboard (Chapter 13) provides real-time or daily computation of these indicators.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -171,7 +171,7 @@ All 34 KPIs are designed to be measured using **data already captured by the OSL
 
 ---
 
-## 21.9 Reporting Schedule
+## 18.9 Reporting Schedule
 
 | Report | Content | Audience | Frequency | Format |
 |--------|---------|----------|:---------:|--------|
@@ -182,7 +182,7 @@ All 34 KPIs are designed to be measured using **data already captured by the OSL
 
 ---
 
-## 21.10 KPI-to-Gate Mapping
+## 18.10 KPI-to-Gate Mapping
 
 The following table maps which KPIs serve as **formal gate criteria** at each Stage Gate review:
 
@@ -207,7 +207,7 @@ The following table maps which KPIs serve as **formal gate criteria** at each St
 
 ---
 
-## 21.11 Assumption Classification of KPI Targets
+## 18.11 Assumption Classification of KPI Targets
 
 Following the Assumption Classification Framework (Chapter 9), the KPI targets carry the following classifications:
 
@@ -221,7 +221,7 @@ The **[FD] Field-Dependent** KPIs will be recalibrated based on actual performan
 
 ---
 
-## 21.12 Continuous Improvement Cycle
+## 18.12 Continuous Improvement Cycle
 
 The M&E framework supports a continuous improvement cycle aligned with the Stage Gate methodology:
 
@@ -255,4 +255,4 @@ The M&E framework supports a continuous improvement cycle aligned with the Stage
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 21 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 21 | Chemiroy Nigeria Limited*

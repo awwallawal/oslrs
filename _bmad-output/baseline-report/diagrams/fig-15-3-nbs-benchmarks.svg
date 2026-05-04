@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="26.00 -9.00 1248.00 703.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="26.00" y="-9.00" width="1248.00" height="703.00" fill="white"/>
+  <text x="650" y="52" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="650" dy="0">OSLSR validation exercise results benchmarked against NBS NLFS Q2 2024</tspan></text>
+  <rect x="960" y="80" width="280" height="52" rx="4.16" ry="4.16" fill="#f9f9f9" stroke="#bdc3c7" stroke-width="1" opacity="1"/>
+  <rect x="970" y="87" width="14" height="14" rx="1.12" ry="1.12" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="990" y="86" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="990" dy="0">OSLSR Validation (n=330)</tspan></text>
+  <rect x="970" y="108" width="14" height="14" rx="1.12" ry="1.12" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="990" y="107" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="990" dy="0">NBS NLFS Q2 2024</tspan></text>
+  <polyline points="130.00,150.00 130.00,570.00" fill="none" stroke="#2c3e50" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="130.00,570.00 1230.00,570.00" fill="none" stroke="#2c3e50" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="145" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">100%</tspan></text>
+  <polyline points="130.00,150.00 1230.00,150.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="229" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">80%</tspan></text>
+  <polyline points="130.00,234.00 1230.00,234.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="313" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">60%</tspan></text>
+  <polyline points="130.00,318.00 1230.00,318.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="397" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">40%</tspan></text>
+  <polyline points="130.00,402.00 1230.00,402.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="481" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">20%</tspan></text>
+  <polyline points="130.00,486.00 1230.00,486.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="565" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="130" dy="0">0%</tspan></text>
+  <rect x="160" y="352" width="50" height="218" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="185" y="335" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="185" dy="0">51.8%</tspan></text>
+  <rect x="215" y="353" width="50" height="217" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="240" y="335" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="240" dy="0">51.5%</tspan></text>
+  <text x="212.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="212.5" dy="0">Gender (% Male)</tspan></text>
+  <text x="215" y="315" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="215" dy="0">±0.3pp ✓</tspan></text>
+  <rect x="300" y="204" width="50" height="366" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="325" y="187" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="325" dy="0">87.0%</tspan></text>
+  <rect x="355" y="203" width="50" height="367" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="380" y="187" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="380" dy="0">87.3%</tspan></text>
+  <text x="350" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="350" dy="0">Employment Rate</tspan></text>
+  <text x="355" y="167" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">±0.3pp ✓</tspan></text>
+  <rect x="440" y="255" width="50" height="315" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="465" y="238" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="465" dy="0">74.9%</tspan></text>
+  <rect x="495" y="254" width="50" height="316" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="520" y="238" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="520" dy="0">75.2%</tspan></text>
+  <text x="492.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="492.5" dy="0">Self-Employment</tspan></text>
+  <text x="495" y="218" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="495" dy="0">±0.3pp ✓</tspan></text>
+  <rect x="580" y="185" width="50" height="385" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="605" y="168" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="605" dy="0">91.6%</tspan></text>
+  <rect x="635" y="181" width="50" height="389" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="660" y="168" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="660" dy="0">92.6%</tspan></text>
+  <text x="632.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="632.5" dy="0">Informal Employment</tspan></text>
+  <text x="635" y="148" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="635" dy="0">±1.0pp ✓</tspan></text>
+  <rect x="720" y="408" width="50" height="162" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="745" y="391" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="745" dy="0">38.5%</tspan></text>
+  <rect x="775" y="423" width="50" height="147" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="800" y="391" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="800" dy="0">~35%</tspan></text>
+  <text x="772.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="772.5" dy="0">Business Ownership</tspan></text>
+  <text x="775" y="371" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="775" dy="0">±3.5pp ✓</tspan></text>
+  <rect x="860" y="474" width="50" height="96" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="885" y="457" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="885" dy="0">22.8%</tspan></text>
+  <rect x="915" y="486" width="50" height="84" rx="4" ry="4" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="940" y="457" fill="#e67e22" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="940" dy="0">~20%</tspan></text>
+  <text x="912.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="912.5" dy="0">CAC Registration</tspan></text>
+  <text x="915" y="437" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="915" dy="0">±2.8pp ✓</tspan></text>
+  <rect x="1000" y="283" width="50" height="287" rx="4" ry="4" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="1025" y="266" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1025" dy="0">68.2%</tspan></text>
+  <rect x="1055" y="546" width="50" height="24" rx="1.92" ry="1.92" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="1" opacity="1" stroke-dasharray="4,2"/>
+  <text x="1080" y="549" fill="#95a5a6" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1080" dy="0">N/A</tspan></text>
+  <text x="1052.5" y="578" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1052.5" dy="0">Marketplace</tspan><tspan x="1052.5" dy="12.5">Consent</tspan></text>
+  <text x="1050" y="246" fill="#95a5a6" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1050" dy="0">N/A (novel)</tspan></text>
+  <rect x="160" y="625" width="960" height="45" rx="3.6" ry="3.6" fill="#eafaf1" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="640" y="633" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="640" dy="0">All 6 comparable indicators within ±4pp of NBS national benchmarks — confirming</tspan><tspan x="640" dy="15">instrument validity and demographic representativeness of purposive sample</tspan></text>
+</svg>

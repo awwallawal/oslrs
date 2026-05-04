@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="21.00 -9.00 993.00 573.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="21.00" y="-9.00" width="993.00" height="573.00" fill="white"/>
+  <text x="45" y="75" fill="#c0392b" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="45" dy="0">TIER 1 — ADMINISTRATIVE</tspan></text>
+  <rect x="230" y="70" width="250" height="80" rx="6.4" ry="6.4" fill="#e74c3c" stroke="#c0392b" stroke-width="2" opacity="1"/>
+  <text x="355" y="80" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Super Admin</tspan></text>
+  <text x="355" y="108" fill="#fde8e8" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Full System Control</tspan></text>
+  <rect x="520" y="70" width="250" height="80" rx="6.4" ry="6.4" fill="#e74c3c" stroke="#c0392b" stroke-width="2" opacity="1"/>
+  <text x="645" y="80" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="645" dy="0">Admin</tspan></text>
+  <text x="645" y="108" fill="#fde8e8" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="645" dy="0">Staff Mgmt, ID Cards, Payments</tspan></text>
+  <text x="45" y="200" fill="#2471a3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="45" dy="0">TIER 2 — FIELD OPS</tspan></text>
+  <rect x="45" y="222" width="120" height="22" rx="1.76" ry="1.76" fill="#f9e79f" stroke="#f39c12" stroke-width="1" opacity="1"/>
+  <text x="107" y="224" fill="#7d6608" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="107" dy="0">LGA-Restricted</tspan></text>
+  <rect x="180" y="195" width="220" height="80" rx="6.4" ry="6.4" fill="#3498db" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <text x="290" y="205" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="290" dy="0">Supervisor</tspan></text>
+  <text x="290" y="233" fill="#d6eaf8" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="290" dy="0">Team Mgmt, Fraud Review,</tspan><tspan x="290" dy="15">Messaging</tspan></text>
+  <rect x="420" y="195" width="220" height="80" rx="6.4" ry="6.4" fill="#3498db" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <text x="530" y="205" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="530" dy="0">Enumerator</tspan></text>
+  <text x="530" y="233" fill="#d6eaf8" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="530" dy="0">Mobile Data Collection,</tspan><tspan x="530" dy="15">Offline PWA</tspan></text>
+  <rect x="660" y="195" width="220" height="80" rx="6.4" ry="6.4" fill="#3498db" stroke="#2471a3" stroke-width="2" opacity="1"/>
+  <text x="770" y="205" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="770" dy="0">Data Entry Clerk</tspan></text>
+  <text x="770" y="233" fill="#d6eaf8" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="770" dy="0">Keyboard-First,</tspan><tspan x="770" dy="15">Paper Digitisation</tspan></text>
+  <text x="45" y="330" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="45" dy="0">TIER 3 — OVERSIGHT</tspan></text>
+  <rect x="45" y="352" width="100" height="22" rx="1.76" ry="1.76" fill="#abebc6" stroke="#2ecc71" stroke-width="1" opacity="1"/>
+  <text x="97" y="354" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="97" dy="0">State-Wide</tspan></text>
+  <rect x="230" y="325" width="250" height="80" rx="6.4" ry="6.4" fill="#27ae60" stroke="#1e8449" stroke-width="2" opacity="1"/>
+  <text x="355" y="335" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Verification Assessor</tspan></text>
+  <text x="355" y="363" fill="#d5f5e3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Audit Queue, Approve/Reject</tspan></text>
+  <rect x="520" y="325" width="250" height="80" rx="6.4" ry="6.4" fill="#27ae60" stroke="#1e8449" stroke-width="2" opacity="1"/>
+  <text x="645" y="335" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="645" dy="0">Government Official</tspan></text>
+  <text x="645" y="363" fill="#d5f5e3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="645" dy="0">Read-Only Dashboards, Reports</tspan></text>
+  <text x="45" y="460" fill="#6c3483" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="45" dy="0">TIER 4 — PUBLIC</tspan></text>
+  <rect x="45" y="482" width="120" height="22" rx="1.76" ry="1.76" fill="#d7bde2" stroke="#8e44ad" stroke-width="1" opacity="1"/>
+  <text x="107" y="484" fill="#6c3483" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="107" dy="0">Self-Registered</tspan></text>
+  <rect x="230" y="450" width="540" height="80" rx="6.4" ry="6.4" fill="#8e44ad" stroke="#6c3483" stroke-width="2" opacity="1"/>
+  <text x="500" y="460" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="500" dy="0">Public User</tspan></text>
+  <text x="500" y="488" fill="#e8daef" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="500" dy="0">Self-Registration, Survey, Marketplace Search, Contact Reveal</tspan></text>
+  <polyline points="355.00,150.00 355.00,190.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="645.00,150.00 645.00,190.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="290.00,275.00 290.00,320.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="530.00,275.00 530.00,320.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="770.00,275.00 770.00,320.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="355.00,405.00 355.00,445.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <polyline points="645.00,405.00 645.00,445.00" fill="none" stroke="#7f8c8d" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#7f8c8d"/>
+  <rect x="830" y="60" width="160" height="480" rx="12.8" ry="12.8" fill="#f8f9fa" stroke="#bdc3c7" stroke-width="1" opacity="0.6"/>
+  <text x="910" y="65" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Expected Count</tspan></text>
+  <rect x="845" y="92" width="130" height="24" rx="1.92" ry="1.92" fill="#fadbd8" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="910" y="94" fill="#c0392b" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Super Admin: 1-2</tspan></text>
+  <rect x="845" y="122" width="130" height="24" rx="1.92" ry="1.92" fill="#fadbd8" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="910" y="124" fill="#c0392b" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Admin: 3-5</tspan></text>
+  <rect x="845" y="196" width="130" height="24" rx="1.92" ry="1.92" fill="#d6eaf8" stroke="#2471a3" stroke-width="1" opacity="1"/>
+  <text x="910" y="198" fill="#2471a3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Supervisor: 33</tspan></text>
+  <rect x="845" y="226" width="130" height="24" rx="1.92" ry="1.92" fill="#d6eaf8" stroke="#2471a3" stroke-width="1" opacity="1"/>
+  <text x="910" y="228" fill="#2471a3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Enumerator: 99</tspan></text>
+  <rect x="845" y="256" width="130" height="24" rx="1.92" ry="1.92" fill="#d6eaf8" stroke="#2471a3" stroke-width="1" opacity="1"/>
+  <text x="910" y="258" fill="#2471a3" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Data Entry: 3-5</tspan></text>
+  <rect x="845" y="330" width="130" height="24" rx="1.92" ry="1.92" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="910" y="332" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Assessor: 3-5</tspan></text>
+  <rect x="845" y="360" width="130" height="24" rx="1.92" ry="1.92" fill="#d5f5e3" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="910" y="362" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Gov Official: 5-10</tspan></text>
+  <rect x="845" y="466" width="130" height="24" rx="1.92" ry="1.92" fill="#e8daef" stroke="#6c3483" stroke-width="1" opacity="1"/>
+  <text x="910" y="468" fill="#6c3483" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="910" dy="0">Public: Unlimited</tspan></text>
+</svg>

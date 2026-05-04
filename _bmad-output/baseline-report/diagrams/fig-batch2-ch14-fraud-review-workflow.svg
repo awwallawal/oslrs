@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="440" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Fraud-Flag Review Workflow</text>
+  <rect x="60" y="100" width="700" height="60" fill="white" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="130" font-family='"Inter", sans-serif' font-size="18" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#b58105">①</text>
+  <text x="120" y="130" font-family='"Inter", sans-serif' font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Submission flagged by Engine</text>
+  <line x1="410" y1="160" x2="410" y2="180" stroke="#b58105" stroke-width="2" marker-end="url(#arrowhead)" color="#b58105"/>
+  <rect x="60" y="180" width="700" height="60" fill="white" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="210" font-family='"Inter", sans-serif' font-size="18" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1864ab">②</text>
+  <text x="120" y="210" font-family='"Inter", sans-serif' font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Queued for Supervisor</text>
+  <line x1="410" y1="240" x2="410" y2="260" stroke="#1864ab" stroke-width="2" marker-end="url(#arrowhead)" color="#1864ab"/>
+  <rect x="60" y="260" width="700" height="60" fill="white" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="290" font-family='"Inter", sans-serif' font-size="18" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#9C1E23">③</text>
+  <text x="120" y="290" font-family='"Inter", sans-serif' font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Supervisor reviews context</text>
+  <line x1="410" y1="320" x2="410" y2="340" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="60" y="340" width="700" height="60" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="370" font-family='"Inter", sans-serif' font-size="18" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#2b8a3e">④</text>
+  <text x="120" y="370" font-family='"Inter", sans-serif' font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Decision recorded (audit log)</text>
+</svg>

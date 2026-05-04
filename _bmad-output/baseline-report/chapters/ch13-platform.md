@@ -1,20 +1,20 @@
-# CHAPTER 13: REGISTRY PLATFORM DEVELOPMENT & CAPABILITIES
+# 10. Registry Platform Development and Capabilities
 
 ---
 
-## 13.1 Introduction
+## 10.1 Introduction
 
-This chapter documents the design, development, and deployment of the **Oyo State Labour & Skills Registry (OSLSR)** digital platform — the core technology infrastructure upon which the State Labour Register operates. The platform was purpose-built to address the specific requirements of workforce enumeration in a developing economy context, incorporating offline-capable mobile data collection, multi-channel registration, automated fraud detection, and a public-facing skills marketplace.
+This chapter documents the design, development, and deployment of the **Oyo State Labour & Skills Registry (OSLSR)** digital platform, the core technology infrastructure upon which the State Labour Register operates. The platform was purpose-built to address the specific requirements of workforce enumeration in a developing economy context, incorporating offline-capable mobile data collection, multi-channel registration, automated fraud detection, and a public-facing skills marketplace.
 
-The platform is **operational and deployed**, accessible to authorised users from the on-premises Data Center workstations and via any internet-connected device.
+The platform is **operational and deployed**, accessible to authorised users from the on-premises Data Centre workstations and via any internet-connected device.
 
 ---
 
-## 13.2 Platform Architecture
+## 10.2 Platform Architecture
 
-### 13.2.1 Architecture Overview
+### 10.2.1 Architecture Overview
 
-The OSLSR platform employs a **modular monolith architecture** — a proven design pattern that combines the simplicity of a single deployable unit with the maintainability of modular internal boundaries. This architecture was selected over microservices based on the project's scale requirements (200+ concurrent staff users, 1,000 concurrent public users) and the operational simplicity demanded by a single-VPS deployment.
+The OSLSR platform employs a **modular monolith architecture**, a proven design pattern that combines the simplicity of a single deployable unit with the maintainability of modular internal boundaries. This architecture was selected over microservices based on the project's scale requirements (200+ concurrent staff users, 1,000 concurrent public users) and the operational simplicity demanded by a single-VPS deployment.
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -70,7 +70,7 @@ The OSLSR platform employs a **modular monolith architecture** — a proven desi
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-### 13.2.2 Technology Stack
+### 10.2.2 Technology Stack
 
 | Layer | Technology | Version | Purpose |
 |-------|-----------|---------|---------|
@@ -96,21 +96,21 @@ The OSLSR platform employs a **modular monolith architecture** — a proven desi
 
 ---
 
-## 13.3 Platform Capabilities
+## 10.3 Platform Capabilities
 
 The following table summarises the platform's operational capabilities:
 
 | # | Capability | Description | Status |
 |---|-----------|-------------|:------:|
-| 1 | **Multi-Channel Data Collection** | Field enumeration (mobile PWA), desktop data entry, and public web self-registration — three distinct channels feeding a unified registry | ✓ Operational |
+| 1 | **Multi-Channel Data Collection** | Field enumeration (mobile PWA), desktop data entry, and public web self-registration, three distinct channels feeding a unified registry | ✓ Operational |
 | 2 | **Offline-Capable PWA** | Progressive Web Application with Service Worker caching and IndexedDB storage enabling 7-day offline data collection with automatic synchronisation | ✓ Operational |
 | 3 | **Native Form Renderer** | One-question-per-screen survey interface with skip logic, real-time validation, and auto-save; supports the full 150-skill taxonomy | ✓ Operational |
 | 4 | **National Identity Verification** | NIN (National Identity Number) validation using Modulus 11 checksum at point of entry, with global uniqueness enforcement across all submission channels | ✓ Operational |
-| 5 | **Role-Based Access Control** | Eight (8) distinct user roles with granular permissions: Super Admin, Admin, Supervisor, Enumerator, Data Entry Clerk, Verification Assessor, Government Official, Public User | ✓ Operational |
+| 5 | **Role-Based Access Control** | Five operational user roles plus a Public tier with granular permissions: Super Admin, Supervisor, Assessor, Enumerator, Data Entry Clerk, and a Public tier for self-registration | ✓ Operational |
 | 6 | **Context-Aware Fraud Detection** | Automated detection of GPS clustering (multiple submissions from same location), speed-run submissions (implausibly fast completion), and straight-lining (repetitive response patterns); configurable thresholds | ✓ Operational |
 | 7 | **Public Skills Marketplace** | Searchable public directory of anonymised worker profiles with government verification badges, full-text search, trade/LGA filtering, and CAPTCHA-protected contact reveal | ✓ Operational |
 | 8 | **Staff Remuneration Management** | Bulk payment recording with bank reference/receipt upload, payment history, dispute mechanism (report → dispute → resolution → acknowledgement), and immutable records | ✓ Operational |
-| 9 | **Immutable Audit Trails** | SHA-256 hash-chained, append-only audit log recording all user actions, PII access, and administrative operations; tamper-proof with database trigger protection; NDPA-compliant 7-year retention | ✓ Operational |
+| 9 | **Immutable Audit Trails** | SHA-256 hash-chained, append-only audit log recording all user actions, PII access, and administrative operations; tamper-proof with database trigger protection; NDPA-aligned 7-year retention | ✓ Operational |
 | 10 | **System Health Monitoring** | Real-time dashboard tracking CPU, RAM, disk utilisation, database performance (p95 latency), job queue depth, and email delivery status; configurable alert thresholds with email notifications | ✓ Operational |
 | 11 | **Automated Backup System** | Daily encrypted database backups to offsite storage via scheduled job (2:00 AM WAT); 7-day daily retention + 7-year monthly archives; tested restore procedure | ✓ Operational |
 | 12 | **Data Export & Reporting** | Role-authorised CSV and PDF export of registry data with audit logging; filtered exports by LGA, date range, occupation, and status | ✓ Operational |
@@ -120,7 +120,7 @@ The following table summarises the platform's operational capabilities:
 
 ---
 
-## 13.4 User Role Architecture
+## 10.4 User Role Architecture
 
 The platform enforces strict role-based access control (RBAC) across eight distinct user roles. Each role has precisely defined permissions, ensuring that users can only access data and functions appropriate to their designated responsibilities.
 
@@ -164,7 +164,7 @@ The platform enforces strict role-based access control (RBAC) across eight disti
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 13.4.1 Access Control Matrix
+### 10.4.1 Access Control Matrix
 
 | Function | Super Admin | Admin | Supervisor | Enumerator | Clerk | Assessor | Official | Public |
 |----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -189,9 +189,9 @@ The platform enforces strict role-based access control (RBAC) across eight disti
 
 ---
 
-## 13.5 Quality Assurance
+## 10.5 Quality Assurance
 
-### 13.5.1 Automated Testing
+### 10.5.1 Automated Testing
 
 The OSLSR platform was subjected to comprehensive automated quality assurance testing:
 
@@ -201,7 +201,7 @@ The OSLSR platform was subjected to comprehensive automated quality assurance te
 | Frontend Component & Hook Tests | 2,093 | 100% | All pages, components, and hooks |
 | **Total Automated Tests** | **3,564** | **100%** | **Full platform coverage** |
 
-### 13.5.2 Security Assessment
+### 10.5.2 Security Assessment
 
 A comprehensive security assessment was conducted against the OWASP Top 10 framework:
 
@@ -218,22 +218,22 @@ A comprehensive security assessment was conducted against the OWASP Top 10 frame
 | A09: Logging & Monitoring | AuditService, PII access logging, prom-client metrics | ✓ Secure |
 | A10: SSRF | No user-provided URLs for server-side fetching | ✓ Secure |
 
-**All ten OWASP categories rated SECURE** — including one category (A05) that was identified and remediated during the assessment period.
+**All ten OWASP categories at A- security posture (state-government-grade)**, including one category (A05) that was identified and remediated during the assessment period.
 
 ---
 
-## 13.6 Platform Screenshots
+## 10.6 Platform Screenshots
 
 *[Refer to Appendix J: Plates 6–12 for platform screenshots demonstrating key interfaces]*
 
 - **Plate 6**: Login and Authentication Screen
 - **Plate 7**: Super Administrator Dashboard with real-time analytics
-- **Plate 8**: Survey Form Renderer (mobile view) — one-question-per-screen interface
+- **Plate 8**: Survey Form Renderer (mobile view), one-question-per-screen interface
 - **Plate 9**: Public Skills Marketplace search interface
 - **Plate 10**: Fraud Detection dashboard with flagged submission alerts
 - **Plate 11**: System Health Monitoring with CPU, RAM, and latency metrics
-- **Plate 12**: Staff Remuneration Management — bulk payment recording
+- **Plate 12**: Staff Remuneration Management, bulk payment recording
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 13 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 13 | Chemiroy Nigeria Limited*

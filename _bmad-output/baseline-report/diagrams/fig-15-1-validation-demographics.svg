@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4.00 -9.00 1408.00 923.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="-4.00" y="-9.00" width="1408.00" height="923.00" fill="white"/>
+  <text x="700" y="52" fill="#6b7280" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="700" dy="0">Source: OSLSR Validation Exercise, February 2026 | Purposive sample aligned with NBS NLFS Q2 2024</tspan></text>
+  <rect x="20" y="90" width="670" height="390" rx="31.2" ry="31.2" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" opacity="1"/>
+  <text x="355" y="100" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Gender Distribution (n=330)</tspan></text>
+  <ellipse cx="275" cy="255" rx="100" ry="100" fill="#3498db" stroke="#2980b9" stroke-width="2" opacity="1"/>
+  <rect x="175" y="155" width="100" height="200" rx="0" ry="0" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <ellipse cx="275" cy="255" rx="100" ry="100" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="0.5"/>
+  <ellipse cx="275" cy="255" rx="50" ry="50" fill="#f9fafb" stroke="#f9fafb" stroke-width="1" opacity="1"/>
+  <text x="380" y="200" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="380" dy="0">Male: 51.8% (171)</tspan></text>
+  <rect x="396" y="237" width="16" height="16" rx="1.28" ry="1.28" fill="#3498db" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="380" y="260" fill="#e74c3c" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="380" dy="0">Female: 48.2% (159)</tspan></text>
+  <rect x="396" y="297" width="16" height="16" rx="1.28" ry="1.28" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="275" y="240" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="275" dy="0">n=330</tspan></text>
+  <rect x="140" y="390" width="18" height="18" rx="1.44" ry="1.44" fill="#3498db" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="165" y="389" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="165" dy="0">Male — 51.8%</tspan></text>
+  <rect x="340" y="390" width="18" height="18" rx="1.44" ry="1.44" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="365" y="389" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="365" dy="0">Female — 48.2%</tspan></text>
+  <text x="340" y="170" fill="#2980b9" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="340" dy="0">51.8%</tspan></text>
+  <text x="195" y="330" fill="#c0392b" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="195" dy="0">48.2%</tspan></text>
+  <rect x="710" y="90" width="670" height="390" rx="31.2" ry="31.2" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" opacity="1"/>
+  <text x="1045" y="100" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1045" dy="0">Age Cohort Distribution</tspan></text>
+  <text x="790" y="143" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">15–24</tspan></text>
+  <rect x="800" y="140" width="185" height="28" rx="2.24" ry="2.24" fill="#1abc9c" stroke="#16a085" stroke-width="1" opacity="1"/>
+  <text x="990" y="143" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="990" dy="0">18.5% (61)</tspan></text>
+  <text x="790" y="183" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">25–34</tspan></text>
+  <rect x="800" y="180" width="315" height="28" rx="2.24" ry="2.24" fill="#2ecc71" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="1120" y="183" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="1120" dy="0">31.5% (104)</tspan></text>
+  <text x="790" y="223" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">35–44</tspan></text>
+  <rect x="800" y="220" width="248" height="28" rx="2.24" ry="2.24" fill="#3498db" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="1053" y="223" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="1053" dy="0">24.8% (82)</tspan></text>
+  <text x="790" y="263" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">45–54</tspan></text>
+  <rect x="800" y="260" width="155" height="28" rx="2.24" ry="2.24" fill="#9b59b6" stroke="#8e44ad" stroke-width="1" opacity="1"/>
+  <text x="960" y="263" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="960" dy="0">15.5% (51)</tspan></text>
+  <text x="790" y="303" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">55–64</tspan></text>
+  <rect x="800" y="300" width="70" height="28" rx="2.24" ry="2.24" fill="#e67e22" stroke="#d35400" stroke-width="1" opacity="1"/>
+  <text x="875" y="303" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="875" dy="0">7.0% (23)</tspan></text>
+  <text x="790" y="343" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="790" dy="0">65+</tspan></text>
+  <rect x="800" y="340" width="27" height="28" rx="2.16" ry="2.16" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="833" y="343" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="833" dy="0">2.7% (9)</tspan></text>
+  <polyline points="800.00,135.00 800.00,380.00" fill="none" stroke="#9ca3af" stroke-width="1" opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1045" y="390" fill="#9ca3af" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1045" dy="0">Peak working-age cohort: 25–44 accounts for 56.3% of sample</tspan></text>
+  <rect x="20" y="500" width="670" height="390" rx="31.2" ry="31.2" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" opacity="1"/>
+  <text x="355" y="510" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Employment Status</tspan></text>
+  <ellipse cx="240" cy="660" rx="100" ry="100" fill="#27ae60" stroke="#1e8449" stroke-width="2" opacity="1"/>
+  <rect x="140" y="560" width="55" height="105" rx="0" ry="0" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="0.9"/>
+  <rect x="140" y="665" width="55" height="95" rx="0" ry="0" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1" opacity="0.9"/>
+  <ellipse cx="240" cy="660" rx="50" ry="50" fill="#f9fafb" stroke="#f9fafb" stroke-width="1" opacity="1"/>
+  <text x="242" y="640" fill="#1e8449" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="242" dy="0">87.0%</tspan></text>
+  <text x="240" y="668" fill="#6b7280" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="240" dy="0">employed</tspan></text>
+  <rect x="380" y="600" width="18" height="18" rx="1.44" ry="1.44" fill="#27ae60" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="405" y="600" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="405" dy="0">Employed: 87.0% (287)</tspan></text>
+  <rect x="380" y="630" width="18" height="18" rx="1.44" ry="1.44" fill="#e74c3c" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="405" y="630" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="405" dy="0">Unemployed: 7.6% (25)</tspan></text>
+  <rect x="380" y="660" width="18" height="18" rx="1.44" ry="1.44" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1" opacity="1"/>
+  <text x="405" y="660" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="405" dy="0">Outside Labour Force: 5.5% (18)</tspan></text>
+  <rect x="710" y="500" width="670" height="390" rx="31.2" ry="31.2" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" opacity="1"/>
+  <text x="1045" y="510" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1045" dy="0">Employment Type (of employed)</tspan></text>
+  <text x="840" y="563" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="840" dy="0">Self-employed</tspan></text>
+  <rect x="850" y="555" width="412" height="36" rx="2.88" ry="2.88" fill="#f39c12" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="870" y="563" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="870" dy="0">74.9%</tspan></text>
+  <text x="840" y="618" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="840" dy="0">Paid employee</tspan></text>
+  <rect x="850" y="610" width="90" height="36" rx="2.88" ry="2.88" fill="#3498db" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="945" y="618" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="945" dy="0">16.4%</tspan></text>
+  <text x="840" y="673" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="840" dy="0">Employer</tspan></text>
+  <rect x="850" y="665" width="29" height="36" rx="2.32" ry="2.32" fill="#27ae60" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="884" y="673" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="884" dy="0">5.2%</tspan></text>
+  <text x="840" y="728" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="840" dy="0">Contributing family</tspan></text>
+  <rect x="850" y="720" width="19" height="36" rx="1.52" ry="1.52" fill="#9b59b6" stroke="#8e44ad" stroke-width="1" opacity="1"/>
+  <text x="874" y="728" fill="#374151" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="874" dy="0">3.5%</tspan></text>
+  <polyline points="850.00,550.00 850.00,770.00" fill="none" stroke="#9ca3af" stroke-width="1" opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1045" y="790" fill="#9ca3af" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="1045" dy="0">3 in 4 employed respondents are self-employed,</tspan><tspan x="1045" dy="13.75">consistent with Oyo State informal economy structure</tspan></text>
+  <text x="355" y="800" fill="#9ca3af" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="355" dy="0">Employment rate (87%) aligns with NBS NLFS Q2 2024</tspan><tspan x="355" dy="13.75">for Oyo State (84.8% employed among 15–64 cohort)</tspan></text>
+  <polyline points="30.00,490.00 1370.00,490.00" fill="none" stroke="#e5e7eb" stroke-width="1" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1,1.5"/>
+  <polyline points="700.00,95.00 700.00,885.00" fill="none" stroke="#e5e7eb" stroke-width="1" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1,1.5"/>
+</svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 346" preserveAspectRatio="xMidYMid meet">
+  <rect width="630" height="346" fill="#fbf9f2"/>
+  <text x="30" y="38" font-family='"Inter", sans-serif' font-size="14" font-weight="600" fill="#1a1a1a">EDUCATION DISTRIBUTION (n=330)</text>
+  <text x="142" y="77" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">SSS/WAEC</text>
+  <rect x="150" y="64" width="380.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="538" y="77" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">27.0%</text>
+  <text x="142" y="103" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">NCE/OND</text>
+  <rect x="150" y="90" width="207.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="365.27272727272725" y="103" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">13.9%</text>
+  <text x="142" y="129" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Vocational</text>
+  <rect x="150" y="116" width="190.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="348" y="129" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">13.0%</text>
+  <text x="142" y="155" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">HND/BSc</text>
+  <rect x="150" y="142" width="172.7" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="330.72727272727275" y="155" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">12.1%</text>
+  <text x="142" y="181" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Primary</text>
+  <rect x="150" y="168" width="155.5" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="313.4545454545455" y="181" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">10.9%</text>
+  <text x="142" y="207" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">No Formal Ed</text>
+  <rect x="150" y="194" width="138.2" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="296.1818181818182" y="207" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">10.0%</text>
+  <text x="142" y="233" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">JSS</text>
+  <rect x="150" y="220" width="112.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="270.27272727272725" y="233" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">7.9%</text>
+  <text x="142" y="259" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Master's</text>
+  <rect x="150" y="246" width="51.8" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="209.8181818181818" y="259" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">3.9%</text>
+  <text x="142" y="285" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Doctorate</text>
+  <rect x="150" y="272" width="17.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="175.27272727272728" y="285" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">1.2%</text>
+  <text x="600" y="332" font-family='"Inter", sans-serif' font-size="9" fill="#6b6b6b" text-anchor="end">(n=330)</text>
+</svg>

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 632" preserveAspectRatio="xMidYMid meet">
+  <rect width="630" height="632" fill="#fbf9f2"/>
+  <text x="30" y="38" font-family='"Inter", sans-serif' font-size="14" font-weight="600" fill="#1a1a1a">SKILLS PER SECTOR</text>
+  <text x="142" y="77" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Construction</text>
+  <rect x="150" y="64" width="380.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="538" y="77" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">12</text>
+  <text x="142" y="103" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Digital/Technology</text>
+  <rect x="150" y="90" width="380.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="538" y="103" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">10</text>
+  <text x="142" y="129" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Fashion/Beauty</text>
+  <rect x="150" y="116" width="285.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="443" y="129" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">9</text>
+  <text x="142" y="155" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Agriculture/Food</text>
+  <rect x="150" y="142" width="285.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="443" y="155" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">9</text>
+  <text x="142" y="181" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Automotive</text>
+  <rect x="150" y="168" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="181" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="207" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Education/Prof.</text>
+  <rect x="150" y="194" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="207" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="233" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Sales/Commerce</text>
+  <rect x="150" y="220" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="233" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="259" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Manufacturing</text>
+  <rect x="150" y="246" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="259" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="285" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Real Estate</text>
+  <rect x="150" y="272" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="285" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="311" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Healthcare</text>
+  <rect x="150" y="298" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="311" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="337" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Transport/Logistics</text>
+  <rect x="150" y="324" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="337" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="363" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Entertainment</text>
+  <rect x="150" y="350" width="253.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="411.3333333333333" y="363" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">8</text>
+  <text x="142" y="389" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Artisan/Crafts</text>
+  <rect x="150" y="376" width="221.7" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="379.6666666666667" y="389" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">7</text>
+  <text x="142" y="415" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Hospitality</text>
+  <rect x="150" y="402" width="221.7" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="379.6666666666667" y="415" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">7</text>
+  <text x="142" y="441" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Security</text>
+  <rect x="150" y="428" width="190.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="348" y="441" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">6</text>
+  <text x="142" y="467" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Energy/Utilities</text>
+  <rect x="150" y="454" width="190.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="348" y="467" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">6</text>
+  <text x="142" y="493" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Mining/Quarrying</text>
+  <rect x="150" y="480" width="158.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="316.33333333333337" y="493" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">5</text>
+  <text x="142" y="519" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Waste Management</text>
+  <rect x="150" y="506" width="158.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="316.33333333333337" y="519" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">5</text>
+  <text x="142" y="545" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Religious/Community</text>
+  <rect x="150" y="532" width="158.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="316.33333333333337" y="545" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">5</text>
+  <text x="142" y="571" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Marine/Waterway</text>
+  <rect x="150" y="558" width="158.3" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="316.33333333333337" y="571" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">5</text>
+</svg>

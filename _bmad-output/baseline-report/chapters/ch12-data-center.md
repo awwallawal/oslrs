@@ -1,22 +1,22 @@
-# CHAPTER 12: DATA CENTER ESTABLISHMENT
+# 9. Data Centre Establishment
 
 ---
 
-## 12.1 Introduction
+## 9.1 Introduction
 
-Deliverable 1 of the engagement Terms of Reference requires the **Establishment of a Data Center** for the Oyo State Skilled Labour Register. This chapter documents the design rationale, procurement, configuration, and operational status of the Data Center infrastructure, which employs a hybrid architecture combining on-premises computing resources with cloud-hosted production services.
+Deliverable 1 of the engagement Terms of Reference requires the **Establishment of a Data Centre** for the Oyo State Skilled Labour Register. This chapter documents the design rationale, procurement, configuration, and operational status of the Data Centre infrastructure, which employs a hybrid architecture combining on-premises computing resources with cloud-hosted production services.
 
-The Data Center was established at the premises of the **Ministry of Trade, Industry, Investment and Cooperatives**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
+The Data Centre was established at the premises of the **Ministry of Trade, Industry, Investment and Cooperatives**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
 
 **Deliverable Status: COMPLETE** ✓
 
 ---
 
-## 12.2 Design Rationale
+## 9.2 Design Rationale
 
-### 12.2.1 Hybrid Architecture Decision
+### 9.2.1 Hybrid Architecture Decision
 
-The Data Center adopts a **hybrid architecture** — combining on-premises physical infrastructure with cloud-hosted services — to address the dual requirements of operational resilience and cost efficiency. This design was selected based on the following considerations:
+The Data Centre adopts a **hybrid architecture**, combining on-premises physical infrastructure with cloud-hosted services, to address the dual requirements of operational resilience and cost efficiency. This design was selected based on the following considerations:
 
 | Factor | On-Premises Only | Cloud Only | Hybrid (Selected) |
 |--------|:-:|:-:|:-:|
@@ -36,19 +36,19 @@ The hybrid model ensures that:
 
 ---
 
-## 12.3 On-Premises Operations Node
+## 9.3 On-Premises Operations Node
 
-### 12.3.1 Hardware Specifications
+### 9.3.1 Hardware Specifications
 
 The on-premises node comprises three (3) enterprise-grade HP workstations, procured and configured for specific operational functions:
 
 | Unit | Type | Specifications | Assigned Function |
 |------|------|---------------|-------------------|
-| **Workstation 1** | HP Desktop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Full HD Display | Data Entry & Quality Assurance Terminal — Primary data entry station for Data Entry Clerks; quality assurance review of flagged submissions |
-| **Workstation 2** | HP Desktop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Full HD Display | Administrative Operations & Reporting Terminal — System administration, report generation, supervisory monitoring, and dashboard analytics |
-| **Workstation 3** | HP Laptop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Integrated Display | Field Supervision & Mobile Operations Unit — Portable unit for field visits, on-site training delivery, demonstration sessions, and mobile supervisory functions |
+| **Workstation 1** | HP Desktop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Full HD Display | Data Entry & Quality Assurance Terminal, Primary data entry station for Data Entry Clerks; quality assurance review of flagged submissions |
+| **Workstation 2** | HP Desktop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Full HD Display | Administrative Operations & Reporting Terminal, System administration, report generation, supervisory monitoring, and dashboard analytics |
+| **Workstation 3** | HP Laptop | Intel Core i7 Processor, 16 GB RAM, 512 GB HDD, Integrated Display | Field Supervision & Mobile Operations Unit, Portable unit for field visits, on-site training delivery, demonstration sessions, and mobile supervisory functions |
 
-### 12.3.2 Operating Environment
+### 9.3.2 Operating Environment
 
 All workstations are configured with:
 - Modern web browser (Google Chrome, latest stable release) for OSLSR platform access
@@ -56,18 +56,18 @@ All workstations are configured with:
 - User accounts with role-appropriate platform access credentials
 - Local backup of essential reference documents and training materials
 
-### 12.3.3 Physical Security
+### 9.3.3 Physical Security
 
-The Data Center is located within the secured premises of the Ministry of Trade, Industry, Investment and Cooperatives, benefiting from:
+The Data Centre is located within the secured premises of the Ministry of Trade, Industry, Investment and Cooperatives, benefiting from:
 - Ministry building security (access control, security personnel)
-- Designated workspace for Data Center equipment
+- Designated workspace for Data Centre equipment
 - Equipment inventory and asset tagging for accountability
 
 ---
 
-## 12.4 Network Infrastructure
+## 9.4 Network Infrastructure
 
-### 12.4.1 Broadband Connectivity
+### 9.4.1 Broadband Connectivity
 
 Network connectivity is provided via the **Airtel SmartConnect 5G Outdoor Unit (ODU) Router**, a next-generation broadband solution specifically designed for Nigerian operating environments.
 
@@ -82,7 +82,7 @@ Network connectivity is provided via the **Airtel SmartConnect 5G Outdoor Unit (
 | **Power Backup** | Built-in battery providing 5–6 hours of operation during power outages |
 | **Parental/Usage Controls** | Configurable access and browsing controls |
 
-### 12.4.2 Network Architecture
+### 9.4.2 Network Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -126,20 +126,20 @@ Network connectivity is provided via the **Airtel SmartConnect 5G Outdoor Unit (
 │  │    Redis    │  │   BullMQ     │  │   Offsite Backup   │  │
 │  │   Cache &   │  │   Job Queue  │  │   (S3-Compatible)  │  │
 │  │ Rate Limit  │  │  (Fraud Det, │  │   7-Year Retention │  │
-│  │             │  │   Backups)   │  │   NDPA Compliant   │  │
+│  │             │  │   Backups)   │  │   NDPA Aligned   │  │
 │  └─────────────┘  └──────────────┘  └────────────────────┘  │
 │                                                               │
 │  Server: Ubuntu 24.04 LTS | 99.9% Uptime SLA                │
 └───────────────────────────────────────────────────────────────┘
 ```
 
-### 12.4.3 Connectivity Resilience
+### 9.4.3 Connectivity Resilience
 
 The network infrastructure incorporates the following resilience measures:
 
 1. **5G/4G Automatic Fallback**: The Airtel ODU automatically switches between 5G and 4G LTE networks based on signal availability, ensuring continuous connectivity even in areas where 5G coverage is intermittent
 
-2. **Built-in Power Backup**: The ODU's integrated battery provides 5–6 hours of operation during power outages — a critical provision given the power supply challenges typical of Nigerian government facilities
+2. **Built-in Power Backup**: The ODU's integrated battery provides 5–6 hours of operation during power outages, a critical provision given the power supply challenges typical of Nigerian government facilities
 
 3. **Offline-Capable Applications**: The OSLSR platform's Progressive Web Application (PWA) architecture enables field data collection to continue for up to 7 days without network connectivity, with automatic synchronisation upon restoration
 
@@ -147,9 +147,9 @@ The network infrastructure incorporates the following resilience measures:
 
 ---
 
-## 12.5 Cloud Infrastructure
+## 9.5 Cloud Infrastructure
 
-### 12.5.1 Production Server Specifications
+### 9.5.1 Production Server Specifications
 
 | Component | Specification |
 |-----------|--------------|
@@ -162,7 +162,7 @@ The network infrastructure incorporates the following resilience measures:
 | **SSL Certificate** | TLS 1.2+ (HTTPS enforced on all endpoints) |
 | **Domain** | Configured and operational |
 
-### 12.5.2 Backup & Disaster Recovery
+### 9.5.2 Backup & Disaster Recovery
 
 | Parameter | Configuration |
 |-----------|--------------|
@@ -174,7 +174,7 @@ The network infrastructure incorporates the following resilience measures:
 | **Recovery Time Objective (RTO)** | < 1 hour from latest backup |
 | **Recovery Point Objective (RPO)** | Maximum 24 hours (daily backup interval) |
 
-### 12.5.3 Monitoring & Alerting
+### 9.5.3 Monitoring & Alerting
 
 The cloud infrastructure is monitored through the OSLSR System Health Monitoring module (detailed in Chapter 13), which tracks:
 
@@ -187,9 +187,9 @@ The cloud infrastructure is monitored through the OSLSR System Health Monitoring
 
 ---
 
-## 12.6 Cost Efficiency
+## 9.6 Cost Efficiency
 
-The hybrid Data Center architecture delivers significant cost efficiency compared to traditional government IT procurement models:
+The hybrid Data Centre architecture delivers significant cost efficiency compared to traditional government IT procurement models:
 
 | Cost Component | Description | Frequency |
 |----------------|-------------|-----------|
@@ -199,11 +199,11 @@ The hybrid Data Center architecture delivers significant cost efficiency compare
 | Cloud hosting | Production server with backup storage | Monthly |
 | **Total Monthly Operating Cost** | Broadband + Cloud hosting | **Recurring** |
 
-The operating cost model ensures sustainability beyond the initial engagement period. The Ministry can continue operating the Data Center and platform with minimal recurring expenditure — broadband connectivity and cloud hosting — without requiring additional capital investment.
+The operating cost model ensures sustainability beyond the initial engagement period. The Ministry can continue operating the Data Centre and platform with minimal recurring expenditure, broadband connectivity and cloud hosting, without requiring additional capital investment.
 
 ---
 
-## 12.7 Deliverable Acceptance Criteria
+## 9.7 Deliverable Acceptance Criteria
 
 | # | Criterion | Status |
 |---|-----------|:------:|
@@ -215,8 +215,8 @@ The operating cost model ensures sustainability beyond the initial engagement pe
 | 6 | System monitoring and alerting configured | ✓ Complete |
 | 7 | Data Centre operational and ready for production use | ✓ Complete |
 
-**Deliverable 1 — Establishment of Data Center: COMPLETE** ✓
+**Deliverable 1, Establishment of Data Centre: COMPLETE** ✓
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 12 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 12 | Chemiroy Nigeria Limited*

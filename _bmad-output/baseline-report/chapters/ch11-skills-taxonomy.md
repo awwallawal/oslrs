@@ -1,14 +1,14 @@
-# CHAPTER 11: OCCUPATIONAL SKILLS TAXONOMY
+# 8. Occupational Skills Taxonomy
 
 ---
 
-## 11.1 Introduction
+## 8.1 Introduction
 
-This chapter documents the **150-skill occupational taxonomy** developed for the Oyo State Skilled Labour Register — a structured classification of tradeable skills organised across 20 economic sectors and mapped to the **International Standard Classification of Occupations (ISCO-08)**. The taxonomy serves as the core skills inventory for both the survey instrument (Question 5.1) and the public Skills Marketplace search functionality.
+This chapter documents the **150-skill occupational taxonomy** developed for the Oyo State Skilled Labour Register, a structured classification of tradeable skills organised across 20 economic sectors and mapped to the **International Standard Classification of Occupations (ISCO-08)**. The taxonomy serves as the core skills inventory for both the survey instrument (Question 5.1) and the public Skills Marketplace search functionality.
 
 ---
 
-## 11.2 Design Principles
+## 8.2 Design Principles
 
 The taxonomy was designed according to five governing principles:
 
@@ -17,12 +17,12 @@ The taxonomy was designed according to five governing principles:
 | 1 | **Comprehensive coverage** | Must capture the full breadth of economic activities in Oyo State, from subsistence farming to emerging digital services |
 | 2 | **Local relevance** | Skills must be recognisable and meaningful to respondents in Yoruba-speaking Southwest Nigeria, including informal economy terminology |
 | 3 | **ISCO-08 compatibility** | Mapping to international standards enables comparison with national (NBS) and international (ILO) labour statistics |
-| 4 | **Manageable enumeration** | 150 skills is a balance between comprehensiveness and field usability — enumerators can navigate the full list within 2–3 minutes |
+| 4 | **Manageable enumeration** | 150 skills is a balance between comprehensiveness and field usability, enumerators can navigate the full list within 2–3 minutes |
 | 5 | **Multi-select capability** | Workers in the informal economy typically possess multiple tradeable skills; the taxonomy supports multi-selection |
 
 ---
 
-## 11.3 Development Process
+## 8.3 Development Process
 
 The taxonomy was developed through an iterative process:
 
@@ -73,7 +73,7 @@ The taxonomy was developed through an iterative process:
 
 ---
 
-## 11.4 Taxonomy Structure — 20 Sectors, 150 Skills
+## 8.4 Taxonomy Structure, 20 Sectors, 150 Skills
 
 ### Sector 1: Construction & Building Trades (12 skills)
 
@@ -327,7 +327,7 @@ The taxonomy was developed through an iterative process:
 
 ---
 
-## 11.5 Summary Statistics
+## 8.5 Summary Statistics
 
 | Metric | Value |
 |--------|:-----:|
@@ -367,7 +367,7 @@ Marine/Waterway       ██████████                5
 
 ---
 
-## 11.6 ISCO-08 Mapping Summary
+## 8.6 ISCO-08 Mapping Summary
 
 The taxonomy maps to the following ISCO-08 major groups:
 
@@ -388,7 +388,7 @@ The taxonomy maps to the following ISCO-08 major groups:
 
 ---
 
-## 11.7 Validation Exercise Results
+## 8.7 Validation Exercise Results
 
 During the validation exercise (n=330, Chapter 15), the taxonomy was tested in field conditions:
 
@@ -406,7 +406,7 @@ The 12 free-text "Other" skills identified during validation have been evaluated
 
 ---
 
-## 11.8 Chapter Summary
+## 8.8 Chapter Summary
 
 The 150-skill occupational taxonomy provides the OSLSR with a **granular, internationally-compatible skills classification** that captures the full breadth of Oyo State's formal and informal economy. The taxonomy's ISCO-08 mapping ensures that OSLSR data can be compared with national (NBS) and international (ILO) labour statistics, while its local relevance and sector-grouped presentation ensure field usability.
 
@@ -414,4 +414,4 @@ The complete taxonomy is reproduced in **Appendix C** for reference.
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 11 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 11 | Chemiroy Nigeria Limited*

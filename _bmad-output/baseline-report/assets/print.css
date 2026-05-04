@@ -1,0 +1,283 @@
+/* =============================================================================
+ * Print-specific overrides for Chemiroy Document Design System v2.0
+ * Chromium-compatible — no named pages or @top/@bottom margin boxes
+ * (those features aren't supported by chromium --print-to-pdf).
+ * ============================================================================= */
+
+/* @page rules — body pages with standard 20mm margins, cover overrides via
+ * `@page :first`. Explicit per-side properties + !important + matching :left/:right
+ * to defeat any cascade quirks in chromium --print-to-pdf. */
+@page {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :left {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :right {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :first {
+  size: A4 !important;
+  margin: 0 !important;
+  margin-top: 0 !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+}
+
+@media print {
+
+  /* ───────── Reset screen-preview decoration ───────── */
+
+  body {
+    background: white;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ───────── Cover (page 1) — full-bleed photo ─────────
+   * Explicit absolute-style positioning at page origin (0,0) to ensure the
+   * cover sits at the physical page top-left corner, bleeding to all four
+   * edges when @page :first removes the margin. */
+
+  .cover {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    page-break-after: always;
+    overflow: hidden;
+    position: relative;
+    display: block;
+  }
+
+  .cover .cover__photo {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* ───────── Body pages ─────────
+   * @page already provides 20mm side / 20mm top / 25mm bottom margins.
+   * The .page wrapper just strips screen-preview decoration. */
+
+  .page {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    width: auto;
+    box-shadow: none;
+  }
+
+  /* Force a page-break before each .page wrapper if needed */
+  .page + .page { page-break-before: always; }
+
+  /* ───────── Page-break behaviour ───────── */
+
+  /* Each chapter (H1) starts on a fresh page. The first H1 after the cover
+   * is a no-op — chromium coalesces the cover's page-break-after with the
+   * H1's page-break-before, so no blank intermediate page is generated.
+   * Use break-before: page (modern keyword) for stronger chromium support
+   * across documents with many chapters. */
+  .page h1 {
+    page-break-before: always;
+    break-before: page;
+  }
+  /* Belt-and-braces: also target direct children H1 explicitly, in case the
+   * container nesting changes. */
+  .page > h1 {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* ───────── Heading + content keep-together ───────── */
+
+  /* Headings never end a page; first content after must travel with them. */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Universal "next-element" rule: ANY block immediately following a
+   * heading should never break before. This catches paragraphs, lists,
+   * tables, figures, callouts, and any custom block types. H1 included
+   * for chapter-opening headings (e.g. Abbreviations + table). */
+  h1 + *, h2 + *, h3 + *, h4 + *, h5 + *, h6 + * {
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
+  /* The .keep-with-next wrapper is injected by the markdown renderer
+   * around each heading + its immediately-following block. break-inside:
+   * avoid forces chromium to keep the wrapper's contents together,
+   * which is more reliable than break-after on the heading alone. */
+  .keep-with-next {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Stronger orphan/widow control */
+  p {
+    orphans: 4;
+    widows: 4;
+  }
+
+  /* ───────── Visual blocks: keep together ───────── */
+
+  /* NOTE: <table> is intentionally EXCLUDED. Multi-page tables (e.g. the
+   * Abbreviations and Acronyms table, the regulatory traceability table)
+   * cannot honour `break-inside: avoid`. When chromium can't satisfy the
+   * constraint it falls back to "break at the FIRST available boundary",
+   * which orphans captions and headings from the table body. Letting
+   * tables break naturally — combined with `<thead>` repeating on each
+   * page (CSS default) and `.caption + table { break-before: avoid }` —
+   * yields the cleaner outcome.
+   *
+   * Single-page tables still don't break in practice because they fit;
+   * no explicit rule is needed for them. */
+  .callout, .stat-card, img, figure, blockquote {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* ───────── Code blocks & ASCII diagrams (figures) ───────── */
+
+  /* Figure-panel treatment for fenced code blocks. Each diagram sits in a
+   * cream-paper panel with a maroon accent stripe on the left edge — visually
+   * reads as a deliberate figure, not a slab of monospaced body text.
+   *
+   * Box-drawing characters (─│┌┐└┘├┤┬┴┼) render cleanly with no gaps because
+   * JetBrains Mono draws them as connected glyphs. Ligatures and contextual
+   * alternates are disabled to keep ASCII art's visual grid intact. */
+  pre {
+    margin: 18pt auto;
+    padding: 16pt 22pt;
+    background: #fbf9f2;
+    border: 1px solid #c9bba6;
+    border-left: 4px solid var(--colour-maroon, #9C1E23);
+    border-radius: 0 3pt 3pt 0;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-size: 7.5pt;
+    line-height: 1.45;
+    letter-spacing: 0;
+    color: #1a1a1a;
+    font-feature-settings: "liga" 0, "calt" 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  pre code {
+    white-space: pre;
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-weight: 400;
+    display: block;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  /* Inline code stays distinct from prose, but with the same JetBrains Mono
+   * face for typographic consistency. */
+  code {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    font-weight: 500;
+    background: #f4efe5;
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--colour-maroon-dark, #7A171B);
+  }
+
+  /* ───────── SVG diagram figures ───────── */
+
+  /* Diagrams converted from Excalidraw via convert-excalidraw.js, embedded
+   * in markdown as <figure class="diagram"> ... <img src=".../*.svg"> ... </figure>.
+   * Treated as proper figure panels: cream-paper background, maroon accent
+   * stripe on the left edge, centred horizontally, scaled to fit the print
+   * width while preserving aspect ratio. */
+  figure.diagram {
+    margin: 18pt auto;
+    padding: 14pt 18pt;
+    background: #fbf9f2;
+    border: 1px solid #c9bba6;
+    border-left: 4px solid var(--colour-maroon, #9C1E23);
+    border-radius: 0 3pt 3pt 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  figure.diagram img,
+  figure.diagram svg {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+  }
+
+  /* Figure captions glued to their diagram panels */
+  .caption--figure + figure.diagram {
+    margin-top: 0;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+
+  /* ───────── Table & Figure captions (auto-numbered) ───────── */
+
+  /* Captions are injected by build.js. They sit above their table/figure
+   * with a tight margin and a "keep-with-next" page-break behaviour so
+   * the caption never gets orphaned at the bottom of a page. */
+  .caption {
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: var(--colour-maroon, #9C1E23);
+    margin: 14pt 0 3pt 0;
+    letter-spacing: 0.02em;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Figure captions centre-align so they sit above the centred figure panel. */
+  .caption--figure {
+    text-align: center;
+  }
+
+  .caption + table,
+  .caption + pre {
+    margin-top: 0;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
+  /* Orphans / widows control for body prose */
+  p, li { orphans: 3; widows: 3; }
+
+  /* ───────── Hide screen-only elements ───────── */
+
+  .variant-stack, .preview-only { display: none !important; }
+
+  /* ───────── Link styling for print ───────── */
+
+  a { color: inherit; border-bottom: none; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #6b6b6b;
+  }
+  a[href^="#"]::after { content: ""; }
+}

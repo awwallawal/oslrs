@@ -1,10 +1,10 @@
-# CHAPTER 18: CAPACITY BUILDING PROGRAMME DESIGN
+# 15. Capacity Building Programme Design
 
 ---
 
-## 18.1 Introduction
+## 15.1 Introduction
 
-Deliverable 3 of the engagement Terms of Reference requires the **Training of Ministry/Government Officials** in the operation, management, and utilisation of the Oyo State Skilled Labour Register. This chapter documents the design of the comprehensive capacity building programme — a structured, role-specific training curriculum that ensures each category of platform user possesses the knowledge and skills necessary to perform their designated functions effectively.
+Deliverable 3 of the engagement Terms of Reference requires the **Training of Ministry/Government Officials** in the operation, management, and utilisation of the Oyo State Skilled Labour Register. This chapter documents the design of the comprehensive capacity building programme, a structured, role-specific training curriculum that ensures each category of platform user possesses the knowledge and skills necessary to perform their designated functions effectively.
 
 The capacity building programme was designed during the baseline study phase, informed by:
 1. The 8-role user architecture documented in Chapter 13
@@ -12,11 +12,11 @@ The capacity building programme was designed during the baseline study phase, in
 3. The operational workflows validated during the validation exercise (Chapter 15)
 4. Best practice in government ICT capacity building from comparable state-level initiatives (Chapter 8)
 
-**Deliverable Status: DESIGN COMPLETE** — Training delivery is scheduled for Gate 3 (Chapter 19), contingent upon mobilisation of field personnel.
+**Deliverable Status: DESIGN COMPLETE**, Training delivery is scheduled for Gate 3 (Chapter 19), contingent upon mobilisation of field personnel.
 
 ---
 
-## 18.2 Programme Structure
+## 15.2 Programme Structure
 
 The capacity building programme comprises **four modules**, each targeting a specific tier of the platform user hierarchy:
 
@@ -25,7 +25,7 @@ The capacity building programme comprises **four modules**, each targeting a spe
 │           CAPACITY BUILDING PROGRAMME STRUCTURE                │
 │           4 Modules × 8 Roles                                  │
 │                                                                │
-│  MODULE A: PLATFORM OPERATIONS — ENUMERATOR                   │
+│  MODULE A: PLATFORM OPERATIONS, ENUMERATOR                   │
 │  ┌──────────────────────────────────────────────────────┐     │
 │  │ Target: Field Enumerators (99 persons)               │     │
 │  │ Duration: 2 days (classroom + hands-on)              │     │
@@ -47,7 +47,7 @@ The capacity building programme comprises **four modules**, each targeting a spe
 │  ┌──────────────────────────────────────────────────────┐     │
 │  │ Target: Ministry Admin staff (3–5 persons)           │     │
 │  │ Duration: 2 days (intensive hands-on)                │     │
-│  │ Delivery: Small group at Data Center                 │     │
+│  │ Delivery: Small group at Data Centre                 │     │
 │  │ Assessment: Live system administration tasks         │     │
 │  │ Pass threshold: 85%                                  │     │
 │  └──────────────────────────────────────────────────────┘     │
@@ -66,9 +66,9 @@ The capacity building programme comprises **four modules**, each targeting a spe
 
 ---
 
-## 18.3 Module A: Platform Operations — Enumerator
+## 15.3 Module A: Platform Operations, Enumerator
 
-### 18.3.1 Training Overview
+### 15.3.1 Training Overview
 
 | Parameter | Detail |
 |-----------|--------|
@@ -80,9 +80,9 @@ The capacity building programme comprises **four modules**, each targeting a spe
 | **Assessment** | Practical test (complete a full survey submission) + written quiz (20 questions) |
 | **Pass threshold** | 85% (17/20 on quiz; successful submission with zero validation errors) |
 
-### 18.3.2 Curriculum
+### 15.3.2 Curriculum
 
-**Day 1: Classroom — Understanding the Registry and Survey**
+**Day 1: Classroom, Understanding the Registry and Survey**
 
 | Session | Duration | Content |
 |---------|----------|---------|
@@ -97,25 +97,25 @@ The capacity building programme comprises **four modules**, each targeting a spe
 | Session | Duration | Content |
 |---------|----------|---------|
 | 2.1 | 45 min | **Device Setup**: PWA installation; Service Worker caching; verifying offline capability; understanding the auto-save indicator; battery management |
-| 2.2 | 90 min | **Guided Survey Practice**: Instructor-led completion of 3 full surveys (employed business owner, unemployed job-seeker, outside labour force) — covering all conditional paths |
+| 2.2 | 90 min | **Guided Survey Practice**: Instructor-led completion of 3 full surveys (employed business owner, unemployed job-seeker, outside labour force), covering all conditional paths |
 | 2.3 | 60 min | **Offline Operations**: Airplane mode practice; completing survey offline; reconnecting and verifying synchronisation; understanding the offline queue indicator |
 | 2.4 | 45 min | **Troubleshooting Common Issues**: No GPS signal; slow network; app crash recovery; battery depletion mid-survey; respondent changes answer mid-survey |
 | 2.5 | 60 min | **Assessment**: Complete one full survey independently (practical); 20-question written quiz covering instrument, ethics, and procedures |
 
-### 18.3.3 Assessment Rubric
+### 15.3.3 Assessment Rubric
 
 | Component | Weight | Pass Criteria |
 |-----------|:------:|-------------|
 | Written quiz (20 MCQs) | 40% | ≥ 17/20 correct (85%) |
-| Practical test — survey completion | 40% | Zero validation errors; all required fields completed; correct skip logic path |
+| Practical test, survey completion | 40% | Zero validation errors; all required fields completed; correct skip logic path |
 | Field protocol knowledge | 20% | Demonstrates consent procedure; handles hypothetical refusal correctly |
-| **Overall pass threshold** | — | **85% weighted aggregate** |
+| **Overall pass threshold** |, | **85% weighted aggregate** |
 
 ---
 
-## 18.4 Module B: Field Supervision & Quality Assurance
+## 15.4 Module B: Field Supervision & Quality Assurance
 
-### 18.4.1 Training Overview
+### 15.4.1 Training Overview
 
 | Parameter | Detail |
 |-----------|--------|
@@ -123,10 +123,10 @@ The capacity building programme comprises **four modules**, each targeting a spe
 | **Prerequisite** | Management experience; familiarity with government field programmes; minimum OND/NCE |
 | **Duration** | 2 days (Day 1: Supervisory functions; Day 2: Fraud detection and team management) |
 | **Delivery format** | Single cohort; instructor-led with dashboard demonstrations |
-| **Assessment** | Scenario-based evaluation — respond to 5 simulated field situations |
+| **Assessment** | Scenario-based evaluation, respond to 5 simulated field situations |
 | **Pass threshold** | 85% (correct handling of ≥ 4/5 scenarios) |
 
-### 18.4.2 Curriculum
+### 15.4.2 Curriculum
 
 **Day 1: Supervisory Platform Functions**
 
@@ -150,26 +150,26 @@ The capacity building programme comprises **four modules**, each targeting a spe
 
 ---
 
-## 18.5 Module C: System Administration & Reporting
+## 15.5 Module C: System Administration & Reporting
 
-### 18.5.1 Training Overview
+### 15.5.1 Training Overview
 
 | Parameter | Detail |
 |-----------|--------|
 | **Target audience** | Ministry-designated Admin and Super Admin staff (3–5 persons) |
 | **Prerequisite** | Computer literacy; basic understanding of database concepts; Ministry staff designation |
-| **Duration** | 2 days (intensive hands-on at Data Center) |
-| **Delivery format** | Small group instruction at on-premises Data Center workstations |
+| **Duration** | 2 days (intensive hands-on at Data Centre) |
+| **Delivery format** | Small group instruction at on-premises Data Centre workstations |
 | **Assessment** | Live system administration tasks on training environment |
 | **Pass threshold** | 85% (successful completion of all core tasks) |
 
-### 18.5.2 Curriculum
+### 15.5.2 Curriculum
 
 **Day 1: System Administration**
 
 | Session | Duration | Content |
 |---------|----------|---------|
-| 1.1 | 45 min | **Platform Architecture Overview**: How the system works (simplified); Data Center → Cloud → Database; what happens when a survey is submitted |
+| 1.1 | 45 min | **Platform Architecture Overview**: How the system works (simplified); Data Centre → Cloud → Database; what happens when a survey is submitted |
 | 1.2 | 60 min | **Staff Management**: Creating user accounts; assigning roles; activating/deactivating staff; resetting credentials; LGA assignment |
 | 1.3 | 60 min | **Form & Configuration Management**: Viewing active survey version; understanding platform settings; configuring fraud detection thresholds |
 | 1.4 | 60 min | **ID Card Generation**: Generating staff ID cards; understanding QR verification; batch printing procedures |
@@ -187,9 +187,9 @@ The capacity building programme comprises **four modules**, each targeting a spe
 
 ---
 
-## 18.6 Module D: Data Analysis & Dashboard Utilisation
+## 15.6 Module D: Data Analysis & Dashboard Utilisation
 
-### 18.6.1 Training Overview
+### 15.6.1 Training Overview
 
 | Parameter | Detail |
 |-----------|--------|
@@ -200,7 +200,7 @@ The capacity building programme comprises **four modules**, each targeting a spe
 | **Assessment** | Navigate dashboard and generate one report independently |
 | **Pass threshold** | 80% |
 
-### 18.6.2 Curriculum
+### 15.6.2 Curriculum
 
 | Session | Duration | Content |
 |---------|----------|---------|
@@ -212,7 +212,7 @@ The capacity building programme comprises **four modules**, each targeting a spe
 
 ---
 
-## 18.7 Training Materials
+## 15.7 Training Materials
 
 The following training materials will be developed and provided:
 
@@ -229,39 +229,39 @@ The following training materials will be developed and provided:
 
 ---
 
-## 18.8 Training Schedule
+## 15.8 Training Schedule
 
 The training delivery schedule is designed to minimise disruption while ensuring all personnel are trained before field deployment:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │              TRAINING DELIVERY SCHEDULE                     │
-│              (Gate 1 — Pre-Deployment)                      │
+│              (Gate 1, Pre-Deployment)                      │
 │                                                            │
 │  WEEK 1                                                    │
 │  ─────                                                     │
-│  Mon-Tue:  Module B — Supervisors (33 persons)            │
+│  Mon-Tue:  Module B, Supervisors (33 persons)            │
 │            [2 days, single cohort]                         │
 │                                                            │
-│  Wed-Thu:  Module A — Enumerators Batch 1 (33 persons)    │
+│  Wed-Thu:  Module A, Enumerators Batch 1 (33 persons)    │
 │            [2 days]                                        │
 │                                                            │
 │  WEEK 2                                                    │
 │  ─────                                                     │
-│  Mon-Tue:  Module A — Enumerators Batch 2 (33 persons)    │
+│  Mon-Tue:  Module A, Enumerators Batch 2 (33 persons)    │
 │            [2 days]                                        │
 │                                                            │
-│  Wed-Thu:  Module A — Enumerators Batch 3 (33 persons)    │
+│  Wed-Thu:  Module A, Enumerators Batch 3 (33 persons)    │
 │            [2 days]                                        │
 │                                                            │
 │  Fri:      Field Pilot Launch (3 selected LGAs)           │
 │                                                            │
 │  WEEK 3 (during/after enumeration)                        │
 │  ─────                                                     │
-│  Mon-Tue:  Module C — System Administration (3–5 persons) │
-│            [2 days at Data Center]                         │
+│  Mon-Tue:  Module C, System Administration (3–5 persons) │
+│            [2 days at Data Centre]                         │
 │                                                            │
-│  Wed:      Module D — Government Officials (5–10 persons) │
+│  Wed:      Module D, Government Officials (5–10 persons) │
 │            [1 day at Ministry premises]                    │
 │                                                            │
 │  TOTAL: 9 training days across 3 weeks                    │
@@ -270,13 +270,13 @@ The training delivery schedule is designed to minimise disruption while ensuring
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Scheduling rationale**: Supervisors are trained first (Week 1, Mon-Tue) so they can assist with enumerator training as teaching assistants. Modules C and D are delivered during or after enumeration commencement, when real production data is available for training exercises — providing a more meaningful learning experience than synthetic training data.
+**Scheduling rationale**: Supervisors are trained first (Week 1, Mon-Tue) so they can assist with enumerator training as teaching assistants. Modules C and D are delivered during or after enumeration commencement, when real production data is available for training exercises, providing a more meaningful learning experience than synthetic training data.
 
 ---
 
-## 18.9 Assessment and Certification
+## 15.9 Assessment and Certification
 
-### 18.9.1 Assessment Framework
+### 15.9.1 Assessment Framework
 
 | Module | Assessment Type | Pass Threshold | Remediation |
 |--------|----------------|:--------------:|-------------|
@@ -285,13 +285,13 @@ The training delivery schedule is designed to minimise disruption while ensuring
 | C: Admin | Live system tasks | 85% | Paired mentoring with consultant |
 | D: Officials | Dashboard navigation | 80% | Follow-up 1-on-1 demonstration |
 
-### 18.9.2 Records
+### 15.9.2 Records
 
 All training attendance, assessment results, and certification records will be maintained as part of the engagement documentation and included in the Completion Report (Gate 3, Chapter 19).
 
 ---
 
-## 18.10 Post-Training Support
+## 15.10 Post-Training Support
 
 The capacity building programme includes a **30-day post-training support period** following field deployment:
 
@@ -304,9 +304,9 @@ The capacity building programme includes a **30-day post-training support period
 
 ---
 
-## 18.11 Knowledge Transfer Strategy
+## 15.11 Knowledge Transfer Strategy
 
-The capacity building programme is designed for **full knowledge transfer** — ensuring that the Ministry can independently operate, maintain, and utilise the OSLSR platform after the engagement concludes:
+The capacity building programme is designed for **full knowledge transfer**, ensuring that the Ministry can independently operate, maintain, and utilise the OSLSR platform after the engagement concludes:
 
 | Knowledge Area | Transfer Mechanism | Recipient |
 |---------------|-------------------|-----------|
@@ -320,4 +320,4 @@ The goal is **zero dependency** on the Consultant for routine platform operation
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 18 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 18 | Chemiroy Nigeria Limited*

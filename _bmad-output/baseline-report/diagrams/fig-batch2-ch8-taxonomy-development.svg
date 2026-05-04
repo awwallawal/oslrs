@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 580" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="760" height="580" fill="#fbf9f2"/>
+  <text x="380" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Occupational Taxonomy Development Process</text>
+  <rect x="60" y="75" width="640" height="100" fill="#f3e6e7" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="87" width="96" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="12" ry="12" opacity="1"/>
+  <text x="120" y="99" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">PHASE 1</text>
+  <text x="180" y="99" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Desk Review</text>
+  <text x="72" y="125" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">NBS occupational classifications for Southwest</text>
+  <text x="72" y="140.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">ISCO-08 major / minor group analysis</text>
+  <text x="72" y="156.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Oyo State economic-sector review</text>
+  <text x="72" y="172.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Output: Initial 61 skills across 8 sectors</text>
+  <line x1="380" y1="175" x2="380" y2="200" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="60" y="200" width="640" height="100" fill="white" stroke="#c9bba6" stroke-width="1" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="212" width="96" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="12" ry="12" opacity="1"/>
+  <text x="120" y="224" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">PHASE 2</text>
+  <text x="180" y="224" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Gap Analysis</text>
+  <text x="72" y="250" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Cross-reference with Oyo State economic data</text>
+  <text x="72" y="265.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Identify missing sectors (Transport, Sales, Mining, Manufacturing, Hospitality, Entertainment, Security, Waste, Religious, Energy, Marine, Real Estate)</text>
+  <text x="72" y="281.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Output: 12 additional sectors identified</text>
+  <line x1="380" y1="300" x2="380" y2="325" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="60" y="325" width="640" height="100" fill="white" stroke="#c9bba6" stroke-width="1" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="337" width="96" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="12" ry="12" opacity="1"/>
+  <text x="120" y="349" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">PHASE 3</text>
+  <text x="180" y="349" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Expansion</text>
+  <text x="72" y="375" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Added 89 skills across 12 new sectors</text>
+  <text x="72" y="390.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Refined existing 8 sectors with additional skills</text>
+  <text x="72" y="406.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">ISCO-08 mapping for all 150 skills</text>
+  <text x="72" y="422.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Output: Final 150-skill taxonomy</text>
+  <line x1="380" y1="425" x2="380" y2="450" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="60" y="450" width="640" height="100" fill="white" stroke="#c9bba6" stroke-width="1" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="462" width="96" height="24" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="12" ry="12" opacity="1"/>
+  <text x="120" y="474" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">PHASE 4</text>
+  <text x="180" y="474" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="middle" fill="#1a1a1a">Validation</text>
+  <text x="72" y="500" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Tested during validation exercise (n=330)</text>
+  <text x="72" y="515.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">89 of 150 skills selected at least once</text>
+  <text x="72" y="531.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">&quot;Other skills&quot; free text captured 12 additional</text>
+  <text x="72" y="547.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Output: Validated taxonomy</text>
+</svg>

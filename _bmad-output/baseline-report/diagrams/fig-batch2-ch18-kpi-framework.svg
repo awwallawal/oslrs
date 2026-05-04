@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 460" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="460" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">KPI Framework, Five Domains × 34 Indicators</text>
+  <rect x="60" y="80" width="235" height="155" fill="white" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="92" width="56" height="22" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="11" ry="11" opacity="1"/>
+  <text x="100" y="103" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">8 KPIs</text>
+  <text x="72" y="130" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#9C1E23">Enumeration Progress</text>
+  <text x="76" y="160" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Submissions/day</text>
+  <text x="76" y="175.225" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• LGA coverage %</text>
+  <text x="76" y="190.45" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Days remaining</text>
+  <rect x="310" y="80" width="235" height="155" fill="white" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="322" y="92" width="56" height="22" fill="#1864ab" stroke="none" stroke-width="1.5" rx="11" ry="11" opacity="1"/>
+  <text x="350" y="103" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">7 KPIs</text>
+  <text x="322" y="130" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#1864ab">Data Quality</text>
+  <text x="326" y="160" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Validation pass-rate</text>
+  <text x="326" y="175.225" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Fraud-flag rate</text>
+  <text x="326" y="190.45" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NIN dedup rate</text>
+  <rect x="560" y="80" width="235" height="155" fill="white" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="572" y="92" width="56" height="22" fill="#b58105" stroke="none" stroke-width="1.5" rx="11" ry="11" opacity="1"/>
+  <text x="600" y="103" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">7 KPIs</text>
+  <text x="572" y="130" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#b58105">Field Operations</text>
+  <text x="576" y="160" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Enumerator availability</text>
+  <text x="576" y="175.225" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Device uptime</text>
+  <text x="576" y="190.45" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Connectivity %</text>
+  <rect x="60" y="255" width="235" height="155" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="267" width="56" height="22" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="11" ry="11" opacity="1"/>
+  <text x="100" y="278" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">6 KPIs</text>
+  <text x="72" y="305" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">Platform Performance</text>
+  <text x="76" y="335" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• API response time</text>
+  <text x="76" y="350.225" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Uptime %</text>
+  <text x="76" y="365.45" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Error rate</text>
+  <rect x="310" y="255" width="235" height="155" fill="white" stroke="#6f4faa" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="322" y="267" width="56" height="22" fill="#6f4faa" stroke="none" stroke-width="1.5" rx="11" ry="11" opacity="1"/>
+  <text x="350" y="278" font-family='"Inter", sans-serif' font-size="10" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">6 KPIs</text>
+  <text x="322" y="305" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#6f4faa">Registry Outcomes</text>
+  <text x="326" y="335" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Marketplace registrations</text>
+  <text x="326" y="350.225" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Skill diversity</text>
+  <text x="326" y="365.45" font-family='"Inter", sans-serif' font-size="10.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Equity coverage</text>
+</svg>

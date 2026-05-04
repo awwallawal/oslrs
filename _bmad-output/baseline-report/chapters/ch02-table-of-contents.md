@@ -46,8 +46,8 @@
 | | 6.1 Background and Context | 18 |
 | | 6.2 Engagement Scope | 18 |
 | | 6.3 Activity Schedule | 19 |
-| | 6.4 Convergence of Factors — Why Now | 21 |
-| **7** | **Situational Analysis — Oyo State Labour Market** | 22 |
+| | 6.4 Convergence of Factors, Why Now | 21 |
+| **7** | **Situational Analysis, Oyo State Labour Market** | 22 |
 | | 7.1 Introduction | 22 |
 | | 7.2 Geographic and Administrative Profile | 22 |
 | | 7.3 Population Demographics | 24 |
@@ -58,7 +58,7 @@
 | | 7.8 Policy Context | 37 |
 | | 7.9 Convergence of Factors | 38 |
 | | 7.10 Chapter Summary | 39 |
-| **8** | **Comparative Analysis — State-Level Registry Initiatives** | 40 |
+| **8** | **Comparative Analysis, State-Level Registry Initiatives** | 40 |
 | | 8.1 Introduction | 40 |
 | | 8.2 Landscape Overview | 40 |
 | | 8.3 Comparative Analysis | 41 |
@@ -89,7 +89,7 @@
 | | 11.1 Introduction | 71 |
 | | 11.2 Design Principles | 71 |
 | | 11.3 Development Process | 72 |
-| | 11.4 Taxonomy Structure — 20 Sectors, 150 Skills | 73 |
+| | 11.4 Taxonomy Structure, 20 Sectors, 150 Skills | 73 |
 | | 11.5 Summary Statistics | 82 |
 | | 11.6 ISCO-08 Mapping Summary | 83 |
 | | 11.7 Validation Exercise Results | 84 |
@@ -117,7 +117,7 @@
 | | 14.5 Nigeria Data Protection Act 2023 Compliance | 110 |
 | | 14.6 Data Encryption Standards | 112 |
 | | 14.7 Secure-by-Design Patterns | 112 |
-| **15** | **Validation Exercise — Aggregate Findings** | 114 |
+| **15** | **Validation Exercise, Aggregate Findings** | 114 |
 | | 15.1 Introduction | 114 |
 | | 15.2 Sample Summary | 114 |
 | | 15.3 Demographic Profile | 115 |
@@ -129,7 +129,7 @@
 | | 15.9 NBS Benchmark Comparison Summary | 129 |
 | | 15.10 Platform Performance During Validation | 130 |
 | | 15.11 Findings Summary | 131 |
-| **16** | **Validation Exercise — LGA-by-LGA Profiles** | 132 |
+| **16** | **Validation Exercise, LGA-by-LGA Profiles** | 132 |
 | | 16.1 Introduction | 132 |
 | | 16.2 Zone Classification | 132 |
 | | 16.3 Zone Summary Comparison | 133 |
@@ -175,7 +175,7 @@
 | | 20.5 Risk Ownership Matrix | 214 |
 | | 20.6 Risk Review Schedule | 214 |
 | | 20.7 Key Insight | 215 |
-| **21** | **Monitoring & Evaluation — Key Performance Indicators** | 216 |
+| **21** | **Monitoring & Evaluation, Key Performance Indicators** | 216 |
 | | 21.1 Introduction | 216 |
 | | 21.2 KPI Framework Structure | 216 |
 | | 21.3 Domain 1: Enumeration Progress (7 KPIs) | 217 |
@@ -202,12 +202,12 @@
 
 | Appendix | Title | Page |
 |:--------:|-------|:----:|
-| **A** | Terms of Reference — Extract | 233 |
+| **A** | Terms of Reference, Extract | 233 |
 | **B** | Survey Instrument (Full Questionnaire v3.0) | 235 |
 | **C** | Occupational Skills Taxonomy (150 Skills, 20 Sectors) | 243 |
 | **D** | Validation Exercise Data Sheets (33 LGA Tables) | 253 |
 | **E** | LGA Population Projections (2006 Census & 2024 Estimates) | 258 |
-| **F** | Comparative State Registry Analysis — Extended Tables | 260 |
+| **F** | Comparative State Registry Analysis, Extended Tables | 260 |
 | **G** | Technical Architecture Documentation | 262 |
 | **H** | Data Protection Impact Assessment (DPIA) Summary | 268 |
 | **I** | Capacity Building Curriculum Outline | 272 |

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pre-Field Survey Status Report — CHM/OSLR/2026/001</title>
+  <style>
+/* =============================================================================
+ * Chemiroy Document Design System — v2.0
+ * For OSLRS reports and future Ministry-facing documents.
+ * Reusable across: Pre-Field Status Report, IUBR, DPIA, Transfer Protocol,
+ * Operations Manual, future quarterly updates.
+ *
+ * Authored 2026-04-27 by Awwal + Claude per transcript recommendations
+ * (lines 3453-3483: "proper design pass, not a template tweak").
+ * ============================================================================= */
+
+/* ───────────────────────── 1. Fonts ────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ───────────────────────── 2. Tokens ───────────────────────── */
+
+:root {
+  /* Brand */
+  --colour-maroon:        #9C1E23;
+  --colour-maroon-dark:   #7A171B;
+  --colour-maroon-tint:   #f3e6e7;
+
+  /* Neutrals (near-black, not pure black, per design recs) */
+  --colour-ink:           #1a1a1a;
+  --colour-charcoal:      #4a4a4a;
+  --colour-graphite:      #6b6b6b;
+  --colour-mute:          #9a9a9a;
+  --colour-rule:          #e5e3df;
+
+  /* Backgrounds */
+  --colour-paper:         #ffffff;
+  --colour-warm:          #fafaf7;
+  --colour-callout:       #f4f2ed;
+
+  /* Accent (status, data viz) */
+  --colour-teal:          #2f6b6f;
+  --colour-amber:         #b58105;
+
+  /* Type scale */
+  --font-body:            'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display:         'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+  --font-mono:            'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --size-base:            10.5pt;
+  --size-small:           9pt;
+  --size-tiny:            8pt;
+
+  --leading-tight:        1.2;
+  --leading-body:         1.55;
+  --leading-loose:        1.7;
+
+  /* Layout */
+  --page-width:           210mm;
+  --page-height:          297mm;
+  --margin-x:             20mm;
+  --margin-y:             20mm;
+  --content-width:        170mm;
+
+  /* Spacing scale (1x = 4pt at body-size) */
+  --s-1: 4pt;
+  --s-2: 8pt;
+  --s-3: 12pt;
+  --s-4: 16pt;
+  --s-5: 24pt;
+  --s-6: 32pt;
+  --s-7: 48pt;
+  --s-8: 64pt;
+}
+
+/* ───────────────────────── 3. Reset ────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  /* CRITICAL for chromium --print-to-pdf: browsers strip background colours
+   * and images during print by default ("save ink"). Force everything to
+   * preserve colours in PDF output, matching what you see on screen. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; display: block; }
+
+/* ─────────────────────── 4. Document body ─────────────────── */
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--size-base);
+  line-height: var(--leading-body);
+  color: var(--colour-ink);
+  background: var(--colour-warm);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Page-shaped container for screen preview (mimics A4).
+ * Note: NO overflow: hidden here — content is allowed to grow beyond min-height
+ * (the visual page card grows; chromium handles real pagination via @page in print). */
+.page {
+  width: var(--page-width);
+  min-height: var(--page-height);
+  margin: 20px auto;
+  background: var(--colour-paper);
+  padding: var(--margin-y) var(--margin-x);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  position: relative;
+}
+
+/* ───────────────────── 5. Typography ──────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--colour-ink);     /* near-black, not maroon — hierarchy via weight + size */
+  line-height: var(--leading-tight);
+  font-weight: 700;
+  margin: 0 0 var(--s-3);
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 28pt; font-weight: 800; letter-spacing: -0.025em; margin-bottom: var(--s-5); }
+h2 { font-size: 18pt; font-weight: 700; margin-top: var(--s-6); padding-top: var(--s-3); border-top: 0.5pt solid var(--colour-rule); }
+h3 { font-size: 13pt; font-weight: 600; margin-top: var(--s-5); }
+h4 { font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--colour-charcoal); margin-top: var(--s-4); }
+
+p, ul, ol, blockquote { margin: 0 0 var(--s-3); }
+
+/* Body alignment: left-aligned, NOT justified — per design recs ("awkward rivers") */
+p { text-align: left; }
+
+a { color: var(--colour-maroon); text-decoration: none; border-bottom: 0.5pt solid var(--colour-maroon-tint); }
+a:hover { border-bottom-color: var(--colour-maroon); }
+
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+ul, ol { padding-left: var(--s-4); }
+li { margin-bottom: var(--s-1); }
+li > ul, li > ol { margin-top: var(--s-1); margin-bottom: 0; }
+
+blockquote {
+  border-left: 2pt solid var(--colour-maroon);
+  padding: var(--s-2) 0 var(--s-2) var(--s-4);
+  margin-left: 0;
+  font-style: italic;
+  color: var(--colour-charcoal);
+}
+
+code, pre { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* ───────────────────── 6. Tables ──────────────────────────── */
+/* Per design recs: less heavy; subtle header tint; no outer borders;
+ * inner borders between rows only; monospaced digits. */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--s-4) 0;
+  font-size: var(--size-small);
+  line-height: 1.4;
+}
+
+thead th {
+  background: var(--colour-warm);
+  color: var(--colour-charcoal);
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--size-tiny);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1pt solid var(--colour-rule);
+}
+
+tbody td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 0.5pt solid var(--colour-rule);
+  vertical-align: top;
+}
+
+/* Right-align numeric columns with monospaced digits */
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+tbody tr:last-child td { border-bottom: none; }
+
+/* ────────────────── 7. Callout boxes ───────────────────────
+ * Key Finding / Assumption / Recommendation — grey tint + maroon left bar */
+
+.callout {
+  background: var(--colour-callout);
+  border-left: 3pt solid var(--colour-maroon);
+  padding: var(--s-3) var(--s-4);
+  margin: var(--s-4) 0;
+  border-radius: 0 2pt 2pt 0;
+}
+
+.callout-label {
+  font-family: var(--font-display);
+  font-size: var(--size-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--colour-maroon);
+  margin: 0 0 var(--s-1);
+}
+
+.callout-body { margin: 0; }
+
+.callout--key       { border-left-color: var(--colour-maroon); }
+.callout--assumption { border-left-color: var(--colour-amber); }
+.callout--assumption .callout-label { color: var(--colour-amber); }
+.callout--recommend  { border-left-color: var(--colour-teal); }
+.callout--recommend .callout-label { color: var(--colour-teal); }
+
+/* ───────────────── 8. Dashboard exec-summary stat cards ──── */
+/* Per design recs: page-2 dashboard with infographic cards
+ * showing %, # respondents, # LGAs, security grade. */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-4);
+  margin: var(--s-4) 0 var(--s-6);
+}
+
+.stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+.stat-card {
+  background: var(--colour-paper);
+  border: 1pt solid var(--colour-rule);
+  border-top: 3pt solid var(--colour-maroon);
+  padding: var(--s-4);
+  border-radius: 2pt;
+}
+
+.stat-card__value {
+  font-family: var(--font-display);
+  font-size: 32pt;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--colour-ink);
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--s-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card__label {
+  font-size: var(--size-tiny);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--colour-charcoal);
+  margin: 0;
+}
+
+.stat-card__sublabel {
+  font-size: var(--size-small);
+  color: var(--colour-graphite);
+  margin: var(--s-1) 0 0;
+}
+
+/* ──────────────── 9. Document control band ─────────────────
+ * Top-of-cover band carrying CHM ref + classification. */
+
+.doc-control-band {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--size-tiny);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--colour-charcoal);
+  padding-bottom: var(--s-3);
+  border-bottom: 0.5pt solid var(--colour-rule);
+  margin-bottom: var(--s-5);
+}
+
+.doc-control-band__ref { font-variant-numeric: tabular-nums; }
+.doc-control-band__class { color: var(--colour-maroon); }
+
+/* ──────────────── 10. Page furniture (running) ─────────────
+ * Footer: "Title | Chemiroy Nigeria Limited | date | page X"
+ * Chapter markers in corner. */
+
+.page-footer {
+  position: absolute;
+  bottom: 12mm;
+  left: var(--margin-x);
+  right: var(--margin-x);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--size-tiny);
+  color: var(--colour-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.chapter-marker {
+  position: absolute;
+  top: 12mm;
+  right: var(--margin-x);
+  font-family: var(--font-display);
+  font-size: var(--size-tiny);
+  font-weight: 700;
+  color: var(--colour-maroon);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * COVER VARIANTS — three modes, choose via .cover-mode-* class on body
+ * Per design recs: photograph-driven cover with title overlay; trust signal.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.cover {
+  width: var(--page-width);
+  height: var(--page-height);
+  margin: 20px auto;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  background: var(--colour-ink);
+}
+
+/* ───── Variant B — full-bleed photo + Gaussian blur + dark overlay ─── */
+
+.cover.variant-blur .cover__photo {
+  position: absolute;
+  inset: 0;
+  background-image: url('file:///C:/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/assets/images/cover-tailor-meritkosy.jpg');
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) saturate(0.85);
+  transform: scale(1.1);  /* hide blur edges */
+}
+
+.cover.variant-blur .cover__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg,
+      rgba(20,20,20,0.55) 0%,
+      rgba(20,20,20,0.65) 50%,
+      rgba(20,20,20,0.85) 100%);
+}
+
+/* ───── Variant C — full-bleed photo, light overlay, photo subject visible ─── */
+
+.cover.variant-photo .cover__photo {
+  position: absolute;
+  inset: 0;
+  background-image: url('file:///C:/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/assets/images/cover-tailor-meritkosy.jpg');
+  background-size: cover;
+  background-position: center 30%;
+}
+
+.cover.variant-photo .cover__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg,
+      rgba(20,20,20,0.55) 0%,    /* dark band at top — gives doc-control band a contrast substrate */
+      rgba(20,20,20,0.20) 10%,
+      rgba(20,20,20,0.00) 18%,   /* clear by 18% — photo subject fully visible from here */
+      rgba(20,20,20,0.00) 35%,
+      rgba(20,20,20,0.25) 55%,
+      rgba(20,20,20,0.85) 80%,
+      rgba(20,20,20,0.95) 100%);
+}
+
+/* Variant-C-specific doc control: full white + bold + text shadow for guaranteed legibility */
+.cover.variant-photo .cover__doc-control {
+  color: rgba(255,255,255,1.0);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.55), 0 0 8px rgba(0,0,0,0.25);
+  border-bottom: 0.75pt solid rgba(255,255,255,0.5);
+  padding-bottom: var(--s-2);
+}
+
+/* ───── Variant D — split: photo top, solid maroon-dark bottom ─── */
+
+.cover.variant-split .cover__photo {
+  position: absolute;
+  inset: 0 0 50% 0;       /* top half only */
+  background-image: url('file:///C:/Users/DELL/Desktop/oslrs/_bmad-output/baseline-report/assets/images/cover-tailor-meritkosy.jpg');
+  background-size: cover;
+  background-position: center 30%;
+}
+
+.cover.variant-split .cover__overlay {
+  position: absolute;
+  top: 50%;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--colour-maroon-dark);
+}
+
+.cover.variant-split .cover__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.0) 70%, rgba(0,0,0,0.4) 100%);
+}
+
+/* ───── Cover content (shared across all three variants) ─── */
+
+.cover__content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--margin-y) var(--margin-x);
+  color: white;
+}
+
+.cover__doc-control {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--size-tiny);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.85);
+  padding-bottom: var(--s-2);
+  border-bottom: 0.5pt solid rgba(255,255,255,0.3);
+}
+
+/* For variant-split, document-control sits over the photo (top), so darker shadow needed */
+.cover.variant-split .cover__doc-control {
+  border-bottom-color: rgba(255,255,255,0.5);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.cover__spacer { flex: 1; }
+
+.cover__title-block {
+  margin-bottom: var(--s-7);
+}
+
+/* For variant-split, title block sits in the bottom (solid maroon) half */
+.cover.variant-split .cover__title-block {
+  margin-bottom: 0;
+  margin-top: 0;
+}
+
+.cover__superhead {
+  font-family: var(--font-display);
+  font-size: 11pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.85);
+  margin: 0 0 var(--s-3);
+}
+
+.cover__title {
+  font-family: var(--font-display);
+  font-size: 44pt;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: white;
+  margin: 0 0 var(--s-3);
+  max-width: 90%;
+}
+
+.cover__subtitle {
+  font-family: var(--font-display);
+  font-size: 16pt;
+  font-weight: 400;
+  line-height: 1.3;
+  color: rgba(255,255,255,0.92);
+  margin: 0 0 var(--s-5);
+  max-width: 80%;
+}
+
+.cover__rule {
+  width: 60mm;
+  height: 2pt;
+  background: var(--colour-maroon);
+  margin: var(--s-5) 0;
+  border: none;
+}
+
+.cover.variant-split .cover__rule {
+  background: rgba(255,255,255,0.6);
+}
+
+.cover__authorship {
+  font-family: var(--font-display);
+  font-size: 12pt;
+  font-weight: 600;
+  margin: 0 0 var(--s-1);
+}
+
+.cover__date {
+  font-size: var(--size-small);
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.cover__credit {
+  font-size: 7pt;
+  color: rgba(255,255,255,0.6);
+  margin-top: var(--s-5);
+  letter-spacing: 0.04em;
+}
+
+.cover__credit a {
+  color: rgba(255,255,255,0.75);
+  border-bottom-color: rgba(255,255,255,0.2);
+}
+
+/* ───────────────────── 11. Print rules ─────────────────────
+ * Stored separately in print.css for clarity.
+ * Imported here for screen-preview parity. */
+
+@media print {
+  body { background: white; }
+  .page, .cover { box-shadow: none; margin: 0; page-break-after: always; }
+}
+
+/* ───────────────────── 12. Variant-preview helper ─────────
+ * For comparing the three cover variants side-by-side on screen. */
+
+.variant-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.variant-stack .cover { margin: 0; transform-origin: top center; }
+
+@media (max-width: 1200px) {
+  .variant-stack .cover { transform: scale(0.65); margin-bottom: -100px; }
+}
+
+</style>
+  <style>
+/* =============================================================================
+ * Print-specific overrides for Chemiroy Document Design System v2.0
+ * Chromium-compatible — no named pages or @top/@bottom margin boxes
+ * (those features aren't supported by chromium --print-to-pdf).
+ * ============================================================================= */
+
+/* @page rules — body pages with standard 20mm margins, cover overrides via
+ * `@page :first`. Explicit per-side properties + !important + matching :left/:right
+ * to defeat any cascade quirks in chromium --print-to-pdf. */
+@page {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :left {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :right {
+  size: A4;
+  margin: 20mm 20mm 25mm 20mm;
+}
+@page :first {
+  size: A4 !important;
+  margin: 0 !important;
+  margin-top: 0 !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+}
+
+@media print {
+
+  /* ───────── Reset screen-preview decoration ───────── */
+
+  body {
+    background: white;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ───────── Cover (page 1) — full-bleed photo ─────────
+   * Explicit absolute-style positioning at page origin (0,0) to ensure the
+   * cover sits at the physical page top-left corner, bleeding to all four
+   * edges when @page :first removes the margin. */
+
+  .cover {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    page-break-after: always;
+    overflow: hidden;
+    position: relative;
+    display: block;
+  }
+
+  .cover .cover__photo {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* ───────── Body pages ─────────
+   * @page already provides 20mm side / 20mm top / 25mm bottom margins.
+   * The .page wrapper just strips screen-preview decoration. */
+
+  .page {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    width: auto;
+    box-shadow: none;
+  }
+
+  /* Force a page-break before each .page wrapper if needed */
+  .page + .page { page-break-before: always; }
+
+  /* ───────── Page-break behaviour ───────── */
+
+  /* Each chapter (H1) starts on a fresh page. The first H1 after the cover
+   * is a no-op — chromium coalesces the cover's page-break-after with the
+   * H1's page-break-before, so no blank intermediate page is generated.
+   * Use break-before: page (modern keyword) for stronger chromium support
+   * across documents with many chapters. */
+  .page h1 {
+    page-break-before: always;
+    break-before: page;
+  }
+  /* Belt-and-braces: also target direct children H1 explicitly, in case the
+   * container nesting changes. */
+  .page > h1 {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* ───────── Heading + content keep-together ───────── */
+
+  /* Headings never end a page; first content after must travel with them. */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Universal "next-element" rule: ANY block immediately following a
+   * heading should never break before. This catches paragraphs, lists,
+   * tables, figures, callouts, and any custom block types. H1 included
+   * for chapter-opening headings (e.g. Abbreviations + table). */
+  h1 + *, h2 + *, h3 + *, h4 + *, h5 + *, h6 + * {
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
+  /* The .keep-with-next wrapper is injected by the markdown renderer
+   * around each heading + its immediately-following block. break-inside:
+   * avoid forces chromium to keep the wrapper's contents together,
+   * which is more reliable than break-after on the heading alone. */
+  .keep-with-next {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Stronger orphan/widow control */
+  p {
+    orphans: 4;
+    widows: 4;
+  }
+
+  /* ───────── Visual blocks: keep together ───────── */
+
+  /* NOTE: <table> is intentionally EXCLUDED. Multi-page tables (e.g. the
+   * Abbreviations and Acronyms table, the regulatory traceability table)
+   * cannot honour `break-inside: avoid`. When chromium can't satisfy the
+   * constraint it falls back to "break at the FIRST available boundary",
+   * which orphans captions and headings from the table body. Letting
+   * tables break naturally — combined with `<thead>` repeating on each
+   * page (CSS default) and `.caption + table { break-before: avoid }` —
+   * yields the cleaner outcome.
+   *
+   * Single-page tables still don't break in practice because they fit;
+   * no explicit rule is needed for them. */
+  .callout, .stat-card, img, figure, blockquote {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* ───────── Code blocks & ASCII diagrams (figures) ───────── */
+
+  /* Figure-panel treatment for fenced code blocks. Each diagram sits in a
+   * cream-paper panel with a maroon accent stripe on the left edge — visually
+   * reads as a deliberate figure, not a slab of monospaced body text.
+   *
+   * Box-drawing characters (─│┌┐└┘├┤┬┴┼) render cleanly with no gaps because
+   * JetBrains Mono draws them as connected glyphs. Ligatures and contextual
+   * alternates are disabled to keep ASCII art's visual grid intact. */
+  pre {
+    margin: 18pt auto;
+    padding: 16pt 22pt;
+    background: #fbf9f2;
+    border: 1px solid #c9bba6;
+    border-left: 4px solid var(--colour-maroon, #9C1E23);
+    border-radius: 0 3pt 3pt 0;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-size: 7.5pt;
+    line-height: 1.45;
+    letter-spacing: 0;
+    color: #1a1a1a;
+    font-feature-settings: "liga" 0, "calt" 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  pre code {
+    white-space: pre;
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-weight: 400;
+    display: block;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  /* Inline code stays distinct from prose, but with the same JetBrains Mono
+   * face for typographic consistency. */
+  code {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    font-weight: 500;
+    background: #f4efe5;
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--colour-maroon-dark, #7A171B);
+  }
+
+  /* ───────── SVG diagram figures ───────── */
+
+  /* Diagrams converted from Excalidraw via convert-excalidraw.js, embedded
+   * in markdown as <figure class="diagram"> ... <img src=".../*.svg"> ... </figure>.
+   * Treated as proper figure panels: cream-paper background, maroon accent
+   * stripe on the left edge, centred horizontally, scaled to fit the print
+   * width while preserving aspect ratio. */
+  figure.diagram {
+    margin: 18pt auto;
+    padding: 14pt 18pt;
+    background: #fbf9f2;
+    border: 1px solid #c9bba6;
+    border-left: 4px solid var(--colour-maroon, #9C1E23);
+    border-radius: 0 3pt 3pt 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  figure.diagram img,
+  figure.diagram svg {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+  }
+
+  /* Figure captions glued to their diagram panels */
+  .caption--figure + figure.diagram {
+    margin-top: 0;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+
+  /* ───────── Table & Figure captions (auto-numbered) ───────── */
+
+  /* Captions are injected by build.js. They sit above their table/figure
+   * with a tight margin and a "keep-with-next" page-break behaviour so
+   * the caption never gets orphaned at the bottom of a page. */
+  .caption {
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: var(--colour-maroon, #9C1E23);
+    margin: 14pt 0 3pt 0;
+    letter-spacing: 0.02em;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Figure captions centre-align so they sit above the centred figure panel. */
+  .caption--figure {
+    text-align: center;
+  }
+
+  .caption + table,
+  .caption + pre {
+    margin-top: 0;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
+  /* Orphans / widows control for body prose */
+  p, li { orphans: 3; widows: 3; }
+
+  /* ───────── Hide screen-only elements ───────── */
+
+  .variant-stack, .preview-only { display: none !important; }
+
+  /* ───────── Link styling for print ───────── */
+
+  a { color: inherit; border-bottom: none; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #6b6b6b;
+  }
+  a[href^="#"]::after { content: ""; }
+}
+
+</style>
+<style>@page { size: A4; margin: 0 !important; }</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     COVER (page 1, full-bleed)
+     ════════════════════════════════════════════════════════════════════ -->
+
+<div class="cover variant-photo">
+  <div class="cover__photo"></div>
+  <div class="cover__overlay"></div>
+
+  <div class="cover__content">
+
+    <div class="cover__doc-control">
+      <span>CHM/OSLR/2026/001</span>
+      <span>Confidential, for official use only</span>
+    </div>
+
+    <div class="cover__spacer"></div>
+
+    <div class="cover__title-block">
+      <p class="cover__superhead">Oyo State Labour & Skills Registry</p>
+      <h1 class="cover__title">Pre-Field Survey Status Report</h1>
+      <p class="cover__subtitle">Skilled Labour Registry deployment readiness for the Ministry of Trade, Industry and Cooperatives</p>
+
+      <hr class="cover__rule">
+
+      <p class="cover__authorship">Mrs Fateemah Roy-Lagbaja</p>
+      <p class="cover__authorship" style="font-weight:400;font-size:10pt;color:rgba(255,255,255,0.85);margin-top:0;">Chemiroy Nigeria Limited</p>
+      <p class="cover__date" style="margin-top:8pt;">May 2026 · v1</p>
+    </div>
+
+    <div class="cover__credit">Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wikimedia Commons (CC BY-SA 4.0)</div>
+
+  </div>
+</div>
+</body>
+</html>

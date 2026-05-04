@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16.00 -4.00 1058.00 848.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="16.00" y="-4.00" width="1058.00" height="848.00" fill="white"/>
+  <rect x="40" y="70" width="720" height="130" rx="10.4" ry="10.4" fill="#27ae60" stroke="#1a7a3a" stroke-width="2" opacity="0.3"/>
+  <text x="55" y="78" fill="#1a7a3a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">LAYER 1: Point-of-Entry Validation</tspan></text>
+  <text x="55" y="106" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Client + Server | Real-time | 10 validation rules</tspan></text>
+  <text x="55" y="130" fill="#333333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">NIN Modulus 11 | Phone format | Age bounds | Cross-field logic | Skip enforcement</tspan></text>
+  <rect x="790" y="100" width="260" height="50" rx="4" ry="4" fill="#27ae60" stroke="#1a7a3a" stroke-width="2" opacity="0.4"/>
+  <text x="920" y="108" fill="#1a7a3a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="920" dy="0">AUTO: 100%</tspan><tspan x="920" dy="17.5">of submissions</tspan></text>
+  <polyline points="762.00,125.00 787.00,125.00" fill="none" stroke="#1a7a3a" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#1a7a3a"/>
+  <polyline points="400.00,202.00 400.00,230.00" fill="none" stroke="#555555" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#555555"/>
+  <rect x="40" y="235" width="720" height="130" rx="10.4" ry="10.4" fill="#e67e22" stroke="#b5600a" stroke-width="2" opacity="0.3"/>
+  <text x="55" y="243" fill="#b5600a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">LAYER 2: Automated Fraud Detection</tspan></text>
+  <text x="55" y="271" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Server-side | Background | 5 algorithms</tspan></text>
+  <text x="55" y="295" fill="#333333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">GPS clustering | Speed-run | Straight-lining | Duplicate NIN | Pattern analysis</tspan></text>
+  <rect x="790" y="265" width="260" height="50" rx="4" ry="4" fill="#e67e22" stroke="#b5600a" stroke-width="2" opacity="0.4"/>
+  <text x="920" y="273" fill="#b5600a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="920" dy="0">AUTO: Flagged submissions</tspan><tspan x="920" dy="17.5">-&gt; Layer 3</tspan></text>
+  <polyline points="762.00,290.00 787.00,290.00" fill="none" stroke="#b5600a" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#b5600a"/>
+  <polyline points="400.00,367.00 400.00,395.00" fill="none" stroke="#555555" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#555555"/>
+  <rect x="40" y="400" width="720" height="130" rx="10.4" ry="10.4" fill="#2980b9" stroke="#1a6090" stroke-width="2" opacity="0.3"/>
+  <text x="55" y="408" fill="#1a6090" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">LAYER 3: Supervisory Review</tspan></text>
+  <text x="55" y="436" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Human | Supervisor Dashboard | LGA-scoped</tspan></text>
+  <text x="55" y="460" fill="#333333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Review flagged | Approve/Reject/Re-interview | Performance metrics | Daily reports</tspan></text>
+  <rect x="790" y="430" width="260" height="50" rx="4" ry="4" fill="#2980b9" stroke="#1a6090" stroke-width="2" opacity="0.4"/>
+  <text x="920" y="438" fill="#1a6090" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="920" dy="0">HUMAN: ~5-10%</tspan><tspan x="920" dy="17.5">of submissions</tspan></text>
+  <polyline points="762.00,455.00 787.00,455.00" fill="none" stroke="#1a6090" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#1a6090"/>
+  <polyline points="400.00,532.00 400.00,560.00" fill="none" stroke="#555555" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#555555"/>
+  <rect x="40" y="565" width="720" height="130" rx="10.4" ry="10.4" fill="#8e44ad" stroke="#6a2e82" stroke-width="2" opacity="0.3"/>
+  <text x="55" y="573" fill="#6a2e82" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">LAYER 4: Verification Audit</tspan></text>
+  <text x="55" y="601" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Human | Assessor + Statistical | State-wide</tspan></text>
+  <text x="55" y="625" fill="#333333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="55" dy="0">Random sample audit | NBS quality gates (8) | Statistical anomaly detection</tspan></text>
+  <rect x="790" y="595" width="260" height="50" rx="4" ry="4" fill="#8e44ad" stroke="#6a2e82" stroke-width="2" opacity="0.4"/>
+  <text x="920" y="603" fill="#6a2e82" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="920" dy="0">HUMAN: ~2%</tspan><tspan x="920" dy="17.5">random sample</tspan></text>
+  <polyline points="762.00,620.00 787.00,620.00" fill="none" stroke="#6a2e82" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#6a2e82"/>
+  <polyline points="400.00,697.00 400.00,725.00" fill="none" stroke="#555555" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" color="#555555"/>
+  <text x="400" y="735" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="18" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="400" dy="0">Result: DATA QUALITY CLASSIFICATION</tspan></text>
+  <rect x="100" y="770" width="200" height="50" rx="4" ry="4" fill="#27ae60" stroke="#1a7a3a" stroke-width="2" opacity="0.5"/>
+  <text x="200" y="783" fill="#1a7a3a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="200" dy="0">Verified (Green)</tspan></text>
+  <rect x="330" y="770" width="200" height="50" rx="4" ry="4" fill="#f39c12" stroke="#b5600a" stroke-width="2" opacity="0.5"/>
+  <text x="430" y="783" fill="#b5600a" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="430" dy="0">Flagged (Amber)</tspan></text>
+  <rect x="560" y="770" width="200" height="50" rx="4" ry="4" fill="#e74c3c" stroke="#a81e1e" stroke-width="2" opacity="0.5"/>
+  <text x="660" y="783" fill="#a81e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="660" dy="0">Rejected (Red)</tspan></text>
+  <rect x="40" y="70" width="8" height="130" rx="0" ry="0" fill="#27ae60" stroke="#1a7a3a" stroke-width="1" opacity="1"/>
+  <rect x="40" y="235" width="8" height="130" rx="0" ry="0" fill="#e67e22" stroke="#b5600a" stroke-width="1" opacity="1"/>
+  <rect x="40" y="400" width="8" height="130" rx="0" ry="0" fill="#2980b9" stroke="#1a6090" stroke-width="1" opacity="1"/>
+  <rect x="40" y="565" width="8" height="130" rx="0" ry="0" fill="#8e44ad" stroke="#6a2e82" stroke-width="1" opacity="1"/>
+</svg>

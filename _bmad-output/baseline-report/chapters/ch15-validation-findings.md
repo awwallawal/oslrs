@@ -1,8 +1,8 @@
-# CHAPTER 15: VALIDATION EXERCISE — AGGREGATE FINDINGS
+# 12. Validation Exercise: Aggregate Findings
 
 ---
 
-## 15.1 Introduction
+## 12.1 Introduction
 
 This chapter presents the aggregate findings from the validation exercise conducted across all 33 Local Government Areas (LGAs) of Oyo State. The validation exercise, designed and described in the methodology chapter (Chapter 9), collected **330 respondent records** (10 per LGA) to validate the survey instrument, test the digital platform under field conditions, calibrate the fraud detection engine, and generate preliminary descriptive statistics for benchmarking against national survey data.
 
@@ -10,7 +10,7 @@ This chapter presents the aggregate findings from the validation exercise conduc
 
 ---
 
-## 15.2 Sample Summary
+## 12.2 Sample Summary
 
 | Parameter | Value |
 |-----------|-------|
@@ -20,13 +20,13 @@ This chapter presents the aggregate findings from the validation exercise conduc
 | **Collection channels** | Mobile PWA (field), Desktop web (data entry), Public self-registration |
 | **Collection period** | February 2026 |
 | **Completion rate** | 100% (all 330 records passed Layer 1 validation) |
-| **Fraud flags triggered** | 12 (3.6%) — all reviewed and resolved |
+| **Fraud flags triggered** | 12 (3.6%), all reviewed and resolved |
 
 ---
 
-## 15.3 Demographic Profile
+## 12.3 Demographic Profile
 
-### 15.3.1 Gender Distribution
+### 12.3.1 Gender Distribution
 
 | Gender | Count | Percentage | NBS NLFS Benchmark |
 |--------|:-----:|:----------:|:------------------:|
@@ -47,7 +47,7 @@ Other     ██                                                     1.2%
 
 **Observation**: The gender distribution closely mirrors the NBS NLFS national gender split (51.3% male / 48.5% female), providing confidence that the validation sample is not gender-skewed.
 
-### 15.3.2 Age Distribution
+### 12.3.2 Age Distribution
 
 | Age Group | Count | Percentage | NBS Benchmark (Working-Age) |
 |-----------|:-----:|:----------:|:---------------------------:|
@@ -79,7 +79,7 @@ Mean Age: 36.2 years | Median Age: 34 years
 
 **Observation**: The age distribution shows the expected concentration in the 25–44 age range characteristic of economically active populations. The median age of 34 years aligns with the NBS working-age population median for Southwest Nigeria.
 
-### 15.3.3 Marital Status
+### 12.3.3 Marital Status
 
 | Status | Count | Percentage |
 |--------|:-----:|:----------:|
@@ -90,7 +90,7 @@ Mean Age: 36.2 years | Median Age: 34 years
 | Separated | 9 | 2.7% |
 | **Total** | **330** | **100%** |
 
-### 15.3.4 Education Level
+### 12.3.4 Education Level
 
 | Level | Count | Percentage | NBS Benchmark |
 |-------|:-----:|:----------:|:-------------:|
@@ -125,18 +125,18 @@ Doctorate          ██                                            1.2%
 
 ---
 
-## 15.4 Labour Force Participation
+## 12.4 Labour Force Participation
 
-### 15.4.1 ILO ICLS-19 Classification Results
+### 12.4.1 ILO ICLS-19 Classification Results
 
 The labour force classification cascade (Questions 3.1–3.4) produced the following distribution:
 
 | Classification | Count | Percentage | NBS NLFS Benchmark |
 |---------------|:-----:|:----------:|:------------------:|
-| **Employed** (Q3.1=Yes) | 268 | 81.2% | — |
-| **Employed — Temporarily Absent** (Q3.1=No, Q3.2=Yes) | 19 | 5.8% | — |
+| **Employed** (Q3.1=Yes) | 268 | 81.2% |, |
+| **Employed, Temporarily Absent** (Q3.1=No, Q3.2=Yes) | 19 | 5.8% |, |
 | **Total Employed** | **287** | **87.0%** | 85.2% |
-| **Unemployed — Job Seeking** (Q3.3=Yes) | 24 | 7.3% | 5.3% |
+| **Unemployed, Job Seeking** (Q3.3=Yes) | 24 | 7.3% | 5.3% |
 | **Potential Labour Force** (Q3.3=No, Q3.4=Yes) | 8 | 2.4% | 3.1% |
 | **Outside Labour Force** (Q3.4=No) | 11 | 3.3% | 6.4% |
 | **Total** | **330** | **100%** | |
@@ -164,15 +164,15 @@ LABOUR FORCE CLASSIFICATION (n=330, ILO ICLS-19)
 
 **Observation**: The 87.0% employment rate is broadly consistent with the NBS NLFS figure for Southwest Nigeria. The slightly higher employment rate in the validation sample may reflect the purposive sampling strategy, which prioritised economically active respondents.
 
-### 15.4.2 Employment Type Distribution
+### 12.4.2 Employment Type Distribution
 
 Among the 287 employed respondents:
 
 | Employment Type | Count | Percentage | NBS Benchmark |
 |----------------|:-----:|:----------:|:-------------:|
 | Self-Employed (Artisan/Trader/Business Owner) | 215 | 74.9% | 75.2% |
-| Wage Earner — Private Sector | 32 | 11.1% | 12.8% |
-| Wage Earner — Government/Public Sector | 16 | 5.6% | 4.6% |
+| Wage Earner, Private Sector | 32 | 11.1% | 12.8% |
+| Wage Earner, Government/Public Sector | 16 | 5.6% | 4.6% |
 | Apprentice/Intern | 12 | 4.2% | 3.8% |
 | Unpaid Family Worker | 7 | 2.4% | 2.1% |
 | Contractor/Consultant | 5 | 1.7% | 1.5% |
@@ -191,9 +191,9 @@ Contractor     ██                                                           
                0%    10%    20%    30%    40%    50%    60%    70%    80%
 ```
 
-**Observation**: The dominance of self-employment (74.9%) closely aligns with the NBS benchmark of 75.2% for Southwest Nigeria, confirming the well-documented structure of the Yoruba informal economy. Combined with unpaid family workers (2.4%), **the informal sector accounts for approximately 93% of employment** — consistent with the NBS NLFS finding that informal employment constitutes 92.6% of total employment nationally.
+**Observation**: The dominance of self-employment (74.9%) closely aligns with the NBS benchmark of 75.2% for Southwest Nigeria, confirming the well-documented structure of the Yoruba informal economy. Combined with unpaid family workers (2.4%), **the informal sector accounts for approximately 93% of employment**, consistent with the NBS NLFS finding that informal employment constitutes 92.6% of total employment nationally.
 
-### 15.4.3 Hours Worked and Income
+### 12.4.3 Hours Worked and Income
 
 Among respondents who worked in the last 7 days (n=268):
 
@@ -218,7 +218,7 @@ Among respondents who worked in the last 7 days (n=268):
 
 **Observation**: The median income falls within the ₦30,000–60,000 range, consistent with the national minimum wage context and the predominance of informal self-employment. The 26.9% earning below ₦30,000 per month underscores the prevalence of underemployment in the informal sector.
 
-### 15.4.4 Years of Experience
+### 12.4.4 Years of Experience
 
 Among employed respondents (n=287):
 
@@ -231,13 +231,13 @@ Among employed respondents (n=287):
 | Over 10 years | 73 | 25.4% |
 | **Total** | **287** | **100%** |
 
-**Observation**: Over 50% of employed respondents report 7+ years of experience, reflecting a mature workforce with established skill sets — a positive indicator for the Skills Marketplace utility.
+**Observation**: Over 50% of employed respondents report 7+ years of experience, reflecting a mature workforce with established skill sets, a positive indicator for the Skills Marketplace utility.
 
 ---
 
-## 15.5 Household & Welfare
+## 12.5 Household & Welfare
 
-### 15.5.1 Household Composition
+### 12.5.1 Household Composition
 
 | Metric | Value |
 |--------|-------|
@@ -246,7 +246,7 @@ Among employed respondents (n=287):
 | **Mean dependents (children/elderly)** | 2.3 persons |
 | **Percentage who are head of household** | 58.2% |
 
-### 15.5.2 Housing Tenure
+### 12.5.2 Housing Tenure
 
 | Tenure | Count | Percentage |
 |--------|:-----:|:----------:|
@@ -271,9 +271,9 @@ Other              ████                                           3.6%
 
 ---
 
-## 15.6 Skills & Business
+## 12.6 Skills & Business
 
-### 15.6.1 Top 20 Reported Skills
+### 12.6.1 Top 20 Reported Skills
 
 | Rank | Skill | Sector | Count | % of Respondents |
 |:----:|-------|--------|:-----:|:----------------:|
@@ -317,7 +317,7 @@ Electrical           ███████████████████  
                      0%    2%    4%    6%    8%   10%   12%   14%   16%
 ```
 
-### 15.6.2 Skills Distribution by Sector
+### 12.6.2 Skills Distribution by Sector
 
 | Sector | Unique Skills Reported | % of Total Skill Mentions |
 |--------|:---------------------:|:------------------------:|
@@ -333,7 +333,7 @@ Electrical           ███████████████████  
 | Artisan & Traditional Crafts | 4 | 2.6% |
 | Other Sectors | 9 | 4.3% |
 
-### 15.6.3 Multi-Skill Prevalence
+### 12.6.3 Multi-Skill Prevalence
 
 | Number of Skills Reported | Count | Percentage |
 |:-------------------------:|:-----:|:----------:|
@@ -345,7 +345,7 @@ Electrical           ███████████████████  
 
 **Observation**: 57% of respondents report multiple skills, confirming the multi-skilled nature of the informal workforce and validating the multi-select design of the skills question (Q5.1).
 
-### 15.6.4 Business Ownership
+### 12.6.4 Business Ownership
 
 | Parameter | Value |
 |-----------|-------|
@@ -355,13 +355,13 @@ Electrical           ███████████████████  
 | **Unregistered** | 121 of 148 (81.8%) |
 | **Mean apprentices per business** | 1.4 |
 
-**Observation**: The 81.8% unregistered business rate reflects the dominance of the informal economy. The 12.8% CAC registration rate indicates a small but significant formalised segment — a potential target for the Ministry's enterprise development programmes.
+**Observation**: The 81.8% unregistered business rate reflects the dominance of the informal economy. The 12.8% CAC registration rate indicates a small but significant formalised segment, a potential target for the Ministry's enterprise development programmes.
 
 ---
 
-## 15.7 Skills Marketplace Consent
+## 12.7 Skills Marketplace Consent
 
-### 15.7.1 Consent Tier Distribution
+### 12.7.1 Consent Tier Distribution
 
 | Consent Level | Count | Percentage |
 |--------------|:-----:|:----------:|
@@ -391,7 +391,7 @@ MARKETPLACE CONSENT (n=330)
 
 ---
 
-## 15.8 Disability Status
+## 12.8 Disability Status
 
 | Status | Count | Percentage | NBS/WHO Benchmark |
 |--------|:-----:|:----------:|:-----------------:|
@@ -402,7 +402,7 @@ MARKETPLACE CONSENT (n=330)
 
 ---
 
-## 15.9 NBS Benchmark Comparison Summary
+## 12.9 NBS Benchmark Comparison Summary
 
 The following table consolidates the key comparisons between the validation exercise findings and the NBS National Labour Force Survey benchmarks:
 
@@ -416,29 +416,29 @@ The following table consolidates the key comparisons between the validation exer
 | SSS/WAEC education (modal) | 27.0% | 25.6% | +1.4 pp | ✓ Aligned |
 | Unemployment (job-seeking) | 7.3% | 5.3% | +2.0 pp | ~ Broadly consistent |
 | Mean household size | 4.8 | 4.5 (national) | +0.3 | ✓ Aligned |
-| Marketplace opt-in | 74.5% | N/A (no benchmark) | — | Positive indicator |
+| Marketplace opt-in | 74.5% | N/A (no benchmark) |, | Positive indicator |
 
 **Overall assessment**: The validation exercise aggregate indicators are **broadly aligned with NBS NLFS benchmarks** across all comparable dimensions, supporting the conclusion that the survey instrument captures the expected demographic and labour force patterns for Southwest Nigeria. The minor deviations are within expected ranges for a purposive validation sample and do not indicate systematic bias in the instrument.
 
 ---
 
-## 15.10 Platform Performance During Validation
+## 12.10 Platform Performance During Validation
 
 | Metric | Result |
 |--------|--------|
 | **Submissions successfully processed** | 330 of 330 (100%) |
-| **Offline submissions synced** | 47 (14.3% of total) — all synced within 24 hours |
+| **Offline submissions synced** | 47 (14.3% of total), all synced within 24 hours |
 | **Average completion time** | 8.4 minutes |
 | **Shortest legitimate completion** | 5.1 minutes (outside labour force respondent) |
 | **Longest completion** | 14.2 minutes (business owner with marketplace opt-in) |
 | **Validation errors (corrected at point of entry)** | 23 instances across 330 submissions (7.0%) |
-| **Fraud flags triggered** | 12 (3.6%) — 10 approved, 2 recollected |
+| **Fraud flags triggered** | 12 (3.6%), 10 approved, 2 recollected |
 | **Platform uptime during exercise** | 100% |
 | **API p95 response time** | 187ms |
 
 ---
 
-## 15.11 Findings Summary
+## 12.11 Findings Summary
 
 The validation exercise achieved its four stated objectives:
 
@@ -453,4 +453,4 @@ These results confirm that the survey instrument, digital platform, and data qua
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 15 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 15 | Chemiroy Nigeria Limited*

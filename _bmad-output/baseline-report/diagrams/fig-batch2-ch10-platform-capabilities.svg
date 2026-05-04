@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 480" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="480" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Platform Capabilities, Functional Pillars</text>
+  <rect x="60" y="80" width="335" height="160" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="227.5" y="102" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">DATA COLLECTION</text>
+  <text x="76" y="136" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 3-channel: mobile, desktop, public web</text>
+  <text x="76" y="151.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 7-day offline buffer (PWA)</text>
+  <text x="76" y="167.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• GPS validation</text>
+  <text x="76" y="183.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NIN dedup</text>
+  <rect x="425" y="80" width="335" height="160" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="592.5" y="102" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">QUALITY ASSURANCE</text>
+  <text x="441" y="136" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Point-of-entry validation</text>
+  <text x="441" y="151.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Fraud Signal Engine</text>
+  <text x="441" y="167.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Supervisory review</text>
+  <text x="441" y="183.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Assessor verification</text>
+  <rect x="60" y="260" width="335" height="160" fill="#fff5e6" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="227.5" y="282" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#b58105">MARKETPLACE</text>
+  <text x="76" y="316" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 3-tier consent</text>
+  <text x="76" y="331.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Anonymous skill search</text>
+  <text x="76" y="347.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• hCaptcha-protected reveal</text>
+  <text x="76" y="363.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Rate-limited contact</text>
+  <rect x="425" y="260" width="335" height="160" fill="#f3e6e7" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="592.5" y="282" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">ANALYTICS</text>
+  <text x="441" y="316" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Descriptive + inferential statistics</text>
+  <text x="441" y="331.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• LGA choropleth</text>
+  <text x="441" y="347.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Equity analysis</text>
+  <text x="441" y="363.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Policy-brief PDF export</text>
+</svg>

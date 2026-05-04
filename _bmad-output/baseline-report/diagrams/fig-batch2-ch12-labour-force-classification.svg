@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="540" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">ILO ICLS-19 Labour Force Classification, Validation Sample (n=330)</text>
+  <rect x="60" y="75" width="700" height="440" fill="#fafaf7" stroke="#c9bba6" stroke-width="1" rx="8" ry="8" opacity="1"/>
+  <text x="410" y="95" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">TOTAL ADULT POPULATION (n=330, 100%)</text>
+  <rect x="80" y="120" width="660" height="200" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="410" y="140" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">EMPLOYED (n=287, 87.0%)</text>
+  <rect x="100" y="165" width="380" height="130" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="4" ry="4" opacity="1"/>
+  <text x="290" y="185" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">WORKING (n=268, 81.2%)</text>
+  <text x="120" y="215" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Wage employed: 18.7%</text>
+  <text x="120" y="230.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Self-employed (informal): 65.5%</text>
+  <text x="120" y="246.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Self-employed (formal): 7.6%</text>
+  <text x="120" y="262.85" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Subsistence agriculture: 8.2%</text>
+  <rect x="490" y="165" width="230" height="130" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="4" ry="4" opacity="1"/>
+  <text x="605" y="185" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">ABSENT (n=19, 5.8%)</text>
+  <text x="510" y="215" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Temporarily off work</text>
+  <text x="510" y="230.95" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Reasons: leave, illness,</text>
+  <text x="510" y="246.9" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">training, family obligations</text>
+  <rect x="80" y="335" width="350" height="80" fill="#fff5e6" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="255" y="355" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#b58105">UNEMPLOYED (n=14, 4.2%)</text>
+  <text x="255" y="380" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Job-seeking, available within 2 weeks</text>
+  <rect x="440" y="335" width="280" height="80" fill="#f4f2ed" stroke="#6b6b6b" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="580" y="355" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">OUTSIDE LABOUR FORCE (n=29, 8.8%)</text>
+  <text x="580" y="380" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Students, retired, full-time caregivers</text>
+  <text x="410" y="470" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">Working-age population: aged 15+. Classification per ILO ICLS-19 (2013).</text>
+</svg>

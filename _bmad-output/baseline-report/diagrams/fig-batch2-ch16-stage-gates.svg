@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 360" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="360" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Implementation Stage Gates, Overview</text>
+  <rect x="60" y="90" width="152.5" height="200" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="96.25" y="105" width="80" height="28" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="14" ry="14" opacity="1"/>
+  <text x="136.25" y="119" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">GATE 0</text>
+  <text x="74" y="150" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Methodology &amp;</text>
+  <text x="74" y="166.675" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Platform Sign-off</text>
+  <text x="136.25" y="250" font-family='"Inter", sans-serif' font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">✓ Complete</text>
+  <line x1="212.5" y1="190" x2="242.5" y2="190" stroke="#6b6b6b" stroke-width="2" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="242.5" y="90" width="152.5" height="200" fill="white" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="278.75" y="105" width="80" height="28" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="14" ry="14" opacity="1"/>
+  <text x="318.75" y="119" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">GATE 1</text>
+  <text x="256.5" y="150" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Recruitment,</text>
+  <text x="256.5" y="166.675" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Training, Pilot</text>
+  <text x="318.75" y="250" font-family='"Inter", sans-serif' font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">Pending mobilisation</text>
+  <line x1="395" y1="190" x2="425" y2="190" stroke="#6b6b6b" stroke-width="2" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="425" y="90" width="152.5" height="200" fill="white" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="461.25" y="105" width="80" height="28" fill="#1864ab" stroke="none" stroke-width="1.5" rx="14" ry="14" opacity="1"/>
+  <text x="501.25" y="119" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">GATE 2</text>
+  <text x="439" y="150" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Full-Scale Field</text>
+  <text x="439" y="166.675" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Enumeration</text>
+  <text x="501.25" y="250" font-family='"Inter", sans-serif' font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">Following Gate 1</text>
+  <line x1="577.5" y1="190" x2="607.5" y2="190" stroke="#6b6b6b" stroke-width="2" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="607.5" y="90" width="152.5" height="200" fill="white" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="643.75" y="105" width="80" height="28" fill="#b58105" stroke="none" stroke-width="1.5" rx="14" ry="14" opacity="1"/>
+  <text x="683.75" y="119" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="white">GATE 3</text>
+  <text x="621.5" y="150" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Data Quality</text>
+  <text x="621.5" y="166.675" font-family='"Inter", sans-serif' font-size="11.5" font-weight="600" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Review, Handover</text>
+  <text x="683.75" y="250" font-family='"Inter", sans-serif' font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="hanging" fill="#b58105">Following Gate 2</text>
+</svg>

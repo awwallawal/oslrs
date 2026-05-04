@@ -1,8 +1,8 @@
-# CHAPTER 16: VALIDATION EXERCISE — LGA-BY-LGA PROFILES
+# 13. Validation Exercise: LGA-by-LGA Profiles
 
 ---
 
-## 16.1 Introduction
+## 13.1 Introduction
 
 This chapter presents the Local Government Area (LGA)-level disaggregation of the validation exercise findings. Each of the 33 LGAs in Oyo State contributed 10 respondent records to the validation exercise (n=330). While the per-LGA sample size (n=10) is insufficient for individual LGA-level statistical inference, the data serves three purposes:
 
@@ -14,11 +14,11 @@ The 33 LGAs are organised into **six geographic zones** for analytical coherence
 
 ---
 
-## 16.2 Zone Classification
+## 13.2 Zone Classification
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              OYO STATE — 6 GEOGRAPHIC ZONES                    │
+│              OYO STATE, 6 GEOGRAPHIC ZONES                    │
 │              33 Local Government Areas                         │
 │                                                                │
 │  ┌──────────────────────────────────────────────────────┐     │
@@ -65,7 +65,7 @@ The 33 LGAs are organised into **six geographic zones** for analytical coherence
 
 ---
 
-## 16.3 Zone Summary Comparison
+## 13.3 Zone Summary Comparison
 
 | Zone | LGAs | n | Employed (%) | Self-Employed (%) | Mean Age | Marketplace Opt-in (%) | Top Skill |
 |------|:----:|:-:|:------------:|:------------------:|:--------:|:----------------------:|-----------|
@@ -78,7 +78,7 @@ The 33 LGAs are organised into **six geographic zones** for analytical coherence
 | **State Total** | **33** | **330** | **87.0%** | **74.9%** | **36.2** | **74.5%** | Crop Farming |
 
 ```
-ZONE COMPARISON — KEY INDICATORS
+ZONE COMPARISON, KEY INDICATORS
 
 Employment Rate (%)
 Zone 1 (Ibadan Metro)       ██████████████████████████████████████████████  90.0%
@@ -112,11 +112,11 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ---
 
-## 16.4 LGA-Level Profiles
+## 13.4 LGA-Level Profiles
 
 ### Zone 1: Ibadan Metropolis
 
-#### 16.4.1 Ibadan North
+#### 13.4.1 Ibadan North
 
 | Indicator | Value |
 |-----------|-------|
@@ -132,9 +132,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 9 of 10 (90%) |
 | **Mean Household Size** | 3.8 |
 
-**Profile**: Ibadan North — the state's commercial and educational hub (University of Ibadan, Polytechnic Ibadan) — shows the youngest mean age, highest education level, strongest digital skills presence, and highest marketplace opt-in rate in the validation sample.
+**Profile**: Ibadan North, the state's commercial and educational hub (University of Ibadan, Polytechnic Ibadan), shows the youngest mean age, highest education level, strongest digital skills presence, and highest marketplace opt-in rate in the validation sample.
 
-#### 16.4.2 Ibadan North-East
+#### 13.4.2 Ibadan North-East
 
 | Indicator | Value |
 |-----------|-------|
@@ -152,7 +152,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ibadan North-East reflects a strong artisanal/mechanical skills cluster, consistent with the concentration of auto repair workshops along the Iwo Road corridor.
 
-#### 16.4.3 Ibadan North-West
+#### 13.4.3 Ibadan North-West
 
 | Indicator | Value |
 |-----------|-------|
@@ -170,7 +170,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ibadan North-West shows strong presence of fashion and food-related trades, reflecting the commercial character of the Dugbe/Oje market corridor.
 
-#### 16.4.4 Ibadan South-East
+#### 13.4.4 Ibadan South-East
 
 | Indicator | Value |
 |-----------|-------|
@@ -188,7 +188,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ibadan South-East shows a mix of professional services and personal care trades, consistent with its residential and institutional character (Mapo Hall area, government offices).
 
-#### 16.4.5 Ibadan South-West
+#### 13.4.5 Ibadan South-West
 
 | Indicator | Value |
 |-----------|-------|
@@ -210,7 +210,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ### Zone 2: Ibadan Peripheral
 
-#### 16.4.6 Akinyele
+#### 13.4.6 Akinyele
 
 | Indicator | Value |
 |-----------|-------|
@@ -225,9 +225,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 8 of 10 (80%) |
 | **Mean Household Size** | 5.1 |
 
-**Profile**: Akinyele — a peri-urban LGA on Ibadan's northern fringe — shows a blend of agricultural and construction skills, reflecting its transitional character between urban Ibadan and the farming hinterland.
+**Profile**: Akinyele, a peri-urban LGA on Ibadan's northern fringe, shows a blend of agricultural and construction skills, reflecting its transitional character between urban Ibadan and the farming hinterland.
 
-#### 16.4.7 Egbeda
+#### 13.4.7 Egbeda
 
 | Indicator | Value |
 |-----------|-------|
@@ -244,7 +244,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Egbeda shows a mix of artisanal and agricultural activities typical of fast-growing peri-urban areas along the Ibadan-Lagos expressway corridor.
 
-#### 16.4.8 Ido
+#### 13.4.8 Ido
 
 | Indicator | Value |
 |-----------|-------|
@@ -261,7 +261,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ido's more rural character is reflected in the dominance of agricultural skills and lower average education level.
 
-#### 16.4.9 Lagelu
+#### 13.4.9 Lagelu
 
 | Indicator | Value |
 |-----------|-------|
@@ -278,7 +278,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Lagelu demonstrates a strong construction and artisanal skills base, consistent with the residential development occurring in this growing peri-urban zone.
 
-#### 16.4.10 Oluyole
+#### 13.4.10 Oluyole
 
 | Indicator | Value |
 |-----------|-------|
@@ -293,9 +293,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 8 of 10 (80%) |
 | **Mean Household Size** | 4.6 |
 
-**Profile**: Oluyole — hosting the Ibadan industrial estate — shows relatively higher wage employment and trading activity.
+**Profile**: Oluyole, hosting the Ibadan industrial estate, shows relatively higher wage employment and trading activity.
 
-#### 16.4.11 Ona Ara
+#### 13.4.11 Ona Ara
 
 | Indicator | Value |
 |-----------|-------|
@@ -316,7 +316,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ### Zone 3: Ogbomosho
 
-#### 16.4.12 Ogbomosho North
+#### 13.4.12 Ogbomosho North
 
 | Indicator | Value |
 |-----------|-------|
@@ -331,9 +331,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 8 of 10 (80%) |
 | **Mean Household Size** | 4.7 |
 
-**Profile**: Ogbomosho North — the urban centre of the Ogbomosho zone (LAUTECH) — shows a well-diversified skills portfolio spanning artisanal, food, and automotive trades.
+**Profile**: Ogbomosho North, the urban centre of the Ogbomosho zone (LAUTECH), shows a well-diversified skills portfolio spanning artisanal, food, and automotive trades.
 
-#### 16.4.13 Ogbomosho South
+#### 13.4.13 Ogbomosho South
 
 | Indicator | Value |
 |-----------|-------|
@@ -350,7 +350,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ogbomosho South reflects a strong traditional artisanal economy with notable vocational training background.
 
-#### 16.4.14 Ogo Oluwa
+#### 13.4.14 Ogo Oluwa
 
 | Indicator | Value |
 |-----------|-------|
@@ -367,7 +367,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ogo Oluwa's rural character is evident in the agricultural skills dominance and lower marketplace opt-in rate.
 
-#### 16.4.15 Surulere
+#### 13.4.15 Surulere
 
 | Indicator | Value |
 |-----------|-------|
@@ -388,7 +388,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ### Zone 4: Oyo
 
-#### 16.4.16 Afijio
+#### 13.4.16 Afijio
 
 | Indicator | Value |
 |-----------|-------|
@@ -403,7 +403,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.0 |
 
-#### 16.4.17 Atiba
+#### 13.4.17 Atiba
 
 | Indicator | Value |
 |-----------|-------|
@@ -418,9 +418,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 4.8 |
 
-**Profile**: Atiba — seat of the Alaafin of Oyo — shows a diversified service economy reflecting Oyo town's status as a significant secondary urban centre.
+**Profile**: Atiba, seat of the Alaafin of Oyo, shows a diversified service economy reflecting Oyo town's status as a significant secondary urban centre.
 
-#### 16.4.18 Oyo East
+#### 13.4.18 Oyo East
 
 | Indicator | Value |
 |-----------|-------|
@@ -435,7 +435,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.1 |
 
-#### 16.4.19 Oyo West
+#### 13.4.19 Oyo West
 
 | Indicator | Value |
 |-----------|-------|
@@ -454,7 +454,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ### Zone 5: Oke-Ogun
 
-#### 16.4.20 Atisbo
+#### 13.4.20 Atisbo
 
 | Indicator | Value |
 |-----------|-------|
@@ -469,7 +469,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 6 of 10 (60%) |
 | **Mean Household Size** | 5.8 |
 
-#### 16.4.21 Irepo
+#### 13.4.21 Irepo
 
 | Indicator | Value |
 |-----------|-------|
@@ -484,7 +484,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.4 |
 
-#### 16.4.22 Iseyin
+#### 13.4.22 Iseyin
 
 | Indicator | Value |
 |-----------|-------|
@@ -499,9 +499,9 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.0 |
 
-**Profile**: Iseyin — historically renowned as the centre of aso-oke weaving — shows the expected dominance of textile and weaving crafts, demonstrating the instrument's ability to capture localised skill specialisations.
+**Profile**: Iseyin, historically renowned as the centre of aso-oke weaving, shows the expected dominance of textile and weaving crafts, demonstrating the instrument's ability to capture localised skill specialisations.
 
-#### 16.4.23 Itesiwaju
+#### 13.4.23 Itesiwaju
 
 | Indicator | Value |
 |-----------|-------|
@@ -516,7 +516,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 6 of 10 (60%) |
 | **Mean Household Size** | 5.7 |
 
-#### 16.4.24 Iwajowa
+#### 13.4.24 Iwajowa
 
 | Indicator | Value |
 |-----------|-------|
@@ -531,7 +531,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 6 of 10 (60%) |
 | **Mean Household Size** | 6.0 |
 
-#### 16.4.25 Kajola
+#### 13.4.25 Kajola
 
 | Indicator | Value |
 |-----------|-------|
@@ -548,7 +548,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Kajola (Okeho) shows the mixed farming-trading economy characteristic of Oke-Ogun market towns.
 
-#### 16.4.26 Olorunsogo
+#### 13.4.26 Olorunsogo
 
 | Indicator | Value |
 |-----------|-------|
@@ -563,7 +563,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 6 of 10 (60%) |
 | **Mean Household Size** | 5.8 |
 
-#### 16.4.27 Orelope
+#### 13.4.27 Orelope
 
 | Indicator | Value |
 |-----------|-------|
@@ -578,7 +578,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.5 |
 
-#### 16.4.28 Ori Ire
+#### 13.4.28 Ori Ire
 
 | Indicator | Value |
 |-----------|-------|
@@ -593,7 +593,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.2 |
 
-#### 16.4.29 Saki East
+#### 13.4.29 Saki East
 
 | Indicator | Value |
 |-----------|-------|
@@ -608,7 +608,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 6 of 10 (60%) |
 | **Mean Household Size** | 5.9 |
 
-#### 16.4.30 Saki West
+#### 13.4.30 Saki West
 
 | Indicator | Value |
 |-----------|-------|
@@ -623,13 +623,13 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 8 of 10 (80%) |
 | **Mean Household Size** | 5.0 |
 
-**Profile**: Saki West — the major urban centre of Oke-Ogun — shows a distinctly more urban skills profile than its surrounding LGAs, reflecting Saki town's role as a regional commercial hub and cross-border trading centre.
+**Profile**: Saki West, the major urban centre of Oke-Ogun, shows a distinctly more urban skills profile than its surrounding LGAs, reflecting Saki town's role as a regional commercial hub and cross-border trading centre.
 
 ---
 
 ### Zone 6: Ibarapa
 
-#### 16.4.31 Ibarapa Central
+#### 13.4.31 Ibarapa Central
 
 | Indicator | Value |
 |-----------|-------|
@@ -644,7 +644,7 @@ Zone 6 (Ibarapa)            █████████████████�
 | **Marketplace Opt-in** | 7 of 10 (70%) |
 | **Mean Household Size** | 5.2 |
 
-#### 16.4.32 Ibarapa East
+#### 13.4.32 Ibarapa East
 
 | Indicator | Value |
 |-----------|-------|
@@ -661,7 +661,7 @@ Zone 6 (Ibarapa)            █████████████████�
 
 **Profile**: Ibarapa East (Eruwa) shows a mixed farming-trading economy with a stronger construction skills presence than the other Ibarapa LGAs.
 
-#### 16.4.33 Ibarapa North
+#### 13.4.33 Ibarapa North
 
 | Indicator | Value |
 |-----------|-------|
@@ -680,9 +680,9 @@ Zone 6 (Ibarapa)            █████████████████�
 
 ---
 
-## 16.5 Cross-LGA Analytical Observations
+## 13.5 Cross-LGA Analytical Observations
 
-### 16.5.1 Skills Specialisation by Zone
+### 13.5.1 Skills Specialisation by Zone
 
 The validation data reveals distinctive **skills specialisation patterns** that correspond to each zone's economic geography:
 
@@ -695,7 +695,7 @@ The validation data reveals distinctive **skills specialisation patterns** that 
 | Oke-Ogun | Agriculture (dominant) | Trading, Textiles | Rural farming; cross-border commerce |
 | Ibarapa | Agriculture (dominant) | Food processing | Rural farming; emerging agribusiness |
 
-### 16.5.2 Marketplace Enthusiasm Gradient
+### 13.5.2 Marketplace Enthusiasm Gradient
 
 A clear **urban-rural gradient** in marketplace opt-in rates is observable:
 
@@ -708,7 +708,7 @@ A clear **urban-rural gradient** in marketplace opt-in rates is observable:
 
 This gradient has implications for the full enumeration: **additional sensitisation** about the marketplace benefits may be needed in rural LGAs to achieve comparable opt-in rates.
 
-### 16.5.3 Enumeration Planning Implications
+### 13.5.3 Enumeration Planning Implications
 
 | Finding | Implication for Full Enumeration |
 |---------|--------------------------------|
@@ -716,21 +716,21 @@ This gradient has implications for the full enumeration: **additional sensitisat
 | Oke-Ogun LGAs show lower education levels | Deploy enumerators with strong Yoruba language skills; prioritise verbal explanation over written materials |
 | Urban LGAs show higher skills diversity | Ensure enumerators in urban LGAs are familiar with the full 150-skill taxonomy |
 | Agriculture dominates rural zones | Schedule enumeration to avoid peak farming seasons if possible |
-| Iseyin shows textile specialisation | Demonstrates the instrument captures localised economic patterns — a validation success |
+| Iseyin shows textile specialisation | Demonstrates the instrument captures localised economic patterns, a validation success |
 
 ---
 
-## 16.6 Chapter Summary
+## 13.6 Chapter Summary
 
 The LGA-by-LGA analysis confirms that:
 
-1. **All 33 LGAs** successfully participated in the validation exercise — demonstrating full geographic coverage capability
-2. **Zonal economic patterns** are clearly captured by the instrument — urban commercial skills in Ibadan, agricultural dominance in Oke-Ogun and Ibarapa, artisanal diversity in Ogbomosho
-3. **The instrument differentiates** between LGAs with distinct economic structures — Iseyin's textile specialisation, Saki's cross-border commerce, Ibadan North's digital skills cluster
-4. **The marketplace value proposition** resonates most strongly in urban areas — rural sensitisation strategies should emphasise concrete marketplace benefits
+1. **All 33 LGAs** successfully participated in the validation exercise, demonstrating full geographic coverage capability
+2. **Zonal economic patterns** are clearly captured by the instrument, urban commercial skills in Ibadan, agricultural dominance in Oke-Ogun and Ibarapa, artisanal diversity in Ogbomosho
+3. **The instrument differentiates** between LGAs with distinct economic structures, Iseyin's textile specialisation, Saki's cross-border commerce, Ibadan North's digital skills cluster
+4. **The marketplace value proposition** resonates most strongly in urban areas, rural sensitisation strategies should emphasise concrete marketplace benefits
 
 These findings directly inform the field deployment strategy for the full-scale enumeration (Gate 1, Chapter 19).
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 16 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 16 | Chemiroy Nigeria Limited*

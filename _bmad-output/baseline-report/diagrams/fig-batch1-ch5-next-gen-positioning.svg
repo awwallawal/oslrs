@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 620" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect width="800" height="620" fill="#fbf9f2"/>
+  <text x="400" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">OSLSR, Next-Generation Positioning</text>
+  <rect x="80" y="80" width="640" height="200" fill="#fff3f3" stroke="#c92a2a" stroke-width="1.5" rx="8" ry="8" opacity="1"/>
+  <text x="400" y="102" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#c92a2a">EARLIER INITIATIVES</text>
+  <text x="110" y="130" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="130" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Single-channel (web only or field only)</text>
+  <text x="110" y="151" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="151" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Broad skills categories (limited matching value)</text>
+  <text x="110" y="172" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="172" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">No offline capability</text>
+  <text x="110" y="193" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="193" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">No automated fraud detection</text>
+  <text x="110" y="214" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="214" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">No skills marketplace incentive</text>
+  <text x="110" y="235" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="235" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">No ILO-aligned methodology</text>
+  <text x="110" y="256" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#c92a2a">✗</text>
+  <text x="132" y="256" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Limited or unknown NDPA compliance</text>
+  <line x1="400" y1="290" x2="400" y2="320" stroke="#9C1E23" stroke-width="2.5" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="80" y="330" width="640" height="270" fill="#f3e6e7" stroke="#9C1E23" stroke-width="2" rx="8" ry="8" opacity="1"/>
+  <text x="400" y="354" font-family='"Inter", sans-serif' font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">OSLSR (OYO STATE)</text>
+  <text x="110" y="388" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="388" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Three-channel registration (mobile + desktop + self-registration)</text>
+  <text x="110" y="409" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="409" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">150-skill taxonomy (ISCO-08 mapped)</text>
+  <text x="110" y="430" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="430" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">7-day offline capability (Progressive Web Application)</text>
+  <text x="110" y="451" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="451" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Multi-algorithm fraud detection (GPS, speed, pattern, NIN dedup)</text>
+  <text x="110" y="472" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="472" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Public Skills Marketplace with three-tier consent</text>
+  <text x="110" y="493" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="493" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">ILO ICLS-19 aligned methodology</text>
+  <text x="110" y="514" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="514" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Full NDPA 2023 alignment</text>
+  <text x="110" y="535" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="535" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Independent A- security posture (state-government-grade)</text>
+  <text x="110" y="556" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">✓</text>
+  <text x="132" y="556" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Immutable audit trails (SHA-256 hash chain)</text>
+</svg>

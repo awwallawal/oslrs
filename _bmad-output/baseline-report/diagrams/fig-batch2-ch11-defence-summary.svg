@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 460" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="460" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Defence-in-Depth Implementation Summary</text>
+  <rect x="60" y="80" width="700" height="56" fill="white" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="92" width="12" height="32" fill="#1864ab" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="98" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#1864ab">Operator Access</text>
+  <text x="96" y="118" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Tailscale overlay • key-only SSH • fail2ban • sshd hardening</text>
+  <rect x="60" y="145" width="700" height="56" fill="white" stroke="#6f4faa" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="157" width="12" height="32" fill="#6f4faa" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="163" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#6f4faa">Edge Protection</text>
+  <text x="96" y="183" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Cloudflare WAF (Free tier) • DDoS protection • A+ TLS</text>
+  <rect x="60" y="210" width="700" height="56" fill="white" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="222" width="12" height="32" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="228" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#9C1E23">Application Layer</text>
+  <text x="96" y="248" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">CSP edge↔app mirror • CORS multi-origin • Input sanitisation layer</text>
+  <rect x="60" y="275" width="700" height="56" fill="white" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="287" width="12" height="32" fill="#b58105" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="293" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#b58105">Data Integrity</text>
+  <text x="96" y="313" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Hash-chained audit log • NIN dedup constraint • advisory locks on critical writes</text>
+  <rect x="60" y="340" width="700" height="56" fill="white" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <rect x="72" y="352" width="12" height="32" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="96" y="358" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">Backup &amp; Recovery</text>
+  <text x="96" y="378" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Daily encrypted backups (DO Spaces) • client-side AES-256 (in-progress)</text>
+</svg>

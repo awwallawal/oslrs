@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 190" preserveAspectRatio="xMidYMid meet">
+  <rect width="630" height="190" fill="#fbf9f2"/>
+  <text x="30" y="38" font-family='"Inter", sans-serif' font-size="14" font-weight="600" fill="#1a1a1a">MARKETPLACE CONSENT (n=330)</text>
+  <text x="142" y="77" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Tier 3 (47.0%)  │</text>
+  <rect x="150" y="64" width="380.0" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="538" y="77" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">│</text>
+  <text x="142" y="103" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Tier 2 (27.6%)  │</text>
+  <rect x="150" y="90" width="232.2" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="390.22222222222223" y="103" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">│</text>
+  <text x="142" y="129" font-family='"Inter", sans-serif' font-size="11" fill="#1a1a1a" text-anchor="end">Tier 1 (25.5%)  │</text>
+  <rect x="150" y="116" width="211.1" height="18" fill="#9C1E23" rx="2" ry="2"/>
+  <text x="369.1111111111111" y="129" font-family='"Inter", sans-serif' font-size="11" font-weight="500" fill="#1a1a1a">│</text>
+  <text x="600" y="176" font-family='"Inter", sans-serif' font-size="9" fill="#6b6b6b" text-anchor="end">(n=330)</text>
+</svg>

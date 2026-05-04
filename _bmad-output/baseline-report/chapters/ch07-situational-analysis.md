@@ -1,21 +1,21 @@
-# CHAPTER 7: SITUATIONAL ANALYSIS — OYO STATE LABOUR MARKET
+# 4. Situational Analysis: Oyo State Labour Market
 
 ---
 
-## 7.1 Introduction
+## 4.1 Introduction
 
 This chapter presents a comprehensive situational analysis of the Oyo State labour market, drawing on national survey data from the **National Bureau of Statistics (NBS)**, state-level economic indicators, and the broader macroeconomic context within which the Skilled Labour Register operates. The analysis provides the empirical foundation upon which the registry methodology, survey instrument, and operational assumptions are built.
 
 ---
 
-## 7.2 Oyo State — Geographic and Administrative Profile
+## 4.2 Oyo State, Geographic and Administrative Profile
 
-### 7.2.1 State Overview
+### 4.2.1 State Overview
 
 | Parameter | Detail |
 |-----------|--------|
 | **Location** | Southwestern Nigeria; borders Kwara (north), Osun (east), Ogun (south), Republic of Benin (west) |
-| **State Capital** | Ibadan — largest city in West Africa by geographic area |
+| **State Capital** | Ibadan, largest city in West Africa by geographic area |
 | **Land Area** | Approximately 28,454 km² |
 | **Population (2006 Census)** | 5,591,589 |
 | **Population (2024 Projection)** | ~8.5–9.2 million (NPC 2.8–3.0% growth rate) |
@@ -25,7 +25,7 @@ This chapter presents a comprehensive situational analysis of the Oyo State labo
 | **Major Cities** | Ibadan, Ogbomosho, Oyo, Iseyin, Saki |
 | **Economic Base** | Agriculture, commerce, manufacturing, services |
 
-### 7.2.2 Geographic Zones
+### 4.2.2 Geographic Zones
 
 Oyo State's 33 LGAs are organised into six zones for administrative and analytical purposes:
 
@@ -40,7 +40,7 @@ Oyo State's 33 LGAs are organised into six zones for administrative and analytic
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              OYO STATE — POPULATION DISTRIBUTION               │
+│              OYO STATE, POPULATION DISTRIBUTION               │
 │              By Geographic Zone (Estimated)                     │
 │                                                                │
 │  Ibadan Metro     ██████████████████████████████████  ~30%    │
@@ -56,9 +56,9 @@ Oyo State's 33 LGAs are organised into six zones for administrative and analytic
 
 ---
 
-## 7.3 Population Demographics
+## 4.3 Population Demographics
 
-### 7.3.1 Population Projections
+### 4.3.1 Population Projections
 
 The 2006 National Population Census (the most recent completed census in Nigeria) recorded the following LGA-level populations. The 2024 projections apply the NPC annual growth rates (2.8–3.0% for urban areas, 2.3–2.5% for rural areas):
 
@@ -107,7 +107,7 @@ The 2006 National Population Census (the most recent completed census in Nigeria
 
 *Sources: NPC 2006 Census; 2024 projections based on NPC state growth rates (2.8% urban, 2.3% rural). Figures rounded to nearest thousand.*
 
-### 7.3.2 Working-Age Population
+### 4.3.2 Working-Age Population
 
 | Parameter | Value | Source |
 |-----------|-------|--------|
@@ -117,13 +117,13 @@ The 2006 National Population Census (the most recent completed census in Nigeria
 | **Estimated labour force in Oyo** | ~3.7–4.3 million | Calculated |
 | **Youth (15–35) as % of working-age** | ~45% | NBS estimate |
 
-**Implication**: The estimated 3.7–4.3 million labour force participants in Oyo State represent the **target population** for the Skilled Labour Register. The initial field enumeration (targeting approximately 23,760 registrants) would capture approximately 0.5–0.6% of this population — a substantive initial registry that serves as a foundation for continuous expansion through ongoing self-registration.
+**Implication**: The estimated 3.7–4.3 million labour force participants in Oyo State represent the **target population** for the Skilled Labour Register. The initial field enumeration (targeting approximately 23,760 registrants) would capture approximately 0.5–0.6% of this population, a substantive initial registry that serves as a foundation for continuous expansion through ongoing self-registration.
 
 ---
 
-## 7.4 Labour Market Structure
+## 4.4 Labour Market Structure
 
-### 7.4.1 National Labour Market Indicators
+### 4.4.1 National Labour Market Indicators
 
 The following national-level indicators from the NBS National Labour Force Survey (NLFS) provide the benchmark context for interpreting Oyo State labour market conditions:
 
@@ -139,7 +139,7 @@ The following national-level indicators from the NBS National Labour Force Surve
 | **Youth unemployment (15–24)** | 8.4% | Q2 2024 | NBS NLFS |
 | **Female labour force participation** | 73.1% | Q2 2024 | NBS NLFS |
 
-### 7.4.2 Southwest Regional Context
+### 4.4.2 Southwest Regional Context
 
 The Southwest geopolitical zone (comprising Lagos, Oyo, Ogun, Osun, Ondo, and Ekiti states) exhibits distinctive labour market characteristics:
 
@@ -151,20 +151,20 @@ The Southwest geopolitical zone (comprising Lagos, Oyo, Ogun, Osun, Ondo, and Ek
 | Education (SSS+ attainment) | 62.1% | 53.4% | Higher (better educational infrastructure) |
 | Urban population share | 58.3% | 48.0% | Higher (more urbanised) |
 
-**Observation**: The Southwest region — and Oyo State within it — has a more urbanised, better-educated, and slightly more formalised labour market than the national average. However, informal employment still dominates (89.4%), and self-employment remains the primary mode of economic activity (71.8%).
+**Observation**: The Southwest region, and Oyo State within it, has a more urbanised, better-educated, and slightly more formalised labour market than the national average. However, informal employment still dominates (89.4%), and self-employment remains the primary mode of economic activity (71.8%).
 
-### 7.4.3 Informality and the Visibility Gap
+### 4.4.3 Informality and the Visibility Gap
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│          THE VISIBILITY GAP — WHY THE REGISTER MATTERS        │
+│          THE VISIBILITY GAP, WHY THE REGISTER MATTERS        │
 │                                                                │
 │  ┌──────────────────────────────────────────────────────┐    │
 │  │                                                        │    │
 │  │  FORMAL ECONOMY (~10%)                                │    │
 │  │  ┌──────────────────────────────────────────────────┐│    │
 │  │  │ Registered businesses, tax-paying enterprises,   ││    │
-│  │  │ formal employees — VISIBLE to government          ││    │
+│  │  │ formal employees, VISIBLE to government          ││    │
 │  │  └──────────────────────────────────────────────────┘│    │
 │  │                                                        │    │
 │  │  ═══════════════════════════════════════════════════  │    │
@@ -174,7 +174,7 @@ The Southwest geopolitical zone (comprising Lagos, Oyo, Ogun, Osun, Ondo, and Ek
 │  │  INFORMAL ECONOMY (~90%)                              │    │
 │  │  ┌──────────────────────────────────────────────────┐│    │
 │  │  │ Self-employed artisans, market traders, subsist-  ││    │
-│  │  │ ence farmers, informal apprentices — INVISIBLE    ││    │
+│  │  │ ence farmers, informal apprentices, INVISIBLE    ││    │
 │  │  │ to government planning systems                    ││    │
 │  │  │                                                    ││    │
 │  │  │ ▶ No registration data                            ││    │
@@ -203,9 +203,9 @@ The OSLSR is designed to systematically bridge this visibility gap.
 
 ---
 
-## 7.5 Sectoral Economic Structure
+## 4.5 Sectoral Economic Structure
 
-### 7.5.1 Oyo State Economic Sectors
+### 4.5.1 Oyo State Economic Sectors
 
 Oyo State's economy is characterised by the following sectoral structure:
 
@@ -229,7 +229,7 @@ Construction    ████████████                            
                 0%     5%    10%    15%    20%    25%    30%    35%
 ```
 
-### 7.5.2 Key Economic Characteristics by Zone
+### 4.5.2 Key Economic Characteristics by Zone
 
 | Zone | Dominant Sector | Key Products/Activities | Labour Market Character |
 |------|----------------|------------------------|------------------------|
@@ -242,11 +242,11 @@ Construction    ████████████                            
 
 ---
 
-## 7.6 Youth Employment Challenge
+## 4.6 Youth Employment Challenge
 
-### 7.6.1 The Youth Bulge
+### 4.6.1 The Youth Bulge
 
-Nigeria — and Oyo State within it — faces a significant youth employment challenge driven by demographic structure:
+Nigeria, and Oyo State within it, faces a significant youth employment challenge driven by demographic structure:
 
 | Indicator | Value | Implication |
 |-----------|-------|-------------|
@@ -256,7 +256,7 @@ Nigeria — and Oyo State within it — faces a significant youth employment cha
 | **Youth underemployment** | ~18% (NBS) | Many young workers in inadequate employment |
 | **NEET rate (15–24)** | ~21.7% (NBS) | Not in education, employment, or training |
 
-### 7.6.2 Skills Mismatch
+### 4.6.2 Skills Mismatch
 
 A persistent **skills mismatch** characterises the Nigerian labour market:
 
@@ -286,7 +286,7 @@ A persistent **skills mismatch** characterises the Nigerian labour market:
 
 ---
 
-## 7.7 Existing Data Gaps
+## 4.7 Existing Data Gaps
 
 The following table summarises the critical data gaps that the OSLSR is designed to fill:
 
@@ -302,22 +302,22 @@ The following table summarises the critical data gaps that the OSLSR is designed
 
 ---
 
-## 7.8 Policy Context
+## 4.8 Policy Context
 
-### 7.8.1 National Policy Framework
+### 4.8.1 National Policy Framework
 
 The OSLSR operates within the following national policy context:
 
 | Policy | Relevance to OSLSR |
 |--------|-------------------|
 | **National Development Plan 2021–2025** | Targets job creation and skills development; requires state-level labour data |
-| **Subnational Business Enabling Environment Reform Programme** | World Bank-supported ($750M) programme assessing states across 16 indicators including **skilled labour readiness**; Oyo State ranked 3rd nationally (62.7%) in the 2025 assessment — the register directly strengthens this indicator |
+| **Subnational Business Enabling Environment Reform Programme** | World Bank-supported ($750M) programme assessing states across 16 indicators including **skilled labour readiness**; Oyo State ranked 3rd nationally (62.7%) in the 2025 assessment, the register directly strengthens this indicator |
 | **Nigeria Data Protection Act 2023** | Governs collection, storage, and processing of personal data (OSLSR compliance: Chapter 14) |
 | **National Skills Qualification Framework (NSQF)** | Provides framework for skills recognition and certification |
 | **National Employment Policy** | Emphasises need for labour market information systems |
 | **Decent Work Country Programme (ILO-Nigeria)** | ILO partnership for improved labour statistics and decent work promotion |
 
-### 7.8.2 State-Level Context
+### 4.8.2 State-Level Context
 
 | Factor | Description |
 |--------|-------------|
@@ -329,7 +329,7 @@ The OSLSR operates within the following national policy context:
 
 ---
 
-## 7.9 Convergence of Factors — Why Now
+## 4.9 Convergence of Factors, Why Now
 
 Six structural factors converge to make the current moment optimal for establishing a state-level skilled labour register:
 
@@ -344,7 +344,7 @@ Six structural factors converge to make the current moment optimal for establish
 
 ---
 
-## 7.10 Chapter Summary
+## 4.10 Chapter Summary
 
 The situational analysis reveals that Oyo State's labour market is characterised by:
 
@@ -354,8 +354,8 @@ The situational analysis reveals that Oyo State's labour market is characterised
 4. **Significant data gaps**: No comprehensive, state-level skills inventory or labour force register exists
 5. **Favourable enabling conditions**: NIN penetration, smartphone availability, and network coverage create the technical prerequisites for digital enumeration
 
-The OSLSR is purpose-built to address these conditions — creating, for the first time, a **digital, searchable, NIN-linked register of Oyo State's skilled workforce** that spans both the formal and informal economies.
+The OSLSR is purpose-built to address these conditions, creating, for the first time, a **digital, searchable, NIN-linked register of Oyo State's skilled workforce** that spans both the formal and informal economies.
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 7 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 7 | Chemiroy Nigeria Limited*

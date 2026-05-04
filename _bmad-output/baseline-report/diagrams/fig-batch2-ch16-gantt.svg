@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="380" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Implementation Timeline, Gantt View (6-month engagement)</text>
+  <line x1="180" y1="80" x2="180" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="230" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 1</text>
+  <line x1="280" y1="80" x2="280" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="330" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 2</text>
+  <line x1="380" y1="80" x2="380" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="430" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 3</text>
+  <line x1="480" y1="80" x2="480" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="530" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 4</text>
+  <line x1="580" y1="80" x2="580" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="630" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 5</text>
+  <line x1="680" y1="80" x2="680" y2="320" stroke="#c9bba6" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="730" y="92" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="middle" fill="#6b6b6b">Month 6</text>
+  <line x1="180" y1="105" x2="780" y2="105" stroke="#c9bba6" stroke-width="1"/>
+  <text x="172" y="140" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Inception &amp; Desk Review</text>
+  <rect x="180" y="130" width="100" height="18" fill="#6f4faa" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="164" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Instrument &amp; Taxonomy Design</text>
+  <rect x="230" y="154" width="200" height="18" fill="#1864ab" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="188" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Data Centre Setup</text>
+  <rect x="280" y="178" width="150" height="18" fill="#b58105" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="212" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Platform Development</text>
+  <rect x="330" y="202" width="200" height="18" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="236" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Validation Exercise (n=330)</text>
+  <rect x="530" y="226" width="50" height="18" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="260" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Field Enumeration (33 LGAs)</text>
+  <rect x="580" y="250" width="150" height="18" fill="#9C1E23" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="284" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Quality Review &amp; Reporting</text>
+  <rect x="680" y="274" width="100" height="18" fill="#b58105" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+  <text x="172" y="308" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="middle" fill="#1a1a1a">Training &amp; Handover</text>
+  <rect x="730" y="298" width="50" height="18" fill="#2b8a3e" stroke="none" stroke-width="1.5" rx="3" ry="3" opacity="1"/>
+</svg>

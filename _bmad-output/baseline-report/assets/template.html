@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ TITLE }} — {{ DOC_REF }}</title>
+  <link rel="stylesheet" href="v2-styles.css">
+  <link rel="stylesheet" href="print.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     COVER (page 1, full-bleed)
+     ════════════════════════════════════════════════════════════════════ -->
+
+<div class="cover variant-photo">
+  <div class="cover__photo"></div>
+  <div class="cover__overlay"></div>
+
+  <div class="cover__content">
+
+    <div class="cover__doc-control">
+      <span>{{ DOC_REF }}</span>
+      <span>{{ CLASSIFICATION }}</span>
+    </div>
+
+    <div class="cover__spacer"></div>
+
+    <div class="cover__title-block">
+      <p class="cover__superhead">{{ SUPERHEAD }}</p>
+      <h1 class="cover__title">{{ TITLE }}</h1>
+      <p class="cover__subtitle">{{ SUBTITLE }}</p>
+
+      <hr class="cover__rule">
+
+      <p class="cover__authorship">{{ AUTHORS }}</p>
+      <p class="cover__authorship" style="font-weight:400;font-size:10pt;color:rgba(255,255,255,0.85);margin-top:0;">{{ FIRM }}</p>
+      <p class="cover__date" style="margin-top:8pt;">{{ DATE }} · v{{ VERSION }}</p>
+    </div>
+
+    <div class="cover__credit">{{ COVER_CREDIT }}</div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     BODY CONTENT (page 2 onwards)
+     ════════════════════════════════════════════════════════════════════ -->
+
+<div class="page">
+  {{ CONTENT_HTML }}
+</div>
+
+</body>
+</html>

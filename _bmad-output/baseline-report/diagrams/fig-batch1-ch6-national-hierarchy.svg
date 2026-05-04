@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 420" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect width="700" height="420" fill="#fbf9f2"/>
+  <text x="350" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">National Enumeration-Area Hierarchy</text>
+  <text x="350" y="44" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">NPC Standard Framework</text>
+  <rect x="60" y="80" width="580" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <text x="74" y="102" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">National Territory</text>
+  <rect x="90" y="120" width="550" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="74" y1="110" x2="74" y2="138" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="74" y1="138" x2="90" y2="138" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="104" y="142" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">State</text>
+  <text x="630" y="142" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#6b6b6b">36 + FCT</text>
+  <rect x="120" y="160" width="520" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="104" y1="150" x2="104" y2="178" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="104" y1="178" x2="120" y2="178" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="134" y="182" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">Senatorial District</text>
+  <text x="630" y="182" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#6b6b6b">3 per state</text>
+  <rect x="150" y="200" width="490" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="134" y1="190" x2="134" y2="218" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="134" y1="218" x2="150" y2="218" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="164" y="222" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">Local Government Area (LGA)</text>
+  <rect x="180" y="240" width="460" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="164" y1="230" x2="164" y2="258" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="164" y1="258" x2="180" y2="258" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="194" y="262" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">Registration Area / Ward</text>
+  <rect x="210" y="280" width="430" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="194" y1="270" x2="194" y2="298" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="194" y1="298" x2="210" y2="298" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="224" y="302" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">Locality</text>
+  <rect x="240" y="320" width="400" height="36" fill="white" stroke="#c9bba6" stroke-width="0.8" rx="4" ry="4" opacity="1"/>
+  <line x1="224" y1="310" x2="224" y2="338" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="224" y1="338" x2="240" y2="338" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="254" y="342" font-family='"Inter", sans-serif' font-size="12" font-weight="500" text-anchor="start" dominant-baseline="auto" fill="#1a1a1a">Supervisory Area (SA)</text>
+  <rect x="270" y="360" width="370" height="36" fill="#f3e6e7" stroke="#9C1E23" stroke-width="1.5" rx="4" ry="4" opacity="1"/>
+  <line x1="254" y1="350" x2="254" y2="378" stroke="#6b6b6b" stroke-width="1"/>
+  <line x1="254" y1="378" x2="270" y2="378" stroke="#6b6b6b" stroke-width="1"/>
+  <text x="284" y="382" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="auto" fill="#9C1E23">Enumeration Area (EA)</text>
+  <text x="630" y="382" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="end" dominant-baseline="auto" fill="#6b6b6b">primary unit</text>
+</svg>

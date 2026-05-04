@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="26.00 -9.00 1368.00 739.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="26.00" y="-9.00" width="1368.00" height="739.00" fill="white"/>
+  <text x="700" y="63" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="700" dy="0">150 skills across 20 economic sectors, all mapped to ISCO-08</tspan></text>
+  <ellipse cx="280" cy="320" rx="200" ry="200" fill="#e0e0e0" stroke="#1e1e1e" stroke-width="2" opacity="1"/>
+  <polyline points="280.00,220.00 280.00,130.00 298.70,131.90 317.20,137.70 335.10,147.20 352.10,160.20 367.80,176.30 381.80,195.10 393.80,216.00 375.20,247.80 361.70,257.50 346.60,233.80 329.50,224.30 311.20,220.50 292.50,220.00 280.00,220.00" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="375.20,247.80 393.80,216.00 403.50,238.60 410.50,262.60 414.70,287.60 416.00,313.30 380.00,320.00 377.50,298.40 371.50,277.30 375.20,247.80" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="380.00,320.00 416.00,313.30 414.70,340.10 410.50,366.50 403.50,391.60 393.80,415.00 375.20,385.80 371.50,356.30 377.50,333.70 380.00,320.00" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="375.20,385.80 393.80,415.00 381.80,435.40 367.80,453.70 352.10,469.60 335.10,483.00 346.60,398.80 361.70,375.00 375.20,385.80" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="346.60,398.80 335.10,483.00 317.20,493.30 298.70,500.30 280.00,503.50 261.30,503.20 280.00,420.00 267.50,419.60 311.20,412.60 346.60,398.80" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="267.50,419.60 261.30,503.20 242.80,500.30 224.90,493.30 207.90,483.00 192.20,469.60 213.40,398.80 230.50,411.10 248.80,417.10 267.50,419.60" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="213.40,398.80 192.20,469.60 178.20,453.70 166.20,435.40 156.50,415.00 149.50,392.70 184.80,370.30 198.30,382.50 213.40,398.80" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="184.80,370.30 149.50,392.70 145.30,367.20 143.50,341.00 144.00,320.00 180.00,320.00 180.50,334.00 182.50,348.30 184.80,370.30" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="180.00,320.00 144.00,320.00 143.50,299.00 145.30,277.40 149.50,256.70 156.50,237.00 184.80,262.50 182.50,291.70 180.50,306.00 180.00,320.00" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="184.80,262.50 156.50,237.00 166.20,218.30 178.20,201.60 192.20,187.00 207.90,174.80 213.40,241.20 198.30,265.00 184.80,262.50" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="213.40,241.20 207.90,174.80 224.90,165.00 242.80,157.80 257.50,154.00 248.80,224.00 230.50,231.00 213.40,241.20" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="248.80,224.00 257.50,154.00 276.30,151.40 295.30,151.60 314.00,154.50 332.00,160.00 322.40,228.50 302.50,224.50 283.70,222.50 264.70,222.00 248.80,224.00" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="322.40,228.50 332.00,160.00 349.80,167.50 366.20,177.70 380.60,190.00 345.50,239.50 335.00,233.20 322.40,228.50" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="345.50,239.50 380.60,190.00 393.00,204.60 403.00,221.00 410.50,239.00 416.00,258.00 380.00,277.00 280.00,320.00 371.50,263.00 361.50,251.50 345.50,239.50" fill="none" stroke="#ffffff" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="280" cy="320" rx="100" ry="100" fill="#ffffff" stroke="#ffffff" stroke-width="3" opacity="1"/>
+  <text x="280" y="313" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="24" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="280" dy="0">150 SKILLS</tspan></text>
+  <text x="280" y="340" fill="#555555" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="15" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="280" dy="0">20 SECTORS</tspan></text>
+  <rect x="540" y="90" width="830" height="26" rx="0" ry="0" fill="#2c3e50" stroke="#2c3e50" stroke-width="1" opacity="1"/>
+  <text x="556" y="103" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="556" dy="0">#</tspan></text>
+  <text x="590" y="103" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Economic Sector</tspan></text>
+  <text x="865" y="103" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">Skills</tspan></text>
+  <text x="925" y="103" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">%</tspan></text>
+  <text x="960" y="103" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="960" dy="0">Distribution</tspan></text>
+  <rect x="540" y="116" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="121" width="14" height="14" rx="0" ry="0" fill="#e74c3c" stroke="#e74c3c" stroke-width="1" opacity="1"/>
+  <text x="575" y="129" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">1</tspan></text>
+  <text x="590" y="129" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Construction &amp; Building</tspan></text>
+  <text x="865" y="129" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">12</tspan></text>
+  <text x="925" y="129" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">8.0%</tspan></text>
+  <rect x="960" y="121" width="312" height="14" rx="0" ry="0" fill="#e74c3c" stroke="#e74c3c" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="142" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="147" width="14" height="14" rx="0" ry="0" fill="#c0392b" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="575" y="155" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">2</tspan></text>
+  <text x="590" y="155" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Automotive &amp; Mechanical</tspan></text>
+  <text x="865" y="155" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="155" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="147" width="208" height="14" rx="0" ry="0" fill="#c0392b" stroke="#c0392b" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="168" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="173" width="14" height="14" rx="0" ry="0" fill="#9b59b6" stroke="#9b59b6" stroke-width="1" opacity="1"/>
+  <text x="575" y="181" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">3</tspan></text>
+  <text x="590" y="181" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Fashion, Beauty &amp; Personal Care</tspan></text>
+  <text x="865" y="181" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">9</tspan></text>
+  <text x="925" y="181" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">6.0%</tspan></text>
+  <rect x="960" y="173" width="234" height="14" rx="0" ry="0" fill="#9b59b6" stroke="#9b59b6" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="194" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="199" width="14" height="14" rx="0" ry="0" fill="#27ae60" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="575" y="207" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">4</tspan></text>
+  <text x="590" y="207" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Food, Agriculture &amp; Processing</tspan></text>
+  <text x="865" y="207" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">9</tspan></text>
+  <text x="925" y="207" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">6.0%</tspan></text>
+  <rect x="960" y="199" width="234" height="14" rx="0" ry="0" fill="#27ae60" stroke="#27ae60" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="220" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="225" width="14" height="14" rx="0" ry="0" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="575" y="233" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">5</tspan></text>
+  <text x="590" y="233" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Digital, Technology &amp; Office</tspan></text>
+  <text x="865" y="233" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">10</tspan></text>
+  <text x="925" y="233" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">6.7%</tspan></text>
+  <rect x="960" y="225" width="260" height="14" rx="0" ry="0" fill="#3498db" stroke="#3498db" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="246" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="251" width="14" height="14" rx="0" ry="0" fill="#1abc9c" stroke="#1abc9c" stroke-width="1" opacity="1"/>
+  <text x="575" y="259" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">6</tspan></text>
+  <text x="590" y="259" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Healthcare &amp; Wellness</tspan></text>
+  <text x="865" y="259" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="259" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="251" width="208" height="14" rx="0" ry="0" fill="#1abc9c" stroke="#1abc9c" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="272" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="277" width="14" height="14" rx="0" ry="0" fill="#2980b9" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="575" y="285" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">7</tspan></text>
+  <text x="590" y="285" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Education &amp; Professional Services</tspan></text>
+  <text x="865" y="285" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="285" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="277" width="208" height="14" rx="0" ry="0" fill="#2980b9" stroke="#2980b9" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="298" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="303" width="14" height="14" rx="0" ry="0" fill="#d35400" stroke="#d35400" stroke-width="1" opacity="1"/>
+  <text x="575" y="311" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">8</tspan></text>
+  <text x="590" y="311" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Artisan &amp; Traditional Crafts</tspan></text>
+  <text x="865" y="311" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">7</tspan></text>
+  <text x="925" y="311" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">4.7%</tspan></text>
+  <rect x="960" y="303" width="182" height="14" rx="0" ry="0" fill="#d35400" stroke="#d35400" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="324" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="329" width="14" height="14" rx="0" ry="0" fill="#f39c12" stroke="#f39c12" stroke-width="1" opacity="1"/>
+  <text x="575" y="337" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">9</tspan></text>
+  <text x="590" y="337" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Transport &amp; Logistics</tspan></text>
+  <text x="865" y="337" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="337" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="329" width="208" height="14" rx="0" ry="0" fill="#f39c12" stroke="#f39c12" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="350" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="355" width="14" height="14" rx="0" ry="0" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="575" y="363" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">10</tspan></text>
+  <text x="590" y="363" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Sales &amp; Commerce</tspan></text>
+  <text x="865" y="363" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="363" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="355" width="208" height="14" rx="0" ry="0" fill="#e67e22" stroke="#e67e22" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="376" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="381" width="14" height="14" rx="0" ry="0" fill="#7f8c8d" stroke="#7f8c8d" stroke-width="1" opacity="1"/>
+  <text x="575" y="389" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">11</tspan></text>
+  <text x="590" y="389" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Mining &amp; Quarrying</tspan></text>
+  <text x="865" y="389" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">5</tspan></text>
+  <text x="925" y="389" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">3.3%</tspan></text>
+  <rect x="960" y="381" width="130" height="14" rx="0" ry="0" fill="#7f8c8d" stroke="#7f8c8d" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="402" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="407" width="14" height="14" rx="0" ry="0" fill="#2c3e50" stroke="#2c3e50" stroke-width="1" opacity="1"/>
+  <text x="575" y="415" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">12</tspan></text>
+  <text x="590" y="415" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Manufacturing &amp; Industrial</tspan></text>
+  <text x="865" y="415" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="415" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="407" width="208" height="14" rx="0" ry="0" fill="#2c3e50" stroke="#2c3e50" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="428" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="433" width="14" height="14" rx="0" ry="0" fill="#16a085" stroke="#16a085" stroke-width="1" opacity="1"/>
+  <text x="575" y="441" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">13</tspan></text>
+  <text x="590" y="441" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Hospitality &amp; Tourism</tspan></text>
+  <text x="865" y="441" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">7</tspan></text>
+  <text x="925" y="441" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">4.7%</tspan></text>
+  <rect x="960" y="433" width="182" height="14" rx="0" ry="0" fill="#16a085" stroke="#16a085" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="454" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="459" width="14" height="14" rx="0" ry="0" fill="#8e44ad" stroke="#8e44ad" stroke-width="1" opacity="1"/>
+  <text x="575" y="467" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">14</tspan></text>
+  <text x="590" y="467" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Entertainment &amp; Creative Arts</tspan></text>
+  <text x="865" y="467" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="467" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="459" width="208" height="14" rx="0" ry="0" fill="#8e44ad" stroke="#8e44ad" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="480" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="485" width="14" height="14" rx="0" ry="0" fill="#c0392b" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="575" y="493" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">15</tspan></text>
+  <text x="590" y="493" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Security &amp; Safety Services</tspan></text>
+  <text x="865" y="493" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">6</tspan></text>
+  <text x="925" y="493" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">4.0%</tspan></text>
+  <rect x="960" y="485" width="156" height="14" rx="0" ry="0" fill="#c0392b" stroke="#c0392b" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="506" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="511" width="14" height="14" rx="0" ry="0" fill="#27ae60" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="575" y="519" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">16</tspan></text>
+  <text x="590" y="519" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Waste Management &amp; Environmental</tspan></text>
+  <text x="865" y="519" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">5</tspan></text>
+  <text x="925" y="519" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">3.3%</tspan></text>
+  <rect x="960" y="511" width="130" height="14" rx="0" ry="0" fill="#27ae60" stroke="#27ae60" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="532" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="537" width="14" height="14" rx="0" ry="0" fill="#f1c40f" stroke="#f1c40f" stroke-width="1" opacity="1"/>
+  <text x="575" y="545" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">17</tspan></text>
+  <text x="590" y="545" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Religious &amp; Community Services</tspan></text>
+  <text x="865" y="545" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">5</tspan></text>
+  <text x="925" y="545" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">3.3%</tspan></text>
+  <rect x="960" y="537" width="130" height="14" rx="0" ry="0" fill="#f1c40f" stroke="#f1c40f" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="558" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="563" width="14" height="14" rx="0" ry="0" fill="#e74c3c" stroke="#e74c3c" stroke-width="1" opacity="1"/>
+  <text x="575" y="571" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">18</tspan></text>
+  <text x="590" y="571" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Energy &amp; Utilities</tspan></text>
+  <text x="865" y="571" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">6</tspan></text>
+  <text x="925" y="571" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">4.0%</tspan></text>
+  <rect x="960" y="563" width="156" height="14" rx="0" ry="0" fill="#e74c3c" stroke="#e74c3c" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="584" width="830" height="26" rx="0" ry="0" fill="#f8f9fa" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="589" width="14" height="14" rx="0" ry="0" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="575" y="597" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">19</tspan></text>
+  <text x="590" y="597" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Marine &amp; Waterway Services</tspan></text>
+  <text x="865" y="597" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">5</tspan></text>
+  <text x="925" y="597" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">3.3%</tspan></text>
+  <rect x="960" y="589" width="130" height="14" rx="0" ry="0" fill="#3498db" stroke="#3498db" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="610" width="830" height="26" rx="0" ry="0" fill="#ffffff" stroke="#e8e8e8" stroke-width="0.5" opacity="1"/>
+  <rect x="546" y="615" width="14" height="14" rx="0" ry="0" fill="#95a5a6" stroke="#95a5a6" stroke-width="1" opacity="1"/>
+  <text x="575" y="623" fill="#333" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="575" dy="0">20</tspan></text>
+  <text x="590" y="623" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">Real Estate &amp; Property Services</tspan></text>
+  <text x="865" y="623" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">8</tspan></text>
+  <text x="925" y="623" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">5.3%</tspan></text>
+  <rect x="960" y="615" width="208" height="14" rx="0" ry="0" fill="#95a5a6" stroke="#95a5a6" stroke-width="0.5" opacity="1"/>
+  <rect x="540" y="636" width="830" height="28" rx="0" ry="0" fill="#2c3e50" stroke="#2c3e50" stroke-width="1" opacity="1"/>
+  <text x="590" y="650" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="590" dy="0">TOTAL</tspan></text>
+  <text x="865" y="650" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="865" dy="0">150</tspan></text>
+  <text x="925" y="650" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="925" dy="0">100%</tspan></text>
+  <rect x="540" y="90" width="830" height="574" rx="0" ry="0" fill="none" stroke="#2c3e50" stroke-width="2" opacity="1"/>
+  <text x="50" y="698" fill="#888888" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="50" dy="0">Source: OSLRS Baseline Survey 2025-2026  |  All 150 skills mapped to ISCO-08 international classification</tspan></text>
+</svg>

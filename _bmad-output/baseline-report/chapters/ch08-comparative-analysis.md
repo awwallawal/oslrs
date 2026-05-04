@@ -1,14 +1,14 @@
-# CHAPTER 8: COMPARATIVE ANALYSIS — STATE-LEVEL REGISTRY INITIATIVES
+# 5. Comparative Analysis: State-Level Registry Initiatives
 
 ---
 
-## 8.1 Introduction
+## 5.1 Introduction
 
 This chapter presents a comparative analysis of state-level workforce registration and skills enumeration initiatives across Nigeria. The analysis serves two purposes: (1) to situate the Oyo State Skilled Labour Register within the broader national landscape of sub-national labour market information systems, and (2) to identify lessons learned and best practices from comparable initiatives that have informed the OSLSR design.
 
 ---
 
-## 8.2 Landscape Overview
+## 5.2 Landscape Overview
 
 Several Nigerian states have undertaken workforce registration or skills mapping initiatives in recent years, driven by the shared challenge of informal economy visibility and the need for evidence-based skills development planning. However, these initiatives vary significantly in scope, methodology, technology, and outcomes.
 
@@ -42,9 +42,9 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 
 ---
 
-## 8.3 Comparative Analysis
+## 5.3 Comparative Analysis
 
-### 8.3.1 Lagos State — Employment Trust Fund
+### 5.3.1 Lagos State, Employment Trust Fund
 
 | Parameter | Detail |
 |-----------|--------|
@@ -61,7 +61,7 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 | **Key Limitation** | Primarily serves the formal/semi-formal sector; limited penetration into informal artisan economy |
 | **Fraud Detection** | BVN-based deduplication; no field enumeration component |
 
-### 8.3.2 Kaduna State — Kaduna State Residents Registration Agency (KADSRA)
+### 5.3.2 Kaduna State, Kaduna State Residents Registration Agency (KADSRA)
 
 | Parameter | Detail |
 |-----------|--------|
@@ -78,7 +78,7 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 | **Key Limitation** | Broad scope means limited depth of skills data; designed for general administration rather than labour market intelligence |
 | **Fraud Detection** | Biometric capture (fingerprint); agent supervision |
 
-### 8.3.3 Edo State — EdoJobs / Edo Skills Map
+### 5.3.3 Edo State, EdoJobs / Edo Skills Map
 
 | Parameter | Detail |
 |-----------|--------|
@@ -92,10 +92,10 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 | **Unique Identifier** | NIN (National Identification Number) |
 | **Estimated Registrants** | 50,000+ (through training programmes) |
 | **Key Strength** | Direct linkage to skills training creates pipeline from registration to development; GIZ technical support |
-| **Key Limitation** | Registration is training-programme driven — does not capture existing skilled workers who are not seeking training |
+| **Key Limitation** | Registration is training-programme driven, does not capture existing skilled workers who are not seeking training |
 | **Fraud Detection** | NIN validation; training programme attendance records |
 
-### 8.3.4 Delta State — Job Creation Office
+### 5.3.4 Delta State, Job Creation Office
 
 | Parameter | Detail |
 |-----------|--------|
@@ -111,7 +111,7 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 
 ---
 
-## 8.4 Comparative Matrix
+## 5.4 Comparative Matrix
 
 | Feature | Lagos (LETF) | Kaduna (KADSRA) | Edo (EdoJobs) | OSLSR (Oyo) |
 |---------|:---:|:---:|:---:|:---:|
@@ -132,7 +132,7 @@ Several Nigerian states have undertaken workforce registration or skills mapping
 
 ---
 
-## 8.5 Key Lessons from Comparable Initiatives
+## 5.5 Key Lessons from Comparable Initiatives
 
 The comparative analysis yields five key lessons that have directly informed the OSLSR design:
 
@@ -140,7 +140,7 @@ The comparative analysis yields five key lessons that have directly informed the
 
 **Observation**: Lagos and Edo rely primarily on web-based self-registration, which excludes workers who lack internet access or digital literacy. Kaduna's field agent model achieves broader coverage but requires massive human resources.
 
-**OSLSR Application**: The OSLSR implements a **three-channel approach** (Mobile PWA for field enumeration, desktop web for data entry, public self-registration) — combining the reach of field enumeration with the scalability of self-registration.
+**OSLSR Application**: The OSLSR implements a **three-channel approach** (Mobile PWA for field enumeration, desktop web for data entry, public self-registration), combining the reach of field enumeration with the scalability of self-registration.
 
 ### Lesson 2: Skills Taxonomy Depth Determines Utility
 
@@ -152,29 +152,29 @@ The comparative analysis yields five key lessons that have directly informed the
 
 **Observation**: Lagos achieves high registration through financial incentive (loan access). Edo achieves registration through training programme enrollment. Registries without clear incentives struggle with participation.
 
-**OSLSR Application**: The OSLSR offers the **Skills Marketplace** as a tangible incentive — registered workers gain visibility to potential employers and clients through a publicly searchable directory, creating a direct economic benefit from registration.
+**OSLSR Application**: The OSLSR offers the **Skills Marketplace** as a tangible incentive, registered workers gain visibility to potential employers and clients through a publicly searchable directory, creating a direct economic benefit from registration.
 
 ### Lesson 4: Offline Capability is Non-Negotiable for Field Work
 
 **Observation**: States that rely on internet-connected registration have limited reach in rural areas with poor connectivity.
 
-**OSLSR Application**: The OSLSR PWA operates for **up to 7 days offline** with automatic synchronisation — a critical capability for enumeration in rural Oke-Ogun and Ibarapa LGAs where connectivity is intermittent.
+**OSLSR Application**: The OSLSR PWA operates for **up to 7 days offline** with automatic synchronisation, a critical capability for enumeration in rural Oke-Ogun and Ibarapa LGAs where connectivity is intermittent.
 
 ### Lesson 5: Data Quality Requires Systematic Controls
 
 **Observation**: Large-scale registration exercises (particularly Kaduna's 6M+ registrants) face significant data quality challenges without systematic fraud detection and quality assurance mechanisms.
 
-**OSLSR Application**: The OSLSR implements a **4-layer quality assurance protocol** (Chapter 17) with automated fraud detection, supervisory review, and statistical quality gates — a more rigorous approach than any comparable state initiative.
+**OSLSR Application**: The OSLSR implements a **4-layer quality assurance protocol** (Chapter 17) with automated fraud detection, supervisory review, and statistical quality gates, a more rigorous approach than any comparable state initiative.
 
 ---
 
-## 8.6 OSLSR Positioning
+## 5.6 OSLSR Positioning
 
 The comparative analysis positions the OSLSR as a **next-generation state-level labour register** that addresses the limitations observed in earlier state initiatives:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│              OSLSR — NEXT-GENERATION POSITIONING               │
+│              OSLSR, NEXT-GENERATION POSITIONING               │
 │                                                                │
 │  ┌──────────────────────────────────────────────────────┐    │
 │  │  EARLIER INITIATIVES                                  │    │
@@ -207,12 +207,12 @@ The comparative analysis positions the OSLSR as a **next-generation state-level 
 
 ---
 
-## 8.7 Chapter Summary
+## 5.7 Chapter Summary
 
-The comparative analysis demonstrates that while several Nigerian states have undertaken workforce registration or skills mapping initiatives, the OSLSR represents a significant methodological and technological advancement over existing efforts. The OSLSR's distinguishing features — offline-capable multi-channel data collection, granular 150-skill taxonomy with ISCO-08 mapping, automated multi-algorithm fraud detection, public skills marketplace with progressive consent, and ILO ICLS-19 aligned survey methodology — position it as a potential model for state-level labour market information systems in Nigeria.
+The comparative analysis demonstrates that while several Nigerian states have undertaken workforce registration or skills mapping initiatives, the OSLSR represents a significant methodological and technological advancement over existing efforts. The OSLSR's distinguishing features, offline-capable multi-channel data collection, granular 150-skill taxonomy with ISCO-08 mapping, automated multi-algorithm fraud detection, public skills marketplace with progressive consent, and ILO ICLS-19 aligned survey methodology, position it as a potential model for state-level labour market information systems in Nigeria.
 
 The lessons drawn from Lagos, Kaduna, Edo, and Delta have been systematically incorporated into the OSLSR design, ensuring that known failure modes and limitations are addressed proactively rather than discovered post-deployment.
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 8 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 8 | Chemiroy Nigeria Limited*

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="540" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Oyo State Zonal Classification, 6 Zones × 33 LGAs</text>
+  <rect x="60" y="80" width="223.33333333333334" height="200" fill="#f3e6e7" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="171.66666666666669" y="98" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">Ibadan Metro</text>
+  <text x="171.66666666666669" y="118" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">5 LGAs</text>
+  <text x="72" y="138" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibadan North</text>
+  <text x="72" y="152" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibadan NE</text>
+  <text x="72" y="166" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibadan NW</text>
+  <text x="72" y="180" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibadan SE</text>
+  <text x="72" y="194" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibadan SW</text>
+  <rect x="298.33333333333337" y="80" width="223.33333333333334" height="200" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="410.00000000000006" y="98" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">Ibadan Periphery</text>
+  <text x="410.00000000000006" y="118" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">6 LGAs</text>
+  <text x="310.33333333333337" y="138" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Akinyele</text>
+  <text x="310.33333333333337" y="152" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Egbeda</text>
+  <text x="310.33333333333337" y="166" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ido</text>
+  <text x="310.33333333333337" y="180" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Lagelu</text>
+  <text x="310.33333333333337" y="194" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ona Ara</text>
+  <text x="310.33333333333337" y="208" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Oluyole</text>
+  <rect x="536.6666666666667" y="80" width="223.33333333333334" height="200" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="648.3333333333334" y="98" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">Oke-Ogun</text>
+  <text x="648.3333333333334" y="118" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">10 LGAs</text>
+  <text x="548.6666666666667" y="138" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Saki West</text>
+  <text x="548.6666666666667" y="152" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Saki East</text>
+  <text x="548.6666666666667" y="166" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Atisbo</text>
+  <text x="548.6666666666667" y="180" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Olorunsogo</text>
+  <text x="548.6666666666667" y="194" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Iwajowa</text>
+  <text x="548.6666666666667" y="208" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Itesiwaju</text>
+  <text x="548.6666666666667" y="222" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Iseyin</text>
+  <text x="548.6666666666667" y="236" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Kajola</text>
+  <text x="548.6666666666667" y="250" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Irepo</text>
+  <text x="548.6666666666667" y="264" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Orelope</text>
+  <rect x="60" y="300" width="223.33333333333334" height="200" fill="#fff5e6" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="171.66666666666669" y="318" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#b58105">Ogbomosho</text>
+  <text x="171.66666666666669" y="338" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">5 LGAs</text>
+  <text x="72" y="358" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ogbomosho N</text>
+  <text x="72" y="372" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ogbomosho S</text>
+  <text x="72" y="386" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Surulere</text>
+  <text x="72" y="400" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Orire</text>
+  <text x="72" y="414" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ogo Oluwa</text>
+  <rect x="298.33333333333337" y="300" width="223.33333333333334" height="200" fill="#e9e0f3" stroke="#6f4faa" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="410.00000000000006" y="318" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#6f4faa">Oyo</text>
+  <text x="410.00000000000006" y="338" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">4 LGAs</text>
+  <text x="310.33333333333337" y="358" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Oyo East</text>
+  <text x="310.33333333333337" y="372" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Oyo West</text>
+  <text x="310.33333333333337" y="386" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Atiba</text>
+  <text x="310.33333333333337" y="400" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Afijio</text>
+  <rect x="536.6666666666667" y="300" width="223.33333333333334" height="200" fill="#d6ebee" stroke="#2f6b6f" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="648.3333333333334" y="318" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2f6b6f">Ibarapa</text>
+  <text x="648.3333333333334" y="338" font-family='"Inter", sans-serif' font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="hanging" fill="#6b6b6b">3 LGAs</text>
+  <text x="548.6666666666667" y="358" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibarapa Central</text>
+  <text x="548.6666666666667" y="372" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibarapa East</text>
+  <text x="548.6666666666667" y="386" font-family='"Inter", sans-serif' font-size="9.5" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Ibarapa North</text>
+</svg>

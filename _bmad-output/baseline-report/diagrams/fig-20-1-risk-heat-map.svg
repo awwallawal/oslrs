@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6.00 -4.00 936.00 773.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="6.00" y="-4.00" width="936.00" height="773.00" fill="white"/>
+  <text x="40" y="322.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="40" dy="0">P</tspan><tspan x="40" dy="17.5">R</tspan><tspan x="40" dy="17.5">O</tspan><tspan x="40" dy="17.5">B</tspan><tspan x="40" dy="17.5">A</tspan><tspan x="40" dy="17.5">B</tspan><tspan x="40" dy="17.5">I</tspan><tspan x="40" dy="17.5">L</tspan><tspan x="40" dy="17.5">I</tspan><tspan x="40" dy="17.5">T</tspan><tspan x="40" dy="17.5">Y</tspan></text>
+  <text x="410" y="732.5" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="410" dy="0">IMPACT</tspan></text>
+  <text x="185" y="105" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="middle" opacity="1"><tspan x="185" dy="0">Almost Certain (5)</tspan></text>
+  <text x="185" y="225" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="middle" opacity="1"><tspan x="185" dy="0">Likely (4)</tspan></text>
+  <text x="185" y="345" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="middle" opacity="1"><tspan x="185" dy="0">Possible (3)</tspan></text>
+  <text x="185" y="465" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="middle" opacity="1"><tspan x="185" dy="0">Unlikely (2)</tspan></text>
+  <text x="185" y="585" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="middle" opacity="1"><tspan x="185" dy="0">Rare (1)</tspan></text>
+  <text x="250" y="690" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="250" dy="0">Minimal (1)</tspan></text>
+  <text x="360" y="690" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="360" dy="0">Minor (2)</tspan></text>
+  <text x="470" y="690" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="470" dy="0">Moderate (3)</tspan></text>
+  <text x="580" y="690" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="580" dy="0">Major (4)</tspan></text>
+  <text x="695" y="690" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="695" dy="0">Catastrophic (5)</tspan></text>
+  <rect x="195" y="550" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="250" y="606" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="250" dy="0">1</tspan></text>
+  <rect x="305" y="550" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="360" y="606" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="360" dy="0">2</tspan></text>
+  <rect x="415" y="550" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="470" y="606" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="470" dy="0">3</tspan></text>
+  <rect x="525" y="550" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="580" y="606" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="580" dy="0">4</tspan></text>
+  <rect x="635" y="550" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="690" y="606" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="690" dy="0">5</tspan></text>
+  <rect x="195" y="440" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="250" y="496" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="250" dy="0">2</tspan></text>
+  <rect x="305" y="440" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="360" y="496" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="360" dy="0">4</tspan></text>
+  <rect x="415" y="440" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="470" y="496" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="470" dy="0">6</tspan></text>
+  <rect x="525" y="440" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="580" y="496" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="580" dy="0">8</tspan></text>
+  <rect x="635" y="440" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="690" y="496" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="690" dy="0">10</tspan></text>
+  <rect x="195" y="330" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="250" y="386" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="250" dy="0">3</tspan></text>
+  <rect x="305" y="330" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="360" y="386" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="360" dy="0">6</tspan></text>
+  <rect x="415" y="330" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="470" y="386" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="470" dy="0">9</tspan></text>
+  <rect x="525" y="330" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="580" y="386" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="580" dy="0">12</tspan></text>
+  <rect x="635" y="330" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="690" y="386" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="690" dy="0">15</tspan></text>
+  <rect x="195" y="220" width="110" height="110" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="250" y="276" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="250" dy="0">4</tspan></text>
+  <rect x="305" y="220" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="360" y="276" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="360" dy="0">8</tspan></text>
+  <rect x="415" y="220" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="470" y="276" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="470" dy="0">12</tspan></text>
+  <rect x="525" y="220" width="110" height="110" rx="0" ry="0" fill="#e74c3c" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="580" y="276" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="580" dy="0">16</tspan></text>
+  <rect x="635" y="220" width="110" height="110" rx="0" ry="0" fill="#e74c3c" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="690" y="276" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="690" dy="0">20</tspan></text>
+  <rect x="195" y="110" width="110" height="110" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="250" y="166" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="250" dy="0">5</tspan></text>
+  <rect x="305" y="110" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="360" y="166" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="360" dy="0">10</tspan></text>
+  <rect x="415" y="110" width="110" height="110" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="470" y="166" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="470" dy="0">15</tspan></text>
+  <rect x="525" y="110" width="110" height="110" rx="0" ry="0" fill="#e74c3c" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="580" y="166" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="580" dy="0">20</tspan></text>
+  <rect x="635" y="110" width="110" height="110" rx="0" ry="0" fill="#e74c3c" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="690" y="166" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="0.6"><tspan x="690" dy="0">25</tspan></text>
+  <text x="690" y="265" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="690" dy="0">R-01</tspan></text>
+  <text x="580" y="265" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="580" dy="0">R-02</tspan></text>
+  <text x="690" y="385" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="690" dy="0">R-03</tspan></text>
+  <text x="470" y="265" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="470" dy="0">R-04</tspan></text>
+  <text x="580" y="385" fill="#ffffff" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="580" dy="0">R-05</tspan></text>
+  <text x="470" y="385" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="470" dy="0">R-06</tspan></text>
+  <text x="580" y="495" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="580" dy="0">R-07</tspan></text>
+  <text x="470" y="495" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="middle" opacity="1"><tspan x="470" dy="0">R-08</tspan></text>
+  <text x="770" y="510" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="770" dy="0">Legend</tspan></text>
+  <rect x="770" y="530" width="20" height="20" rx="0" ry="0" fill="#2ecc71" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="798" y="541" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="798" dy="0">Low (1-4)</tspan></text>
+  <rect x="770" y="558" width="20" height="20" rx="0" ry="0" fill="#f1c40f" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="798" y="569" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="798" dy="0">Medium (5-9)</tspan></text>
+  <rect x="770" y="586" width="20" height="20" rx="0" ry="0" fill="#e67e22" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="798" y="597" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="798" dy="0">High (10-15)</tspan></text>
+  <rect x="770" y="614" width="20" height="20" rx="0" ry="0" fill="#e74c3c" stroke="#1e1e1e" stroke-width="1" opacity="1"/>
+  <text x="798" y="625" fill="#1e1e1e" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="middle" opacity="1"><tspan x="798" dy="0">Critical (16-25)</tspan></text>
+</svg>

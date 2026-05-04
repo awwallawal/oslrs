@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-14.00 -9.00 1138.00 849.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="-14.00" y="-9.00" width="1138.00" height="849.00" fill="white"/>
+  <text x="600" y="52" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="600" dy="0">89 of 150 taxonomy skills (59.3%) observed in validation sample</tspan></text>
+  <text x="820" y="78" fill="#f39c12" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="820" dy="0">■ Construction</tspan></text>
+  <text x="820" y="95" fill="#e74c3c" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="820" dy="0">■ Fashion &amp; Beauty</tspan></text>
+  <text x="820" y="112" fill="#27ae60" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="820" dy="0">■ Agriculture</tspan></text>
+  <text x="960" y="78" fill="#3498db" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="960" dy="0">■ Digital &amp; Commerce</tspan></text>
+  <text x="960" y="95" fill="#9b59b6" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="960" dy="0">■ Services</tspan></text>
+  <text x="960" y="112" fill="#1abc9c" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="960" dy="0">■ Automotive &amp; Tech</tspan></text>
+  <text x="230" y="140" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Tailoring / Sewing</tspan></text>
+  <rect x="240" y="140" width="510" height="22" rx="1.76" ry="1.76" fill="#e74c3c" stroke="#e74c3c" stroke-width="1" opacity="1"/>
+  <text x="758" y="141" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="758" dy="0">8.5%  (28)</tspan></text>
+  <text x="230" y="172" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Trading / General Commerce</tspan></text>
+  <rect x="240" y="172" width="456" height="22" rx="1.76" ry="1.76" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="704" y="173" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="704" dy="0">7.6%  (25)</tspan></text>
+  <text x="230" y="204" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Crop Farming</tspan></text>
+  <rect x="240" y="204" width="402" height="22" rx="1.76" ry="1.76" fill="#27ae60" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="650" y="205" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="650" dy="0">6.7%  (22)</tspan></text>
+  <text x="230" y="236" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Hairdressing / Styling</tspan></text>
+  <rect x="240" y="236" width="330" height="22" rx="1.76" ry="1.76" fill="#9b59b6" stroke="#9b59b6" stroke-width="1" opacity="1"/>
+  <text x="578" y="237" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="578" dy="0">5.5%  (18)</tspan></text>
+  <text x="230" y="268" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Carpentry / Woodwork</tspan></text>
+  <rect x="240" y="268" width="288" height="22" rx="1.76" ry="1.76" fill="#f39c12" stroke="#f39c12" stroke-width="1" opacity="1"/>
+  <text x="536" y="269" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="536" dy="0">4.8%  (16)</tspan></text>
+  <text x="230" y="300" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Auto Mechanic</tspan></text>
+  <rect x="240" y="300" width="270" height="22" rx="1.76" ry="1.76" fill="#1abc9c" stroke="#1abc9c" stroke-width="1" opacity="1"/>
+  <text x="518" y="301" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="518" dy="0">4.5%  (15)</tspan></text>
+  <text x="230" y="332" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Baking &amp; Confectionery</tspan></text>
+  <rect x="240" y="332" width="252" height="22" rx="1.76" ry="1.76" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="500" y="333" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="500" dy="0">4.2%  (14)</tspan></text>
+  <text x="230" y="364" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Welding &amp; Fabrication</tspan></text>
+  <rect x="240" y="364" width="234" height="22" rx="1.76" ry="1.76" fill="#2980b9" stroke="#2980b9" stroke-width="1" opacity="1"/>
+  <text x="482" y="365" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="482" dy="0">3.9%  (13)</tspan></text>
+  <text x="230" y="396" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Electrical Installation</tspan></text>
+  <rect x="240" y="396" width="216" height="22" rx="1.76" ry="1.76" fill="#8e44ad" stroke="#8e44ad" stroke-width="1" opacity="1"/>
+  <text x="464" y="397" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="464" dy="0">3.6%  (12)</tspan></text>
+  <text x="230" y="428" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Teaching / Tutoring</tspan></text>
+  <rect x="240" y="428" width="198" height="22" rx="1.76" ry="1.76" fill="#c0392b" stroke="#c0392b" stroke-width="1" opacity="1"/>
+  <text x="446" y="429" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="446" dy="0">3.3%  (11)</tspan></text>
+  <text x="230" y="460" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Professional Driving</tspan></text>
+  <rect x="240" y="460" width="180" height="22" rx="1.76" ry="1.76" fill="#16a085" stroke="#16a085" stroke-width="1" opacity="1"/>
+  <text x="428" y="461" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="428" dy="0">3.0%  (10)</tspan></text>
+  <text x="230" y="492" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Plumbing</tspan></text>
+  <rect x="240" y="492" width="162" height="22" rx="1.76" ry="1.76" fill="#d35400" stroke="#d35400" stroke-width="1" opacity="1"/>
+  <text x="410" y="493" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="410" dy="0">2.7%  (9)</tspan></text>
+  <text x="230" y="524" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Catering / Event Cooking</tspan></text>
+  <rect x="240" y="524" width="144" height="22" rx="1.76" ry="1.76" fill="#2c3e50" stroke="#2c3e50" stroke-width="1" opacity="1"/>
+  <text x="392" y="525" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="392" dy="0">2.4%  (8)</tspan></text>
+  <text x="230" y="556" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Fashion Design</tspan></text>
+  <rect x="240" y="556" width="144" height="22" rx="1.76" ry="1.76" fill="#e74c3c" stroke="#e74c3c" stroke-width="1" opacity="1"/>
+  <text x="392" y="557" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="392" dy="0">2.4%  (8)</tspan></text>
+  <text x="230" y="588" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Livestock / Poultry Farming</tspan></text>
+  <rect x="240" y="588" width="126" height="22" rx="1.76" ry="1.76" fill="#27ae60" stroke="#27ae60" stroke-width="1" opacity="1"/>
+  <text x="374" y="589" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="374" dy="0">2.1%  (7)</tspan></text>
+  <text x="230" y="620" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Masonry / Bricklaying</tspan></text>
+  <rect x="240" y="620" width="126" height="22" rx="1.76" ry="1.76" fill="#f39c12" stroke="#f39c12" stroke-width="1" opacity="1"/>
+  <text x="374" y="621" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="374" dy="0">2.1%  (7)</tspan></text>
+  <text x="230" y="652" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Barbing</tspan></text>
+  <rect x="240" y="652" width="108" height="22" rx="1.76" ry="1.76" fill="#9b59b6" stroke="#9b59b6" stroke-width="1" opacity="1"/>
+  <text x="356" y="653" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="356" dy="0">1.8%  (6)</tspan></text>
+  <text x="230" y="684" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Computer / Phone Repair</tspan></text>
+  <rect x="240" y="684" width="108" height="22" rx="1.76" ry="1.76" fill="#3498db" stroke="#3498db" stroke-width="1" opacity="1"/>
+  <text x="356" y="685" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="356" dy="0">1.8%  (6)</tspan></text>
+  <text x="230" y="716" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Painting &amp; Decoration</tspan></text>
+  <rect x="240" y="716" width="90" height="22" rx="1.76" ry="1.76" fill="#e67e22" stroke="#e67e22" stroke-width="1" opacity="1"/>
+  <text x="338" y="717" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="338" dy="0">1.5%  (5)</tspan></text>
+  <text x="230" y="748" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="230" dy="0">Graphic Design</tspan></text>
+  <rect x="240" y="748" width="90" height="22" rx="1.76" ry="1.76" fill="#1abc9c" stroke="#1abc9c" stroke-width="1" opacity="1"/>
+  <text x="338" y="749" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="338" dy="0">1.5%  (5)</tspan></text>
+  <polyline points="240.00,135.00 240.00,780.00" fill="none" stroke="#bdc3c7" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="540.00,135.00 540.00,780.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="540" y="782" fill="#95a5a6" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="540" dy="0">5%</tspan></text>
+  <text x="240" y="782" fill="#95a5a6" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="11" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="240" dy="0">0%</tspan></text>
+  <text x="600" y="800" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="600" dy="0">Percentage of respondents (n=330)</tspan></text>
+</svg>

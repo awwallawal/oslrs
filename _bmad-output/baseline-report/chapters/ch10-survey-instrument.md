@@ -1,16 +1,16 @@
-# CHAPTER 10: SURVEY INSTRUMENT DESIGN & VALIDATION
+# 7. Survey Instrument Design and Validation
 
 ---
 
-## 10.1 Introduction
+## 7.1 Introduction
 
-This chapter documents the design, structure, and iterative validation of the **OSLSR Labour & Skills Registry Survey** — the primary data collection instrument for the Oyo State Skilled Labour Register. The instrument was purpose-built to capture the multidimensional nature of labour force participation in Oyo State, incorporating international statistical standards, Nigerian regulatory requirements, and the specific policy objectives of the commissioning authority.
+This chapter documents the design, structure, and iterative validation of the **OSLSR Labour & Skills Registry Survey**, the primary data collection instrument for the Oyo State Skilled Labour Register. The instrument was purpose-built to capture the multidimensional nature of labour force participation in Oyo State, incorporating international statistical standards, Nigerian regulatory requirements, and the specific policy objectives of the commissioning authority.
 
 The final instrument (Version 3.0) represents the outcome of **three iterative review cycles**, each incorporating feedback from methodological review, technical feasibility assessment, and alignment verification against the ILO International Conference of Labour Statisticians (ICLS-19) framework.
 
 ---
 
-## 10.2 Design Principles
+## 7.2 Design Principles
 
 The survey instrument was designed according to five governing principles:
 
@@ -24,11 +24,11 @@ The survey instrument was designed according to five governing principles:
 
 ---
 
-## 10.3 Instrument Evolution
+## 7.3 Instrument Evolution
 
 The survey instrument underwent three major revisions before finalisation:
 
-### 10.3.1 Version History
+### 7.3.1 Version History
 
 | Version | Date | Key Changes | Trigger |
 |---------|------|-------------|---------|
@@ -36,7 +36,7 @@ The survey instrument underwent three major revisions before finalisation:
 | **v2.0** | January 2026 | Expanded to 33 questions; added NIN requirement, LGA field, years of experience, expanded employment types; skills expanded to 50+ | PRD requirements analysis (FR5, FR17, FR21) |
 | **v3.0** | January 2026 | Finalised at 36 questions; added marketplace section (6.0–6.4), business fields (address, apprentice count), refined education levels to 9 options, CAC registration status | Marketplace module requirements, stakeholder feedback on enterprise data needs |
 
-### 10.3.2 Review Cycle Process
+### 7.3.2 Review Cycle Process
 
 Each version underwent a structured review cycle:
 
@@ -70,11 +70,11 @@ Each version underwent a structured review cycle:
 
 ---
 
-## 10.4 Instrument Structure
+## 7.4 Instrument Structure
 
 The final instrument (v3.0) comprises **six sections** containing **36 questions**, of which **28 are required** and **12 are conditional** (displayed based on skip logic).
 
-### 10.4.1 Section Overview
+### 7.4.1 Section Overview
 
 | Section | Title | Questions | Required | Conditional | Purpose |
 |---------|-------|:---------:|:--------:|:-----------:|---------|
@@ -88,7 +88,7 @@ The final instrument (v3.0) comprises **six sections** containing **36 questions
 
 *\* Including display-only informational fields (Q1.1, Q6.0) and auto-calculated fields (Q2.5)*
 
-### 10.4.2 Estimated Completion Time
+### 7.4.2 Estimated Completion Time
 
 | Respondent Profile | Estimated Time | Basis |
 |-------------------|:--------------:|-------|
@@ -101,18 +101,18 @@ The instrument is designed for a **maximum completion time of 12 minutes** under
 
 ---
 
-## 10.5 Section-by-Section Analysis
+## 7.5 Section-by-Section Analysis
 
-### 10.5.1 Section 1: Introduction & Consent
+### 7.5.1 Section 1: Introduction & Consent
 
 | # | Question | Type | Required | Notes |
 |---|----------|------|:--------:|-------|
-| 1.1 | Welcome note introducing the OSLSR | Display only | — | Informational text explaining the purpose, duration, and data handling |
-| 1.2 | Do you consent to participate? | Yes / No | Yes | **Gate question** — "No" terminates the survey with a thank-you message |
+| 1.1 | Welcome note introducing the OSLSR | Display only |, | Informational text explaining the purpose, duration, and data handling |
+| 1.2 | Do you consent to participate? | Yes / No | Yes | **Gate question**, "No" terminates the survey with a thank-you message |
 
-**Design rationale**: NDPA 2023 Section 25 requires informed consent before personal data collection. The consent question serves as a legally compliant gate — no data is collected or transmitted until explicit consent is obtained. This satisfies the lawful basis for processing requirement.
+**Design rationale**: NDPA 2023 Section 25 requires informed consent before personal data collection. The consent question serves as a legally compliant gate, no data is collected or transmitted until explicit consent is obtained. This satisfies the lawful basis for processing requirement.
 
-### 10.5.2 Section 2: Identity & Demographics
+### 7.5.2 Section 2: Identity & Demographics
 
 | # | Question | Type | Required | Validation |
 |---|----------|------|:--------:|-----------|
@@ -120,7 +120,7 @@ The instrument is designed for a **maximum completion time of 12 minutes** under
 | 2.2 | First Name | Text | Yes | Non-empty |
 | 2.3 | Gender | Single choice | Yes | Male / Female / Prefer not to say |
 | 2.4 | Date of Birth | Date | Yes | Cannot be future date |
-| 2.5 | Age | Auto-calculated | — | Derived from DOB; must be ≥15 years |
+| 2.5 | Age | Auto-calculated |, | Derived from DOB; must be ≥15 years |
 | 2.6 | Marital Status | Single choice | Yes | 5 options: Single, Married, Divorced, Widowed, Separated |
 | 2.7 | Highest Education | Single choice | Yes | 9 levels from No Formal Education to Doctorate |
 | 2.8 | Disability status | Yes / No | Yes | Self-declared |
@@ -134,13 +134,13 @@ The instrument is designed for a **maximum completion time of 12 minutes** under
 
 - **Age threshold (≥15 years)**: Aligned with the ILO ICLS-19 definition of the working-age population. The auto-calculation from Date of Birth eliminates the common field survey problem of respondents misreporting age.
 
-- **Education levels (9 options)**: The expanded education classification distinguishes between NCE/OND and HND/BSc — a distinction that is significant in the Nigerian labour market where holders of different credentials occupy distinctly different employment niches.
+- **Education levels (9 options)**: The expanded education classification distinguishes between NCE/OND and HND/BSc, a distinction that is significant in the Nigerian labour market where holders of different credentials occupy distinctly different employment niches.
 
 - **GPS auto-capture**: Device GPS coordinates are captured automatically (not displayed to the respondent), enabling the fraud detection engine to identify geographic clustering anomalies.
 
-### 10.5.3 Section 3: Labour Force Participation
+### 7.5.3 Section 3: Labour Force Participation
 
-This section implements the **ILO ICLS-19 labour force classification cascade** — a structured decision tree that classifies respondents into mutually exclusive labour force categories.
+This section implements the **ILO ICLS-19 labour force classification cascade**, a structured decision tree that classifies respondents into mutually exclusive labour force categories.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -202,43 +202,43 @@ This section implements the **ILO ICLS-19 labour force classification cascade** 
 
 **Design rationale**: The six employment type options reflect the structure of the Nigerian labour market, where the distinction between formal wage employment and self-employment is critical for policy analysis. The inclusion of "Apprentice/Intern" captures the significant informal apprenticeship economy that characterises Yoruba-speaking states.
 
-### 10.5.4 Section 4: Household & Welfare
+### 7.5.4 Section 4: Household & Welfare
 
 | # | Question | Type | Required | Validation |
 |---|----------|------|:--------:|-----------|
-| 4.1 | Head of household? | Yes / No | Yes | — |
+| 4.1 | Head of household? | Yes / No | Yes |, |
 | 4.2 | Total household size | Number | Yes | Minimum: 1 |
 | 4.3 | Number of dependents | Number | Yes | Cannot exceed household size (Q4.2) |
 | 4.4 | Housing ownership | Single choice | Yes | 5 options: Owned, Rented, Family, Employer-provided, Other |
 
-**Design rationale**: Household data enables the computation of dependency ratios and housing tenure profiles — key indicators for labour policy planning. The cross-validation rule (dependents ≤ household size) prevents data quality errors at the point of entry.
+**Design rationale**: Household data enables the computation of dependency ratios and housing tenure profiles, key indicators for labour policy planning. The cross-validation rule (dependents ≤ household size) prevents data quality errors at the point of entry.
 
-### 10.5.5 Section 5: Skills & Business
+### 7.5.5 Section 5: Skills & Business
 
 | # | Question | Type | Required | Show If | Validation |
 |---|----------|------|:--------:|---------|-----------|
 | 5.1 | Primary skills | Multi-select | Yes | Always | 150 skills across 20 sectors |
 | 5.2 | Other skills (free text) | Text | No | Always | Max 200 characters |
 | 5.3 | Skills desired to learn | Multi-select | No | Always | Same 150-skill list |
-| 5.4 | Own/operate a business? | Yes / No | Yes | Always | — |
-| 5.5 | Business name | Text | Yes | Q5.4 = Yes | — |
+| 5.4 | Own/operate a business? | Yes / No | Yes | Always |, |
+| 5.5 | Business name | Text | Yes | Q5.4 = Yes |, |
 | 5.6 | CAC registration status | Single choice | Yes | Q5.4 = Yes | Registered / Unregistered / In Progress |
-| 5.7 | Business address | Text | Yes | Q5.4 = Yes | — |
+| 5.7 | Business address | Text | Yes | Q5.4 = Yes |, |
 | 5.8 | Number of apprentices | Number | No | Q5.4 = Yes | Cannot be negative |
 
 **Design rationale**:
 
 - **150-skill taxonomy**: The comprehensive skills list (documented in Chapter 11) enables precise matching between worker capabilities and employer needs in the Skills Marketplace. The multi-select format acknowledges that workers in the informal economy typically possess multiple tradeable skills.
 
-- **"Skills desired to learn" (Q5.3)**: This forward-looking question captures unmet training demand — critical data for the Ministry's skills development programme planning.
+- **"Skills desired to learn" (Q5.3)**: This forward-looking question captures unmet training demand, critical data for the Ministry's skills development programme planning.
 
 - **Business registration data**: CAC registration status provides a proxy measure for formalisation of the informal economy, directly relevant to the Ministry's mandate.
 
-### 10.5.6 Section 6: Public Skills Marketplace
+### 7.5.6 Section 6: Public Skills Marketplace
 
 | # | Question | Type | Required | Show If | Validation |
 |---|----------|------|:--------:|---------|-----------|
-| 6.0 | Marketplace explanation | Display only | — | Always | Explains anonymous vs enriched profiles |
+| 6.0 | Marketplace explanation | Display only |, | Always | Explains anonymous vs enriched profiles |
 | 6.1 | Join anonymous marketplace? | Yes / No | Yes | Always | Opt-in for basic profile visibility |
 | 6.2 | Allow name/phone visibility? | Yes / No | Yes | Q6.1 = Yes | Second-tier consent for contact details |
 | 6.3 | Professional bio | Text | No | Q6.2 = Yes | Max 150 characters |
@@ -263,11 +263,11 @@ TIER 3: Identifiable Contact (Q6.2 = Yes)
 └── Contact reveal protected by hCaptcha + rate limiting
 ```
 
-This progressive model ensures that respondents make informed, granular decisions about their data visibility — a core principle of the NDPA 2023 consent framework.
+This progressive model ensures that respondents make informed, granular decisions about their data visibility, a core principle of the NDPA 2023 consent framework.
 
 ---
 
-## 10.6 Validation Rules
+## 7.6 Validation Rules
 
 The instrument enforces **10 validation rules** at the point of data entry, preventing common data quality issues before submission:
 
@@ -284,11 +284,11 @@ The instrument enforces **10 validation rules** at the point of data entry, prev
 | 9 | Professional Bio | ≤ 150 characters | "Bio must be 150 characters or less" | Frontend + Backend |
 | 10 | Other Skills | ≤ 200 characters | "Maximum 200 characters" | Frontend + Backend |
 
-**Critical design decision**: All validation rules are enforced on **both frontend and backend** using shared Zod schemas — a single source of truth that prevents validation bypass through API manipulation. This dual-enforcement is a direct mitigation for OWASP A03 (Injection) and A04 (Insecure Design).
+**Critical design decision**: All validation rules are enforced on **both frontend and backend** using shared Zod schemas, a single source of truth that prevents validation bypass through API manipulation. This dual-enforcement is a direct mitigation for OWASP A03 (Injection) and A04 (Insecure Design).
 
 ---
 
-## 10.7 Skip Logic Architecture
+## 7.7 Skip Logic Architecture
 
 The instrument employs conditional display logic (skip logic) to minimise respondent burden by showing only relevant questions:
 
@@ -329,7 +329,7 @@ The instrument employs conditional display logic (skip logic) to minimise respon
 
 ---
 
-## 10.8 Multi-Channel Delivery
+## 7.8 Multi-Channel Delivery
 
 The survey instrument is delivered through three channels, each optimised for its target user context:
 
@@ -339,32 +339,32 @@ The survey instrument is delivered through three channels, each optimised for it
 | **Desktop Web** | Keyboard-optimised multi-field layout | Data Entry Clerks | Tab navigation between fields; batch entry workflow; paper form digitisation |
 | **Public Self-Registration** | Responsive web form with hCaptcha | General Public | Bot protection; progressive disclosure; no login required; mobile-responsive |
 
-All three channels feed into a **unified ingestion pipeline** that applies identical validation rules, fraud detection algorithms, and deduplication checks — ensuring data quality parity regardless of the submission source.
+All three channels feed into a **unified ingestion pipeline** that applies identical validation rules, fraud detection algorithms, and deduplication checks, ensuring data quality parity regardless of the submission source.
 
 ---
 
-## 10.9 ILO ICLS-19 Compliance Verification
+## 7.9 ILO ICLS-19 Compliance Verification
 
 The following table maps the instrument's labour force questions to the specific ICLS-19 requirements they satisfy:
 
 | ICLS-19 Requirement | Resolution | Instrument Question |
 |---------------------|-----------|-------------------|
 | Working-age population definition | 15 years and above | Q2.4 (DOB) → Q2.5 (auto-calculated age ≥ 15) |
-| Employment — short reference period | 7-day recall period | Q3.1: "Worked for pay or profit in the last 7 days?" |
-| Employment — temporary absence | Job attachment despite absence | Q3.2: "Temporarily absent from a job?" |
-| Unemployment — active search | 4-week job search period | Q3.3: "Looked for work in the last 4 weeks?" |
-| Unemployment — availability | 2-week availability criterion | Q3.4: "Available to start work within 2 weeks?" |
+| Employment, short reference period | 7-day recall period | Q3.1: "Worked for pay or profit in the last 7 days?" |
+| Employment, temporary absence | Job attachment despite absence | Q3.2: "Temporarily absent from a job?" |
+| Unemployment, active search | 4-week job search period | Q3.3: "Looked for work in the last 4 weeks?" |
+| Unemployment, availability | 2-week availability criterion | Q3.4: "Available to start work within 2 weeks?" |
 | Status in employment (ICSE-18) | 6 employment type categories | Q3.6: Employment type (6 options mapped to ICSE-18) |
 | Working time | Weekly hours worked | Q3.8: "Hours worked last week" (0–168) |
 | Informal employment proxy | Self-employment + unpaid family work | Q3.6 categories: self_employed, family_unpaid |
 
 ---
 
-## 10.10 Instrument Limitations
+## 7.10 Instrument Limitations
 
 The following limitations are acknowledged for transparency:
 
-1. **Income data is self-reported and optional**: Monthly income (Q3.9) is not required, and where provided, is subject to recall bias and potential underreporting — a well-documented phenomenon in labour force surveys in developing economies.
+1. **Income data is self-reported and optional**: Monthly income (Q3.9) is not required, and where provided, is subject to recall bias and potential underreporting, a well-documented phenomenon in labour force surveys in developing economies.
 
 2. **Single time-point measurement**: The instrument captures a snapshot of labour force status at the time of interview. Seasonal employment patterns (particularly in agriculture-dependent LGAs) are not captured by a single-round survey.
 
@@ -376,4 +376,4 @@ These limitations are standard for large-scale labour force registration exercis
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 10 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 10 | Chemiroy Nigeria Limited*

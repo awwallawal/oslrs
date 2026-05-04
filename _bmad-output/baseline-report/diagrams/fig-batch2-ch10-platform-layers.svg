@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
+  <rect width="820" height="540" fill="#fbf9f2"/>
+  <text x="410" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">OSLSR Platform, Layered Architecture</text>
+  <rect x="60" y="75" width="700" height="70" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="99" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#1864ab">CLIENT LAYER</text>
+  <text x="80" y="121" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Public Wizard • Mobile PWA • Field Tablets • Admin UI</text>
+  <line x1="410" y1="145" x2="410" y2="163" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="60" y="163" width="700" height="70" fill="#e9e0f3" stroke="#6f4faa" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="187" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#6f4faa">EDGE LAYER</text>
+  <text x="80" y="209" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Cloudflare WAF • DDoS Protection • CDN</text>
+  <line x1="410" y1="233" x2="410" y2="251" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="60" y="251" width="700" height="70" fill="#f3e6e7" stroke="#9C1E23" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="275" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#9C1E23">APPLICATION LAYER</text>
+  <text x="80" y="297" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Express API • Auth (JWT) • Rate Limiting • Validation</text>
+  <line x1="410" y1="321" x2="410" y2="339" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="60" y="339" width="700" height="70" fill="#fff5e6" stroke="#b58105" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="363" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#b58105">BUSINESS LOGIC LAYER</text>
+  <text x="80" y="385" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">Form Engine • Skip Logic • Fraud Signal Engine • Marketplace</text>
+  <line x1="410" y1="409" x2="410" y2="427" stroke="#6b6b6b" stroke-width="1.5" marker-end="url(#arrowhead)" color="#6b6b6b"/>
+  <rect x="60" y="427" width="700" height="70" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="80" y="451" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="start" dominant-baseline="hanging" fill="#2b8a3e">DATA LAYER</text>
+  <text x="80" y="473" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">PostgreSQL 15 • Redis 7 • DO Spaces (S3-compatible)</text>
+</svg>

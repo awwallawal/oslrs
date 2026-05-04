@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 600" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect width="880" height="600" fill="#fbf9f2"/>
+  <text x="440" y="22" font-family='"Inter", sans-serif' font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1a1a1a">Baseline Study Methodology, Summary Flow</text>
+  <rect x="40" y="80" width="240" height="150" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="160" y="102" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">DESK REVIEW</text>
+  <text x="56" y="130" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NBS NLFS</text>
+  <text x="56" y="148" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NPC Census</text>
+  <text x="56" y="166" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• ILO / ISCO-08</text>
+  <text x="56" y="184" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• SMEDAN</text>
+  <text x="56" y="202" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• State comparisons</text>
+  <rect x="320" y="80" width="240" height="150" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="440" y="102" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">INSTRUMENT DESIGN</text>
+  <text x="336" y="130" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 3 versions</text>
+  <text x="336" y="148" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• ILO ICLS-19 aligned</text>
+  <text x="336" y="166" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 150 skills</text>
+  <text x="336" y="184" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Skip logic</text>
+  <text x="336" y="202" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Validation rules</text>
+  <rect x="600" y="80" width="240" height="150" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="720" y="102" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#1864ab">TECHNOLOGY PLATFORM</text>
+  <text x="616" y="130" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• OSLSR Platform</text>
+  <text x="616" y="148" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 3,564 automated tests</text>
+  <text x="616" y="166" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• A- security posture</text>
+  <text x="616" y="184" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• PWA offline-capable</text>
+  <text x="616" y="202" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Fraud detection</text>
+  <line x1="160" y1="240" x2="160" y2="280" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <line x1="440" y1="240" x2="440" y2="280" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <line x1="720" y1="240" x2="720" y2="280" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="40" y="290" width="800" height="90" fill="#f3e6e7" stroke="#9C1E23" stroke-width="2" rx="6" ry="6" opacity="1"/>
+  <text x="440" y="312" font-family='"Inter", sans-serif' font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#9C1E23">VALIDATION EXERCISE  (n=330)</text>
+  <text x="64" y="340" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 10 respondents × 33 LGAs = 330 total</text>
+  <text x="464" y="340" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Purposive sample aligned with NBS benchmarks</text>
+  <text x="64" y="358" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 3 data-collection modes tested</text>
+  <text x="464" y="358" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• 4-layer quality assurance protocol</text>
+  <line x1="160" y1="388" x2="160" y2="420" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <line x1="440" y1="388" x2="440" y2="420" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <line x1="720" y1="388" x2="720" y2="420" stroke="#9C1E23" stroke-width="2" marker-end="url(#arrowhead)" color="#9C1E23"/>
+  <rect x="40" y="430" width="240" height="140" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="160" y="452" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">FINDINGS</text>
+  <text x="56" y="480" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Demographic profiles</text>
+  <text x="56" y="498" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Skills mapping</text>
+  <text x="56" y="516" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Instrument performance</text>
+  <rect x="320" y="430" width="240" height="140" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="440" y="452" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">ANALYSIS</text>
+  <text x="336" y="480" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• NBS benchmark comparison</text>
+  <text x="336" y="498" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Zone analysis</text>
+  <text x="336" y="516" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Gap identification</text>
+  <rect x="600" y="430" width="240" height="140" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5" rx="6" ry="6" opacity="1"/>
+  <text x="720" y="452" font-family='"Inter", sans-serif' font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="hanging" fill="#2b8a3e">RECOMMENDATIONS</text>
+  <text x="616" y="480" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Field staffing</text>
+  <text x="616" y="498" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Logistics</text>
+  <text x="616" y="516" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Training</text>
+  <text x="616" y="534" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Timeline</text>
+  <text x="616" y="552" font-family='"Inter", sans-serif' font-size="11" font-weight="400" text-anchor="start" dominant-baseline="hanging" fill="#1a1a1a">• Resources</text>
+  <line x1="40" y1="580" x2="840" y2="580" stroke="#c9bba6" stroke-width="1"/>
+  <text x="440" y="588" font-family='"Inter", sans-serif' font-size="9" font-weight="400" text-anchor="middle" dominant-baseline="auto" fill="#6b6b6b">Assumption Classification:  [VF] Verified Fact   [FD] Field-Dependent   [WA] Working Assumption</text>
+</svg>

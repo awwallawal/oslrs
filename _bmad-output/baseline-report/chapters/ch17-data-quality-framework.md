@@ -1,16 +1,16 @@
-# CHAPTER 17: DATA QUALITY ASSURANCE FRAMEWORK
+# 14. Data Quality Assurance Framework
 
 ---
 
-## 17.1 Introduction
+## 14.1 Introduction
 
 Data quality is the cornerstone of a credible labour register. A registry populated with inaccurate, duplicated, or fraudulent records would undermine the policy objectives of the Oyo State Skilled Labour Register and erode stakeholder confidence in the data. This chapter documents the **four-layer data quality assurance (QA) protocol** designed to ensure that every record in the registry meets minimum quality standards before being accepted as a verified entry.
 
-The QA framework operates on the principle of **progressive filtration** — each layer captures a distinct category of data quality issue, and records must pass through all four layers before being accepted into the verified registry.
+The QA framework operates on the principle of **progressive filtration**, each layer captures a distinct category of data quality issue, and records must pass through all four layers before being accepted into the verified registry.
 
 ---
 
-## 17.2 Four-Layer Quality Assurance Protocol
+## 14.2 Four-Layer Quality Assurance Protocol
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -28,7 +28,7 @@ The QA framework operates on the principle of **progressive filtration** — eac
 │  │  │ • Skip logic integrity verification                  │  │  │
 │  │  └──────────────────────────────────────────────────────┘  │  │
 │  │  ❌ Invalid submissions rejected with specific error       │  │
-│  │     messages — respondent/enumerator can correct and retry │  │
+│  │     messages, respondent/enumerator can correct and retry │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                              │                                    │
 │                              ▼                                    │
@@ -42,7 +42,7 @@ The QA framework operates on the principle of **progressive filtration** — eac
 │  │  │ • Temporal anomaly detection (submission patterns)   │  │  │
 │  │  └──────────────────────────────────────────────────────┘  │  │
 │  │  ⚠️ Flagged submissions queued for human review            │  │
-│  │     (not auto-rejected — minimises false positive impact)  │  │
+│  │     (not auto-rejected, minimises false positive impact)  │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                              │                                    │
 │                              ▼                                    │
@@ -75,11 +75,11 @@ The QA framework operates on the principle of **progressive filtration** — eac
 
 ---
 
-## 17.3 Layer 1: Point-of-Entry Validation
+## 14.3 Layer 1: Point-of-Entry Validation
 
-Point-of-entry validation prevents structurally invalid data from entering the system. These checks are **deterministic** — a submission either passes or fails, with no ambiguity.
+Point-of-entry validation prevents structurally invalid data from entering the system. These checks are **deterministic**, a submission either passes or fails, with no ambiguity.
 
-### 17.3.1 Validation Rules
+### 14.3.1 Validation Rules
 
 | # | Rule | Implementation | Error Handling |
 |---|------|---------------|----------------|
@@ -94,7 +94,7 @@ Point-of-entry validation prevents structurally invalid data from entering the s
 | 9 | **Skip logic integrity** | Conditional fields only accepted when show-condition is met | Server-side enforcement regardless of client |
 | 10 | **Character limits** | Bio ≤ 150 chars; Other skills ≤ 200 chars | Character counter with enforcement |
 
-### 17.3.2 Dual-Layer Enforcement
+### 14.3.2 Dual-Layer Enforcement
 
 A critical design decision is the enforcement of **all validation rules on both frontend and backend** using shared Zod validation schemas:
 
@@ -134,11 +134,11 @@ This architecture ensures that **validation cannot be bypassed** by submitting d
 
 ---
 
-## 17.4 Layer 2: Automated Fraud Detection
+## 14.4 Layer 2: Automated Fraud Detection
 
-The fraud detection engine identifies **structurally valid but potentially fraudulent** submissions — data that passes all validation rules but exhibits patterns inconsistent with genuine field enumeration.
+The fraud detection engine identifies **structurally valid but potentially fraudulent** submissions, data that passes all validation rules but exhibits patterns inconsistent with genuine field enumeration.
 
-### 17.4.1 Detection Algorithms
+### 14.4.1 Detection Algorithms
 
 | # | Algorithm | Detection Target | Method | Threshold |
 |---|-----------|-----------------|--------|-----------|
@@ -148,7 +148,7 @@ The fraud detection engine identifies **structurally valid but potentially fraud
 | 4 | **NIN Duplication** | Same individual registered multiple times across channels | Global NIN uniqueness constraint + cross-channel deduplication query | Exact match = auto-reject |
 | 5 | **Temporal Anomaly** | Submissions outside operational hours or in impossible sequences | Timestamp analysis against expected field operation schedules | Outside 06:00–20:00 WAT flagged for review |
 
-### 17.4.2 Fraud Detection Decision Matrix
+### 14.4.2 Fraud Detection Decision Matrix
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -179,7 +179,7 @@ The fraud detection engine identifies **structurally valid but potentially fraud
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 17.4.3 Threshold Configuration
+### 14.4.3 Threshold Configuration
 
 All fraud detection thresholds are **configurable by Super Administrators** through the platform interface, enabling calibration based on field conditions:
 
@@ -190,15 +190,15 @@ All fraud detection thresholds are **configurable by Super Administrators** thro
 | Straight-line entropy threshold | Platform-calibrated | Adjustable | Tuned during validation exercise (Chapter 15) |
 | Operational hours | 06:00–20:00 WAT | Configurable | May be extended for evening enumeration in urban markets |
 
-**Calibration approach**: Thresholds were initially set based on methodological assumptions, then refined using data from the validation exercise (n=330). The validation exercise specifically tested edge cases — rapid completions by experienced enumerators, clustered submissions in market areas, and evening submissions — to establish empirically grounded baselines.
+**Calibration approach**: Thresholds were initially set based on methodological assumptions, then refined using data from the validation exercise (n=330). The validation exercise specifically tested edge cases, rapid completions by experienced enumerators, clustered submissions in market areas, and evening submissions, to establish empirically grounded baselines.
 
 ---
 
-## 17.5 Layer 3: Supervisory Review
+## 14.5 Layer 3: Supervisory Review
 
 Supervisory review applies **human judgement** to ambiguous cases that automated systems cannot reliably resolve.
 
-### 17.5.1 Supervisor Responsibilities
+### 14.5.1 Supervisor Responsibilities
 
 | Responsibility | Method | Frequency |
 |---------------|--------|-----------|
@@ -208,7 +208,7 @@ Supervisory review applies **human judgement** to ambiguous cases that automated
 | **Team communication** | In-app messaging to enumerators for feedback, correction, and coordination | As needed |
 | **Escalation** | Escalate systemic quality issues to Admin/Super Admin for threshold recalibration | As identified |
 
-### 17.5.2 Fraud Review Workflow
+### 14.5.2 Fraud Review Workflow
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -245,7 +245,7 @@ Supervisory review applies **human judgement** to ambiguous cases that automated
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 17.5.3 Performance Metrics
+### 14.5.3 Performance Metrics
 
 Supervisors have access to the following per-enumerator performance indicators:
 
@@ -259,11 +259,11 @@ Supervisors have access to the following per-enumerator performance indicators:
 
 ---
 
-## 17.6 Layer 4: Verification Audit
+## 14.6 Layer 4: Verification Audit
 
 The verification audit layer provides **statistical quality assurance** at the aggregate level, ensuring that the registry dataset as a whole is consistent and credible.
 
-### 17.6.1 Audit Activities
+### 14.6.1 Audit Activities
 
 | Activity | Method | Frequency | Responsibility |
 |----------|--------|-----------|---------------|
@@ -273,7 +273,7 @@ The verification audit layer provides **statistical quality assurance** at the a
 | **NBS benchmark alignment** | Flag LGA-level distributions that deviate significantly from national survey baselines | Monthly | Admin / Government Official |
 | **Duplication audit** | Post-hoc analysis for near-duplicate records (similar names + same LGA + similar demographics) | Monthly | Automated + manual review |
 
-### 17.6.2 Statistical Quality Gates
+### 14.6.2 Statistical Quality Gates
 
 At the aggregate level, the following quality gates are monitored:
 
@@ -290,7 +290,7 @@ At the aggregate level, the following quality gates are monitored:
 
 ---
 
-## 17.7 Data Quality Classification
+## 14.7 Data Quality Classification
 
 Every record in the registry carries an internal quality classification:
 
@@ -303,7 +303,7 @@ Every record in the registry carries an internal quality classification:
 
 ---
 
-## 17.8 Quality Assurance During Validation Exercise
+## 14.8 Quality Assurance During Validation Exercise
 
 The QA framework was operationally tested during the validation exercise (n=330, Chapter 15). The following calibration outcomes were achieved:
 
@@ -318,16 +318,16 @@ The QA framework was operationally tested during the validation exercise (n=330,
 
 ---
 
-## 17.9 Continuous Improvement
+## 14.9 Continuous Improvement
 
 The QA framework is designed for **continuous improvement** through feedback loops:
 
 1. **Threshold recalibration**: Fraud detection thresholds are adjustable based on accumulated field data. As more data flows through the system, thresholds can be tightened or loosened based on observed false positive and false negative rates.
 
-2. **Enumerator feedback**: Patterns of fraud flags per enumerator inform targeted retraining — an enumerator with consistently high flag rates may need additional training on interview technique rather than disciplinary action.
+2. **Enumerator feedback**: Patterns of fraud flags per enumerator inform targeted retraining, an enumerator with consistently high flag rates may need additional training on interview technique rather than disciplinary action.
 
 3. **Aggregate monitoring**: Weekly statistical quality gate reviews identify emerging quality issues before they become systemic, enabling mid-course correction during the enumeration period (Gate 2, Chapter 19).
 
 ---
 
-*Document Reference: CHM/OSLR/2026/001 | Chapter 17 | Chemiroy Nigeria Limited*
+*Document Reference: CHM/OSLR/2026/002 | Chapter 17 | Chemiroy Nigeria Limited*

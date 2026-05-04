@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="36.00 -9.00 988.00 611.00" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="36.00" y="-9.00" width="988.00" height="611.00" fill="white"/>
+  <text x="550" y="52" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="550" dy="0">Source: National Population Commission, 2006 Census with NPC growth rates</tspan></text>
+  <polyline points="200.00,90.00 200.00,490.00" fill="none" stroke="#2c3e50" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="200.00,490.00 900.00,490.00" fill="none" stroke="#2c3e50" stroke-width="2" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="200.00,490.00 200.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="200" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="200" dy="0">0</tspan></text>
+  <polyline points="340.00,490.00 340.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="340" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="340" dy="0">0.5M</tspan></text>
+  <polyline points="480.00,490.00 480.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="480" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="480" dy="0">1.0M</tspan></text>
+  <polyline points="620.00,490.00 620.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="620" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="620" dy="0">1.5M</tspan></text>
+  <polyline points="760.00,490.00 760.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="760" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="760" dy="0">2.0M</tspan></text>
+  <polyline points="900.00,490.00 900.00,498.00" fill="none" stroke="#2c3e50" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="900" y="500" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="12" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="900" dy="0">2.5M</tspan></text>
+  <polyline points="340.00,90.00 340.00,490.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="480.00,90.00 480.00,490.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="620.00,90.00 620.00,490.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="760.00,90.00 760.00,490.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="900.00,90.00 900.00,490.00" fill="none" stroke="#ecf0f1" stroke-width="1" opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="190" y="103" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Ibadan Metropolis</tspan></text>
+  <rect x="200" y="97" width="637" height="40" rx="3.2" ry="3.2" fill="#3498db" stroke="#2471a3" stroke-width="1" opacity="1"/>
+  <text x="845" y="105" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="845" dy="0">2,275,000 (28%)</tspan></text>
+  <text x="190" y="168" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Oke-Ogun</tspan></text>
+  <rect x="200" y="162" width="550" height="40" rx="3.2" ry="3.2" fill="#27ae60" stroke="#1e8449" stroke-width="1" opacity="1"/>
+  <text x="758" y="170" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="758" dy="0">1,965,000 (24%)</tspan></text>
+  <text x="190" y="233" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Ibadan Peripheral</tspan></text>
+  <rect x="200" y="227" width="512" height="40" rx="3.2" ry="3.2" fill="#2980b9" stroke="#1f6fa5" stroke-width="1" opacity="1"/>
+  <text x="720" y="235" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="720" dy="0">1,829,000 (22%)</tspan></text>
+  <text x="190" y="298" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Oyo</tspan></text>
+  <rect x="200" y="292" width="219" height="40" rx="3.2" ry="3.2" fill="#f39c12" stroke="#d68910" stroke-width="1" opacity="1"/>
+  <text x="427" y="300" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="427" dy="0">782,000 (10%)</tspan></text>
+  <text x="190" y="363" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Ogbomosho</tspan></text>
+  <rect x="200" y="357" width="211" height="40" rx="3.2" ry="3.2" fill="#e67e22" stroke="#ca6f1e" stroke-width="1" opacity="1"/>
+  <text x="419" y="365" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="419" dy="0">754,000 (9%)</tspan></text>
+  <text x="190" y="428" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="14" font-weight="400" text-anchor="end" dominant-baseline="hanging" opacity="1"><tspan x="190" dy="0">Ibarapa</tspan></text>
+  <rect x="200" y="422" width="133" height="40" rx="3.2" ry="3.2" fill="#e74c3c" stroke="#cb4335" stroke-width="1" opacity="1"/>
+  <text x="341" y="430" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="start" dominant-baseline="hanging" opacity="1"><tspan x="341" dy="0">474,000 (6%)</tspan></text>
+  <text x="550" y="530" fill="#2c3e50" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="16" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="550" dy="0">Total: ~8,079,000  |  Working-Age (60%): ~4,850,000</tspan></text>
+  <text x="550" y="560" fill="#7f8c8d" font-family='"Inter", "Segoe UI", -apple-system, sans-serif' font-size="13" font-weight="400" text-anchor="middle" dominant-baseline="hanging" opacity="1"><tspan x="550" dy="0">Population (millions)</tspan></text>
+</svg>
