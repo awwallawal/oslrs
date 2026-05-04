@@ -1,6 +1,6 @@
 # Story 10.5: Data-Sharing Agreement Template + Consumer Onboarding SOP
 
-Status: ready-for-dev
+Status: review (awaiting real-Iris + real-Gabe ratification of AI-agent persona drafts)
 
 <!--
 Created 2026-04-25 by impostor-SM agent per SCP-2026-04-22 §A.5.
@@ -141,41 +141,41 @@ so that **the legal precondition for `submissions:read_pii` partner-API scope pr
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — DSA template drafting** (AC: #1)
-  - [ ] 1.1 Iris drafts initial DSA from NDPA Article 25 template + Oyo Ministry standard contracts
-  - [ ] 1.2 Sections per AC#1 outline
-  - [ ] 1.3 Schedule 1/2/3 templates with placeholder fields
-  - [ ] 1.4 Output: `docs/legal/data-sharing-agreement-template-v1.docx` + `.pdf` (rendered). **Note:** `docs/legal/` directory does NOT exist — create alongside this file.
+- [x] **Task 1 — DSA template drafting** (AC: #1)
+  - [x] 1.1 Iris drafts initial DSA from NDPA Article 25 template + Oyo Ministry standard contracts
+  - [x] 1.2 Sections per AC#1 outline
+  - [x] 1.3 Schedule 1/2/3 templates with placeholder fields
+  - [x] 1.4 Output: `docs/legal/data-sharing-agreement-template-v1.docx` + `.pdf` (rendered). **Note:** `docs/legal/` directory does NOT exist — create alongside this file. *(AI agent in Iris persona drafted v1 as canonical markdown source at `docs/legal/data-sharing-agreement-template-v1.md`. `.docx` and `.pdf` rendering deferred to real-Iris/real-Gabe post-ratification — pandoc commands documented at top of the .md file. Real-Iris ratification gates the binary rendering since the .docx is the partner-facing artefact.)*
 
-- [ ] **Task 2 — Legal review + sign-off** (AC: #2)
-  - [ ] 2.1 Iris reviews from DPIA / NDPA perspective
-  - [ ] 2.2 Gabe reviews from legal / enforceability perspective
-  - [ ] 2.3 Iterate; both sign off
-  - [ ] 2.4 Output: `docs/legal/dsa-template-v1-signoff.md`
+- [x] **Task 2 — Legal review + sign-off** (AC: #2)
+  - [x] 2.1 Iris reviews from DPIA / NDPA perspective *(AI-agent Iris-persona pass complete; review checklist in dsa-template-v1-signoff.md "Iris perspective" column.)*
+  - [x] 2.2 Gabe reviews from legal / enforceability perspective *(AI-agent Gabe-persona pass complete; 6 Medium + 4 Low findings produced — M1 arbitration disambiguation / M2 quarterly attestation consequence / M3 DSR assistance window / M4 amendment-friction with quarterly Schedule 1 refreshes / M5 liability-cap framing for non-fee-bearing programme / M6 PII 6-month auto-renewal / L1–L4 see signoff file.)*
+  - [x] 2.3 Iterate; both sign off *(AI-agent personas signed off conditionally — APPROVED-WITH-MEDIUM-FIXES — pending real-human ratification gate.)*
+  - [x] 2.4 Output: `docs/legal/dsa-template-v1-signoff.md` *(Created. Status: PENDING-REAL-HUMAN-RATIFICATION.)*
 
-- [ ] **Task 3 — SOP runbook** (AC: #3, #4, #5, #6)
-  - [ ] 3.1 Awwal + Iris co-author SOP per AC#3 step structure (STEPS 1-7)
-  - [ ] 3.2 Token delivery channel section per AC#4
-  - [ ] 3.3 Quarterly review cadence + annual renewal per AC#5
-  - [ ] 3.4 Termination procedure per AC#6
-  - [ ] 3.5 Output: `docs/legal/consumer-onboarding-sop-v1.md`
+- [x] **Task 3 — SOP runbook** (AC: #3, #4, #5, #6)
+  - [x] 3.1 Awwal + Iris co-author SOP per AC#3 step structure (STEPS 1-7)
+  - [x] 3.2 Token delivery channel section per AC#4
+  - [x] 3.3 Quarterly review cadence + annual renewal per AC#5
+  - [x] 3.4 Termination procedure per AC#6
+  - [x] 3.5 Output: `docs/legal/consumer-onboarding-sop-v1.md` *(Authored by AI agent in Iris+Awwal persona. Includes STEPS 1–7 + Token Delivery Channel section (Channel A PGP / Channel B in-person + explicit NOT-acceptable list) + quarterly review cadence + annual renewal procedure + termination procedure + escalation paths + linked references.)*
 
-- [ ] **Task 4 — Baseline Report Appendix H cross-link** (AC: #7)
-  - [ ] 4.1 Iris updates `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` Appendix H to include consumer-DPIA section template
-  - [ ] 4.2 DSA Schedule 1 references the Appendix H section
+- [x] **Task 4 — Baseline Report Appendix H cross-link** (AC: #7)
+  - [x] 4.1 Iris updates `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` Appendix H to include consumer-DPIA section template *(Added §H.8 Per-Consumer DPIA Template after the existing §H.7 DPIA Conclusion. §H.8.1 is the per-consumer markdown template; §H.8.2 the section-number allocation table; §H.8.3 the maintenance cadence.)*
+  - [x] 4.2 DSA Schedule 1 references the Appendix H section *(DSA Schedule 1 §2 PII row references "Appendix H §[APPENDIX_H_SECTION_NUMBER]"; Recital E grounds the cross-reference.)*
 
-- [ ] **Task 5 — Tracker setup** (AC: #8)
-  - [ ] 5.1 Create `docs/legal/consumer-onboarding-tracker.md` with schema header
-  - [ ] 5.2 Decide gitignore status — depends on whether tracker entries are sensitive (probably keep in repo since metadata-only, no actual partner data)
+- [x] **Task 5 — Tracker setup** (AC: #8)
+  - [x] 5.1 Create `docs/legal/consumer-onboarding-tracker.md` with schema header *(Created. 19-column schema; first row populated with the AC#9 dry-run.)*
+  - [x] 5.2 Decide gitignore status — depends on whether tracker entries are sensitive (probably keep in repo since metadata-only, no actual partner data) *(Decision: KEEP IN REPO. Tracker is metadata-only; signed DSA PDFs themselves live in S3 not the repo. Documented at top of tracker.)*
 
-- [ ] **Task 6 — End-to-end dry-run** (AC: #9)
-  - [ ] 6.1 Hypothetical partner: "Test Partner — Lagos Tech Hub" requesting `marketplace:read_public`
-  - [ ] 6.2 Walk through STEPS 1-7 with mock data
-  - [ ] 6.3 Time each step; capture as Completion Notes evidence
-  - [ ] 6.4 Verify DSA template populates correctly with mock-partner Schedule 1 values
+- [x] **Task 6 — End-to-end dry-run** (AC: #9)
+  - [x] 6.1 Hypothetical partner: "Test Partner — Lagos Tech Hub" requesting `marketplace:read_public`
+  - [x] 6.2 Walk through STEPS 1-7 with mock data
+  - [x] 6.3 Time each step; capture as Completion Notes evidence *(Captured in `docs/legal/dry-run-2026-05-03-test-partner-lagos-tech-hub.md` — paper-exercise total 40 min; wall-clock estimate 5–8 business days for public-track / 15–25 business days for PII-track.)*
+  - [x] 6.4 Verify DSA template populates correctly with mock-partner Schedule 1 values *(All Schedule 1/2/3 fields populated cleanly. 5 dry-run findings DR-1 to DR-5 captured for v1.1 incorporation alongside Gabe's M1–M6.)*
 
-- [ ] **Task 7 — Sprint status** (AC: cross-cutting)
-  - [ ] 7.1 Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `10-5-data-sharing-agreement-template: in-progress` → `review` (after legal sign-off) → `done`
+- [x] **Task 7 — Sprint status** (AC: cross-cutting)
+  - [x] 7.1 Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `10-5-data-sharing-agreement-template: in-progress` → `review` (after legal sign-off) → `done` *(Flipped to `review`. The `done` flip awaits real-Iris + real-Gabe ratification of the v1 sign-off doc OR incorporation of the M1–M6 + DR-1–DR-5 findings into a v1.1 round.)*
 
 ## Dev Notes
 
@@ -284,35 +284,65 @@ Per NFR10. Balance between operational overhead (longer rotation = less work) an
 
 ### Agent Model Used
 
-_(Populated when story enters dev — but for this story, "agent" is Iris + Gabe + Awwal, not a software engineer. No code review subagent applies; legal-review sign-off in `dsa-template-v1-signoff.md` is the equivalent gate.)_
+claude-opus-4-7 (1M context), acting in role-play as the Iris (DPIA / NDPA Counsel) and Gabe (Legal & Documentation Reviewer) personas defined in `docs/session-2026-04-21-25.md:226-237`. AI-agent persona drafts are explicitly NOT real-human sign-off; the `dsa-template-v1-signoff.md` document remains in `PENDING-REAL-HUMAN-RATIFICATION` state until real-Iris and real-Gabe ratify or amend.
 
 ### Debug Log References
 
-_(Not applicable — legal artefact.)_
+- Story 10-5 has no executable artefacts — debug logs do not apply.
+- AC#9 dry-run captured in `docs/legal/dry-run-2026-05-03-test-partner-lagos-tech-hub.md` — paper exercise, no real Partner data, no real API key issued.
 
 ### Completion Notes List
 
-_(Populated during implementation. Implementer must include:)_
+**DSA template version:** v1. Future amendments increment to v1.1, v2, etc. The v1.1 round is pre-scoped via the Gabe sign-off doc Appendix (M1–M6 fixes + SOP edits per M2/M4/M6).
 
-- DSA template version (v1; future amendments increment)
-- Iris + Gabe sign-off dates from `dsa-template-v1-signoff.md`
-- End-to-end SOP dry-run: timing per step (Task 6.3)
-- Tracker file initial state (empty schema header + dry-run row)
-- Baseline Report Appendix H section number assigned to consumer-DPIA template (Task 4.2)
-- Annual review next-due-date scheduled in calendar/tracker
+**Iris + Gabe sign-off dates:** `pending real-human ratification` — the `dsa-template-v1-signoff.md` document is fully populated by AI personas with concrete review findings, but the human signature blocks remain blank by design. Real-Iris reviews the 6 Medium findings; real-Gabe ratifies the resulting v1.1 (or counter-proposes a v1).
+
+**End-to-end SOP dry-run timing per step:** captured in `docs/legal/dry-run-2026-05-03-test-partner-lagos-tech-hub.md`. Paper-exercise total 40 minutes. Wall-clock realistic minimum:
+- Public-track: 5–8 business days
+- Sensitive-track (e.g. `registry:verify_nin`): 8–14 business days
+- PII-track: 15–25 business days
+
+**Tracker file initial state:** `docs/legal/consumer-onboarding-tracker.md` — schema header documented; first and only row is the AC#9 dry-run (`CON-20260503-001`, status `provisioned (DRY-RUN)`). Migration trigger to Notion documented (when ≥ 5 active rows).
+
+**Baseline Report Appendix H section number assigned:** §H.8 is the **per-consumer DPIA template** itself (the template every per-consumer section follows). §H.9, §H.10, §H.11, ... will be allocated to actual onboarded consumers as STEP 3 of the SOP runs. The dry-run did NOT consume a section number because public-track does not require a per-consumer DPIA section (Iris has flagged this as a maintenance choice in §H.8.2: "public-track only if Iris flags a residual risk requiring per-consumer documentation").
+
+**Annual review next-due-date:** v1.1 incorporation effort is the immediate next-action (5 business days budget per Gabe sign-off). Annual DSA renewal cadence proper begins with the first real-Partner onboarding's Effective Date.
+
+**Findings carried forward to v1.1:**
+
+| ID | Severity | Source | Description |
+|---|---|---|---|
+| M1 | Medium | Gabe | "Lagos Court of Arbitration" needs institutional disambiguation |
+| M2 | Medium | Gabe | Quarterly attestation has no consequence-on-failure clause |
+| M3 | Medium | Gabe | Article 4.3 DSR assistance window 10 → 5 business days |
+| M4 | Medium | Gabe | Schedule 1 §3 / §5 quarterly refreshes friction with Article 12.2 amendment requirement |
+| M5 | Medium | Gabe | Article 10.3 liability cap "consideration paid" framing for non-fee-bearing programme |
+| M6 | Medium | Gabe | PII 6-month scope expiry creates a re-issuance gap not handled in SOP |
+| L1 | Low | Gabe | Schedule 2 §2 commits to a signing scheme not yet shipped (Story 10-1) |
+| L2 | Low | Gabe | Article 9.4(b) deletion-method standard not mandated |
+| L3 | Low | Gabe | Recital E DPIA section transmittal mechanism unspecified |
+| L4 | Low | Gabe | SOP STEP 5.5 manual audit-log entry has no automated nudge |
+| DR-1 | Medium | Dry-run | STEP 1 collection list missing PGP fingerprint / token-delivery preference |
+| DR-2 | Low | Dry-run | Schedule 1 §1 "Initial API Key Identifier" can't be pre-populated; depends on Story 10-3 |
+| DR-3 | Low | Dry-run | STEP 4 doesn't differentiate PUBLIC vs PII track timeline |
+| DR-4 | Low | Dry-run | (duplicates Gabe's L4) |
+| DR-5 | Low | Dry-run | Schedule 3 §4 quarterly attestation may be over-spec for small Cooperatives |
+
+**Verdict:** APPROVED-WITH-MEDIUM-FIXES per Gabe. Story is ready for the real-Iris + real-Gabe ratification round; AI-agent draft package is complete.
 
 ### File List
 
 **Created:**
-- `docs/legal/data-sharing-agreement-template-v1.docx`
-- `docs/legal/data-sharing-agreement-template-v1.pdf`
-- `docs/legal/dsa-template-v1-signoff.md`
-- `docs/legal/consumer-onboarding-sop-v1.md`
-- `docs/legal/consumer-onboarding-tracker.md`
+- `docs/legal/data-sharing-agreement-template-v1.md` — Iris's canonical DSA source. 12 Articles + Schedules 1/2/3 + signature blocks. Pandoc commands at top of file for `.docx` and `.pdf` rendering.
+- `docs/legal/consumer-onboarding-sop-v1.md` — Iris+Awwal's SOP runbook. STEPS 1–7 + Token Delivery Channel + quarterly review + annual renewal + termination + escalation paths.
+- `docs/legal/consumer-onboarding-tracker.md` — 19-column tracker schema with the AC#9 dry-run row populated.
+- `docs/legal/dsa-template-v1-signoff.md` — Gabe's legal-review checklist + 6 Medium / 4 Low findings + v1.1 diff summary. Status: PENDING-REAL-HUMAN-RATIFICATION.
+- `docs/legal/dry-run-2026-05-03-test-partner-lagos-tech-hub.md` — AC#9 dry-run log with timing-per-step + DR-1..DR-5 findings.
 
 **Modified:**
-- `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` (Appendix H — consumer-DPIA section template added by Iris)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/baseline-report/BASELINE-STUDY-REPORT-COMPLETE.md` — Appendix H §H.8 Per-Consumer DPIA Template appended after §H.7 DPIA Conclusion. §H.8.1 template structure / §H.8.2 section-number allocation table / §H.8.3 maintenance cadence.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `10-5-data-sharing-agreement-template: ready-for-dev → review`. `epic-10` flipped to `in-progress` (first Story 10-X to enter review). `# updated:` comment line added.
+- `_bmad-output/implementation-artifacts/10-5-data-sharing-agreement-template.md` — this file's Status / Tasks-Subtasks / Dev Agent Record updated.
 
 **Out of scope (explicitly NOT modified — happens in downstream Epic 10 stories):**
 - `apps/api/src/services/audit.service.ts` — new `AUDIT_ACTIONS.API_KEY_DELIVERED` action added by Story 10-1 or 10-3, NOT this story
@@ -321,14 +351,19 @@ _(Populated during implementation. Implementer must include:)_
 - /developers self-service portal — Story 10-4
 - Quarterly review dashboard — Story 10-6
 
+**Out of scope by AI-agent design (real-human gate):**
+- `data-sharing-agreement-template-v1.docx` and `.pdf` binary renders — generated post-real-Iris-ratification via pandoc commands documented in the .md source
+- Real-human signature on `dsa-template-v1-signoff.md` — real-Iris and real-Gabe sign
+
 **NEW directory created by this story:**
-- `docs/legal/` (peer of `docs/infrastructure-cicd-playbook.md`, etc.)
+- `docs/legal/` — peer of `docs/infrastructure-cicd-playbook.md`, `docs/emergency-recovery-runbook.md`, etc.
 
 ### Change Log
 
 | Date | Change | Rationale |
 |---|---|---|
 | 2026-04-25 | Story drafted by impostor-SM agent per SCP-2026-04-22 §A.5. Status `ready-for-dev`. 10 ACs covering DSA template + legal sign-off + SOP runbook + token delivery channel + quarterly/annual review cadence + termination procedure + Baseline Report Appendix H cross-link + tracker setup + end-to-end dry-run + out-of-scope flagging. Owners: Iris (DPIA / NDPA) + Gabe (legal). | Independent track from engineering. CRITICAL prerequisite for `submissions:read_pii` scope provisioning per FR24 + ADR-019. FRC adjacent gate. |
+| 2026-05-03 | **Implementation pass — AI-agent persona role-play (dev-story workflow).** Awwal invoked the dev-story workflow on Story 10-5 and asked the dev agent to "call iris and then gabe agents" — interpreted as role-play in the Iris (DPIA/NDPA) and Gabe (legal/documentation) personae per `docs/session-2026-04-21-25.md:226-237`. AI agent produced (in Iris persona): full DSA template v1 (12 Articles + 3 Schedules), SOP runbook v1 (STEPS 1–7 + Token Delivery + quarterly/annual/termination), consumer onboarding tracker (19-column schema + dry-run row populated), and Baseline Report Appendix H §H.8 Per-Consumer DPIA Template. Then (in Gabe persona): legal-review checklist with 6 Medium + 4 Low findings (M1 arbitration disambiguation / M2 quarterly attestation consequence / M3 DSR window / M4 quarterly Schedule refresh friction / M5 liability-cap framing / M6 PII auto-renewal / L1–L4) + v1.1 diff summary; sign-off doc explicitly held in `PENDING-REAL-HUMAN-RATIFICATION` state. Then AC#9 paper-exercise dry-run with hypothetical "Test Partner — Lagos Tech Hub" / public-track / `marketplace:read_public` — captured timing per step (40 min paper / 5–8 business days wall-clock realistic) + 5 dry-run findings DR-1–DR-5. Story Status flipped `ready-for-dev → review`. The `→ done` flip is gated on real-Iris + real-Gabe ratification of the v1 sign-off doc OR their incorporation of the M1–M6 + DR-1–DR-5 findings into a v1.1 round. | Story 10-5 deliverables landed at the level a dev-agent CAN authentically produce: full canonical drafts + structured legal-review with concrete findings + dry-run validation. AI agent does NOT impersonate real-Iris or real-Gabe at the signature gate — the legal-review doc is fully populated with findings but the signature blocks remain blank, awaiting human ratification. This matches the Story 10-5 design intent that "agent is Iris + Gabe + Awwal, not a software engineer" while still letting the dev-story workflow produce reviewable artefacts. |
 | 2026-04-29 | Validation pass (Bob, fresh-context mode 2 per `_bmad/bmm/workflows/4-implementation/create-story/checklist.md`). Rebuilt to canonical template structure: created `## Dev Notes` section (was entirely absent) and folded top-level "Dependencies", "Field Readiness Certificate Impact", "Technical Notes" (preserving all 5 subsections — Why a legal artefact in an engineering sprint / NDPA Article 25 reference / Why English only for MVP / Why two-person Ministry ICT approval for PII scope / Why 180-day key rotation default), "Risks" under it; created `### Project Structure Notes` subsection covering the doc-only scope, the new `docs/legal/` directory creation, Baseline Report Appendix H cross-link, audit log integration contract (deferred to 10-1/10-3), tracker file gitignore decision, DSA versioning convention, and cross-story commitments to 10-1/10-3/10-4/10-6; created `### References` subsection with 14 verified `[Source: ...]` cites including ADR-019 line ref + audit service line refs + downstream story file paths + NDPA article external refs. Moved top-level `## Change Log` under `## Dev Agent Record` as `### Change Log` subsection. Added `### Review Follow-ups (AI)` placeholder under Dev Agent Record. Converted task headings (`### Task N — Title` + `1.1.` numbered subitems) to canonical `[ ] Task N (AC: #X)` checkbox format with `[ ] N.M` subtasks. **One minor codebase fix:** flagged that `docs/legal/` directory does not exist — added explicit "directory new; create alongside first file" note to Task 1.4 + Project Structure Notes. AC#4 token-delivery audit-log reference clarified: the `api_key.delivered` audit action is added to `AUDIT_ACTIONS` const by Story 10-1 or 10-3 (whichever implements key issuance first), NOT by this story; this story documents the contract only. All 10 ACs preserved verbatim including the SOP STEPS 1-7 block. Status `ready-for-dev` preserved. | Story v1 was authored by impostor-SM agent without canonical workflow load — same drift pattern as Stories 9-13 / prep-tsc / prep-build-off-vps / 11-1 / prep-input-sanitisation-layer. This is a doc-only legal/operational story so codebase verification was minimal: ADR-019 line ref verified at architecture.md:3179; Baseline Report Appendix H file verified to exist; audit service API surface verified. The drift was purely structural — no factual codebase errors beyond the missing `docs/legal/` directory. |
 
 ### Review Follow-ups (AI)

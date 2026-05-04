@@ -7439,6 +7439,122 @@ The OSLSR collects and processes personal data for the following purposes:
 
 ---
 
+## H.8 Per-Consumer DPIA Template (Partner-API Programme)
+
+*Added 2026-05-03 per Story 10-5 AC#7. The OSLRS Partner-API Programme (Epic 10) discloses a defined subset of OSLRS Data to external consumer organisations under signed Data-Sharing Agreements. Each onboarded consumer receives a dedicated DPIA sub-section in this Appendix (§H.9, §H.10, §H.11, ...) as a per-consumer impact assessment. Iris (DPIA / NDPA Counsel) populates each sub-section during Consumer Onboarding STEP 3 (DSA Drafting) per `docs/legal/consumer-onboarding-sop-v1.md`. The Schedule 1 §2 of each consumer's signed DSA cross-references the assigned section number. This template is the canonical structure each per-consumer DPIA follows.*
+
+### H.8.1 Template Structure
+
+For each onboarded Partner-API consumer, append a sub-section to this Appendix using the following template:
+
+```markdown
+## H.<N> [PARTNER_LEGAL_NAME] — DPIA
+
+**Section assigned:** H.<N>
+**Consumer onboarding tracker reference:** CON-YYYYMMDD-NNN
+**DSA Effective Date:** YYYY-MM-DD
+**DSA Signed URL:** digitalocean://oslsr-media/legal/dsa-signed/CON-YYYYMMDD-NNN.pdf
+**Last reviewed (annual):** YYYY-MM-DD
+**Next review due:** YYYY-MM-DD
+**Author:** Iris (DPIA / NDPA Counsel)
+
+### H.<N>.1 Consumer Identification
+
+| Field | Value |
+|---|---|
+| Legal name | |
+| Registration number | |
+| Type | Federal MDA / State MDA / Cooperative / Limited Company / Other |
+| Authorised signatory | |
+| Technical contact | |
+
+### H.<N>.2 Purpose of Processing
+
+*One paragraph describing the consumer's stated Purpose. Must demonstrably fall within OSLRS lawful basis (NDPA s.6(1)(e) public interest by default). If a different basis is asserted (e.g. legal obligation under another Act), cite the statutory provision.*
+
+### H.<N>.3 Scopes Granted
+
+| Scope | Granted? | LGA Scope | Per-Day Limit | Justification |
+|---|:---:|---|:---:|---|
+| `aggregated_stats:read` | | | | |
+| `marketplace:read_public` | | | | |
+| `submissions:read_aggregated` | | | | |
+| `submissions:read_pii` | | | | **HIGH-PRIVACY — full justification required** |
+| `registry:verify_nin` | | | | |
+
+### H.<N>.4 Categories of Personal Data Disclosed
+
+*List every personal data category the consumer can access via the granted scopes. Cross-reference §H.3 of the parent DPIA. Where a scope discloses derived/aggregated data only, state the aggregation method and k-anonymity guarantee.*
+
+### H.<N>.5 Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Misuse — consumer processes Data for purposes outside the agreed Scope | | | DSA Article 2.1 + 2.2; quarterly compliance attestation; audit log |
+| Re-identification — consumer attempts to re-identify aggregated data | | | DSA Article 2.5; k-anonymity ≥ 5 enforced server-side |
+| Sub-Processor leakage | | | DSA Article 6; consumer remains liable; sub-processor list audit |
+| Personal Data Breach at consumer | | | DSA Article 8; 24h notification; quarterly vulnerability assessment |
+| Termination data retention | | | DSA Article 9; 30-day deletion; written attestation |
+| LGA-scope violation | | | API enforces; audit log; zero-tolerance per quarterly review |
+| API Key compromise | | | 180-day rotation (90 for PII); IP allowlist; per-consumer rate limit |
+
+### H.<N>.6 Lawful Basis Confirmation
+
+- [ ] NDPA s.6(1)(c) — legal obligation
+- [ ] NDPA s.6(1)(e) — public interest *(default)*
+- [ ] NDPA s.26(1)(b) — national identification (NIN-bearing scopes only)
+- [ ] Other: __________________________ *(requires Iris approval; cite statute)*
+
+### H.<N>.7 Cross-Border Transfer
+
+- [x] None — all processing within Nigeria *(default)*
+- [ ] Transfer to: __________ under NDPA s.41 ground __________
+
+### H.<N>.8 Two-Person Approval (PII-track only)
+
+| Approver | Name | Signature on File | Date |
+|---|---|---|---|
+| Super Admin | | | |
+| Ministry ICT Lead | | | |
+
+Captured in `audit_logs` with `action='dsa.pii_scope_approved'` and both `actor_id` references.
+
+### H.<N>.9 Data Subject Rights Provision
+
+*Confirm the consumer has been provided the standard NDPA Data Subject Request channel and acknowledges the Article 4 forwarding obligation (DSA §4.1). State the consumer's response time SLA committed (default 5 business days).*
+
+### H.<N>.10 Annual Review Notes
+
+| Review Date | Reviewer | Outcome | Notes |
+|---|---|---|---|
+| | | | |
+
+### H.<N>.11 DPIA Conclusion
+
+*Iris's overall risk verdict for this consumer: APPROVED / APPROVED WITH CONDITIONS / DECLINED. If conditions, list them.*
+
+```
+
+### H.8.2 Section Number Allocation
+
+Section numbers are allocated sequentially as consumers are onboarded:
+
+| Section | Consumer | Onboarded |
+|---|---|---|
+| H.9 | _first onboarded consumer_ | _date_ |
+| H.10 | _second onboarded consumer_ | _date_ |
+| ... | ... | ... |
+
+The Consumer Onboarding Tracker (`docs/legal/consumer-onboarding-tracker.md`) records the assigned section number in the `notes` column for every new row that triggers DPIA section creation (PII-track and sensitive-track always; public-track only if Iris flags a residual risk requiring per-consumer documentation).
+
+### H.8.3 Maintenance Cadence
+
+- **On consumer onboarding (STEP 3 of SOP):** Iris drafts the new sub-section before DSA signing.
+- **Annually (paired with DSA renewal):** Iris reviews and updates each existing sub-section's §H.\<N\>.10 (Annual Review Notes); flags any material changes.
+- **On consumer termination:** sub-section is preserved (not deleted); §H.\<N\>.11 conclusion updated to "TERMINATED — see consumer-onboarding-tracker.md row for deletion attestation reference".
+
+---
+
 *Document Reference: CHM/OSLR/2026/001 | Appendix H | Chemiroy Nigeria Limited*
 
 
