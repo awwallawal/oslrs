@@ -241,7 +241,7 @@ _**Revised 2026-04-27** per cost-aware roadmap session with Awwal: item #5 (aler
 | 3 | Story 9-12 Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email live | 9-12 | ⏳ Backlog |
 | 4 | `prep-input-sanitisation-layer` merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill executed (9-9 AC#5) **[REVISED 2026-04-27]** | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
-| 6 | Operations Manual enumerator-section (D4 subset) drafted and printed | Iris / Gabe | ⏳ Backlog |
+| 6 | Operations Manual enumerator-section (D4 subset) drafted (`.md` source + print-ready HTML/PDF artifact) **[REVISED 2026-05-04: Ministry office-printer print run downstream of `done`, NOT field-blocking; closure-gate relaxed per Awwal directive]** | `prep-operations-manual-enumerator-section` | ✅ Done 2026-05-05 (drafted + rendered + AI-persona-ratified + adversarial code review pass clean; real-Iris + real-Gabe ratification + Awwal placeholder fills tracked as v1.1 follow-ups OUTSIDE this story's scope per Awwal directive 2026-05-05) |
 
 **Tier B items** (Stories 9-10, 9-11, DPIA filing, OS patching, super-admin TOTP MFA Story 9-13) can ship during the first weeks of field operation without blocking start. Note: Story 9-13 is Tier B per FRC but is slotted in Wave 0 because it's zero-cost and small (~1-2 days) — recommended to land before field rather than during.
 
@@ -2536,6 +2536,57 @@ So that the field survey does not surface ITF-SUPA-style data hygiene problems (
 **Slot:** Before field survey (FRC item #4). Independent / parallelisable with all Epic 9-11 stories.
 
 **Status:** Backlog (per SCP-2026-04-22).
+
+---
+
+### Prep Task: prep-operations-manual-enumerator-section
+
+As a **Field Enumerator (and Field Supervisor) preparing for OSLRS field-survey deployment**,
+I want **a printed-quality Operations Manual covering daily workflow, capture-flow walkthrough, common error recovery, NDPA briefing, reimbursement procedure, escalation paths, plus a printable A5 quick-reference card**,
+So that **I can self-onboard onto the staff app, recover from common errors in the field without supervisor escalation, and explain NDPA consent confidently to respondents during enrollment**.
+
+**Context:** FRC #6 closure. Spec from Awwal/PM (John) verbal/in-session conversation 2026-05-04 (NOT a single committed text file — the three `ssh_analy*.txt` files in repo root are stale conversation logs about adjacent topics, gitignored 2026-05-04 by code-review pass); validated by John (PM) with 11-issue review; Awwal directives 2026-05-04 settled the design questions (closure-gate relaxed to `.md` + print-ready HTML/PDF; cost cap waived via Ministry office printer; English-only with oral-Yoruba at Training-of-Trainers; screenshot placeholders only; semver versioning; quality > speed). Ratification pattern mirrors Story 10-5 (DSA template) — AI-persona-drafted by Iris (DPIA / NDPA Counsel) + Gabe (Legal & Documentation) + Awwal (Builder, technical app-usage chunks); ships at status `review` pending real-Iris + real-Gabe ratification. Same single ratification session as 10-5.
+
+**Audience:** ~50–100 field enumerators across Oyo State LGAs. Mostly first-time-app users; mixed smartphone literacy. Primary deliverable consumed in print form during field work; print-ready HTML/PDF available on staff phone for digital reference.
+
+**Scope (Bob to refine into Tasks/Subtasks):**
+1. Daily workflow checklist — start-of-day device check / mid-day sync / end-of-day reconciliation
+2. Capture-flow walkthrough — login, new submission, NIN lookup, photo, skills entry, consent, submit, offline-then-sync. **Screenshot placeholders with descriptive titles** per Awwal directive 2026-05-04 ("describe the screenshot title; I source post-draft").
+3. Common error scenarios + recovery — NIN not found, photo blur, skip-logic confusion, network drop, app crash
+4. NDPA briefing for field staff (≤ 1 page) — derive from Story 10-5 Iris voice in `docs/legal/consumer-onboarding-sop-v1.md`. NDPA section refs in footnotes only; zero legal jargon in body. **English only** — oral Yoruba translation handled at Training-of-Trainers per Awwal directive 2026-05-04.
+5. Reimbursement / payment / phone-allowance procedure — Gabe persona authors
+6. Escalation paths — supervisor → ICT → Builder/Ministry — Gabe persona authors
+7. Printable A5 quick-reference card (separate file) — distilled cheat sheet for the 5 most common things; fits one A5 sheet front + back
+
+**Output deliverables (mirrors `_bmad-output/baseline-report/output/` convention — `.md` source + `.html` + `.pdf`):**
+- Markdown source: `docs/operations-manual/enumerator-v1.md`
+- Print-ready HTML rendered via pandoc using `_bmad-output/baseline-report/assets/template.html` letterhead pipeline
+- PDF rendered from HTML, committed alongside source
+- Quick-reference A5 card: `docs/operations-manual/enumerator-quick-ref-v1.md` + `.html` + `.pdf`
+- Iris sign-off doc: `docs/operations-manual/iris-signoff-v1.md` (`PENDING-REAL-HUMAN-RATIFICATION` header per 10-5 pattern)
+- Gabe sign-off doc: `docs/operations-manual/gabe-signoff-v1.md` (`PENDING-REAL-HUMAN-RATIFICATION` header)
+- Dry-run log (post-draft, non-gating): `docs/operations-manual/dry-run-2026-MM-DD.md` — captures friction notes from representative readers; relaxed per Awwal directive 2026-05-04 ("dry-run only happens after document produced; don't gate on it")
+
+**Owners (cross-functional, persona-modeled with real-human ratification gate):**
+- Iris persona (DPIA / NDPA Counsel) — Section 4 NDPA briefing + reviews consent walkthrough wording in Section 2
+- Gabe persona (Legal & Documentation Reviewer) — Sections 5 + 6 (reimbursement language + escalation paths) + overall doc quality
+- Awwal (Builder, until Transfer) — Sections 1–3 (technical app-usage chunks; sole person who has used the staff app in field-shaped scenarios). Validates print proof. Sources screenshots post-draft.
+- Ministry ICT (post-Transfer) — final review/sign-off; not blocking field-readiness
+
+**Versioning convention (per Awwal directive 2026-05-04):** v1 (initial draft + ratification) → v1.1 (post-dry-run friction incorporated) → future minor revs follow semver. Version marked in document header AND filename suffix (`enumerator-v1.md` → `enumerator-v1.1.md` after R1 incorporation).
+
+**Closure semantics (REVISED 2026-05-04 per Awwal directive — relaxed from spec):**
+- FRC #6 flips to `review` when: (a) `.md` source drafted with all 7 sections, (b) print-ready HTML + PDF rendered alongside, (c) AI-persona-ratified Iris and Gabe sign-off docs in place. **Markdown + print-ready artifact = field-readiness gate met; physical printing is downstream.**
+- FRC #6 flips `done` when real-Iris + real-Gabe ratify (single ratification session, paired with Story 10-5 ratification).
+- Physical printing on Ministry office printer is downstream of `done` and is NOT field-blocking. Cost cap waived (Ministry absorbs office-printer cost).
+
+**Slot:** Wave 1 satellite track — paired with Story 10-5 (currently `review`) for shared real-human ratification gate. Independent of all engineering tracks. Independent of Story 10-5's content shipping (10-5 is voice/tone reference only, not a blocking dependency).
+
+**Dependencies:** None blocking. Voice/tone reference: `docs/legal/consumer-onboarding-sop-v1.md` (Iris voice from Story 10-5 SOP) + `docs/legal/dsa-template-v1-signoff.md` (`PENDING-REAL-HUMAN-RATIFICATION` pattern reference).
+
+**FRC Impact:** Closes FRC #6 when status flips `review` per closure semantics above.
+
+**Status:** Backlog. Pickup by Bob via canonical `*create-story --yolo` workflow (per `feedback_canonical_create_story_workflow.md`).
 
 ---
 
