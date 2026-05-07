@@ -41,6 +41,7 @@ import {
   Search,
   BarChart3,
   ScrollText,
+  Settings,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -159,6 +160,9 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     // R3-F1: end:true prevents accidental highlight on nested routes
     // (e.g. /dashboard/super-admin/audit-log/detail/:id when future stories add them)
     { label: 'Audit Log', href: '/dashboard/super-admin/audit-log', icon: ScrollText, end: true },
+    // prep-settings-landing-and-feature-flags — Settings landing page (between Audit Log and MFA Settings).
+    // end:true so it doesn't highlight on nested routes like /settings/fraud-thresholds.
+    { label: 'Settings', href: '/dashboard/super-admin/settings', icon: Settings, end: true },
     // Story 9-13 — TOTP MFA enrollment + management
     { label: 'MFA Settings', href: '/dashboard/super-admin/security/mfa', icon: Shield },
   ],

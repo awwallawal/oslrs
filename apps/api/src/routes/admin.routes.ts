@@ -8,6 +8,7 @@ import { getEmailConfigFromEnv } from '../providers/index.js';
 import { getEmailQueueStats, getDeferredCount } from '../queues/email.queue.js';
 import { db } from '../db/index.js';
 import auditLogViewerRoutes from './audit-log-viewer.routes.js';
+import settingsRoutes from './settings.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -18,6 +19,10 @@ const router = Router();
 // verification, Story 6-1). All endpoints are super-admin-gated inside the
 // sub-router itself.
 router.use('/audit-logs', auditLogViewerRoutes);
+
+// prep-settings-landing-and-feature-flags — sub-router for system_settings
+// management at /admin/settings/*. Super-admin-gated inside the sub-router.
+router.use('/settings', settingsRoutes);
 
 /**
  * GET /api/v1/admin/email-budget

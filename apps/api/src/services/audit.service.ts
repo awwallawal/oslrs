@@ -74,6 +74,8 @@ export const AUDIT_ACTIONS = {
   RESPONDENT_BACKFILLED_NORMALISATION: 'respondent.backfilled_normalisation',
   // Audit Log Viewer (Story 9-11)
   AUDIT_LOG_EXPORTED: 'audit_log.exported',
+  // Feature flag flips (prep-settings-landing-and-feature-flags)
+  SETTINGS_FLIPPED: 'settings.flipped',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

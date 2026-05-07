@@ -37,6 +37,9 @@ const MfaEnrollmentPage = lazy(() => import('./features/security/mfa/pages/MfaEn
 // Story 9-11 — Super Admin audit log viewer
 const AuditLogPage = lazy(() => import('./features/audit-log/pages/AuditLogPage'));
 
+// prep-settings-landing-and-feature-flags — Super Admin settings landing
+const SettingsLandingPage = lazy(() => import('./features/settings/pages/SettingsLandingPage'));
+
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
 
@@ -827,6 +830,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <AuditLogPage />
+                    </Suspense>
+                  }
+                />
+                {/* prep-settings-landing-and-feature-flags — Settings landing */}
+                <Route
+                  path="settings"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SettingsLandingPage />
                     </Suspense>
                   }
                 />

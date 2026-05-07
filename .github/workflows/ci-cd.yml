@@ -766,6 +766,12 @@ jobs:
             # will own the auth surface for — schema-ahead split per ADR-019.
             cd apps/api && pnpm tsx scripts/migrate-audit-principal-dualism-init.ts && cd ~/oslrs
 
+            # prep-settings-landing-and-feature-flags: seeds the auth.sms_otp_enabled
+            # row into system_settings (Drizzle's db:push creates the table but cannot
+            # seed). Idempotent (ON CONFLICT DO NOTHING). Defensive: aborts cleanly if
+            # zero active super_admin rows exist (FK target).
+            cd apps/api && pnpm tsx scripts/migrate-system-settings-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

@@ -2610,7 +2610,7 @@ So that future feature flags land in 5-line PRs without schema migrations, Story
 
 **Slot:** Wave 1 alongside `prep-input-sanitisation-layer`. Independent / parallelisable. HARD dependency for Story 9-12 (SMS OTP toggle UI) and Story 10-1 (audit-viewer-prerequisite flag).
 
-**Status:** Backlog (per Wave 2 retrofit cascade 2026-04-30 — Awwal Path B decision).
+**Status:** Review 2026-05-06 (Amelia / dev-story workflow, single-session implementation; 39 new tests, both apps lint+tsc clean; Task 7 code review deferred to operator per `feedback_review_before_commit.md`; flips → Done after review pass + commit). Closes Story 9-12 AC#7 HARD-dependency block.
 
 ---
 

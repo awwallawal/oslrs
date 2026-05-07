@@ -75,10 +75,10 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has exactly 15 sidebar items', () => {
-      // 13 base items + MFA Settings (Story 9-13) + Audit Log (Story 9-11)
+    it('super_admin has exactly 16 sidebar items', () => {
+      // 13 base items + Audit Log (Story 9-11) + Settings (prep-settings-landing) + MFA Settings (Story 9-13)
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBe(15);
+      expect(items.length).toBe(16);
     });
 
     it('super_admin has Audit Log sidebar item between System Health and MFA Settings', () => {
@@ -90,6 +90,20 @@ describe('sidebarConfig', () => {
       expect(items[auditIdx].href).toBe('/dashboard/super-admin/audit-log');
       expect(auditIdx).toBeGreaterThan(systemIdx);
       expect(auditIdx).toBeLessThan(mfaIdx);
+    });
+
+    // prep-settings-landing-and-feature-flags — locks in Settings position
+    // between Audit Log and MFA Settings (closes review F5: ordering test
+    // was too weak after Settings insertion).
+    it('super_admin has Settings sidebar item between Audit Log and MFA Settings', () => {
+      const items = sidebarConfig.super_admin;
+      const auditIdx = items.findIndex((i) => i.label === 'Audit Log');
+      const settingsIdx = items.findIndex((i) => i.label === 'Settings');
+      const mfaIdx = items.findIndex((i) => i.label === 'MFA Settings');
+      expect(settingsIdx).toBeGreaterThan(-1);
+      expect(items[settingsIdx].href).toBe('/dashboard/super-admin/settings');
+      expect(settingsIdx).toBeGreaterThan(auditIdx);
+      expect(settingsIdx).toBeLessThan(mfaIdx);
     });
 
     // Story 6.5: Payments sidebar item for enumerator and supervisor
