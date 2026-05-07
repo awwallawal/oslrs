@@ -48,9 +48,15 @@ async function run(): Promise<void> {
   `);
 
   if (adminResult.rows.length === 0) {
-    console.error('[migrate-system-settings-init] No active super_admin found; cannot seed initial updated_by FK.');
-    console.error('[migrate-system-settings-init] Aborting (non-fatal — re-run after super_admin is provisioned).');
-    process.exitCode = 1;
+    // Truly non-fatal: the auto-discovery chain in scripts/db-push-full.ts
+    // treats a non-zero exit code as fatal and aborts the whole pipeline.
+    // CI's test_db has no super_admins by design, so we must exit 0 here
+    // (no seed gets written; tests that need the seed already skip when
+    // no super_admin is present — see system-settings.constraints.test.ts).
+    // Production has 2 super_admins per MEMORY.md so this branch never
+    // fires there; if it ever did, re-run after super_admin provisioning.
+    console.warn('[migrate-system-settings-init] No active super_admin found; skipping seed (non-fatal).');
+    console.warn('[migrate-system-settings-init] Re-run after super_admin is provisioned to write the auth.sms_otp_enabled seed row.');
     return;
   }
 
