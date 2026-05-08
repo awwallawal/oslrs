@@ -1,0 +1,67 @@
+name: Performance Benchmarks
+
+# Nightly + on-demand regression watchdog for BENCHMARK=1-gated tests
+# (currently: ExportService PDF/CSV generation at 100/1K/10K/100K rows).
+# These tests use synthesised in-memory rows — no DB / Redis required.
+#
+# Created 2026-05-08 per Story 9-10 close-out 2nd-pass review:
+# the BENCHMARK gate was rational (suite slowdown ~19s) but the tests
+# were permanently dark, so PDF/CSV generation regressions would only
+# surface via user complaint. This lane runs them weekly + on-demand
+# and uploads the vitest report for trend analysis.
+
+on:
+  schedule:
+    # Weekly Sunday 03:00 UTC (off-peak in WAT). Matches Story 9-10 cadence
+    # for low-noise observability windows.
+    - cron: '0 3 * * 0'
+  workflow_dispatch: {}  # On-demand via Actions UI — useful when a PR
+                          # touches ExportService and you want a delta read
+
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export-benchmarks:
+    name: ExportService (PDF + CSV)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NODE_ENV: test
+      BENCHMARK: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run export benchmarks
+        run: |
+          pnpm --filter @oslsr/api exec vitest run \
+            src/services/__tests__/export.performance.test.ts \
+            src/services/__tests__/export.scale.test.ts
+
+      # Persist the JSON report so trend analysis can compare runs.
+      # 90-day retention captures ~12 weekly runs + on-demand triggers.
+      - name: Upload vitest report
+        if: ${{ !cancelled() }}
+        # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: export-benchmarks-${{ github.run_number }}
+          path: apps/api/vitest-report.json
+          retention-days: 90

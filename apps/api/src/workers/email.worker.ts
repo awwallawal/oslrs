@@ -301,7 +301,10 @@ const DIGEST_CRON = '*/30 * * * *';
  * Called by the 'digest-flush' repeatable job.
  */
 async function processDigestFlush(): Promise<{ recipients: number; sent: number; skipped: number }> {
-  logger.info({ event: 'email.digest.flush_started' });
+  // Story 9-10 AC#5: digest cron fires every 30 minutes. flush_started + flush_empty
+  // together accounted for ~46% of info-level log volume with no actionable signal
+  // for the empty path. Demoted to debug; flush_skipped (budget exhaustion) stays warn.
+  logger.debug({ event: 'email.digest.flush_started' });
 
   // Check budget before sending digests (Task 4.5)
   const budgetCheck = await budgetService.checkBudget();
@@ -315,7 +318,7 @@ async function processDigestFlush(): Promise<{ recipients: number; sent: number;
 
   const recipients = await getDeferredRecipients();
   if (recipients.length === 0) {
-    logger.info({ event: 'email.digest.flush_empty' });
+    logger.debug({ event: 'email.digest.flush_empty' });
     return { recipients: 0, sent: 0, skipped: 0 };
   }
 

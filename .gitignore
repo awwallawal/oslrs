@@ -68,6 +68,9 @@ test-run-output.txt
 # Scratch files at repo root (baseline-report tooling, dev experiments, etc.)
 _tmp_*
 
+# BMAD operator scratch — probe scripts, ad-hoc evidence dumps. NOT for commit.
+_bmad-output/scratch/
+
 # Build artifacts (generated)
 *.tsbuildinfo
 apps/web/vite.config.d.ts
@@ -75,6 +78,7 @@ apps/web/vite.config.js
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Unrelated/personal docs
 docs/agrikonsult_ffs_handout.html

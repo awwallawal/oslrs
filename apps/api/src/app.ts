@@ -238,7 +238,12 @@ app.use('/api/v1', routes);
 // Error Handler
 app.use((err: Error & { code?: string; status?: number; statusCode?: number; type?: string; details?: unknown }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof AppError) {
-    logger.warn({ event: 'api.error', code: err.code, path: req.path });
+    // Story 9-10 AC#5: 4xx client errors (esp. AUTH_INVALID_TOKEN on /auth/refresh)
+    // produce 76% of warn-level log noise without carrying actionable signal.
+    // Server-side 5xx errors stay at warn so real bugs surface in alerting.
+    const isClientError = err.statusCode >= 400 && err.statusCode < 500;
+    const logFn = isClientError ? logger.debug : logger.warn;
+    logFn.call(logger, { event: 'api.error', code: err.code, path: req.path });
     return res.status(err.statusCode).json({
       status: 'error',
       code: err.code,

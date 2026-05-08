@@ -26,8 +26,11 @@ describeOrSkip('ExportService Scale Tests', () => {
     console.log(`PDF 10K: ${elapsed.toFixed(0)}ms, size: ${(result.length / (1024 * 1024)).toFixed(1)}MB, heap: +${memDeltaMB.toFixed(1)}MB`);
     expect(result).toBeInstanceOf(Buffer);
     expect(result.length).toBeGreaterThan(0);
-    // Should complete under 60s (runs slower under full test suite load)
-    expect(elapsed).toBeLessThan(60000);
+    // Threshold tightened 2026-05-08 (Story 9-10 2nd-pass review): observed
+    // ~17s on developer laptop, was 60000 (3.5× headroom — too generous to
+    // catch a 2× regression). 30000 keeps ~1.75× margin over observed which
+    // covers slower CI runner hardware variance without masking real slowdowns.
+    expect(elapsed).toBeLessThan(30000);
   }, 120000);
 
   it('CSV 100K rows — measures scaling behavior', async () => {
@@ -42,7 +45,10 @@ describeOrSkip('ExportService Scale Tests', () => {
     console.log(`CSV 100K: ${elapsed.toFixed(0)}ms, size: ${(result.length / (1024 * 1024)).toFixed(1)}MB, heap: +${memDeltaMB.toFixed(1)}MB`);
     expect(result).toBeInstanceOf(Buffer);
     expect(result.length).toBeGreaterThan(0);
-    // Should complete under 5s
-    expect(elapsed).toBeLessThan(5000);
+    // Threshold tightened 2026-05-08 (Story 9-10 2nd-pass review): observed
+    // ~340ms on developer laptop, was 5000 (14.7× headroom — wasteful).
+    // 2000 keeps ~5.9× margin over observed; catches a 3× regression while
+    // tolerating slow shared CI runners.
+    expect(elapsed).toBeLessThan(2000);
   }, 60000);
 });
