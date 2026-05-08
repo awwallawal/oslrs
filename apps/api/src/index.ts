@@ -11,8 +11,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // Now import app after env is loaded
 const { app, logger } = await import('./app.js');
+const { resolveListenAddress } = await import('./lib/listen-address.js');
 
-const port = process.env.PORT || 3000;
+// Story 9-9 AC#3 F2: see .env.example HOST entry + resolveListenAddress for rationale.
+const { host, port } = resolveListenAddress();
 
 // Expose raw http.Server for transport attachment (Socket.io)
 const server = http.createServer(app);
@@ -32,8 +34,8 @@ if (process.env.NODE_ENV !== 'test') {
     });
   });
 
-  server.listen(port, () => {
-    logger.info({ event: 'server_start', port });
+  server.listen(port, host, () => {
+    logger.info({ event: 'server_start', port, host });
   });
 
   // Graceful shutdown — close Redis connections on SIGTERM/SIGINT

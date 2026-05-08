@@ -87,6 +87,37 @@ Both `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `60-cloudimg-settings.conf`
 - **DO Cloud Firewall "OSLRS"** — SSH (22/tcp) inbound permitted from **both** `0.0.0.0/0` (+ `::/0`) **and** `100.64.0.0/10` (Tailscale CGNAT). The `0.0.0.0/0` source is intentional and load-bearing — required for GitHub Actions CI deploys (`appleboy/ssh-action`) and DO Web Console (SSH-based via DOTTY/`droplet-agent` from DO infrastructure IPs). Firewall is **defence-in-depth + DDoS attenuation**, not the primary access control. Primary control = sshd-level key-only authentication (see §1.3). Other ports per app needs.
 - **Helmet CSP** on app layer — full sec2-3 CSP enforcing on 200 responses
 
+#### Listening port table (audited 2026-05-08 per Story 9-9 AC#3)
+
+Authoritative state of every listening TCP socket on the production VPS, with public-reachability verdict and a one-line justification per port. Full audit + recreate recipes in `docs/port-audit-2026-05-08.md`. Re-run audit on any infrastructure change (new container, new service, port-binding rebind).
+
+**Current state (snapshot 2026-05-08 ~16:00 WAT):**
+
+| Port | Bound to | Process | Public via DO firewall? | Justification |
+|---:|---|---|---|---|
+| 22 | `0.0.0.0` + `::` | `sshd` | ALLOW | SSH ingress; key-only auth + fail2ban + dual-source firewall per ADR-020 V8.2-a1 |
+| 53 | `127.0.0.53` | `systemd-resolve` | n/a (loopback) | Internal DNS resolver |
+| 80 | `0.0.0.0` | `nginx` | ALLOW | HTTP redirect to HTTPS |
+| 443 | `0.0.0.0` | `nginx` | ALLOW (behind Cloudflare orange-cloud) | Public HTTPS ingress |
+| 3000 | `*` (all interfaces) — **rebinds to `127.0.0.1` on next deploy** | `node` (oslsr-api) | DENY | API; nginx is the only consumer (now explicitly `proxy_pass http://127.0.0.1:3000`) |
+| 5432 | `127.0.0.1` | `docker-proxy` → `oslsr-postgres` | DENY | Postgres; locked down by Phase 2 hardening 2026-04-04 |
+| 6379 | `127.0.0.1` | `docker-proxy` → `oslsr-redis` | DENY | Redis; locked down by Phase 2 hardening 2026-04-04 |
+| 8000 | `0.0.0.0` + `::` — **rebind pending operator container recreate** | `docker-proxy` → `portainer` | DENY (defence-in-depth gap at host level) | Portainer HTTP edge; planned reach via `ssh -L 8000:127.0.0.1:8000 root@oslsr-home-app` after rebind |
+| 9443 | `0.0.0.0` + `::` — **rebind pending operator container recreate** | `docker-proxy` → `portainer` | DENY (defence-in-depth gap at host level; UFW currently allows 9443 explicitly) | Portainer HTTPS UI; planned reach via `ssh -L 9443:127.0.0.1:9443 root@oslsr-home-app` after rebind |
+| 38429, 40918 | tailnet only | `tailscaled` | n/a | Tailscale node communication |
+
+**Pending changes (from AC#3 close-out 2026-05-08 — incident-response operators must know what's open):**
+
+| Port | Current bind | Target bind | What unblocks the change | ETA |
+|---:|---|---|---|---|
+| 3000 | `*` | `127.0.0.1` | Next PM2 restart on production after the AC#3 PR's `apps/api/src/lib/listen-address.ts` lands | At next deploy |
+| 8000 | `0.0.0.0` + `::` | `127.0.0.1` | Operator runs Portainer container-recreate recipe per `docs/port-audit-2026-05-08.md` § F1 | Operator-scheduled (brief Portainer downtime) |
+| 9443 | `0.0.0.0` + `::` | `127.0.0.1` | Same as 8000 (single recreate covers both ports); plus `ufw delete allow 9443/tcp` for the stale UFW rule | Operator-scheduled |
+
+Re-audit and replace the "Current state" table with refreshed values once both the deploy and the Portainer recreate have landed; remove the corresponding rows from the "Pending changes" subsection at that point.
+
+**Cross-reference rule:** every public-listening port (non-`127.0.0.1`) MUST have a matching DO Cloud Firewall ingress rule. Every DO firewall rule MUST have a matching listener — stale rules are deletion candidates. Verify quarterly with `ss -tlnp` from the host + `Test-NetConnection` from operator's public IP.
+
 ### 1.5 Key accounts & contacts
 
 | Account | Auth method | Notes |
