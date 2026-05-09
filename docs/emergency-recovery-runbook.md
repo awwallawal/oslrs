@@ -91,7 +91,7 @@ Both `/etc/ssh/sshd_config.d/50-cloud-init.conf` and `60-cloudimg-settings.conf`
 
 Authoritative state of every listening TCP socket on the production VPS, with public-reachability verdict and a one-line justification per port. Full audit + recreate recipes in `docs/port-audit-2026-05-08.md`. Re-run audit on any infrastructure change (new container, new service, port-binding rebind).
 
-**Current state (snapshot 2026-05-08 ~16:00 WAT):**
+**Current state (snapshot 2026-05-09 ~20:50 WAT, post-F2-deploy + post-F1-Portainer-recreate):**
 
 | Port | Bound to | Process | Public via DO firewall? | Justification |
 |---:|---|---|---|---|
@@ -99,22 +99,20 @@ Authoritative state of every listening TCP socket on the production VPS, with pu
 | 53 | `127.0.0.53` | `systemd-resolve` | n/a (loopback) | Internal DNS resolver |
 | 80 | `0.0.0.0` | `nginx` | ALLOW | HTTP redirect to HTTPS |
 | 443 | `0.0.0.0` | `nginx` | ALLOW (behind Cloudflare orange-cloud) | Public HTTPS ingress |
-| 3000 | `*` (all interfaces) — **rebinds to `127.0.0.1` on next deploy** | `node` (oslsr-api) | DENY | API; nginx is the only consumer (now explicitly `proxy_pass http://127.0.0.1:3000`) |
+| 3000 | `127.0.0.1` | `node` (oslsr-api) | DENY | API; nginx is the only consumer (`proxy_pass http://127.0.0.1:3000`); rebound by `apps/api/src/lib/listen-address.ts` HOST default 2026-05-09 deploy |
 | 5432 | `127.0.0.1` | `docker-proxy` → `oslsr-postgres` | DENY | Postgres; locked down by Phase 2 hardening 2026-04-04 |
 | 6379 | `127.0.0.1` | `docker-proxy` → `oslsr-redis` | DENY | Redis; locked down by Phase 2 hardening 2026-04-04 |
-| 8000 | `0.0.0.0` + `::` — **rebind pending operator container recreate** | `docker-proxy` → `portainer` | DENY (defence-in-depth gap at host level) | Portainer HTTP edge; planned reach via `ssh -L 8000:127.0.0.1:8000 root@oslsr-home-app` after rebind |
-| 9443 | `0.0.0.0` + `::` — **rebind pending operator container recreate** | `docker-proxy` → `portainer` | DENY (defence-in-depth gap at host level; UFW currently allows 9443 explicitly) | Portainer HTTPS UI; planned reach via `ssh -L 9443:127.0.0.1:9443 root@oslsr-home-app` after rebind |
+| 8000 | `127.0.0.1` | `docker-proxy` → `portainer` | DENY | Portainer HTTP edge; rebound 2026-05-09 via container recreate (volume `portainer_data` preserved). Reach via `ssh -L 8000:127.0.0.1:8000 root@oslsr-home-app` |
+| 9443 | `127.0.0.1` | `docker-proxy` → `portainer` | DENY | Portainer HTTPS UI; rebound 2026-05-09 via container recreate; stale UFW `ALLOW 9443/tcp` rule deleted in the same change. Reach via `ssh -L 9443:127.0.0.1:9443 root@oslsr-home-app` |
 | 38429, 40918 | tailnet only | `tailscaled` | n/a | Tailscale node communication |
 
-**Pending changes (from AC#3 close-out 2026-05-08 — incident-response operators must know what's open):**
-
-| Port | Current bind | Target bind | What unblocks the change | ETA |
-|---:|---|---|---|---|
-| 3000 | `*` | `127.0.0.1` | Next PM2 restart on production after the AC#3 PR's `apps/api/src/lib/listen-address.ts` lands | At next deploy |
-| 8000 | `0.0.0.0` + `::` | `127.0.0.1` | Operator runs Portainer container-recreate recipe per `docs/port-audit-2026-05-08.md` § F1 | Operator-scheduled (brief Portainer downtime) |
-| 9443 | `0.0.0.0` + `::` | `127.0.0.1` | Same as 8000 (single recreate covers both ports); plus `ufw delete allow 9443/tcp` for the stale UFW rule | Operator-scheduled |
-
-Re-audit and replace the "Current state" table with refreshed values once both the deploy and the Portainer recreate have landed; remove the corresponding rows from the "Pending changes" subsection at that point.
+**Verification 2026-05-09 (post-F1 + post-F2):**
+- `ss -tlnp` over Tailscale: ports 3000, 8000, 9443 all bound to `127.0.0.1` only ✅
+- `docker ps` Portainer ports row: `127.0.0.1:8000->8000/tcp, 127.0.0.1:9443->9443/tcp` ✅
+- `ufw status | grep 9443`: empty (rule deleted) ✅
+- External `Test-NetConnection` from operator laptop public IP → 22/80/443 OPEN, 3000/8000/9443 CLOSED ✅
+- Internal `https://127.0.0.1:9443/` 200 (Portainer admin UI alive post-recreate) ✅
+- Public `https://oyotradeministry.com.ng/api/v1/health` 200 + `https://oyoskills.com/api/v1/health` 200 (full nginx → 127.0.0.1:3000 chain working) ✅
 
 **Cross-reference rule:** every public-listening port (non-`127.0.0.1`) MUST have a matching DO Cloud Firewall ingress rule. Every DO firewall rule MUST have a matching listener — stale rules are deletion candidates. Verify quarterly with `ss -tlnp` from the host + `Test-NetConnection` from operator's public IP.
 
