@@ -76,23 +76,44 @@ jobs:
       - name: Seed database
         run: pnpm --filter @oslsr/api db:seed:dev
 
-      # Cache Playwright browsers to avoid ~90s install on every run
+      # Cache Playwright browsers to avoid ~90s install on every run.
+      #
+      # Pitfall #31 (2026-05-09): the cache key MUST track the resolved
+      # Playwright version, not just `apps/web/package.json` text. With a
+      # caret-pinned `^1.58.2`, the package.json hash stays stable across
+      # 1.58.x → 1.59.x bumps, but Playwright's on-disk browser path includes
+      # a revision number (e.g. `chromium_headless_shell-1208/`) that bumps
+      # with the npm version. Restoring an older cached path means the test
+      # runner fails at browser launch with "Executable doesn't exist".
+      #
+      # Two-part fix:
+      #   1. Include `pnpm-lock.yaml` (resolved version) AND a manual `v2-`
+      #      prefix in the key so the next bump invalidates the cache and any
+      #      future ops can bust manually by incrementing.
+      #   2. Tighten `restore-keys` to only match v2-or-later — the previous
+      #      `playwright-${{ runner.os }}-` fallback restored the v1 broken
+      #      cache, which is why fe878af + 096086e both failed identically.
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+          key: playwright-${{ runner.os }}-v2-${{ hashFiles('apps/web/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
-            playwright-${{ runner.os }}-
+            playwright-${{ runner.os }}-v2-
 
+      # Pitfall #31 (2026-05-09): use the project-pinned Playwright via
+      # `pnpm --filter @oslsr/web exec playwright`, NOT `pnpm dlx playwright`.
+      # `dlx` fetches a separate (latest) Playwright that may install a newer
+      # browser revision than the project's locked version expects, so the
+      # cached binaries silently disagree with the test-runner's expectations.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm dlx playwright install chromium --with-deps
+        run: pnpm --filter @oslsr/web exec playwright install chromium --with-deps
 
       - name: Install Playwright system deps (cache hit)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm dlx playwright install-deps chromium
+        run: pnpm --filter @oslsr/web exec playwright install-deps chromium
 
       - name: Run E2E tests
         run: pnpm test:e2e

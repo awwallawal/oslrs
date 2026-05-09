@@ -1344,6 +1344,70 @@ None of those applied to 10-5 ‖ 9-11. They DO apply to e.g. two API stories bo
 
 ---
 
+### Pitfall #31: GH Actions Playwright cache key must track the resolved version, not just `package.json`
+
+**Symptom:** 21 of 36 E2E tests fail at browser launch with the same error before any test code runs:
+
+```
+Error: browserType.launch: Executable doesn't exist at
+/home/runner/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell
+```
+
+The job conclusion is `failure`, but the workflow conclusion is `success` because `e2e.yml` sets `continue-on-error: true` ("Non-blocking during stabilization") — so the failure stayed invisible in the GH Actions UI summary view across at least 2 commits (`fe878af` 2026-05-07 + `096086e` 2026-05-08) before someone read the job log.
+
+**Cause:** The pre-fix cache config:
+
+```yaml
+- name: Cache Playwright browsers
+  uses: actions/cache@v5
+  with:
+    path: ~/.cache/ms-playwright
+    key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+    restore-keys: |
+      playwright-${{ runner.os }}-
+```
+
+Two compounding issues:
+
+1. **Cache key tracks `package.json` text, not the resolved version.** With `"@playwright/test": "^1.58.2"`, the package.json text stays stable across `1.58.x → 1.59.x → ...` releases — but the on-disk browser path includes a revision number (`chromium_headless_shell-1208/`, `-1213/`, …) that bumps with every Playwright release. When Playwright resolves to a newer version and asks for a newer browser revision, the cache hit restores the OLD revision's directory and the new version's launch code can't find its expected path.
+
+2. **Restore-keys fallback is too permissive.** `playwright-${{ runner.os }}-` matches ALL prior caches under that prefix, including the broken one. So even if the primary key changes, the fallback restores the stale broken cache, the cache-hit branch fires (`install-deps chromium` only — system deps, no browser binaries), and tests fail identically every time.
+
+**Compounding factor — `pnpm dlx`:** the install commands used `pnpm dlx playwright install chromium --with-deps` instead of the project-pinned `pnpm --filter @oslsr/web exec playwright install …`. `dlx` fetches a separate (typically latest) Playwright into a one-shot npx-style cache and runs ITS install logic — which may target a newer browser revision than the project's locked `@playwright/test` actually expects. Even when the cache works, this is a latent version-mismatch source.
+
+**Fix (e2e.yml `Cache Playwright browsers` + 2 install steps):**
+
+```yaml
+- name: Cache Playwright browsers
+  id: playwright-cache
+  uses: actions/cache@v5
+  with:
+    path: ~/.cache/ms-playwright
+    # Include the lockfile so resolved-version bumps invalidate the cache,
+    # plus a manual `v2-` prefix so future ops can bust by incrementing.
+    key: playwright-${{ runner.os }}-v2-${{ hashFiles('apps/web/package.json', 'pnpm-lock.yaml') }}
+    restore-keys: |
+      playwright-${{ runner.os }}-v2-
+
+- name: Install Playwright browsers
+  if: steps.playwright-cache.outputs.cache-hit != 'true'
+  run: pnpm --filter @oslsr/web exec playwright install chromium --with-deps
+
+- name: Install Playwright system deps (cache hit)
+  if: steps.playwright-cache.outputs.cache-hit == 'true'
+  run: pnpm --filter @oslsr/web exec playwright install-deps chromium
+```
+
+Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved version actually lives), (b) `restore-keys` only matches v2-prefixed keys so v1 broken caches can't be inherited, (c) `dlx` swapped for `--filter @oslsr/web exec` so the project's locked Playwright is what installs the browsers — eliminating the dlx-vs-pinned-version drift.
+
+**Lesson — caching invariant:** the cache key must change every time the cached artifact would change. For Playwright, that's "every time the resolved npm version changes." `package.json` is the *declaration*; `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) is the *resolution*. Hash the lock, not the manifest, when caching anything that depends on resolved-version side-effects (browser binaries, native modules, ...). Same pattern applies to caching Cypress binaries, esbuild platform-specific binaries, sharp prebuilds, etc.
+
+**Visibility lesson:** `continue-on-error: true` on a CI job is fine during stabilization — but it MUST be paired with a separate visible signal (a PR-comment bot, a dashboard, a periodic email) so red doesn't become wallpaper. Two consecutive commits with identical job-level failures should never go unnoticed for >24 hours. Consider removing `continue-on-error` once the underlying flake source is fixed, OR adding a `status: green/red` rollup that reads job-level conclusions in addition to workflow-level.
+
+**Related:** Pitfall #25 (action stable tags lag main branch — SHA-pin to keep using current Node runtime) covers a different action-versioning problem, but the meta-pattern is the same: GitHub-hosted action versions and project-pinned tool versions don't auto-sync — pin both ends explicitly or expect silent drift.
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1353,4 +1417,5 @@ None of those applied to 10-5 ‖ 9-11. They DO apply to e.g. two API stories bo
 *Updated: 2026-05-03 — Pitfalls #26-27 added: raw-SQL migrations need a tsx runner (db:push doesn't apply them) + postgres-vs-pg package mistake (postgres pkg not a project dep). Pattern caught after Story 9-13's migrate-mfa-init.ts shipped with `import postgres from 'postgres'`, silently breaking 5+ deploys until prep-input-sanitisation code-review surfaced the bug as F14. Also captures the Dev-Agent-Record lesson: "X is broken on local; worked around with Y" must be treated as HIGH-severity follow-up, not a debug log note.*
 *Updated: 2026-05-03 — Pitfalls #28-29 added per Story 11-1 follow-up: db:push aggressively reconciles + drops init-script objects (CHECK constraints, partial unique indexes, raw-SQL composite indexes) → introduces `pnpm db:push:full` umbrella that auto-discovers every `migrate-*-init.ts` runner and chains them after push; `--reset` flags on seed scripts need explicit env-var gates because env-name guards only protect against prod hostnames, not local dev DBs holding real backup-restored data. Caught after Story 11-1's `seed-projected-scale.ts --reset` wiped 874 audit_logs rows on first run; fix-forward shipped both the env-var gate and the umbrella in the same story.*
 *Updated: 2026-05-03 — Pitfall #30 added: doc-track ‖ code-track parallelism (Story 10-5 legal docs + Story 9-11 audit-viewer code) is safe when zero file overlap + zero semantic coupling — don't reflexively flag mixed working trees as "contamination" without measuring overlap first. Discipline is selective staging at commit time, not a working-tree blocker.*
+*Updated: 2026-05-09 — Pitfall #31 added: GH Actions E2E job had been silently failing across 2 commits (fe878af + 096086e) with `chromium_headless_shell-1208 doesn't exist` because the Playwright browser cache key tracked `apps/web/package.json` text instead of `pnpm-lock.yaml` resolved version, AND the `restore-keys` fallback was too permissive (matched broken v1 caches). Compounded by `pnpm dlx playwright install` fetching a latest Playwright that targeted a newer browser revision than the project's pinned `@playwright/test` expects. Fix: cache key includes `pnpm-lock.yaml` + manual `v2-` prefix; restore-keys narrowed to `v2-`-only; dlx swapped for `pnpm --filter @oslsr/web exec` so project-pinned Playwright drives both install and runtime. Visibility lesson: `continue-on-error: true` on a CI job needs a separate visible-red signal or red becomes wallpaper.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*
