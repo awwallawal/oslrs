@@ -4180,6 +4180,126 @@ type LawfulBasis =
 
 **Used by:** `ImportDryRunPreview` (Component #14), Story 10-3 Consumer Create form, Journey 5 step 3, Journey 7 step 1.
 
+#### 18. ExportFormatHintModal
+
+**Purpose:** Helps a user who's about to download a large PDF realise — *gently* — that CSV would serve them better. Triggers in the 2,001–5,000 row band (per ADR-021); below that we generate silently, above that the API itself returns HTTP 413 and the user sees a server-handled error rather than a UI surface. This component lives in the **soft band** — the empathetic middle ground where someone made a reasonable choice that the system can help refine.
+
+**The user moment:**
+
+Aisha, a Government Official, has spent ten minutes building exactly the right report — all 33 LGAs, the skill categories her Commissioner asked for, the date range that fits the briefing tomorrow morning. She clicks "Export PDF" because that's what she always attaches to email. Her filter resolves to 3,400 rows.
+
+Without this component, Aisha gets a 30 MB PDF. It bounces off the Commissioner's office mail server (Outlook's 25 MB cap). She panics, retries in formats she half-understands, slices the data manually. Fifteen minutes of frustration before she even realises what's wrong — and her trust in the tool drops a notch.
+
+With this component, Aisha sees a knowledgeable-colleague tap on the shoulder: *"Heads up — this PDF will be around 30 MB and take 7 seconds. Anything over 25 MB doesn't attach to most email systems. CSV at this size is around 2 MB and faster — and Excel opens it cleanly. Want to switch?"* She picks CSV, gets her file, makes her deadline. She doesn't feel corrected; she feels respected.
+
+**Usage:** Triggered when a user invokes a PDF export action AND the estimated row count is between 2,001 and 5,000 AND the originating endpoint is not flagged with `suppressExportRowCapModal: true`. Per ADR-021, threshold values, suppression list, and benchmark-derived estimate constants all live in shared config — no hard-coding in the modal itself.
+
+**Anatomy:**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Heads up — this PDF will be large                   [×]  │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Rows in your export:    ~3,400                          │
+│  Estimated file size:    ~30 MB                          │
+│  Estimated generation:   ~7 seconds                      │
+│                                                          │
+│  PDFs over 25 MB don't attach to most email systems.     │
+│  CSV at this size is around 2 MB and generates in        │
+│  under a second — Excel, Google Sheets, and your         │
+│  team's tools all open it cleanly.                       │
+│                                                          │
+│  ──────────────────────────────────────────────────      │
+│  [ Continue with PDF ]              [ Switch to CSV ]    │
+│                                              ↑           │
+│                                    (default focus)       │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Field details:**
+
+| Field | Source | Display rule |
+|---|---|---|
+| Rows in your export | Server-provided count from the same filter that will drive generation | Rounded to the nearest 100. "~3,400" reads warmer than "3,427"; precision here is false comfort, not respect. |
+| Estimated file size | Linear extrapolation from BENCHMARK constants (PDF ≈ 9.7 KB/row, per ADR-021) | Rounded to nearest MB. This is the headline number — it anchors the email-cap insight that flips the decision. |
+| Estimated generation time | Linear extrapolation (PDF ≈ 2.4 ms/row + 1.5 s baseline, per ADR-021) | Rounded to nearest second. Caps at "~12 seconds" in the soft band; never shown as "0 seconds" — show "~1 second" minimum, since "~0 seconds" reads as broken. |
+
+**Tone & copy guide (load-bearing):**
+
+Words to **use:** *heads up, large, around, switch, faster, opens cleanly, want to switch?* — conversational, register of a knowledgeable colleague.
+
+Words to **avoid:** *warning, alert, blocked, exceeded, error, cannot, refuse, denied, must, required* — punitive register, treats a reasonable choice as a mistake.
+
+The user has not done anything wrong; the system is sharing context they didn't have. The headline is `Heads up — this PDF will be large`, **not** `Warning: large export`. The recommended CTA is `Switch to CSV`, **not** `Use CSV (recommended)` — labelling a button "(recommended)" sounds like a parent labelling a vegetable.
+
+The copy in Anatomy above is the **canonical English copy** for v1. Localisation should preserve the conversational register, not chase literal translation. If the same warmth doesn't land in the target language, work with a native speaker to find the equivalent register before shipping. (For OSLSR's Yoruba/Hausa/Igbo language touchpoints in later phases, this is a real concern, not a hypothetical one.)
+
+**States:**
+
+- **Default:** All three estimate values populated; both CTAs enabled; focus on "Switch to CSV" (default-focus, see Behaviour).
+- **Estimates unavailable (graceful degradation):** If the server count query fails, the modal still renders — we know the user is in the soft band from whatever upstream signal triggered the modal. Headline becomes `Heads up — this looks like a large PDF`. Body becomes: *"This PDF may take several seconds to generate and could be too large to attach to email. CSV is faster and more email-friendly."* No numbers shown. Both CTAs still enabled. We do not block on estimate availability — denying the user the modal because we can't show numbers is worse than showing the modal without them.
+- **Submitting (post-CTA):** Whichever CTA was clicked shows an inline spinner and disables. The other CTA also disables (the user has committed). Modal does not close until the export request resolves; on resolution, modal closes and the normal download flow takes over.
+- **Submission error (rare edge case):** If the export request itself fails after CTA click, the modal stays open and surfaces a recoverable error inline below the CTAs: *"Couldn't start the export — try again?"* with both CTAs re-enabled. User can retry without re-opening.
+
+**Behaviour:**
+
+- **Default focus is "Switch to CSV"** — the recommended action. This is intentional and load-bearing. ADR-021 explicitly calls this out: we are nudging toward the better outcome, not blocking the worse one. Users who actually want PDF press Tab once and Enter — one extra keystroke is the right cost for the off-recommended path. Reversing the default focus would change the modal from "respectful nudge" to "trick question."
+- **"Switch to CSV" CTA** triggers the same export pipeline with `format=csv`; the user lands in the existing CSV download flow without a second confirmation. No "are you sure?" — we already asked, this is the answer.
+- **"Continue with PDF" CTA** proceeds with PDF generation. The choice is logged via the existing audit-log infrastructure (per ADR-021 telemetry contract): `action: 'export.format_chosen_after_hint'`, `meta: { format_choice: 'pdf_after_modal_warning', estimated_rows, estimated_size_mb, estimated_seconds, endpoint }`. This is the evidence stream the team will use to revisit the threshold over time.
+- **ESC closes** the modal without committing to either format. No export action is taken; the user returns to the trigger surface with their filter and Export button intact. This is a *third* option — *"I changed my mind, I want to refine my filter first"* — and we honour it without forcing a CTA choice. **Forcing a binary on someone who wants to back out is exactly the kind of dark pattern we don't ship.**
+- **Click outside the modal** (backdrop click) behaves identically to ESC. The X button in the header also.
+
+**Accessibility:**
+
+- Modal is `role="dialog" aria-modal="true" aria-labelledby="export-hint-title" aria-describedby="export-hint-body"`.
+- Focus trap inside the modal; on open, focus moves to "Switch to CSV"; on close (any path), focus returns to the originating Export button.
+- The three estimates render in a `<dl>` — `<dt>Rows in your export</dt><dd>~3,400</dd>`, etc. — so screen readers parse them as a definition list rather than scattered text. This matters: assistive-tech users should *hear* the structure, not stitch it together.
+- A live region (`role="status" aria-live="polite"`) announces the body copy on open: *"Heads up. This PDF will be around 30 megabytes and take about 7 seconds. PDFs over 25 megabytes don't attach to most email systems. CSV is around 2 megabytes and faster."* Slightly compressed from the visual copy — assistive-tech users hear it once and shouldn't have to re-traverse the visual layout.
+- **Visual hierarchy without alarm colour:** the headline uses standard surface colour (Neutral-900 on Surface-50), not Warning-amber or Error-red. This is a hint, not an alert. Using alarm colour for non-alarm content erodes the meaning of alarm colour everywhere else in the system.
+- Both CTAs are reachable via Tab in visual order; the X button is the third tab stop. ESC is a documented shortcut; we surface it visually as a faint hint on the X button (`title="Close (Esc)"` and `aria-label="Close (Escape)"`).
+- Reduced-motion preference respected: modal entry/exit animation skips when `prefers-reduced-motion: reduce`.
+- Minimum touch-target size (44×44 px) met on both CTAs. On mobile (<768px) the CTAs stack vertically with "Switch to CSV" on top — the recommended action stays primary regardless of layout.
+
+**Props:**
+
+```typescript
+interface ExportFormatHintModalProps {
+  estimatedRows: number;                         // already-rounded for display
+  estimatedFileSizeMB: number | null;            // null = estimates unavailable (graceful state)
+  estimatedGenerationSeconds: number | null;     // null = estimates unavailable
+  endpoint: string;                              // for audit-log telemetry meta
+  onContinuePdf: () => Promise<void> | void;
+  onSwitchToCsv: () => Promise<void> | void;
+  onClose: () => void;                           // user dismissed via ESC, X, or backdrop click
+}
+```
+
+**Telemetry contract:**
+
+When **"Continue with PDF"** fires, the host emits one audit-log event aligned with ADR-021:
+
+```json
+{
+  "action": "export.format_chosen_after_hint",
+  "meta": {
+    "format_choice": "pdf_after_modal_warning",
+    "estimated_rows": 3400,
+    "estimated_size_mb": 30,
+    "estimated_seconds": 7,
+    "endpoint": "/api/v1/admin/exports/respondents"
+  }
+}
+```
+
+When **"Switch to CSV"** fires, no telemetry event — the user followed the recommended path; we don't audit virtue. (We audit the override, not the compliance — same discipline as Journey 6 step 6's audit-log export pattern.)
+
+When **ESC / backdrop-close** fires, also no telemetry — the user is recomposing their request, not deciding. Logging that as a "rejection" event would mis-label a healthy behaviour.
+
+**Used by:** Any export trigger surface that resolves to `format=pdf` AND row count 2,001–5,000 AND endpoint not flagged `suppressExportRowCapModal: true`. Bob's `prep-export-row-cap-and-redirect` story lands the per-endpoint inventory and the host integration. The component itself is shared and should live at a path like `apps/web/src/features/exports/components/ExportFormatHintModal.tsx` — the implementer finalises within the existing feature-folder convention.
+
+**Pattern lineage:** This component is the explicit **format-aware twin** of the audit-log *"Refine your filters or use the API for bulk export"* prompt at Journey 6 step 6 (Story 9-11). That pattern is server-enforced cap + prompted alternative for CSV at 10K; this one is server-enforced soft cap + prompted alternative for PDF at 2K–5K, plus a hard server cap above. Same project-level UX language: *don't refuse, redirect — and let the system explain itself in a sentence the user can act on.* If a future expensive-synchronous-operation needs the same shape (ID-card PDF batch render, payroll batch generation, supervisor analytics rollups), this component is the right starting point — generalise the props, swap the copy.
+
 ### Component Implementation Strategy
 
 **Foundation Approach:**

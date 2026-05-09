@@ -3318,6 +3318,98 @@ A future engineer reading "SSH firewall = `0.0.0.0/0`" might assume sloppiness o
 - **ADR-013 §"Tailscale Operator Access" subsection** — reflects the same dual-source posture
 - **Decision 2.7** (Authentication & Security) — the operator-facing summary cross-references this ADR for the full rationale
 
+### ADR-021: Export Row-Cap Policy (PDF Tiered Cap; CSV Out of Scope)
+
+**Decision:** PDF exports from `ExportService.generatePdfReport` operate under a **two-tier row cap** — a UX-level soft cap that warns the user at **2,001–5,000 rows** (modal; user may continue), and an API-level hard cap at **5,001+ rows** (HTTP 413 with a stable JSON response shape). CSV exports are not constrained by this ADR; existing per-endpoint CSV caps remain in force on their own terms — most notably the audit-log 10K-row cap from UX Spec Journey 6, which this ADR is consciously modelled after. Domain-bounded exports — those whose row count is small by design (e.g. LGA enumerator productivity rollups, ≤200 rows) — are exempt via a per-endpoint suppression flag set by the implementer.
+
+**Status:** Accepted 2026-05-08. Source: John's decision memo at `docs/decisions/2026-05-08-pdf-export-row-cap.md` (Awwal-ratified 2026-05-08; Iris and Sally unavailable in the Operate-phase window per the originating brief's escalation rule). Implementation lands via Story `prep-export-row-cap-and-redirect` (Bob-authored).
+
+**Context:**
+
+The cost curve became visible on 2026-05-08 when the BENCHMARK gate was lifted as part of the Story 9-10 close-out 2nd-pass review. Measured on developer-laptop hardware against synthesised in-memory rows:
+
+| Format | Rows    | Time      | Output  |
+|--------|--------:|----------:|--------:|
+| PDF    |   1,000 |    2.4 s  |  9.7 MB |
+| PDF    |  10,000 |   14.6 s  | 93.0 MB |
+| CSV    |  10,000 |    0.12 s |  634 KB |
+| CSV    | 100,000 |    0.34 s |  6.3 MB |
+
+PDF generation cost is roughly linear in row count. By ~5K rows the output is no longer email-attachable (Gmail caps at 25 MB) and is no longer a comfortable open on a modest machine. CSV at the same scale is 15× smaller and 40-100× faster, and tabular tooling (Excel, Pandas, Looker Studio) handles it natively. The format-appropriateness gap is not subtle.
+
+A note on the numbers: these are **developer-laptop estimates, not production-VPS measurements**. The shape of the curve is reliable; the absolute constants are conservative for the typical case but worst-case under deploy-window CPU contention (Story 9-10 evidence shows 70–90% CPU during deploys on the 2GB VPS) could be higher. Threshold selection accounts for the asymmetry: protect the worst case, not the typical one.
+
+**Why this needs a cap at all:**
+
+The current `ExportService` accepts arbitrary row counts. A confused user requesting "all submissions" — or a hostile actor probing API surface — can pin a request for ~75 seconds and return ~470 MB. That is a denial-of-service vector dressed as a feature, and exploiting it costs nothing. We are not seeing it in practice today; this ADR is preventive, not reactive. The cap arrives ahead of partner-API consumer access (Story 10-3 / 10-4) where misbehaving integrations are a real possibility — once external clients can hit the export endpoints, the cost of *not* having a cap rises sharply.
+
+**Options considered:**
+
+| Option | Approach | Outcome |
+|---|---|---|
+| **No cap** | Status quo | Rejected — abuse vector is real; cost of installation is low; partner-API arrival makes "wait until we see abuse" unwise. |
+| **Single hard cap at 1K (HTTP 413 only)** | Block over threshold; no UX | Rejected — over-frictions legitimate 1.2–1.8K row use cases that PDF handles fine; teaches the user nothing about format choice. |
+| **Single soft modal at 1K (warn but allow)** | Educate; no enforcement | Rejected — leaves the abuse vector wide open. Warning a hostile actor is not a control. |
+| **Auto-redirect PDF → CSV above threshold** | Silently swap format | Rejected — silent format change confuses tabular-tool consumers and breaks downstream automation that expects a PDF mime type. The transparency cost is too high. |
+| **Two-tier (modal + 413)** _(SELECTED)_ | Modal at 2K (educate); HTTP 413 at 5K (protect) | Modal and hard cap solve different problems (UX education vs availability). Coupling them onto a single threshold either over-frictions or under-protects. Decoupling lets each band be tuned against its own evidence over time. |
+
+**Decision details:**
+
+- **Soft band — 2,001 to 5,000 rows.** The export trigger UI presents a warning modal before generation begins. The modal communicates: estimated row count, estimated file size, estimated generation time, the format-friendliness tradeoff, and offers a "switch to CSV" path. The exact copy and component anatomy is Sally's domain — Custom Component to be authored in `ux-design-specification.md` against this ADR.
+
+- **Hard band — 5,001+ rows.** `ExportService.generatePdfReport` rejects with **HTTP 413 Payload Too Large** before generation begins. The response body is JSON with a stable shape:
+
+  ```json
+  {
+    "error": "row_cap_exceeded",
+    "format": "pdf",
+    "limit": 5000,
+    "requested": <N>,
+    "alternative_format": "csv"
+  }
+  ```
+
+  Stable shape is **load-bearing** — partner-API consumers (Story 10-3 / 10-4) will integrate against this response, and copy-driven changes that break the contract are a recurring failure mode in API-bearing systems. Document in the partner-API contract (Story 10-1) when authored.
+
+- **Per-endpoint suppression.** A configuration flag `suppressExportRowCapModal: boolean` (and the parallel server-side suppression of the 413 boundary) marks domain-bounded exports as exempt. The per-endpoint inventory is **Bob's during story decomposition**; Bob also decides whether the cap logic lands as middleware or per-controller. Architectural constraint regardless of shape: threshold values, suppression list, and benchmark-derived estimate constants live in **shared config**, not hard-coded in handlers. Future tuning should not require simultaneous changes in multiple places.
+
+- **CSV is out of scope here.** Existing per-endpoint CSV caps (notably the 10K cap on the audit-log export from UX Spec Journey 6) remain authoritative on their own terms. CSV streaming generation (chunked transfer, no full-buffer materialisation) is a deferred option — the lifetime data projection is ~100K rows (every respondent in the field-survey submissions table) and CSV at that scale is comfortably inside budget at 6.3 MB output / 66 MB heap delta. Streaming becomes worth its complexity only if the projection moves past ~1M.
+
+- **Estimation engine for the modal.** Linear extrapolation against benchmark constants — currently PDF ≈ 9.7 KB/row and ≈ 2.4 ms/row + 1.5 s baseline. These constants live in shared config; the BENCHMARK lane is the regression watchdog. If a future PDFKit version bump (or any other dependency change) drifts the constants, the lane catches it before production sees it; the modal estimates auto-track because the constants are config-driven.
+
+- **Telemetry on the soft-band choice.** When a user hits the modal and chooses "Continue with PDF" rather than "Switch to CSV", the choice is logged via the existing audit-log infrastructure with `meta: { format_choice: 'pdf_after_modal_warning', estimated_rows }`. This is the evidence stream we will use to revisit the threshold. No behaviour is built on this telemetry today; we are instrumenting the seam so future-Winston (or future-John) can see what real users do.
+
+**Boring-technology continuity:**
+
+This ADR is consciously modelled on Sally's existing audit-log 10K-row CSV cap pattern (UX Spec Journey 6, step 6: *"Export caps at 10,000 rows (server-enforced); larger queries prompt 'Refine your filters or use the API for bulk export'"*). The pattern is already in the project — a server-enforced cap with a prompted alternative. We are extending it to a different format (PDF), at a different threshold band (where PDF stops being friendly), with one additional rung (the modal-warns soft band that doesn't exist for the audit-log CSV case because CSV doesn't need it).
+
+This is the project's first formal expression of a **tiered-cap pattern for expensive synchronous operations**. Future expensive operations — ID-card PDF batch render, payroll batch generation, supervisor analytics rollups, the eventual async-job substrate — should default to this shape unless their cost curve argues for a different one. The pattern is small, stable, and re-uses infrastructure (config, audit-log, BENCHMARK lane) that already exists. That is the right kind of architectural commitment to make.
+
+**Consequences:**
+
+- **Story `prep-export-row-cap-and-redirect`** lands the implementation. Bob authors. The story carries: backend HTTP 413 enforcement at the hard band, frontend modal integration at the soft band, per-endpoint inventory + suppression flag, shared-config seam for thresholds and estimate constants, and tests at both threshold boundaries plus the suppression case.
+
+- **No CSV pipeline change.** Documenting CSV's current ceiling (100K rows / 6.3 MB / 66 MB heap delta) here so a future architect doesn't re-litigate. Move to streaming only if the data projection moves past ~1M.
+
+- **Partner-API contract.** The HTTP 413 response shape becomes part of the partner-API surface for any partner endpoint that exposes a PDF export path. Story 10-1 (partner-API contract authoring) must reference it.
+
+- **BENCHMARK lane becomes ongoing infrastructure.** The lane created 2026-05-08 (`.github/workflows/benchmarks.yml`) is now the regression watchdog for the threshold and the estimation constants. Architectural commitment: the lane stays green; if it goes red, that is a P2 issue and the constants need re-derivation. Lane expansion to other endpoints (audit-log filters, supervisor analytics, payroll batch, ID-card batch render) is deferred 2–3 weeks per the decision memo Q5; review target ~2026-05-29.
+
+- **Open evolution path — async export jobs.** If modal-dismissal telemetry shows users routinely choosing "Continue" at 4–5K rows, the threshold is wrong or the workflow is wrong. The right response in either case is probably an async export-to-email substrate: queue the export, return immediately, deliver the artifact later. Out of scope for this preventive cap; in scope for a future ADR if the evidence appears. Captured here as a watchpoint, not a commitment.
+
+- **Decision-record continuity.** This ADR is the first after ADR-020 (Tailscale operator-access). Numbering is canonical; cross-references in subsequent ADRs and stories should use ADR-021. The next ADR is ADR-022.
+
+**Cross-references:**
+
+- **PRD V8.4 Story 5.2 AC#5** — the user-facing acceptance criterion that points here for operational policy
+- **UX Spec Custom Component (forthcoming)** — Sally to author the export-warn modal pattern; modal anatomy / states / accessibility / props belong in her domain
+- **Decision memo** — `docs/decisions/2026-05-08-pdf-export-row-cap.md` (Awwal-ratified 2026-05-08; canonical product source)
+- **Originating follow-up brief** — `docs/follow-ups/2026-05-08-pdf-export-row-cap-product-decision.md` (closed 2026-05-08; benchmark data + Q1–Q5 framing)
+- **Story 9-10 Change Log entry 2026-05-08** — origin trail (BENCHMARK gate lift surfaced the cost curve)
+- **UX Spec Journey 6 step 6 (Story 9-11)** — architectural precedent we are extending (audit-log CSV 10K server-enforced cap with prompted alternative)
+- **BENCHMARK lane** — `.github/workflows/benchmarks.yml`
+- **Story 10-1 (forthcoming partner-API contract)** — must document the HTTP 413 response shape
+
 ---
 
 ## Operational Procedures

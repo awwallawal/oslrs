@@ -2614,6 +2614,35 @@ So that future feature flags land in 5-line PRs without schema migrations, Story
 
 ---
 
+### Prep Task: prep-export-row-cap-and-redirect
+
+As an **operator of OSLSR (current Builder; future Ministry-handover)**,
+I want **PDF exports to be tiered-capped — silent below 2,000 rows, modal-warned at 2,001-5,000, and hard-rejected with HTTP 413 above 5,000 — with a per-endpoint suppression flag for domain-bounded exports**,
+So that **a confused or hostile user cannot pin a request for ~75 seconds and return ~470 MB by requesting a 50K-row PDF, legitimate users in the soft band are nudged toward CSV (the better format for large datasets) without being blocked, and partner-API consumers (Story 10-3 / 10-4) integrate against a stable HTTP 413 response shape**.
+
+**Context:** Surfaced 2026-05-08 during Story 9-10 close-out 2nd-pass code-review when the BENCHMARK gate was lifted, exposing real `ExportService.generatePdfReport` cost at scale (PDF 10K = 14.6s/93MB; CSV 100K = 0.34s/6.3MB). Routed via canonical handoff chain: John (PM) → Awwal ratification 2026-05-08 → Winston (Architect, ADR-021) → Sally (UX Designer, Custom Component #18 `ExportFormatHintModal`) → Bob (SM) story creation. Decision memo at `docs/decisions/2026-05-08-pdf-export-row-cap.md` is the canonical product source. **This is preventive** — no real export volume has hit production yet; cap arrives ahead of partner-API consumer access (Story 10-3 / 10-4) where misbehaving integrations are a real possibility.
+
+**Scope:**
+- **Backend HTTP 413 hard cap** at 5,001+ rows for PDF format. Stable JSON response shape `{ error: "row_cap_exceeded", format: "pdf", limit: 5000, requested: <N>, alternative_format: "csv" }` — load-bearing for partner-API consumers.
+- **Frontend `ExportFormatHintModal` soft band** at 2,001-5,000 rows. Default focus on "Switch to CSV" CTA. Below 2K, silent generation; above 5K, the API 413 takes over (no UI).
+- **Per-endpoint suppression flag** `suppressExportRowCapModal: boolean`. Domain-bounded exports (productivity rollups ≤200 rows by domain logic) exempt. Per-endpoint inventory documented in playbook.
+- **Shared cap-config module** for thresholds + suppression list + estimate constants (PDF ≈ 9.7 KB/row + 2.4 ms/row + 1.5s baseline). NOT hard-coded; backend and frontend kept-in-sync via CI guard test.
+- **Linear estimate engine** computing file size + generation time from row count for modal display.
+- **Telemetry asymmetry:** audit-log `action: 'export.format_chosen_after_hint'` ONLY on "Continue with PDF" override; NO event on "Switch to CSV" or modal dismiss. Mirrors Sally's audit-log Journey 6 cap discipline.
+- **Tone-and-copy discipline** (load-bearing): canonical English copy from UX Spec #18 verbatim; forbidden words (warning, alert, blocked, exceeded, error, cannot, refuse, denied) MUST NOT appear in modal-rendered DOM.
+- **Full accessibility** per UX Spec #18: dialog role, focus trap, default focus on Switch-to-CSV, ESC closes, live region announcement, no alarm colour.
+- **Test coverage:** backend boundary (413 at 5,001 / 200 at 5,000 / 200 with suppression), backend response-shape deep-equality, modal lifecycle, default focus, dismissal paths, copy regex against forbidden words, estimate engine boundary cases, telemetry asymmetry assertions, **suppression-flag inventory completeness test** (auto-traverses routes to prevent silent bypass on new endpoints).
+- **Documentation:** `docs/infrastructure-cicd-playbook.md` Part 6 (or new Part 8) gains export-cap pattern + per-endpoint inventory table; forward-ref TODO marker in Story 10-1 entry for partner-API OpenAPI spec to document HTTP 413 response shape.
+- **DO NOT** modify CSV pipeline (existing per-endpoint CSV caps remain authoritative on their own terms — notably Story 9-11 audit-log 10K). **DO NOT** ship CSV streaming (deferred until lifetime data projection >1M rows). **DO NOT** ship async export jobs (queue + email-when-ready) — captured in ADR-021 as evolution path; out of scope for preventive cap.
+
+**Slot:** Independent / parallelisable with all in-flight stories (Epic 9 / 10 / 11). NOT FRC-blocking — preventive measure, not field-survey-blocker. Pickup whenever capacity allows; recommended before any of Story 10-3 / 10-4 (partner-API consumer access) lands.
+
+**Dependencies:** **None blocking.** Soft forward-reference: Story 10-1 (Partner-API Consumer Auth) OpenAPI spec must document the HTTP 413 response shape verbatim from this story's AC#1 — captured as TODO marker in 10-1 file/entry, not a sequencing block.
+
+**Status:** Ready-for-dev. Story file at `_bmad-output/implementation-artifacts/prep-export-row-cap-and-redirect.md` — 10 ACs + 9 Tasks with file-path-specific subtasks.
+
+---
+
 ## Epic 10: API Governance & Third-Party Data Sharing
 
 **Epic Goal:** Establish an authenticated, scoped, rate-limited, audit-logged partner-API substrate so that third-party MDA consumers (ITF-SUPA, NBS, NIMC, future integrations) can access the registry under formal agreement without compromising NDPA compliance or operator visibility.

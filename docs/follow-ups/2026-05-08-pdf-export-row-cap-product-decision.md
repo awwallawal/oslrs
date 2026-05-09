@@ -1,5 +1,7 @@
 # Follow-up — 2026-05-08 — PDF export row-cap product decision
 
+**Status:** ✅ **CLOSED 2026-05-08** — Decision memo at `docs/decisions/2026-05-08-pdf-export-row-cap.md`, ratified by Awwal same day. Routed to Bob (SM) for story creation (`prep-export-row-cap-and-redirect` or rolled into next polish epic — Bob's call).
+
 **Run on or after:** as soon as PM bandwidth permits (no calendar gate)
 **Owner:** John (PM) — outcomes route to Iris/Sally for UX, then back to SM (Bob) for story creation
 **Originating context:** Story 9-10 close-out 2nd-pass code-review (2026-05-08) surfaced the real cost of `ExportService.generatePdfReport` at scale. The data was previously invisible because the BENCHMARK-gated tests were permanently dark; this brief is the surfaced nuance.
