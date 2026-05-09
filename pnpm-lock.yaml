@@ -6,6 +6,7 @@ settings:
 
 overrides:
   fast-xml-parser: '>=5.5.6'
+  fast-xml-builder: '>=1.1.7'
   minimatch: '>=9.0.7'
   rollup: '>=4.59.0'
   socket.io-parser: '>=4.2.6'
@@ -4862,8 +4863,8 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-builder@1.1.4:
-    resolution: {integrity: sha512-f2jhpN4Eccy0/Uz9csxh3Nu6q4ErKxf0XIsasomfOihuSUa3/xw6w8dnOtCDgEItQFJG8KyXPzQXzcODDrrbOg==}
+  fast-xml-builder@1.2.0:
+    resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
 
   fast-xml-parser@5.5.10:
     resolution: {integrity: sha512-go2J2xODMc32hT+4Xr/bBGXMaIoiCwrwp2mMtAvKyvEFW6S/v5Gn2pBmE4nvbwNjGhpcAiOwEv7R6/GZ6XRa9w==}
@@ -5992,6 +5993,10 @@ packages:
 
   path-expression-matcher@1.2.1:
     resolution: {integrity: sha512-d7gQQmLvAKXKXE2GeP9apIGbMYKz88zWdsn/BN2HRWVQsDFdUY36WSLTY0Jvd4HWi7Fb30gQ62oAOzdgJA6fZw==}
+    engines: {node: '>=14.0.0'}
+
+  path-expression-matcher@1.5.0:
+    resolution: {integrity: sha512-cbrerZV+6rvdQrrD+iGMcZFEiiSrbv9Tfdkvnusy6y0x0GKBXREFg/Y65GhIfm0tnLntThhzCnfKwp1WRjeCyQ==}
     engines: {node: '>=14.0.0'}
 
   path-key@3.1.1:
@@ -7326,6 +7331,10 @@ packages:
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
+
+  xml-naming@0.1.0:
+    resolution: {integrity: sha512-k8KO9hrMyNk6tUWqUfkTEZbezRRpONVOzUTnc97VnCvyj6Tf9lyUR9EDAIeiVLv56jsMcoXEwjW8Kv5yPY52lw==}
+    engines: {node: '>=16.0.0'}
 
   xml-parse-from-string@1.0.1:
     resolution: {integrity: sha512-ErcKwJTF54uRzzNMXq2X5sMIy88zJvfN2DmdoQvy7PAFJ+tPRU6ydWuOKNMyfmOjdyBQTFREi60s0Y0SyI0G0g==}
@@ -12411,13 +12420,14 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-builder@1.1.4:
+  fast-xml-builder@1.2.0:
     dependencies:
-      path-expression-matcher: 1.2.1
+      path-expression-matcher: 1.5.0
+      xml-naming: 0.1.0
 
   fast-xml-parser@5.5.10:
     dependencies:
-      fast-xml-builder: 1.1.4
+      fast-xml-builder: 1.2.0
       path-expression-matcher: 1.2.1
       strnum: 2.2.2
 
@@ -13561,6 +13571,8 @@ snapshots:
   path-exists@4.0.0: {}
 
   path-expression-matcher@1.2.1: {}
+
+  path-expression-matcher@1.5.0: {}
 
   path-key@3.1.1: {}
 
@@ -15134,6 +15146,8 @@ snapshots:
       word: 0.3.0
 
   xml-name-validator@5.0.0: {}
+
+  xml-naming@0.1.0: {}
 
   xml-parse-from-string@1.0.1: {}
 
