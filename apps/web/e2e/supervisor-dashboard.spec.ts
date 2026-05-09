@@ -95,8 +95,11 @@ test.describe('Supervisor Dashboard & Team', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Messages → Home (Dashboard)
-    await page.getByRole('link', { name: 'Home' }).click();
+    // Messages → Home (Dashboard). Exact-match to disambiguate from the two
+    // logo links whose aria-label is "OSLSR Dashboard Home" (sidebar logo +
+    // header logo); only the sidebar nav item has accessible name "Home".
+    // See DashboardSidebar.tsx:79 + DashboardHeader.tsx:64 + sidebarConfig.ts:115.
+    await page.getByRole('link', { name: 'Home', exact: true }).click();
     await page.waitForURL('**/dashboard/supervisor');
     await expect(page.getByRole('heading', { name: /Supervisor Dashboard/i })).toBeVisible();
   });

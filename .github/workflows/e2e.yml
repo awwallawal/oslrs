@@ -16,7 +16,9 @@ jobs:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true  # Non-blocking during stabilization
+    # Stabilization period closed 2026-05-09: Pitfall #31 (cache key fix)
+    # exposed 7 silently-failing tests, all triaged + fixed (6 selector-rot,
+    # 1 fixture-gap skipped with TODO). E2E is now a real CI gate.
 
     services:
       postgres:

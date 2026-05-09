@@ -34,11 +34,13 @@ test.describe('Supervisor Messaging', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Verify the messages page loads (inbox or empty state)
-    // Either the inbox list renders or the empty state message appears
+    // The role="list" with aria-label "Message threads" always renders;
+    // when threads.length === 0 the empty-state ("No messages yet") renders
+    // INSIDE that same list container. Asserting on the list alone is
+    // sufficient — the .or() fallback was redundant and triggered strict-mode
+    // because both selectors matched in the empty state. (See MessageInbox.tsx:49,89.)
     const inboxList = page.getByRole('list', { name: 'Message threads' });
-    const emptyState = page.getByText('No messages yet');
-    await expect(inboxList.or(emptyState)).toBeVisible();
+    await expect(inboxList).toBeVisible();
   });
 
   test('send a broadcast message and verify it appears in inbox', async ({ page }) => {
@@ -48,8 +50,10 @@ test.describe('Supervisor Messaging', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Click "Broadcast to Team" button
-    await page.getByRole('button', { name: /broadcast to team/i }).click();
+    // Click the broadcast button. The button's accessible name comes from its
+    // aria-label "Send broadcast message to all team members" (NOT the visible
+    // text "Broadcast to Team"), so the regex must match the aria-label.
+    await page.getByRole('button', { name: /send broadcast/i }).click();
 
     // Verify broadcast composer loads
     await expect(page.getByText('Broadcast to Team')).toBeVisible();
@@ -74,8 +78,8 @@ test.describe('Supervisor Messaging', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Send a broadcast to guarantee inbox has content
-    await page.getByRole('button', { name: /broadcast to team/i }).click();
+    // Send a broadcast to guarantee inbox has content (aria-label match — see broadcast test for rationale)
+    await page.getByRole('button', { name: /send broadcast/i }).click();
     const composer = page.getByLabel('Message input');
     await composer.fill(broadcastText);
     await page.getByRole('button', { name: 'Send message' }).click();
@@ -102,8 +106,11 @@ test.describe('Supervisor Messaging', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Click "New Conversation" button
-    await page.getByRole('button', { name: /start a new conversation/i }).click();
+    // Click the header "New Conversation" button. Use exact aria-label match to
+    // disambiguate from the empty-state button (aria-label "Start a new conversation
+    // from empty inbox") which a regex /start a new conversation/i would also match.
+    // See MessageInbox.tsx:30 (header) vs :97 (empty-state).
+    await page.getByRole('button', { name: 'Start a new conversation', exact: true }).click();
 
     // Verify team roster picker opens
     await expect(page.getByTestId('team-roster-picker')).toBeVisible();
@@ -128,8 +135,8 @@ test.describe('Supervisor Messaging', () => {
     await page.getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
 
-    // Open New Conversation roster
-    await page.getByRole('button', { name: /start a new conversation/i }).click();
+    // Open New Conversation roster (exact-match — see "New Conversation flow" test for rationale)
+    await page.getByRole('button', { name: 'Start a new conversation', exact: true }).click();
     await expect(page.getByTestId('team-roster-picker')).toBeVisible();
 
     // Click the first team member to start conversation
