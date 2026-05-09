@@ -203,6 +203,63 @@ so that **a confused or hostile user cannot pin a request for ~75 seconds and re
   - [ ] 9.4 Flip `_bmad-output/implementation-artifacts/sprint-status.yaml` `prep-export-row-cap-and-redirect` from `ready-for-dev` → `in-progress` at PR open, → `review` at code-review-pass, → `done` at merge.
   - [ ] 9.5 Update `docs/decisions/2026-05-08-pdf-export-row-cap.md` Round 1 propagation log (Bob row) from "⏳ Pending Bob" → "✅ Done — Bob (SM)" with story-file pointer. (Bob does this AT story-creation time; flip to actual implementation `done` happens at merge.)
 
+## Manual Verification Plan
+
+After Tasks 1-9 are implementation-complete and `pnpm test` + lint + tsc all green, walk this checklist before flipping the story to `review`. Automated tests verify code correctness; this checklist verifies feature correctness in a real browser. Dev agent must explicitly mark each item `[x]` or document why skipped — partial completion is documented, not glossed.
+
+> **Why this section exists:** per project memory rule *"For UI or frontend changes, start the dev server and use the feature in a browser before reporting the task as complete. Type checking and test suites verify code correctness, not feature correctness."* The forbidden-words copy regex test (AC#9) and the focus-trap a11y test cover code; only a real browser confirms the **felt experience** — does the modal actually feel like a respectful nudge, or like a paywall.
+
+### Layer 1 — Local dev server walkthrough (golden path, ~5 min)
+
+Start: `pnpm dev` from repo root (turbo runs API + web). Login as Government Official (Story 5.2 audience — they own the export-heavy workflows). Use a respondent registry filter or chart-export trigger surface to drive the row count.
+
+- [ ] **MV-1.1 — Silent path (<2,000 rows):** Apply a narrow filter (~500 rows). Click Export PDF. **Expect:** PDF downloads directly, no modal renders.
+- [ ] **MV-1.2 — Soft-band entry (2,001-5,000 rows):** Widen filter to ~3,000 rows. Click Export PDF. **Expect:** modal renders with headline `Heads up — this PDF will be large`, three estimates populated (rows / MB / seconds), and default focus on **Switch to CSV** (Tab once from modal open should land on "Continue with PDF" — that confirms focus order is correct).
+- [ ] **MV-1.3 — Switch-to-CSV path:** From the open modal in MV-1.2, click "Switch to CSV". **Expect:** CSV download starts immediately without a second confirmation prompt; modal closes; no PDF generated.
+- [ ] **MV-1.4 — Continue-with-PDF override path:** Repeat MV-1.2. This time click "Continue with PDF". **Expect:** PDF generates and downloads; modal closes.
+- [ ] **MV-1.5 — Hard cap (>5,000 rows):** Widen filter to ~6,000 rows. Click Export PDF. **Expect:** NO modal appears. Instead, error toast surfaces the 413 message (e.g. "PDF supports up to 5,000 rows. Use CSV for larger exports."). User can still trigger CSV export manually.
+
+### Layer 2 — DevTools forensics (contract verification, ~5 min)
+
+- [ ] **MV-2.1 — HTTP 413 response shape:** During MV-1.5, open Network tab → click the failing request → inspect response body. **Must match the AC#1 JSON shape exactly:**
+  ```json
+  { "error": "row_cap_exceeded", "format": "pdf", "limit": 5000, "requested": 6000, "alternative_format": "csv" }
+  ```
+  Drift here breaks partner-API consumers (Story 10-3 / 10-4). Confirm `Content-Type: application/json` (NOT `application/pdf`).
+- [ ] **MV-2.2 — Audit-log telemetry on override:** After MV-1.4 (Continue with PDF), navigate to `/dashboard/admin/audit-log` (Story 9-11). Filter by action `export.format_chosen_after_hint`. **Expect exactly ONE event** with meta payload containing `format_choice: 'pdf_after_modal_warning'`, `estimated_rows`, `estimated_size_mb`, `estimated_seconds`, `endpoint`.
+- [ ] **MV-2.3 — Telemetry asymmetry (no event on Switch to CSV):** After MV-1.3 (Switch to CSV path), refresh the audit log filter from MV-2.2. **Expect ZERO new events** with that action — we audit overrides, not compliance.
+- [ ] **MV-2.4 — Telemetry asymmetry (no event on dismiss):** Open modal (MV-1.2 setup), hit ESC. Refresh audit log filter. **Expect ZERO new events.** Repeat with backdrop click and X button. Same expectation.
+- [ ] **MV-2.5 — Console clean:** During all of Layer 1, watch DevTools Console. **Expect zero errors, zero warnings.** Any new warnings introduced by this story must be triaged before flipping to `review`.
+
+### Layer 3 — Edge cases + accessibility (~10 min)
+
+- [ ] **MV-3.1 — Estimates-unavailable graceful state:** DevTools → Network → block the row-count endpoint URL via "Block request URL". Trigger PDF export in soft band. **Expect:** modal still renders, headline becomes `Heads up — this looks like a large PDF`, estimate values are absent (no "~0 MB" or "~undefined seconds"), copy degrades to the AC#7 graceful state. Both CTAs still functional.
+- [ ] **MV-3.2 — Mobile viewport:** Chrome DevTools → toggle device toolbar → 375px width (iPhone SE). Trigger MV-1.2 setup. **Expect:** CTAs stack vertically with **"Switch to CSV" on top**. Touch targets ≥44×44 px (eyeball, not pixel-measure).
+- [ ] **MV-3.3 — Reduced-motion preference:** DevTools → Rendering panel → "Emulate CSS media feature prefers-reduced-motion" → "reduce". Trigger MV-1.2. **Expect:** modal entry/exit animation skips entirely (instant in/out, no fade or slide).
+- [ ] **MV-3.4 — Keyboard-only navigation:** Trigger MV-1.2 setup. Navigate the entire modal using only Tab / Shift+Tab / Enter / ESC. Confirm focus trap (Tab past the X button cycles back to the first element). Confirm ESC closes. Confirm focus returns to the originating Export button on close.
+- [ ] **MV-3.5 — Screen reader spot-check:** Use NVDA (Windows) or VoiceOver (macOS). Open modal. **Expect:** live region announces the body copy on open (a paraphrased version of the visual copy — "Heads up. This PDF will be around X megabytes and take about Y seconds...").
+- [ ] **MV-3.6 — Forbidden-words DOM scan:** Open modal in MV-1.2 setup. Ctrl+F in the rendered DOM for: `warning`, `blocked`, `error`, `denied`, `cannot`, `must`, `required`, `exceeded`, `refuse`. **Expect zero matches.** AC#9 enforces this via Vitest regex; eyeballing catches retrofit drift if a future translator or designer is tempted.
+- [ ] **MV-3.7 — Color check:** Open modal. Headline must use standard surface colour (Neutral-900 on Surface-50), NOT Warning-amber or Error-red. Quick visual: if it looks like an error dialog or a system alert, that's wrong — it should look like an informational tip card.
+
+### Layer 4 — Production verification (post-deploy, ~5 min)
+
+Mirrors your existing 9-8 CSP self-test pattern: Firefox + Chrome, both prod domains.
+
+- [ ] **MV-4.1 — Firefox @ oyoskills.com:** Repeat MV-1.1 → MV-1.5 in Firefox against the production deployment.
+- [ ] **MV-4.2 — Chrome @ oyoskills.com:** Same in Chrome.
+- [ ] **MV-4.3 — Firefox @ oyotradeministry.com.ng:** Same in Firefox against the legacy domain (Strategy A relative URLs should make this identical to oyoskills.com — confirm).
+- [ ] **MV-4.4 — Chrome @ oyotradeministry.com.ng:** Same in Chrome.
+- [ ] **MV-4.5 — Audit-log telemetry survives the production round-trip:** After MV-4.1 + MV-4.2 override paths, confirm the prod audit log received the `export.format_chosen_after_hint` events with correct meta. (This is the strongest evidence the telemetry contract holds end-to-end through CF + nginx + Express + Drizzle + Postgres.)
+
+### Closure rule
+
+Story is `review`-ready when:
+- All Layer 1, 2, 3 items checked `[x]` (or explicitly documented as `[~] N/A — <reason>`).
+- Layer 4 items checked `[x]` post-deploy in the same PR cycle.
+- Any unexpected behaviour observed during the walkthrough is logged in **Dev Agent Record → Completion Notes List** with a "manual-verification surprise" tag, and the corresponding AC re-evaluated.
+
+Manual-verification surprises that contradict an AC must be either (a) fixed in the same commit, or (b) documented as a known-issue Review Follow-up in Dev Agent Record with an owner and date.
+
 ## Dev Notes
 
 ### Background — Why this is preventive, not reactive
@@ -335,3 +392,4 @@ _To be filled by Dev agent. Expected (estimate from Task breakdown):_
 | Date | Change | Files |
 |---|---|---|
 | 2026-05-08 | Story authored by Bob (SM) via canonical `*create-story --yolo` per the Round 3 routing in `docs/decisions/2026-05-08-pdf-export-row-cap.md`. 10 ACs covering backend HTTP 413 hard cap, frontend `ExportFormatHintModal` soft band, per-endpoint suppression flag + inventory, shared cap-config module (no hard-coding), linear estimate engine, telemetry asymmetry (audit overrides not compliance), canonical English copy + tone-discipline, full accessibility per UX Spec #18, comprehensive test coverage (backend + frontend + integration + CI guard + inventory completeness), documentation updates with forward-ref TODO for Story 10-1 partner-API contract. 9 Tasks broken down with file-path-specific subtasks. Status: ready-for-dev. | This story file. |
+| 2026-05-09 | **Manual Verification Plan added** between Tasks/Subtasks and Dev Notes — 4 layers / 22 checklist items: Layer 1 dev-server walkthrough (silent/soft/CSV/PDF/hard-cap golden paths), Layer 2 DevTools forensics (HTTP 413 response shape deep-equality eyeball + audit-log telemetry asymmetry verification on all four interaction paths + console-clean), Layer 3 edge cases + a11y (estimates-unavailable graceful state, mobile stacking, reduced-motion, keyboard-only, screen reader, forbidden-words DOM scan, color-not-alarm), Layer 4 production verification (Firefox + Chrome × oyoskills.com + oyotradeministry.com.ng matching the existing 9-8 CSP self-test cadence + prod audit-log round-trip). Added per Awwal request 2026-05-09 — closes the gap project memory flags as *"Type checking and test suites verify code correctness, not feature correctness"*. Closure rule explicit: story is `review`-ready only when Layer 1-3 checked [x] AND Layer 4 checked [x] post-deploy AND any surprises logged as either same-commit fixes or documented Review Follow-ups. | This story file. |
