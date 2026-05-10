@@ -36,6 +36,7 @@
  *   | googleAuthRateLimit              | 10/IP/1hr      | sensible default |
  *   | mfaRateLimit                     | 10/IP/1min     | Story 9-13 AC#7 |
  *   | reauthRateLimit                  | 5/IP/15min     | AC#4 audit fix  |
+ *   | magicLinkRateLimit               | 3/email/1hr    | Story 9-12 AC#6 (NFR4.4 budget) |
  *
  * If ANY of those values are changed at the source-file level, update this
  * table AND run `pnpm vitest run apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts`
@@ -125,6 +126,13 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   // Login step-2 (TOTP / backup code) — full layered stack
   { method: 'POST', path: '/login/mfa',        rateLimiters: ['strictLoginRateLimit', 'loginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 5 } },
   { method: 'POST', path: '/login/mfa-backup', rateLimiters: ['strictLoginRateLimit', 'loginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 5 } },
+
+  // Story 9-12 magic-link endpoints
+  { method: 'POST', path: '/public/magic-link', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
+  {
+    method: 'GET', path: '/magic', rateLimiters: [], expectedHandlerCount: { min: 1 },
+    rationale: 'Story 9-12 AC#6 redemption endpoint. Rate limit lives upstream on the request endpoint (POST /public/magic-link, 3/email/hour). Redemption is single-use by atomic UPDATE — burst attempts hit MAGIC_LINK_ALREADY_USED, not a quota. Brute-force token guessing is bounded by 32-byte token entropy (2^256) + per-token expiry; per-IP limiter would need careful tuning to avoid blocking legitimate users on shared NATs and is not justified for the threat model.',
+  },
 ];
 
 interface ActualRoute {

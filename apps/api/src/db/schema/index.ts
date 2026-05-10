@@ -21,3 +21,6 @@ export * from './marketplace.js';
 export * from './contact-reveals.js';
 export * from './user-backup-codes.js';
 export * from './system-settings.js';
+// Story 9-12 — Public Wizard + magic-link auth + pending-NIN
+export * from './magic-link-tokens.js';
+export * from './wizard-drafts.js';

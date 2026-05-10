@@ -1,6 +1,7 @@
 import { Router, type RequestHandler } from 'express';
 import { AuthController } from '../controllers/auth.controller.js';
 import { MfaController } from '../controllers/mfa.controller.js';
+import { MagicLinkController } from '../controllers/magic-link.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
@@ -10,6 +11,7 @@ import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../mid
 import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit, activationRateLimit } from '../middleware/registration-rate-limit.js';
 import { googleAuthRateLimit } from '../middleware/google-auth-rate-limit.js';
 import { reauthRateLimit } from '../middleware/reauth-rate-limit.js';
+import { magicLinkRateLimit } from '../middleware/magic-link-rate-limit.js';
 import { AppError } from '@oslsr/utils';
 
 const router = Router();
@@ -186,6 +188,26 @@ router.post('/login/mfa-backup',
   mfaRateLimit,
   verifyCaptcha,
   MfaController.loginMfaBackup
+);
+
+// ---------------------------------------------------------------------------
+// Story 9-12 — Public Wizard magic-link auth endpoints
+// ---------------------------------------------------------------------------
+
+// POST /api/v1/auth/public/magic-link — request a magic link by email + purpose.
+// Per-email rate limited (3/hour) per NFR4.4 password-reset budget pool.
+// Returns 200 always (anti-enumeration); abuse is gated by the limiter.
+router.post('/public/magic-link',
+  magicLinkRateLimit,
+  MagicLinkController.requestMagicLink
+);
+
+// GET /api/v1/auth/magic?token=<plaintext>&purpose=<purpose>
+// Validates + atomically consumes the token. Returns JSON describing the
+// redemption result; frontend (Task 4-7) handles the redirect. No JWT issued
+// here — JWT issuance for magic-link login is a future Task in Story 9-12.
+router.get('/magic',
+  MagicLinkController.redeemMagicLink
 );
 
 export default router;

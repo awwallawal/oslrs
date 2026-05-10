@@ -76,6 +76,11 @@ export const AUDIT_ACTIONS = {
   AUDIT_LOG_EXPORTED: 'audit_log.exported',
   // Feature flag flips (prep-settings-landing-and-feature-flags)
   SETTINGS_FLIPPED: 'settings.flipped',
+  // Public registration / magic-link (Story 9-12)
+  MAGIC_LINK_ISSUED: 'magic_link.issued',
+  MAGIC_LINK_REDEEMED: 'magic_link.redeemed',
+  PENDING_NIN_DEFERRED: 'pending_nin.deferred_again',
+  PENDING_NIN_TRANSITIONED: 'pending_nin.transitioned_to_nin_unavailable',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
