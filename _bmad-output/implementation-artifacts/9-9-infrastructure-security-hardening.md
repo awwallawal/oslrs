@@ -160,7 +160,36 @@ Architecture deviation from the original recipe: the OSLSR daily backup is a **B
 - [x] 5.5 Documented in `docs/infrastructure-cicd-playbook.md` **Part 12** (Encrypted Backup Restore) — covers algorithm contract, restore command for both encrypted + legacy paths, full failure-modes table (5 scenarios + recovery steps each), and the operator quarterly drill recipe. Cross-referenced from runbook §7.2.
 - [x] 5.6 Monthly backup uses the same worker code path (the daily worker promotes to monthly via `CopyObjectCommand` on the 1st of the month — see `promoteToMonthly`). Monthly backups inherit encryption automatically; no separate script to update.
 - [x] 5.7 Quarterly restore drill scheduled in runbook §7.2 — full recipe with scratch Postgres container, expected output, and a 3-step diagnostic flow ("if decryption fails — compare key", "if key matches — investigate ciphertext", "fall back to monthly retention if needed"). Same calendar cadence as the existing §7.1 Tailscale drill.
-- [x] 5.8 Drill validation evidence (one-shot, deferred to next session because this PR ships code + docs without provisioning the prod key — operator action required to set `BACKUP_ENCRYPTION_KEY` on VPS, run the next scheduled backup, then execute the §7.2 drill against the resulting `.sql.gz.enc`). Story closure does not gate on the drill artefact because the **18 unit tests in `apps/api/src/lib/__tests__/backup-crypto.test.ts`** already cover the encrypt-decrypt round-trip + 3 tampering modes against a live key, and the existing 15 `backup.worker.test.ts` tests prove the unset-key gating preserves legacy behaviour. The drill is operational verification, not implementation verification.
+- [x] 5.8 Drill validation evidence — **executed 2026-05-10 against production VPS via Tailscale.** Sequence:
+
+  1. Operator generated key on VPS: `KEY=$(openssl rand -hex 32); echo "BACKUP_ENCRYPTION_KEY=$KEY" >> /root/oslrs/.env`. Saved to password manager + paper backup.
+  2. `pm2 restart oslsr-api --update-env` → PID 321876 → 324062, `workers.initialized` log shows `backupWorkerRunning: true`, `server_start host: 127.0.0.1`.
+  3. Triggered manual one-shot backup via tsx-loaded `getBackupQueue().add('ac5-drill-manual', {})` (instead of waiting for 01:00 UTC schedule). Job ID `110`, `encryptionKeySet: true`.
+  4. Worker logs (PID 324062, post-restart): `backup.start filename: 2026-05-10-app_db.sql.gz.enc encrypted: true` → `backup.encrypt.start` → `backup.encrypt.complete algorithm: aes-256-gcm ivHex: e3b687…637d2` (24 hex chars = 12 bytes IV; auth tag intentionally NOT logged) → `backup.s3_upload.verified key: backups/daily/2026-05-10-app_db.sql.gz.enc` → `backup.complete sizeBytes: 44860 encrypted: true durationMs: 704`.
+  5. §7.2 drill: spun up scratch `postgres:15-alpine` on `127.0.0.1:55432` (drill_db / drill / drill); ran `pnpm exec tsx scripts/restore-backup.ts --latest --target-db postgresql://drill:drill@127.0.0.1:55432/drill_db --confirm`. Output:
+
+     ```
+     Restore target: 127.0.0.1:55432/drill_db
+     Backup source:  backups/daily/2026-05-10-app_db.sql.gz.enc
+     Downloaded backups/daily/2026-05-10-app_db.sql.gz.enc (0.04 MB)
+     Checksum verified.
+     Decrypting (aes-256-gcm)...
+     Decryption verified (GCM auth tag passed).
+     Decompressing...
+     Restoring to 127.0.0.1:55432/drill_db...
+     Restore complete.
+     Validating table counts...
+     Table               Manifest       Restored       Match
+     users               3              3              YES
+     respondents         1              1              YES
+     audit_logs          123            123            YES
+     submissions         1              1              YES
+     All table counts match.
+     ```
+
+  6. Cleanup: `docker stop restore-drill-db` (--rm flag auto-removed); `/tmp/trigger-backup.ts` removed.
+
+  **Field-verified, not just code-complete.** End-to-end proof: VPS .env key → worker encrypts → S3 ciphertext → restore-script downloads → decrypts (GCM auth tag passes) → restores → table counts match. Same flow operator would run during a real recovery. S3 currently holds both `2026-05-10-app_db.sql.gz` (this morning's pre-key run, unencrypted) and `2026-05-10-app_db.sql.gz.enc` (manual drill artefact, encrypted) — operator opted to leave both; day-7 retention sweep will remove the orphan plaintext on 2026-05-17.
 
 **Subtask 5 ships:**
 - New `apps/api/src/lib/backup-crypto.ts` (95 lines, pure-function helpers: `getEncryptionKey`, `isEncryptionEnabled`, `createEncryptCipher`, `createDecryptDecipher`, `buildEncryptionMeta`).
