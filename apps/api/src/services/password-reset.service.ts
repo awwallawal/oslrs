@@ -7,10 +7,11 @@ import { AppError, hashPassword } from '@oslsr/utils';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 
-// Password reset constants
+// Password reset constants — exported so the AC#4 rate-limit-coverage test
+// can sentinel them as the canonical NFR4.4 password-reset 3/email/hour contract.
 const RESET_TOKEN_EXPIRY = 60 * 60;           // 1 hour (in seconds)
-const RESET_RATE_LIMIT = 3;                   // 3 requests per hour
-const RESET_RATE_WINDOW = 60 * 60;            // 1 hour (in seconds)
+export const RESET_RATE_LIMIT = 3;            // 3 requests per hour (NFR4.4)
+export const RESET_RATE_WINDOW = 60 * 60;     // 1 hour in seconds (NFR4.4)
 
 // Redis key patterns
 const RESET_TOKEN_KEY_PREFIX = 'password_reset:';

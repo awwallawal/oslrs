@@ -9,6 +9,7 @@ import { requireFreshReAuth } from '../middleware/require-fresh-reauth.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
 import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit, activationRateLimit } from '../middleware/registration-rate-limit.js';
 import { googleAuthRateLimit } from '../middleware/google-auth-rate-limit.js';
+import { reauthRateLimit } from '../middleware/reauth-rate-limit.js';
 import { AppError } from '@oslsr/utils';
 
 const router = Router();
@@ -102,8 +103,11 @@ router.post('/reset-password',
 );
 
 // Re-authenticate for sensitive actions
+// Story 9-9 AC#4 (2026-05-10): added reauthRateLimit (5/IP/15min) — defense-in-depth
+// against password brute-force from a stolen-token holder. See reauth-rate-limit.ts.
 router.post('/reauth',
   authenticate,
+  reauthRateLimit,
   AuthController.reAuth
 );
 
