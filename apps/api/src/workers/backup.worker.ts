@@ -17,9 +17,10 @@ import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../lib/redis.js';
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, statSync, unlinkSync, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, statSync, unlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import {
   S3Client,
   PutObjectCommand,
@@ -35,6 +36,13 @@ import { users, respondents, auditLogs, submissions } from '../db/schema/index.j
 import { roles } from '../db/schema/index.js';
 import { sql, eq, and } from 'drizzle-orm';
 import { queueBackupNotificationEmail } from '../queues/email.queue.js';
+import {
+  isEncryptionEnabled,
+  getEncryptionKey,
+  createEncryptCipher,
+  buildEncryptionMeta,
+  type EncryptionMeta,
+} from '../lib/backup-crypto.js';
 
 const logger = pino({ name: 'backup-worker' });
 
@@ -59,6 +67,17 @@ export interface BackupManifest {
     submissions: number;
   };
   retentionTier: 'daily' | 'monthly';
+  /**
+   * Story 9-9 AC#5: present when BACKUP_ENCRYPTION_KEY was set at backup time
+   * and the .sql.gz was encrypted with AES-256-GCM before S3 upload. Absent for
+   * legacy unencrypted backups (.sql.gz suffix). Restore script reads this to
+   * decide whether to decrypt + which IV/auth-tag to use.
+   *
+   * - sizeBytes when encrypted: ciphertext bytes uploaded to S3 (NOT the plaintext .sql.gz size).
+   * - checksumSha256 when encrypted: hash of the ciphertext (proves S3 object integrity end-to-end).
+   *   Plaintext integrity is guaranteed by GCM auth tag, not this hash.
+   */
+  encryption?: EncryptionMeta;
 }
 
 // ============================================================================
@@ -438,40 +457,75 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
   }
 
   const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  const filename = `${dateStr}-app_db.sql.gz`;
-  const tmpPath = path.join(tmpdir(), filename);
+  const plainFilename = `${dateStr}-app_db.sql.gz`;
+  const tmpPlainPath = path.join(tmpdir(), plainFilename);
+
+  // Story 9-9 AC#5: encrypt with AES-256-GCM before S3 upload when key is set.
+  // Filename gets `.enc` suffix and the manifest records the algorithm + IV +
+  // auth tag so the restore script can reconstruct decryption.
+  const encrypt = isEncryptionEnabled();
+  const filename = encrypt ? `${plainFilename}.enc` : plainFilename;
+  const tmpEncryptedPath = path.join(tmpdir(), filename);
   const s3Key = `backups/daily/${filename}`;
   const bucket = getBucketName();
   const s3 = createS3Client();
 
-  logger.info({ event: 'backup.start', date: dateStr, filename });
+  logger.info({ event: 'backup.start', date: dateStr, filename, encrypted: encrypt });
 
   try {
-    // Step 1: Execute pg_dump
+    // Step 1: Execute pg_dump → plaintext gzipped file
     logger.info({ event: 'backup.pg_dump.start' });
-    executePgDump(databaseUrl, tmpPath);
+    executePgDump(databaseUrl, tmpPlainPath);
     logger.info({ event: 'backup.pg_dump.complete' });
 
-    // Step 2: Compute SHA-256 checksum via streaming (avoids loading full file into memory)
-    const checksumSha256 = await computeFileChecksum(tmpPath);
-    const sizeBytes = statSync(tmpPath).size;
+    // Step 2 (optional): Encrypt the gzipped plaintext via streaming AES-256-GCM.
+    // Plaintext file is removed after encryption succeeds — only the ciphertext leaves the host.
+    let encryptionMeta: EncryptionMeta | undefined;
+    let uploadPath = tmpPlainPath;
+    if (encrypt) {
+      logger.info({ event: 'backup.encrypt.start' });
+      const key = getEncryptionKey();
+      const { cipher, iv } = createEncryptCipher(key);
+      await pipeline(
+        createReadStream(tmpPlainPath),
+        cipher,
+        createWriteStream(tmpEncryptedPath),
+      );
+      encryptionMeta = buildEncryptionMeta(iv, cipher);
+      // Drop plaintext immediately — its contents are now sealed in the ciphertext file.
+      if (existsSync(tmpPlainPath)) unlinkSync(tmpPlainPath);
+      uploadPath = tmpEncryptedPath;
+      logger.info({
+        event: 'backup.encrypt.complete',
+        algorithm: encryptionMeta.algorithm,
+        ivHex: encryptionMeta.ivHex,
+        // intentionally NOT logging the auth tag at info level — it's effectively a MAC and
+        // logging it would aid an attacker who saw both the log and the ciphertext.
+      });
+    }
+
+    // Step 3: Compute SHA-256 of the upload payload (ciphertext when encrypted, plaintext gzip otherwise).
+    // This proves S3-object integrity end-to-end. Plaintext integrity is enforced by the GCM auth tag, not this hash.
+    const checksumSha256 = await computeFileChecksum(uploadPath);
+    const sizeBytes = statSync(uploadPath).size;
     logger.info({ event: 'backup.checksum.computed', sizeBytes, checksumSha256: checksumSha256.substring(0, 16) + '...' });
 
-    // Step 3: Upload to S3
+    // Step 4: Upload to S3
     logger.info({ event: 'backup.s3_upload.start', key: s3Key });
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: s3Key,
-      Body: createReadStream(tmpPath),
+      Body: createReadStream(uploadPath),
       ContentLength: sizeBytes,
-      ContentType: 'application/gzip',
+      ContentType: encrypt ? 'application/octet-stream' : 'application/gzip',
       Metadata: {
         'checksum-sha256': checksumSha256,
         'backup-date': dateStr,
+        ...(encryptionMeta ? { 'encryption-algorithm': encryptionMeta.algorithm } : {}),
       },
     }));
 
-    // Step 4: Verify upload
+    // Step 5: Verify upload
     const headResult = await s3.send(new HeadObjectCommand({
       Bucket: bucket,
       Key: s3Key,
@@ -482,11 +536,11 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
     }
     logger.info({ event: 'backup.s3_upload.verified', s3Key });
 
-    // Step 5: Collect table counts
+    // Step 6: Collect table counts
     const tableCounts = await getTableCounts();
     logger.info({ event: 'backup.table_counts', ...tableCounts });
 
-    // Step 6: Build and upload manifest
+    // Step 7: Build and upload manifest
     const durationMs = Date.now() - startTime;
     const redactedUrl = new URL(databaseUrl);
     const manifest: BackupManifest = {
@@ -499,6 +553,7 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
       databaseUrl: redactedUrl.hostname,
       tableCounts,
       retentionTier: 'daily',
+      ...(encryptionMeta ? { encryption: encryptionMeta } : {}),
     };
 
     const manifestKey = `backups/manifests/${dateStr}-manifest.json`;
@@ -510,23 +565,22 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
     }));
     logger.info({ event: 'backup.manifest.uploaded', manifestKey });
 
-    // Step 7: Retention management
+    // Step 8: Retention management
     const deletedDailies = await cleanupOldDailies(s3, bucket);
     const promoted = await promoteToMonthly(s3, bucket, dateStr);
     const deletedMonthlies = await cleanupOldMonthlies(s3, bucket);
     logger.info({ event: 'backup.retention', deletedDailies, promoted, deletedMonthlies });
 
-    // Step 8: Send success notification
+    // Step 9: Send success notification
     await sendBackupSuccessEmail(manifest);
 
-    logger.info({ event: 'backup.complete', durationMs, sizeBytes, filename });
+    logger.info({ event: 'backup.complete', durationMs, sizeBytes, filename, encrypted: encrypt });
 
     return manifest;
   } finally {
-    // Always clean temp file
-    if (existsSync(tmpPath)) {
-      unlinkSync(tmpPath);
-    }
+    // Always clean both temp files (plaintext may still exist if encryption step threw early)
+    if (existsSync(tmpPlainPath)) unlinkSync(tmpPlainPath);
+    if (existsSync(tmpEncryptedPath)) unlinkSync(tmpEncryptedPath);
   }
 }
 

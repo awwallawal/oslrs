@@ -543,7 +543,7 @@ OS patching ✅ done 2026-04-25 (kernel 6.8.0-90 → 110, 49 packages, reboot cl
 - [ ] Add phone to Tailscale tailnet (Tailscale SSH iOS/Android app) — secondary access device, single-point-of-failure mitigation
 - [ ] Configure fail2ban with stricter `jail.local` (optional — `bantime = 1h`, `findtime = 10m`, `maxretry = 3`)
 - [ ] Add a second super-admin break-glass account (per Story 9-9 subtask)
-- [ ] Enable backup client-side encryption before S3 upload (per Story 9-9 subtask)
+- [x] Enable backup client-side encryption before S3 upload — **done 2026-05-09 per Story 9-9 AC#5.** AES-256-GCM via `apps/api/src/lib/backup-crypto.ts` + `apps/api/src/workers/backup.worker.ts`; gated on `BACKUP_ENCRYPTION_KEY` (32-byte hex). Restore script auto-detects via manifest. Recipe + drill in `docs/infrastructure-cicd-playbook.md` Part 12. Quarterly drill cadence added to §7 below.
 - [ ] Port audit: `ss -tlnp`, restrict Portainer public access (per Story 9-9 subtask)
 - [ ] Alerting tier: SMS/WhatsApp/paged channel for CRITICAL alerts (per Story 9-9 subtask)
 - [ ] Logrotate for PM2 logs + journalctl retention (per Story 9-9 subtask)
@@ -565,7 +565,9 @@ OS patching ✅ done 2026-04-25 (kernel 6.8.0-90 → 110, 49 packages, reboot cl
 
 ## 7. Drill — run this quarterly
 
-Simulate losing primary access. Goal: prove you can recover in under 30 minutes.
+### 7.1 Primary access drill — simulate losing Tailscale
+
+Goal: prove you can recover in under 30 minutes.
 
 1. Disconnect Tailscale on laptop (right-click tray → Exit)
 2. Attempt DO Web Console login — confirm works with password manager credentials
@@ -576,6 +578,49 @@ Simulate losing primary access. Goal: prove you can recover in under 30 minutes.
 7. (Optional) Boot Recovery Console, look at disk, exit back to normal boot
 
 If any step fails or takes >5 min to figure out, that's a finding — update this runbook with what was learned.
+
+### 7.2 Encrypted-backup restore drill — added 2026-05-09 per Story 9-9 AC#5
+
+Goal: prove the day's encrypted backup is recoverable to a scratch DB using the password-manager copy of `BACKUP_ENCRYPTION_KEY`. Catches three failure modes early:
+- Key drift (.env on VPS rotated but operator's password-manager copy didn't)
+- S3 ciphertext corruption
+- Restore-script regression (gunzip/decrypt pipeline broken by a future code change)
+
+Run on the same calendar cadence as 7.1 (quarterly).
+
+```bash
+# On operator laptop (Tailscale):
+ssh root@oslsr-home-app
+
+# On VPS — set up scratch DB
+docker run -d --name=restore-drill-db \
+  -e POSTGRES_USER=drill -e POSTGRES_PASSWORD=drill -e POSTGRES_DB=drill_db \
+  -p 127.0.0.1:55432:5432 postgres:15-alpine
+
+# Wait ~5s for postgres ready, then run restore against scratch DB
+DATABASE_URL=postgresql://drill:drill@127.0.0.1:55432/drill_db \
+  pnpm --filter @oslsr/api tsx scripts/restore-backup.ts --latest \
+    --target-db postgresql://drill:drill@127.0.0.1:55432/drill_db --confirm
+
+# Expected output:
+#   Downloaded backups/daily/YYYY-MM-DD-app_db.sql.gz.enc (X.XX MB)
+#   Checksum verified.
+#   Decrypting (aes-256-gcm)...
+#   Decryption verified (GCM auth tag passed).
+#   Decompressing...
+#   Restoring to 127.0.0.1:55432/drill_db...
+#   Restore complete.
+#   All table counts match.
+
+# Cleanup
+docker stop restore-drill-db && docker rm restore-drill-db
+```
+
+If decryption fails: the operator's password-manager copy of `BACKUP_ENCRYPTION_KEY` no longer matches what's encrypting prod backups. **Compare the password-manager copy against the VPS `/root/oslrs/.env` value byte-for-byte.** If they differ, either (a) someone rotated the key without updating the password manager — restore the password-manager copy from paper backup, OR (b) the password-manager copy was corrupted on save — re-store from VPS .env.
+
+If the key matches but decryption still fails: ciphertext or auth-tag tampering. Investigate S3 audit log for unexpected writes; consider falling back to monthly retention (likely uncorrupted because lower write rate).
+
+Full recipe + failure-modes table in `docs/infrastructure-cicd-playbook.md` Part 12.
 
 ---
 

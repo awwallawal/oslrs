@@ -20,15 +20,21 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { execSync } from 'node:child_process';
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { writeFileSync, unlinkSync, existsSync, createReadStream, createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 import {
   S3Client,
   GetObjectCommand,
   ListObjectsV2Command,
   S3ClientConfig,
 } from '@aws-sdk/client-s3';
+import {
+  getEncryptionKey,
+  createDecryptDecipher,
+  type EncryptionMeta,
+} from '../src/lib/backup-crypto.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -132,7 +138,9 @@ async function listBackups(s3: S3Client, bucket: string): Promise<BackupEntry[]>
 
     if (result.Contents) {
       for (const obj of result.Contents) {
-        if (!obj.Key || !obj.Key.endsWith('.sql.gz')) continue;
+        if (!obj.Key) continue;
+        // Story 9-9 AC#5: accept both encrypted (.sql.gz.enc) and legacy (.sql.gz) keys.
+        if (!obj.Key.endsWith('.sql.gz') && !obj.Key.endsWith('.sql.gz.enc')) continue;
         entries.push({
           key: obj.Key,
           size: obj.Size || 0,
@@ -194,9 +202,12 @@ async function downloadFromS3(s3: S3Client, bucket: string, key: string, outputP
 
 interface ManifestData {
   filename: string;
+  s3Key?: string;
   checksumSha256: string;
   sizeBytes: number;
   tableCounts: Record<string, number>;
+  /** Story 9-9 AC#5: present when this backup was encrypted with AES-256-GCM. */
+  encryption?: EncryptionMeta;
 }
 
 async function downloadManifest(s3: S3Client, bucket: string, manifestKey: string): Promise<ManifestData | null> {
@@ -218,13 +229,25 @@ async function downloadManifest(s3: S3Client, bucket: string, manifestKey: strin
 
 function resolveS3Key(args: RestoreArgs, entries: BackupEntry[]): string {
   switch (args.mode) {
-    case 'date':
+    case 'date': {
+      // Story 9-9 AC#5: prefer the encrypted variant (.sql.gz.enc) if it exists in the
+      // listing; fall back to legacy unencrypted (.sql.gz). The manifest is the canonical
+      // source for the actual key + encryption state, but this resolver runs before the
+      // manifest is downloaded — so we pick from the listing.
       if (!args.dateValue) throw new Error('--date requires a value (YYYY-MM-DD)');
-      return `backups/daily/${args.dateValue}-app_db.sql.gz`;
+      const encKey = `backups/daily/${args.dateValue}-app_db.sql.gz.enc`;
+      const plainKey = `backups/daily/${args.dateValue}-app_db.sql.gz`;
+      if (entries.some((e) => e.key === encKey)) return encKey;
+      return plainKey;
+    }
 
-    case 'monthly':
+    case 'monthly': {
       if (!args.dateValue) throw new Error('--monthly requires a value (YYYY-MM)');
-      return `backups/monthly/${args.dateValue}-app_db.sql.gz`;
+      const encKey = `backups/monthly/${args.dateValue}-app_db.sql.gz.enc`;
+      const plainKey = `backups/monthly/${args.dateValue}-app_db.sql.gz`;
+      if (entries.some((e) => e.key === encKey)) return encKey;
+      return plainKey;
+    }
 
     case 'latest':
       if (entries.length === 0) throw new Error('No backups found');
@@ -315,17 +338,22 @@ async function restore(args: RestoreArgs): Promise<void> {
     return;
   }
 
-  // Download backup and manifest
-  const tmpBackup = path.join(tmpdir(), `restore-${Date.now()}.sql.gz`);
-  const tmpSql = tmpBackup.replace('.gz', '');
+  // Download backup and manifest. Encrypted backups (.sql.gz.enc) are saved with their
+  // ciphertext suffix, decrypted to a sibling .sql.gz, then gunzipped to .sql.
+  const isEncryptedKey = s3Key.endsWith('.sql.gz.enc');
+  const tmpDownload = path.join(tmpdir(), `restore-${Date.now()}${isEncryptedKey ? '.sql.gz.enc' : '.sql.gz'}`);
+  const tmpGzip = isEncryptedKey ? tmpDownload.replace(/\.enc$/, '') : tmpDownload;
+  const tmpSql = tmpGzip.replace(/\.gz$/, '');
 
   try {
-    await downloadFromS3(s3, bucket, s3Key, tmpBackup);
+    await downloadFromS3(s3, bucket, s3Key, tmpDownload);
     const manifest = await downloadManifest(s3, bucket, manifestKey);
 
-    // Verify checksum if manifest available
+    // Verify checksum if manifest available. The manifest's checksumSha256 hashes the
+    // S3-uploaded payload — ciphertext when encrypted, plaintext gzip otherwise — so we
+    // hash the downloaded file BEFORE any decryption.
     if (manifest) {
-      const fileBuffer = await import('node:fs').then(fs => fs.readFileSync(tmpBackup));
+      const fileBuffer = await import('node:fs').then(fs => fs.readFileSync(tmpDownload));
       const checksum = createHash('sha256').update(fileBuffer).digest('hex');
       if (checksum !== manifest.checksumSha256) {
         throw new Error(`Checksum mismatch! Expected ${manifest.checksumSha256}, got ${checksum}`);
@@ -333,9 +361,34 @@ async function restore(args: RestoreArgs): Promise<void> {
       console.log('Checksum verified.');
     }
 
+    // Story 9-9 AC#5: decrypt if the backup is encrypted. Manifest is preferred for the
+    // encryption metadata; if the key looks encrypted but the manifest is missing, fail loudly
+    // — we cannot decrypt without IV + auth tag, and silently restoring the wrong file (or
+    // mid-decryption garbage) would be worse than aborting.
+    if (isEncryptedKey) {
+      if (!manifest?.encryption) {
+        throw new Error(
+          `Cannot decrypt ${s3Key}: manifest missing or has no encryption metadata. ` +
+            `If this backup predates AC#5, the .sql.gz.enc suffix is a misnomer — ` +
+            `restore the legacy .sql.gz key instead.`,
+        );
+      }
+      console.log(`Decrypting (${manifest.encryption.algorithm})...`);
+      const key = getEncryptionKey();
+      const decipher = createDecryptDecipher(key, manifest.encryption);
+      await pipeline(
+        createReadStream(tmpDownload),
+        decipher,
+        createWriteStream(tmpGzip),
+      );
+      // Drop ciphertext immediately — only the plaintext gzip is needed from here on
+      if (tmpDownload !== tmpGzip && existsSync(tmpDownload)) unlinkSync(tmpDownload);
+      console.log('Decryption verified (GCM auth tag passed).');
+    }
+
     // Decompress
     console.log('Decompressing...');
-    execSync(`gunzip -f ${tmpBackup}`, { timeout: 120000 });
+    execSync(`gunzip -f ${tmpGzip}`, { timeout: 120000 });
 
     if (!existsSync(tmpSql)) {
       throw new Error('Decompression failed: output file not found');
@@ -380,8 +433,9 @@ async function restore(args: RestoreArgs): Promise<void> {
       console.log(allMatch ? 'All table counts match.' : 'WARNING: Some table counts do not match!');
     }
   } finally {
-    // Cleanup temp files
-    if (existsSync(tmpBackup)) unlinkSync(tmpBackup);
+    // Cleanup temp files (download + intermediate gzip + final sql)
+    if (existsSync(tmpDownload)) unlinkSync(tmpDownload);
+    if (tmpGzip !== tmpDownload && existsSync(tmpGzip)) unlinkSync(tmpGzip);
     if (existsSync(tmpSql)) unlinkSync(tmpSql);
   }
 }

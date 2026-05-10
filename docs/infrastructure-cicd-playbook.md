@@ -1418,4 +1418,65 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 *Updated: 2026-05-03 — Pitfalls #28-29 added per Story 11-1 follow-up: db:push aggressively reconciles + drops init-script objects (CHECK constraints, partial unique indexes, raw-SQL composite indexes) → introduces `pnpm db:push:full` umbrella that auto-discovers every `migrate-*-init.ts` runner and chains them after push; `--reset` flags on seed scripts need explicit env-var gates because env-name guards only protect against prod hostnames, not local dev DBs holding real backup-restored data. Caught after Story 11-1's `seed-projected-scale.ts --reset` wiped 874 audit_logs rows on first run; fix-forward shipped both the env-var gate and the umbrella in the same story.*
 *Updated: 2026-05-03 — Pitfall #30 added: doc-track ‖ code-track parallelism (Story 10-5 legal docs + Story 9-11 audit-viewer code) is safe when zero file overlap + zero semantic coupling — don't reflexively flag mixed working trees as "contamination" without measuring overlap first. Discipline is selective staging at commit time, not a working-tree blocker.*
 *Updated: 2026-05-09 — Pitfall #31 added: GH Actions E2E job had been silently failing across 2 commits (fe878af + 096086e) with `chromium_headless_shell-1208 doesn't exist` because the Playwright browser cache key tracked `apps/web/package.json` text instead of `pnpm-lock.yaml` resolved version, AND the `restore-keys` fallback was too permissive (matched broken v1 caches). Compounded by `pnpm dlx playwright install` fetching a latest Playwright that targeted a newer browser revision than the project's pinned `@playwright/test` expects. Fix: cache key includes `pnpm-lock.yaml` + manual `v2-` prefix; restore-keys narrowed to `v2-`-only; dlx swapped for `pnpm --filter @oslsr/web exec` so project-pinned Playwright drives both install and runtime. Visibility lesson: `continue-on-error: true` on a CI job needs a separate visible-red signal or red becomes wallpaper.*
+
+## Part 12: Encrypted Backup Restore (added 2026-05-09 per Story 9-9 AC#5)
+
+**Why this part exists.** The daily backup worker (`apps/api/src/workers/backup.worker.ts`) encrypts the gzipped Postgres dump with AES-256-GCM before upload to DigitalOcean Spaces when `BACKUP_ENCRYPTION_KEY` is set. Object key gains `.enc` suffix; the manifest gains `encryption: { algorithm, ivHex, authTagHex }`. Backward-compat: legacy unencrypted `.sql.gz` objects in S3 remain restorable; the restore script auto-detects via the manifest.
+
+**Encryption contract:**
+- Algorithm: AES-256-GCM (authenticated encryption — tampering fails decryption with a clear error).
+- Key: 32 bytes / 64 hex chars, generated with `openssl rand -hex 32`. Stored ONLY on the VPS `.env` + operator's password manager + paper backup.
+- IV: 12 bytes, freshly random per backup (recorded in manifest).
+- Auth tag: 16 bytes (recorded in manifest).
+- IV + auth tag are NOT secret — only the key is. The manifest can sit in S3 in cleartext alongside the ciphertext object; the key cannot.
+
+**Restore — encrypted backup (post-2026-05-09):**
+
+```bash
+# 1. From a host with BACKUP_ENCRYPTION_KEY in env (operator laptop or VPS):
+ssh root@oslsr-home-app    # if running on VPS
+
+# 2. List available backups (auto-shows both .sql.gz and .sql.gz.enc)
+pnpm --filter @oslsr/api tsx scripts/restore-backup.ts --list
+
+# 3. Restore a specific date (script prefers .sql.gz.enc when present):
+pnpm --filter @oslsr/api tsx scripts/restore-backup.ts --date 2026-05-09 --target-db postgresql://... --confirm
+
+# What the script does internally:
+#   a. Lists S3 objects, prefers .sql.gz.enc over .sql.gz for the requested date.
+#   b. Downloads ciphertext + manifest.
+#   c. Hashes ciphertext + verifies against manifest.checksumSha256 (S3-object integrity).
+#   d. Reads manifest.encryption — if present, pipes ciphertext through AES-256-GCM decipher
+#      with the recorded IV + auth tag. GCM auth-tag verification triggers on the final block;
+#      a wrong key, tampered ciphertext, or tampered tag throws before any plaintext lands.
+#   e. gunzips the resulting .sql.gz to .sql.
+#   f. psql restores into the target database.
+#   g. Re-counts table rows and compares to manifest.tableCounts.
+```
+
+**Restore — legacy unencrypted backup (pre-2026-05-09):**
+
+Same command. The script's `resolveS3Key` falls back to `.sql.gz` when no `.sql.gz.enc` exists for the requested date, and skips the decrypt step when `manifest.encryption` is absent.
+
+**Failure modes worth knowing:**
+
+| Symptom | Likely cause | Recovery |
+|---|---|---|
+| `BACKUP_ENCRYPTION_KEY env var not set` | Restoring an encrypted backup without the key on the host | Set the env var from the password-manager copy and retry |
+| `BACKUP_ENCRYPTION_KEY must be 64 hex chars` | Truncated paste / extra whitespace | Re-paste the key from password manager, no trailing newline |
+| `Unsupported algorithm: <X>` from `createDecryptDecipher` | Future-format backup restored with old code | Update the restore script to the same git revision the worker shipped |
+| `Cannot decrypt <key>: manifest missing or has no encryption metadata` | `.sql.gz.enc` exists in S3 but no manifest, OR manifest from before AC#5 doesn't have the encryption field | Restore the legacy `.sql.gz` instead, OR rebuild manifest manually from S3 ListObjects + the IV/tag stored in S3 object Metadata (`encryption-algorithm` HEAD field) |
+| `Unsupported state or unable to authenticate data` (GCM) | Wrong key, OR ciphertext or auth tag was tampered with at rest | Verify key against password-manager copy; if key matches, re-download the S3 object (could be S3 corruption — rare) |
+
+**Operator quarterly drill** — run from runbook §7 cadence:
+
+```bash
+# Off-prod scratch DB (do not aim --target-db at production)
+DATABASE_URL=postgresql://test_user:test_password@localhost:5432/restore_drill_db \
+  pnpm --filter @oslsr/api tsx scripts/restore-backup.ts --latest --target-db $DATABASE_URL --confirm
+```
+
+Expected: clean restore with table counts matching the manifest. Any divergence = drill failure → write-up + next-day investigation.
+
+*Updated: 2026-05-09 — Part 12 (encrypted backup restore) added per Story 9-9 AC#5. Restore script handles both encrypted and legacy backups via manifest auto-detection.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*
