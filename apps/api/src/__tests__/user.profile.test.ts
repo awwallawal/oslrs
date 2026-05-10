@@ -15,6 +15,11 @@ describe('User Profile Integration', () => {
   const email = `profile-test-${Date.now()}@example.com`;
   const otherEmail = `profile-other-${Date.now()}@example.com`;
   const password = 'TestPass123!';
+  // Dynamic phones to avoid `users_phone_unique` collisions when a prior test run
+  // left residue in the test DB (e.g., killed mid-test before afterAll cleanup).
+  // Derived from Date.now() like the email fixtures above; padded to E.164 NG length.
+  const phone = `0801${String(Date.now() % 10_000_000).padStart(7, '0')}`;
+  const otherPhone = `0809${String((Date.now() + 1) % 10_000_000).padStart(7, '0')}`;
 
   beforeAll(async () => {
     await db.insert(roles).values([
@@ -27,7 +32,7 @@ describe('User Profile Integration', () => {
     const [user] = await db.insert(users).values({
       email,
       fullName: 'Profile Test User',
-      phone: '08011111111',
+      phone,
       roleId: role!.id,
       status: 'active',
       passwordHash: hashedPw,
@@ -39,7 +44,7 @@ describe('User Profile Integration', () => {
     const [otherUser] = await db.insert(users).values({
       email: otherEmail,
       fullName: 'Other User',
-      phone: '08099999999',
+      phone: otherPhone,
       roleId: role!.id,
       status: 'active',
       passwordHash: hashedPw,
@@ -76,7 +81,7 @@ describe('User Profile Integration', () => {
       expect(res.body.data.id).toBe(userId);
       expect(res.body.data.email).toBe(email);
       expect(res.body.data.fullName).toBe('Profile Test User');
-      expect(res.body.data.phone).toBe('08011111111');
+      expect(res.body.data.phone).toBe(phone);
       expect(res.body.data.status).toBe('active');
       expect(res.body.data.roleName).toBe('super_admin');
       expect(res.body.data).toHaveProperty('createdAt');
@@ -142,7 +147,7 @@ describe('User Profile Integration', () => {
       const res = await request
         .patch('/api/v1/users/profile')
         .set('Authorization', `Bearer ${accessToken}`)
-        .send({ phone: '08099999999' }); // Other user's phone
+        .send({ phone: otherPhone }); // Other user's phone
 
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('DUPLICATE_PHONE');
@@ -153,13 +158,13 @@ describe('User Profile Integration', () => {
       await request
         .patch('/api/v1/users/profile')
         .set('Authorization', `Bearer ${accessToken}`)
-        .send({ phone: '08011111111' });
+        .send({ phone });
 
       // Should succeed — same phone as current
       const res = await request
         .patch('/api/v1/users/profile')
         .set('Authorization', `Bearer ${accessToken}`)
-        .send({ phone: '08011111111' });
+        .send({ phone });
 
       expect(res.status).toBe(200);
     });

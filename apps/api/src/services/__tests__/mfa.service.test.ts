@@ -48,7 +48,12 @@ async function createSuperAdminUser(email: string): Promise<string> {
   return user.id;
 }
 
-describe('MfaService', () => {
+// MFA tests run bcrypt password operations + DB writes per case. In isolation each
+// case finishes in 1-5 s; under full-suite parallelism + CPU contention the slower
+// ones (`redeemBackupCode` round-trip, `regenerateBackupCodes`) brush the default
+// 5 s timeout. Bumping to 15 s here keeps the suite green without masking real
+// regressions — if a test exceeds 15 s, that IS a real signal worth investigating.
+describe('MfaService', { timeout: 15000 }, () => {
   beforeAll(async () => {
     // Sanity check that schema is applied — fail fast with a useful message if not.
     try {
