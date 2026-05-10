@@ -124,11 +124,16 @@ so that **I can complete registration in one continuous flow without bouncing ac
   - [ ] 2.5 Audit-logging on flag flip is handled by `prep-settings-landing` `SETTINGS_FLIPPED` event — this story doesn't duplicate that
   - [ ] 2.6 Tests: confirm enabling the flag does not break any existing flow (regression suite); verify `503 SMS_OTP_DISABLED` shape when disabled
 
-- [ ] **Task 3 — Backend: pending-NIN status path** (AC: #4, #9, #10)
-  - [ ] 3.1 Wire wizard Step 5 submit → `SubmissionProcessingService.findOrCreateRespondent` (`apps/api/src/services/submission-processing.service.ts:310`) with conditional NIN-presence branching (Story 11-1 AC#7 prerequisite — should already be in place by the time this story implements)
-  - [ ] 3.2 Endpoint `POST /api/v1/registration/complete-nin` — validates magic-link session, accepts NIN, runs FR21 dedupe, promotes `status` to `active` on success
-  - [ ] 3.3 Endpoint `POST /api/v1/registration/defer-reminder` — resets reminder timer; audit-logged with `PENDING_NIN_DEFERRED` action
-  - [ ] 3.4 Tests: status promotion, FR21-at-promotion, defer-reminder timer reset
+- [ ] **Task 3 — Backend: pending-NIN status path (universal — all sources)** (AC: #4, #9, #10) — **EXPANDED 2026-05-10 per Universal Pending-NIN Option 1; see Dev Notes**
+  - [ ] 3.1 Wire wizard Step 5 submit → `SubmissionProcessingService.findOrCreateRespondent` (`apps/api/src/services/submission-processing.service.ts:310`) with conditional NIN-presence branching. **Remove the NIN-required throw at line 359**; route to `findOrCreateRespondent` with `nin: undefined` when missing (regardless of source).
+  - [ ] 3.2 Endpoint `POST /api/v1/registration/complete-nin` — validates magic-link session, accepts NIN, runs FR21 dedupe, promotes `status` to `active` on success. Fires `PENDING_NIN_PROMOTED` audit event.
+  - [ ] 3.3 Endpoint `POST /api/v1/registration/defer-reminder` — resets reminder timer; audit-logged with `PENDING_NIN_DEFERRED` action.
+  - [ ] 3.4 Tests: status promotion, FR21-at-promotion, defer-reminder timer reset.
+  - [ ] 3.5 **Race-resolution merge** (D1 in Universal Pending-NIN Dev Notes): in `findOrCreateRespondent`, when `nin` is provided, BEFORE insert run fuzzy-match SQL against pending rows (lower(first_name) + lower(last_name) + normalized phone_number). On match → atomic UPDATE pending row to `nin = $`, `status = 'active'`; fire `PENDING_NIN_PROMOTED`. On miss → standard insert. Edge cases: no phone → no merge; name typo → no merge (acceptable; supervisor reconciles via Story 9-11).
+  - [ ] 3.6 **`resolveReminderDestination` pure function** (D2 in Dev Notes): `apps/api/src/workers/reminder.worker.ts` (NEW per Task 1.9) imports from a new `apps/api/src/services/pending-nin.service.ts` helper. 5-branch precedence per source (public → email; enumerator → email | sms-when-flag-on | supervisor; clerk → email | supervisor; imported_* → no reminder). Tested in isolation per source + missing-fields shape.
+  - [ ] 3.7 **Anti-abuse data surface** (D6 in Dev Notes): aggregate query exposed via existing supervisor dashboard infrastructure. Query shape: per-enumerator, last 7 days, `total_submissions`, `pending_nin_submissions`, `pending_nin_unresolved_at_7d`, `defer_reason_provided_count`. Build the query + supervisor-dashboard widget. **UI soft-warning affordance deferred** to post-field-survey (D6 explicit defer).
+  - [ ] 3.8 **Audit actions** (D4 in Dev Notes): append `PENDING_NIN_CREATED` + `PENDING_NIN_PROMOTED` to `AUDIT_ACTIONS` const at `audit.service.ts`. Bump `audit.service.test.ts:165` sentinel from `.toHaveLength(38)` to `.toHaveLength(40)` with heritage-comment line. **Critical**: this same sentinel pattern broke CI on commit `adb956b` → fixed in `d648b6d` — apply preemptively this time.
+  - [ ] 3.9 Tests for the new behaviour: race-resolution merge happy path + name-typo-no-merge + no-phone-no-merge + concurrent-merge-attempts (race-safe via UPDATE...WHERE...usedAt IS NULL idiom equivalent on status); reminder-destination per-source assertions; aggregate-query shape verification.
 
 - [ ] **Task 4 — Frontend: WizardLayout + WizardStepIndicator** (AC: #1, #2)
   - [ ] 4.1 New layout `apps/web/src/layouts/WizardLayout.tsx` — sticky step indicator + content slot + sticky trust badges footer
@@ -136,16 +141,17 @@ so that **I can complete registration in one continuous flow without bouncing ac
   - [ ] 4.3 URL routing: `/register?step=N` with TanStack Router
   - [ ] 4.4 Auto-save server-side draft on every field change (debounced 2s) + IndexedDB local cache for offline-tolerance
   - [ ] 4.5 Tests: navigation between steps, draft hydration, mobile collapse breakpoint
+  - [ ] 4.6 **Form-schema NIN introspection on Step 4 mount** (per Dev Notes "Step 5 NIN handling — state-aware dispatcher"): after the form schema lands from the discovery endpoint, iterate `formSchema.sections[].questions[]` and set `formData.formHasNinQuestion = sections.some(s => s.questions.some(q => NIN_QUESTION_NAMES.includes(q.name)))`. Reuse `NIN_QUESTION_NAMES` constant from `apps/web/src/features/forms/pages/FormFillerPage.tsx:21` — export it from a shared module if needed; do NOT redefine.
 
 - [ ] **Task 5 — Frontend: 5 wizard steps** (AC: #1)
   - [ ] 5.1 `apps/web/src/features/registration/pages/Step1BasicInfo.tsx` — full name + DOB + gender form
   - [ ] 5.2 `apps/web/src/features/registration/pages/Step2ContactLga.tsx` — phone + email (with email-typo per AC#5) + LGA autocomplete
   - [ ] 5.3 `apps/web/src/features/registration/pages/Step3Consent.tsx` — Stage 1 + Stage 2 consent radios with progressive disclosure
   - [ ] 5.4 `apps/web/src/features/registration/pages/Step4Questionnaire.tsx` — mounts the existing native form renderer for the public-survey form within wizard chrome. **See Dev Notes "Step 4 Questionnaire Injection — design clarification (2026-05-10)" for the expanded 9-subtask checklist (5.4.0 design decision → 5.4.8 tests).** Source-type filter does NOT exist on the questionnaire schema today; Awwal picks discovery mechanism (Option A schema-extension / B system_settings / C convention). Default if unspecified = Option B.
-  - [ ] 5.5 `apps/web/src/features/registration/pages/Step5NinAndAuth.tsx` — NIN input + NinHelpHint inline + PendingNinToggle + magic-link/password/skip CTAs
+  - [ ] 5.5 `apps/web/src/features/registration/pages/Step5NinAndAuth.tsx` — **state-aware dispatcher** rendering State A (NIN captured in Step 4 questionnaire) / State B (pending NIN via inline toggle) / State C (form had no NIN question — original spec). **See Dev Notes "Step 5 NIN handling — state-aware dispatcher (2026-05-10)" for the expanded 4-subtask checklist (5.5.0 dispatcher → 5.5.4 tests) + State A/B/C sub-views (`Step5NinCaptured.tsx` / `Step5PendingNin.tsx` / `Step5NinInput.tsx`).**
 
 - [ ] **Task 6 — Frontend: shared form pattern components** (AC: #3, #4, #5, #8)
-  - [ ] 6.1 `apps/web/src/features/registration/components/NinHelpHint.tsx` (3 variants: inline, tooltip, banner) — see Sally's Custom Component #12 spec
+  - [ ] 6.1 `apps/web/src/features/registration/components/NinHelpHint.tsx` (3 variants: inline, tooltip, banner) — see Sally's Custom Component #12 spec. **Inline variant `onPendingNinClick` callback** (per Dev Notes "Step 5 NIN handling — state-aware dispatcher"): when fired during Step 4's NIN question, dispatches into wizard parent → sets `formData.pendingNinToggle = true` + `formData.questionnaireResponses.nin = null` + advances to next question via skip-logic engine. Triggers Step 5 State B downstream.
   - [ ] 6.2 `apps/web/src/features/registration/components/PendingNinToggle.tsx` — see Sally's Form Pattern
   - [ ] 6.3 `apps/web/src/features/registration/components/EmailTypoDetection.tsx` — published dictionary + correction suggestion + Use-this button. Uses `mailcheck` dictionary from `prep-input-sanitisation-layer` (`apps/api/src/lib/normalise/typo-dictionary.json` — verify how the frontend consumes it; client-side dictionary may need separate JSON copy or shared package export)
   - [ ] 6.4 `apps/web/src/features/registration/components/TrustBadgesRow.tsx` — three badges per Sally's Journey 2 visual contract
@@ -180,6 +186,12 @@ so that **I can complete registration in one continuous flow without bouncing ac
   - [ ] 11.2 Verify 4,191-test baseline maintained or grown
   - [ ] 11.3 Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `9-12-public-wizard-pending-nin-magic-link: in-progress` → `review` at PR → `done` at merge
   - [ ] 11.4 On merge + production deploy + first test respondent completion: flip FRC item #3 in `_bmad-output/planning-artifacts/epics.md` from `⏳ Backlog` → `✅ Done <date>`
+
+- [ ] **Task 13 — Frontend: enumerator + clerk pending-NIN toggle** (NEW 2026-05-10 per Universal Pending-NIN Option 1; AC: D5 in Dev Notes)
+  - [ ] 13.1 `apps/web/src/features/forms/pages/FormFillerPage.tsx` — wire NinHelpHint inline variant on the NIN question. When user clicks "I don't have my NIN now" link: prompt for optional `_deferReasonNin` free-text input + Confirm button. On confirm: stamp `submission.rawData._pendingNin = true`, `submission.rawData._deferReasonNin = <value>`, advance via skip-logic engine. Reuses existing `NIN_QUESTION_NAMES` constant (line 21).
+  - [ ] 13.2 `apps/web/src/features/forms/pages/ClerkDataEntryPage.tsx` — same toggle pattern, clerk-specific UI placement (paper-form data-entry layout). Same `_pendingNin` + `_deferReasonNin` rawData shape.
+  - [ ] 13.3 Submission contract: backend `submission-processing.service.ts:359` reads `_pendingNin` flag; if true → route to `findOrCreateRespondent` with `nin: undefined` (skip the NIN-required throw which is removed in Task 3.1). `_deferReasonNin` flows through to `PENDING_NIN_CREATED` audit event details.
+  - [ ] 13.4 Tests: enumerator toggle component test + clerk toggle component test + integration test verifying `_pendingNin` payload reaches `findOrCreateRespondent` correctly across both surfaces.
 
 - [ ] **Task 12 — Code review** (cross-cutting AC: all)
   - [ ] 12.1 Run `/bmad:bmm:workflows:code-review` on the uncommitted working tree (per the existing "code review before commit" project pattern in MEMORY.md `feedback_review_before_commit.md`)
@@ -270,6 +282,218 @@ So Task 5.4's "mounts the existing native form renderer for the public-survey fo
 
 **TL;DR**: the wizard does NOT reinvent the questionnaire engine — it MOUNTS the existing one. The architectural elegance is real, but the **discovery mechanism** ("which form is THE public form?") needs a small new infrastructure piece (Task 5.4.1-5.4.2). Recommend Option B; defer A unless multi-form-per-channel comes up post-Transfer.
 
+### Step 5 NIN handling — state-aware dispatcher (added 2026-05-10)
+
+**Spec gap discovered during Task 1 dev session, second clarification round**: AC#1 Step 5 says "NIN input with `NinHelpHint` inline + pending-NIN toggle (per AC#4)" and AC#4 places the toggle "under the NIN input on Step 5." Both implicitly assume NIN is NOT in the questionnaire. **It is.** Verified 2026-05-10 against the codebase:
+
+- `apps/web/src/features/forms/pages/FormFillerPage.tsx:21` — `const NIN_QUESTION_NAMES = ['nin', 'national_id']`. The renderer special-cases NIN.
+- `apps/web/src/features/forms/pages/FormFillerPage.tsx:111` — `const isCurrentNin = currentQuestion ? NIN_QUESTION_NAMES.includes(currentQuestion.name) : false`. NIN-question mode triggers different UI (real-time duplicate check).
+- `apps/web/src/features/forms/hooks/useNinCheck.ts` — debounced modulus-11 + duplicate-check via `/api/v1/forms/check-nin` while the user types.
+- `apps/api/src/services/submission-processing.service.ts:359` — extracts NIN from `rawData['nin']`. Story 11-1 made the downstream `findOrCreateRespondent` accept `nin?: string` (optional → pending_nin_capture row).
+- The active form (`oslsr_master_v3.xlsx` per Awwal 2026-05-10) HAS a NIN question; future forms may or may not.
+
+**Without resolution**: Step 4 collects NIN inside the questionnaire AND Step 5 collects NIN again — duplicate input, conflicting state, confused UX.
+
+**Resolution: Step 5 becomes a state-aware dispatcher, not a fixed UI.** It reads what happened upstream (Step 4 + form-schema introspection) and renders one of three states:
+
+| State | Trigger condition | Step 5 UI | On submit |
+|---|---|---|---|
+| **A — NIN captured** | `formData.questionnaireResponses.nin` is present AND modulus-11 valid AND duplicate check passed | "✓ NIN captured: 1234***8901" confirmation card + auth choices (magic-link / password / skip). **No NIN input rendered.** | `respondent.status = 'active'`. FR21 dedup runs at submission-processing layer (already in place). |
+| **B — Pending NIN** | User clicked the inline "I don't have my NIN now" link in Step 4 (set `formData.pendingNinToggle = true` + cleared `formData.questionnaireResponses.nin`) | The Info-50 consequence-preview card from AC#4 ("Saved as pending; we'll email reminders at T+2/7/14d…") + auth choices. **No NIN input rendered.** Submit-button label = "Save as Pending". | `respondent.status = 'pending_nin_capture'` + `pending_nin_complete` magic link sent. AC#10 reminder cadence kicks in. |
+| **C — Form has no NIN question** | `formData.formHasNinQuestion = false` (form-schema introspection at Step 4 mount found no question matching `NIN_QUESTION_NAMES`) | **Falls back to original AC#1 Step 5 + AC#4 spec verbatim**: NIN input + NinHelpHint inline + `<button role="switch">` pending-NIN toggle + auth choices. Wizard becomes sole NIN owner. | If NIN entered → `status='active'`; if toggle ON → `status='pending_nin_capture'` + magic link. Same as A/B downstream behaviour. |
+
+**Why state-aware**: per Awwal 2026-05-10 — "We can still change the questionnaire to another form and it would be rendered." The wizard must be ROBUST to form changes. State-aware Step 5 means publishing a NIN-less form makes the wizard automatically own NIN (State C) without code changes; publishing a NIN-carrying form lets the questionnaire own it (States A/B).
+
+**How the wizard knows which state it's in** — Step 4 mount-time introspection:
+1. After fetching the active form schema (per Step 4 Questionnaire Injection design clarification, Option B), iterate `formSchema.sections[].questions[]`.
+2. Set `formData.formHasNinQuestion = formSchema.sections.some(s => s.questions.some(q => NIN_QUESTION_NAMES.includes(q.name)))`.
+3. Persist into `wizard_drafts` via the existing 2s-debounced auto-save.
+
+**How the inline pending-NIN toggle wires to State B** — extends AC#3's inline NinHelpHint variant:
+1. AC#3 already specifies the inline variant has "I don't have my NIN now" link that "triggers the pending-NIN toggle in the parent wizard."
+2. When user clicks the link AT the NIN question in Step 4:
+   - Wizard sets `formData.pendingNinToggle = true`
+   - Wizard sets `formData.questionnaireResponses.nin = null`
+   - Skip-logic engine advances past the question (same way as a programmatic skip)
+   - Existing `useNinCheck` hook resets via its `reset()` method
+3. User continues through remaining Step 4 questions; reaches Step 5 in State B.
+
+**Implication for AC#4** (toggle location is now dynamic, not fixed under Step 5's NIN input):
+- States A/B → toggle does not appear in Step 5 (already triggered upstream OR unnecessary).
+- State C → toggle appears in Step 5 per original AC#4 spec.
+- The toggle BEHAVIOUR is unchanged; only its LOCATION is now state-dependent.
+- This is technically a spec amendment to AC#4. **Not modifying AC#4 text directly** per dev-story workflow's permitted-edit rule (AC modification needs SM workflow). Dev Agent implements per this Dev Notes section; future SM session can canonicalise.
+
+**Implication for `WizardDraftData` shape** (extends what was shipped in commit `adb956b`):
+
+```ts
+export interface WizardDraftData {
+  // ... existing fields shipped in adb956b ...
+
+  // Step 5 NIN handling — state-aware dispatcher (added 2026-05-10)
+  formHasNinQuestion?: boolean;            // set at Step 4 mount via schema introspection
+  questionnaireFormId?: string;            // for version-locking (Step 4 design clarification)
+  questionnaireFormVersionId?: string;     // for version-locking
+  // The existing `nin?: string` field is now POPULATED for State C only.
+  // For States A/B, NIN comes from questionnaireResponses.nin or is null.
+  // For State A: derive on submit via formData.questionnaireResponses.nin
+  // For State B: stays null/undefined; status drives the pending flow
+}
+```
+
+These are TypeScript-only additions to the type; no DB migration needed — `form_data` is JSONB.
+
+**Task 5.5 Step5NinAndAuth.tsx amendment** (extends the existing one-line task spec):
+- [ ] 5.5.0 **Dispatcher logic at component top**: read `formData.formHasNinQuestion`, `formData.questionnaireResponses.nin`, `formData.pendingNinToggle`. Compute current state ∈ {A, B, C}. Render the corresponding sub-component.
+- [ ] 5.5.1 **State A sub-view** (`Step5NinCaptured.tsx`): "✓ NIN captured: 1234***8901" confirmation card (last 4 digits visible, rest masked per Story 5-3 PII display pattern) + auth choices (magic-link primary CTA / password / skip).
+- [ ] 5.5.2 **State B sub-view** (`Step5PendingNin.tsx`): Info-50 consequence-preview card per AC#4 + auth choices. Submit-button label = "Save as Pending".
+- [ ] 5.5.3 **State C sub-view** (`Step5NinInput.tsx`): the original AC#1 Step 5 + AC#4 spec — NIN input + NinHelpHint inline + pending-NIN toggle + auth choices. **Reuses State A/B sub-views** at submit time (after NIN entered → State A view; after toggle on → State B view).
+- [ ] 5.5.4 **Tests**: dispatcher state-derivation tests (verify each state triggers correct sub-view) + per-sub-view component tests.
+
+**Task 4 amendment** (Wizard layout):
+- [ ] 4.6 **Form-schema introspection on Step 4 mount** — when the form schema lands from the discovery endpoint, iterate questions to compute `formHasNinQuestion`. Push into `formData` via auto-save. Reuse the `NIN_QUESTION_NAMES` constant from `apps/web/src/features/forms/pages/FormFillerPage.tsx:21` (export it from a shared module if needed; do NOT redefine).
+
+**Task 6 amendment** (NinHelpHint inline):
+- [ ] 6.1.x Wire the "I don't have my NIN now" link in the inline variant to dispatch into wizard parent: `onPendingNinClick={() => setWizardFormData({ pendingNinToggle: true, questionnaireResponses: { ...prev, nin: null } })}` then advance to next question.
+
+### Universal pending-NIN — Option 1 design (added 2026-05-10)
+
+**Scope expansion ratified by Awwal 2026-05-10**: pending-NIN extends from public-only to all submission sources (enumerator + clerk + public). Schema (Story 11-1) already supports it; the backend pipeline + frontend surfaces need extension. Story 9-12 grows from 5-7 dev-days to ~7-9 dev-days. Ships in current sprint window (< 2 weeks to field-survey) per Awwal's "do it once and for all, no technical debt" directive — instead of post-field-survey via a follow-up story.
+
+**The reframe**: pending-NIN is no longer a public-wizard feature; it's a system-wide capability of the registry. Step 5 dispatcher (Dev Notes "Step 5 NIN handling") is one of three frontend surfaces; enumerator FormFillerPage and ClerkDataEntryPage are the other two.
+
+**Six design decisions locked**:
+
+#### D1 — Race-resolution merge
+
+**Problem**: Enumerator A submits `Adebayo, +234801..., LGA Egbeda` as pending-NIN at 09:00. Enumerator B encounters the same person at a different location at 14:00, gets the NIN, submits. FR21 partial UNIQUE on `nin WHERE NOT NULL` doesn't catch this — we'd end up with two rows for the same person (one pending without NIN, one active with NIN).
+
+**Fix**: in `findOrCreateRespondent`, when `nin` is provided, BEFORE insert run a fuzzy-match against existing pending rows:
+
+```sql
+SELECT id FROM respondents
+WHERE status = 'pending_nin_capture'
+  AND nin IS NULL
+  AND lower(first_name) = lower($1)
+  AND lower(last_name) = lower($2)
+  AND phone_number = $3  -- assumes prep-input-sanitisation E.164-normalised value
+LIMIT 1
+```
+
+If hit → atomic UPDATE the pending row (set `nin = $4`, `status = 'active'`, log `PENDING_NIN_PROMOTED` audit event referencing the merged respondent_id). If miss → standard insert path.
+
+**Idempotency**: the partial UNIQUE on NIN (Story 11-1) catches subsequent duplicates downstream of the merge; race-safe under concurrent merge attempts (UPDATE ... WHERE nin IS NULL excludes already-promoted rows).
+
+**Edge case — phone normalisation**: relies on prep-input-sanitisation-layer's E.164 normaliser (already shipped, FRC #4 done). Both rows must have phone normalised to the same canonical form. If either lacks phone → fall through to standard insert (no merge).
+
+**Edge case — name typos**: strict equality on lowercased name. If respondent gave Enumerator A "Adebayo Adejumo" and Enumerator B "Adebayo Adejumo Bola" — no match; two rows created. Acceptable: better to leak a duplicate than to merge wrong people. Supervisor review queue can manually reconcile via Story 9-11 audit-log viewer.
+
+**Implementation surface**: ~30 lines in `apps/api/src/services/submission-processing.service.ts`. New audit event `PENDING_NIN_PROMOTED` (D4 below).
+
+#### D2 — Reminder destination precedence
+
+**`AC#10`** worker fires at T+2/7/14d for every pending-NIN respondent. Where does the email go?
+
+| `respondent.source` | Primary | Fallback 1 | Fallback 2 | If none |
+|---|---|---|---|---|
+| `public` | `respondent.email` (collected in wizard Step 2; always present) | — | — | (always present) |
+| `enumerator` | `respondent.email` (if collected) | SMS to `respondent.phoneNumber` (only if AC#7 SMS-OTP flag ON) | Supervisor of `respondent.lgaId` (via `team_assignments` lookup) | Skip; enqueue `T+7d` supervisor task |
+| `clerk` | `respondent.email` (rare; paper forms typically lack) | Supervisor of `respondent.lgaId` | — | Skip; enqueue `T+7d` supervisor task |
+| `imported_itf_supa` / `imported_other` | (no reminder — historical imports) | — | — | — |
+
+**Implementation**: pure function `resolveReminderDestination(respondent: Respondent): { type: 'email' | 'sms' | 'supervisor_task' | 'skip'; target: string | null }`. Tested in isolation; deterministic per source + collected-fields shape.
+
+**SMS-OTP feature flag dependency**: SMS fallback for enumerator-source pending-NIN reminders depends on AC#7's `auth.sms_otp_enabled` flag (which today defaults `false`). When SMS flag is ON and enumerator-source pending has phone but no email, send via SMS. Until SMS flips ON, that branch falls through to supervisor.
+
+**Implementation surface**: ~25 lines in `apps/api/src/workers/reminder.worker.ts` (Task 1.9 — already deferred to next session). Tests cover all 4 branches per source.
+
+#### D3 — Pay-on-completion (productivity metric)
+
+**Risk**: enumerators are paid per submission (Story 4-x productivity dashboards). Universal pending-NIN creates an abuse incentive — over-defer to inflate counts, never follow up.
+
+**Fix**: pending submissions do NOT count toward enumerator productivity until status flips to `active`. Productivity dashboards (Story 4-x) query `respondents.status = 'active'` AND `submitter_id = <enumerator>`.
+
+**Implementation**: zero new code at Story 4-x layer (the existing query already filters by status implicitly via the active-rows-only assumption — verify at impl time). What changes: pending-NIN respondents transition to active either via:
+- Respondent clicks magic-link + completes via `/registration/complete-nin` endpoint (Task 3.2)
+- Race-resolution merge (D1 above) — another submitter's NIN-bearing submission promotes the pending row
+
+In both cases, `submitter_id` on the original pending row is preserved — the enumerator who first captured the person gets the productivity credit when it lands. **NOT the enumerator who completed the NIN** (that's secondary; primary credit goes to outreach, not data entry).
+
+**Visibility**: add a "pending follow-up" column to enumerator productivity dashboard (separate from the productivity-credit number). Dev Note: this is a Story 4-x amendment; defer the dashboard column to a small follow-up task post-field-survey.
+
+#### D4 — Audit actions: 38 → 40
+
+Already added in commit `adb956b`: `MAGIC_LINK_ISSUED`, `MAGIC_LINK_REDEEMED`, `PENDING_NIN_DEFERRED`, `PENDING_NIN_TRANSITIONED`.
+
+For Option 1 universal pending-NIN, add 2 more in Task 3:
+- `PENDING_NIN_CREATED` — fired on every pending-NIN row creation regardless of source
+- `PENDING_NIN_PROMOTED` — fired on race-resolution merge (D1) OR explicit complete-nin endpoint (Task 3.2)
+
+**Implementation**: append to `AUDIT_ACTIONS` const at `audit.service.ts`. Bump the sentinel test in `audit.service.test.ts:165` from `.toHaveLength(38)` to `.toHaveLength(40)` with heritage comment line. **Same trip-wire that bit us in commit `d648b6d` — apply the lesson preemptively this time.**
+
+#### D5 — Optional `_deferReasonNin` field
+
+**Goal**: minimal friction at deferral time, retrospective analysis capability.
+
+**Schema**: extend the submission `rawData` JSONB payload with optional `_deferReasonNin?: string` (max 500 chars). Lives on the original submission, audit-logged with `PENDING_NIN_CREATED`.
+
+**UI surface**:
+- **Public wizard** (Step 4 inline NIN-help-hint): no input — just the toggle. Auto-set reason = `'public_wizard_user_self_deferred'`. Reduces friction; the user already chose to defer, no need to ask why.
+- **Enumerator FormFillerPage** + **ClerkDataEntryPage**: toggle reveals a free-text input "Reason for deferring (optional)". Examples: "respondent forgot NIN card", "NIN not yet issued", "respondent unsure of number". Submit allowed without filling.
+
+**Why optional**: required reasons collect fake answers ("dunno"). Optional + audited gives signal without friction. Anti-abuse work (D6) uses the unfilled-rate as a flag.
+
+#### D6 — Anti-abuse signal (build the data surface; defer UI)
+
+**Goal**: prevent enumerator over-deferring without adding friction that hurts legitimate use.
+
+**Data surface (build now in Task 3)**: aggregate query exposed via supervisor dashboard:
+- Per enumerator, last 7 days: `total_submissions`, `pending_nin_submissions`, `pending_nin_unresolved_at_7d`, `defer_reason_provided_count`
+- Sortable by `pending_unresolved_rate DESC`
+
+**UI affordance (defer to post-field-survey)**: based on the data surface, add a "soft warning" UI later. For Story 9-12 scope, just expose the metric; UI evaluation post-field with real data.
+
+**Cost-now**: ~30 lines (one query + one supervisor-dashboard widget); the data surface is genuinely useful even without the warning UI.
+
+---
+
+#### Implementation surface for Option 1 (vs public-only baseline)
+
+| Component | Public-only (original) | Option 1 (universal) | Delta |
+|---|---|---|---|
+| `submission-processing.service.ts:359` NIN-required throw | unchanged (still required for enumerator/clerk) | **REMOVED**; route to `findOrCreateRespondent` with `nin: undefined` | +0.25 day |
+| `findOrCreateRespondent` race-resolution merge (D1) | n/a | NEW: 30-line fuzzy-match-then-promote | +0.5 day |
+| `resolveReminderDestination` (D2) | one branch (public) | 5-branch precedence + tests | +0.25 day |
+| `reminder.worker.ts` (AC#10) | public-only | source-aware reminder + supervisor fallback | +0.5 day (was deferred to next session anyway) |
+| Audit actions count + sentinel test | 38 (4 added) | **40** (`PENDING_NIN_CREATED` + `PENDING_NIN_PROMOTED`) | +0.1 day |
+| Frontend: public wizard Step 5 dispatcher (per Step 5 Dev Notes) | in scope | unchanged | 0 |
+| Frontend: enumerator `FormFillerPage.tsx` pending-NIN toggle | n/a | **NEW**: NinHelpHint inline on NIN question + skip-logic advance + `_deferReasonNin` input | +0.5 day |
+| Frontend: clerk `ClerkDataEntryPage.tsx` pending-NIN toggle | n/a | **NEW**: same toggle pattern; clerk-specific `_deferReasonNin` input | +0.25 day |
+| Anti-abuse data surface (D6) | n/a | NEW: aggregate query + supervisor widget | +0.5 day (UI later) |
+| Race-condition + reminder-destination + merge tests | 0 | NEW: covers all 6 decisions | +0.5 day |
+| **Total delta** | | | **≈ +2.0 dev-days** |
+
+Pushes Story 9-12 from ~5-7 dev-days (public-only) to ~7-9 dev-days (universal). Field-survey window of <2 weeks accommodates this; AC#7 SMS-OTP infra-only feature flag pattern keeps SMS reminder destination dormant until manually flipped (no SMS cost incurred during field-survey).
+
+---
+
+#### Task amendments
+
+- **Task 3 expanded** (backend pending-NIN status path) — add subtasks 3.5 (race-resolution merge in `findOrCreateRespondent`), 3.6 (`resolveReminderDestination` pure function + tests), 3.7 (anti-abuse data surface aggregate query), 3.8 (2 new audit actions + sentinel test bump).
+- **Task 5.5 unchanged** (Step 5 dispatcher per the previous Dev Notes section — public-only flow already correct).
+- **NEW Task 13** — Frontend: enumerator + clerk pending-NIN toggle wiring. 4 subtasks (FormFillerPage inline NIN toggle / ClerkDataEntryPage inline NIN toggle / `_deferReasonNin` input + audit / cross-cutting tests).
+
+#### Backwards-compatibility implications
+
+- Existing enumerator/clerk submissions with NIN: unchanged path. Same `findOrCreateRespondent` behaviour for the NIN-present case.
+- Existing pending-NIN respondents from public wizard: unchanged. The race-resolution merge (D1) ALSO applies to them — if an enumerator later captures the same person with NIN, the public-wizard pending row is promoted (not duplicated).
+- AC#11 migration (existing public_users keep working) — unaffected. This is purely additive on the submission side.
+- FR21 NIN uniqueness — preserved via the existing partial UNIQUE on `nin WHERE NOT NULL`. The race-resolution merge keeps the partial UNIQUE intact (only one row will ever have a given NIN).
+
+#### Field-readiness implication
+
+FRC #3 is satisfied when public wizard ships (the original Story 9-12 scope). Universal pending-NIN does NOT block FRC #3 — it's a quality-of-life expansion that ships in the same window. Field-survey can launch on the public-only scope if Option 1 work overruns; the enumerator/clerk pending-NIN surfaces can land mid-field-survey via a follow-up commit if needed.
+
 ### Email service template handling — verify at impl time
 
 `apps/api/src/services/email.service.ts` exists as a flat file (verified 2026-04-30). Story v1 referenced `apps/api/src/services/email/templates/` subdirectory which does NOT yet exist. Two options at impl time:
@@ -304,6 +528,10 @@ The pattern (impostor-SM heuristic file-path generator) is consistent across all
 8. **Email service template handling unknown.** AC#6 + AC#10 + AC#9 all need email templates; current service is flat file with unknown template pattern. Mitigation: Task 1.8 explicitly defers to dev-time inspection; Dev Notes "Email service template handling" provides decision tree; refactor (if needed) is a separate prep task. **RESOLVED 2026-05-10**: existing pattern is inline strings via private static `getXxxHtml/getXxxText` methods; magic-link templates rendered inline in `MagicLinkService.sendMagicLinkEmail()` calling `EmailService.sendGenericEmail({to, subject, html, text})`. No subdirectory refactor needed.
 
 9. **Step 4 questionnaire source-type filter does not exist in the schema.** Story v2 AC#1 references `respondentSourceTypes='public'` form but the actual `questionnaire_forms` table has NO source-type / role / target-audience column (verified 2026-05-10 against `apps/api/src/db/schema/questionnaires.ts` + `packages/types/src/native-form.ts:88` + `apps/api/src/routes/form.routes.ts:24-27`). The wizard needs a NEW discovery mechanism. **Mitigation**: Dev Notes "Step 4 Questionnaire Injection — design clarification (2026-05-10)" enumerates 3 options (A schema extension / B system_settings row / C convention-based), recommends Option B (consistent with prep-settings-landing pattern + 1-day implementation). Awwal final-call at Task 5.4.0; default = Option B if unspecified.
+
+11. **Universal pending-NIN expands Story 9-12 scope by ~2 dev-days.** Awwal directive 2026-05-10 — extend pending-NIN from public-only to enumerator + clerk surfaces ("do it once and for all, no technical debt"). Full design + 6 locked decisions captured in Dev Notes "Universal pending-NIN — Option 1 design (2026-05-10)". Story grows from 5-7 to 7-9 dev-days; field-survey window of <2 weeks accommodates. **Mitigation**: FRC #3 (public wizard) is satisfied independent of universal-pending-NIN — the public-only scope alone closes FRC. If Option 1 work overruns, enumerator/clerk toggles can land mid-field-survey via follow-up commit without blocking field launch. Race-resolution merge logic + reminder-destination resolver + audit actions extension all build on existing infrastructure (Story 11-1 schema + prep-input-sanitisation E.164 phone normaliser + Story 6-1 audit chain). New Task 13 covers frontend surfaces; Task 3 expanded with 5 new subtasks.
+
+10. **NIN appears in BOTH the questionnaire AND wizard Step 5.** The active form (`oslsr_master_v3.xlsx` per Awwal 2026-05-10) has a NIN question that the existing renderer special-cases (`apps/web/src/features/forms/pages/FormFillerPage.tsx:21,111` — `NIN_QUESTION_NAMES = ['nin', 'national_id']` + `useNinCheck` hook). The story's AC#1 Step 5 + AC#4 implicitly assumed NIN was NOT in the questionnaire — leading to potential duplicate input + conflicting state. **Mitigation**: Dev Notes "Step 5 NIN handling — state-aware dispatcher (2026-05-10)" reframes Step 5 as a 3-state dispatcher (A: NIN captured in questionnaire / B: pending NIN via inline toggle / C: form has no NIN question — fall back to original AC#1+AC#4 spec). Wizard becomes ROBUST to form changes — Super Admin republishing a NIN-less form auto-flips Step 5 to State C without code changes. AC#4 toggle location is now state-dependent (inline in Step 4 for States A/B, in Step 5 for State C); behaviour unchanged. Implementation lives in Task 5.5 (4-subtask expansion) + Task 4.6 (form-schema introspection) + Task 6.1.x (NinHelpHint inline `onPendingNinClick` wiring). NOT modifying AC#4 text directly per dev-story workflow's permitted-edit rule; future SM session can canonicalise.
 
 ### Project Structure Notes
 
@@ -412,7 +640,10 @@ _(Populated during implementation. Implementer must include:)_
 - `apps/web/src/features/forms/pages/FormFillerPage.tsx` — DECOMPOSE: extract the inner state + skipLogic + renderer into a reusable `<FormRenderer>` component at `apps/web/src/features/forms/components/FormRenderer.tsx`. FormFillerPage becomes a thin route-mount wrapper around `<FormRenderer>`. The wizard's Step 4 mounts `<FormRenderer>` directly without the page chrome.
 
 **Frontend (created):**
-- `apps/web/src/features/forms/components/FormRenderer.tsx` — Task 5.4.3 decomposition target. Reusable component extracted from `FormFillerPage.tsx`. Props: `formSchema` + `initialResponses` + `onAnswer` + `onComplete`. No URL params; no router dependency. Wizard Step 4 mounts this directly.
+- `apps/web/src/features/forms/components/FormRenderer.tsx` — Task 5.4.3 decomposition target. Reusable component extracted from `FormFillerPage.tsx`. Props: `formSchema` + `initialResponses` + `onAnswer` + `onComplete` + `onPendingNinClick` (NEW callback per Step 5 dispatcher Dev Notes — fires when user clicks "I don't have my NIN now" link inline on the NIN question). No URL params; no router dependency. Wizard Step 4 mounts this directly.
+- `apps/web/src/features/registration/pages/Step5NinCaptured.tsx` — State A sub-view (NIN captured via questionnaire). "✓ NIN captured: 1234***8901" confirmation + auth choices.
+- `apps/web/src/features/registration/pages/Step5PendingNin.tsx` — State B sub-view (pending NIN via inline toggle). Info-50 consequence-preview + auth choices + "Save as Pending" submit button.
+- `apps/web/src/features/registration/pages/Step5NinInput.tsx` — State C sub-view (form has no NIN question). Original AC#1 Step 5 + AC#4 spec verbatim.
 - `apps/web/src/layouts/WizardLayout.tsx`
 - `apps/web/src/features/registration/components/WizardStepIndicator.tsx`
 - `apps/web/src/features/registration/components/NinHelpHint.tsx`
@@ -435,6 +666,17 @@ _(Populated during implementation. Implementer must include:)_
 - `apps/web/src/features/auth/components/activation-wizard/ActivationWizard.tsx` — apply `WizardStepIndicator` (Task 9 polish)
 - `apps/web/src/features/auth/components/activation-wizard/steps/*.tsx` — apply `TrustBadgesRow` (Task 9 polish)
 - TanStack Router config — register new routes `/register?step=N`, `/register/complete-nin`, `/register/complete`, `/auth/magic`
+- **`apps/web/src/features/forms/pages/FormFillerPage.tsx`** — Task 13.1: NinHelpHint inline variant on NIN question with "I don't have my NIN now" link → optional `_deferReasonNin` input + Confirm → `_pendingNin: true` in submission rawData. Reuses existing `NIN_QUESTION_NAMES` constant (line 21).
+- **`apps/web/src/features/forms/pages/ClerkDataEntryPage.tsx`** — Task 13.2: same toggle pattern, clerk-specific UI placement.
+
+**Backend modified — Universal Pending-NIN (added 2026-05-10):**
+- `apps/api/src/services/submission-processing.service.ts` — Task 3.1: REMOVE NIN-required throw at line 359; route to `findOrCreateRespondent` with `nin: undefined` when missing (regardless of source). Task 3.5: race-resolution merge — fuzzy-match-then-promote pending rows when NIN is provided later.
+- `apps/api/src/services/pending-nin.service.ts` — **NEW** (Task 3.6): `resolveReminderDestination(respondent)` pure function with 5-branch precedence per source.
+- `apps/api/src/workers/reminder.worker.ts` — Task 1.9 (deferred to next session) + Task 3.6: source-aware reminder dispatch using `resolveReminderDestination`.
+- `apps/api/src/services/audit.service.ts` — Task 3.8: append `PENDING_NIN_CREATED` + `PENDING_NIN_PROMOTED` to `AUDIT_ACTIONS` const (40 total).
+- `apps/api/src/services/__tests__/audit.service.test.ts` — Task 3.8: bump sentinel `.toHaveLength(38) → .toHaveLength(40)` with heritage-comment line. Same trip-wire that broke commit `adb956b` → preempt this time.
+- `apps/api/src/services/__tests__/submission-processing.service.test.ts` (or equivalent) — Task 3.9: race-resolution-merge tests + concurrent-merge-attempts + reminder-destination per-source tests.
+- (NEW supervisor-dashboard widget surface) — Task 3.7: anti-abuse data surface (per-enumerator 7-day pending rate aggregate query). UI affordance for the soft warning deferred to post-field-survey.
 
 **Other:**
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — status flips
@@ -452,6 +694,8 @@ _(Populated during implementation. Implementer must include:)_
 | Date | Change | Rationale |
 |---|---|---|
 | 2026-04-25 | Story drafted by impostor-SM agent per SCP-2026-04-22 §A.5. Status `ready-for-dev`. 14 ACs covering 5-step wizard + magic-link primary + SMS OTP infra-only + pending-NIN status path + NinHelpHint + email-typo detection + trust badges + return-to-complete + reminder cadence + migration cutover + bundled staff-wizard polish + tests + FRC flip. Depends on Story 11-1 schema. | A.5 sequencing: 9-12 follows 11-1 in dependency order. FRC item #3 — field-survey-blocking. |
+| 2026-05-10 | **Universal pending-NIN — Option 1 scope expansion ratified (no code change in this commit).** Awwal directive: extend pending-NIN from public-only to all submission sources (enumerator + clerk). Rationale: "do it once and for all, no technical debt" — schema (Story 11-1) already supports it, marginal cost is ~2 dev-days vs the data-quality risk of carrying public-only forward + a follow-up story later. Six design decisions locked in new Dev Notes subsection "Universal pending-NIN — Option 1 design (2026-05-10)": **(D1)** race-resolution merge in `findOrCreateRespondent` (fuzzy-match name+phone of pending rows when NIN provided later → atomic UPDATE pending → active; `PENDING_NIN_PROMOTED` audit event); **(D2)** `resolveReminderDestination` pure function with 5-branch precedence per source (public→email; enumerator→email\|sms-flag-on\|supervisor; clerk→email\|supervisor; imported_*→no reminder); **(D3)** pay-on-completion productivity metric (pending submissions don't count toward enumerator KPI until status flips to active — abuse-resistant); **(D4)** audit actions 38→40 (`PENDING_NIN_CREATED` + `PENDING_NIN_PROMOTED`); **(D5)** optional `_deferReasonNin` field on rawData (auto-set for public, free-text for enumerator/clerk; never required); **(D6)** anti-abuse data surface (per-enumerator 7-day pending-rate aggregate query — supervisor-dashboard widget; UI soft warning deferred post-field-survey based on real data). Story scope: 5-7 → 7-9 dev-days. Risks #11 added. Task 3 expanded with 5 new subtasks (3.5 race-merge / 3.6 destination resolver / 3.7 anti-abuse query / 3.8 audit-actions+sentinel / 3.9 tests). NEW Task 13 covers enumerator FormFillerPage + clerk ClerkDataEntryPage pending-NIN toggle wiring (`_pendingNin` + `_deferReasonNin` rawData fields). FRC #3 (public wizard) remains satisfied by the public-only baseline — universal-pending-NIN is additive, not blocking. AC text NOT modified per dev-story workflow's permitted-edit rule; canonical SM amendment can land in a future Bob session. | Field-survey window of <2 weeks accommodates the +2 days. The race-resolution merge is the only genuinely new infrastructure piece — everything else builds on Story 11-1 schema + prep-input-sanitisation E.164 normaliser + Story 6-1 audit chain. Pay-on-completion productivity metric is the most important policy decision in this set (incentive design); without it, universal-pending-NIN creates an enumerator over-deferral abuse vector. |
+| 2026-05-10 | **Step 5 NIN handling — state-aware dispatcher design clarification added to Dev Notes (no code change).** During the Step-4-injection clarification round, Awwal flagged a deeper conflict: the active form (`oslsr_master_v3.xlsx`) has a NIN question. The existing renderer special-cases NIN (`apps/web/src/features/forms/pages/FormFillerPage.tsx:21,111` — `NIN_QUESTION_NAMES = ['nin', 'national_id']` + `useNinCheck` hook for real-time modulus-11 + duplicate-check). Story's AC#1 Step 5 + AC#4 implicitly assumed NIN was NOT in the questionnaire → if implemented as written, user types NIN twice (Step 4 form + Step 5 input) with conflicting state. New Dev Notes subsection "Step 5 NIN handling — state-aware dispatcher (2026-05-10)" reframes Step 5 as a 3-state dispatcher: **State A** (NIN captured via questionnaire — Step 5 shows confirmation + auth choices, no NIN input), **State B** (pending NIN via inline toggle in Step 4 — Step 5 shows consequence-preview + auth choices + "Save as Pending" button), **State C** (form has no NIN question — falls back to original AC#1+AC#4 spec verbatim). Wizard introspects form schema at Step 4 mount via `formData.formHasNinQuestion` boolean — robust to form changes (Super Admin can publish a NIN-less form, wizard auto-flips to State C without code changes). Task 5.5 expanded to 4-subtask checklist with 3 sub-views (`Step5NinCaptured.tsx` / `Step5PendingNin.tsx` / `Step5NinInput.tsx`). Task 4 gains 4.6 (form-schema introspection); Task 6.1 amended for NinHelpHint inline `onPendingNinClick` wiring. New Risks entry #10. WizardDraftData TypeScript shape extended (`formHasNinQuestion`, `questionnaireFormId`, `questionnaireFormVersionId` — JSONB-backed, no migration). AC#4 toggle location is now state-dependent (inline in Step 4 for States A/B, in Step 5 for State C); behaviour unchanged. **AC text NOT modified** per dev-story workflow's permitted-edit rule; Dev Notes is the spec-amendment-of-record until next SM canonicalisation pass. | Second clarification surfaced by Awwal's question "the questionnaire already has a NIN Question, how do we use the pending nin approach in this regards." Same impostor-SM drift pattern at design-time as the Step-4 source-type-filter gap (both surfaced 2026-05-10). The state-aware Step 5 design is more robust than the originally-specced fixed UI — it handles the future case where a NIN-less form gets published without breaking. Catches before Task 5 implementation; saves ~1 day of rework + post-deploy UX-correction churn. |
 | 2026-05-10 | **Step 4 questionnaire injection — design clarification added to Dev Notes (no code change).** During the magic-link Task 1 dev session, a clarifying question from Awwal exposed a real spec gap: AC#1 Step 4 says the wizard renders the published `respondentSourceTypes='public'` form, but the codebase has NO source-type / role / target-audience filter on the `questionnaire_forms` schema. Verified across `apps/api/src/db/schema/questionnaires.ts`, `packages/types/src/native-form.ts:88` (`NativeFormSchema` has no `targetRoles` field), `apps/api/src/routes/form.routes.ts:24-27` (`/forms/published` returns ALL published forms, no filter). New Dev Notes subsection "Step 4 Questionnaire Injection — design clarification (2026-05-10)" enumerates 3 discovery options: **A** schema extension (add `respondent_source_types TEXT[]` column + Native Form Builder UI checkbox), **B** `system_settings` row (`wizard.public_form_id` setting; reuses prep-settings-landing infrastructure), **C** convention-based (most-recently-published form). **Recommends Option B** — consistent with AC#7 SMS OTP toggle pattern, ~1-day implementation, no schema migration. Task 5.4 expanded to a 9-subtask checklist (5.4.0 Awwal design pick → 5.4.8 tests) covering: discovery endpoint (`GET /forms/public-active`), `<FormRenderer>` decomposition from existing `apps/web/src/features/forms/pages/FormFillerPage.tsx`, draft form-version locking via new `WizardDraftData.questionnaireFormId/VersionId` fields (TypeScript-only addition; no migration), edge case for "no public form configured" empty state, two-progress-indicator UX. New Risks entry #9. Email-service-template Risks entry #8 also flipped RESOLVED with the inline-string outcome from Task 1.8 dev-time inspection. | This is the impostor-SM drift pattern recurring at design time, not just file-path time — the original story v1 (and even the v2 retrofit) carried forward an architectural assumption (`respondentSourceTypes` filter on questionnaires) that doesn't match the codebase. Catching it BEFORE Task 5.4 implementation saves a day of rework. The Option B recommendation leverages prep-settings-landing infrastructure and stays consistent with the broader Awwal Path B decision (Settings infrastructure once, used by multiple stories). |
 | 2026-05-10 | **Task 1 PARTIAL — backend magic-link foundation (1.1-1.7 + 1.10 done; 1.8 inline; 1.9 + 1.11 deferred to next session).** Status `ready-for-dev → in-progress`. Files shipped: 2 schemas (`magic-link-tokens.ts` + `wizard-drafts.ts`), migration `0012_add_magic_links_and_wizard_drafts.sql`, service `magic-link.service.ts` (issue/redeem/revoke/sendEmail with atomic single-use via UPDATE...RETURNING + 3 per-purpose TTLs), rate-limit middleware `magic-link-rate-limit.ts` (3/email/1hr per NFR4.4 budget), controller `magic-link.controller.ts` (POST /public/magic-link anti-enumeration + GET /magic redemption returns JSON), 4 new `AUDIT_ACTIONS` (`MAGIC_LINK_ISSUED` + `MAGIC_LINK_REDEEMED` + `PENDING_NIN_DEFERRED` + `PENDING_NIN_TRANSITIONED`). Auth.routes.ts wired with 2 new endpoints. Coverage map (`rate-limit-coverage.test.ts`) extended with both endpoints + threshold contract entry for `magicLinkRateLimit`. **Tests: 17 service tests pass** (issue + redeem + revoke + URL build + per-purpose TTLs + atomic single-use + expiry + JSON serialization + lowercase-email-storage). **Pre-commit checks**: lint clean, tsc clean, middleware+routes regression 133/133. **Deferred**: 1.9 reminder worker (couples with Task 3 pending-NIN promotion logic; cohesive landing in next session); 1.11 route-level supertest layer (requires app-fixture pattern matching existing `auth.routes.test.ts`); JWT cookie issuance for magic-link login (lands when frontend drives the redirect flow in Task 4-7). **Task 2 (SMS OTP infra) + Task 3 (pending-NIN) + Task 4-7 (frontend wizard) all queued for subsequent sessions per Risk #3 (5-7 dev-days realistic).** | First session of FRC #3 implementation. The magic-link primitive is the load-bearing piece for AC#6 + #9 + #10 — landing it as a clean, tested, atomic deliverable de-risks the rest of the story. JWT issuance was scoped out because there's no frontend yet to redirect to; carrying that complexity into a backend-only commit would be premature. Cohesive next-session boundary: Task 1.9 + Task 2 + Task 3 = remaining backend; then Tasks 4-9 = frontend wizard (largest surface, separate session per Risk #3). |
 | 2026-04-30 | Validation pass (Bob, fresh-context mode 2 per `_bmad/bmm/workflows/4-implementation/create-story/checklist.md`). Rebuilt to canonical template structure: folded top-level "Dependencies", "Field Readiness Certificate Impact", "Technical Notes" (preserving all 5 subsections — Magic-link token storage discipline / Pending-NIN reminder cadence rationale / Server-side draft vs IndexedDB / Why Google OAuth retirement / SMS OTP feature flag relationship to prep-settings-landing / Email service template handling), "Risks" under Dev Notes; converted task-as-headings (`### Task N — Title` + `1.1.` numbered subitems) to canonical `[ ] Task N (AC: #X)` checkbox format with `[ ] N.M` subtasks; added `### Project Structure Notes` subsection covering new feature dir + wizard layout + existing auth pages inventory + staff activation wizard existing path + service-layer pattern + workers convention + drizzle barrel + settings dependency + audit logging + rate-limit clone pattern + JWT issuance reuse + frontend HTTP client + TanStack Query convention + CSP discipline + email service flat-file pattern + existing routes file; added `### References` subsection with 24 verified `[Source: file:line]` cites; moved top-level `## Change Log` under `## Dev Agent Record` as `### Change Log`; added `### Review Follow-ups (AI)` placeholder; added Task 12 (code review) per `feedback_review_before_commit.md`. **Five factual path corrections applied throughout:** (1) `apps/web/src/features/auth/pages/PublicRegisterPage.tsx` → `RegistrationPage.tsx` (verified actual filename); (2) `apps/web/src/features/auth/pages/PublicLoginPage.tsx` → `LoginPage.tsx` (verified actual filename); (3) `apps/web/src/features/staff-activation/` (fictional dir) → `apps/web/src/features/auth/components/activation-wizard/` (verified existing path; AC#12 retro-fits the existing wizard at this canonical location); (4) `apps/api/src/lib/settings.ts` referenced as if existing → relocated as HARD dependency on companion story `prep-settings-landing-and-feature-flags` which creates this lib (per Awwal Path B decision 2026-04-30 — Settings infrastructure is a separate prep task, not folded into 9-12); (5) `apps/api/src/services/email/templates/` referenced as existing dir → email service is currently flat file; Task 1.8 explicitly defers template-pattern decision to dev-time inspection (refactor only if needed; separate prep task if so). **AC#7 reframed to consume prep-settings-landing:** SMS OTP feature flag mechanism (system_settings DB table + `getSetting` accessor) lives in prep-settings-landing-and-feature-flags; super-admin toggle UI lives in Settings Landing Page; this story is the BACKEND consumer of the flag (route + provider adapter + service + audit on attempts), not the UI owner. **Four new audit actions documented** for `AUDIT_ACTIONS` const extension: `MAGIC_LINK_ISSUED`, `MAGIC_LINK_REDEEMED`, `PENDING_NIN_DEFERRED`, `PENDING_NIN_TRANSITIONED`. All 14 ACs preserved verbatim. Status `ready-for-dev` preserved. | Story v1 was authored by impostor-SM agent without canonical workflow load — same drift pattern as Stories 9-13 / prep-tsc / prep-build-off-vps / 11-1 / prep-input-sanitisation-layer / 10-5 / 9-11 / 11-2 / 11-4. This story is the LARGEST in the retrofit batch (14 ACs, 12 Tasks, 5 path corrections, 1 dependency-relocation per Awwal Path B). The new prep-settings-landing dependency was created during this same retrofit cascade as the cleanest resolution to Q2 (settings storage for `auth.sms_otp_enabled` feature flag) — avoiding the technical-debt path of a one-off settings hack scoped to 9-12. |
