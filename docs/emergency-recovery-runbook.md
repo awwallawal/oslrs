@@ -116,6 +116,42 @@ Authoritative state of every listening TCP socket on the production VPS, with pu
 
 **Cross-reference rule:** every public-listening port (non-`127.0.0.1`) MUST have a matching DO Cloud Firewall ingress rule. Every DO firewall rule MUST have a matching listener — stale rules are deletion candidates. Verify quarterly with `ss -tlnp` from the host + `Test-NetConnection` from operator's public IP.
 
+#### Log retention policy (Story 9-9 AC#7, executed 2026-05-10)
+
+Two log streams on the VPS need bounded retention to prevent disk-fill incidents during the 30-day field exercise (where API + worker logs grow continuously and journald accumulates systemd-managed logs).
+
+**PM2 application logs** (`/root/.pm2/logs/oslsr-api-*.log`):
+
+Managed by `pm2-logrotate` module v3.0.0. Configuration applied 2026-05-10 via Tailscale SSH:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 50M
+pm2 set pm2-logrotate:retain 14
+pm2 set pm2-logrotate:compress true
+pm2 set pm2-logrotate:rotateInterval '0 0 * * *'    # daily at 00:00 UTC
+```
+
+Effective behaviour: rotate at 50 MB per file OR daily (whichever first); keep 14 rotations; compress with gzip. Verification: `pm2 conf pm2-logrotate`.
+
+**Systemd journal logs** (managed by `systemd-journald`):
+
+Edited `/etc/systemd/journald.conf` 2026-05-10 (backup at `/etc/systemd/journald.conf.bak.<UTC-timestamp>`):
+
+```ini
+SystemMaxUse=2G        # cap on-disk journal size
+MaxRetentionSec=30d    # drop entries older than 30 days
+```
+
+Applied via `systemctl restart systemd-journald`. **Immediate impact 2026-05-10**: pre-restart 2.5 GB → post-restart 266 MB (2.2 GB recovered). Verification: `journalctl --disk-usage`.
+
+**Why this matters operationally:**
+- VPS root partition is 48 GB / 7.6 GB used pre-AC#7. Without retention, journald could approach 5 GB+ over 30-day field exercise.
+- pm2-logrotate prevents single log files from growing into the multi-GB range during sustained traffic — easier to grep, faster to scp out for incident analysis.
+- Compressed rotations (`compress true`) keep retained logs ≤ ~10% of raw size for typical pino JSON output.
+
+**Quarterly drill** (added to §6.1 cadence): `journalctl --disk-usage` + `du -sh /root/.pm2/logs` should both stay well under their caps. Run alongside Tailscale + backup-restore drills.
+
 ### 1.5 Key accounts & contacts
 
 | Account | Auth method | Notes |

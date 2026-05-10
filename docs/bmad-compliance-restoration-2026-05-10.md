@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Created | 2026-05-10 by Amelia (dev agent) |
-| Last verified | 2026-05-10 ~13:00 UTC (commits `9a3ca29` → `609e06e`; F5 closed; reframed for <2-week field-survey runway by John PM) |
-| Status | OPEN — 5 restoration tasks (§A) + 7 forward roadmap items (§F: F1-F8 + F5a; **F5 closed; F4 dissolved; F7 deferred to Operate-phase as Story 9-14**) pending |
+| Last verified | 2026-05-10 ~15:30 UTC (R1-R5+F5a closed via `c3db684`; F1 closed by this commit; <2-week field-survey runway active) |
+| Status | OPEN — **§A R1-R5 closed via `c3db684`; F5 closed `609e06e`; F5a closed `c3db684`; F1 closed by this commit.** Remaining: F2 (AC#4 stretch), F3 (AC#9 carry), F6 (deferred wait-and-see), F7 (Operate-phase Story 9-14), F8 (alert ergonomics nice-to-have). F4 dissolved. |
 | Owner | Awwal + dev agent (next session — Amelia) |
 | Audit method | Round 1 (5 commits, full rubric) + Round 2 (30-commit sweep, V1+V2+V4 patterns) + 2026-05-10 PM reframe |
 | Field-survey | < 2 weeks out (best estimate as of 2026-05-10). VPS upgrade to `s-2vcpu-4gb` recommended pre-field — see §I. |
@@ -27,12 +27,11 @@ If a new session is opening this doc with no prior context:
    - If yes: spot-check whether new story-impl commits include review-pass evidence (V1 pattern). Update §A as needed.
 4. **Pick up the next task** in this priority order (reframed 2026-05-10 by John PM for <2-week field-survey runway):
    - **§H Critical Path to Field is the canonical priority list** — read it first.
-   - Sequence: R1-R5 (~90 min restoration) → F5a Pitfall #35 (10 min, smallest) → F1 AC#7 logrotate (1 hr) → **Story 9-12 Public Wizard (FRC #3, the field-blocker)** → then remaining open backlog items per §H.
-   - F2 (AC#4 rate-limit audit, 4-8 hr) — defense-in-depth; ship if time allows. Not FRC.
-   - F3 (AC#9 SOC baseline) — calendar-gated to ~2026-05-23; close-with-carry per §G new clause if field starts before window closes.
+   - **Tier 1 status (2026-05-10 ~15:30 UTC)**: ✅ R1-R5 closed `c3db684` ✅ F5a closed `c3db684` ✅ F1 closed (this commit). **Remaining Tier 1**: Story 9-12 Public Wizard (FRC #3, the field-blocker) + VPS resize to 4GB (operator action, §I).
+   - **Tier 2 (stretch, ship if time allows)**: F2 (AC#4 rate-limit audit, 4-8 hr) + Story 9-13 TOTP MFA close-out (~30 min ratification) + Story 10-5 DSA close-out (~30 min ratification) + F8 (alert ergonomics PR, ~75 min) + F3 (AC#9 carry-clause documentation).
+   - **Tier 3 (Awwal committed to "all stories before field"; PM flagged as defer-able)**: 11-2 / 11-3 / 11-4 / 10-1 / 10-2 / 10-3 / 10-4 / 10-6 / prep-export-row-cap.
+   - **Tier 4 (strictly defer to Operate-phase)**: F6 (threshold tuning wait-and-see), F7 (Story 9-14 worker isolation), Story 9-9 AC#10 follow-up (firewall re-narrow), self-hosted GH Actions runner.
    - F4 — **dissolved.** Filed as prep-7 follow-up. Not a separate task.
-   - F7 → **Story 9-14 worker isolation, deferred to Operate-phase.** Authoring stake removed. Don't open before field-survey.
-   - F8 — bundled metrics ergonomics PR (was F8 + F9). Quality-of-life under field load.
 
 When closing a task:
 - Mark the checkbox `[x]`
@@ -47,7 +46,7 @@ When the last task in §A closes, update **Status** to CLOSED and append a closu
 
 ### R1 — Retrospective adversarial code review on AC#5 close-out work
 
-- [ ] **Task**: Run `/bmad:bmm:workflows:code-review` workflow on the AC#5 close-out diff (commit `4dc989f` working-tree state). Auto-fix HIGH+MEDIUM findings inline; document LOW findings under a new 2026-05-10 divider in the Story 9-9 Review Follow-ups (AI) section.
+- [x] **Task**: Run `/bmad:bmm:workflows:code-review` workflow on the AC#5 close-out diff (commit `4dc989f` working-tree state). Auto-fix HIGH+MEDIUM findings inline; document LOW findings under a new 2026-05-10 divider in the Story 9-9 Review Follow-ups (AI) section. **CLOSED `c3db684` 2026-05-10 14:32 UTC** — 0 HIGH / 3 MEDIUM / 6 LOW. R1-M1 + R1-M2 auto-fixed inline (test count 18 → 20). R1-M3 deferred-with-rationale. 6 LOWs documented as backlog under 2026-05-10 divider in Story 9-9 Review Follow-ups (AI).
 - **File**: `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md`
 - **Reference pattern**: AC#6 retrospective review (Change Log entry 2026-05-01) + AC#3 third-pass review (2026-05-08 divider). Same shape.
 - **Why**: AC#5 shipped without the documented pre-commit review that `feedback_review_before_commit.md` mandates. This is a recurrence of the AC#6 mistake that originally prompted that memory note. Without R1, the violation persists in institutional record.
@@ -65,7 +64,7 @@ When the last task in §A closes, update **Status** to CLOSED and append a closu
 
 ### R2 — Add Subtask 5 File List block to Story 9-9
 
-- [ ] **Task**: The story file at L327-370 has dedicated File List blocks for Subtask 6 (DONE 2026-05-01), Subtask 3 (PARTIAL 2026-05-08...), and the Subtask 1+2 preserved blocks. **No equivalent `**Subtask 5 (DONE 2026-05-09):**` block exists**. Add one matching the Subtask 6 structure.
+- [x] **Task**: The story file at L327-370 has dedicated File List blocks for Subtask 6 (DONE 2026-05-01), Subtask 3 (PARTIAL 2026-05-08...), and the Subtask 1+2 preserved blocks. **No equivalent `**Subtask 5 (DONE 2026-05-09):**` block exists**. Add one matching the Subtask 6 structure. **CLOSED `c3db684` 2026-05-10 14:32 UTC** — 9-file Subtask 5 File List block added; obsolete `apps/api/scripts/backup-to-s3.sh` line removed from forward-planned block.
 - **File**: `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` (around L327)
 - **Reference pattern**: copy the `**Subtask 6 (DONE 2026-05-01):**` block at L329-337 verbatim and adapt for AC#5.
 - **Files to list in the new block**:
@@ -85,7 +84,7 @@ When the last task in §A closes, update **Status** to CLOSED and append a closu
 
 ### R3 — Populate Dev Agent Record fields in Story 9-9
 
-- [ ] **Task**: L514-524 of the story file has three placeholder fields that have never been populated despite **7 of 10 subtasks done**:
+- [x] **Task**: L514-524 of the story file has three placeholder fields that have never been populated despite **7 of 10 subtasks done**: **CLOSED `c3db684` 2026-05-10 14:32 UTC** — Agent Model Used + Debug Log References + Completion Notes List populated with per-subtask content for AC#1, AC#2, AC#3, AC#5, AC#6, AC#8, AC#10. Same-LLM same-session caveat acknowledged.
   - `### Agent Model Used` — currently `_(Populated when each subtask enters dev.)_`
   - `### Debug Log References` — currently `_(Populated during implementation.)_`
   - `### Completion Notes List` — currently `_(Populated during implementation.)_`
@@ -100,7 +99,7 @@ When the last task in §A closes, update **Status** to CLOSED and append a closu
 
 ### R4 — Promote test-fix lessons to playbook (Pitfalls #32-34)
 
-- [ ] **Task**: Three lessons from commits `c375254` + `235563c` are captured only in commit bodies, not in the canonical pitfall catalogue. The pattern set by `9a3ca29` (Pitfall #31 in playbook) shows the right discipline; these three follow-ups should match.
+- [x] **Task**: Three lessons from commits `c375254` + `235563c` are captured only in commit bodies, not in the canonical pitfall catalogue. The pattern set by `9a3ca29` (Pitfall #31 in playbook) shows the right discipline; these three follow-ups should match. **CLOSED `c3db684` 2026-05-10 14:32 UTC** — Pitfalls #32 (selector rot), #33 (WebSocket-refresh flake), #34 (continue-on-error mask) appended to `docs/infrastructure-cicd-playbook.md` with Symptom / Detection / Cause / Fix / Reference structure.
 - **File**: `docs/infrastructure-cicd-playbook.md`
 - **Pitfalls to add**:
   - **Pitfall #32 — Selector rot under accessibility-name UI changes.** Symptom: Playwright tests pass strict-mode regex like `/broadcast to team/i` until UI gains a second matching element (button aria-label + heading sharing the visible text); test then fails strict-mode with "two elements matched". Detection: `pnpm exec playwright test` after any aria-label/role rename. Fix: switch to `getByRole(role, {name: …})` with exact-match, or scope the search via `.getByRole("region", …).getByRole(…)`. Reference: commit `235563c`.
@@ -112,7 +111,7 @@ When the last task in §A closes, update **Status** to CLOSED and append a closu
 
 ### R5 — Add Change Log entry recording the audit + R1-R4 restorations
 
-- [ ] **Task**: Single 2026-05-10 entry in Story 9-9 Change Log table (around L530) summarising the audit, the violations found, and which R-tasks closed them. Should reference this tracker doc.
+- [x] **Task**: Single 2026-05-10 entry in Story 9-9 Change Log table (around L530) summarising the audit, the violations found, and which R-tasks closed them. Should reference this tracker doc. **CLOSED `c3db684` 2026-05-10 14:32 UTC** — single 2026-05-10 entry appended to Change Log table summarising R1-R5+F5a closure with cross-reference to tracker.
 - **File**: `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` Change Log table
 - **Suggested entry**:
   > **2026-05-10** | BMAD compliance audit + restoration. | 30-commit sweep (commits `9a3ca29..d8f96a3`) found 1 V1 violation (AC#5 shipped without documented pre-commit code review — recurrence of AC#6 mistake), 1 V2 violation (Subtask 5 File List block missing), 1 V4 violation (Dev Agent Record placeholders unfilled despite 7/10 subtasks done), 1 V5 partial (3 test-fix lessons captured in commit bodies but not playbook). Round 2 sweep against 30 commits confirmed AC#5 is the only V1 violation; V2 + V4 are 9-9-specific. R1-R5 restorations executed per `docs/bmad-compliance-restoration-2026-05-10.md` §A. Tracker doc remains the canonical record.
@@ -230,6 +229,8 @@ To audit ~30 commits efficiently:
 _(Each completed task appends a one-line entry here when its checkbox flips to `[x]`. When all 5 R-tasks AND the F-tasks below close, status flips to CLOSED and the doc moves to historical reference.)_
 
 - **2026-05-10 12:19 UTC** — F5 closed via commit `609e06e` (other Claude session). Time-windowed p95 buffer eviction shipped; 2 pre-commit code-review passes; 6 new tests; full API suite 2087/7/0. **F5a (Pitfall #35 in playbook) opened as leftover** — F5 commit shipped without the playbook entry that the BMAD discipline checklist required.
+- **2026-05-10 14:32 UTC** — **R1, R2, R3, R4, R5, F5a all closed** via commit `c3db684`. Single BMAD restoration commit. R1: 0 HIGH / 3 MEDIUM / 6 LOW on AC#5; 2 MEDIUMs auto-fixed (test count 18 → 20); 6 LOWs documented as backlog. R2: Subtask 5 File List block added (9 files) + obsolete `backup-to-s3.sh` removed from forward-planned. R3: 3 Dev Agent Record fields populated for 7 done subtasks. R4: Pitfalls #32-34 in playbook. F5a: Pitfall #35 in playbook. R5: 2026-05-10 audit Change Log entry on Story 9-9. Pre-commit checks: API lint clean, tsc clean, backup-crypto + worker tests 81/81 pass.
+- **2026-05-10 ~15:30 UTC** — **F1 (AC#7 logrotate) closed** by this commit. VPS-side: pm2-logrotate v3.0.0 installed + configured; journald `SystemMaxUse=2G` + `MaxRetentionSec=30d`. Disk recovered 2.2 GB (2.5 GB → 266 MB). Runbook §1.4 "Log retention policy" subsection authored. Story 9-9 Subtask 7 marked DONE; Status Matrix + Priority Map + Subtask 11.1 progress (`7/10 → 8/10`) all refreshed; Change Log entry appended. sprint-status.yaml comment updated `DONE 7/10 → 8/10`. AC#9 carry-clause acknowledgement added. **Tier 1 Critical Path to Field complete except Story 9-12 (FRC #3 blocker, the only thing standing between current state and FRC complete) + VPS resize.**
 
 ---
 
@@ -239,9 +240,9 @@ These are the **remaining Story 9-9 ACs** + adjacent technical debt. They are NO
 
 **Sequence rationale**: AC#7 first (smallest, proves the restored template); AC#4 second (largest surface, benefits most from discipline being already in place); AC#9 runs in parallel (passive observation, no file collision). E2E skips after the 9-9 ACs since they're a separate prep-7 concern and don't gate field-readiness.
 
-### F1 — AC#7 Logrotate for PM2 + journald (~1 hour, P2)
+### F1 — AC#7 Logrotate for PM2 + journald (CLOSED 2026-05-10)
 
-- [ ] **Task**: Configure `pm2-logrotate` module + tune `/etc/systemd/journald.conf` retention. Cheapest of the remaining ACs; prevents disk-fill incident.
+- [x] **Task**: Configure `pm2-logrotate` module + tune `/etc/systemd/journald.conf` retention. Cheapest of the remaining ACs; prevents disk-fill incident. **CLOSED 2026-05-10 ~15:00 UTC over Tailscale.** pm2-logrotate v3.0.0 installed + 4 settings applied; journald `SystemMaxUse=2G` + `MaxRetentionSec=30d` (recovered 2.2 GB on restart: 2.5 GB → 266 MB); runbook §1.4 "Log retention policy" subsection authored. **Closing SHA**: this commit.
 - **Story file**: `_bmad-output/implementation-artifacts/9-9-infrastructure-security-hardening.md` Subtask 7 (L216-221, currently 4 unchecked subtasks 7.1-7.4)
 - **Subtasks (already in story)**:
   - 7.1 `pm2 install pm2-logrotate` + `pm2 set pm2-logrotate:max_size 50M` / `:retain 14` / `:compress true` / `:rotateInterval '0 0 * * *'`
@@ -326,7 +327,7 @@ These are the **remaining Story 9-9 ACs** + adjacent technical debt. They are NO
 
 ### F5a — Pitfall #35 in playbook (F5 leftover)
 
-- [ ] **Task**: Add Pitfall #35 to `docs/infrastructure-cicd-playbook.md`. The F5 commit shipped without it; story Review Follow-ups capture the *story-specific* learning, but a Pitfall entry generalises the gotcha for any future engineer encountering the same symptom on this or future projects.
+- [x] **Task**: Add Pitfall #35 to `docs/infrastructure-cicd-playbook.md`. The F5 commit shipped without it; story Review Follow-ups capture the *story-specific* learning, but a Pitfall entry generalises the gotcha for any future engineer encountering the same symptom on this or future projects. **CLOSED `c3db684` 2026-05-10 14:32 UTC** — Pitfall #35 appended with full Symptom / Detection / Cause / Fix (mechanism = F5 commit `609e06e`) / Architectural-fix-pending (Story 9-14) / Tactical-alternative (F6) / Reference structure.
 - **Suggested entry**:
   > **Pitfall #35 — In-process worker CPU spike contaminates API latency rolling buffer on low-traffic VPS.**
   > **Symptom**: CRITICAL `api_p95_latency` alert fires identical value across multiple 120s evaluator cycles, despite system being idle (load 0.00, low memory, health 200). Same exact value re-fires 6+ minutes later.
