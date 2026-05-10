@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { db } from '../../db/index.js';
 import { magicLinkTokens, users, roles, lgas, respondents } from '../../db/schema/index.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { MagicLinkService } from '../magic-link.service.js';
 import { createHash } from 'node:crypto';
@@ -22,6 +22,7 @@ describe('MagicLinkService', () => {
   const createdTokenIds: string[] = [];
   let testUserId: string;
   let testRespondentId: string;
+  let testLgaId: string;
   const testEmail = `${TEST_EMAIL_PREFIX}@example.com`;
 
   beforeAll(async () => {
@@ -49,9 +50,19 @@ describe('MagicLinkService', () => {
 
     // A respondent for pending_nin_complete tests. Use a non-NIN respondent
     // (NIN nullable post Story 11-1) with status pending_nin_capture.
-    // First we need an LGA for the FK; pick any existing one.
-    const lga = await db.query.lgas.findFirst();
-    if (!lga) throw new Error('No LGAs in test DB; seed first');
+    //
+    // CI test DB may NOT have seeded LGAs after `db:push:full:force` (seeds
+    // run separately). Defensive: insert a uniquely-named test LGA via
+    // onConflictDoNothing, then look it up.
+    const testLgaName = `MagicLink Test LGA ${Date.now()}`;
+    const testLgaCode = `magic_link_test_${Date.now()}`;
+    await db
+      .insert(lgas)
+      .values({ name: testLgaName, code: testLgaCode, isSeeded: false })
+      .onConflictDoNothing();
+    const lga = await db.query.lgas.findFirst({ where: eq(lgas.code, testLgaCode) });
+    if (!lga) throw new Error('Failed to provision test LGA in beforeAll');
+
     const [respondent] = await db
       .insert(respondents)
       .values({
@@ -65,6 +76,7 @@ describe('MagicLinkService', () => {
       })
       .returning();
     testRespondentId = respondent.id;
+    testLgaId = lga.id;
   }, 30000);
 
   beforeEach(async () => {
@@ -80,6 +92,7 @@ describe('MagicLinkService', () => {
     await db.delete(magicLinkTokens).where(eq(magicLinkTokens.email, testEmail));
     if (testRespondentId) await db.delete(respondents).where(eq(respondents.id, testRespondentId));
     if (testUserId) await db.delete(users).where(eq(users.id, testUserId));
+    if (testLgaId) await db.delete(lgas).where(eq(lgas.id, testLgaId));
   });
 
   describe('issueToken', () => {
