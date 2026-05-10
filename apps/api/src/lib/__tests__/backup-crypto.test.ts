@@ -164,6 +164,19 @@ describe('backup-crypto (Story 9-9 AC#5)', () => {
   });
 
   describe('createDecryptDecipher validation', () => {
+    it('rejects wrong-length key (R1-M1)', () => {
+      // Symmetric protection with createEncryptCipher; production restore failures
+      // surface clearer than letting createDecipheriv throw a less-specific error.
+      const shortKey = Buffer.alloc(16);
+      expect(() =>
+        createDecryptDecipher(shortKey, {
+          algorithm: ENCRYPTION_ALGORITHM,
+          ivHex: '0'.repeat(IV_LENGTH_BYTES * 2),
+          authTagHex: '0'.repeat(AUTH_TAG_LENGTH_BYTES * 2),
+        }),
+      ).toThrow(/Decryption key must be 32 bytes/);
+    });
+
     it('rejects unknown algorithm', () => {
       const key = getEncryptionKey({ BACKUP_ENCRYPTION_KEY: VALID_KEY_HEX });
       expect(() =>
@@ -195,6 +208,32 @@ describe('backup-crypto (Story 9-9 AC#5)', () => {
           authTagHex: 'aa',
         }),
       ).toThrow(/Auth tag must be 16 bytes/);
+    });
+  });
+
+  describe('manifest serialization (R1-M2)', () => {
+    it('round-trips EncryptionMeta through JSON.stringify + JSON.parse', async () => {
+      // Production code path: manifest written as JSON to S3, read back as JSON during
+      // restore. In-memory pass-through (covered above) does not exercise this serialization;
+      // a serializer bug would silently fail at restore time.
+      const plaintext = Buffer.from('payload for json-roundtrip test');
+      const key = getEncryptionKey({ BACKUP_ENCRYPTION_KEY: VALID_KEY_HEX });
+
+      const { cipher, iv } = createEncryptCipher(key);
+      const ciphertext = await streamToBuffer(plaintext, cipher);
+      const meta = buildEncryptionMeta(iv, cipher);
+
+      const serialized = JSON.stringify(meta);
+      const parsed = JSON.parse(serialized);
+
+      expect(parsed.algorithm).toBe(ENCRYPTION_ALGORITHM);
+      expect(parsed.ivHex).toBe(meta.ivHex);
+      expect(parsed.authTagHex).toBe(meta.authTagHex);
+
+      // Decrypt using the parsed (post-JSON) metadata, proving the field shape survives.
+      const decipher = createDecryptDecipher(key, parsed);
+      const recovered = await streamToBuffer(ciphertext, decipher);
+      expect(recovered.equals(plaintext)).toBe(true);
     });
   });
 });

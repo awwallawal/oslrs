@@ -1408,6 +1408,84 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 
 ---
 
+### Pitfall #32: Selector rot under accessibility-name UI changes (Playwright strict mode)
+
+**Symptom**: Playwright tests pass strict-mode regex like `/broadcast to team/i` until the UI gains a second matching element (button aria-label + heading sharing the visible text); test then fails with `strict mode violation: locator resolved to 2 elements`. Test was correct against the *old* UI; UI got a legitimate accessibility improvement; test became wrong as a side-effect.
+
+**Detection**: After any aria-label / role / accessible-name rename, run `pnpm exec playwright test` against the affected page. Strict-mode-violation errors point straight at the rotted selector.
+
+**Fix**: Switch to either (a) `getByRole(role, { name: ..., exact: true })` so the match is anchored, or (b) scope the search via `.getByRole("region", ...).getByRole(...)` so the locator only sees the relevant subtree.
+
+**Reference**: commit `235563c` (e2e silent-failure triage 2026-05-09) fixed 4 strict-mode violations in `messaging.spec.ts` + `supervisor-dashboard.spec.ts` after Pitfall #31's cache-key fix unmasked the failures. Common rotted patterns:
+
+- `getByText('Broadcast to Team')` matched both inbox button + composer h2
+- `getByText(/broadcast to team/i)` regex never matched the button (button's accessible name is its aria-label "Send broadcast message to all team members", NOT visible text "Broadcast to Team")
+- `getByText(/start a new conversation/i)` matched both header button + empty-state button
+- `getByRole('link', { name: /home/i })` matched 3 elements (sidebar nav + sidebar logo aria-label + header logo aria-label)
+
+**Lesson**: tests assert against the accessibility tree, not the visible-text tree. Aria-label changes are public-API-equivalent for tests. Bake `exact: true` into selectors that target unique-by-position-on-page elements; scope by region for elements that legitimately repeat.
+
+---
+
+### Pitfall #33: WebSocket-refresh flake masquerading as a flaky test
+
+**Symptom**: e2e test sends an action that returns 200, then asserts the result appears in the inbox/list/dashboard within 15s. Fails sporadically in CI; passes locally on the first try. High variance + no obvious code-path failure.
+
+**Detection**: Test variance > 10% across 5 consecutive CI runs without code change. Logs show 200 response + assertion timeout. Network tab in `--debug` mode shows the inbox refetch happens *eventually* but not deterministically before the 15s timeout.
+
+**Cause**: The send action returns 200, but the inbox display refresh happens via either (a) a WebSocket event from the server, or (b) a query refetch triggered by mutation invalidation. In CI under load, either can lag — the WS event might not fire deterministically, or the refetch might hit a race with the assertion's timer.
+
+**Fix** (defer-to-determinism, two paths):
+- (a) **Explicitly await the refetch**: `page.waitForResponse('**/messages/threads')` BEFORE the assertion. Forces the test to wait for the network event the UI is also waiting for.
+- (b) **Cover the round-trip via integration-test fixture**: a Playwright fixture that doesn't depend on real-time. Useful when the UI surface is genuinely WS-driven and you don't want to deterministise the WS in tests.
+- (c) **Scope-narrow the assertion**: assert against the deterministic part only (e.g., compose pane verification — heading + send button + composer textarea visible) and defer the round-trip assertion to a different test layer.
+
+**Reference**: commit `c375254` (e2e second-pass triage 2026-05-09) narrowed the broadcast test to compose-pane verification and skipped 2 round-trip-dependent tests with explanatory TODOs + re-enable conditions. The skipped tests are tracked in tracker §F4 as prep-7 follow-up.
+
+**Lesson**: don't assert against UI updates that arrive asynchronously through WS or mutation invalidation — without explicit waits, the test is racing the framework. Either deterministise the wait or shrink the assertion scope.
+
+---
+
+### Pitfall #34: `continue-on-error: true` as silent-failure mask
+
+**Symptom**: GitHub Actions workflow conclusion = `success` despite real test failures. CI badge stays green. Real bugs ride main for hours/days because nobody checks per-job logs.
+
+**Detection**: Workflow-level conclusion (the badge color) does NOT equal job-level conclusion. If a job has `continue-on-error: true`, its failure does not propagate. To detect: read the job log, not just the workflow status. A workflow that is "always green" while a particular job is "always red" is the classic shape.
+
+**Fix**: Remove `continue-on-error: true` from any job that gates merge. The flag has legitimate uses (stabilization-period tolerance, optional jobs that augment but don't gate), but those uses must be paired with:
+- A separate visible signal (PR-comment bot, dashboard, periodic email) reporting per-job state
+- A `status: green/red` rollup that reads job-level conclusions in addition to workflow-level
+- A timebox: stabilization with `continue-on-error: true` for >2 weeks should trigger a "remove or pair with signal" review
+
+**Reference**: commit `235563c` removed `continue-on-error: true` from `.github/workflows/e2e.yml` after Pitfall #31's cache-key fix unmasked 7 silent failures (selector rot + fixture gaps). Two consecutive commits before the fix had identical job-level failures; the workflow conclusion stayed `success` for ~24 hours before someone read the job log.
+
+**Lesson**: red wallpaper is worse than no wallpaper. If the gate doesn't gate, remove it from the gate set OR pair its silence with explicit visibility.
+
+---
+
+### Pitfall #35: In-process worker CPU spike contaminates API latency rolling buffer on low-traffic VPS
+
+**Symptom**: CRITICAL `api_p95_latency` alert fires identical value across multiple 120s evaluator cycles, despite system being idle (load 0.00, low memory, health endpoint 200). Same exact value re-fires 6+ minutes later. Alert latches and won't clear without intervention.
+
+**Detection**:
+1. Cross-check VPS load avg + memory + health endpoint at the alert time. All three idle ⇒ buffer-stale, not real-traffic.
+2. Check workers-tier activity (backup, email, fraud, import, ODK sync) within ±2 min of the alert. A backup run with CPU-bound encryption + compression + S3 upload is the classic culprit.
+3. Inspect alert payload — identical numeric value across multiple evaluator cycles means a stuck outlier in the rolling buffer, not new slow traffic.
+
+**Cause**: A single CPU-bound in-process worker run (e.g., AES-GCM encrypted backup + pg_dump + S3 upload at ~700ms total) blocks the API event loop. Any HTTP request in-flight during that window gets recorded at ~700-750ms in the latency rolling buffer. On a low-traffic admin app, that single sample sits at top-5% (p95) until enough newer requests evict it — which can take 40+ minutes on a 2GB / 1 vCPU host.
+
+**Fix (mechanism — shipped commit `609e06e`)**: Time-windowed buffer eviction in `apps/api/src/middleware/metrics.ts`. Drop samples older than 5 min before computing p95. Stale outliers age out instead of latching.
+
+**Architectural fix (root cause — pending Story 9-14, post-field)**: Move workers to a separate PM2 process so backup/email/fraud/import CPU work cannot block the API event loop. Eliminates the failure mode at source. Tracker reference: F7 in `docs/bmad-compliance-restoration-2026-05-10.md` (renamed Story 9-14 worker-process-isolation, deferred to Operate-phase per <2-week field-survey timing).
+
+**Tactical alternative (if F5/F6 land before F7)**: Bump alert thresholds for `api_p95_latency` from `warn=250 / crit=500` to `warn=500 / crit=1000`. Filters in-process-worker spikes; risks masking real degradation under field traffic. Tracker reference: F6.
+
+**Reference**: 2026-05-10 incident — alert fired `api_p95_latency=752` twice (08:28:05 + 08:34:06 UTC), 6 min apart, identical value. AC#5 encrypted-backup ran at 07:33 UTC (704ms total). Diagnosis chain captured in (gitignored) `ssh_analyssis.txt` lines 240-419. Fix shipped commit `609e06e` with 2 pre-commit code-review passes + 6 new tests. Story 9-10 PC1 in Review Follow-ups (AI). Tracker reference: F5 (closed) + F5a (this Pitfall, open until R4 lands).
+
+**Lesson**: rolling buffers without time-based eviction work fine on high-traffic services where samples cycle quickly, but become alert sources of their own on low-traffic services where stale outliers persist. Pair size-windowed buffers with time-windowed eviction OR move the workload that can spike CPU off the same process.
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1417,6 +1495,8 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 *Updated: 2026-05-03 — Pitfalls #26-27 added: raw-SQL migrations need a tsx runner (db:push doesn't apply them) + postgres-vs-pg package mistake (postgres pkg not a project dep). Pattern caught after Story 9-13's migrate-mfa-init.ts shipped with `import postgres from 'postgres'`, silently breaking 5+ deploys until prep-input-sanitisation code-review surfaced the bug as F14. Also captures the Dev-Agent-Record lesson: "X is broken on local; worked around with Y" must be treated as HIGH-severity follow-up, not a debug log note.*
 *Updated: 2026-05-03 — Pitfalls #28-29 added per Story 11-1 follow-up: db:push aggressively reconciles + drops init-script objects (CHECK constraints, partial unique indexes, raw-SQL composite indexes) → introduces `pnpm db:push:full` umbrella that auto-discovers every `migrate-*-init.ts` runner and chains them after push; `--reset` flags on seed scripts need explicit env-var gates because env-name guards only protect against prod hostnames, not local dev DBs holding real backup-restored data. Caught after Story 11-1's `seed-projected-scale.ts --reset` wiped 874 audit_logs rows on first run; fix-forward shipped both the env-var gate and the umbrella in the same story.*
 *Updated: 2026-05-03 — Pitfall #30 added: doc-track ‖ code-track parallelism (Story 10-5 legal docs + Story 9-11 audit-viewer code) is safe when zero file overlap + zero semantic coupling — don't reflexively flag mixed working trees as "contamination" without measuring overlap first. Discipline is selective staging at commit time, not a working-tree blocker.*
+*Updated: 2026-05-09 — Pitfall #31 added: GH Actions Playwright cache key must track resolved version (pnpm-lock.yaml), not declaration (package.json). Plus visibility lesson on `continue-on-error: true` as silent-failure mask.*
+*Updated: 2026-05-10 — Pitfalls #32-35 added per BMAD compliance restoration tracker (`docs/bmad-compliance-restoration-2026-05-10.md` R4 + F5a): #32 selector rot under accessibility-name UI changes (commit `235563c`); #33 WebSocket-refresh flake masquerading as flaky test (commit `c375254`); #34 `continue-on-error: true` as silent-failure mask (commit `235563c`); #35 in-process worker CPU spike contaminates API latency rolling buffer (commit `609e06e` Story 9-10 PC1).*
 *Updated: 2026-05-09 — Pitfall #31 added: GH Actions E2E job had been silently failing across 2 commits (fe878af + 096086e) with `chromium_headless_shell-1208 doesn't exist` because the Playwright browser cache key tracked `apps/web/package.json` text instead of `pnpm-lock.yaml` resolved version, AND the `restore-keys` fallback was too permissive (matched broken v1 caches). Compounded by `pnpm dlx playwright install` fetching a latest Playwright that targeted a newer browser revision than the project's pinned `@playwright/test` expects. Fix: cache key includes `pnpm-lock.yaml` + manual `v2-` prefix; restore-keys narrowed to `v2-`-only; dlx swapped for `pnpm --filter @oslsr/web exec` so project-pinned Playwright drives both install and runtime. Visibility lesson: `continue-on-error: true` on a CI job needs a separate visible-red signal or red becomes wallpaper.*
 
 ## Part 12: Encrypted Backup Restore (added 2026-05-09 per Story 9-9 AC#5)

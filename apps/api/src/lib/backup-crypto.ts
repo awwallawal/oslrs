@@ -101,6 +101,9 @@ export function createDecryptDecipher(
   key: Buffer,
   meta: EncryptionMeta,
 ): DecipherGCM {
+  if (key.length !== KEY_LENGTH_BYTES) {
+    throw new Error(`Decryption key must be ${KEY_LENGTH_BYTES} bytes; got ${key.length}`);
+  }
   if (meta.algorithm !== ENCRYPTION_ALGORITHM) {
     throw new Error(`Unsupported algorithm: ${meta.algorithm}; only ${ENCRYPTION_ALGORITHM} supported`);
   }
