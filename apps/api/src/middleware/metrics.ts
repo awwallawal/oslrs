@@ -20,33 +20,83 @@ export const httpRequestDurationMs = new Histogram({
 });
 
 /**
- * Rolling buffer for computing p95 API latency in-memory.
- * Keeps the last 1000 request durations for percentile calculation.
+ * Rolling ring buffer for in-memory p95 latency computation. Each slot holds a
+ * `LatencySample` record (duration + completion timestamp co-resident); samples
+ * older than LATENCY_WINDOW_MS are excluded from the percentile so a single slow
+ * request can't dominate p95 for hours on low-traffic instances (2026-05-10
+ * false-alert fix). Single-record-per-slot shape eliminates the parallel-array
+ * pair-write invariant that the first-pass review flagged as a structural risk
+ * (NEW-H1, 2nd-pass).
+ *
+ * Note on alert-input vs Prometheus-histogram divergence: the `httpRequestDurationMs`
+ * histogram exported on `/metrics` records EVERY observation regardless of age,
+ * while `getP95Latency()` (the alert-evaluator input) is time-windowed. This is
+ * intentional — Prometheus is for offline analysis where stale samples have value;
+ * the alert is for "is the API slow RIGHT NOW?" which requires recency. A future
+ * operator querying both will see different p95 numbers; that's by design.
  */
+type LatencySample = { duration: number; timestamp: number };
 const LATENCY_BUFFER_SIZE = 1000;
-const latencyBuffer: number[] = [];
+const LATENCY_WINDOW_MS = 5 * 60 * 1000;
+const latencyBuffer: LatencySample[] = [];
 let latencyBufferIndex = 0;
 let latencyBufferFull = false;
 
 /**
- * Minimum number of requests before p95 is statistically meaningful.
- * Below this threshold, getP95Latency() returns 0 to avoid false alerts
- * on low-traffic VPS instances where a single slow request dominates.
+ * Minimum number of in-window samples before p95 is statistically meaningful.
+ * Below this threshold, getP95Latency() returns 0 to avoid false alerts on
+ * low-traffic VPS instances where a single slow request dominates.
+ *
+ * On low-traffic instances (<10 req/min) the 5-min window may never reach this
+ * floor; p95 will read 0 and the alert won't fire. That's intentional —
+ * false-alert suppression > coverage at low traffic. Re-tune after field-survey
+ * traffic ramps.
  */
 const MIN_SAMPLES_FOR_P95 = 50;
 
 /**
- * Get the current p95 API latency from the rolling buffer.
- * Returns 0 if fewer than MIN_SAMPLES_FOR_P95 requests have been recorded,
- * since p95 is not statistically meaningful with very few samples.
+ * Single chokepoint for sample writes. Both `metricsMiddleware` (production
+ * path) and `recordLatencySample` (test path) must call this. Single-record
+ * slot shape means there is no parallel-array invariant to violate even if a
+ * future maintainer adds another writer.
  */
-export function getP95Latency(): number {
-  const count = latencyBufferFull ? LATENCY_BUFFER_SIZE : latencyBufferIndex;
-  if (count < MIN_SAMPLES_FOR_P95) return 0;
+function appendSample(durationMs: number, timestampMs: number): void {
+  latencyBuffer[latencyBufferIndex] = { duration: durationMs, timestamp: timestampMs };
+  latencyBufferIndex++;
+  if (latencyBufferIndex >= LATENCY_BUFFER_SIZE) {
+    latencyBufferIndex = 0;
+    latencyBufferFull = true;
+  }
+}
 
-  const sorted = latencyBuffer.slice(0, count).sort((a, b) => a - b);
-  const p95Index = Math.floor(count * 0.95);
-  return sorted[Math.min(p95Index, count - 1)];
+/**
+ * Get the current p95 API latency from the rolling buffer, restricted to samples
+ * within the last LATENCY_WINDOW_MS. Returns 0 if fewer than MIN_SAMPLES_FOR_P95
+ * fresh samples are available.
+ *
+ * Allocates a fresh `number[]` per call (worst-case ~8KB at full buffer). Called
+ * every 120s by the alert evaluator — the GC pressure is invisible at this
+ * cadence and a fixed scratch array would be premature optimisation.
+ *
+ * @param now Optional evaluation time (defaults to Date.now()) — overridable for tests.
+ */
+export function getP95Latency(now: number = Date.now()): number {
+  const count = latencyBufferFull ? LATENCY_BUFFER_SIZE : latencyBufferIndex;
+  if (count === 0) return 0;
+
+  const cutoff = now - LATENCY_WINDOW_MS;
+  const fresh: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const sample = latencyBuffer[i];
+    // Inclusive boundary: a sample exactly LATENCY_WINDOW_MS old is still counted.
+    if (sample && sample.timestamp >= cutoff) fresh.push(sample.duration);
+  }
+
+  if (fresh.length < MIN_SAMPLES_FOR_P95) return 0;
+
+  fresh.sort((a, b) => a - b);
+  const p95Index = Math.floor(fresh.length * 0.95);
+  return fresh[Math.min(p95Index, fresh.length - 1)];
 }
 
 /**
@@ -98,13 +148,10 @@ export function metricsMiddleware(
       duration,
     );
 
-    // Record in rolling buffer for p95 computation
-    latencyBuffer[latencyBufferIndex] = duration;
-    latencyBufferIndex++;
-    if (latencyBufferIndex >= LATENCY_BUFFER_SIZE) {
-      latencyBufferIndex = 0;
-      latencyBufferFull = true;
-    }
+    // Record in rolling buffer for p95 computation. Timestamp = response-completion
+    // moment (start + duration), avoiding a redundant Date.now() and any drift
+    // that would creep in if work were inserted between this and the buffer write.
+    appendSample(duration, start + duration);
 
     return originalEnd.apply(this, args);
   } as Response['end'];
@@ -120,11 +167,9 @@ export function resetLatencyBuffer(): void {
 }
 
 /** Inject a duration into the rolling latency buffer (for testing) */
-export function recordLatencySample(durationMs: number): void {
-  latencyBuffer[latencyBufferIndex] = durationMs;
-  latencyBufferIndex++;
-  if (latencyBufferIndex >= LATENCY_BUFFER_SIZE) {
-    latencyBufferIndex = 0;
-    latencyBufferFull = true;
-  }
+export function recordLatencySample(
+  durationMs: number,
+  timestampMs: number = Date.now(),
+): void {
+  appendSample(durationMs, timestampMs);
 }
