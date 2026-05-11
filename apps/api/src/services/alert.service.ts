@@ -186,6 +186,19 @@ export class AlertService {
       state.consecutiveOkChecks = 0;
 
       const newLevel: AlertLevel = isCritical ? 'critical' : 'warning';
+
+      // Story 9-15 AC#2 — paper trail on critical TRANSITION, fired BEFORE
+      // queueAlert. Independent of the dispatch layer — fires regardless of
+      // whether Telegram channel is gated off (telegram-channel.isAlertSendEnabled),
+      // email digest is in non-production-mode skip, or per-metric cooldown is
+      // active. Goal: a future critical leaves a searchable line in pm2 logs
+      // even when every notification channel is silent. Transition-only
+      // (state.level !== 'critical') prevents log-spam during long-running
+      // criticals; the existing cooldown still throttles actual notifications.
+      if (newLevel === 'critical' && state.level !== 'critical') {
+        logger.warn({ event: 'alert.critical_evaluated', metricKey: key, value });
+      }
+
       const levelChanged = state.level !== newLevel && state.level !== 'resolved';
       const isEscalation = newLevel === 'critical' && state.level === 'warning';
 

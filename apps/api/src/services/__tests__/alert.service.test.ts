@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockDbSelect, mockSendGenericEmail, mockSendTelegramAlert } = vi.hoisted(() => ({
+const { mockDbSelect, mockSendGenericEmail, mockSendTelegramAlert, mockLoggerWarn } = vi.hoisted(() => ({
   mockDbSelect: vi.fn(),
   mockSendGenericEmail: vi.fn(),
   mockSendTelegramAlert: vi.fn(),
+  // Story 9-15 AC#2 — paper-trail warn log emitted on critical transition
+  // INDEPENDENT of telegram-channel dispatch. Hoisted so the pino mock factory
+  // returns a stable warn-spy we can assert on.
+  mockLoggerWarn: vi.fn(),
 }));
 
 vi.mock('../../db/index.js', () => ({
@@ -43,7 +47,7 @@ vi.mock('drizzle-orm', () => ({
 vi.mock('pino', () => ({
   default: () => ({
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: mockLoggerWarn,
     error: vi.fn(),
   }),
 }));
@@ -293,6 +297,63 @@ describe('AlertService', () => {
       // Should not throw despite Telegram failure
       await expect(AlertService.evaluateAlerts(health)).resolves.toBeUndefined();
       expect(mockSendTelegramAlert).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Story 9-15 AC#2 — Paper-trail warn-log on critical transition.
+  // Goal: even if every alert channel is gated off or down, future criticals
+  // leave a searchable line in pm2 logs. Independent of telegram-channel dispatch.
+  // Transition-only (not per-poll) to avoid log-spam during long-running criticals.
+  describe('Critical-transition paper trail (AC#2)', () => {
+    it('emits alert.critical_evaluated warn-log when a metric transitions to critical', async () => {
+      const health = createHealthData({
+        cpu: { usagePercent: 95, cores: 4 },
+      });
+
+      await AlertService.evaluateAlerts(health);
+
+      const criticalCall = mockLoggerWarn.mock.calls.find(
+        (call) => call[0]?.event === 'alert.critical_evaluated' && call[0]?.metricKey === 'cpu',
+      );
+      expect(criticalCall).toBeDefined();
+      expect(criticalCall![0]).toMatchObject({
+        event: 'alert.critical_evaluated',
+        metricKey: 'cpu',
+        value: 95,
+      });
+    });
+
+    it('does NOT emit alert.critical_evaluated on warning-only transitions', async () => {
+      const health = createHealthData({
+        cpu: { usagePercent: 75, cores: 4 }, // above warning (70), below critical (90)
+      });
+
+      await AlertService.evaluateAlerts(health);
+
+      const criticalCall = mockLoggerWarn.mock.calls.find(
+        (call) => call[0]?.event === 'alert.critical_evaluated',
+      );
+      expect(criticalCall).toBeUndefined();
+    });
+
+    it('does NOT re-emit alert.critical_evaluated on consecutive critical samples (transition-only, not per-poll)', async () => {
+      const health = createHealthData({
+        cpu: { usagePercent: 95, cores: 4 },
+      });
+
+      // First evaluation — emits the warn (transition ok → critical)
+      await AlertService.evaluateAlerts(health);
+      const firstCount = mockLoggerWarn.mock.calls.filter(
+        (call) => call[0]?.event === 'alert.critical_evaluated' && call[0]?.metricKey === 'cpu',
+      ).length;
+      expect(firstCount).toBe(1);
+
+      // Second evaluation — still critical, must NOT re-emit (transition guard)
+      await AlertService.evaluateAlerts(health);
+      const secondCount = mockLoggerWarn.mock.calls.filter(
+        (call) => call[0]?.event === 'alert.critical_evaluated' && call[0]?.metricKey === 'cpu',
+      ).length;
+      expect(secondCount).toBe(1); // unchanged
     });
   });
 });

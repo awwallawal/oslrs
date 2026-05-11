@@ -178,4 +178,96 @@ describe('sendCriticalTelegramAlert', () => {
     // Should still contain a valid ISO timestamp (substituted from now)
     expect(body.text).toMatch(/Time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
+
+  // ============================================================================
+  // Story 9-15 AC#1 — Production-gate (replaces test-mode-only skip)
+  // Prevents local `pnpm dev` from paging the operator with prod tokens.
+  // Trigger: 2026-05-11 self-page incident.
+  // ============================================================================
+
+  it('skips silently when NODE_ENV=development (no opt-in)', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ENABLE_TELEGRAM_ALERTS;
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(),
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('skips silently when NODE_ENV is undefined (no opt-in)', async () => {
+    delete process.env.NODE_ENV;
+    delete process.env.ENABLE_TELEGRAM_ALERTS;
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(),
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends when NODE_ENV=staging + ENABLE_TELEGRAM_ALERTS=true (explicit opt-in)', async () => {
+    process.env.NODE_ENV = 'staging';
+    process.env.ENABLE_TELEGRAM_ALERTS = 'true';
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(),
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('sends when NODE_ENV=production even if ENABLE_TELEGRAM_ALERTS=false (prod is default-allow; explicit false does NOT veto)', async () => {
+    // NODE_ENV=production already set in beforeEach
+    process.env.ENABLE_TELEGRAM_ALERTS = 'false';
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(),
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  // Story 9-15 review finding H2 — defensive: test-mode guard precedence over opt-in
+  it('skips silently when NODE_ENV=test even if ENABLE_TELEGRAM_ALERTS=true (test guard wins)', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.ENABLE_TELEGRAM_ALERTS = 'true';
+
+    await sendCriticalTelegramAlert({
+      metricKey: 'cpu',
+      value: 95,
+      timestamp: new Date(),
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Story 9-15 review finding H1 — strict equality contract: non-canonical opt-in values do NOT enable
+  it('does NOT send when ENABLE_TELEGRAM_ALERTS is a truthy variant (e.g. "1", "TRUE", "yes") in non-production', async () => {
+    process.env.NODE_ENV = 'staging';
+
+    for (const truthyVariant of ['1', 'TRUE', 'yes', 'on', 'True']) {
+      fetchMock.mockReset();
+      process.env.ENABLE_TELEGRAM_ALERTS = truthyVariant;
+
+      await sendCriticalTelegramAlert({
+        metricKey: 'cpu',
+        value: 95,
+        timestamp: new Date(),
+      });
+
+      expect(fetchMock, `variant "${truthyVariant}" should NOT enable`).not.toHaveBeenCalled();
+    }
+  });
 });
