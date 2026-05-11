@@ -17,7 +17,16 @@ router.param('id', (req, _res, next, value) => {
   next();
 });
 
-// All routes require authentication (no role restriction — any authenticated user can access published forms)
+// ---------------------------------------------------------------------------
+// Story 9-12 Task 5.4.2 — UNAUTHENTICATED public-wizard form discovery.
+// Returns the flattened render schema for the form pinned by the
+// `wizard.public_form_id` setting (Option B). Mounted BEFORE `authenticate`.
+// 404 PUBLIC_FORM_NOT_CONFIGURED when the setting is null or pinned form is
+// not currently published — frontend treats that as an empty-state.
+// ---------------------------------------------------------------------------
+router.get('/public-active', FormController.getPublicActiveForm);
+
+// All other routes require authentication (no role restriction — any authenticated user can access published forms)
 router.use(authenticate);
 
 // List all published forms available for data collection

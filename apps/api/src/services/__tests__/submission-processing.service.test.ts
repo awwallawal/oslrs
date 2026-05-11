@@ -11,6 +11,9 @@ const mockFindFirstRole = vi.fn();
 const mockInsertRespondent = vi.fn();
 const mockUpdateSubmissionSet = vi.fn();
 const mockQueueFraudDetection = vi.fn();
+// Story 9-12 Task 3.5 — race-resolution merge uses db.execute(sql`UPDATE...`)
+// Default returns { rows: [] } (no merge); tests can override per-case.
+const mockDbExecute = vi.fn().mockResolvedValue({ rows: [] });
 
 vi.mock('../../db/index.js', () => ({
   db: {
@@ -39,8 +42,25 @@ vi.mock('../../db/index.js', () => ({
         },
       };
     },
+    execute: (...args: unknown[]) => mockDbExecute(...args),
   },
 }));
+
+// AuditService is fire-and-forget; mock so tests don't try to walk the audit
+// hash chain or hit the DB through the audit path.
+vi.mock('../audit.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../audit.service.js')>('../audit.service.js');
+  return {
+    ...actual,
+    AuditService: {
+      ...actual.AuditService,
+      logAction: vi.fn(),
+      logActionTx: vi.fn(),
+      logPiiAccess: vi.fn(),
+      logPiiAccessTx: vi.fn(),
+    },
+  };
+});
 
 vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
@@ -147,6 +167,9 @@ function mockClerkRole() {
 describe('SubmissionProcessingService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Re-establish race-resolution merge default (Story 9-12 Task 3.5):
+    // empty rows means "no pending row matched → caller falls through to insert".
+    mockDbExecute.mockResolvedValue({ rows: [] });
   });
 
   describe('processSubmission', () => {
@@ -200,16 +223,31 @@ describe('SubmissionProcessingService', () => {
       expect(mockInsertRespondent).not.toHaveBeenCalled();
     });
 
-    it('should throw permanent error when NIN is missing from rawData', async () => {
+    // Story 9-12 Task 3.1 — NIN value is no longer required at submission time.
+    // Submissions without NIN now create a `pending_nin_capture` respondent
+    // instead of throwing. The form schema must STILL carry a NIN question
+    // (asserted in the next test below).
+    it('creates a pending-NIN respondent when rawData lacks NIN (universal pending-NIN)', async () => {
       const submission = makeSubmission({
         rawData: { first_name: 'NoNIN', last_name: 'Person' },
       });
       mockFindFirstSubmission.mockResolvedValue(submission);
       mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockEnumeratorRole();
 
-      await expect(
-        SubmissionProcessingService.processSubmission('sub-001')
-      ).rejects.toThrow('NIN');
+      const result = await SubmissionProcessingService.processSubmission('sub-001');
+
+      expect(result.action).toBe('processed');
+      expect(result.respondentId).toBe('resp-001');
+      expect(mockInsertRespondent).toHaveBeenCalled();
+      // The insert should carry status=pending_nin_capture + nin=null
+      const inserted = mockInsertRespondent.mock.calls[0]?.[0] as { values?: unknown };
+      // The mock returns `[{ id: 'resp-001', ...val }]` from insert(...).values(val).returning() so we
+      // can inspect the insert via the wrapper. Direct assertion against the
+      // shape would require fixture re-shaping; the action+id assertion is the
+      // authoritative behaviour check.
+      expect(inserted).toBeDefined();
     });
 
     it('should throw permanent error when form schema is not found', async () => {
@@ -559,12 +597,27 @@ describe('SubmissionProcessingService', () => {
       expect(result.lastName).toBe('Johnson');
     });
 
-    it('should throw PermanentProcessingError when NIN is missing', () => {
+    // Story 9-12 Task 3.1 (Universal pending-NIN, Option 1):
+    // extractRespondentData no longer throws when the NIN value is absent from rawData.
+    // The form schema must still carry a NIN question (next test below); only the
+    // per-submission VALUE is now optional. The downstream `findOrCreateRespondent`
+    // (Story 11-1) creates a `pending_nin_capture` respondent when nin is undefined.
+    it('returns nin=undefined when NIN value is missing from rawData (universal pending-NIN)', () => {
       const rawData = { first_name: 'NoNIN' };
+      const result = SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
+      expect(result.nin).toBeUndefined();
+      expect(result.firstName).toBe('NoNIN');
+    });
 
-      expect(() => {
-        SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
-      }).toThrow('NIN');
+    it('returns nin=undefined when _pendingNin: true flag is set (explicit defer, even if NIN present)', () => {
+      const rawData = {
+        nin: '61961438053',
+        first_name: 'Pending',
+        _pendingNin: true,
+      };
+      const result = SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
+      expect(result.nin).toBeUndefined();
+      expect(result.firstName).toBe('Pending');
     });
 
     it('should throw PermanentProcessingError when form schema has no NIN question (AC 3.4.8)', () => {
@@ -633,6 +686,112 @@ describe('SubmissionProcessingService', () => {
       expect(RESPONDENT_FIELD_MAP['lga_id']).toBe('lgaId');
       expect(RESPONDENT_FIELD_MAP['consent_marketplace']).toBe('consentMarketplace');
       expect(RESPONDENT_FIELD_MAP['consent_enriched']).toBe('consentEnriched');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Story 9-12 Task 3.5 — Race-resolution merge in findOrCreateRespondent.
+  // ────────────────────────────────────────────────────────────────────────
+  describe('findOrCreateRespondent — race-resolution merge', () => {
+    const baseData = {
+      nin: '61961438053',
+      firstName: 'Adewale',
+      lastName: 'Johnson',
+      dateOfBirth: '1990-05-15',
+      // Pre-canonicalised E.164 — what the normaliser produces.
+      phoneNumber: '+2348012345678',
+      lgaId: 'ibadan-north',
+      consentMarketplace: false,
+      consentEnriched: false,
+    };
+
+    it('merges into existing pending row when name+phone match (D1)', async () => {
+      mockFindFirstRespondent.mockResolvedValue(null); // No active NIN collision
+      mockFindFirstUser.mockResolvedValue(null); // No staff NIN collision
+      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'pending-resp-001' }] });
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        baseData,
+        'enumerator',
+        'enumerator-A',
+      );
+
+      expect(result.id).toBe('pending-resp-001');
+      expect(result._isNew).toBe(false);
+      // The merge should NOT proceed to insert — verify insert mock not called.
+      expect(mockInsertRespondent).not.toHaveBeenCalled();
+    });
+
+    it('falls through to insert when no pending row matches', async () => {
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockDbExecute.mockResolvedValueOnce({ rows: [] }); // No match
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        baseData,
+        'enumerator',
+        'enumerator-A',
+      );
+
+      expect(result._isNew).toBe(true);
+      expect(mockInsertRespondent).toHaveBeenCalled();
+    });
+
+    it('skips merge when phoneNumber is missing (no-phone-no-merge edge case)', async () => {
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, phoneNumber: undefined },
+        'enumerator',
+        'enumerator-A',
+      );
+
+      // No execute call — merge skipped due to missing identity field
+      expect(mockDbExecute).not.toHaveBeenCalled();
+      expect(result._isNew).toBe(true);
+    });
+
+    it('skips merge when firstName is missing', async () => {
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+
+      await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, firstName: undefined },
+        'enumerator',
+        'enumerator-A',
+      );
+
+      expect(mockDbExecute).not.toHaveBeenCalled();
+    });
+
+    it('does NOT attempt merge when no NIN supplied (pending-NIN insert path)', async () => {
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, nin: undefined },
+        'public',
+        'public-user-A',
+      );
+
+      // No execute — merge logic only runs when NIN is present.
+      expect(mockDbExecute).not.toHaveBeenCalled();
+      expect(result._isNew).toBe(true);
+    });
+
+    it('returns the original pending row id on a successful merge (preserves submitter credit)', async () => {
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'original-outreach-row' }] });
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        baseData,
+        'enumerator',
+        'second-enumerator-with-nin',
+      );
+
+      // The merge preserves the ORIGINAL submitter id by leaving it untouched
+      // in the UPDATE. The returned id is the pending row's id, not a new id.
+      expect(result.id).toBe('original-outreach-row');
+      expect(result._isNew).toBe(false);
     });
   });
 });

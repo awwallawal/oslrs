@@ -60,6 +60,13 @@ vi.mock('../audit.service.js', () => ({
   },
 }));
 
+// Story 9-12 Task 5.4.2 — getPublicActiveForm reads `wizard.public_form_id`
+// via the settings accessor. Hoist the spy so tests can swap the value.
+const mockGetSetting = vi.fn();
+vi.mock('../../lib/settings.js', () => ({
+  getSetting: (...args: any[]) => mockGetSetting(...args),
+}));
+
 // ── Test Helpers ───────────────────────────────────────────────────────────
 
 function makeValidSchema(overrides?: Partial<NativeFormSchema>): NativeFormSchema {
@@ -402,6 +409,85 @@ describe('NativeFormService.flattenForRender', () => {
         sectionId: 's2',
         sectionTitle: 'Section 2',
       })
+    );
+  });
+});
+
+// ─── Story 9-12 Task 5.4.2 ─────────────────────────────────────────────────
+describe('NativeFormService.getPublicActiveForm', () => {
+  beforeEach(() => {
+    mockFindFirst.mockReset();
+    mockGetSetting.mockReset();
+  });
+
+  it('throws PUBLIC_FORM_NOT_CONFIGURED when the setting is null', async () => {
+    mockGetSetting.mockResolvedValueOnce(null);
+    await expect(NativeFormService.getPublicActiveForm()).rejects.toMatchObject({
+      code: 'PUBLIC_FORM_NOT_CONFIGURED',
+      statusCode: 404,
+    });
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('throws PUBLIC_FORM_NOT_CONFIGURED when the setting is unset (undefined)', async () => {
+    mockGetSetting.mockResolvedValueOnce(undefined);
+    await expect(NativeFormService.getPublicActiveForm()).rejects.toMatchObject({
+      code: 'PUBLIC_FORM_NOT_CONFIGURED',
+      statusCode: 404,
+    });
+  });
+
+  it('throws PUBLIC_FORM_NOT_CONFIGURED when the pinned form is not found', async () => {
+    mockGetSetting.mockResolvedValueOnce('01234567-89ab-7cde-8000-000000000099');
+    mockFindFirst.mockResolvedValueOnce(undefined);
+    await expect(NativeFormService.getPublicActiveForm()).rejects.toMatchObject({
+      code: 'PUBLIC_FORM_NOT_CONFIGURED',
+    });
+  });
+
+  it('throws PUBLIC_FORM_NOT_CONFIGURED when the pinned form is not published (draft)', async () => {
+    mockGetSetting.mockResolvedValueOnce('01234567-89ab-7cde-8000-000000000099');
+    mockFindFirst.mockResolvedValueOnce({
+      id: '01234567-89ab-7cde-8000-000000000099',
+      status: 'draft',
+      formSchema: makeValidSchema(),
+    });
+    await expect(NativeFormService.getPublicActiveForm()).rejects.toMatchObject({
+      code: 'PUBLIC_FORM_NOT_CONFIGURED',
+    });
+  });
+
+  it('returns the flattened render schema when the pinned form is published', async () => {
+    const schema = makeValidSchema({
+      status: 'published',
+      sections: [
+        {
+          id: 's1',
+          title: 'Basics',
+          questions: [
+            {
+              id: 'q1',
+              type: 'text',
+              name: 'occupation',
+              label: 'Occupation',
+              required: true,
+            },
+          ],
+        },
+      ],
+    });
+    mockGetSetting.mockResolvedValueOnce('01234567-89ab-7cde-8000-000000000099');
+    mockFindFirst.mockResolvedValueOnce({
+      id: '01234567-89ab-7cde-8000-000000000099',
+      status: 'published',
+      formSchema: schema,
+    });
+
+    const result = await NativeFormService.getPublicActiveForm();
+    expect(result.title).toBe('Test Form');
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0]).toEqual(
+      expect.objectContaining({ name: 'occupation', sectionId: 's1' }),
     );
   });
 });

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { StaffInvitationEmailData, VerificationEmailData } from '@oslsr/types';
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `VerificationEmailData`
+// removed from imports; the verification job structure test below was deleted
+// alongside the retired hybrid Magic-Link/OTP flow.
+import type { StaffInvitationEmailData } from '@oslsr/types';
 
 /**
  * Email Queue Tests
@@ -34,26 +37,8 @@ describe('Email Queue', () => {
       expect(sampleJob.userId).toBeDefined();
     });
 
-    it('should have correct verification job structure', () => {
-      const sampleJob = {
-        type: 'verification' as const,
-        data: {
-          email: 'verify@example.com',
-          fullName: 'Verify User',
-          verificationUrl: 'http://localhost:5173/verify-email/token456',
-          otpCode: '123456',
-          magicLinkExpiresInHours: 24,
-          otpExpiresInMinutes: 10,
-        } satisfies VerificationEmailData,
-        userId: 'user-456',
-      };
-
-      expect(sampleJob.type).toBe('verification');
-      expect(sampleJob.data.verificationUrl).toBeDefined();
-      expect(sampleJob.data.otpCode).toHaveLength(6);
-      expect(sampleJob.data.magicLinkExpiresInHours).toBe(24);
-      expect(sampleJob.data.otpExpiresInMinutes).toBe(10);
-    });
+    // Story 9-12 Task 10.3 (2026-05-11 session 8) — verification job structure
+    // test removed alongside the retired `VerificationEmailData` type.
 
     it('should have correct password reset job structure', () => {
       const sampleJob = {

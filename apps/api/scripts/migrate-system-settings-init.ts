@@ -85,6 +85,34 @@ async function run(): Promise<void> {
   );
 
   console.log('[migrate-system-settings-init] ✓ auth.sms_otp_enabled seed ensured.');
+
+  // Story 9-12 Task 5.4.1 — idempotent seed for `wizard.public_form_id` (Option B
+  // form-discovery: Super Admin pins which published form the public wizard
+  // renders). Default value is JSONB null — wizard renders an empty-state
+  // ("survey not yet available") until Super Admin sets a UUID via the
+  // Settings landing page.
+  await pool.query(
+    `
+    INSERT INTO "system_settings" (key, value, description, updated_by, updated_at, created_at)
+    VALUES (
+      $1,
+      $2::jsonb,
+      $3,
+      $4,
+      now(),
+      now()
+    )
+    ON CONFLICT ("key") DO NOTHING
+    `,
+    [
+      'wizard.public_form_id',
+      'null',
+      'UUID of the published questionnaire that the public registration wizard renders on Step 4. Null = wizard shows empty-state and skips Step 4.',
+      superAdminId,
+    ],
+  );
+
+  console.log('[migrate-system-settings-init] ✓ wizard.public_form_id seed ensured.');
   console.log('[migrate-system-settings-init] Done.');
 }
 

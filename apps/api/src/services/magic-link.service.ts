@@ -181,6 +181,124 @@ export class MagicLinkService {
   }
 
   /**
+   * Validate a magic-link token WITHOUT consuming it. Used by flows that need
+   * to do additional work before the token is permanently spent (e.g.,
+   * Story 9-12 `complete-nin` endpoint runs FR21 dedupe before promoting the
+   * pending row → if dedupe fails, the user can retry without burning the link).
+   *
+   * Returns the persisted row on success. Throws AppError on any failure with
+   * the same code surface as `redeemToken`.
+   *
+   * Caller MUST follow up with `consumeToken(plaintext, purpose)` once the
+   * downstream work has succeeded to enforce the single-use guarantee.
+   */
+  static async peekToken(args: RedeemTokenArgs): Promise<MagicLinkToken> {
+    const { plaintext, purpose } = args;
+
+    if (!plaintext) {
+      throw new AppError('MAGIC_LINK_INVALID', 'Magic-link token is missing or empty', 400);
+    }
+
+    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+
+    const existing = await db.query.magicLinkTokens.findFirst({
+      where: and(
+        eq(magicLinkTokens.tokenHash, tokenHash),
+        eq(magicLinkTokens.purpose, purpose),
+      ),
+    });
+
+    if (!existing) {
+      throw new AppError('MAGIC_LINK_INVALID', 'Invalid or unknown magic-link token', 400);
+    }
+    if (existing.usedAt !== null) {
+      throw new AppError('MAGIC_LINK_ALREADY_USED', 'This magic link has already been used', 400);
+    }
+    if (existing.expiresAt.getTime() < Date.now()) {
+      throw new AppError('MAGIC_LINK_EXPIRED', 'This magic link has expired', 400);
+    }
+
+    return existing;
+  }
+
+  /**
+   * Atomically mark a previously-validated token as consumed. Race-safe:
+   * the UPDATE filters on `used_at IS NULL`, so concurrent consume attempts
+   * resolve to "first wins" — second sees zero rows updated and throws
+   * `MAGIC_LINK_ALREADY_USED`. Pair with `peekToken` for two-phase flows.
+   */
+  static async consumeToken(args: RedeemTokenArgs): Promise<MagicLinkToken> {
+    return this.redeemToken(args);
+  }
+
+  /**
+   * Code review H5 (2026-05-11) — transactional variant of consumeToken.
+   * Use within `db.transaction(async (tx) => { ... })` when consume must
+   * commit atomically with a downstream UPDATE (e.g. respondent status
+   * promotion in `completeNin`). Same race-safety contract as `consumeToken`.
+   */
+  static async consumeTokenTx(
+    tx: Parameters<Parameters<typeof db['transaction']>[0]>[0],
+    args: RedeemTokenArgs,
+  ): Promise<MagicLinkToken> {
+    const { plaintext, purpose } = args;
+    if (!plaintext) {
+      throw new AppError('MAGIC_LINK_INVALID', 'Magic-link token is missing or empty', 400);
+    }
+    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+
+    const result = await tx.execute(sql`
+      UPDATE "magic_link_tokens"
+      SET "used_at" = now()
+      WHERE "token_hash" = ${tokenHash}
+        AND "purpose" = ${purpose}
+        AND "used_at" IS NULL
+        AND "expires_at" > now()
+      RETURNING
+        "id",
+        "token_hash" AS "tokenHash",
+        "purpose",
+        "email",
+        "user_id" AS "userId",
+        "respondent_id" AS "respondentId",
+        "expires_at" AS "expiresAt",
+        "used_at" AS "usedAt",
+        "requested_ip" AS "requestedIp",
+        "user_agent" AS "userAgent",
+        "created_at" AS "createdAt"
+    `);
+    const rows = (result as unknown as { rows: MagicLinkToken[] }).rows;
+    if (!rows || rows.length === 0) {
+      // Differentiate at the same fidelity as `redeemToken` so the caller
+      // can surface the right user-facing error.
+      const existing = await tx.execute(sql`
+        SELECT "id",
+               "used_at" AS "usedAt",
+               "expires_at" AS "expiresAt"
+        FROM "magic_link_tokens"
+        WHERE "token_hash" = ${tokenHash}
+          AND "purpose" = ${purpose}
+        LIMIT 1
+      `);
+      const existingRows = (existing as unknown as {
+        rows: Array<{ id: string; usedAt: Date | null; expiresAt: Date }>;
+      }).rows;
+      if (!existingRows || existingRows.length === 0) {
+        throw new AppError('MAGIC_LINK_INVALID', 'Invalid or unknown magic-link token', 400);
+      }
+      const row = existingRows[0];
+      if (row.usedAt !== null) {
+        throw new AppError('MAGIC_LINK_ALREADY_USED', 'This magic link has already been used', 400);
+      }
+      if (new Date(row.expiresAt).getTime() < Date.now()) {
+        throw new AppError('MAGIC_LINK_EXPIRED', 'This magic link has expired', 400);
+      }
+      throw new AppError('MAGIC_LINK_INVALID', 'Magic link could not be redeemed', 400);
+    }
+    return rows[0];
+  }
+
+  /**
    * Manually revoke a token (e.g., on user-requested invalidation, email change).
    * Idempotent — already-revoked tokens are a no-op.
    */

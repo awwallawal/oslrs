@@ -15,7 +15,28 @@ import { db } from '../db/index.js';
 
 const router = Router();
 
-// All routes require authentication
+// ---------------------------------------------------------------------------
+// Story 9-12 — UNAUTHENTICATED LGA list for the public registration wizard.
+// Public respondents in Step 2 need to pick their LGA before they have an
+// account; the data is non-sensitive reference data (33 Oyo LGAs). Mounted
+// BEFORE `authenticate`; returns only id + name + code (no internal fields).
+// ---------------------------------------------------------------------------
+router.get(
+  '/public',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const lgasList = await db.query.lgas.findMany({
+        columns: { id: true, name: true, code: true },
+        orderBy: (lgas, { asc }) => [asc(lgas.name)],
+      });
+      res.json({ data: lgasList });
+    } catch {
+      next(new AppError('LGA_LIST_ERROR', 'Failed to retrieve LGAs list', 500));
+    }
+  },
+);
+
+// All other routes require authentication
 router.use(authenticate);
 
 // GET /api/v1/lgas — LGA list for filter dropdowns

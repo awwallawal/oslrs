@@ -57,6 +57,14 @@ export default defineConfig({
       testMatch: /(?:fraud-threshold|messaging|supervisor-dashboard)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    // Story 9-12 — public registration wizard E2E (AC#13). Smoke-level
+    // assertions are active; full-stack flows are test.skip() with detailed
+    // re-enable preconditions (mirrors nin-validation.spec.ts pattern).
+    {
+      name: 'wizard',
+      testMatch: /wizard-registration\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
   webServer: [
     {

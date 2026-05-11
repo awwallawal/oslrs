@@ -1,6 +1,7 @@
 import { db } from '../db/index.js';
 import { questionnaireForms } from '../db/schema/index.js';
 import { AuditService } from './audit.service.js';
+import { getSetting } from '../lib/settings.js';
 import { eq, desc } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
@@ -371,6 +372,49 @@ export class NativeFormService {
       status: f.status,
       publishedAt: f.nativePublishedAt?.toISOString() ?? null,
     }));
+  }
+
+  /**
+   * Story 9-12 Task 5.4.2 — public-wizard form discovery (Option B).
+   *
+   * Reads the `wizard.public_form_id` setting; if set and the referenced form
+   * is published, returns its flattened render schema. If the setting is null,
+   * missing, or the pinned form is no longer published, throws
+   * `PUBLIC_FORM_NOT_CONFIGURED` (404) so the wizard renders an empty-state on
+   * Step 4 and tracks the gap as a metric for operator follow-up.
+   *
+   * Called by an UNAUTHENTICATED route — the form contents themselves are
+   * public-survey questions that need to render before the respondent has an
+   * account.
+   */
+  static async getPublicActiveForm(): Promise<FlattenedForm> {
+    const formId = await getSetting<string | null>('wizard.public_form_id');
+
+    if (!formId) {
+      throw new AppError(
+        'PUBLIC_FORM_NOT_CONFIGURED',
+        'No public-wizard form is currently configured.',
+        404,
+      );
+    }
+
+    const form = await db.query.questionnaireForms.findFirst({
+      where: eq(questionnaireForms.id, formId),
+    });
+
+    if (!form || form.status !== 'published') {
+      // Pinned form has been unpublished or deleted since it was set.
+      // Treat the same as "not configured" so the wizard renders the empty
+      // state; operator must re-pin a published form via the Settings UI.
+      throw new AppError(
+        'PUBLIC_FORM_NOT_CONFIGURED',
+        'The configured public-wizard form is not currently published.',
+        404,
+      );
+    }
+
+    const schema = form.formSchema as NativeFormSchema;
+    return this.flattenForRender(schema);
   }
 
   /**

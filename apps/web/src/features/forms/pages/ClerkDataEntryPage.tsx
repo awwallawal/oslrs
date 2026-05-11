@@ -17,14 +17,15 @@ import { syncManager } from '../../../services/sync-manager';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { getVisibleQuestions } from '../utils/skipLogic';
 import { QuestionRenderer } from '../components/QuestionRenderer';
+import { PendingNinPrompt } from '../components/PendingNinPrompt';
 import type { FlattenedQuestion } from '../api/form.api';
 import { Card, CardContent } from '../../../components/ui/card';
 import { SkeletonForm } from '../../../components/skeletons';
 import { useToast } from '../../../hooks/useToast';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { getCachedDynamicFormSchema } from '../utils/formSchema';
-
-const NIN_QUESTION_NAMES = ['nin', 'national_id'];
+import { NinHelpHint } from '../../registration/components/NinHelpHint';
+import { NIN_QUESTION_NAMES } from '../../registration/lib/nin-question-names';
 
 interface Section {
   id: string;
@@ -73,6 +74,10 @@ export default function ClerkDataEntryPage() {
   // Accumulate all answers across question navigation.
   const allAnswersRef = useRef<Record<string, unknown>>({});
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+
+  // Story 9-12 Task 13 — pending-NIN prompt visibility.
+  const [pendingNinPromptOpen, setPendingNinPromptOpen] = useState(false);
+  const pendingNin = formData._pendingNin === true;
 
   // Session tracking (persisted to sessionStorage)
   const [session, setSession] = useState(() => {
@@ -199,6 +204,40 @@ export default function ClerkDataEntryPage() {
     [trigger, ninQuestionName, formData, ninCheck]
   );
 
+  /**
+   * Story 9-12 Task 13 — pending-NIN confirm.
+   *
+   * Stamps `_pendingNin: true` (+ optional `_deferReasonNin`) into the
+   * submission rawData and clears any partially-typed NIN. Backend reads the
+   * flag at `submission-processing.service.ts:359` and routes the row to the
+   * `pending_nin_capture` status path (Task 3.1 removed the NIN-required
+   * throw). NIN validation is skipped at submit time when the flag is set.
+   */
+  const handlePendingNinConfirm = useCallback(
+    (reason?: string) => {
+      if (!ninQuestionName) return;
+      const next = { ...allAnswersRef.current };
+      next._pendingNin = true;
+      if (reason) next._deferReasonNin = reason;
+      next[ninQuestionName] = null;
+      allAnswersRef.current = next;
+      setFormData({ ...next });
+      ninCheck.reset();
+      clearErrors(ninQuestionName);
+      setPendingNinPromptOpen(false);
+    },
+    [ninQuestionName, ninCheck, clearErrors],
+  );
+
+  /** Clears the pending-NIN flag if the operator decides to capture it after all. */
+  const handlePendingNinUndo = useCallback(() => {
+    const next = { ...allAnswersRef.current };
+    delete next._pendingNin;
+    delete next._deferReasonNin;
+    allAnswersRef.current = next;
+    setFormData({ ...next });
+  }, []);
+
   // Submit handler
   const handleSubmit = useCallback(async () => {
     // Block submit if NIN duplicate detected
@@ -206,6 +245,8 @@ export default function ClerkDataEntryPage() {
 
     const fieldNames = visibleQuestions
       .filter((q) => q.type !== 'note')
+      // Skip NIN validation when the operator marked the row as pending-NIN.
+      .filter((q) => !(pendingNin && NIN_QUESTION_NAMES.includes(q.name)))
       .map((q) => q.name);
 
     const isValid = await trigger(fieldNames);
@@ -250,7 +291,7 @@ export default function ClerkDataEntryPage() {
     }
 
     navigate('/dashboard/clerk/surveys');
-  }, [trigger, visibleQuestions, draft, toast, ninCheck, navigate]);
+  }, [trigger, visibleQuestions, draft, toast, ninCheck, navigate, pendingNin]);
 
   // Ctrl+S save draft
   const handleSaveDraft = useCallback(async () => {
@@ -461,11 +502,54 @@ export default function ClerkDataEntryPage() {
                             }
                           }}
                           error={displayErrors[question.name]}
+                          disabled={isNinField && pendingNin}
                         />
                       )}
                     />
                     {isNinField && ninCheck.isChecking && (
                       <p className="text-sm text-gray-500 mt-1" data-testid="nin-checking">Checking NIN availability...</p>
+                    )}
+
+                    {/* Story 9-12 Task 13 — pending-NIN toggle for clerk surface */}
+                    {isNinField && (
+                      <div className="mt-2" data-testid="nin-pending-toggle-area">
+                        {pendingNin ? (
+                          <div
+                            role="status"
+                            aria-live="polite"
+                            className="flex items-center justify-between rounded-md border border-info-200 bg-info-50 px-3 py-2 text-sm text-info-800"
+                            data-testid="nin-pending-active-banner"
+                          >
+                            <span>
+                              Saved as <strong>pending-NIN</strong>
+                              {typeof formData._deferReasonNin === 'string' && formData._deferReasonNin
+                                ? ` — reason: "${formData._deferReasonNin}"`
+                                : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handlePendingNinUndo}
+                              className="text-xs font-medium text-info-700 hover:text-info-900 underline"
+                              data-testid="nin-pending-undo"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <NinHelpHint
+                              variant="inline"
+                              onPendingNinClick={() => setPendingNinPromptOpen(true)}
+                              hidePendingLink={pendingNinPromptOpen}
+                            />
+                            <PendingNinPrompt
+                              open={pendingNinPromptOpen}
+                              onConfirm={handlePendingNinConfirm}
+                              onCancel={() => setPendingNinPromptOpen(false)}
+                            />
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

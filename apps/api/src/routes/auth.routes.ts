@@ -2,14 +2,20 @@ import { Router, type RequestHandler } from 'express';
 import { AuthController } from '../controllers/auth.controller.js';
 import { MfaController } from '../controllers/mfa.controller.js';
 import { MagicLinkController } from '../controllers/magic-link.controller.js';
+import { SmsOtpController } from '../controllers/sms-otp.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { mfaRateLimit } from '../middleware/mfa-rate-limit.js';
 import { requireFreshReAuth } from '../middleware/require-fresh-reauth.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
-import { registrationRateLimit, resendVerificationRateLimit, verifyEmailRateLimit, activationRateLimit } from '../middleware/registration-rate-limit.js';
-import { googleAuthRateLimit } from '../middleware/google-auth-rate-limit.js';
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `resendVerificationRateLimit`,
+// `verifyEmailRateLimit`, and `registrationRateLimit` (the auth-route consumer
+// of it) deleted alongside the legacy verification routes. `registrationRateLimit`
+// the middleware itself lives on in `registration-rate-limit.ts` and is used by
+// `/registration/wizard` via `registration.routes.ts`. `activationRateLimit`
+// retained here for the /activate routes.
+import { activationRateLimit } from '../middleware/registration-rate-limit.js';
 import { reauthRateLimit } from '../middleware/reauth-rate-limit.js';
 import { magicLinkRateLimit } from '../middleware/magic-link-rate-limit.js';
 import { AppError } from '@oslsr/utils';
@@ -40,38 +46,29 @@ router.post('/public/login',
   AuthController.publicLogin
 );
 
-// Google OAuth verification - rate limited, no CAPTCHA needed (Story 3.0)
-router.post('/google/verify',
-  googleAuthRateLimit,
-  AuthController.googleVerify
-);
+// Story 9-12 Task 10.1 — Google OAuth retired per ADR-015 rewrite. Magic-link
+// is the primary public-auth channel; Google OAuth was deemed misleading
+// (NDPA confound — read as government-Google partnership claim) and removed.
+// The route stays mounted to return a structured 404 so any in-flight
+// frontend bundles get a deterministic failure rather than a network error.
+// Code review L7 (2026-05-11) — rate-limit the 404 too so it can't be pounded.
+router.post('/google/verify', magicLinkRateLimit, (_req, res) => {
+  res.status(404).json({
+    code: 'GOOGLE_OAUTH_RETIRED',
+    message:
+      'Google sign-in has been retired. Please use email + password, or request a magic link.',
+  });
+});
 
-// Public user registration - rate limited + CAPTCHA protected (Story 1.8)
-router.post('/public/register',
-  registrationRateLimit,
-  verifyCaptcha,
-  AuthController.publicRegister
-);
-
-// Email verification - rate limited (Story 1.8)
-router.get('/verify-email/:token',
-  verifyEmailRateLimit,
-  AuthController.verifyEmail
-);
-
-// OTP verification - rate limited + CAPTCHA protected (ADR-015)
-router.post('/verify-otp',
-  verifyEmailRateLimit,
-  verifyCaptcha,
-  AuthController.verifyOtp
-);
-
-// Resend verification email - rate limited + CAPTCHA protected (Story 1.8)
-router.post('/resend-verification',
-  resendVerificationRateLimit,
-  verifyCaptcha,
-  AuthController.resendVerification
-);
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — Legacy hybrid Magic-Link/OTP
+// registration flow retired in favour of the wizard at /api/v1/registration/wizard.
+// Routes removed:
+//   - POST /public/register
+//   - GET  /verify-email/:token
+//   - POST /verify-otp
+//   - POST /resend-verification
+// Existing public_users continue to use /public/login (email + password).
+// Magic-link primary auth path lives below (/public/magic-link + /magic + /magic/consume).
 
 // Logout - requires authentication
 router.post('/logout',
@@ -203,11 +200,35 @@ router.post('/public/magic-link',
 );
 
 // GET /api/v1/auth/magic?token=<plaintext>&purpose=<purpose>
-// Validates + atomically consumes the token. Returns JSON describing the
-// redemption result; frontend (Task 4-7) handles the redirect. No JWT issued
-// here — JWT issuance for magic-link login is a future Task in Story 9-12.
+// Code review C1 (2026-05-11) — GET is PEEK-ONLY now. Email-link prefetchers
+// would otherwise burn legitimate users' tokens before they click. Token
+// consume happens via POST /auth/magic/consume below, driven by an explicit
+// Confirm action on the frontend resume page.
 router.get('/magic',
   MagicLinkController.redeemMagicLink
+);
+
+// POST /api/v1/auth/magic/consume — body { token, purpose }
+// Atomically consumes the token (single-use). Audit-logged.
+router.post('/magic/consume',
+  magicLinkRateLimit,
+  MagicLinkController.consumeMagicLink
+);
+
+// ---------------------------------------------------------------------------
+// Story 9-12 AC#7 — SMS OTP infra-only / feature-flagged off by default.
+// Both endpoints short-circuit with 503 SMS_OTP_DISABLED when
+// `auth.sms_otp_enabled` is false in system_settings (the default).
+// Per-IP rate limit (cloned from magic-link) caps abuse at the edge.
+// ---------------------------------------------------------------------------
+router.post('/public/sms-otp/request',
+  magicLinkRateLimit,
+  SmsOtpController.request
+);
+
+router.post('/public/sms-otp/verify',
+  magicLinkRateLimit,
+  SmsOtpController.verify
 );
 
 export default router;

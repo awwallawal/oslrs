@@ -2,13 +2,30 @@ import { ReactNode } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { supportEmail } from '../../../../config/site';
-import { WizardProgressBar } from './WizardProgressBar';
 import { WizardNavigation } from './WizardNavigation';
 import {
   useActivationWizard,
+  STEP_LABELS,
   type WizardStep,
   type UseActivationWizardOptions,
 } from './useActivationWizard';
+// Story 9-12 Task 9 — retro-fit shared wizard chrome from features/registration.
+import { WizardStepIndicator } from '../../../registration/components/WizardStepIndicator';
+import { TrustBadgesRow } from '../../../registration/components/TrustBadgesRow';
+
+/**
+ * Story 9-12 Task 9 — convert the existing numeric `activeSteps` shape into
+ * the `{id, label}[]` shape consumed by `WizardStepIndicator`. Pure helper so
+ * both `ActivationWizard` and `ActivationWizardUI` share the conversion.
+ */
+function buildIndicatorSteps(
+  activeSteps: WizardStep[],
+): { id: string; label: string }[] {
+  return activeSteps.map((step) => ({
+    id: String(step),
+    label: STEP_LABELS[step],
+  }));
+}
 
 interface ActivationWizardProps extends UseActivationWizardOptions {
   /** Render function for each step */
@@ -74,11 +91,13 @@ export function ActivationWizard({
         {/* Progress bar — only shown when more than 1 step */}
         {wizard.activeSteps.length > 1 && (
           <div className="px-6 py-4 border-b border-neutral-100">
-            <WizardProgressBar
-              currentStep={wizard.currentStep}
-              completedSteps={wizard.completedSteps}
-              activeSteps={wizard.activeSteps}
-              onStepClick={handleStepClick}
+            <WizardStepIndicator
+              steps={buildIndicatorSteps(wizard.activeSteps)}
+              currentStepIndex={wizard.activeSteps.indexOf(wizard.currentStep)}
+              onStepClick={(idx) => {
+                const target = wizard.activeSteps[idx];
+                if (target) handleStepClick(target);
+              }}
             />
           </div>
         )}
@@ -128,6 +147,11 @@ export function ActivationWizard({
             onSubmit={handleSubmit}
           />
         </div>
+
+        {/* Story 9-12 Task 9 — trust badges row at the foot of the card */}
+        <div className="border-t border-neutral-100 bg-white px-6 py-4">
+          <TrustBadgesRow />
+        </div>
       </div>
 
       {/* Help text */}
@@ -171,7 +195,10 @@ interface ActivationWizardUIProps {
 
 export function ActivationWizardUI({
   currentStep,
-  completedSteps,
+  // Story 9-12 Task 9 — WizardStepIndicator derives "completed" from index <
+  // currentStepIndex, so the explicit set is no longer needed for rendering.
+  // Kept on the public prop surface for backward-compat.
+  completedSteps: _completedSteps,
   activeSteps,
   formData,
   updateFormData,
@@ -208,11 +235,13 @@ export function ActivationWizardUI({
         {/* Progress bar — only shown when more than 1 step */}
         {activeSteps.length > 1 && (
           <div className="px-6 py-4 border-b border-neutral-100">
-            <WizardProgressBar
-              currentStep={currentStep}
-              completedSteps={completedSteps}
-              activeSteps={activeSteps}
-              onStepClick={onStepClick}
+            <WizardStepIndicator
+              steps={buildIndicatorSteps(activeSteps)}
+              currentStepIndex={activeSteps.indexOf(currentStep)}
+              onStepClick={(idx) => {
+                const target = activeSteps[idx];
+                if (target) onStepClick(target);
+              }}
             />
           </div>
         )}
@@ -261,6 +290,11 @@ export function ActivationWizardUI({
             onNext={onNext}
             onSubmit={onSubmit}
           />
+        </div>
+
+        {/* Story 9-12 Task 9 — trust badges row at the foot of the card */}
+        <div className="border-t border-neutral-100 bg-white px-6 py-4">
+          <TrustBadgesRow />
         </div>
       </div>
 

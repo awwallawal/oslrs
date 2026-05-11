@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 38 total action types across all categories', () => {
+    it('should have 40 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -172,8 +172,10 @@ describe('AuditService', () => {
       // Story 9-12 (public wizard + magic-link) added 4 actions:
       //   MAGIC_LINK_ISSUED, MAGIC_LINK_REDEEMED, PENDING_NIN_DEFERRED,
       //   PENDING_NIN_TRANSITIONED → 38.
+      // Story 9-12 Task 3.8 (Universal pending-NIN, Option 1) added 2 more:
+      //   PENDING_NIN_CREATED, PENDING_NIN_PROMOTED → 40.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(38);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(40);
     });
   });
 

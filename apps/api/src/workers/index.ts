@@ -13,10 +13,12 @@ import { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 import { backupWorker, closeBackupWorker } from './backup.worker.js';
 import { disputeAutoCloseWorker, closeDisputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 import { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
+import { reminderWorker, closeReminderWorker } from './reminder.worker.js';
 import { closeMarketplaceExtractionQueue } from '../queues/marketplace-extraction.queue.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
 import { scheduleDailyBackup } from '../queues/backup.queue.js';
 import { scheduleDisputeAutoClose } from '../queues/dispute-autoclose.queue.js';
+import { scheduleDailyReminders, closeReminderQueue } from '../queues/reminder.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
 import { closeAllConnections } from '../lib/redis.js';
@@ -33,6 +35,7 @@ export { productivitySnapshotWorker } from './productivity-snapshot.worker.js';
 export { backupWorker } from './backup.worker.js';
 export { disputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 export { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
+export { reminderWorker, closeReminderWorker } from './reminder.worker.js';
 
 /**
  * Initialize all workers
@@ -44,7 +47,7 @@ export async function initializeWorkers(): Promise<void> {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose', 'marketplace-extraction'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose', 'marketplace-extraction', 'pending-nin-reminders'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
     webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
@@ -53,6 +56,7 @@ export async function initializeWorkers(): Promise<void> {
     backupWorkerRunning: backupWorker?.isRunning() ?? false,
     disputeAutoCloseWorkerRunning: disputeAutoCloseWorker?.isRunning() ?? false,
     marketplaceExtractionWorkerRunning: marketplaceExtractionWorker?.isRunning() ?? false,
+    reminderWorkerRunning: reminderWorker?.isRunning() ?? false,
   });
 
   // Schedule nightly productivity snapshot
@@ -63,6 +67,9 @@ export async function initializeWorkers(): Promise<void> {
 
   // Schedule daily dispute auto-close
   await scheduleDisputeAutoClose();
+
+  // Schedule daily pending-NIN reminders (Story 9-12 AC#10)
+  await scheduleDailyReminders();
 
   // Schedule email digest flush (every 30 minutes)
   await scheduleDigestFlush();
@@ -123,6 +130,8 @@ export async function closeAllWorkers(): Promise<void> {
     closeDisputeAutoCloseWorker(),
     marketplaceExtractionWorker?.close(),
     closeMarketplaceExtractionQueue(),
+    closeReminderWorker(),
+    closeReminderQueue(),
   ]);
 
   // Close factory-tracked Redis connections (singleton + any remaining dedicated)

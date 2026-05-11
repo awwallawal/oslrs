@@ -80,25 +80,12 @@ router.get('/email-preview/staff-invitation/no-lga', (_req: Request, res: Respon
   res.send(html);
 });
 
-/**
- * GET /api/v1/dev/email-preview/verification
- *
- * Preview the hybrid verification email (Magic Link + OTP)
- */
-router.get('/email-preview/verification', (_req: Request, res: Response) => {
-  const sampleData = {
-    fullName: 'Chinedu Okafor',
-    email: 'chinedu.okafor@example.com',
-    verificationUrl: 'http://localhost:5173/verify-email/sample-verification-token',
-    otpCode: '847592',
-    magicLinkExpiresInHours: 24,
-    otpExpiresInMinutes: 10,
-  };
-
-  const html = EmailService.getVerificationHtml(sampleData);
-  res.setHeader('Content-Type', 'text/html');
-  res.send(html);
-});
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `/email-preview/verification`
+// route removed. The hybrid Magic-Link/OTP template was retired alongside the
+// legacy public-registration flow. Magic-link emails for the wizard are
+// inline-rendered in `MagicLinkService.sendMagicLinkEmail`; if a preview is
+// desired in future, add a route here that constructs the per-purpose magic-link
+// HTML via that service's private `getCopyForPurpose` accessor.
 
 /**
  * GET /api/v1/dev/email-preview/password-reset

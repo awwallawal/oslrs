@@ -29,16 +29,7 @@ vi.mock('../../api/auth.api', () => ({
   },
 }));
 
-// Mock Google OAuth
-vi.mock('@react-oauth/google', () => ({
-  GoogleLogin: () => <div data-testid="google-login-mock">Google Sign-In</div>,
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-// Mock Google auth API
-vi.mock('../../api/google-auth.api', () => ({
-  verifyGoogleToken: vi.fn(),
-}));
+// Story 9-12 Task 10.1 — Google OAuth retired; mocks no longer needed.
 
 // Mock HCaptcha component - needs to match the import path from LoginForm
 vi.mock('../../components/HCaptcha', () => ({
@@ -143,5 +134,26 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/oyo state labour/i)).toBeInTheDocument();
     });
+  });
+
+  // Story 9-12 Task 8 — cutover messaging.
+  it('shows the "New here?" cutover banner with a link to /register on public login', async () => {
+    renderWithProviders(<LoginPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page-cutover-banner')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('login-page-cutover-link')).toHaveAttribute('href', '/register');
+    expect(screen.getByTestId('login-page-existing-user-header')).toHaveTextContent(
+      /already registered/i,
+    );
+  });
+
+  it('does NOT show the cutover banner on staff login', async () => {
+    renderWithProviders(<LoginPage type="staff" />);
+    await waitFor(() => {
+      expect(screen.getByText('Staff Login')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('login-page-cutover-banner')).toBeNull();
+    expect(screen.queryByTestId('login-page-existing-user-header')).toBeNull();
   });
 });
