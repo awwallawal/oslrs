@@ -27,9 +27,8 @@ describe('Email Backpressure', () => {
       expect(EMAIL_TYPE_PRIORITY['staff-invitation']).toBe('critical');
     });
 
-    it('should classify verification as critical', () => {
-      expect(EMAIL_TYPE_PRIORITY['verification']).toBe('critical');
-    });
+    // Story 9-12 Task 10.3 (2026-05-11 session 8) — 'verification' job
+    // type retired; test removed.
 
     it('should classify password-reset as critical', () => {
       expect(EMAIL_TYPE_PRIORITY['password-reset']).toBe('critical');
@@ -51,19 +50,18 @@ describe('Email Backpressure', () => {
       expect(EMAIL_TYPE_PRIORITY['backup-notification']).toBe('standard');
     });
 
-    it('should have exactly 3 critical types and 4 standard types', () => {
+    it('should have exactly 2 critical types and 4 standard types (post Story 9-12 Task 10.3 retirement of verification)', () => {
       const priorities = Object.values(EMAIL_TYPE_PRIORITY);
       const critical = priorities.filter((p) => p === 'critical');
       const standard = priorities.filter((p) => p === 'standard');
-      expect(critical).toHaveLength(3);
+      expect(critical).toHaveLength(2);
       expect(standard).toHaveLength(4);
     });
 
-    it('should cover all 7 email job types', () => {
+    it('should cover all 6 email job types (post Story 9-12 Task 10.3 retirement of verification)', () => {
       const types = Object.keys(EMAIL_TYPE_PRIORITY);
-      expect(types).toHaveLength(7);
+      expect(types).toHaveLength(6);
       expect(types).toContain('staff-invitation');
-      expect(types).toContain('verification');
       expect(types).toContain('password-reset');
       expect(types).toContain('payment-notification');
       expect(types).toContain('dispute-notification');
@@ -99,8 +97,7 @@ describe('Email Backpressure', () => {
       expect(DEDUP_TTL_SECONDS).toBe(300); // 5 * 60
     });
 
-    it('should not deduplicate critical emails (verification, password-reset)', () => {
-      expect(EMAIL_TYPE_PRIORITY['verification']).toBe('critical');
+    it('should not deduplicate critical emails (password-reset, staff-invitation)', () => {
       expect(EMAIL_TYPE_PRIORITY['password-reset']).toBe('critical');
       expect(EMAIL_TYPE_PRIORITY['staff-invitation']).toBe('critical');
     });
@@ -122,7 +119,7 @@ describe('Email Backpressure', () => {
 
     it('should generate dedup keys for all 7 email types without error', () => {
       const allTypes: EmailJobType[] = [
-        'staff-invitation', 'verification', 'password-reset',
+        'staff-invitation', 'password-reset',
         'payment-notification', 'dispute-notification', 'dispute-resolution', 'backup-notification',
       ];
       for (const type of allTypes) {
@@ -300,7 +297,7 @@ describe('Email Backpressure', () => {
       expect(result.budgetUsage).toBe(0.85);
     });
 
-    it('should NOT defer critical verification email when daily at 85%', () => {
+    it('should NOT defer critical staff-invitation email when daily at 85%', () => {
       const result = shouldDeferEmail(85, 100, 500, 3000, 'critical');
       expect(result.defer).toBe(false);
     });
@@ -335,7 +332,7 @@ describe('Email Backpressure', () => {
 
     it('should exercise all 7 email types through deferral logic', () => {
       const allTypes: EmailJobType[] = [
-        'staff-invitation', 'verification', 'password-reset',
+        'staff-invitation', 'password-reset',
         'payment-notification', 'dispute-notification', 'dispute-resolution', 'backup-notification',
       ];
       for (const type of allTypes) {

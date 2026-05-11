@@ -29,9 +29,7 @@
  *   | passwordResetRateLimit (IP)      | 10/IP/1hr      | defense-in-depth |
  *   | PasswordResetService.checkRate   | 3/email/1hr    | NFR4.4 line 5 (service layer) |
  *   | passwordResetCompletionRateLimit | 5/IP/15min     | sensible default |
- *   | registrationRateLimit            | 5/IP/15min     | sensible default |
- *   | resendVerificationRateLimit      | 3/email/1hr    | sensible default |
- *   | verifyEmailRateLimit             | 10/IP/15min    | sensible default |
+ *   | registrationRateLimit            | 5/IP/15min     | sensible default (used by /registration/wizard) |
  *   | activationRateLimit              | 10/IP/15min    | sensible default |
  *   | googleAuthRateLimit              | 10/IP/1hr      | sensible default |
  *   | mfaRateLimit                     | 10/IP/1min     | Story 9-13 AC#7 |
@@ -84,14 +82,22 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   { method: 'POST', path: '/staff/login',  rateLimiters: ['strictLoginRateLimit', 'loginRateLimit'], expectedHandlerCount: { min: 4 } },
   { method: 'POST', path: '/public/login', rateLimiters: ['strictLoginRateLimit', 'loginRateLimit'], expectedHandlerCount: { min: 4 } },
 
-  // Google OAuth
-  { method: 'POST', path: '/google/verify', rateLimiters: ['googleAuthRateLimit'], expectedHandlerCount: { min: 2 } },
+  // Google OAuth — RETIRED (Story 9-12 Task 10.1). Route returns 404
+  // unconditionally. Code review L7 (2026-05-11) — wrapped in
+  // magicLinkRateLimit so the 404 endpoint can't be pounded indefinitely.
+  {
+    method: 'POST', path: '/google/verify', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 },
+    rationale: 'Story 9-12 Task 10.1 — Google OAuth retired per ADR-015 rewrite. Route returns 404 GOOGLE_OAUTH_RETIRED. Code review L7 added magicLinkRateLimit to bound 404 pounding.',
+  },
 
-  // Public registration + email/OTP verification
-  { method: 'POST', path: '/public/register',     rateLimiters: ['registrationRateLimit'],       expectedHandlerCount: { min: 3 } },
-  { method: 'GET',  path: '/verify-email/:token', rateLimiters: ['verifyEmailRateLimit'],        expectedHandlerCount: { min: 2 } },
-  { method: 'POST', path: '/verify-otp',          rateLimiters: ['verifyEmailRateLimit'],        expectedHandlerCount: { min: 3 } },
-  { method: 'POST', path: '/resend-verification', rateLimiters: ['resendVerificationRateLimit'], expectedHandlerCount: { min: 3 } },
+  // Story 9-12 Task 10.3 (2026-05-11 session 8) — Legacy public-registration
+  // + verification routes RETIRED. The wizard at /api/v1/registration/wizard
+  // is the canonical entry-point; magic-link auth replaces email-token + OTP.
+  // Removed entries (do NOT re-add unless reviving the legacy flow):
+  //   POST /public/register
+  //   GET  /verify-email/:token
+  //   POST /verify-otp
+  //   POST /resend-verification
 
   // Session lifecycle
   {
@@ -131,8 +137,20 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   { method: 'POST', path: '/public/magic-link', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
   {
     method: 'GET', path: '/magic', rateLimiters: [], expectedHandlerCount: { min: 1 },
-    rationale: 'Story 9-12 AC#6 redemption endpoint. Rate limit lives upstream on the request endpoint (POST /public/magic-link, 3/email/hour). Redemption is single-use by atomic UPDATE — burst attempts hit MAGIC_LINK_ALREADY_USED, not a quota. Brute-force token guessing is bounded by 32-byte token entropy (2^256) + per-token expiry; per-IP limiter would need careful tuning to avoid blocking legitimate users on shared NATs and is not justified for the threat model.',
+    rationale: 'Story 9-12 AC#6 peek endpoint (code review C1, 2026-05-11 — GET is now PEEK-ONLY, no token consume). Rate limit lives upstream on the request endpoint (POST /public/magic-link, 3/email/hour). Brute-force token guessing is bounded by 32-byte token entropy (2^256) + per-token expiry; per-IP limiter would need careful tuning to avoid blocking legitimate users on shared NATs and is not justified for the threat model.',
   },
+  // Code review C1 (2026-05-11) — explicit consume endpoint. Wrapped in
+  // magicLinkRateLimit so a brute-force consumer can't iterate tokens at
+  // line-rate. Token entropy (32 bytes) is the primary control.
+  { method: 'POST', path: '/magic/consume', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
+
+  // Story 9-12 AC#7 — SMS OTP infra-only endpoints. Both gated by
+  // `auth.sms_otp_enabled` system_setting (default false → 503 on every
+  // request before any rate-limit logic kicks in). Per-IP magicLinkRateLimit
+  // adds defence-in-depth so a flag flip doesn't immediately expose a
+  // brute-force surface.
+  { method: 'POST', path: '/public/sms-otp/request', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
+  { method: 'POST', path: '/public/sms-otp/verify',  rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
 ];
 
 interface ActualRoute {

@@ -36,12 +36,30 @@ export type RespondentStatus = typeof respondentStatusTypes[number];
 
 /**
  * Shape of the `respondents.metadata` JSONB column.
- * Currently records input-normalisation warnings and back-fill failure flags.
- * Extend as new metadata categories are added; treat as merge-on-write.
+ * Currently records input-normalisation warnings, back-fill failure flags,
+ * and the pending-NIN reminder state (Story 9-12). Extend as new metadata
+ * categories are added; treat as merge-on-write.
  */
 export interface RespondentMetadata {
   normalisation_warnings?: string[];
   backfill_failed?: true;
+  /**
+   * Story 9-12 — reminder cadence bookkeeping for `pending_nin_capture`
+   * respondents. The keys are ISO timestamps; the worker uses them to
+   * de-dupe milestone fan-out and to recompute schedule offsets after a
+   * deferral. Kept open-shape (Record<string, unknown>) so the worker can
+   * stash adapter-specific metadata (last destination, etc.) without
+   * forcing schema churn.
+   */
+  reminder_state?: Record<string, unknown>;
+  /**
+   * Story 9-12 D5 — optional free-text reason captured at deferral time.
+   * Auto-set to a sentinel for the public wizard (`public_wizard_user_self_deferred`);
+   * collected via the enumerator/clerk inline NIN-help-hint when those surfaces ship.
+   * Persisted on the respondent row so the anti-abuse aggregate (D6) can flag
+   * enumerators with a high "no reason provided" rate.
+   */
+  defer_reason_nin?: string;
 }
 
 export const respondents = pgTable('respondents', {

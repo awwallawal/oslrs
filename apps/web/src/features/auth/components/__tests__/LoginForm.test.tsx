@@ -29,16 +29,7 @@ vi.mock('../../api/auth.api', () => ({
   },
 }));
 
-// Mock Google OAuth
-vi.mock('@react-oauth/google', () => ({
-  GoogleLogin: () => <div data-testid="google-login-mock">Google Sign-In</div>,
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-// Mock Google auth API
-vi.mock('../../api/google-auth.api', () => ({
-  verifyGoogleToken: vi.fn(),
-}));
+// Story 9-12 Task 10.1 — Google OAuth retired; mocks no longer needed.
 
 // Mock HCaptcha component
 vi.mock('../HCaptcha', () => ({
@@ -188,40 +179,23 @@ describe('LoginForm', () => {
     });
   });
 
-  describe('Google OAuth Integration', () => {
-    it('renders Google Sign-In button for public login', async () => {
+  // Story 9-12 Task 10.1 — Google OAuth UI retired. The "Google Sign-In Integration"
+  // describe block was removed; the only retained assertion is that NO Google
+  // affordance exists on either flow (regression guard against accidental re-add).
+  describe('Google OAuth retired (Story 9-12 Task 10.1)', () => {
+    it('does NOT render the Google Sign-In button on public login', async () => {
       renderWithProviders(<LoginForm type="public" />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('google-login-mock')).toBeInTheDocument();
-      });
-    });
-
-    it('does NOT render Google Sign-In button for staff login', async () => {
-      renderWithProviders(<LoginForm type="staff" />);
-
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
       });
-
       expect(screen.queryByTestId('google-login-mock')).not.toBeInTheDocument();
     });
 
-    it('shows "Or sign in with email" divider for public login', async () => {
+    it('does NOT show the "Or sign in with email" divider on public login', async () => {
       renderWithProviders(<LoginForm type="public" />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/or sign in with email/i)).toBeInTheDocument();
-      });
-    });
-
-    it('does NOT show divider for staff login', async () => {
-      renderWithProviders(<LoginForm type="staff" />);
-
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
       });
-
       expect(screen.queryByText(/or sign in with email/i)).not.toBeInTheDocument();
     });
   });

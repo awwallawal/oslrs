@@ -4,7 +4,8 @@ import type {
   EmailResult,
   EmailConfig,
   PasswordResetEmailData,
-  VerificationEmailData,
+  // VerificationEmailData removed alongside the hybrid Magic-Link/OTP
+  // template (Story 9-12 Task 10.3, 2026-05-11 session 8).
   DuplicateRegistrationEmailData,
   StaffInvitationEmailData,
   PaymentNotificationEmailData,
@@ -306,123 +307,17 @@ Government of Oyo State
   }
 
   // ==========================================================================
-  // Verification Email (ADR-015 Hybrid: Magic Link + OTP)
+  // Story 9-12 Task 10.3 (2026-05-11 session 8) — Hybrid Magic-Link/OTP
+  // verification email retired. Replaced by per-purpose magic-link emails
+  // rendered inline in `MagicLinkService.sendMagicLinkEmail` (Story 9-12 AC#6).
+  // ADR-015 was rewritten alongside this story to drop the hybrid pattern.
+  //
+  // Removed surface (was here):
+  //   - sendVerificationEmail(data: VerificationEmailData)
+  //   - generateVerificationUrl(token: string)
+  //   - getVerificationHtml(data: VerificationEmailData)
+  //   - getVerificationText(data: VerificationEmailData)
   // ==========================================================================
-
-  /**
-   * Sends a hybrid verification email with both magic link and OTP
-   *
-   * Per ADR-015: Single email contains BOTH verification methods:
-   * - Magic Link (primary): Click to verify
-   * - 6-digit OTP (fallback): Enter code if link doesn't work
-   */
-  static async sendVerificationEmail(data: VerificationEmailData): Promise<EmailResult> {
-    if (!this.isEnabled()) {
-      logger.warn({
-        event: 'email.verification.disabled',
-        to: data.email,
-        note: 'Email service is disabled',
-      });
-      return { success: false, error: 'Email service is disabled' };
-    }
-
-    return this.getProvider().send({
-      to: data.email,
-      subject: 'Verify Your Email - OSLSR',
-      html: this.getVerificationHtml(data),
-      text: this.getVerificationText(data),
-    });
-  }
-
-  /**
-   * Generates an email verification URL
-   */
-  static generateVerificationUrl(token: string): string {
-    return `${this.APP_URL}/verify-email/${token}`;
-  }
-
-  /**
-   * Gets HTML content for hybrid verification email (Magic Link + OTP)
-   * Public for email preview routes
-   */
-  static getVerificationHtml(data: VerificationEmailData): string {
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Verify Your Email - OSLSR</title>
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: ${this.BRAND_COLOR}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0;">OSLSR</h1>
-    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour & Skills Registry</p>
-  </div>
-
-  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
-    <h2 style="color: #333; margin-top: 0;">Welcome to OSLSR!</h2>
-
-    <p>Hello ${data.fullName},</p>
-
-    <p>Thank you for registering with the Oyo State Labour & Skills Registry. Please verify your email address to complete your registration.</p>
-
-    <p><strong>Click the link OR enter the code below:</strong></p>
-
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${data.verificationUrl}" style="background-color: ${this.BRAND_COLOR}; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Verify Email Address</a>
-    </div>
-
-    <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #fff; border-radius: 8px; border: 2px dashed #ddd;">
-      <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">Or enter this code:</p>
-      <p style="font-size: 32px; letter-spacing: 8px; font-weight: bold; color: ${this.BRAND_COLOR}; margin: 0; font-family: monospace;">${data.otpCode}</p>
-      <p style="margin: 10px 0 0 0; color: #999; font-size: 12px;">Code expires in ${data.otpExpiresInMinutes} minutes</p>
-    </div>
-
-    <p style="color: #666; font-size: 14px;">The verification link expires in ${data.magicLinkExpiresInHours} hour(s). If you didn't create an account with OSLSR, you can safely ignore this email.</p>
-
-    <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: ${this.BRAND_COLOR}; font-size: 14px;">${data.verificationUrl}</p>
-
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-
-    <p style="color: #999; font-size: 12px; text-align: center;">
-      This email was sent by the Oyo State Labour & Skills Registry.<br>
-      &copy; ${new Date().getFullYear()} Government of Oyo State. All rights reserved.
-    </p>
-  </div>
-</body>
-</html>
-    `.trim();
-  }
-
-  /**
-   * Gets plain text content for hybrid verification email
-   */
-  private static getVerificationText(data: VerificationEmailData): string {
-    return `
-Welcome to OSLSR - Verify Your Email
-
-Hello ${data.fullName},
-
-Thank you for registering with the Oyo State Labour & Skills Registry.
-
-CLICK THE LINK OR ENTER THE CODE:
-
-Verification Link:
-${data.verificationUrl}
-(Link expires in ${data.magicLinkExpiresInHours} hour(s))
-
-Verification Code: ${data.otpCode}
-(Code expires in ${data.otpExpiresInMinutes} minutes)
-
-If you didn't create an account with OSLSR, you can safely ignore this email.
-
----
-Oyo State Labour & Skills Registry
-Government of Oyo State
-    `.trim();
-  }
 
   // ==========================================================================
   // Duplicate Registration Email

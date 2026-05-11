@@ -26,9 +26,18 @@ const ForgotPasswordPage = lazy(() => import('./features/auth/pages/ForgotPasswo
 const ResetPasswordPage = lazy(() => import('./features/auth/pages/ResetPasswordPage'));
 const ProfileCompletionPage = lazy(() => import('./features/onboarding/pages/ProfileCompletionPage'));
 const VerificationPage = lazy(() => import('./features/onboarding/pages/VerificationPage'));
-const RegistrationPage = lazy(() => import('./features/auth/pages/RegistrationPage'));
-const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage'));
-const ResendVerificationPage = lazy(() => import('./features/auth/pages/ResendVerificationPage'));
+// Story 9-12 Task 8 — public registration wizard (replaces legacy RegistrationPage at /register).
+// Legacy `RegistrationPage` + `RegistrationForm` source files deleted in this commit.
+const WizardPage = lazy(() => import('./features/registration/pages/WizardPage'));
+const CompleteNinPage = lazy(() => import('./features/registration/pages/CompleteNinPage'));
+const RegistrationCompletePage = lazy(() => import('./features/registration/pages/RegistrationCompletePage'));
+// Story 9-12 MR-8 (2026-05-11 session 8) — magic-link landing page closes the
+// JSON-in-browser UX gap. Email links land here; the page peeks the token then
+// routes the user onward to /register or /register/complete-nin.
+const MagicLinkLandingPage = lazy(() => import('./features/auth/pages/MagicLinkLandingPage'));
+// Story 9-12 Task 10.3 — Legacy hybrid Magic-Link/OTP verification flow retired
+// (2026-05-11 session 8). VerifyEmailPage + ResendVerificationPage deleted;
+// the wizard at `/register` is the canonical public-registration entry-point.
 
 // Story 9-13 — TOTP MFA pages
 const MfaChallengePage = lazy(() => import('./features/security/mfa/pages/MfaChallengePage'));
@@ -84,8 +93,7 @@ const FormBuilderPage = lazy(() => import('./features/questionnaires/pages/FormB
 // Lazy load Staff Management page (Story 2.5-3)
 const StaffManagementPage = lazy(() => import('./features/staff/pages/StaffManagementPage'));
 
-// Lazy load GoogleOAuthWrapper — scoped to /login and /register routes only (PERF-1)
-const GoogleOAuthWrapper = lazy(() => import('./features/auth/components/GoogleOAuthWrapper'));
+// Story 9-12 Task 10.1 — Google OAuth retired; GoogleOAuthWrapper unused.
 
 // Story 3.1: Form Filler Page (Enumerator fill mode + Super Admin preview mode)
 const FormFillerPage = lazy(() => import('./features/forms/pages/FormFillerPage'));
@@ -493,38 +501,19 @@ function App() {
 
             {/* ============================================
              * AUTH ROUTES - Wrapped in AuthLayout
-             * GoogleOAuthWrapper scoped to /login and /register only (PERF-1)
+             * Story 9-12 Task 10.1 — Google OAuth retired; GoogleOAuthWrapper removed.
              * ============================================ */}
             <Route element={<Suspense fallback={<AuthLoadingFallback />}><AuthLayout /></Suspense>}>
-              {/* Routes that need Google OAuth SDK */}
               <Route
+                path="login"
                 element={
-                  <Suspense fallback={<AuthLoadingFallback />}>
-                    <GoogleOAuthWrapper />
-                  </Suspense>
+                  <PublicOnlyRoute redirectTo="/dashboard">
+                    <Suspense fallback={<AuthLoadingFallback />}>
+                      <LoginPage />
+                    </Suspense>
+                  </PublicOnlyRoute>
                 }
-              >
-                <Route
-                  path="login"
-                  element={
-                    <PublicOnlyRoute redirectTo="/dashboard">
-                      <Suspense fallback={<AuthLoadingFallback />}>
-                        <LoginPage />
-                      </Suspense>
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route
-                  path="register"
-                  element={
-                    <PublicOnlyRoute redirectTo="/dashboard">
-                      <Suspense fallback={<AuthLoadingFallback />}>
-                        <RegistrationPage />
-                      </Suspense>
-                    </PublicOnlyRoute>
-                  }
-                />
-              </Route>
+              />
 
               {/* Routes that do NOT need Google OAuth SDK */}
               <Route
@@ -557,26 +546,9 @@ function App() {
                   </PublicOnlyRoute>
                 }
               />
-              <Route
-                path="verify-email/:token"
-                element={
-                  <PublicOnlyRoute redirectTo="/dashboard">
-                    <Suspense fallback={<AuthLoadingFallback />}>
-                      <VerifyEmailPage />
-                    </Suspense>
-                  </PublicOnlyRoute>
-                }
-              />
-              <Route
-                path="resend-verification"
-                element={
-                  <PublicOnlyRoute redirectTo="/dashboard">
-                    <Suspense fallback={<AuthLoadingFallback />}>
-                      <ResendVerificationPage />
-                    </Suspense>
-                  </PublicOnlyRoute>
-                }
-              />
+              {/* Story 9-12 Task 10.3 — `verify-email/:token` and `resend-verification`
+                  routes retired alongside the legacy registration flow. The
+                  wizard owns public registration via `/register`. */}
               {/* Story 9-13 — login step-2 challenge (unauthenticated, gated by router state) */}
               <Route
                 path="mfa-challenge"
@@ -593,6 +565,48 @@ function App() {
             {/* ============================================
              * SPECIAL ROUTES - No layout wrapper
              * ============================================ */}
+            {/* Story 9-12 — public registration wizard (owns its own WizardLayout chrome) */}
+            <Route
+              path="register"
+              element={
+                <PublicOnlyRoute redirectTo="/dashboard">
+                  <Suspense fallback={<AuthLoadingFallback />}>
+                    <WizardPage />
+                  </Suspense>
+                </PublicOnlyRoute>
+              }
+            />
+
+            {/* Story 9-12 Task 7 — pending-NIN return-to-complete (magic-link redemption) */}
+            <Route
+              path="register/complete-nin"
+              element={
+                <Suspense fallback={<AuthLoadingFallback />}>
+                  <CompleteNinPage />
+                </Suspense>
+              }
+            />
+
+            {/* Story 9-12 MR-8 — magic-link landing page (closes JSON-in-browser UX gap) */}
+            <Route
+              path="auth/magic"
+              element={
+                <Suspense fallback={<AuthLoadingFallback />}>
+                  <MagicLinkLandingPage />
+                </Suspense>
+              }
+            />
+
+            {/* Story 9-12 Task 7 — registration-complete confirmation */}
+            <Route
+              path="register/complete"
+              element={
+                <Suspense fallback={<AuthLoadingFallback />}>
+                  <RegistrationCompletePage />
+                </Suspense>
+              }
+            />
+
             {/* Staff Activation (uses own minimal layout) */}
             <Route
               path="activate/:token"

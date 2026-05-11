@@ -92,8 +92,28 @@ vi.mock('../../db/index.js', () => ({
         },
       }),
     })),
+    // Story 9-12 Task 3.5 — race-resolution merge runs db.execute(sql`UPDATE...`).
+    // Inline closure so it survives `vi.resetAllMocks()` in beforeEach (which
+    // would otherwise wipe a `vi.fn()` mockResolvedValue back to undefined).
+    execute: () => Promise.resolve({ rows: [] }),
   },
 }));
+
+// AuditService is fire-and-forget (Story 9-12 PENDING_NIN_CREATED / PENDING_NIN_PROMOTED)
+// and would otherwise try to write the audit hash chain. Stub it.
+vi.mock('../../services/audit.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../services/audit.service.js')>('../../services/audit.service.js');
+  return {
+    ...actual,
+    AuditService: {
+      ...actual.AuditService,
+      logAction: vi.fn(),
+      logActionTx: vi.fn(),
+      logPiiAccess: vi.fn(),
+      logPiiAccessTx: vi.fn(),
+    },
+  };
+});
 
 vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
@@ -247,16 +267,17 @@ describe('Submission Ingestion Pipeline (Integration)', () => {
     expect(result.error).toContain('NIN_DUPLICATE_STAFF');
   });
 
-  it('should handle missing NIN as permanent error (no retry)', async () => {
+  // Story 9-12 Task 3.1 (Universal pending-NIN, Option 1): submissions without NIN
+  // no longer throw; they create a pending_nin_capture respondent which graduates
+  // to active via the magic-link complete-nin endpoint.
+  it('creates a pending-NIN respondent when rawData lacks NIN (universal pending-NIN)', async () => {
     const job = makeJob({
       rawData: { first_name: 'NoNIN', last_name: 'Person' },
     });
 
     const result = await workerProcessor(job) as Record<string, unknown>;
 
-    // Permanent error → result indicates failure, but no throw (no BullMQ retry)
-    expect(result.success).toBe(false);
-    expect(result.action).toBe('failed');
-    expect(result.error).toContain('NIN');
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('created');
   });
 });

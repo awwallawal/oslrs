@@ -4,7 +4,9 @@ import pino from 'pino';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import type { EmailJob, StaffInvitationEmailData, VerificationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailTier, EmailJobType } from '@oslsr/types';
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `VerificationEmailData`
+// removed from imports alongside the retired hybrid Magic-Link/OTP flow.
+import type { EmailJob, StaffInvitationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailTier, EmailJobType } from '@oslsr/types';
 import { EMAIL_TYPE_PRIORITY } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
@@ -35,7 +37,7 @@ export const BUDGET_THRESHOLD_WARNING = 0.95; // 95% — defer standard + log wa
 function getRecipientEmail(job: EmailJob): string {
   switch (job.type) {
     case 'staff-invitation': return job.data.email;
-    case 'verification': return job.data.email;
+    // 'verification' job type retired — Story 9-12 Task 10.3.
     case 'password-reset': return job.data.email;
     case 'payment-notification': return job.data.email;
     case 'dispute-notification': return job.data.to;
@@ -169,9 +171,10 @@ export const emailWorker = new Worker<EmailJob>(
           result = await EmailService.sendStaffInvitationEmail(data as StaffInvitationEmailData);
           break;
 
-        case 'verification':
-          result = await EmailService.sendVerificationEmail(data as VerificationEmailData);
-          break;
+        // Story 9-12 Task 10.3 (2026-05-11 session 8) — 'verification' job
+        // type retired alongside the hybrid Magic-Link/OTP flow. Magic-link
+        // emails for the wizard now flow through `MagicLinkService.sendMagicLinkEmail`
+        // directly (synchronous to the issue handler, not queued).
 
         case 'password-reset':
           result = await EmailService.sendPasswordResetEmail(data as PasswordResetEmailData);

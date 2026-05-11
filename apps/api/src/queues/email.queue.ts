@@ -9,7 +9,8 @@ import type {
   EmailJob,
   EmailJobType,
   StaffInvitationEmailData,
-  VerificationEmailData,
+  // VerificationEmailData removed — Story 9-12 Task 10.3 retired the hybrid
+  // Magic-Link/OTP verification flow (2026-05-11 session 8).
   PasswordResetEmailData,
   PaymentNotificationEmailData,
   DisputeNotificationEmailData,
@@ -280,26 +281,13 @@ export async function queueStaffInvitationEmail(
   return job.id || '';
 }
 
-/**
- * Add a verification email to the queue
- */
-export async function queueVerificationEmail(
-  data: VerificationEmailData,
-  userId: string
-): Promise<string> {
-  // In test mode, return a mock job ID
-  if (isTestMode()) {
-    return 'test-job-id';
-  }
-
-  const job = await getEmailQueue().add('verification', {
-    type: 'verification',
-    data,
-    userId,
-    priority: EMAIL_TYPE_PRIORITY['verification'],
-  } as EmailJob);
-  return job.id || '';
-}
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `queueVerificationEmail`
+// removed. The hybrid Magic-Link/OTP verification flow was retired; magic-link
+// emails for the wizard go through `MagicLinkService.sendMagicLinkEmail`
+// directly (AC#6), bypassing the BullMQ queue because they're issued in the
+// request handler. The `'verification'` BullMQ job type is also removed from
+// `@oslsr/types` `EmailJob` union; existing in-flight jobs of that type
+// (none expected post-cleanup) would be silently dropped by the worker.
 
 /**
  * Add a password reset email to the queue

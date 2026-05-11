@@ -7,6 +7,7 @@ import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { QuestionRenderer } from '../components/QuestionRenderer';
 import { ProgressBar } from '../components/ProgressBar';
 import { PreviewBanner } from '../components/PreviewBanner';
+import { PendingNinPrompt } from '../components/PendingNinPrompt';
 import {
   getVisibleQuestions,
   getNextVisibleIndex,
@@ -17,8 +18,8 @@ import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { syncManager } from '../../../services/sync-manager';
-
-const NIN_QUESTION_NAMES = ['nin', 'national_id'];
+import { NinHelpHint } from '../../registration/components/NinHelpHint';
+import { NIN_QUESTION_NAMES } from '../../registration/lib/nin-question-names';
 
 interface FormFillerPageProps {
   mode?: 'fill' | 'preview';
@@ -74,6 +75,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   // so we maintain our own persistent store keyed by question name.
   const allAnswersRef = useRef<Record<string, unknown>>({});
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+
+  // Story 9-12 Task 13 — pending-NIN prompt visibility (open per-NIN-question).
+  const [pendingNinPromptOpen, setPendingNinPromptOpen] = useState(false);
 
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
@@ -212,6 +216,58 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       setSlideDirection(null);
     }, 50);
   }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError, trigger, setError, clearErrors]);
+
+  /**
+   * Story 9-12 Task 13 — pending-NIN confirm.
+   *
+   * Stamps `_pendingNin: true` (+ optional `_deferReasonNin`) into the
+   * submission rawData and skips past the NIN question. Backend reads the
+   * flag at `submission-processing.service.ts:359` and routes the row to the
+   * `pending_nin_capture` status path (Task 3.1 removed the NIN-required
+   * throw). Validation for the NIN question is bypassed because the field
+   * value is cleared and the `_pendingNin` flag explicitly opts out of NIN
+   * collection for this submission.
+   */
+  const handlePendingNinConfirm = useCallback(
+    async (reason?: string) => {
+      if (!form || !currentQuestion || isPreview) return;
+
+      const next = { ...allAnswersRef.current };
+      next._pendingNin = true;
+      if (reason) next._deferReasonNin = reason;
+      // Clear any partially-typed NIN so it's not part of the payload.
+      next[currentQuestion.name] = null;
+      allAnswersRef.current = next;
+      setFormData({ ...next });
+      ninCheck.reset();
+      setPendingNinPromptOpen(false);
+      clearErrors(currentQuestion.name);
+
+      const nextIdx = getNextVisibleIndex(
+        form.questions,
+        currentIndex,
+        next,
+        form.sectionShowWhen,
+      );
+      if (nextIdx === -1) {
+        // NIN was the final visible question — complete + sync.
+        try {
+          await draft.completeDraft();
+          syncManager.syncNow().catch(() => {});
+        } catch {
+          // completion errors surface through draft hook; swallow here.
+        }
+        setCompleted(true);
+        return;
+      }
+      setSlideDirection('left');
+      setTimeout(() => {
+        setCurrentIndex(nextIdx);
+        setSlideDirection(null);
+      }, 50);
+    },
+    [form, currentQuestion, currentIndex, isPreview, ninCheck, clearErrors, draft],
+  );
 
   const handleBack = useCallback(() => {
     if (!form) return;
@@ -383,6 +439,22 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           />
           {isCurrentNin && ninCheck.isChecking && (
             <p className="text-sm text-gray-500 mt-2" data-testid="nin-checking">Checking NIN availability...</p>
+          )}
+
+          {/* Story 9-12 Task 13 — NIN help + pending toggle */}
+          {isCurrentNin && !isPreview && (
+            <div className="mt-3" data-testid="nin-pending-toggle-area">
+              <NinHelpHint
+                variant="inline"
+                onPendingNinClick={() => setPendingNinPromptOpen(true)}
+                hidePendingLink={pendingNinPromptOpen}
+              />
+              <PendingNinPrompt
+                open={pendingNinPromptOpen}
+                onConfirm={handlePendingNinConfirm}
+                onCancel={() => setPendingNinPromptOpen(false)}
+              />
+            </div>
           )}
         </div>
 

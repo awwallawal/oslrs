@@ -79,49 +79,11 @@ describe('Email Templates', () => {
     });
   });
 
-  describe('Verification Email (Hybrid Magic Link + OTP)', () => {
-    const sampleData = {
-      fullName: 'Chinedu Okafor',
-      email: 'chinedu@example.com',
-      verificationUrl: 'http://localhost:5173/verify-email/test-token-456',
-      otpCode: '847592',
-      magicLinkExpiresInHours: 24,
-      otpExpiresInMinutes: 10,
-    };
-
-    it('should include both magic link and OTP code', () => {
-      const html = EmailService.getVerificationHtml(sampleData);
-
-      expect(html).toContain(sampleData.verificationUrl);
-      expect(html).toContain(sampleData.otpCode);
-    });
-
-    it('should explain both verification methods', () => {
-      const html = EmailService.getVerificationHtml(sampleData);
-
-      expect(html).toContain('Click the link OR enter the code');
-    });
-
-    it('should show different expiration times for link and OTP', () => {
-      const html = EmailService.getVerificationHtml(sampleData);
-
-      expect(html).toContain('24 hour');
-      expect(html).toContain('10 minutes');
-    });
-
-    it('should have prominent OTP display', () => {
-      const html = EmailService.getVerificationHtml(sampleData);
-
-      // OTP should be in large font
-      expect(html).toContain('font-size: 32px');
-      expect(html).toContain('letter-spacing: 8px');
-    });
-
-    it('should match snapshot for verification HTML', () => {
-      const html = EmailService.getVerificationHtml(sampleData);
-      expect(html).toMatchSnapshot();
-    });
-  });
+  // Story 9-12 Task 10.3 (2026-05-11 session 8) — Verification Email
+  // (Hybrid Magic Link + OTP) template tests deleted alongside the retired
+  // `EmailService.getVerificationHtml` / `getVerificationText` / `sendVerificationEmail` /
+  // `generateVerificationUrl` surface. Magic-link emails for the wizard are
+  // covered by `magic-link.service.test.ts`.
 
   describe('Email Subject Lines', () => {
     it('should generate correct staff invitation subject', async () => {
@@ -142,13 +104,8 @@ describe('Email Templates', () => {
       expect(url).toContain(token);
     });
 
-    it('should generate correct verification URL', () => {
-      const token = 'verify789xyz';
-      const url = EmailService.generateVerificationUrl(token);
-
-      expect(url).toContain('/verify-email/');
-      expect(url).toContain(token);
-    });
+    // Story 9-12 Task 10.3 (2026-05-11 session 8) — `generateVerificationUrl`
+    // test deleted alongside the retired surface.
 
     it('should generate correct password reset URL', () => {
       const token = 'reset123abc';

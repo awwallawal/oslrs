@@ -1,10 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service.js';
-import { GoogleAuthService } from '../services/google-auth.service.js';
 import { PasswordResetService } from '../services/password-reset.service.js';
-import { RegistrationService } from '../services/registration.service.js';
 import { EmailService } from '../services/email.service.js';
 import { setReAuthValid } from '../middleware/sensitive-action.js';
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `RegistrationService` import
+// removed alongside the deleted controller methods (publicRegister /
+// verifyEmail / verifyOtp / resendVerification). `publicRegistrationRequestSchema`,
+// `resendVerificationRequestSchema`, `verifyOtpRequestSchema` also removed.
 import {
   activationWithSelfieSchema,
   backOfficeActivationSchema,
@@ -12,10 +14,6 @@ import {
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
   reAuthRequestSchema,
-  publicRegistrationRequestSchema,
-  resendVerificationRequestSchema,
-  verifyOtpRequestSchema,
-  googleAuthRequestSchema,
   isBackOfficeRole,
 } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
@@ -400,50 +398,10 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /api/v1/auth/google/verify
-   * Verify Google ID token, register or login user (Story 3.0)
-   */
-  static async googleVerify(req: Request, res: Response, next: NextFunction) {
-    try {
-      const validation = googleAuthRequestSchema.safeParse(req.body);
-      if (!validation.success) {
-        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
-      }
-
-      const { idToken } = validation.data;
-      const ipAddress = req.ip || req.socket.remoteAddress;
-      const userAgent = req.get('user-agent');
-
-      // Verify the Google ID token
-      const googlePayload = await GoogleAuthService.verifyGoogleToken(idToken);
-
-      // Register or login
-      const result = await GoogleAuthService.registerOrLoginWithGoogle(
-        googlePayload,
-        ipAddress,
-        userAgent
-      );
-
-      // Set refresh token as httpOnly cookie (30-day for Google users)
-      const refreshCookieMaxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-      res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
-        ...COOKIE_OPTIONS,
-        maxAge: refreshCookieMaxAge,
-      });
-
-      res.status(200).json({
-        data: {
-          accessToken: result.accessToken,
-          user: result.user,
-          expiresIn: result.expiresIn,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+  // Story 9-12 Task 10.1 — `googleVerify` controller method retired.
+  // Route at `POST /api/v1/auth/google/verify` now returns 404 inline.
+  // GoogleAuthService + google-auth-rate-limit middleware + their tests were
+  // deleted in the same commit. ADR-015 rewrite — magic-link primary.
 
   /**
    * GET /api/v1/auth/me
@@ -489,119 +447,14 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /api/v1/auth/public/register
-   * Public user self-registration
-   */
-  static async publicRegister(req: Request, res: Response, next: NextFunction) {
-    try {
-      const validation = publicRegistrationRequestSchema.safeParse(req.body);
-      if (!validation.success) {
-        throw new AppError('VALIDATION_ERROR', 'Invalid registration data', 400, { errors: validation.error.errors });
-      }
-
-      const { fullName, email, phone, nin, password } = validation.data;
-      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
-      const userAgent = req.get('user-agent') || 'unknown';
-
-      const result = await RegistrationService.registerPublicUser({
-        fullName,
-        email,
-        phone,
-        nin,
-        password,
-        ipAddress,
-        userAgent,
-      });
-
-      res.status(201).json({
-        data: {
-          message: result.message,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  /**
-   * GET /api/v1/auth/verify-email/:token
-   * Verify email address using token from email link
-   */
-  static async verifyEmail(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { token } = req.params;
-
-      if (!token || token.length !== 64) {
-        throw new AppError('VALIDATION_ERROR', 'Invalid verification token', 400);
-      }
-
-      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
-      const userAgent = req.get('user-agent') || 'unknown';
-
-      const result = await RegistrationService.verifyEmail(token, ipAddress, userAgent);
-
-      res.status(200).json({
-        data: {
-          message: result.message,
-          success: result.success,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  /**
-   * POST /api/v1/auth/resend-verification
-   * Resend verification email
-   */
-  static async resendVerification(req: Request, res: Response, next: NextFunction) {
-    try {
-      const validation = resendVerificationRequestSchema.safeParse(req.body);
-      if (!validation.success) {
-        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
-      }
-
-      const { email } = validation.data;
-
-      const result = await RegistrationService.resendVerificationEmail(email);
-
-      res.status(200).json({
-        data: {
-          message: result.message,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  /**
-   * POST /api/v1/auth/verify-otp
-   * Verify email address using 6-digit OTP (ADR-015 fallback)
-   */
-  static async verifyOtp(req: Request, res: Response, next: NextFunction) {
-    try {
-      const validation = verifyOtpRequestSchema.safeParse(req.body);
-      if (!validation.success) {
-        throw new AppError('VALIDATION_ERROR', 'Invalid request data', 400, { errors: validation.error.errors });
-      }
-
-      const { email, otp } = validation.data;
-      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
-      const userAgent = req.get('user-agent') || 'unknown';
-
-      const result = await RegistrationService.verifyOtp(email, otp, ipAddress, userAgent);
-
-      res.status(200).json({
-        data: {
-          message: result.message,
-          success: result.success,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+  // Story 9-12 Task 10.3 (2026-05-11 session 8) — Legacy public-registration
+  // controller methods removed:
+  //   - publicRegister  (POST /api/v1/auth/public/register)
+  //   - verifyEmail     (GET  /api/v1/auth/verify-email/:token)
+  //   - resendVerification (POST /api/v1/auth/resend-verification)
+  //   - verifyOtp       (POST /api/v1/auth/verify-otp)
+  //
+  // The wizard at /api/v1/registration/wizard is the canonical entry-point.
+  // Existing public_users continue to use POST /api/v1/auth/public/login
+  // (email + password) — that path is unchanged.
 }

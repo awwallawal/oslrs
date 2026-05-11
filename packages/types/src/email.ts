@@ -73,32 +73,15 @@ export const staffInvitationEmailDataSchema = z.object({
 });
 
 // ============================================================================
-// Verification Email Types (ADR-015 Hybrid: Magic Link + OTP)
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — Verification Email Types
+// (ADR-015 Hybrid: Magic Link + OTP) RETIRED.
+//
+// `VerificationEmailData` + `verificationEmailDataSchema` removed alongside
+// the legacy public-registration flow. The wizard at `/api/v1/registration/wizard`
+// is the canonical public-registration entry-point; magic-link emails issued
+// by `MagicLinkService.sendMagicLinkEmail` (Story 9-12 AC#6) are inline-rendered,
+// not queued via this typed surface.
 // ============================================================================
-
-/**
- * Data required to send a hybrid verification email
- */
-export interface VerificationEmailData {
-  email: string;
-  fullName: string;
-  verificationUrl: string;
-  otpCode: string;
-  magicLinkExpiresInHours: number;
-  otpExpiresInMinutes: number;
-}
-
-/**
- * Zod schema for verification email data validation
- */
-export const verificationEmailDataSchema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(1),
-  verificationUrl: z.string().url(),
-  otpCode: z.string().length(6).regex(/^\d{6}$/),
-  magicLinkExpiresInHours: z.number().positive(),
-  otpExpiresInMinutes: z.number().positive(),
-});
 
 // ============================================================================
 // Password Reset Email Types
@@ -222,7 +205,8 @@ export interface BackupNotificationEmailData {
 export type EmailPriority = 'critical' | 'standard';
 
 /** All email job type strings */
-export type EmailJobType = 'staff-invitation' | 'verification' | 'password-reset' | 'payment-notification' | 'dispute-notification' | 'dispute-resolution' | 'backup-notification';
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `'verification'` removed.
+export type EmailJobType = 'staff-invitation' | 'password-reset' | 'payment-notification' | 'dispute-notification' | 'dispute-resolution' | 'backup-notification';
 
 /**
  * Maps each email job type to its priority tier.
@@ -230,7 +214,6 @@ export type EmailJobType = 'staff-invitation' | 'verification' | 'password-reset
  */
 export const EMAIL_TYPE_PRIORITY: Record<EmailJobType, EmailPriority> = {
   'staff-invitation': 'critical',
-  'verification': 'critical',
   'password-reset': 'critical',
   'payment-notification': 'standard',
   'dispute-notification': 'standard',
@@ -260,14 +243,9 @@ export interface StaffInvitationJob extends BaseEmailJob {
   userId: string;
 }
 
-/**
- * Verification email job payload
- */
-export interface VerificationJob extends BaseEmailJob {
-  type: 'verification';
-  data: VerificationEmailData;
-  userId: string;
-}
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — `VerificationJob` removed.
+// The hybrid Magic-Link/OTP verification flow was retired; magic-link emails
+// for the wizard are issued synchronously by `MagicLinkService.sendMagicLinkEmail`.
 
 /**
  * Password reset email job payload
@@ -317,7 +295,7 @@ export interface BackupNotificationJob extends BaseEmailJob {
 /**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | VerificationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | DisputeResolutionJob | BackupNotificationJob;
+export type EmailJob = StaffInvitationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | DisputeResolutionJob | BackupNotificationJob;
 
 // ============================================================================
 // Email Configuration Types

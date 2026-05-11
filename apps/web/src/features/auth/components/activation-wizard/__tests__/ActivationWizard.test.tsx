@@ -144,4 +144,51 @@ describe('ActivationWizard Component (role-based rendering)', () => {
       expect(screen.getByTestId('step-content')).toBeDefined();
     });
   });
+
+  // Story 9-12 Task 9 — retro-fit shared wizard chrome.
+  describe('Task 9 polish — WizardStepIndicator + TrustBadgesRow', () => {
+    it('renders the shared WizardStepIndicator for field roles', () => {
+      render(
+        <ActivationWizard
+          token="test-token"
+          roleName="enumerator"
+          renderStep={renderStep}
+        />
+      );
+      expect(screen.getByTestId('wizard-step-indicator')).toBeDefined();
+    });
+
+    it('omits the WizardStepIndicator for single-step back-office roles', () => {
+      render(
+        <ActivationWizard
+          token="test-token"
+          roleName="super_admin"
+          renderStep={renderStep}
+        />
+      );
+      expect(screen.queryByTestId('wizard-step-indicator')).toBeNull();
+    });
+
+    it('renders the TrustBadgesRow at the foot for back-office roles', () => {
+      render(
+        <ActivationWizard
+          token="test-token"
+          roleName="super_admin"
+          renderStep={renderStep}
+        />
+      );
+      expect(screen.getByTestId('trust-badges-row')).toBeDefined();
+    });
+
+    it('renders the TrustBadgesRow at the foot for field roles', () => {
+      render(
+        <ActivationWizard
+          token="test-token"
+          roleName="enumerator"
+          renderStep={renderStep}
+        />
+      );
+      expect(screen.getByTestId('trust-badges-row')).toBeDefined();
+    });
+  });
 });

@@ -11,7 +11,7 @@ import { db } from '../db/index.js';
 import { submissions, respondents } from '../db/schema/index.js';
 import { questionnaireForms } from '../db/schema/index.js';
 import { users, roles } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
@@ -21,6 +21,7 @@ import {
   normaliseNigerianPhone,
   normaliseDate,
 } from '../lib/normalise/index.js';
+import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -327,7 +328,12 @@ export class SubmissionProcessingService {
   /**
    * Extract respondent identity fields from rawData using convention-based mapping.
    * Validates against form schema that NIN field exists (AC 3.4.8).
-   * Throws PermanentProcessingError if NIN is missing.
+   *
+   * Story 9-12 (Universal pending-NIN, Option 1): NIN is no longer REQUIRED on the
+   * extracted shape. When rawData lacks NIN OR carries the explicit `_pendingNin: true`
+   * defer-flag, the function returns nin: undefined; downstream `findOrCreateRespondent`
+   * creates a `pending_nin_capture` respondent (Story 11-1 path). The form schema must
+   * still carry a NIN question (line 342 below) — only the per-submission NIN value is optional.
    */
   static extractRespondentData(
     rawData: Record<string, unknown>,
@@ -355,19 +361,22 @@ export class SubmissionProcessingService {
       }
     }
 
-    // NIN is required
-    if (!extracted['nin']) {
-      throw new PermanentProcessingError(
-        'Required field NIN is missing from submission rawData'
-      );
-    }
+    // Story 9-12 Task 3.1 — NIN is OPTIONAL at this layer. Submissions can carry
+    // `_pendingNin: true` to explicitly opt in to deferral, OR simply omit the
+    // NIN value (frontend defer-toggle clears the answer before submit). Either
+    // path produces a `pending_nin_capture` respondent downstream.
+    const isExplicitlyPending = rawData['_pendingNin'] === true;
+    const ninValue =
+      !isExplicitlyPending && extracted['nin'] != null
+        ? String(extracted['nin'])
+        : undefined;
 
     // Convert consent fields to boolean
     const consentMarketplace = String(extracted['consentMarketplace'] ?? '').toLowerCase() === 'yes';
     const consentEnriched = String(extracted['consentEnriched'] ?? '').toLowerCase() === 'yes';
 
     return {
-      nin: String(extracted['nin']),
+      nin: ninValue,
       firstName: extracted['firstName'] != null ? String(extracted['firstName']) : undefined,
       lastName: extracted['lastName'] != null ? String(extracted['lastName']) : undefined,
       dateOfBirth: extracted['dateOfBirth'] != null ? String(extracted['dateOfBirth']) : undefined,
@@ -393,6 +402,11 @@ export class SubmissionProcessingService {
     source: RespondentSource,
     submitterId?: string
   ): Promise<{ id: string; _isNew: boolean }> {
+    // Normalise incoming PII once up front. Race-resolution merge (Story 9-12 Task 3.5)
+    // queries against pending rows using the SAME canonical values the DB stores, so
+    // normalisation must run BEFORE the merge attempt — not just before insert.
+    const { canonical, metadata } = normaliseRespondentPii(data);
+
     // FR21 dedup branch — only when the incoming submission carries a NIN.
     // The public-wizard / pending-NIN flow (Story 9-12) calls into this method
     // without a NIN; FR21 will run later when the respondent completes
@@ -420,12 +434,26 @@ export class SubmissionProcessingService {
           'NIN_DUPLICATE_STAFF: This NIN belongs to a registered staff member'
         );
       }
-    }
 
-    // Normalise incoming PII before insert so the DB always holds canonical
-    // values; non-blocking warnings are merged into `respondents.metadata`
-    // for super-admin review (Audit Log Viewer — Story 9-11).
-    const { canonical, metadata } = normaliseRespondentPii(data);
+      // Story 9-12 Task 3.5 — Race-resolution merge.
+      // When NIN arrives later for a respondent who was previously deferred
+      // (any source — public/enumerator/clerk), promote the existing pending
+      // row in place rather than creating a duplicate.
+      // Strict equality on lower(first_name)+lower(last_name)+phone_number;
+      // ALL three fields must be present and match. Name typos / missing
+      // phone fall through to a fresh insert (acceptable: better one duplicate
+      // than wrong-person merge — supervisor can reconcile via Story 9-11).
+      const promoted = await this.tryRaceResolutionMerge({
+        nin: data.nin,
+        firstName: canonical.firstName,
+        lastName: canonical.lastName,
+        phoneNumber: canonical.phoneNumber,
+        submitterId,
+      });
+      if (promoted) {
+        return { id: promoted.id, _isNew: false };
+      }
+    }
 
     // Status reflects the lifecycle stage of this row: NIN-carrying rows are
     // 'active' immediately; rows without NIN start in 'pending_nin_capture'
@@ -450,6 +478,19 @@ export class SubmissionProcessingService {
         metadata,
       }).returning();
 
+      // Story 9-12 Task 3.8 — emit PENDING_NIN_CREATED on every pending-NIN
+      // row creation regardless of source. Fire-and-forget; downstream audit
+      // chain serialises via SELECT...FOR UPDATE on its own.
+      if (status === 'pending_nin_capture') {
+        AuditService.logAction({
+          actorId: submitterId ?? null,
+          action: AUDIT_ACTIONS.PENDING_NIN_CREATED,
+          targetResource: 'respondent',
+          targetId: created.id,
+          details: { source },
+        });
+      }
+
       return { id: created.id, _isNew: true };
     } catch (error: unknown) {
       // Handle race condition: PostgreSQL unique constraint violation (code 23505)
@@ -468,5 +509,82 @@ export class SubmissionProcessingService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Story 9-12 Task 3.5 — Race-resolution merge.
+   *
+   * Looks for an existing pending-NIN respondent whose normalised name+phone
+   * triple matches the incoming submission. On match, atomically updates that
+   * row to active with the new NIN — preserving the original `submitter_id`
+   * (productivity credit policy D3: outreach > data-entry).
+   *
+   * The UPDATE filters on `status = 'pending_nin_capture' AND nin IS NULL`,
+   * so concurrent merge attempts are race-safe — only the first transaction
+   * wins; the second sees zero rows updated and falls through to a fresh
+   * insert (which then trips the partial unique index → standard 23505 path).
+   *
+   * Returns the promoted row on success, null on miss / missing-fields.
+   */
+  private static async tryRaceResolutionMerge(args: {
+    nin: string;
+    firstName: string | null;
+    lastName: string | null;
+    phoneNumber: string | null;
+    submitterId?: string;
+  }): Promise<{ id: string } | null> {
+    const { nin, firstName, lastName, phoneNumber, submitterId } = args;
+
+    // All three identity fields are required for a safe merge. If any is
+    // missing the merge is silently skipped — caller falls through to insert.
+    if (!firstName || !lastName || !phoneNumber) {
+      return null;
+    }
+
+    // Atomic match-and-promote. The UPDATE itself enforces the
+    // status/nin-IS-NULL guard so concurrent attempts cannot both succeed.
+    const result = await db.execute(sql`
+      UPDATE "respondents"
+      SET
+        "nin" = ${nin},
+        "status" = 'active',
+        "updated_at" = now()
+      WHERE
+        "id" = (
+          SELECT "id" FROM "respondents"
+          WHERE "status" = 'pending_nin_capture'
+            AND "nin" IS NULL
+            AND lower("first_name") = lower(${firstName})
+            AND lower("last_name") = lower(${lastName})
+            AND "phone_number" = ${phoneNumber}
+          LIMIT 1
+        )
+        AND "status" = 'pending_nin_capture'
+        AND "nin" IS NULL
+      RETURNING "id"
+    `);
+
+    const rows = (result as unknown as { rows: Array<{ id: string }> }).rows;
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+
+    const promotedId = rows[0].id;
+
+    AuditService.logAction({
+      actorId: submitterId ?? null,
+      action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
+      targetResource: 'respondent',
+      targetId: promotedId,
+      details: { trigger: 'race_resolution_merge' },
+    });
+
+    logger.info({
+      event: 'submission_processing.pending_nin_promoted',
+      respondentId: promotedId,
+      trigger: 'race_resolution_merge',
+    });
+
+    return { id: promotedId };
   }
 }

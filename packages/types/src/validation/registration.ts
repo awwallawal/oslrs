@@ -1,77 +1,22 @@
 import { z } from 'zod';
-import { emailSchema, passwordSchema, captchaTokenSchema } from './auth.js';
-import { ninSchema } from './profile.js';
 
-// Nigerian phone number validation (+234XXXXXXXXXX or 0XXXXXXXXXX)
-export const nigerianPhoneSchema = z.string()
-  .transform((phone) => {
-    // Normalize to +234 format
-    const cleaned = phone.replace(/\s+/g, '').replace(/-/g, '');
-    if (cleaned.startsWith('0') && cleaned.length === 11) {
-      return '+234' + cleaned.slice(1);
-    }
-    if (cleaned.startsWith('234') && cleaned.length === 13) {
-      return '+' + cleaned;
-    }
-    return cleaned;
-  })
-  .refine(
-    (phone) => /^\+234\d{10}$/.test(phone),
-    'Phone number must be a valid Nigerian number'
-  );
+// Story 9-12 Task 10.3 (2026-05-11 session 8) — Legacy public-registration
+// Zod schemas removed alongside the controller methods + routes they fed:
+//   - publicRegistrationRequestSchema (POST /auth/public/register)
+//   - verifyEmailRequestSchema        (GET  /auth/verify-email/:token)
+//   - resendVerificationRequestSchema (POST /auth/resend-verification)
+//   - verifyOtpRequestSchema          (POST /auth/verify-otp)
+// The wizard at `/api/v1/registration/wizard` is the canonical public
+// registration entry-point; its Zod schema lives in
+// `apps/api/src/controllers/registration.controller.ts:submitWizardSchema`.
+//
+// `nigerianPhoneSchema` and `fullNameSchema` were ONLY referenced by the
+// retired schemas in this file (verified via project-wide grep), so they
+// have been removed along with the schemas. The wizard normalises phone +
+// name via the `prep-input-sanitisation-layer` utilities and validates
+// inline in `submitWizardSchema`.
 
-// Full name validation
-export const fullNameSchema = z.string()
-  .min(2, 'Full name must be at least 2 characters')
-  .max(100, 'Full name must be at most 100 characters')
-  .regex(/^[a-zA-Z\s\-']+$/, 'Full name can only contain letters, spaces, hyphens and apostrophes')
-  .transform((name) => name.trim());
-
-// Public user registration request schema
-// Note: captchaToken is optional here because the verifyCaptcha middleware
-// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
-export const publicRegistrationRequestSchema = z.object({
-  fullName: fullNameSchema,
-  email: emailSchema,
-  phone: nigerianPhoneSchema,
-  nin: ninSchema,
-  password: passwordSchema,
-  confirmPassword: z.string(),
-  captchaToken: captchaTokenSchema.optional(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-});
-
-export type PublicRegistrationRequestInput = z.infer<typeof publicRegistrationRequestSchema>;
-
-// Email verification request schema
-export const verifyEmailRequestSchema = z.object({
-  token: z.string()
-    .length(64, 'Invalid verification token'),
-});
-
-export type VerifyEmailRequestInput = z.infer<typeof verifyEmailRequestSchema>;
-
-// Resend verification email request schema
-// Note: captchaToken is optional here because the verifyCaptcha middleware
-// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
-export const resendVerificationRequestSchema = z.object({
-  email: emailSchema,
-  captchaToken: captchaTokenSchema.optional(),
-});
-
-export type ResendVerificationRequestInput = z.infer<typeof resendVerificationRequestSchema>;
-
-// OTP verification request schema (ADR-015)
-// Note: captchaToken is optional here because the verifyCaptcha middleware
-// handles CAPTCHA validation and returns proper error codes (AUTH_CAPTCHA_FAILED)
-export const verifyOtpRequestSchema = z.object({
-  email: emailSchema,
-  otp: z.string()
-    .length(6, 'OTP must be exactly 6 digits')
-    .regex(/^\d{6}$/, 'OTP must contain only digits'),
-  captchaToken: captchaTokenSchema.optional(),
-});
-
-export type VerifyOtpRequestInput = z.infer<typeof verifyOtpRequestSchema>;
+// This file intentionally kept as an empty module so existing
+// `export * from './validation/registration.js'` re-exports in
+// `packages/types/src/index.ts` continue to load without error.
+export const _registrationValidationModulePlaceholder = z.never();

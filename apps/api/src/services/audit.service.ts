@@ -81,6 +81,11 @@ export const AUDIT_ACTIONS = {
   MAGIC_LINK_REDEEMED: 'magic_link.redeemed',
   PENDING_NIN_DEFERRED: 'pending_nin.deferred_again',
   PENDING_NIN_TRANSITIONED: 'pending_nin.transitioned_to_nin_unavailable',
+  // Universal pending-NIN — Option 1 (Story 9-12 Task 3.8)
+  // Fired regardless of source (public / enumerator / clerk) on any pending-NIN row creation
+  // and on its later promotion via race-resolution merge or magic-link complete-nin endpoint.
+  PENDING_NIN_CREATED: 'pending_nin.created',
+  PENDING_NIN_PROMOTED: 'pending_nin.promoted',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

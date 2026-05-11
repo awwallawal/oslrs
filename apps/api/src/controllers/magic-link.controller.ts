@@ -110,18 +110,63 @@ export class MagicLinkController {
   /**
    * GET /auth/magic?token=<plaintext>&purpose=<purpose>
    *
-   * Validates + atomically consumes the token. Returns JSON describing the
-   * redemption result. Frontend (Task 4-7) handles the redirect; this
-   * endpoint does NOT redirect itself or issue a session JWT.
-   *
-   * The full magic-link-to-JWT flow lands when frontend drives it. For the
-   * Task 1 backend scope, this endpoint validates the token and returns a
-   * session-key payload that the frontend can present to a separate
-   * `/auth/magic-link/login` endpoint (future Task) for JWT issuance.
+   * Code review C1 (2026-05-11) — Email-link prefetchers (Gmail/Outlook ATP,
+   * Defender, Slack/Discord/iMessage previews, antivirus URL scanners) will
+   * GET this URL before the real user clicks. Per RFC 7231 §4.2.1 GET must be
+   * safe. We PEEK the token here (no `used_at` write) and return the same JSON
+   * payload as before. The token is consumed by an explicit user-driven
+   * `POST /auth/magic/consume` once the frontend lands and shows a Confirm
+   * button on the resume page. Prefetcher round-trips against this endpoint
+   * are now idempotent.
    */
   static async redeemMagicLink(req: Request, res: Response, next: NextFunction) {
     try {
       const validation = redeemMagicLinkQuerySchema.safeParse(req.query);
+      if (!validation.success) {
+        throw new AppError(
+          'MAGIC_LINK_INVALID',
+          'Magic-link token is missing or malformed',
+          400,
+        );
+      }
+
+      const { token, purpose } = validation.data;
+      const peeked = await MagicLinkService.peekToken({
+        plaintext: token,
+        purpose: purpose as MagicLinkPurpose,
+      });
+
+      // NOTE: deliberately NO audit event here — peek is not redemption.
+      // `MAGIC_LINK_REDEEMED` fires on the POST `/auth/magic/consume` path.
+      void req;
+      return res.status(200).json({
+        status: 'ok',
+        data: {
+          tokenId: peeked.id,
+          purpose: peeked.purpose,
+          email: peeked.email,
+          userId: peeked.userId,
+          respondentId: peeked.respondentId,
+          // Hint to the frontend that consume requires a subsequent POST.
+          requiresConsume: true,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /auth/magic/consume — body { token, purpose }.
+   *
+   * Code review C1 (2026-05-11) — explicit-action consume endpoint. Atomic
+   * UPDATE on `used_at` enforces single-use. The frontend resume page calls
+   * this once the user clicks the Confirm button. Idempotent against retries:
+   * a second call returns `MAGIC_LINK_ALREADY_USED`.
+   */
+  static async consumeMagicLink(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = redeemMagicLinkQuerySchema.safeParse(req.body);
       if (!validation.success) {
         throw new AppError(
           'MAGIC_LINK_INVALID',
@@ -136,7 +181,6 @@ export class MagicLinkController {
         purpose: purpose as MagicLinkPurpose,
       });
 
-      // Audit log — fire-and-forget.
       AuditService.logAction({
         actorId: redeemed.userId ?? null,
         action: AUDIT_ACTIONS.MAGIC_LINK_REDEEMED,

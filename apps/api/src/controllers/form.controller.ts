@@ -38,6 +38,26 @@ export class FormController {
   }
 
   /**
+   * GET /api/v1/forms/public-active
+   *
+   * Story 9-12 Task 5.4.2 — Public-wizard form discovery (Option B).
+   * UNAUTHENTICATED: the public registration wizard renders this form before
+   * the respondent has an account. Returns the flattened render schema for
+   * the form pinned by the `wizard.public_form_id` setting. 404
+   * (PUBLIC_FORM_NOT_CONFIGURED) when the setting is null or the pinned form
+   * isn't published — the frontend treats that as an empty-state and skips
+   * Step 4.
+   */
+  static async getPublicActiveForm(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const form = await NativeFormService.getPublicActiveForm();
+      res.json({ data: form });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * GET /api/v1/forms/published
    * List all published questionnaire forms available for data collection.
    */
