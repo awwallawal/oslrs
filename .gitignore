@@ -93,3 +93,6 @@ docs/SKILLED LABOUR REGISTER ACTION PLAN.xlsx
 
 # Local test prep — not part of OSLRS
 aptitude-tests/
+
+# Briefing HTML intermediates — regenerable from .md via scripts/render-briefing-pdf.mjs
+docs/briefings/*.html
