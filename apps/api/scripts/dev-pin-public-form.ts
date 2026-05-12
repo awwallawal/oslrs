@@ -75,17 +75,59 @@ async function getCurrentPin(): Promise<string | null> {
 
 async function setPin(formId: string | null): Promise<void> {
   const jsonbValue = formId === null ? 'null' : JSON.stringify(formId);
-  const { rowCount } = await pool.query(
+
+  // Common case once the seed runner has installed the row: plain UPDATE.
+  const updateResult = await pool.query(
     `UPDATE system_settings
      SET value = $1::jsonb, updated_at = now()
      WHERE key = 'wizard.public_form_id'`,
     [jsonbValue],
   );
-  if (rowCount === 0) {
+  if (updateResult.rowCount && updateResult.rowCount > 0) return;
+
+  // Row missing — happens on stale local DBs that were last seeded BEFORE
+  // Story 9-12 Session 3 (2026-05-11) added the `wizard.public_form_id`
+  // entry to migrate-system-settings-init.ts. The seed is idempotent so the
+  // canonical fix is `pnpm --filter @oslsr/api tsx scripts/migrate-system-settings-init.ts`,
+  // but we self-heal here too so the dev script Just Works on any state.
+  console.log('[dev-pin-public-form] system_settings row missing; auto-inserting (mirrors the seed runner).');
+
+  // updated_by has an FK to users(id). Reuse the seed runner's
+  // "first-active-super-admin" pick so the actor attribution matches the
+  // canonical seed path exactly.
+  const adminResult = await pool.query<{ id: string }>(`
+    SELECT u.id
+    FROM users u
+    INNER JOIN roles r ON u.role_id = r.id
+    WHERE r.name = 'super_admin' AND u.status = 'active'
+    ORDER BY u.created_at ASC
+    LIMIT 1
+  `);
+  if (adminResult.rows.length === 0) {
     throw new Error(
-      `system_settings row for 'wizard.public_form_id' not found. Run db:push:full first to apply the migrate-system-settings-init seed.`,
+      `[dev-pin-public-form] No active super_admin found in users table. Run \`pnpm --filter @oslsr/api db:seed --admin-from-env\` first so the seed runner has an actor to attribute the insert to, then retry.`,
     );
   }
+  const superAdminId = adminResult.rows[0].id;
+
+  await pool.query(
+    `INSERT INTO system_settings (key, value, description, updated_by, updated_at, created_at)
+     VALUES (
+       'wizard.public_form_id',
+       $1::jsonb,
+       $2,
+       $3,
+       now(),
+       now()
+     )
+     ON CONFLICT (key) DO UPDATE
+       SET value = EXCLUDED.value, updated_at = now()`,
+    [
+      jsonbValue,
+      'UUID of the published questionnaire that the public registration wizard renders on Step 4. Null = wizard shows empty-state and skips Step 4.',
+      superAdminId,
+    ],
+  );
 }
 
 function printForms(forms: FormRow[], currentPin: string | null): void {
