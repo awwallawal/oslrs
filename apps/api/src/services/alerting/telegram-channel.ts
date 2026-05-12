@@ -26,6 +26,16 @@
  * Failure semantics: this function NEVER throws. Network errors, auth failures,
  * rate limits — all logged at `warn` level and swallowed. The alert subsystem
  * must not crash because Telegram is down.
+ *
+ * Environment gating (Story 9-15, post 2026-05-11 self-page incident): even when
+ * TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID are present, dispatch is gated
+ * to NODE_ENV=production OR explicit ENABLE_TELEGRAM_ALERTS=true. Reason: if a
+ * dev's local .env mirrors prod tokens for parity testing, any local metric
+ * sample crossing 'critical' threshold (queue >200, cpu/mem >90%, p95 >500ms)
+ * would silently page the operator. Default-allow on production matches Express
+ * conventions, requires zero deploy-time config change, and is failure-safe in
+ * the right direction: a misconfigured prod is still loud; a misconfigured dev
+ * is silent.
  */
 
 import pino from 'pino';
@@ -41,22 +51,45 @@ export interface CriticalAlertContext {
   timestamp: Date;
 }
 
-const isTestMode = (): boolean =>
-  process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+/**
+ * Channel-send gate. Returns true iff dispatch should proceed.
+ *
+ * Allow when: NODE_ENV='production' OR ENABLE_TELEGRAM_ALERTS='true'.
+ * Always block when: NODE_ENV='test' OR VITEST='true' (test-mode skip preserved
+ * — the test guard is checked FIRST, so opt-in CANNOT override unit-test silence).
+ *
+ * Production is default-allow (no env-var change at deploy needed). Staging /
+ * preview / QA environments must explicitly opt in via ENABLE_TELEGRAM_ALERTS.
+ *
+ * STRICT EQUALITY contract (review finding H1):
+ * - NODE_ENV is matched EXACTLY against 'production' / 'test'. Variants like
+ *   'prod', 'PRODUCTION', 'Production', or trailing whitespace will NOT match.
+ *   If your platform sets a non-standard NODE_ENV value, set
+ *   ENABLE_TELEGRAM_ALERTS='true' to opt in explicitly instead.
+ * - ENABLE_TELEGRAM_ALERTS is matched EXACTLY against the literal string 'true'.
+ *   Variants like '1', 'TRUE', 'yes', 'on' will NOT enable the channel.
+ * Strictness is intentional — Boolean coercion of env strings is a recurring
+ * footgun (e.g., "false" is truthy under !!), so we require the canonical value.
+ */
+const isAlertSendEnabled = (): boolean => {
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') return false;
+  if (process.env.NODE_ENV === 'production') return true;
+  return process.env.ENABLE_TELEGRAM_ALERTS === 'true';
+};
 
 export async function sendCriticalTelegramAlert(
   ctx: CriticalAlertContext,
 ): Promise<void> {
+  if (!isAlertSendEnabled()) {
+    logger.debug({ event: 'telegram.skipped_non_production', metricKey: ctx.metricKey });
+    return;
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_OPERATOR_CHAT_ID;
 
   if (!token || !chatId) {
     logger.debug({ event: 'telegram.skipped_no_config', metricKey: ctx.metricKey });
-    return;
-  }
-
-  if (isTestMode()) {
-    logger.debug({ event: 'telegram.skipped_test_mode', metricKey: ctx.metricKey });
     return;
   }
 
