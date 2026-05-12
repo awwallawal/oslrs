@@ -226,3 +226,61 @@ Outcome: **PASS** — `alert.critical_evaluated` fires (AC#2 paper trail works i
 Outcome: **PASS** — `alert.critical_evaluated` warn fires (AC#2); email digest delivered to BOTH super_admins via Resend (`awwallawal@gmail.com` + `admin@oyoskills.com`-via-ImprovMX); `telegram.alert_sent` (gate=allow + Telegram API returned 200). Operator confirmed receipt of one Telegram message + two emails on phone within ~5 sec.
 
 **Combined verdict:** all 7 ACs end-to-end verified on real production hardware with real prod tokens, real Telegram API, real Resend pipeline. Gate works in both directions (prod default-allow + non-prod default-skip). Status flipped `review → done` 2026-05-12.
+
+### Permanent UAT Runner — Future Use
+
+The runner at `scripts/uat-trigger-critical-alert.ts` ships with the deploy and lives at `/root/oslrs/scripts/uat-trigger-critical-alert.ts` on the VPS. Reusable for any future alerting-pipeline regression check, incident drill, or operator handover. Run from the repo root (cwd matters for the relative `../apps/api/src/...` import).
+
+**Recipes** (all executed via `ssh root@oslsr-home-app` over Tailscale, then `cd /root/oslrs`):
+
+```bash
+# === Negative regression (gate must veto) ===
+# Confirms isAlertSendEnabled() blocks dispatch in non-prod, even on prod hardware
+# with prod TELEGRAM_BOT_TOKEN set. Expected: warn-log fires, NO telegram, NO email,
+# NO operator phone vibration. Run after any change to telegram-channel.ts or alert.service.ts.
+NODE_ENV=development pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu
+
+# === Positive smoke (full pipeline) ===
+# Confirms the prod-default-allow path: warn-log + email digest + Telegram dispatch + phone.
+# WILL ping operator's phone + send 1-2 emails. Use sparingly; coordinates with operator first.
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu
+
+# === Per-metric coverage (six metrics, each tests its own threshold path) ===
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=memory          # >90% mem
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=disk_free       # <10% free
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=api_p95_latency # >500ms p95
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=db_status       # value=1 (error)
+NODE_ENV=production  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=redis_status    # value=1 (error)
+
+# === Explicit opt-in path (staging/preview drill) ===
+# Proves ENABLE_TELEGRAM_ALERTS=true overrides non-prod default-skip.
+NODE_ENV=staging ENABLE_TELEGRAM_ALERTS=true pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu
+
+# === Strict-equality footgun verification (review finding H1) ===
+# These should ALL skip dispatch — non-canonical opt-in values must NOT enable.
+NODE_ENV=staging ENABLE_TELEGRAM_ALERTS=1     pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu  # → SKIP
+NODE_ENV=staging ENABLE_TELEGRAM_ALERTS=TRUE  pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu  # → SKIP
+NODE_ENV=staging ENABLE_TELEGRAM_ALERTS=yes   pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu  # → SKIP
+NODE_ENV=Production ENABLE_TELEGRAM_ALERTS=    pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu  # → SKIP (capital P)
+
+# === Capture evidence for handover/audit ===
+# Tee stdout + stderr to a timestamped file under /tmp; clean up after grepping.
+TS=$(date -u +%Y%m%dT%H%M%SZ); EVID="/tmp/9-15-uat-${TS}.log"
+NODE_ENV=production pnpm exec tsx scripts/uat-trigger-critical-alert.ts --metric=cpu 2>&1 | tee "$EVID"
+echo "evidence at $EVID"
+grep -E "alert\.critical_evaluated|telegram\.alert_sent|alert\.digest_sent|email\.resend\.sent" "$EVID"
+```
+
+**What the runner does NOT cover** (intentional out-of-scope):
+- **Cooldown / hysteresis behaviour** — runner calls `clearStates()` first by design, so per-metric cooldown (5 min) and hourly rate-limit (3/h) and consecutive-OK hysteresis (2 checks) are all bypassed. Test these in unit tests (`apps/api/src/services/__tests__/alert.service.test.ts`), not in this runner.
+- **Live PM2 process state** — runner spawns its own Node process; the live `oslsr-api`'s `alertStates` Map is untouched. To exercise the live process specifically, hit the system-health admin endpoint with synthesised inputs (see `apps/api/src/routes/system.routes.ts` for the surface).
+- **Resend quota / Telegram bot rate-limit** — runner sends 1 message/run. Don't loop it without per-iteration delays; the daily digest cap is 10 emails/day and Telegram bot rate-limit is 30 msg/sec global.
+
+**When to run** (decision triggers):
+- Any PR touching `apps/api/src/services/alerting/` or `apps/api/src/services/alert.service.ts` → run negative + positive on the merged main branch as a smoke test before declaring green.
+- Quarterly drills (per `docs/emergency-recovery-runbook.md` §1.8) → positive run with each metric to confirm thresholds + delivery still work.
+- Operator handover → positive run with new operator's chat_id to verify Telegram routing.
+- Post-deploy after `TELEGRAM_BOT_TOKEN` rotation → positive run to confirm the new token works.
+- Any "where did this alert come from?" investigation → run the negative test from prod hardware to prove the local-dev path is silent (rules out the 2026-05-11 self-page mode).
+
+**Source of truth:** the runner's own header docblock at `scripts/uat-trigger-critical-alert.ts:1-37` documents CLI args, side effects, exit codes, and isolation guarantees. The recipes above are the operator-facing companion.
