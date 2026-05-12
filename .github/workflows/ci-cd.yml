@@ -15,6 +15,13 @@ env:
   NODE_ENV: test
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  # Suppress turbo's "Attention: telemetry" preamble that contaminates stdout
+  # of `--dry-run=json` and breaks downstream `| jq '.packages | length'` checks
+  # used by the per-package change-detection in test-api / test-web / test-unit jobs.
+  # Story 9-15 (PR #1) was the first pull_request-event run on this repo and
+  # exposed the latent bug; push-to-main events skip the conditional path
+  # because [origin/main] filter matches itself = no diff = test skipped.
+  TURBO_TELEMETRY_DISABLED: 1
 
 jobs:
   # ============================================
@@ -560,6 +567,13 @@ jobs:
   lighthouse:
     needs: lint-and-build
     runs-on: ubuntu-latest
+    # PR-event runs need explicit pull-requests:write to post the Lighthouse
+    # score comment via actions/github-script. Without this, GITHUB_TOKEN gets
+    # repo-level read-only and the comment-create call returns 403
+    # "Resource not accessible by integration" (Story 9-15 PR #1 first exposure).
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
 
