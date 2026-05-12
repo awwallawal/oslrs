@@ -69,3 +69,21 @@ Post-fix, future critical evaluations leave a `pino.warn{event:'alert.critical_e
 - Alert service: `apps/api/src/services/alert.service.ts`
 - `.env.example` ENABLE_TELEGRAM_ALERTS block
 - Predecessor story (channel introduced): Story 9-9 AC#6
+- UAT runner (introduced post-fix): `scripts/uat-trigger-critical-alert.ts`
+
+## Closure (2026-05-12)
+
+Incident formally closed. Story 9-15 fix shipped to production via PR #1 squash commit `93e1e3e` on 2026-05-12T00:33:25Z; main CI/CD Pipeline + E2E Tests + deploy job all green.
+
+Operator UAT executed on prod hardware via the new permanent runner `scripts/uat-trigger-critical-alert.ts`:
+
+| Test | NODE_ENV | Expected | Observed | Verdict |
+|---|---|---|---|---|
+| Negative | development | warn fires, NO Telegram, NO email | warn fired, `alert.digest_suppressed_non_production`, no Telegram, no phone | ✅ PASS |
+| Positive | production | warn fires, Telegram delivered, email digest sent | warn fired, `telegram.alert_sent` (CPU=95), Resend × 2 to super_admins, operator confirmed phone + emails within ~5 sec | ✅ PASS |
+
+Both runs produced reproducible evidence captured in the story Dev Agent Record "UAT Closure" subsection (with Resend message IDs + pino log lines). The runner is committed at `scripts/uat-trigger-critical-alert.ts` for any future alerting regression check, incident drill, or operator handover.
+
+**Architectural lesson now codified:** the runner serves as a permanent smoke test guarding against regression of the `isAlertSendEnabled()` gate semantics. If a future code change (e.g., refactor to centralised env-config service, or addition of a third alert channel like SMS) breaks the gate, running the negative test (`NODE_ENV=development tsx scripts/uat-trigger-critical-alert.ts`) on prod hardware will catch it — and the positive test will catch any regression of the prod-default-allow path.
+
+Status: closed. Story 9-15 sprint-status flipped `review → done`.

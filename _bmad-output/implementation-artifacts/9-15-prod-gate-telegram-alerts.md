@@ -1,6 +1,6 @@
 # Story 9.15: Production-Gate Telegram Critical Alerts to Prevent Dev-Environment Paging
 
-Status: review
+Status: done
 
 <!-- Authored 2026-05-11 by Bob (SM) via canonical *create-story --yolo workflow.
      Trigger: 2026-05-11T12:44:54Z incident — local `pnpm dev` paged operator with
@@ -165,7 +165,8 @@ claude-opus-4-7 (1M context) — Amelia (dev agent persona) via `/bmad:bmm:agent
 - `.env.example` — modified (added `ENABLE_TELEGRAM_ALERTS=` block after `TELEGRAM_OPERATOR_CHAT_ID=`)
 - `docs/incidents/2026-05-11-telegram-self-page.md` — created (review M2 — project-tracked authoritative postmortem)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified (9-15 entry added at story authoring time by SM; copied across to worktree)
-- `_bmad-output/implementation-artifacts/9-15-prod-gate-telegram-alerts.md` — created (this story file, authored by SM; populated by dev with task ✅ marks + Dev Agent Record + Review Follow-ups + Merge Notes)
+- `_bmad-output/implementation-artifacts/9-15-prod-gate-telegram-alerts.md` — created (this story file, authored by SM; populated by dev with task ✅ marks + Dev Agent Record + Review Follow-ups + Merge Notes + UAT Closure)
+- `scripts/uat-trigger-critical-alert.ts` — created post-UAT (close-out commit). Permanent reusable runner for any future alerting-pipeline regression check, drill, or operator handover. Synthesises a SystemHealthResponse with one configurable critical metric (cpu / memory / disk_free / api_p95_latency / db_status / redis_status), calls AlertService.evaluateAlerts, exercises the full chain end-to-end with real prod side effects (Telegram + email digest if NODE_ENV=production). Self-documenting via header docblock; fail-safe via clearStates() bypass of cooldowns; isolated from live PM2 process.
 
 ### Review Follow-ups
 
@@ -196,3 +197,32 @@ This story was implemented in a sibling worktree at `C:/Users/DELL/Desktop/oslrs
 3. **`apps/api/src/services/__tests__/__snapshots__/email-templates.test.ts.snap`** may show as modified in the main worktree if you've run vitest there during 9-12 review — Windows CRLF auto-normalization quirk. Discard with `git checkout -- <path>` if it's purely whitespace; this worktree saw the same artifact and reverted it (see Debug Log References).
 
 After merge: `git worktree remove ../oslrs-9-15` (or `git worktree remove "C:/Users/DELL/Desktop/oslrs-9-15"` from main).
+
+### UAT Closure (2026-05-12)
+
+Story merged to `main` via PR #1 squash commit `93e1e3e` on 2026-05-12T00:33:25Z. Main CI/CD Pipeline + E2E Tests both green; deploy job shipped the gate to prod. Operator UAT executed via the new permanent runner `scripts/uat-trigger-critical-alert.ts` (see file list) in two passes from the prod VPS:
+
+**Negative test (NODE_ENV=development on prod hardware):**
+```
+[9-15-uat-1778566395472] START | metric=cpu | NODE_ENV=development | ENABLE_TELEGRAM_ALERTS=(unset)
+[9-15-uat-1778566395472] Synthetic cpu payload: {"usagePercent":95,"criticalThreshold":90}
+{"level":40,"event":"alert.critical_evaluated","metricKey":"cpu","value":95}
+{"level":30,"event":"alert.digest_suppressed_non_production","alertCount":1}
+[9-15-uat-1778566395472] END
+```
+Outcome: **PASS** — `alert.critical_evaluated` fires (AC#2 paper trail works in non-prod too); NO `telegram.alert_sent` (gate vetoes dispatch); NO email (`flushDigest` correctly suppressed). Telegram silent, no operator phone vibration. This is the Story 9-15 fix exercising the gate from inside production env, replicating Awwal's earlier laptop-side test for parity.
+
+**Positive test (NODE_ENV=production on prod hardware):**
+```
+[9-15-uat-1778566743494] START | metric=cpu | NODE_ENV=production | ENABLE_TELEGRAM_ALERTS=(unset)
+[9-15-uat-1778566743494] Synthetic cpu payload: {"usagePercent":95,"criticalThreshold":90}
+{"level":40,"event":"alert.critical_evaluated","metricKey":"cpu","value":95}
+{"level":30,"event":"email.resend.sent","to":"awwallawal@gmail.com","subject":"[CRITICAL] OSLRS System Health Digest (1 alert)","messageId":"3c5c298f-..."}
+{"level":30,"event":"email.resend.sent","to":"admin@oyoskills.com","subject":"[CRITICAL] OSLRS System Health Digest (1 alert)","messageId":"1ae11b5a-..."}
+{"level":30,"event":"alert.digest_sent","alertCount":1,"recipientCount":2,"dailyEmailCount":1}
+{"level":30,"event":"telegram.alert_sent","metricKey":"cpu","value":95}
+[9-15-uat-1778566743494] END
+```
+Outcome: **PASS** — `alert.critical_evaluated` warn fires (AC#2); email digest delivered to BOTH super_admins via Resend (`awwallawal@gmail.com` + `admin@oyoskills.com`-via-ImprovMX); `telegram.alert_sent` (gate=allow + Telegram API returned 200). Operator confirmed receipt of one Telegram message + two emails on phone within ~5 sec.
+
+**Combined verdict:** all 7 ACs end-to-end verified on real production hardware with real prod tokens, real Telegram API, real Resend pipeline. Gate works in both directions (prod default-allow + non-prod default-skip). Status flipped `review → done` 2026-05-12.
