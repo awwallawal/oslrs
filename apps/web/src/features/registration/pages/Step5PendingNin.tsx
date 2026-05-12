@@ -17,6 +17,14 @@ export interface StateBProps {
   onAuthChoiceChange: (choice: 'magic-link' | 'password' | 'skip') => void;
   onSubmit: () => void;
   onBack?: () => void;
+  /**
+   * Undo the pending-NIN choice. Wizard restores Step 5 to A or C based on
+   * whether the questionnaire captured a NIN. Without this, a user who
+   * clicked "I don't have my NIN now" inside Step 4 (or whose draft
+   * persisted a stale `pendingNinToggle=true` from a prior session) has no
+   * in-wizard path to recover and must restart the registration.
+   */
+  onUndoPending?: () => void;
   isSubmitting?: boolean;
   submitError?: string | null;
 }
@@ -29,6 +37,7 @@ export function Step5PendingNin({
   onAuthChoiceChange,
   onSubmit,
   onBack,
+  onUndoPending,
   isSubmitting,
   submitError,
 }: StateBProps) {
@@ -40,6 +49,26 @@ export function Step5PendingNin({
           You can add your NIN later. We'll email you a one-click link to finish.
         </p>
       </header>
+
+      {onUndoPending && (
+        <div
+          className="mb-4 flex items-start gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3"
+          data-testid="step5-undo-pending-banner"
+        >
+          <div className="flex-1 text-sm text-neutral-700">
+            <strong className="font-semibold">Have your NIN now?</strong>{' '}
+            You can switch back and enter it instead of saving as pending.
+          </div>
+          <button
+            type="button"
+            onClick={onUndoPending}
+            className="rounded-md border border-primary-600 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            data-testid="step5-undo-pending-button"
+          >
+            Enter NIN now
+          </button>
+        </div>
+      )}
 
       <div
         className="mb-6 rounded-md border-l-4 border-info-600 bg-info-50 p-4 text-sm text-info-800"

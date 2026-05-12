@@ -2,6 +2,7 @@ import { Step5NinCaptured } from './Step5NinCaptured';
 import { Step5PendingNin } from './Step5PendingNin';
 import { Step5NinInput } from './Step5NinInput';
 import { NIN_QUESTION_NAMES } from '../lib/nin-question-names';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 import type { WizardDraftData } from '../api/wizard.api';
 
 /**
@@ -52,7 +53,12 @@ function readQuestionnaireNin(
   if (!responses) return null;
   for (const key of NIN_QUESTION_NAMES) {
     const value = responses[key];
-    if (typeof value === 'string' && /^\d{11}$/.test(value)) {
+    // Accept only checksum-valid NINs. A respondent typing a junk 11-digit
+    // string into the questionnaire should NOT advance Step 5 into State A
+    // (captured) — it should fall through so the wizard surfaces a NIN
+    // input that they can correct. The Modulus 11 check matches the
+    // server-side validation at registration-controller submit time.
+    if (typeof value === 'string' && /^\d{11}$/.test(value) && modulus11Check(value)) {
       return value;
     }
   }
@@ -95,6 +101,7 @@ export function Step5NinAndAuth({
         onAuthChoiceChange={onAuthChoiceChange}
         onSubmit={onSubmit}
         onBack={onBack}
+        onUndoPending={() => mergeFields({ pendingNinToggle: false })}
         isSubmitting={isSubmitting}
         submitError={submitError}
       />

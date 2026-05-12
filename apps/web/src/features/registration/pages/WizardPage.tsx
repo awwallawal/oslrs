@@ -10,6 +10,7 @@ import {
   type WizardDraftData,
 } from '../api/wizard.api';
 import { NIN_QUESTION_NAMES } from '../lib/nin-question-names';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
@@ -399,7 +400,10 @@ function readQuestionnaireNin(
   if (!responses) return undefined;
   for (const key of NIN_QUESTION_NAMES) {
     const value = responses[key];
-    if (typeof value === 'string' && /^\d{11}$/.test(value)) {
+    // Modulus-11 check mirrors the server-side validation so the wizard's
+    // pending-flag derivation at submit time doesn't accept junk 11-digit
+    // strings and incorrectly mark the registration as non-pending.
+    if (typeof value === 'string' && /^\d{11}$/.test(value) && modulus11Check(value)) {
       return value;
     }
   }
