@@ -168,7 +168,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             # Only test if this package or its dependencies changed
-            CHANGED=$(pnpm turbo run test --filter=@oslsr/${{ matrix.package }}...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/${{ matrix.package }}...[origin/${{ github.base_ref }}] --dry-run=json 2>/dev/null | jq '.packages | length' 2>/dev/null || echo 1)
             if [ "$CHANGED" -gt 0 ]; then
               echo "Changes detected, running tests..."
               pnpm --filter @oslsr/${{ matrix.package }} test
@@ -292,7 +292,7 @@ jobs:
       - name: Run API tests
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            CHANGED=$(pnpm turbo run test --filter=@oslsr/api...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/api...[origin/${{ github.base_ref }}] --dry-run=json 2>/dev/null | jq '.packages | length' 2>/dev/null || echo 1)
             if [ "$CHANGED" -gt 0 ]; then
               echo "Changes detected, running API tests..."
               pnpm --filter @oslsr/api test
@@ -370,7 +370,7 @@ jobs:
       - name: Run Web tests
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            CHANGED=$(pnpm turbo run test --filter=@oslsr/web...[origin/${{ github.base_ref }}] --dry-run=json | jq '.packages | length')
+            CHANGED=$(pnpm turbo run test --filter=@oslsr/web...[origin/${{ github.base_ref }}] --dry-run=json 2>/dev/null | jq '.packages | length' 2>/dev/null || echo 1)
             if [ "$CHANGED" -gt 0 ]; then
               echo "Changes detected, running Web tests..."
               pnpm --filter @oslsr/web test
