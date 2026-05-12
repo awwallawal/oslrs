@@ -59,7 +59,7 @@ export function Step2ContactLga({ formData, mergeFields, onContinue, onBack }: S
 
     if (!phone) next.phone = 'Phone number is required.';
     else if (!isValidNigerianPhone(phone))
-      next.phone = 'Enter a Nigerian number — 080… or +234… format.';
+      next.phone = 'Enter a Nigerian number in 080… or +234… format.';
 
     if (!email) next.email = 'Email is required.';
     else if (!EMAIL_PATTERN.test(email)) next.email = 'Enter a valid email address.';
@@ -190,7 +190,7 @@ export function Step2ContactLga({ formData, mergeFields, onContinue, onBack }: S
           </select>
           {lgaQuery.isError && (
             <p className="text-sm text-warning-700">
-              Couldn't load the LGA list — please try again in a moment.
+              Couldn't load the LGA list. Please try again in a moment.
             </p>
           )}
           {touched.lgaId && errors.lgaId && (

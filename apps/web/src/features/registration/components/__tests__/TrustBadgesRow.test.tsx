@@ -21,7 +21,7 @@ describe('TrustBadgesRow', () => {
     render(<TrustBadgesRow />);
     expect(screen.getByTestId('trust-badge-secure')).toHaveAttribute(
       'aria-label',
-      'Secure registration — data transmitted over encrypted HTTPS',
+      'Secure registration. Data transmitted over encrypted HTTPS.',
     );
     expect(screen.getByTestId('trust-badge-official')).toHaveAttribute(
       'aria-label',
@@ -29,7 +29,7 @@ describe('TrustBadgesRow', () => {
     );
     expect(screen.getByTestId('trust-badge-free')).toHaveAttribute(
       'aria-label',
-      'Free to join — no registration fee',
+      'Free to join. No registration fee.',
     );
   });
 

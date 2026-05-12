@@ -83,7 +83,7 @@ export function Step3Consent({ formData, mergeFields, onContinue, onBack }: Step
               data-testid="consent-marketplace-yes"
             />
             <span className="text-neutral-800">
-              Yes — include me in the Marketplace
+              Yes, include me in the Marketplace
             </span>
           </label>
           <label className="flex cursor-pointer items-center gap-3 text-sm">
@@ -98,7 +98,7 @@ export function Step3Consent({ formData, mergeFields, onContinue, onBack }: Step
               data-testid="consent-marketplace-no"
             />
             <span className="text-neutral-800">
-              No — keep my profile out of the Marketplace
+              No, keep my profile out of the Marketplace
             </span>
           </label>
         </div>
@@ -114,7 +114,7 @@ export function Step3Consent({ formData, mergeFields, onContinue, onBack }: Step
           </h3>
           <p className="text-sm text-neutral-700">
             Marketplace contacts (employers / trainers) can request your phone number through a
-            reveal flow. Enriched sharing lets approved contacts see your phone immediately — they
+            reveal flow. Enriched sharing lets approved contacts see your phone immediately. They
             still see a full audit trail of who looked at your details.
           </p>
           <div className="space-y-2">
@@ -128,7 +128,7 @@ export function Step3Consent({ formData, mergeFields, onContinue, onBack }: Step
                 data-testid="consent-enriched-yes"
               />
               <span className="text-neutral-800">
-                Yes — share my contact details with approved contacts
+                Yes, share my contact details with approved contacts
               </span>
             </label>
             <label className="flex cursor-pointer items-center gap-3 text-sm">
@@ -141,7 +141,7 @@ export function Step3Consent({ formData, mergeFields, onContinue, onBack }: Step
                 data-testid="consent-enriched-no"
               />
               <span className="text-neutral-800">
-                No — only reveal my contact through the reveal flow
+                No, only reveal my contact through the reveal flow
               </span>
             </label>
           </div>

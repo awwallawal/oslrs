@@ -26,7 +26,7 @@ import { completeNin, deferReminder } from '../api/wizard.api';
 const NIN_REGEX = /^\d{11}$/;
 
 export default function CompleteNinPage() {
-  useDocumentTitle('Complete your NIN — Oyo State Skills Registry');
+  useDocumentTitle('Complete your NIN | Oyo State Skills Registry');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
@@ -215,7 +215,7 @@ export default function CompleteNinPage() {
                     </p>
                   )}
                   <p className="mt-2">
-                    If you think this is a mistake, please contact support — they
+                    If you think this is a mistake, please contact support. They
                     can help reconcile the duplicate.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-3">
@@ -249,7 +249,7 @@ export default function CompleteNinPage() {
                   className="mt-5 rounded-lg border border-info-200 bg-info-50 p-4 text-sm text-info-800"
                   data-testid="complete-nin-deferred"
                 >
-                  Got it — we'll remind you in 7 days. You can come back to this
+                  Got it. We'll remind you in 7 days. You can come back to this
                   page any time to add your NIN.
                 </div>
               )}
@@ -263,7 +263,7 @@ export default function CompleteNinPage() {
                   className="text-sm font-medium text-neutral-600 hover:text-primary-700 underline disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="complete-nin-defer"
                 >
-                  {isDeferring ? 'Saving…' : "I still don't have my NIN — remind me later"}
+                  {isDeferring ? 'Saving…' : "I still don't have my NIN. Remind me later."}
                 </button>
                 <button
                   type="button"

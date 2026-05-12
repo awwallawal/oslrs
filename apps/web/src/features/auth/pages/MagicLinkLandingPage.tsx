@@ -59,7 +59,7 @@ function isMagicLinkPurpose(v: string | null): v is MagicLinkPurpose {
 }
 
 export default function MagicLinkLandingPage() {
-  useDocumentTitle('Continue with magic link — Oyo State Skills Registry');
+  useDocumentTitle('Continue with magic link | Oyo State Skills Registry');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 

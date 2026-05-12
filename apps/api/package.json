@@ -33,7 +33,8 @@
     "verify:projected-scale": "tsx src/db/verify-projected-scale-explains.ts",
     "seed:audit-bench": "tsx scripts/seed-audit-bench.ts",
     "bench:audit-viewer": "tsx scripts/bench-audit-viewer.ts",
-    "cleanup:audit-bench": "tsx scripts/cleanup-audit-bench.ts"
+    "cleanup:audit-bench": "tsx scripts/cleanup-audit-bench.ts",
+    "pin-public-form": "tsx scripts/dev-pin-public-form.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",

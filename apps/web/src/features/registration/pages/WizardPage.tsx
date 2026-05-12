@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { WizardLayout } from '../../../layouts/WizardLayout';
 import { useWizardDraft } from '../hooks/useWizardDraft';
@@ -38,7 +38,7 @@ const STEPS = [
 ] as const;
 
 export default function WizardPage() {
-  useDocumentTitle('Register — Oyo State Skills Registry');
+  useDocumentTitle('Register | Oyo State Skills Registry');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -55,23 +55,70 @@ export default function WizardPage() {
   } | null>(null);
 
   // Sync URL ↔ wizard state.
-  useEffect(() => {
-    if (!draft.isHydrated) return;
-    if (stepFromUrl != null && stepFromUrl !== draft.currentStepIndex) {
-      // Clamp to a step the user has actually reached.
-      draft.setCurrentStepIndex(Math.min(stepFromUrl, STEPS.length - 1));
-    }
-  }, [draft.isHydrated, stepFromUrl, draft]);
+  //
+  // FIX 2026-05-12 — the two effects below previously raced each other into an
+  // infinite render loop on every Continue click. Root cause: Effect 1's deps
+  // included the unstable `draft` object (re-created every render by the
+  // useWizardDraft hook), so Effect 1 fired on every render and reverted state
+  // back to the stale URL value while Effect 2 tried to push the URL forward.
+  // They fought to a stalemate, re-rendering continuously without reaching
+  // equilibrium.
+  //
+  // The fix narrows Effect 1's deps so it only runs on genuine URL changes
+  // and uses a `lastSyncSource` ref to suppress the OPPOSITE-direction sync
+  // on the immediate next render. Without this ref, a deep-link like
+  // `/register?step=2` would race: Effect 1 schedules `state ← 2`, while
+  // Effect 2 (still seeing closure-captured state=0) schedules `URL ← 0`,
+  // and on the next render the directions flip back, looping forever.
+  //
+  // `hasReconciledInitialUrl` protects token-resume: useWizardDraft may have
+  // set currentStepIndex from a server-side draft before this effect first
+  // runs. Skipping the URL→state sync on that single render (only when a
+  // resume token is in scope) lets the saved server step survive.
+  const hasReconciledInitialUrl = useRef(false);
+  const lastSyncSource = useRef<'url' | 'state' | null>(null);
 
+  // URL → state (back/forward + explicit `?step=N` deep-links).
   useEffect(() => {
     if (!draft.isHydrated) return;
-    const desired = String(draft.currentStepIndex);
-    if (searchParams.get('step') !== desired) {
-      const next = new URLSearchParams(searchParams);
-      next.set('step', desired);
-      setSearchParams(next, { replace: true });
+    if (!hasReconciledInitialUrl.current) {
+      hasReconciledInitialUrl.current = true;
+      if (resumeToken) return;
     }
-  }, [draft.currentStepIndex, draft.isHydrated, searchParams, setSearchParams]);
+    if (stepFromUrl == null) return;
+    if (stepFromUrl === draft.currentStepIndex) return;
+    // Mark this sync as URL→state so the state→URL effect that fires after
+    // our `setCurrentStepIndex` lands knows to step aside on the next tick.
+    lastSyncSource.current = 'url';
+    // Clamp to a step the user has actually reached.
+    draft.setCurrentStepIndex(Math.min(stepFromUrl, STEPS.length - 1));
+    // Deliberately omit `draft` from deps — it's a fresh object every render
+    // (useWizardDraft return). Reading `draft.currentStepIndex` + `.setCurrentStepIndex`
+    // via closure is the correct sync semantic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.isHydrated, stepFromUrl]);
+
+  // State → URL (Continue / Back button clicks).
+  useEffect(() => {
+    if (!draft.isHydrated) return;
+    // If the previous tick was a URL→state sync, the URL is already the
+    // intended truth — don't overwrite it with our just-updated state.
+    // Reset the flag so subsequent ticks are handled normally.
+    if (lastSyncSource.current === 'url') {
+      lastSyncSource.current = null;
+      return;
+    }
+    const desired = String(draft.currentStepIndex);
+    if (searchParams.get('step') === desired) return;
+    lastSyncSource.current = 'state';
+    const next = new URLSearchParams(searchParams);
+    next.set('step', desired);
+    setSearchParams(next, { replace: true });
+    // Same rationale — `searchParams` + `setSearchParams` are read via
+    // closure; their identities change on every URL update but we only
+    // want this effect firing when the SOURCE-OF-TRUTH state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.currentStepIndex, draft.isHydrated]);
 
   const goToStep = useCallback(
     (idx: number) => {
@@ -214,7 +261,7 @@ export default function WizardPage() {
           </p>
         ) : draft.saveError ? (
           <p className="text-xs text-warning-700" data-testid="wizard-autosave-error">
-            Couldn't save your progress just now — we'll keep retrying.
+            Couldn't save your progress just now. We'll keep retrying.
           </p>
         ) : null
       }
@@ -322,7 +369,7 @@ function CompletionScreen({
         {pendingNin ? (
           <>
             We've saved your registration for <span className="font-mono">{email}</span>. Watch your
-            email for a one-click link to add your NIN whenever you're ready — we'll also remind
+            email for a one-click link to add your NIN whenever you're ready. We'll also remind
             you in 2 days, 7 days, and 14 days.
           </>
         ) : (

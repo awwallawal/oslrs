@@ -141,13 +141,13 @@ export function Step5NinInput({
         {ninStatus === 'valid' && !pendingToggle && (
           <p className="flex items-center gap-1 text-sm text-success-600" data-testid="wizard-nin-valid">
             <CheckCircle2 className="h-4 w-4" />
-            NIN format looks good — final check happens when you submit.
+            NIN format looks good. We do a final check when you submit.
           </p>
         )}
         {ninStatus === 'invalid' && !pendingToggle && (
           <p className="flex items-center gap-1 text-sm text-error-600" data-testid="wizard-nin-invalid">
             <XCircle className="h-4 w-4" />
-            NIN failed the Modulus 11 checksum — please double-check.
+            NIN failed the Modulus 11 checksum. Please double-check it.
           </p>
         )}
         <NinHelpHint

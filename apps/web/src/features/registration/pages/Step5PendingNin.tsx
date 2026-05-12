@@ -37,7 +37,7 @@ export function Step5PendingNin({
       <header className="mb-6">
         <h2 className="text-xl font-semibold text-neutral-900">Saving as pending</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          You can add your NIN later — we'll email you a one-click link to finish.
+          You can add your NIN later. We'll email you a one-click link to finish.
         </p>
       </header>
 

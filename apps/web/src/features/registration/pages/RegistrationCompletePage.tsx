@@ -20,7 +20,7 @@ import { TrustBadgesRow } from '../components/TrustBadgesRow';
  */
 
 export default function RegistrationCompletePage() {
-  useDocumentTitle('Registration complete — Oyo State Skills Registry');
+  useDocumentTitle('Registration complete | Oyo State Skills Registry');
   const [searchParams] = useSearchParams();
   const source = searchParams.get('source');
 

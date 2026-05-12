@@ -33,7 +33,7 @@ export function TrustBadgesRow({ className }: TrustBadgesRowProps) {
       <Badge
         icon={<Lock className="h-4 w-4 text-success-600" aria-hidden="true" />}
         label="Secure Registration"
-        ariaLabel="Secure registration — data transmitted over encrypted HTTPS"
+        ariaLabel="Secure registration. Data transmitted over encrypted HTTPS."
         bgClass="bg-success-100"
         textClass="text-success-700"
         testId="trust-badge-secure"
@@ -56,7 +56,7 @@ export function TrustBadgesRow({ className }: TrustBadgesRowProps) {
       <Badge
         icon={<Gift className="h-4 w-4 text-info-600" aria-hidden="true" />}
         label="Free to Join"
-        ariaLabel="Free to join — no registration fee"
+        ariaLabel="Free to join. No registration fee."
         bgClass="bg-info-100"
         textClass="text-info-700"
         testId="trust-badge-free"

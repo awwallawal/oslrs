@@ -101,7 +101,7 @@ export function Step4Questionnaire({
           <h2 className="text-xl font-semibold text-neutral-900">Survey not yet available</h2>
           <p className="mt-1 text-sm text-neutral-600">
             We don't have a questionnaire set up at the moment. Your registration will save without
-            survey responses — you can come back later to complete it.
+            survey responses. You can come back later to complete it.
           </p>
         </header>
         <WizardNavigation
@@ -137,7 +137,7 @@ export function Step4Questionnaire({
       <header>
         <h2 className="text-xl font-semibold text-neutral-900">{form.title}</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          One question at a time. We auto-save as you go — you can come back later if you need to.
+          One question at a time. We auto-save as you go, so you can come back later if you need to.
         </p>
       </header>
 

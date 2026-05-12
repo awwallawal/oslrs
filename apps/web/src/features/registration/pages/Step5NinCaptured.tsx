@@ -39,7 +39,7 @@ export function Step5NinCaptured({
       <header className="mb-6">
         <h2 className="text-xl font-semibold text-neutral-900">Almost done</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          One last step — pick how you'd like to sign in if you come back later.
+          One last step. Pick how you'd like to sign in if you come back later.
         </p>
       </header>
 
@@ -101,7 +101,7 @@ export function AuthChoiceFieldset({
       value: 'password',
       title: 'Set a password',
       description:
-        'Choose a password now. (Coming soon — we\'ll fall back to email sign-in for now.)',
+        'Choose a password now. (Coming soon. We\'ll fall back to email sign-in for now.)',
       testId: 'auth-choice-password',
     },
     {
