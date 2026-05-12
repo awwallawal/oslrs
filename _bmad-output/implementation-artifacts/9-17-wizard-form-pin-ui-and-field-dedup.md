@@ -283,6 +283,24 @@ NIN already has the most sophisticated handling in the wizard — the state-awar
 
 `WIZARD_PROVIDED_FIELD_NAMES` is for IDENTITY fields the wizard collects FIRST and the questionnaire might ASK FOR AGAIN (a redundancy). NIN is collected in EITHER the questionnaire OR Step 5, not both — handled by a separate state machine, not a redundancy dedup. The two live in different files (`nin-question-names.ts` and the new `wizard-provided-field-names.ts`) to make this separation visually explicit and to make the collision detector test (AC#B7 bullet 2.3) trivially expressive.
 
+### Forward-compat with proposed Story 9-18 (wizard structural redesign)
+
+A subsequent story (9-18, currently in design discussion 2026-05-12) proposes moving NIN capture from Step 5 to Step 1 (or a Step 1.5 sub-step), making Step 5 a Review-and-Save summary, and eliminating the State A/B/C dispatcher entirely. If 9-18 lands, the rationale in "Why NIN is deliberately excluded from the dedup map" above INVERTS: NIN becomes another wizard-collected identity field the questionnaire might re-ask, so it joins the dedup map.
+
+**Implications for THIS story (9-17)**:
+
+1. **The `WIZARD_PROVIDED_FIELD_NAMES` map MUST remain open for additions.** Don't enforce a closed type union or `as const` shape that prevents future keys. The current Part B AC#B1 spec already uses a plain object with string-array values — that's forward-compatible. Just don't tighten it during implementation.
+
+2. **The `hideQuestionNames?: Set<string>` prop on `<FormRenderer>` from AC#B3 is the canonical extension point for 9-18.** When 9-18 adds NIN to the dedup map, it just adds `nin` to the same Set — no FormRenderer changes needed. The prop already accepts arbitrary names.
+
+3. **The banner copy in AC#B4 should read generically.** The current spec phrase "We've pre-filled <Name | Phone | Email | DOB> from your earlier answers" works because 9-18 can add "NIN" to the same list. Avoid hard-coding "Steps 1-2" or other step references that 9-18 would break.
+
+4. **The collision-detector test (AC#B7 bullet 2.3) asserts NIN is NOT in `WIZARD_PROVIDED_FIELD_NAMES`.** If 9-18 lands, that assertion flips. The 9-18 dev agent must update this test. Document the assertion's purpose ("9-17 keeps NIN handled by the state-aware Step 5 dispatcher") so the future flip is conscious.
+
+5. **Part A (form-pin UI) is fully orthogonal to 9-18** — operational concern unaffected by step-structure changes.
+
+**Net**: 9-17 ships exactly as specified. 9-18 builds on 9-17's machinery (the alias map, the `hideQuestionNames` prop, the introspection pattern, the banner) rather than replacing it. No rework.
+
 ### Dependencies
 
 - **Story 9-12** (HARD) — provides the wizard infrastructure (`Step4Questionnaire`, `<FormRenderer>`, `NIN_QUESTION_NAMES` pattern), the form-discovery path (`fetchPublicActiveForm` + `getPublicActiveForm` service + `wizard.public_form_id` setting key + the `migrate-system-settings-init.ts` seed), and the URL-race fix from commit `427a80d`. 9-17 cannot ship before 9-12.
