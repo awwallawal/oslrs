@@ -549,9 +549,16 @@ function App() {
               {/* Story 9-12 Task 10.3 — `verify-email/:token` and `resend-verification`
                   routes retired alongside the legacy registration flow. The
                   wizard owns public registration via `/register`. */}
-              {/* Story 9-13 — login step-2 challenge (unauthenticated, gated by router state) */}
+              {/* Story 9-13 — login step-2 challenge (unauthenticated, gated by router state).
+                  Path is `auth/mfa-challenge` to match the canonical
+                  `/auth/mfa-challenge` navigation target used by useLogin.ts:121,
+                  AuthContext.tsx:294 docstring, and MfaChallengePage.test.tsx
+                  fixtures. The earlier path="mfa-challenge" mounted the route at
+                  `/mfa-challenge` and produced a 404 for every MFA-enrolled staff
+                  login — discovered by Awwal in 2026-05-13 UAT after Story 9-13
+                  shipped to production in `review` status. */}
               <Route
-                path="mfa-challenge"
+                path="auth/mfa-challenge"
                 element={
                   <PublicOnlyRoute redirectTo="/dashboard">
                     <Suspense fallback={<AuthLoadingFallback />}>
