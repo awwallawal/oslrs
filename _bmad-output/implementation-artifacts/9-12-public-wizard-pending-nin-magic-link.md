@@ -1033,3 +1033,187 @@ _"No technical debt" close-out (2026-05-11 session 8) — Awwal directive to res
 
 - [ ] **`9-14-magic-link-login` (proposed)** — Build out the `login`-purpose magic-link flow end-to-end. **Why this isn't 9-12 debt**: Task 1.7 explicitly scoped JWT issuance out of Story 9-12 ("JWT issuance for full magic-link login flow deferred"); existing public_users continue to authenticate via `POST /auth/public/login` (email + password), which is unaffected by 9-12. Magic-link login is a NEW feature that lights up an additional auth channel. **Scope**: (1) frontend "Sign in with magic link" button on `/login` for type=public users → `POST /auth/public/magic-link` with purpose=login. (2) Backend: extend `AuthService` with a `loginByMagicLinkToken` method that consumes a magic-link token, looks up the public_user by email, issues `accessToken` + `refreshToken` cookies via the existing `loginPublic` token-issuance path. (3) Frontend `MagicLinkLandingPage` `login` branch: replace the "coming soon" notice with a Confirm card that POSTs `/auth/magic/consume` (or a new `/auth/magic/login` if we want a dedicated endpoint) → on success, server sets the refresh cookie + returns access token, frontend stores the access token + redirects to `/dashboard`. (4) ADR-015 amendment documenting the magic-link login as primary alongside password. (5) Tests: AuthService magic-link login path + frontend landing-page login branch + route-level supertest. **Effort**: ~3-5 dev-days. **Priority**: post-field-survey unless Awwal escalates — existing email+password login covers all current public_users and the field-survey scope.
 
+---
+
+## Post-Launch UAT Session Log (2026-05-12 → 2026-05-14)
+
+This section captures the marathon UAT session that followed Story 9-12's production deployment (commits `aa621ce` + `b537663` on 2026-05-11). Three days of issues discovered, fixed, and operational recovery actions taken. Logged here as the canonical chronology so future readers (or a returning operator after a context break) can reconstruct exactly what changed in production state and why.
+
+**Scope rule for this log**: any commit, DB action, DNS action, or operational fix between 2026-05-12 00:00 UTC and 2026-05-14 23:59 UTC that touched 9-12's surface area (the public wizard, magic-link flow, registration submit path, public form discovery, or the auth flow exercised during 9-12 UAT) lives here. Items that touched 9-13 (MFA) are also captured because the MFA-route bug was surfaced by 9-12 UAT (login to admin panel to verify wizard data).
+
+### Hotfixes shipped (chronological)
+
+| # | Commit | Date | Title | Trigger | Files |
+|---|---|---|---|---|---|
+| 1 | `427a80d` | 2026-05-12 | WizardPage URL ↔ state race + regression tests + em-dash sweep | UAT — wizard stuck in infinite Continue → Back doom loop after Step 1 | `WizardPage.tsx`, 11 wizard files (em-dash removal), `WizardPage.test.tsx` (new — 5 regression tests) |
+| 2 | `a42ffde` | 2026-05-12 | dev-pin-public-form UPSERT polish | Dev-DB self-heal — local DB last seeded pre-2026-05-11 lacks the `wizard.public_form_id` row | `apps/api/scripts/dev-pin-public-form.ts` |
+| 3 | `bea7545` | 2026-05-12 | Modulus-11 in Step 5 State A + State B undo affordance | UAT — Step 5 showed "save as pending" copy even after valid NIN typed in questionnaire (caused by stale `pendingNinToggle=true` in the draft + State A's shape-only NIN check accepting junk) | `Step5NinAndAuth.tsx`, `Step5PendingNin.tsx`, `WizardPage.tsx`, `Step5NinAndAuth.test.tsx` |
+| 4 | `54efaa0` | 2026-05-12 | docs(9-17): forward-compat notes for proposed Story 9-18 | Story authoring — keep 9-17's dedup-map pattern open for 9-18's NIN extension | `9-17-wizard-form-pin-ui-and-field-dedup.md` |
+| 5 | `c28e8cb` | 2026-05-13 | App.tsx MFA challenge route fix | UAT — Awwal could not log in; the `/auth/mfa-challenge` page returned 404 after a successful password+captcha pass because the route was mounted at `mfa-challenge` (resolved to `/mfa-challenge`) instead of `auth/mfa-challenge`. Frontend navigation target everywhere else used `/auth/mfa-challenge`. Classic Story 9-13 review-status follow-up | `App.tsx` (1-line path change + 9-line context comment) |
+| 6 | `f56ce2a` | 2026-05-13 | docs(9-18): author wizard NIN-first + Review-and-Save story | Strategic UX redesign authored by Bob (SM) via *create-story --yolo. Captures Awwal's 2026-05-12 verbatim proposal to move NIN to Step 1 + make Step 5 a Save summary; eliminates the State A/B/C dispatcher | `9-18-wizard-nin-first-and-summary-save.md` (new, 350 lines), `sprint-status.yaml` (+1 line, ~30 lines extended) |
+
+### Operational actions taken on production (NOT in git — captured here for audit trail + reversibility)
+
+**Numbered chronologically. Each entry: trigger → action → verification → reversal path.**
+
+#### Op-1 — 2026-05-13: MFA disabled on `awwallawal@gmail.com` via direct DB UPDATE
+
+- **Trigger**: Story 9-13's MFA challenge page returned 404 (caused by the route bug fixed in commit `c28e8cb` above). Awwal could not complete the second step of his login flow despite having valid TOTP credentials. The break-glass account `admin@oyoskills.com` (no MFA — created 2026-04-26 specifically for this scenario per the Hand-off-strategy TURNKEY PACKAGE memory) was an alternative but Awwal opted for path C (disable MFA on primary + ship route fix + re-enroll later) over path A (use break-glass).
+- **Action**: SSH via Tailscale (`ssh root@oslsr-home-app`) → ran a parameterised `pg` UPDATE wrapped in BEGIN/COMMIT:
+  ```sql
+  BEGIN;
+  UPDATE users
+     SET mfa_enabled = false,
+         mfa_secret = NULL,
+         mfa_locked_until = NULL,
+         mfa_grace_until = NULL,
+         updated_at = now()
+   WHERE email = 'awwallawal@gmail.com'
+   RETURNING id, email, mfa_enabled, mfa_secret IS NULL AS mfa_secret_cleared;
+  COMMIT;
+  ```
+- **Verification**: returned 1 row, `mfa_enabled: false`, `mfa_secret_cleared: true`. User logged in successfully with email + password on the next attempt.
+- **Reversal path**: Awwal re-enrolls via Settings → Security → Enable MFA after the route fix from commit `c28e8cb` deploys to production. The re-enrollment generates a fresh `mfa_secret` and flips `mfa_enabled` back to true. NO operator action needed; user-initiated flow.
+- **Audit-trail gap**: this UPDATE did NOT write to the `audit_log` table because the controller path was not invoked. Manual operator changes on prod that affect security posture SHOULD ideally write an audit_log row themselves for forensic completeness — captured as **Lesson #L4** below.
+
+#### Op-2 — 2026-05-13: `oyoskills.com` ICANN verification clicked by registrant
+
+- **Trigger**: At ~10:11 UTC 2026-05-13, the domain `oyoskills.com` auto-suspended due to ICANN's Whois Accuracy Program Specification (WAPS) 15-day verification deadline expiring. The domain was registered 2026-04-26 per the TURNKEY PACKAGE memory; the verification email from the registrar (GoDaddy) was sent shortly after registration but not actioned. At deadline expiry, the registrar replaced the authoritative nameservers with `ns1.verification-hold.suspended-domain.com`, swapping the cert to a fresh GoDaddy-issued one for the parking server. End result: frontend rendered from browser-cached service-worker HTML; all `/api/*` XHRs returned HTTP 405 from the parking server.
+- **Action**: Awwal searched Gmail for the registrar's verification email, found it, clicked the verification link.
+- **Verification**: Within ~3 hours, `nslookup www.oyoskills.com 1.1.1.1` returned Cloudflare anycast IPs (`172.67.162.69`, `104.21.73.117`) instead of the parking IPs (`15.197.240.20`). End-to-end test:
+  - `GET https://www.oyoskills.com/` → HTTP 200, real OSLRS frontend (CSP includes `wss://oyoskills.com` proving the bundle was built for this domain).
+  - `GET https://www.oyoskills.com/api/v1/health` → `{"status":"ok"}`.
+  - `POST https://www.oyoskills.com/api/v1/auth/staff/login {}` → `{"status":"error","code":"AUTH_CAPTCHA_FAILED",...}` — proves request reaches Express app on the droplet (HTTP 400 with structured JSON, identical to oyotradeministry.com.ng behavior).
+- **Cert state**: Cloudflare proxy serves the edge with a Cloudflare-managed cert. Original Let's Encrypt cert with `CN=oyoskills.com` issued 2026-04-26 was still on the droplet, valid through 2026-07-25 — visible behind the proxy but not user-facing. No `certbot --expand` needed.
+- **No reversal**: this restored the pre-suspension state. Captured as **Lesson #L1** below.
+
+#### Op-3 — 2026-05-14: Re-uploaded questionnaire on production via Q.M.
+
+- **Trigger**: The original production questionnaire form record (UUID `019d7d40-d3a8-78a9-850e-f306550cc999`, uploaded ~2026-03-13 per UUID-v7 timestamp prefix) had `form_schema = NULL` + `is_native = false` + `native_published_at = NULL`. It predated the auto-conversion code path at `questionnaire.service.ts:127` (`convertToNativeForm`) which now runs at upload time. The form record was `status='published'` but the wizard's `getPublicActiveForm` would have failed on the implicit assumption that a published form has a populated schema.
+- **Action**: Awwal logged into prod as super_admin → Q.M. → uploaded the OSLSR XLSForm fresh. The auto-conversion fired correctly, creating a new form record with `is_native=true` + `form_schema` populated + 7 sections + 39 questions.
+- **Verification**: `pnpm --filter @oslsr/api pin-public-form --list` showed exactly 1 published form (the new one, UUID `019e24ef-9629-77ef-8a3e-12517d34bbff`). A direct `SELECT` confirmed `is_native=true`, `form_schema` non-null, `section_count=7`, `question_count=39`.
+- **Orphan cleanup**: the original 2026-03-13 form record was implicitly superseded (not deleted; left in the DB as a historical record with `status='published'` but unreferenced). Future cleanup can hard-delete it once we're sure nothing references its UUID; no FK constraints currently point at it.
+- **Cosmetic warning**: the new form's `native_published_at` is still NULL — same as the orphan. Inspection of `NativeFormService.publishForm` at line 282-298 shows it DOES set `nativePublishedAt: now` during the publish transaction. The fact that `native_published_at` is NULL on the new form suggests the publish path used was the `PATCH /:id/status` route (which calls `QuestionnaireService.updateFormStatus`), NOT the `POST /:id/publish` route (which calls `NativeFormService.publishForm`). The status flip succeeded but the `nativePublishedAt` field never got stamped. **Operationally harmless** because `getPublicActiveForm` only checks `status='published'` (per `native-form.service.ts:405`), not `native_published_at`. Cosmetic but flagged as **Lesson #L3** for follow-up — the two publish paths should converge.
+
+#### Op-4 — 2026-05-14: Pinned form via SSH `pin-public-form` script
+
+- **Trigger**: After Op-3, the new form was `status='published'` but the wizard's Step 4 still showed empty-state because `wizard.public_form_id` was NULL. Publishing makes a form eligible to be served; pinning sets it as THE wizard's active form. This separation is intentional (multiple published forms can coexist, e.g., archival forms still accepting late submissions, while only ONE is the active public-registration survey) — but the workflow gap surfaces because there's no UI to pin yet. **Story 9-17 ships the Pin button on Q.M. to eliminate this gap.**
+- **Action**: SSH via Tailscale → `pnpm --filter @oslsr/api pin-public-form 019e24ef-9629-77ef-8a3e-12517d34bbff`
+- **Verification**: `pin-public-form --list` shows the new form with `📌 PINNED` badge. End-to-end:
+  - `curl https://oyotradeministry.com.ng/api/v1/forms/public-active` → HTTP 200 with full flattened schema (39 questions returned).
+  - `curl https://www.oyoskills.com/api/v1/forms/public-active` → identical response via Cloudflare.
+- **Reversal path**: `pnpm pin-public-form --unpin` (sets `wizard.public_form_id = null`, wizard reverts to empty-state).
+- **Future**: once Story 9-17 ships the Pin button on Q.M., this entire SSH dance becomes one click in the UI + retires the `pin-public-form` script per 9-17 AC#A7.
+
+### UAT findings catalog
+
+Each finding: symptom → root cause → fix.
+
+#### Finding F1 — Wizard stuck in URL ↔ state doom loop
+
+- **Symptom**: After clicking Continue on Step 1, the page got stuck cycling between "trying to go to next page" and "still on first step" — a visible flicker between hydration states.
+- **Root cause**: Two `useEffect`s in `WizardPage.tsx` syncing URL ↔ state had `draft` in their dependency arrays. `draft` was recreated by `useWizardDraft` on every render, causing Effect 1 (URL → state) to fire constantly and revert state changes made by Effect 2 (state → URL).
+- **Fix (`427a80d`)**: Narrowed dependency arrays + added `lastSyncSource` ref to disambiguate which direction fired most recently + `hasReconciledInitialUrl` ref to handle the initial-mount edge case. 5 regression tests in `WizardPage.test.tsx` covering: mount + URL write, Continue Step 1→2, Back Step 2→1, chain 4 Continues, deep-link `?step=2`.
+
+#### Finding F2 — Step 5 shows "save as pending" copy even after valid NIN typed in questionnaire
+
+- **Symptom**: Awwal typed a NIN into the questionnaire's NIN question on Step 4, advanced to Step 5, but saw the State B copy ("You can add your NIN later. We'll email you a one-click link to finish.") instead of State A's confirmation.
+- **Root cause**: Two compounding bugs:
+  1. The wizard draft had a stale `pendingNinToggle=true` from a prior session (Awwal had clicked the inline "I don't have my NIN now" link in the FormRenderer during exploration). The flag persists in `wizard_drafts.formData` and survives reloads. With `pendingNinToggle=true`, the dispatcher routes to State B unconditionally.
+  2. Even AFTER the toggle is cleared, State A's `readQuestionnaireNin` extractor at `Step5NinAndAuth.tsx:55` only did a shape check (`/^\d{11}$/`) without verifying the Modulus-11 checksum. So an 11-digit string like `12345678901` would have been accepted, but a junk shape-valid value falling through to State C with no recovery surface still felt broken.
+- **Fix (`bea7545`)**:
+  - Imported `modulus11Check` from `@oslsr/utils/src/validation` and added it inline to the `readQuestionnaireNin` shape check in both `Step5NinAndAuth.tsx` and the (originally duplicated) function in `WizardPage.tsx:396-407`. State A now only fires for checksum-valid NINs.
+  - Added a "Enter NIN now" button to `Step5PendingNin.tsx` (State B page) that calls `mergeFields({ pendingNinToggle: false })` and re-derives state. Users stuck in State B (whether intentionally via inline link or unintentionally via stale draft) now have an in-wizard recovery surface.
+  - Test fixtures in `Step5NinAndAuth.test.tsx` updated to use checksum-valid NINs (`61961438053`) from the canonical `packages/utils` test fixtures.
+- **Forward-context**: This entire State A/B/C dispatcher gets DELETED in Story 9-18 (NIN moves to Step 1, single canonical capture). The hotfix is the bridge keeping production correct until 9-18 ships. Captured as the supersession entry in 9-18's Dev Notes.
+
+#### Finding F3 — MFA challenge page returns 404 after successful login
+
+- **Symptom**: Awwal entered email + password + captcha on `/staff/login`, received toast "Login Failed", then navigated to `/auth/mfa-challenge` which showed "Page not found".
+- **Root cause**: Server correctly returned `{requiresMfa: true, mfaChallengeToken, expiresIn}` (HTTP 200). Frontend `useLogin.ts:121` correctly navigated to `/auth/mfa-challenge`. But `App.tsx:554` had `path="mfa-challenge"` (no `auth/` prefix), which resolved to `/mfa-challenge` because the parent AuthLayout route at line 506 has no `path` prop. The route registration and the navigation target were mismatched. The "Login Failed" toast was misleading; the page DID navigate, the destination just didn't exist.
+- **Why the tests didn't catch it**: `MfaChallengePage.test.tsx:60,66` instantiates its own router with `<Route path="/auth/mfa-challenge">` inline, so the page renders fine in isolation. The route registration in production `App.tsx` is never exercised by component-level tests.
+- **Fix (`c28e8cb`)**: Changed `path="mfa-challenge"` to `path="auth/mfa-challenge"` in App.tsx, with a 9-line context comment documenting the bug origin.
+- **Story status implication**: Story 9-13 is in `review` status. This is exactly the kind of UAT find that keeps a story from flipping `done`. Once Awwal re-enrolls MFA and completes a fresh end-to-end pass on the deployed fix, 9-13 can flip → `done`. **Outstanding pre-flip item: at least one E2E MFA login pass on production by Awwal.**
+
+#### Finding F4 — `oyoskills.com` shows OSLRS frontend but API returns 405
+
+- **Symptom**: Browser rendered the OSLRS login form on `www.oyoskills.com/staff/login`, but submitting the form produced a generic failure toast (network panel showed HTTP 405 Method Not Allowed on the POST).
+- **Root cause**: ICANN-mandated administrative suspension of `oyoskills.com` (15-day registrant-contact verification deadline expired). The registrar replaced authoritative nameservers with `ns1.verification-hold.suspended-domain.com`, swapped DNS to parking IPs (`15.197.240.20` / `74.119.239.234`), and issued a fresh GoDaddy cert for the parking server. The frontend appeared to load because the OSLRS service worker had cached the HTML shell + JS bundle from before the suspension, but new XHRs went over the network to the parking IP which doesn't speak `/api/*`.
+- **Why "everything was working before"**: literally true. DNS was fine until 2026-05-13 ~10:11 UTC when the verification deadline kicked in and the registrar enforced suspension.
+- **Fix (Op-2)**: Awwal located + clicked the registrar verification email. DNS propagated back to Cloudflare anycast within ~3 hours. No code change needed; no operator SSL action needed (Cloudflare handles edge cert).
+- **Future prevention**: NEVER use the registrant email as the only inbox monitor. Set up forwarding to ImprovMX → Gmail (per the canonical migration anchor pattern memory) and add `domain-services` / `verification` / `icann` to the search-filters Awwal regularly checks. **L1 below.**
+
+#### Finding F5 — Public wizard Step 4 stays empty after questionnaire republish
+
+- **Symptom**: Awwal republished the questionnaire on prod via Q.M., reloaded `/register`, walked to Step 4, still saw the empty-state "Survey not yet available" copy.
+- **Root cause**: Publishing makes a form `status='published'`. The wizard's `getPublicActiveForm` requires the form's UUID to be set in `wizard.public_form_id` (the "pin"). The new form was published but not pinned. Workflow gap because there's no UI to pin (Story 9-17 ships this).
+- **Fix (Op-4)**: SSH + `pnpm pin-public-form <new-form-uuid>`. Verified via `curl /api/v1/forms/public-active` returning HTTP 200 with the full flattened schema.
+- **5-minute React Query staleTime caveat**: even after pinning, browser tabs that loaded `/register` while empty will keep returning the cached empty-state for up to 5 minutes (per `Step4Questionnaire.tsx:51`). Users hard-refresh OR wait for the cache to expire. Same caveat applies to any pin change in production.
+
+### Lessons & pitfalls captured for future operators
+
+#### L1 — Domain verification emails are critical infrastructure mail; route them to multiple inboxes
+
+The 2026-05-13 `oyoskills.com` suspension cost ~3 hours of UAT time. Mitigation:
+
+1. Set up `ImprovMX` to forward `admin@oyoskills.com` → multiple inboxes (Awwal personal + a project-monitored inbox) so verification emails aren't single-pointed.
+2. Add a calendar reminder 12 days after any new domain registration to verify contact info if not already done.
+3. Add a Gmail filter that auto-stars + auto-labels emails from `*-services@*.com`, `verification@*`, `icann*`, `domains@*` so they never get buried.
+
+#### L2 — Service workers can mask DNS-level outages
+
+The OSLRS service worker (offline mode from prep-11) cached the frontend HTML + JS aggressively enough that `www.oyoskills.com` rendered the login form for ~3 hours after the underlying domain stopped resolving to the droplet. This is a feature for offline mode but a hazard for diagnosis. Future debugging recipe:
+
+1. When a domain "looks fine but doesn't work", curl the API endpoint from a different machine (no service worker, no browser cache) to disambiguate frontend cache from real frontend.
+2. Check `nslookup` first thing — DNS state is foundational and changes silently.
+3. Hard-refresh + DevTools "Empty Cache and Hard Reload" + try incognito as the canonical browser-bypass.
+
+#### L3 — `native_published_at` is not stamped by the `PATCH /:id/status` publish path
+
+Form records published via `PATCH /:id/status` (which calls `QuestionnaireService.updateFormStatus`) leave `native_published_at` NULL. Records published via `POST /:id/publish` (which calls `NativeFormService.publishForm`) get `nativePublishedAt: now` stamped in the same transaction. Both result in `status='published'` and both produce a functional form, but the `native_published_at` timestamp is inconsistent.
+
+**Operationally harmless** (the wizard's `getPublicActiveForm` only checks `status`, not `native_published_at`), but cosmetic. Story 9-17's dev agent should converge these two paths — either deprecate the `PATCH /:id/status` path for `'published'` transitions (force callers through `/publish`), OR stamp `nativePublishedAt: now` in `updateFormStatus` when the transition target is `'published'`. Flagged for Bob's 9-17 implementation: **add a small AC to 9-17 OR a separate prep-questionnaire-publish-path-converge story.**
+
+#### L4 — Operator-initiated DB writes that change security posture should write `audit_log` rows
+
+Op-1 (disable MFA on `awwallawal@gmail.com`) is forensically silent — there's no `audit_log` row showing who disabled MFA, when, or why. The change touches `users.mfa_enabled` + `users.mfa_secret` directly, bypassing the controller path that normally writes the audit row. Best practice for future operator DB writes:
+
+1. Wrap the UPDATE in a Drizzle transaction that ALSO inserts an `audit_log` row with `action='MFA_DISABLED_BY_OPERATOR'`, `actor_user_id=<operator-or-system-uuid>`, `target_user_id=<affected-user-uuid>`, `details={reason: '...', triggered_by_incident: '...'}`.
+2. Captured as a candidate prep-task for hardening: **prep-operator-db-audit-discipline** — a small set of guardrails (a few helper functions in `apps/api/scripts/`) that wrap raw DB writes with proper audit-log emission.
+
+#### L5 — Test infrastructure that stubs router config can hide route-registration bugs
+
+`MfaChallengePage.test.tsx` instantiates its own router config inline (line 66) with `<Route path="/auth/mfa-challenge" element={<MfaChallengePage />} />`. The page rendered perfectly in this isolated test, even though `App.tsx` mounted the same component at a DIFFERENT path (`mfa-challenge` → `/mfa-challenge`). The bug only surfaced in production.
+
+**Mitigation candidates**:
+1. Add a single integration test that imports the real `App.tsx` router config and asserts route resolution for every page (`/login` resolves, `/auth/mfa-challenge` resolves, `/register` resolves, etc.). Cost: ~30 lines of test code, catches mismatches at CI time.
+2. OR enforce a naming convention: page-level tests MUST mount the page via the same route path as App.tsx uses, with the route path imported from a shared `routes.ts` constants file.
+3. Either approach captured as a candidate prep-task: **prep-route-resolution-integration-test** — small, isolated, durable safety net.
+
+### Production state snapshot at end-of-session (2026-05-14)
+
+- **`oyotradeministry.com.ng`**: ✅ Working. Frontend serves from droplet's NGINX. API healthy. Login works (MFA disabled on Awwal's account). Wizard Step 4 renders the pinned form.
+- **`www.oyoskills.com`**: ✅ Working post-Op-2. Cloudflare proxy → droplet. API healthy. Login works. Wizard Step 4 renders the same pinned form.
+- **Pinned form**: UUID `019e24ef-9629-77ef-8a3e-12517d34bbff` (OSLSR Labour & Skills Registry Survey, v2026012601, 7 sections, 39 questions, `is_native=true`, `form_schema` populated).
+- **Orphan form**: UUID `019d7d40-d3a8-78a9-850e-f306550cc999` still exists in `questionnaire_forms` with `status='published'`, `is_native=false`, `form_schema=NULL`. Not pinned. Not referenced. Candidate for hard-delete in the next housekeeping pass once the operator is satisfied no FK constraints will be violated.
+- **Awwal's super_admin account (`awwallawal@gmail.com`)**: `mfa_enabled=false`, `mfa_secret=NULL`. Re-enrollment pending.
+- **Break-glass super_admin (`admin@oyoskills.com`)**: `mfa_enabled=false` (intentional per TURNKEY PACKAGE strategy). Never had MFA; unaffected by Op-1.
+
+### Open follow-ups from this session
+
+1. **AC#C3 pre-impl decision on Story 9-18** — retire OR keep the magic-link / password / skip auth-choice radios on Step 5. Awwal owns this; default assumption per his 2026-05-12 directive is RETIRE. Story 9-18 Task 1.1 blocks all other 9-18 work until Awwal confirms.
+2. **Awwal re-enrolls MFA on his primary account** via Settings → Security after a fresh login succeeds end-to-end with the deployed `c28e8cb` route fix. After that → flip Story 9-13 from `review` → `done`.
+3. **Story 9-12 status flip** — `review` → `done` once Awwal completes the full happy-path UAT (Steps 1 → 5, magic-link arrival, dashboard landing). All 14 ACs technically met; pending Awwal's first-respondent signal.
+4. **Story 9-17 implementation** picks up — top-priority because it eliminates the Op-4 SSH pin step (huge workflow gain).
+5. **Hard-delete the orphan form record** (UUID `019d7d40-...`) in the next housekeeping pass. Low priority; no harm in leaving it.
+6. **Prep-route-resolution-integration-test** (L5) — author a tiny story to add a single integration test that verifies App.tsx's route registrations match the navigate targets used throughout the codebase. Catches future bugs like F3 at CI time. ~half-day effort.
+7. **Prep-operator-db-audit-discipline** (L4) — author a tiny story for helper functions that wrap operator DB writes with proper audit-log emission. ~half-day effort.
+8. **Native publish-path convergence** (L3) — either fold into 9-17 as an additional AC, or author as `prep-questionnaire-publish-path-converge`. ~half-day effort.
+
+Memory consolidation candidates (worth saving as project memories for future sessions):
+- L1 (domain verification email infra) → user/operations memory
+- L2 (service worker masks DNS outages) → debugging-recipe memory
+- L5 (test stubs hiding route bugs) → testing-discipline memory
+
+End of Post-Launch UAT Session Log.
+
