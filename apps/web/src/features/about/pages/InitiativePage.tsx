@@ -142,7 +142,7 @@ function InitiativePage() {
                 </p>
                 <p className="text-neutral-600">
                   By participating, you become part of a powerful tool for
-                  positive change in Oyo State — and you may also connect with
+                  positive change in Oyo State, and you may also connect with
                   employers looking for your exact skills through our upcoming
                   marketplace.
                 </p>

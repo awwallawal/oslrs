@@ -20,7 +20,7 @@ function HeroSection() {
           {/* Subtext */}
           <p className="text-lg sm:text-xl text-neutral-600 mb-10 max-w-3xl mx-auto">
             The Oyo State Labour & Skills Registry helps government plan better jobs,
-            skills training, and economic opportunities — using accurate data collected
+            skills training, and economic opportunities, using accurate data collected
             directly from residents.
           </p>
 

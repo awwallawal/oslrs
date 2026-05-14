@@ -44,7 +44,7 @@ export default function LoginPage({ type = 'public' }: LoginPageProps) {
                   <div className="flex-1">
                     <p className="font-medium text-info-900">New here?</p>
                     <p className="mt-1">
-                      Try our new registration wizard — it takes about 5 minutes.
+                      Try our new registration wizard. It takes about 5 minutes.
                     </p>
                     <Link
                       to="/register"

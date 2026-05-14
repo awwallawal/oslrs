@@ -8,7 +8,7 @@ const requirements = [
   {
     icon: CreditCard,
     title: 'NIN (National Identification Number)',
-    description: 'Your 11-digit NIN verifies your identity. We validate it locally — we don\'t store or share it publicly.',
+    description: 'Your 11-digit NIN verifies your identity. We validate it locally and never store or share it publicly.',
   },
   {
     icon: Phone,
