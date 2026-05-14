@@ -49,11 +49,11 @@ describe('PartnersPage', () => {
     renderWithRouter(<PartnersPage />);
     expect(screen.getByText(/Become a Partner/i)).toBeInTheDocument();
     const contactLink = screen.getByRole('link', { name: /Contact Us/i });
-    expect(contactLink).toHaveAttribute('href', 'mailto:partnerships@oyostate.gov.ng');
+    expect(contactLink).toHaveAttribute('href', 'mailto:partnerships@oyoskills.com');
   });
 
   it('displays partnership email address', () => {
     renderWithRouter(<PartnersPage />);
-    expect(screen.getByText('partnerships@oyostate.gov.ng')).toBeInTheDocument();
+    expect(screen.getByText('partnerships@oyoskills.com')).toBeInTheDocument();
   });
 });

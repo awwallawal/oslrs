@@ -47,13 +47,13 @@ describe('ContactPage', () => {
   it('renders Data & Privacy Requests section', () => {
     renderWithRouter(<ContactPage />);
     expect(screen.getByText('Data & Privacy Requests')).toBeInTheDocument();
-    expect(screen.getByText('dpo@oyostate.gov.ng')).toBeInTheDocument();
+    expect(screen.getByText('dpo@oyoskills.com')).toBeInTheDocument();
   });
 
   it('renders Partnerships & Media section', () => {
     renderWithRouter(<ContactPage />);
     expect(screen.getByText('Partnerships & Media')).toBeInTheDocument();
-    expect(screen.getByText('partnerships@oyostate.gov.ng')).toBeInTheDocument();
+    expect(screen.getByText('partnerships@oyoskills.com')).toBeInTheDocument();
   });
 
   it('renders Report Abuse callout with warning', () => {

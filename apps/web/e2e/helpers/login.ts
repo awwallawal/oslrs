@@ -30,6 +30,11 @@ export async function staffLogin(page: Page, role: StaffRole): Promise<void> {
   // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL('**/dashboard/**');
+  // Race-safe pattern: start the URL wait BEFORE the click. Naive
+  // click→waitForURL pattern can flake if React Router navigates faster
+  // than the next await is registered. See feedback_route_registration_test_discipline.md.
+  await Promise.all([
+    page.waitForURL('**/dashboard/**'),
+    page.getByRole('button', { name: /sign in/i }).click(),
+  ]);
 }

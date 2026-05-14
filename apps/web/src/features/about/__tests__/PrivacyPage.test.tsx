@@ -81,7 +81,7 @@ describe('PrivacyPage', () => {
     renderWithRouter(<PrivacyPage />);
     expect(screen.getByText(/Contact the Data Protection Officer/i)).toBeInTheDocument();
     const dpoLink = screen.getByRole('link', { name: /Contact DPO/i });
-    expect(dpoLink).toHaveAttribute('href', 'mailto:dpo@oyostate.gov.ng');
+    expect(dpoLink).toHaveAttribute('href', 'mailto:dpo@oyoskills.com');
   });
 
   it('displays last updated date', () => {

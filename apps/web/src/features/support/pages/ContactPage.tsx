@@ -32,7 +32,7 @@ const dataPrivacy = {
   title: 'Data & Privacy Requests',
   description: 'For data access, correction, or deletion requests under the NDPA. Responses within 30 days.',
   items: [
-    { icon: Mail, label: 'Email', value: 'dpo@oyostate.gov.ng', href: 'mailto:dpo@oyostate.gov.ng' },
+    { icon: Mail, label: 'Email', value: 'dpo@oyoskills.com', href: 'mailto:dpo@oyoskills.com' },
     { icon: MapPin, label: 'Address', value: 'Ministry of Labour & Productivity, State Secretariat, Ibadan' },
   ],
 };
@@ -41,7 +41,7 @@ const partnerships = {
   title: 'Partnerships & Media',
   description: 'For collaboration opportunities, media inquiries, or institutional partnerships.',
   items: [
-    { icon: Mail, label: 'Email', value: 'partnerships@oyostate.gov.ng', href: 'mailto:partnerships@oyostate.gov.ng' },
+    { icon: Mail, label: 'Email', value: 'partnerships@oyoskills.com', href: 'mailto:partnerships@oyoskills.com' },
   ],
 };
 

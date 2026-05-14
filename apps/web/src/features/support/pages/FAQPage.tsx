@@ -86,7 +86,7 @@ const faqsByCategory: Record<string, FAQItem[]> = {
     },
     {
       question: 'Can I delete my data?',
-      answer: 'Yes, you can request data deletion by contacting the Data Protection Officer at dpo@oyostate.gov.ng. Under the Nigeria Data Protection Act (NDPA), we are required to respond within 30 days.',
+      answer: 'Yes, you can request data deletion by contacting the Data Protection Officer at dpo@oyoskills.com. Under the Nigeria Data Protection Act (NDPA), we are required to respond within 30 days.',
     },
     {
       question: 'Who can see my data?',

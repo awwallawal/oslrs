@@ -382,14 +382,14 @@ function PrivacyPage() {
 
             <div className="inline-flex flex-col sm:flex-row items-center gap-4">
               <a
-                href="mailto:dpo@oyostate.gov.ng"
+                href="mailto:dpo@oyoskills.com"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors"
               >
                 <Mail className="w-5 h-5" />
                 Contact DPO
               </a>
               <span className="text-neutral-600 text-sm">
-                dpo@oyostate.gov.ng
+                dpo@oyoskills.com
               </span>
             </div>
           </div>

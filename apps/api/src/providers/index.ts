@@ -102,7 +102,7 @@ export function getEmailConfigFromEnv(): EmailConfig {
   return {
     provider: (process.env.EMAIL_PROVIDER as EmailProviderType) || 'mock',
     enabled: process.env.EMAIL_ENABLED !== 'false',
-    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@oyotradeministry.com.ng',
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@oyoskills.com',
     fromName: process.env.EMAIL_FROM_NAME || 'Oyo State Labour Registry',
     tier: (process.env.EMAIL_TIER as EmailConfig['tier']) || 'free',
     resendApiKey: process.env.RESEND_API_KEY,

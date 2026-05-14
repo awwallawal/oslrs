@@ -26,8 +26,11 @@ test.describe('Fraud Threshold Settings', () => {
 
   test('navigate to fraud thresholds and view current values', async ({ page }) => {
     // Navigate via sidebar link
-    await page.getByRole('link', { name: 'Fraud Thresholds' }).click();
-    await page.waitForURL('**/settings/fraud-thresholds');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/settings/fraud-thresholds'),
+      page.getByRole('link', { name: 'Fraud Thresholds' }).click(),
+    ]);
 
     // Verify page heading
     await expect(page.getByRole('heading', { name: /Fraud Detection Thresholds/i })).toBeVisible();
@@ -42,8 +45,11 @@ test.describe('Fraud Threshold Settings', () => {
 
   test('modify GPS cluster radius, verify save toast, and verify persistence on reload', async ({ page }) => {
     // Navigate to fraud thresholds
-    await page.getByRole('link', { name: 'Fraud Thresholds' }).click();
-    await page.waitForURL('**/settings/fraud-thresholds');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/settings/fraud-thresholds'),
+      page.getByRole('link', { name: 'Fraud Thresholds' }).click(),
+    ]);
     await expect(page.getByTestId('fraud-thresholds-page')).toBeVisible();
 
     // Record original value for cleanup
@@ -83,8 +89,11 @@ test.describe('Fraud Threshold Settings', () => {
 
   test('cancel edit reverts to original value', async ({ page }) => {
     // Navigate to fraud thresholds
-    await page.getByRole('link', { name: 'Fraud Thresholds' }).click();
-    await page.waitForURL('**/settings/fraud-thresholds');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/settings/fraud-thresholds'),
+      page.getByRole('link', { name: 'Fraud Thresholds' }).click(),
+    ]);
     await expect(page.getByTestId('fraud-thresholds-page')).toBeVisible();
 
     // Record original value
@@ -106,8 +115,11 @@ test.describe('Fraud Threshold Settings', () => {
   });
 
   test('all six threshold categories render', async ({ page }) => {
-    await page.getByRole('link', { name: 'Fraud Thresholds' }).click();
-    await page.waitForURL('**/settings/fraud-thresholds');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/settings/fraud-thresholds'),
+      page.getByRole('link', { name: 'Fraud Thresholds' }).click(),
+    ]);
     await expect(page.getByTestId('fraud-thresholds-page')).toBeVisible();
 
     // Verify all 6 category cards are present

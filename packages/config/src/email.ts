@@ -103,7 +103,7 @@ export const EMAIL_QUEUE_CONFIG = {
 export const emailConfigSchema = z.object({
   provider: z.enum(['resend', 'mock']).default('mock'),
   enabled: z.boolean().default(true),
-  fromAddress: z.string().email().default('noreply@oyotradeministry.com.ng'),
+  fromAddress: z.string().email().default('noreply@oyoskills.com'),
   fromName: z.string().min(1).default('Oyo State Labour Registry'),
   tier: z.enum(['free', 'pro', 'scale']).default('free'),
   resendApiKey: z.string().optional(),

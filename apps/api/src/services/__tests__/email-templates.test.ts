@@ -63,8 +63,8 @@ describe('Email Templates', () => {
     it('should include support URL', () => {
       const html = EmailService.getStaffInvitationHtml(sampleData);
 
-      // SUPPORT_URL defaults to oyotradeministry.com.ng (or process.env.SUPPORT_URL)
-      const expectedUrl = process.env.SUPPORT_URL || 'https://oyotradeministry.com.ng';
+      // SUPPORT_URL defaults to oyoskills.com (or process.env.SUPPORT_URL)
+      const expectedUrl = process.env.SUPPORT_URL || 'https://oyoskills.com';
       expect(html).toContain(expectedUrl);
     });
 

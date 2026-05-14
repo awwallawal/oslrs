@@ -103,10 +103,10 @@ function LeadershipPage() {
                   <div>
                     <h3 className="font-semibold text-neutral-900 mb-1">Email</h3>
                     <a
-                      href="mailto:oslsr@oyostate.gov.ng"
+                      href="mailto:oslsr@oyoskills.com"
                       className="text-primary-600 hover:text-primary-700 transition-colors"
                     >
-                      oslsr@oyostate.gov.ng
+                      oslsr@oyoskills.com
                     </a>
                   </div>
                 </div>

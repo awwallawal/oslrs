@@ -41,8 +41,11 @@ async function staffLogin(
   await captchaFrame.locator('#checkbox').click();
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL('**/dashboard/**');
+  // Race-safe click→navigate (see helpers/login.ts comment).
+  await Promise.all([
+    page.waitForURL('**/dashboard/**'),
+    page.getByRole('button', { name: /sign in/i }).click(),
+  ]);
   await page.context().storageState({ path: storagePath });
 }
 
@@ -69,8 +72,11 @@ async function publicLogin(
   await captchaFrame.locator('#checkbox').click();
   await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL('**/dashboard/**');
+  // Race-safe click→navigate (see helpers/login.ts comment).
+  await Promise.all([
+    page.waitForURL('**/dashboard/**'),
+    page.getByRole('button', { name: /sign in/i }).click(),
+  ]);
   await page.context().storageState({ path: storagePath });
 }
 

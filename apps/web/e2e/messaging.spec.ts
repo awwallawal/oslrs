@@ -31,8 +31,11 @@ test.describe('Supervisor Messaging', () => {
 
   test('navigate to messages page', async ({ page }) => {
     // Navigate via sidebar link
-    await page.getByRole('link', { name: 'Messages' }).click();
-    await page.waitForURL('**/messages');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/messages'),
+      page.getByRole('link', { name: 'Messages' }).click(),
+    ]);
 
     // The role="list" with aria-label "Message threads" always renders;
     // when threads.length === 0 the empty-state ("No messages yet") renders
@@ -53,8 +56,11 @@ test.describe('Supervisor Messaging', () => {
     // network waiting (`page.waitForResponse`). Tracked as follow-up.
 
     // Navigate to Messages
-    await page.getByRole('link', { name: 'Messages' }).click();
-    await page.waitForURL('**/messages');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/messages'),
+      page.getByRole('link', { name: 'Messages' }).click(),
+    ]);
 
     // Click the broadcast button. The button's accessible name comes from its
     // aria-label "Send broadcast message to all team members" (NOT the visible
@@ -85,8 +91,11 @@ test.describe('Supervisor Messaging', () => {
     // First, send a broadcast to ensure at least 1 thread exists
     const broadcastText = `[E2E-THREAD] Thread test ${Date.now()}`;
 
-    await page.getByRole('link', { name: 'Messages' }).click();
-    await page.waitForURL('**/messages');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/messages'),
+      page.getByRole('link', { name: 'Messages' }).click(),
+    ]);
 
     // Send a broadcast to guarantee inbox has content (aria-label match — see broadcast test for rationale)
     await page.getByRole('button', { name: /send broadcast/i }).click();
@@ -113,8 +122,11 @@ test.describe('Supervisor Messaging', () => {
 
   test('New Conversation flow opens team roster picker', async ({ page }) => {
     // Navigate to Messages
-    await page.getByRole('link', { name: 'Messages' }).click();
-    await page.waitForURL('**/messages');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/messages'),
+      page.getByRole('link', { name: 'Messages' }).click(),
+    ]);
 
     // Click the header "New Conversation" button. Use exact aria-label match to
     // disambiguate from the empty-state button (aria-label "Start a new conversation
@@ -154,8 +166,11 @@ test.describe('Supervisor Messaging', () => {
     const directMessage = `[E2E-DM] Direct message ${Date.now()}`;
 
     // Navigate to Messages
-    await page.getByRole('link', { name: 'Messages' }).click();
-    await page.waitForURL('**/messages');
+    // Race-safe nav (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/messages'),
+      page.getByRole('link', { name: 'Messages' }).click(),
+    ]);
 
     // Open New Conversation roster (exact-match — see "New Conversation flow" test for rationale)
     await page.getByRole('button', { name: 'Start a new conversation', exact: true }).click();

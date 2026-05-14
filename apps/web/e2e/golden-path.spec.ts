@@ -70,13 +70,18 @@ test.describe('Golden Path: Admin Form Lifecycle', () => {
     // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
 
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('**/dashboard/**');
+    // Race-safe click→navigate (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/dashboard/**'),
+      page.getByRole('button', { name: /sign in/i }).click(),
+    ]);
 
     // --- Step 2: Navigate to Questionnaire Management ---
     // Use sidebar link instead of page.goto() to preserve SPA auth state
-    await page.getByRole('link', { name: 'Questionnaires' }).click();
-    await page.waitForURL('**/questionnaires');
+    await Promise.all([
+      page.waitForURL('**/questionnaires'),
+      page.getByRole('link', { name: 'Questionnaires' }).click(),
+    ]);
     await expect(page.getByRole('heading', { name: /Questionnaire Management/i })).toBeVisible();
 
     // --- Step 3: Create new form via dialog ---
@@ -84,10 +89,12 @@ test.describe('Golden Path: Admin Form Lifecycle', () => {
     const createDialog = page.getByRole('alertdialog');
     await expect(createDialog).toBeVisible();
     await createDialog.getByPlaceholder('e.g. Oyo State Skills Survey').fill(formTitle);
-    await createDialog.getByRole('button', { name: 'Create' }).click();
 
-    // --- Step 4: Verify redirect to Form Builder ---
-    await page.waitForURL('**/questionnaires/builder/**');
+    // --- Step 4: Click Create + verify redirect to Form Builder (race-safe) ---
+    await Promise.all([
+      page.waitForURL('**/questionnaires/builder/**'),
+      createDialog.getByRole('button', { name: 'Create' }).click(),
+    ]);
     await expect(page.getByText(formTitle)).toBeVisible();
 
     // --- Step 5: Add a section with a text question ---
@@ -121,9 +128,11 @@ test.describe('Golden Path: Admin Form Lifecycle', () => {
     // Verify Published badge appears on the builder page
     await expect(page.getByText('published').first()).toBeVisible();
 
-    // --- Step 9: Navigate back to questionnaire list ---
-    await page.getByRole('button', { name: /Back to Questionnaires/i }).click();
-    await page.waitForURL('**/questionnaires');
+    // --- Step 9: Navigate back to questionnaire list (race-safe) ---
+    await Promise.all([
+      page.waitForURL('**/questionnaires'),
+      page.getByRole('button', { name: /Back to Questionnaires/i }).click(),
+    ]);
 
     // --- Step 10: Verify form appears with Published status ---
     await expect(page.getByText(formTitle)).toBeVisible();

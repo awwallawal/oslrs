@@ -36,12 +36,17 @@ test.describe('NIN Modulus 11 Validation', () => {
 
     // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('**/dashboard/**');
+    // Race-safe click→navigate (see helpers/login.ts comment on Promise.all pattern).
+    await Promise.all([
+      page.waitForURL('**/dashboard/**'),
+      page.getByRole('button', { name: /sign in/i }).click(),
+    ]);
 
     // --- Step 2: Navigate to surveys page ---
-    await page.getByRole('link', { name: /survey/i }).click();
-    await page.waitForURL('**/survey');
+    await Promise.all([
+      page.waitForURL('**/survey'),
+      page.getByRole('link', { name: /survey/i }).click(),
+    ]);
 
     // Wait for surveys to load (not loading, not error, not empty)
     const surveysGrid = page.getByTestId('surveys-grid');
@@ -49,8 +54,10 @@ test.describe('NIN Modulus 11 Validation', () => {
 
     // --- Step 3: Click the first available survey ---
     const firstSurveyButton = surveysGrid.getByRole('button').first();
-    await firstSurveyButton.click();
-    await page.waitForURL('**/survey/**');
+    await Promise.all([
+      page.waitForURL('**/survey/**'),
+      firstSurveyButton.click(),
+    ]);
 
     // --- Step 4: Navigate to the NIN question ---
     // The form filler shows one question per screen. The NIN question may not be first

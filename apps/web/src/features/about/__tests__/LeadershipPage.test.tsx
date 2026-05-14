@@ -53,8 +53,8 @@ describe('LeadershipPage', () => {
   it('displays Contact the Team section', () => {
     renderWithRouter(<LeadershipPage />);
     expect(screen.getByText(/Contact the Team/i)).toBeInTheDocument();
-    const emailLink = screen.getByRole('link', { name: /oslsr@oyostate\.gov\.ng/i });
-    expect(emailLink).toHaveAttribute('href', 'mailto:oslsr@oyostate.gov.ng');
+    const emailLink = screen.getByRole('link', { name: /oslsr@oyoskills\.com/i });
+    expect(emailLink).toHaveAttribute('href', 'mailto:oslsr@oyoskills.com');
   });
 
   it('displays office address', () => {
