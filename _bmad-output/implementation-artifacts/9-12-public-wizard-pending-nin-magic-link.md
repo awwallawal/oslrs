@@ -1190,6 +1190,47 @@ Op-1 (disable MFA on `awwallawal@gmail.com`) is forensically silent — there's 
 2. OR enforce a naming convention: page-level tests MUST mount the page via the same route path as App.tsx uses, with the route path imported from a shared `routes.ts` constants file.
 3. Either approach captured as a candidate prep-task: **prep-route-resolution-integration-test** — small, isolated, durable safety net.
 
+#### L6 — Install human-visitor analytics (JS beacon) BEFORE soft-launch (added 2026-05-19, refined after operator question)
+
+**Two-products distinction first** — this lesson is about the JS beacon view, NOT total-traffic logging.
+
+Cloudflare provides TWO separate analytics products:
+1. **Web Analytics** (JS beacon at `/cdn-cgi/rum`) — needs an in-page `<script>` tag; tracks humans who execute JS; provides referrer attribution + page-view sequences + device/browser/country breakdowns. **Installed 5 days post-launch (commit `d6ffc24` on 2026-05-19 15:28 UTC).**
+2. **Edge Analytics** (always-on proxy logs at Analytics & Logs → Traffic or the account home overview) — counts every HTTP request that hits Cloudflare's edge; bot-inclusive; provides total request counts + bandwidth + cache stats + WAF blocks; NO referrer attribution at the visitor level. **Continuously collecting since 2026-04-26 when the zone was added.**
+
+**What's actually dark** (the subset L6 addresses):
+- Web Analytics dashboard 2026-05-14 → 2026-05-19 15:28 UTC: ZERO human-visitor data
+- Specifically missing: referrer attribution, page-view sequences, device/browser breakdowns
+- The 2026-05-19 12:00-13:00 UTC traffic surge (11 pending-NIN + 3 magic-link sign-ins per Resend) has no referrer chain — "where did this traffic come from?" is permanently unanswerable
+
+**What's NOT dark** (was preserved by always-on Edge Analytics, 24-day window 2026-04-26 → 2026-05-19):
+- 13.53k total requests (bot-inclusive)
+- 146 MB total bandwidth
+- 32% cache hit rate
+- 668 client errors (mostly bot probes — `/admin`, `/wp-login.php`, expired magic-link tokens)
+- 51 high-severity WAF blocks (SQL injection / XSS attempt signatures — Cloudflare auto-blocked)
+- 87.8% encrypted request rate
+- Approximate visitor counts + geographic country (privacy-redacted IPs)
+
+**Other always-preserved evidence trails** for the dark window:
+- Resend logs: 23+ emails delivered (full subject + recipient + timestamp + delivery status)
+- DB `audit_logs`: 3 pending-NIN creations, 3 magic-link issuances, 2 NIN promotions (per Story 9-19 dashboard output)
+- DB `respondents` table: new rows with `created_at` timestamps + LGA + status
+- DB `wizard_drafts` table: funnel snapshot (Step 4 stall = 10 of 16 = 63%)
+
+So the surge's EFFECT (registrations, emails sent) is fully reconstructable. The surge's SOURCE (referrer chain) is gone.
+
+**Mitigation pattern** (codified for future launches in `feedback_install_analytics_before_launch.md` memory):
+1. Pick the human-visitor analytics tool BEFORE the first user-facing deploy.
+2. Ship the beacon `<script>` tag in the first deployed bundle + CSP allow-list.
+3. Verify with `curl` that the beacon is in served HTML before announcing the URL.
+4. Don't trust Cloudflare's "auto-inject" radio toggle — manual tag in Git is canonical.
+5. Server-side proxy Analytics complements but doesn't substitute the JS beacon.
+
+**Forward fix**: Story 9-20 Part C (commit `d6ffc24` on 2026-05-19) closes the gap. The 2026-05-14 → 2026-05-19 window remains the project's permanent missing referrer-attribution dataset; the next surge will be fully captured.
+
+**Authoring note**: The original draft of this L6 lesson (committed 2026-05-19 ~15:50 UTC) overclaimed the gap as "all Cloudflare data is dark." Operator caught the imprecision by asking how Cloudflare could be showing 13.53k requests if the beacon was just installed. This refined version distinguishes the two products and accurately scopes the gap to human-visitor attribution data.
+
 ### Production state snapshot at end-of-session (2026-05-14)
 
 - **`oyotradeministry.com.ng`**: ✅ Working. Frontend serves from droplet's NGINX. API healthy. Login works (MFA disabled on Awwal's account). Wizard Step 4 renders the pinned form.
