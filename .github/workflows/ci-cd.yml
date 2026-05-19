@@ -755,10 +755,17 @@ jobs:
             # Story 9-13 MFA init: partial index + grace_until seed for super_admins
             cd apps/api && pnpm tsx scripts/migrate-mfa-init.ts && cd ~/oslrs
 
-            # Story 9-13 deploy-time email: notify any super_admin still in grace
-            # window that MFA enrollment is required by `<deadline>`. Fire-and-forget;
-            # script exits 0 even if EmailService is degraded so deploy doesn't break.
-            cd apps/api && pnpm tsx scripts/notify-mfa-grace.ts || true && cd ~/oslrs
+            # Story 9-13 deploy-time email: REMOVED from every-deploy firing 2026-05-19
+            # after operator received 3 reminder emails in 90 min from 3 unrelated
+            # deploys today. The original wiring (Story 9-13 F3 code-review fix)
+            # lacked idempotency — every CI deploy re-emailed every super_admin in
+            # grace. Now invoke this script ONLY as an operator-gated one-shot from
+            # SSH when a fresh super_admin needs the grace notification:
+            #   ssh root@oslsr-home-app
+            #   cd /root/oslrs && pnpm --filter @oslsr/api exec tsx scripts/notify-mfa-grace.ts
+            # Long-term: Story 9-13 follow-up to add a `last_mfa_reminder_sent_at`
+            # idempotency column + only re-fire after >7 days OR <72h to grace expiry.
+            # cd apps/api && pnpm tsx scripts/notify-mfa-grace.ts || true && cd ~/oslrs
 
             # prep-input-sanitisation-layer: applies the chk_respondents_phone_number_e164
             # NOT VALID constraint that Drizzle's db:push cannot express. Idempotent.
