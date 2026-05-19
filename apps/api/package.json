@@ -34,7 +34,8 @@
     "seed:audit-bench": "tsx scripts/seed-audit-bench.ts",
     "bench:audit-viewer": "tsx scripts/bench-audit-viewer.ts",
     "cleanup:audit-bench": "tsx scripts/cleanup-audit-bench.ts",
-    "pin-public-form": "tsx scripts/dev-pin-public-form.ts"
+    "pin-public-form": "tsx scripts/dev-pin-public-form.ts",
+    "dashboard": "tsx scripts/dashboard.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.964.0",

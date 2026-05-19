@@ -177,6 +177,42 @@ So that **the wizard feels coherent, my NIN gets validated immediately rather th
 
     Dev Agent Record reports the test-suite total before and after; deltas larger than the expected ~+5 require justification.
 
+### Part E — Section-as-step questionnaire restructure (AMENDMENT 2026-05-19, data-driven)
+
+Added 2026-05-19 after 5 days of production data confirmed the Step-4 stall pattern (63% of all wizard drafts stuck at Step 4 — the unified questionnaire screen). The 39-question / 7-section survey rendered as a single "Step 4 of 5" is the single biggest UX bottleneck blocking actual completions. Folding section-as-step into 9-18 because both are wizard structural redesigns (same surface, same dev context, same UAT cycle). Effort estimate revised: 3-5 days → **6-10 days** total.
+
+22. **AC#E1 — Each questionnaire section becomes its own wizard step**. The current single "Step 4 — Questionnaire" expands into one step per section. The pinned form has 7 sections (General / Introduction & Consent / Identity & Demographics / Employment & Income / Household / Skills & Business / Marketplace consent), so the post-9-18-E wizard has **11 steps total**:
+    ```
+    Step 1   Identity + NIN  (from Part A)
+    Step 2   Contact + LGA
+    Step 3   Consent
+    Step 4   Section: General
+    Step 5   Section: Introduction & Consent
+    Step 6   Section: Identity & Demographics  (auto-fills + hides name/DOB/phone via Pattern C)
+    Step 7   Section: Employment & Income
+    Step 8   Section: Household
+    Step 9   Section: Skills & Business
+    Step 10  Section: Marketplace consent
+    Step 11  Review-and-Save summary  (from Part C)
+    ```
+    Step indicator shows `Step 6 of 11 — Identity & Demographics` so users see realistic progress.
+
+23. **AC#E2 — `FormRenderer` gains `renderSectionByIndex` mode**. Currently `<FormRenderer>` renders the full questionnaire as one component with internal section/question navigation. New prop `sectionIndex?: number` tells it to render ONLY the indexed section (questions within still iterate one-at-a-time). Existing all-sections mode preserved for clerk-data-entry / form-filler-page contexts.
+
+24. **AC#E3 — Wizard step machinery extends to N steps**. `apps/web/src/features/registration/pages/WizardPage.tsx` `STEPS` array dynamically lengthens based on the loaded form's section count (Steps 1-3 fixed, Steps 4..N-1 = form.sections.length, Step N = summary). `useWizardDraft` schema absorbs the extra steps transparently (`currentStep` is just an integer; no schema migration needed).
+
+25. **AC#E4 — Skip-logic across step boundaries**. Conditional questions whose visibility depends on a question in an earlier section continue to work — the renderer's `getNextVisibleIndex` logic operates within a section; cross-section dependencies use `showWhen` resolved against the cumulative `questionnaireResponses` map.
+
+26. **AC#E5 — Empty-section handling**. If `showWhen` rules hide ALL questions in a section, the wizard auto-skips that step (does not show an empty page). `WizardStepIndicator` greys out the skipped step.
+
+27. **AC#E6 — Section title in step header**. Step 4-N's header reads `<section.title>` instead of generic "Questionnaire". Provides scent-of-information so users know what's coming.
+
+28. **AC#E7 — URL state per section**. `?step=4` advances to the General section; `?step=6` jumps to Identity & Demographics. Combined with the `427a80d` URL-race fix, deep-linking + browser-back work correctly across all 11 steps.
+
+29. **AC#E8 — Tests + e2e refresh**. Playwright spec exercises a full wizard walk across all 11 steps. Section-skipping `showWhen` rules tested. ~10-15 additional tests.
+
+30. **AC#E9 — Step-4 stall ratio drops measurably post-deploy**. The success metric for Part E is Story 9-19's dashboard `Step 4 stall %` metric dropping from baseline ~63% to <30% within 7 days of deploy. If it doesn't, the redesign hasn't worked and we re-open.
+
 ## Tasks / Subtasks
 
 - [ ] **Task 1: Pre-impl decision confirmation (AC: #C3)** — BLOCKER
