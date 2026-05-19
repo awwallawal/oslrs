@@ -143,5 +143,21 @@
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!--
+      Cloudflare Web Analytics — Story 9-20 Part C
+      Privacy-first, cookie-free traffic analytics. NDPA-compliant by design
+      (no PII, no fingerprinting). Token reports BOTH oyoskills.com AND
+      oyotradeministry.com.ng visitors under the same Web Analytics site
+      (Cloudflare dashboard "Top hostnames" splits them). CSP allow-listing
+      done by Story 9-8 Task 7.1 (2026-05-01); nginx CSP mirrored at
+      infra/nginx/oslsr.conf. Auto-injection on oyoskills.com's Cloudflare
+      zone is unreliable (curl 2026-05-19 13:30 UTC showed no auto-injected
+      beacon despite the dashboard claiming auto-install ON) — manual tag
+      below is the canonical source of truth.
+    -->
+    <script defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token": "b10d477594a64972b0bb76450f444896"}'></script>
   </body>
 </html>
