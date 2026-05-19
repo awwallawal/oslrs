@@ -310,6 +310,25 @@ Existing OTP and password-reset tokens live as DB columns (`users.passwordResetT
 - MEMORY.md key patterns — drizzle schema cannot import `@oslsr/types`; integration tests use beforeAll/afterAll; db:push:force data-loss risk: [Source: MEMORY.md "Key Patterns"]
 - External security assessment 2026-04-27 (gap origin): [Source: ssh_analysis.txt:65-67]
 
+### Post-launch ops finding — 2026-05-19 MFA reminder spam (bridged to Story 9-25)
+
+During the 2026-05-19 launch-week session-close, the operator received THREE MFA enrollment reminder emails in 90 minutes (06:36, 07:05, 07:24 UTC) from three unrelated CI deploys (`cb9dfca` + `82881fc` + `3c1bff2`). Root cause: this story's **F3 code-review fix** wired `apps/api/scripts/notify-mfa-grace.ts` into `.github/workflows/ci-cd.yml:761` to satisfy AC#5b "deploy-time email notification" — but the fix lacked idempotency. Every CI deploy re-queried all super_admins with `mfa_enabled=false AND mfa_grace_until > NOW()` and re-emailed them.
+
+The operator's `awwallawal@gmail.com` account had `mfa_enabled=false` since Op-1 (2026-05-13, see Story 9-12 § Post-Launch UAT Session Log) and was inside the grace window — so every CI deploy emailed him.
+
+**Two-step resolution**:
+
+1. **Hotfix `672f4d9` (2026-05-19)** — commented out the CI invocation in `ci-cd.yml:761`. Stops the spam immediately. Trade-off: legitimate "fresh super_admin needs a reminder" use case is now operator-gated (must SSH and invoke manually).
+
+2. **Story 9-25 (authored 2026-05-19)** — restores the CI invocation WITH idempotency. New `users.last_mfa_reminder_sent_at` column + 7-day skip window + final-72h escalation override + per-send audit-log entry + migration backfill that stamps NOW() for the current grace cohort. Once 9-25 ships, the spam pattern cannot recur AND the legitimate deploy-time use case is restored.
+
+**Why Story 9-13 stays in `review` until both are done**:
+- The hotfix is in place (spam stopped)
+- Story 9-25 is authored (long-term fix tracked)
+- But 9-13's AC#5b "deploy-time email notification" is currently SUSPENDED (commented out)
+- AC#5b is restored when 9-25 ships → at that point 9-13 + 9-25 can both flip review→done together
+- Pre-flip operator checklist: re-enroll MFA on `awwallawal@gmail.com` + complete one end-to-end MFA login pass
+
 ## Dev Agent Record
 
 ### Agent Model Used
