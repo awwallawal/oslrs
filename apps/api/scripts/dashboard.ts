@@ -179,7 +179,7 @@ async function getTraffic(pool: pg.Pool): Promise<TrafficSnapshot | null> {
         GROUP BY 1 ORDER BY 1`),
       pool.query(`
         SELECT count(*) AS issued,
-               count(*) FILTER (WHERE consumed_at IS NOT NULL) AS consumed
+               count(*) FILTER (WHERE used_at IS NOT NULL) AS consumed
         FROM magic_link_tokens WHERE ${launchClause}`),
       pool.query(`
         SELECT action, count(*)::int AS events
