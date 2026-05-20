@@ -38,6 +38,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
@@ -145,6 +154,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
@@ -257,6 +275,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
@@ -348,6 +375,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
@@ -430,6 +466,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
@@ -581,6 +626,15 @@ jobs:
       # `using: node20` in its action.yml as of 2026-05-01. Re-evaluate to a tagged
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          # Pin pnpm to a Node 20-compatible version. The action's default
+          # behavior (no `version:`) installs the LATEST pnpm, which started
+          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
+          # CI uses Node 20, so the default install fails with
+          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
+          # 9.15.0 matches `packageManager` in root package.json. Bump in
+          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
