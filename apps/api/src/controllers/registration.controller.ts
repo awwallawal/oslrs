@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { respondents, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
+import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
+import { uuidv7 } from 'uuidv7';
 import { MagicLinkService } from '../services/magic-link.service.js';
 import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
 import pino from 'pino';
@@ -502,7 +503,28 @@ export class RegistrationController {
       // Code review M6 (2026-05-11) — wrap insert + audit + draft delete in
       // one transaction so an audit-write failure rolls back the row,
       // preserving the audit chain integrity.
-      const { respondent } = await db.transaction(async (tx) => {
+      //
+      // Story 9-26 (2026-05-20) — UNIFIED INGESTION PIPELINE. The wizard now
+      // also writes a `submissions` row in the same transaction so wizard
+      // respondents are visible to the analytics service (which queries
+      // `submissions` table) and so `questionnaireResponses` + `gender` +
+      // `authChoice` + `email` are persisted to `submissions.raw_data` rather
+      // than silently dropped (the pre-9-26 bug surfaced 2026-05-19).
+      const { respondent, submissionUid } = await db.transaction(async (tx) => {
+        // Story 9-26 Part A — fetch the draft BEFORE we delete it, so we can
+        // pull `questionnaireFormId` (Step 4 introspection-stamped) and
+        // `createdAt` (for completion_time_seconds — fraud-engine signal).
+        const draft = await tx.query.wizardDrafts.findFirst({
+          where: eq(wizardDrafts.email, normalisedEmail),
+          columns: { createdAt: true, formData: true },
+        });
+        const draftFormData = (draft?.formData ?? {}) as WizardDraftData;
+        const questionnaireFormId =
+          draftFormData.questionnaireFormId ?? 'no-form-pinned-at-submit';
+        const completionTimeSeconds = draft?.createdAt
+          ? Math.floor((Date.now() - draft.createdAt.getTime()) / 1000)
+          : null;
+
         const insertRows = await tx
           .insert(respondents)
           .values({
@@ -525,6 +547,52 @@ export class RegistrationController {
           });
         const row = insertRows[0];
 
+        // Story 9-26 Part A — write the canonical submissions row alongside.
+        // `processed: true` + `processedAt: now()` because wizard data is
+        // self-attested + canonical; bypass the submission-processing queue
+        // (no fraud-detection / normalisation enrichment needed). Source
+        // `'public'` matches the wizard's identity provenance + the
+        // analytics service's source filter.
+        const newSubmissionUid = uuidv7();
+        const now = new Date();
+        await tx.insert(submissions).values({
+          submissionUid: newSubmissionUid,
+          questionnaireFormId,
+          submitterId: null,
+          respondentId: row.id,
+          enumeratorId: null,
+          rawData: {
+            // Identity (also in respondents — duplicated here for analytics-
+            // query convenience; the `s.raw_data->>'X'` accessors used by
+            // every analytics query expect snake_case keys).
+            first_name: firstName,
+            last_name: lastName,
+            date_of_birth: data.dateOfBirth ?? null,
+            phone_number: data.phone,
+            lga_id: data.lgaId,
+            nin: ninValue,
+            consent_marketplace: data.consentMarketplace,
+            consent_enriched: data.consentEnriched ?? false,
+            // Wizard-collected fields NOT on respondents row — preserved here
+            // (closes the 2026-05-14 → 2026-05-19 data-loss window for 60
+            // pre-fix wizard respondents per Story 9-12 § L7).
+            email: normalisedEmail,
+            gender: data.gender ?? null,
+            auth_choice: data.authChoice,
+            // Questionnaire answers from Step 4 — formerly dropped; now
+            // canonical. Spread last so they cannot accidentally overwrite
+            // identity fields with the same key.
+            ...(data.questionnaireResponses ?? {}),
+          } as Record<string, unknown>,
+          gpsLatitude: null,
+          gpsLongitude: null,
+          completionTimeSeconds,
+          submittedAt: now,
+          source: 'public',
+          processed: true,
+          processedAt: now,
+        });
+
         await AuditService.logActionTx(tx, {
           actorId: null,
           action: pendingNin
@@ -538,6 +606,8 @@ export class RegistrationController {
             lgaId: data.lgaId,
             ninProvided: !!ninValue,
             pendingNin,
+            // Story 9-26 — submissionUid for cross-table forensic trace.
+            submissionUid: newSubmissionUid,
           },
           ipAddress: req.ip || 'unknown',
           userAgent: req.get('user-agent') || 'unknown',
@@ -549,7 +619,17 @@ export class RegistrationController {
         // partial failure.
         await tx.delete(wizardDrafts).where(eq(wizardDrafts.email, normalisedEmail));
 
-        return { respondent: row };
+        return { respondent: row, submissionUid: newSubmissionUid };
+      });
+
+      // Story 9-26 — log the unified pipeline write at info-level for the
+      // first 30 days post-deploy so we can confirm via pino logs that wizard
+      // submissions are landing correctly. Remove after 2026-06-20.
+      logger.info({
+        event: 'wizard.submission_written',
+        respondentId: respondent.id,
+        submissionUid,
+        pendingNin,
       });
 
       // If pending-NIN path, issue the pending_nin_complete magic-link now so

@@ -48,6 +48,12 @@ export interface WizardDraftData {
   nin?: string;
   pendingNinToggle?: boolean;
   authChoice?: 'magic-link' | 'password' | 'skip';
+  // Step 4 introspection results (stamped on FormRenderer mount per Story 9-12
+  // Task 4.6 + 5.4.5). Used by the Step 5 state-aware NIN dispatcher AND by
+  // Story 9-26 submit handler to populate `submissions.questionnaireFormId`.
+  formHasNinQuestion?: boolean;
+  questionnaireFormId?: string;
+  questionnaireFormVersionId?: string;
   // Free-form for forward-compat
   extras?: Record<string, unknown>;
 }

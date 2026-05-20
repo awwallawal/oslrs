@@ -39,8 +39,12 @@ const PDF_MAX_ROWS = 1000;
 const EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'firstName', header: 'First Name', width: 80 },
   { key: 'lastName', header: 'Last Name', width: 80 },
-  { key: 'nin', header: 'NIN', width: 90 },
-  { key: 'phoneNumber', header: 'Phone', width: 85 },
+  // Story 9-26 Part I — NIN is 11 digits; Excel auto-formats long numerics as
+  // scientific notation (e.g. 1.23E+10) without text-mode coercion.
+  { key: 'nin', header: 'NIN', width: 90, format: 'text' },
+  // Story 9-26 Part I — phone is E.164 (+234XXXXXXXXXX); Excel sees the
+  // leading `+` as a formula prefix and mangles display.
+  { key: 'phoneNumber', header: 'Phone', width: 85, format: 'text' },
   { key: 'dateOfBirth', header: 'Date of Birth', width: 70 },
   { key: 'lgaName', header: 'LGA', width: 80 },
   { key: 'source', header: 'Source', width: 60 },

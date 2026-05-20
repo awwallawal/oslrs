@@ -79,10 +79,17 @@ interface ProcessingResult {
 
 interface ExtractedRespondentData {
   // NIN is optional at this layer post Story 11-1 — `extractRespondentData()`
-  // still requires it (the field-survey path), but the public-wizard /
-  // pending-NIN code path (Story 9-12) calls `findOrCreateRespondent` directly
-  // without NIN, producing a `pending_nin_capture` respondent. FR21 stays in
-  // force for every NIN-carrying row via the partial unique index.
+  // still requires it (the field-survey path); the imported_* code paths
+  // (Story 11-1) bypass this function entirely.
+  //
+  // CORRECTED 2026-05-20 by Story 9-26 Part C: the previous claim that
+  // "the public-wizard / pending-NIN code path (Story 9-12) calls
+  // findOrCreateRespondent directly without NIN" was inaccurate
+  // documentation-drift. The wizard handler at
+  // registration.controller.ts:submitWizard inserts BOTH a `respondents` row
+  // AND a `submissions` row in the same transaction (post Story 9-26) —
+  // bypassing this function entirely. It NEVER called findOrCreateRespondent
+  // even pre-9-26. The drift dated to Story 9-12 code review.
   nin?: string;
   firstName?: string;
   lastName?: string;

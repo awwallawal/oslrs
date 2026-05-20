@@ -86,6 +86,8 @@ vi.mock('../../services/audit.service.js', () => ({
 vi.mock('../../db/schema/index.js', () => ({
   respondents: { name: 'respondents' },
   wizardDrafts: { name: 'wizard_drafts', email: 'email' },
+  // Story 9-26 — wizard now writes to submissions in same tx.
+  submissions: { name: 'submissions' },
 }));
 
 // Drizzle fluent mock — each builder returns the next stage of the chain.
@@ -546,12 +548,31 @@ describe('POST /registration/wizard', () => {
   it('returns 201 with active status when NIN provided (transactional insert + audit)', async () => {
     mockRespondentsFindFirst.mockResolvedValueOnce(null);
     mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
-      const tx = {
-        insert: () => ({
-          values: () => ({
-            returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]),
-          }),
+      // Story 9-26 — wizard now inserts BOTH a respondents row AND a
+      // submissions row in the same tx, so the mock must service two
+      // `insert()` calls. First call returns the respondents-style chain
+      // (with .returning()); second call returns the submissions-style chain
+      // (just awaitable after .values()).
+      const respondentsInsertChain = {
+        values: () => ({
+          returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]),
         }),
+      };
+      const submissionsInsertChain = {
+        values: () => Promise.resolve(undefined),
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: 'form-uuid-1' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
         delete: () => ({ where: () => Promise.resolve() }),
         execute: vi.fn(),
       };
@@ -574,12 +595,27 @@ describe('POST /registration/wizard', () => {
 
   it('returns 201 with pending_nin_capture status when pendingNin=true + issues magic-link', async () => {
     mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
-      const tx = {
-        insert: () => ({
-          values: () => ({
-            returning: () => Promise.resolve([{ id: 'resp-2', status: 'pending_nin_capture' }]),
-          }),
+      // Story 9-26 — same dual-insert pattern as the active-status case.
+      const respondentsInsertChain = {
+        values: () => ({
+          returning: () => Promise.resolve([{ id: 'resp-2', status: 'pending_nin_capture' }]),
         }),
+      };
+      const submissionsInsertChain = {
+        values: () => Promise.resolve(undefined),
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: 'form-uuid-1' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
         delete: () => ({ where: () => Promise.resolve() }),
         execute: vi.fn(),
       };

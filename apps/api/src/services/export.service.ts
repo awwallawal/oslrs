@@ -62,6 +62,17 @@ export interface ExportColumn {
   key: string;
   header: string;
   width: number;
+  /**
+   * Story 9-26 Part I — column format hint applied by `generateCsvExport`.
+   * When set to `'text'`, the value is prefixed with `\t` (tab character) so
+   * Microsoft Excel treats it as literal text instead of trying to evaluate
+   * as a formula or convert to scientific notation. Tab is invisible in
+   * Excel cells and is universally tolerated by LibreOffice, Google Sheets,
+   * and CSV consumers. Apply to phone numbers (Excel sees the `+` prefix as
+   * a formula), 11-digit NINs (Excel may render as scientific notation), and
+   * any other text-shaped numeric column.
+   */
+  format?: 'text' | 'number' | 'date';
 }
 
 export interface PdfReportOptions {
@@ -184,9 +195,18 @@ export class ExportService {
   ): Promise<Buffer> {
     const BOM = '\uFEFF';
 
-    // Build records array for csv-stringify
+    // Build records array for csv-stringify.
+    // Story 9-26 Part I — columns marked `format: 'text'` get a `\t` prefix
+    // so Excel respects the text-mode interpretation. Empty values stay empty
+    // (no spurious prefix in blank cells).
     const records = data.map((row) =>
-      columns.map((col) => String(row[col.key] ?? '')),
+      columns.map((col) => {
+        const value = String(row[col.key] ?? '');
+        if (col.format === 'text' && value !== '') {
+          return `\t${value}`;
+        }
+        return value;
+      }),
     );
 
     const csvContent = stringify(records, {
