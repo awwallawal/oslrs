@@ -174,8 +174,10 @@ describe('AuditService', () => {
       //   PENDING_NIN_TRANSITIONED → 38.
       // Story 9-12 Task 3.8 (Universal pending-NIN, Option 1) added 2 more:
       //   PENDING_NIN_CREATED, PENDING_NIN_PROMOTED → 40.
+      // Story 9-27 Part A (Operator re-engagement email blast) added 1 more:
+      //   OPERATOR_REENGAGEMENT_EMAIL_SENT → 41.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(40);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(41);
     });
   });
 

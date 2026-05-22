@@ -1,6 +1,6 @@
 # Story 9.27: Multi-channel re-engagement campaign for abandoned wizard drafts
 
-Status: ready-for-dev
+Status: in-progress (Part A code shipped 2026-05-22; Parts B/C/D/E/F backlog)
 
 <!--
 Authored 2026-05-20 by Bob (SM) via canonical *create-story --yolo template.
@@ -77,10 +77,10 @@ So that **we recover registrations from abandoned funnel sessions where the user
    support@oyoskills.com
    ```
    - First-name personalization from `form_data->>'fullName'` (split on first space)
-   - Magic-link URL: `https://oyoskills.com/register/resume?token=<plaintext>` (15-min TTL per existing wizard_resume infrastructure)
+   - Magic-link URL produced by `MagicLinkService.buildMagicLinkUrl(plaintext, 'wizard_resume')` → `https://oyoskills.com/auth/magic?token=<plaintext>&purpose=wizard_resume` (72h TTL per `MagicLinkService.TTL_MS_BY_PURPOSE.wizard_resume`; `login` TTL is the 15-min one)
    - NO apology, NO admission, NO reference to any incident or data loss
 
-4. **AC#A4 — Per-send audit log entry**: new `AUDIT_ACTIONS.OPERATOR_REENGAGEMENT_EMAIL_SENT`. Details JSONB captures `{recipient_email, draft_id, sent_at, channel: 'email'}`. No `actor_user_id` required (one-shot operator action with channel-level audit trail).
+4. **AC#A4 — Per-send audit log entry**: new `AUDIT_ACTIONS.OPERATOR_REENGAGEMENT_EMAIL_SENT`. Details JSONB captures `{email, draft_id, sent_at, channel: 'email', provider_message_id}` (key `email` per existing audit-log convention — see `magic-link.controller.ts:91`). `ipAddress` field = `os.hostname()` (operator host); `userAgent` = invocation string (`tsx scripts/_reengagement-email-blast.ts (rate=N)`). `actorId` = null (operator-script context).
 
 5. **AC#A5 — Dry-run flag**: `--dry-run` prints the recipient list (emails redacted to first 4 chars + asterisks) + cohort count without sending. Mandatory for first invocation per launch-week incident-recovery discipline.
 
@@ -164,7 +164,7 @@ So that **we recover registrations from abandoned funnel sessions where the user
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Part A: Email blast script** (AC: #A1-A7)
+- [x] **Task 1 — Part A: Email blast script** (AC: #A1-A7) — code shipped 2026-05-22 (see File List + Dev Agent Record)
 - [ ] **Task 2 — Part B: SMS blast script + URL shortener** (AC: #B1-B6)
 - [ ] **Task 3 — Part C: WhatsApp provider integration + template approval + script** (AC: #C1-C5)
 - [ ] **Task 4 — Part D: Cross-channel coordination + opt-out unification** (AC: #D1-D3)
@@ -273,15 +273,63 @@ WhatsApp third because:
 
 ## File List
 
-(Populated by dev agent. Expected:)
-- `apps/api/scripts/_reengagement-email-blast.ts` (new, one-shot)
+### Part A — shipped 2026-05-22 (this session)
+
+- `apps/api/scripts/_reengagement-email-blast.ts` (new)
+- `apps/api/scripts/__tests__/_reengagement-email-blast.test.ts` (new — AC#E1, 30+ unit tests on pure functions)
+- `apps/api/src/services/audit.service.ts` (modified — added `OPERATOR_REENGAGEMENT_EMAIL_SENT`)
+- `apps/api/src/services/__tests__/audit.service.test.ts` (modified — count 40 → 41)
+
+### Parts B-F — backlog (expected when picked up)
+
 - `apps/api/scripts/_reengagement-sms-blast.ts` (new, one-shot)
 - `apps/api/scripts/_reengagement-whatsapp-blast.ts` (new, one-shot)
 - `apps/api/src/services/sms.service.ts` (modified — sendGeneric() method)
 - `apps/api/src/services/whatsapp.service.ts` (new — Termii / Twilio adapter)
 - `apps/api/src/services/short-link.service.ts` (new — project-hosted URL shortener)
 - `apps/api/src/db/schema/short-links.ts` (new)
-- `apps/api/src/services/audit.service.ts` (modified — new OPERATOR_REENGAGEMENT_*_SENT actions)
-- `apps/api/src/services/__tests__/reengagement.test.ts` (new)
+- `apps/api/src/services/audit.service.ts` (further modified — new OPERATOR_REENGAGEMENT_SMS_SENT / WHATSAPP_SENT actions)
 - `docs/runbooks/wizard-reengagement-campaign.md` (new)
 - `MEMORY.md` + `feedback_reengagement_campaign_discipline.md` (new)
+
+## Review Follow-ups (AI)
+
+Adversarial code-review on uncommitted tree, 2026-05-22 (Claude Opus 4.7). All HIGH + MEDIUM auto-fixed in same session. 14 findings closed.
+
+### HIGH
+
+- [x] [AI-Review][HIGH] AC#E1 unfulfilled — zero unit tests on the script. Fix: created `apps/api/scripts/__tests__/_reengagement-email-blast.test.ts` with 30+ tests across `parseArgs`, `maskEmail`, `firstNameFrom`, `escapeHtml`, `buildEmail`, `KNOWN_FLAGS`.
+- [x] [AI-Review][HIGH] `parseArgs` accepted unknown flags silently → typo-induced live-run risk. Fix: added `KNOWN_FLAGS` Set + throw on unknown flag in `parseArgs` [_reengagement-email-blast.ts:50–58, 92–95].
+
+### MEDIUM
+
+- [x] [AI-Review][MEDIUM] AC#A3 had factually-wrong URL (`/register/resume`) + TTL (15-min) — real impl uses `/auth/magic?token=…&purpose=wizard_resume` + 72h TTL. Fix: AC#A3 rewritten to cite `MagicLinkService.buildMagicLinkUrl` as canonical [9-27 file:80].
+- [x] [AI-Review][MEDIUM] `cohort.indexOf(row)` inside send loop = O(N²) idiom. Fix: switched to indexed `for` loop [_reengagement-email-blast.ts:295, 351].
+- [x] [AI-Review][MEDIUM] Audit log details missing forensic IP/userAgent. Fix: passing `os.hostname()` as `ipAddress` + `tsx scripts/... (rate=N)` as `userAgent` [_reengagement-email-blast.ts:308–311, 331–334].
+- [x] [AI-Review][MEDIUM] Story 9-27 unmaintained vs shipped reality (status `ready-for-dev`, Tasks/File-List stale). Fix: status flipped to `in-progress`; Task 1 marked [x]; File List split into "Part A shipped" / "Parts B-F backlog" sections.
+- [x] [AI-Review][MEDIUM] Stray `apps/api/_bmad-output/` dir from earlier tsc CWD. Fix: CSVs moved to canonical `_bmad-output/scratch/oslrs-cohorts-2026-05-20/`; stray dir deleted.
+- [x] [AI-Review][MEDIUM] No `--help` flag — operator-discoverability gap. Fix: added `--help` handler + HELP_TEXT exposing all flags + rate-limit semantics caveat [_reengagement-email-blast.ts:62–76, 224–227].
+
+### LOW
+
+- [x] [AI-Review][LOW] Duplicate `audit.service.js` imports on two lines. Fix: combined `import { AuditService, AUDIT_ACTIONS } from ...` [_reengagement-email-blast.ts:35].
+- [x] [AI-Review][LOW] `--since` UTC-boundary surprise (`new Date('YYYY-MM-DD')` parses midnight UTC = 01:00 WAT). Fix: inline comment documenting the offset [_reengagement-email-blast.ts:124–127].
+- [x] [AI-Review][LOW] HTML email lacked first-name escape. Fix: added `escapeHtml()` helper + escape `firstName` in HTML body [_reengagement-email-blast.ts:165–173, 199].
+- [x] [AI-Review][LOW] Audit details key `recipient_email` inconsistent with existing `email` convention. Fix: renamed key to `email` in both implementation and AC#A4 [_reengagement-email-blast.ts:316; 9-27 file:84].
+- [x] [AI-Review][LOW] Rate-limit semantics is "max-N/min" not "exactly-N/min". Fix: HELP_TEXT note + inline comment on the delay line [_reengagement-email-blast.ts:73–75, 357].
+
+## Dev Agent Record
+
+### 2026-05-22 — Part A code complete
+
+**Implemented by**: Claude Opus 4.7 (this session).
+**Files added**: `_reengagement-email-blast.ts` + `_reengagement-email-blast.test.ts` (30+ tests).
+**Files modified**: `audit.service.ts` (new action, count 40→41), `audit.service.test.ts` (count expectation).
+**ACs met**: A1, A2, A3, A4, A5, A6, A7, E1, E2, E3 (Part A only).
+**Pre-merge code review**: completed same session (this `Review Follow-ups (AI)` section). All HIGH + MEDIUM auto-fixed.
+**Operator-gated next steps**:
+1. Resend Pro tier upgrade (Story 9-20 Part A) — HARD prereq for live blast.
+2. Dry-run on prod via Tailscale (`tsx scripts/_reengagement-email-blast.ts --dry-run`).
+3. Review masked cohort + invoke live with `--confirm-i-am-not-dry-running --confirm-resend-pro-active`.
+
+**Parts B/C/D/E/F**: still backlog. Decide based on Part A response rate.

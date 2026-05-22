@@ -86,6 +86,10 @@ export const AUDIT_ACTIONS = {
   // and on its later promotion via race-resolution merge or magic-link complete-nin endpoint.
   PENDING_NIN_CREATED: 'pending_nin.created',
   PENDING_NIN_PROMOTED: 'pending_nin.promoted',
+  // Operator re-engagement campaigns (Story 9-27)
+  // Per-send audit trail for outbound nudges to abandoned wizard-draft cohorts.
+  // Email is Part A; SMS + WhatsApp keys added when Parts B/C ship.
+  OPERATOR_REENGAGEMENT_EMAIL_SENT: 'operator.reengagement_email_sent',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
