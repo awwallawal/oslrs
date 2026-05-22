@@ -1,6 +1,6 @@
 # Story 9.28: Cohort A (Step-4-dropped) supplemental questionnaire — decision + optional recovery
 
-Status: ready-for-dev (DECISION-GATED — see Part A before any implementation)
+Status: review (Path B Phase A + Phase B code shipped 2026-05-22 — see Dev Agent Record)
 
 <!--
 Authored 2026-05-20 by Bob (SM) via canonical *create-story --yolo template.
@@ -198,10 +198,10 @@ Send the supplemental-survey email to ALL registered respondents (across all sou
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Part A: Operator decision review** (AC: #A1-A5). BLOCKING all downstream tasks.
-- [ ] **Task 2 (operator) — Path B implementation** (AC: #B1-B7). ONLY if Path B chosen.
-- [ ] **Task 3 (operator) — Path C implementation** (AC: #C1-C7). ONLY if Path C chosen.
-- [ ] **Task 4 — Part D: Memory + cross-references** (AC: #D1-D4). Always required regardless of path.
+- [x] **Task 1 — Part A: Operator decision review** (AC: #A1-A5). Path B chosen 2026-05-22.
+- [x] **Task 2 — Path B implementation** (AC: #B1-B7). Phase A + Phase B shipped 2026-05-22 — see Dev Agent Record.
+- [ ] Task 3 — Path C implementation (AC: #C1-C7). N/A (Path C rejected).
+- [x] **Task 4 — Part D: Memory + cross-references** (AC: #D1-D4). `feedback_cohort_a_disposition_decision.md` + MEMORY.md index entry + 9-12 §L7 + 9-26 cross-ref all landed 2026-05-22.
 
 ## Dev Notes
 
@@ -284,15 +284,91 @@ Adversarial code-review on uncommitted tree, 2026-05-22 (Claude Opus 4.7). 1 fin
 
 ## Dev Agent Record
 
-(Populated by operator during AC#A3 path selection. Template:)
+### 2026-05-22 — Path decision recorded (AC#A3 satisfied)
 
-> **Decision date**: YYYY-MM-DD
-> **Decided by**: <operator name>
-> **Chosen path**: <A | B | C>
-> **Rationale**: <one paragraph>
+> **Decision date**: 2026-05-22
+> **Decided by**: Awwal (Builder)
+> **Chosen path**: **B — Cohort A targeted supplemental questionnaire invitation**
+> **Email wording**: Option 2 ("Complete your skills profile") — recommended by adversarial-review agent; honest framing (the Step 4 questionnaire genuinely IS incomplete in the system for these respondents); no apology; value-prop forward (sector-match incentive).
+>
+> **Rationale**: Cohort A is frozen at 63 (hemorrhage confirmed stopped post-9-26 deploy on 2026-05-20 morning). 100% of 63 reachable (52 email + 11 phone). Recovery yield estimated at ~10-15 completed Step 4 records (15-25% response × 52 reachable email subset; Path B email-only ceiling is 52/63 ≈ 83% of cohort). Audit risk acceptable under Option 2 framing — recipient's incomplete Step 4 state is a true fact about our system; no disclosure of underlying cause needed.
+>
 > **Rejected-path rationale**:
->   - Path X rejected because <reason>
->   - Path Y rejected because <reason>
-> **Counsel consult**: <inline summary OR "none"> (AC#A2)
-> **Cohort A size at decision time**: <count from AC#A1 SQL>
-> **Status post-decision**: <review | in-progress>
+>   - **Path A rejected** because Cohort A is 100% reachable + frozen + Option 2 framing meets the audit-safety bar. Doing nothing wastes recoverable signal for zero gain beyond what Path B's audit-safe wording already provides.
+>   - **Path C rejected** because the universal "expanded questionnaire" approach (a) requires actually adding new questions to the canonical questionnaire (operational overhead), (b) over-contacts already-complete respondents (the 50 with submissions rows since 9-26 deploy don't need this), and (c) provides no audit-defense advantage over Path B + Option 2 given the latter's truthful framing.
+>
+> **Counsel consult**: None (AC#A2). Builder assessed Option 2 framing as NDPA-defensible without external counsel review — the "complete your skills profile" framing is factually accurate for Cohort A respondents (their Step 4 data IS missing from the system), so no fictional/deceptive content is introduced.
+> **Cohort A size at decision time**: 63 (verified 2026-05-22 via Tailscale SSH — see `_bmad-output/scratch/oslrs-cohorts-2026-05-20/SUMMARY.md`).
+> **Status post-decision**: in-progress (Path B implementation began this session).
+
+### Path B implementation plan (12 files / 3 phases)
+
+**Phase A — Backend (~2 hours)**: `magic-link-tokens.ts` enum extension, `magic-link.service.ts` TTL + copy, `audit.service.ts` new action `OPERATOR_SUPPLEMENTAL_SURVEY_SENT` (count 41→42), `audit.service.test.ts` count bump, `_cohort-a-supplemental-survey-blast.ts` script + tests.
+
+**Phase B — Frontend + submit endpoint (~3-4 hours)**: new `submitSupplementalSurvey` controller handler + route, `MagicLinkLandingPage` purpose-dispatch update, new `SupplementalSurveyPage`, `App.tsx` route, tests.
+
+**Phase C — Close-out (~1 hour)**: BMAD code review + auto-fix + commit + push + CI verify.
+
+### 2026-05-22 — Phase A + Phase B shipped (same session)
+
+**Implemented by**: Claude Opus 4.7 (this session).
+**Phase A files (6)**: `magic-link-tokens.ts` (enum extended), `magic-link.service.ts` (TTL 14d + Option 2 copy), `audit.service.ts` (`OPERATOR_SUPPLEMENTAL_SURVEY_SENT`), `audit.service.test.ts` (count 41→42), `_cohort-a-supplemental-survey-blast.ts` (script with `DISTINCT ON` query, KNOWN_FLAGS typo defense, --help, Resend Pro fail-fast, hostname + invocation in audit forensic), `_cohort-a-supplemental-survey-blast.test.ts` (30 tests).
+**Phase B files (6)**: `registration.controller.ts` (new `submitSupplementalSurvey` handler — atomic consume+write transaction, idempotency check, `SUPPLEMENTAL_SURVEY_FORM_ID` sentinel constant), `registration.routes.ts` (new POST `/supplemental`), `magic-link.api.ts` (frontend type extended), `supplemental-survey.api.ts` (new), `SupplementalSurveyPage.tsx` (new — TanStack Query + FormRenderer + Option 2 framing), `App.tsx` (new route), `MagicLinkLandingPage.tsx` (purpose dispatch updated), `SupplementalSurveyPage.test.tsx` (5 tests).
+**Tests**: 30 backend script + 5 frontend page + 38 existing audit + 12 existing MagicLinkLandingPage = 85 tests pass; tsc clean on api + web; zero regressions.
+**ACs met**: A1-A5 (decision recorded), B1-B6 (Path B activated + implemented), D1 partial (memory entry pending Phase C close-out commit).
+**Operator-gated next steps**:
+1. CI deploy lands the commit (~6-7 min)
+2. Live dry-run on prod via Tailscale: `tsx scripts/_cohort-a-supplemental-survey-blast.ts --dry-run` (expect 52 reachable Cohort A recipients of the 63 frozen)
+3. Resend Pro tier check (cohort is 52 — under the 80-cap threshold, so `--confirm-resend-pro-active` not strictly required, but recommended for headroom)
+4. Live blast: `tsx scripts/... --confirm-i-am-not-dry-running --rate-per-minute 10`
+
+## Review Follow-ups (AI)
+
+Two adversarial review passes on the uncommitted tree, both 2026-05-22 (Claude Opus 4.7).
+
+### Pass 1 — inline self-review during build
+
+- [x] [AI-Review][MEDIUM] Magic string `'supplemental-survey'` for `submissions.questionnaireFormId`. **FIXED**: extracted into `SUPPLEMENTAL_SURVEY_FORM_ID` constant near the schema [registration.controller.ts:95-99].
+
+### Pass 2 — formal BMAD `/bmad:bmm:workflows:code-review` workflow
+
+11 findings (2 HIGH + 5 MEDIUM + 4 LOW). All auto-fixed in-session.
+
+#### HIGH
+
+- [x] [AI-Review][HIGH] **H1** — Part D ACs (D1-D4) unfinished — memory file + index entry + cross-references in 9-12 and 9-26 not done. **FIXED**: created `feedback_cohort_a_disposition_decision.md` (full disposition rationale + revisitation conditions), added MEMORY.md index entry, added §L7 lesson to Story 9-12, added "Cohort A disposition cross-reference" section to Story 9-26.
+- [x] [AI-Review][HIGH] **H2** — `SupplementalSurveyPage.tsx` form-fetch ERROR fell through to "no form configured" empty state (confusing wrong message). **FIXED**: distinct `supplemental-fetch-error` branch with retry-prompt copy; `formQuery.isError` checked before the legitimate `!form` empty state [SupplementalSurveyPage.tsx:99-110].
+
+#### MEDIUM
+
+- [x] [AI-Review][MEDIUM] **M3** — 409 idempotency response didn't include the existing submissionUid. **FIXED**: replaced `throw AppError` with explicit `res.status(409).json({status, error, data: {existingSubmissionUid}})` so the frontend can show "you're already done — confirmation: X" instead of a bare error toast [registration.controller.ts:739-747].
+- [x] [AI-Review][MEDIUM] **M4** — Stale-closure risk in `submitMutation.mutationFn`. **FIXED**: mutationFn now accepts `(payload)` argument; `onComplete` calls `submitMutation.mutate(all)` directly; the `responses` component-state is removed [SupplementalSurveyPage.tsx:36-44, 154-162].
+- [x] [AI-Review][MEDIUM] **M5** — No backend integration tests for `submitSupplementalSurvey`. **FIXED**: 5 new tests in `registration.routes.test.ts` covering 400 invalid input / 400 token-no-respondent / 404 respondent-not-found / 409 already-submitted (with existingSubmissionUid assertion) / 201 happy path (with audit-log assertion). Added `mockSubmissionsFindFirst` to test scaffolding. `mockConsumeTokenTx` verified NOT called on the 409 path. Total `registration.routes.test.ts` count: 25 → 30 tests.
+- [x] [AI-Review][MEDIUM] **M6** — No `aria-live` on success / error transitions (accessibility). **FIXED**: success card body wrapped in `role="status" aria-live="polite"`; error card carries `role="alert" aria-live="polite"` [SupplementalSurveyPage.tsx:55-69, 170-176].
+- [x] [AI-Review][MEDIUM] **M7** — `MagicLinkLandingPage` switch default fall-through silently routed unknown future purposes to `/register/complete-nin`. **FIXED**: explicit case for `pending_nin_complete`; default uses TS `never`-exhaustiveness check that fails compile-time if a new `MagicLinkPurpose` variant is added without a handler [MagicLinkLandingPage.tsx:208-225].
+
+#### LOW
+
+- [x] [AI-Review][LOW] **L8** — `respondent.consentMarketplace` / `consent_enriched` could be null in raw_data for legacy respondents. **FIXED**: `?? false` defensive defaults applied [registration.controller.ts:769-770].
+- [x] [AI-Review][LOW] **L9** — `source: 'public'` for supplemental submissions indistinguishable from canonical wizard submissions in source-bucket analytics. **FIXED**: added `campaign: 'cohort_a_supplemental_survey'` field to `raw_data` so analytics can split [registration.controller.ts:773-776].
+- [x] [AI-Review][LOW] **L10** — Reference UUID (36 chars) shown to user is ugly. **FIXED**: truncated to first-8-chars on display; full UUID retained on `title` attribute for support-ticket cross-reference [SupplementalSurveyPage.tsx:57-63].
+- [x] [AI-Review][LOW] **L11** — No explicit double-click guard on submit. **FIXED**: page-level guard via `submitMutation.isPending || submitMutation.isSuccess` short-circuit in `onComplete` [SupplementalSurveyPage.tsx:158-162].
+
+### Pass 3 — proactive scope-tightening (Awwal directive 2026-05-22)
+
+- [x] [AI-Review][LOW→FIXED-NOW] Idempotency check was scoped to "ANY submission for this respondent" — over-broad. **Awwal asked: "Can we assume that the idempotency check will be triggered so that we are already prepared regardless?"** Reasoning: asymmetric downside (broad check → enumerator/clerk submission permanently blocks supplemental recovery for that respondent; no recovery path). Cost of fix tiny (~10 min, 1 `and()` clause + 1 test case). **FIXED**: scope-tightened to `AND questionnaireFormId = SUPPLEMENTAL_SURVEY_FORM_ID` so unrelated submission rows don't block. New test pins the contract: respondent with a non-supplemental submission still successfully completes the supplemental [registration.controller.ts:739-770 + registration.routes.test.ts:715-744].
+
+No outstanding deferred items remaining.
+
+### Out-of-scope finding — Story 9-29 candidate
+
+- 🚨 **`respondents.first_name` / `last_name` are swapped relative to Western convention** — Yoruba/Nigerian users entering full names as "Akinola Oluwaseun" (surname-first) cause `registration.controller.ts:486-495` to store the surname in `first_name`. All 113 production respondents are affected. Personalization in this story's email + page uses `respondents.first_name` — produces a polite/formal Yoruba surname greeting which Awwal explicitly accepted in 2026-05-22 dry-run review. Follow-up Story 9-29: split the wizard "Full Name" input into "Given name" + "Family name" fields and backfill respondents.
+
+### Final test posture
+
+- 129 API tests (38 audit + 31 routes + 30 reengagement + 30 supplemental script)
+- 17 web tests (12 MagicLinkLandingPage + 5 SupplementalSurveyPage)
+- **Total: 146 tests, all pass**
+- TSC clean on api + web
+- Zero regressions
+- Zero deferred items remaining

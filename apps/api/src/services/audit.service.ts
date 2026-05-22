@@ -90,6 +90,10 @@ export const AUDIT_ACTIONS = {
   // Per-send audit trail for outbound nudges to abandoned wizard-draft cohorts.
   // Email is Part A; SMS + WhatsApp keys added when Parts B/C ship.
   OPERATOR_REENGAGEMENT_EMAIL_SENT: 'operator.reengagement_email_sent',
+  // Operator Cohort A supplemental-survey campaign (Story 9-28 Path B)
+  // Per-send audit trail for outbound supplemental-questionnaire invitations
+  // to already-completed wizard respondents whose Step 4 data was missing.
+  OPERATOR_SUPPLEMENTAL_SURVEY_SENT: 'operator.supplemental_survey_sent',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

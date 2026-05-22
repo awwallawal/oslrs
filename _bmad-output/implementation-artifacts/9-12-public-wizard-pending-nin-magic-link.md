@@ -1256,5 +1256,11 @@ Memory consolidation candidates (worth saving as project memories for future ses
 - L2 (service worker masks DNS outages) → debugging-recipe memory
 - L5 (test stubs hiding route bugs) → testing-discipline memory
 
+#### L7 — Cohort A disposition (the 63 already-completed wizard respondents whose Step 4 was dropped)
+
+Between 2026-05-14 (production launch) and 2026-05-20 09:00 UTC (Story 9-26 Part A deploy), the wizard `submitWizard` handler silently dropped `questionnaireResponses`, `gender`, `authChoice`, and `email`-to-respondents. 63 respondents are affected; data loss is bounded (no growth post-9-26 — verified 2026-05-22 via Tailscale SSH).
+
+**Disposition decision**: Path B (Cohort-A-targeted supplemental survey, Option 2 wording — "Complete your skills profile"). Tracked under **Story 9-28** (`_bmad-output/implementation-artifacts/9-28-cohort-a-step4-recovery-decision.md`). Operator decided 2026-05-22 without external counsel review; rationale + rejected-path reasoning captured in 9-28 Dev Agent Record.
+
 End of Post-Launch UAT Session Log.
 

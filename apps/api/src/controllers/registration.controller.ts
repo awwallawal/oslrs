@@ -92,6 +92,20 @@ const submitWizardSchema = z.object({
   authChoice: z.enum(['magic-link', 'password', 'skip']).default('magic-link'),
 });
 
+// Story 9-28 Path B — supplemental-survey submission. Token redemption
+// authorizes a Step 4-only data write for an already-registered respondent
+// whose original wizard submit dropped the questionnaire answers (Cohort A).
+const submitSupplementalSurveySchema = z.object({
+  token: z.string().min(8, 'Magic-link token is missing or too short'),
+  questionnaireResponses: z.record(z.unknown()),
+});
+
+// Story 9-28 Path B — sentinel value for `submissions.questionnaireFormId` on
+// the supplemental-survey path. Distinguishes Cohort A recovery submissions
+// from canonical wizard submissions (which carry the real `wizardDraft
+// .questionnaireFormId`) in audit + analytics queries.
+const SUPPLEMENTAL_SURVEY_FORM_ID = 'supplemental-survey';
+
 export class RegistrationController {
   /**
    * POST /api/v1/registration/complete-nin
@@ -706,6 +720,155 @@ export class RegistrationController {
           409,
         ));
       }
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/registration/supplemental
+   *
+   * Story 9-28 Path B — Cohort A supplemental-survey submission. Validates a
+   * magic-link token (purpose=supplemental_survey), checks the respondent has
+   * no existing submission (idempotency), then atomically consumes the token
+   * and writes a `submissions` row whose `raw_data` is the union of identity
+   * (sourced from `respondents`, not from input — operator can't modify
+   * identity here) and the questionnaire responses (flat-spread to match the
+   * wizard handler's storage shape, so analytics queries hit the same keys).
+   */
+  static async submitSupplementalSurvey(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = submitSupplementalSurveySchema.safeParse(req.body);
+      if (!validation.success) {
+        throw new AppError('SUPPLEMENTAL_INVALID_INPUT', 'Invalid input', 400);
+      }
+      const { token, questionnaireResponses } = validation.data;
+
+      const peeked = await MagicLinkService.peekToken({
+        plaintext: token,
+        purpose: 'supplemental_survey',
+      });
+
+      if (!peeked.respondentId) {
+        throw new AppError(
+          'SUPPLEMENTAL_TOKEN_NO_RESPONDENT',
+          'Magic link is not associated with a respondent',
+          400,
+        );
+      }
+
+      const respondent = await db.query.respondents.findFirst({
+        where: eq(respondents.id, peeked.respondentId),
+      });
+      if (!respondent) {
+        throw new AppError('RESPONDENT_NOT_FOUND', 'Respondent not found', 404);
+      }
+
+      // Idempotency check BEFORE consume so user can retry harmlessly if they
+      // already submitted (e.g., double-tap). Token is NOT burned on this
+      // path — matches the complete-nin handler's "dedup-before-consume"
+      // discipline.
+      //
+      // Scope-tightened (Awwal directive 2026-05-22): the check filters by
+      // `questionnaireFormId = SUPPLEMENTAL_SURVEY_FORM_ID` so unrelated
+      // submission rows (enumerator door-to-door, clerk-data-entry update)
+      // for the same respondent DO NOT block a supplemental submission.
+      // Without this scope, a respondent who got an enumerator visit between
+      // their wizard-completion and their supplemental-email-click would be
+      // permanently locked out of recovery (worst-case scenario: zero
+      // supplemental data when we wanted a recovery path).
+      //
+      // M3 fix: return the existing submissionUid so the frontend can show
+      // "you're already done" with a real reference instead of an error toast.
+      const existing = await db.query.submissions.findFirst({
+        where: and(
+          eq(submissions.respondentId, peeked.respondentId),
+          eq(submissions.questionnaireFormId, SUPPLEMENTAL_SURVEY_FORM_ID),
+        ),
+        columns: { id: true, submissionUid: true },
+      });
+      if (existing) {
+        return res.status(409).json({
+          status: 'error',
+          error: {
+            code: 'SUPPLEMENTAL_ALREADY_SUBMITTED',
+            message: 'A supplemental-survey submission already exists for this respondent.',
+          },
+          data: { existingSubmissionUid: existing.submissionUid },
+        });
+      }
+
+      const newSubmissionUid = uuidv7();
+      const now = new Date();
+
+      await db.transaction(async (tx) => {
+        await MagicLinkService.consumeTokenTx(tx, {
+          plaintext: token,
+          purpose: 'supplemental_survey',
+        });
+
+        await tx.insert(submissions).values({
+          submissionUid: newSubmissionUid,
+          questionnaireFormId: SUPPLEMENTAL_SURVEY_FORM_ID,
+          submitterId: null,
+          respondentId: peeked.respondentId!,
+          enumeratorId: null,
+          rawData: {
+            // Identity sourced from respondents (immutable in this endpoint).
+            // L8 fix — consent fields default to false if the legacy
+            // respondents row lacks them (defensive; Cohort A respondents
+            // should have these per 9-12 schema, but the schema allows null).
+            first_name: respondent.firstName,
+            last_name: respondent.lastName,
+            date_of_birth: respondent.dateOfBirth,
+            phone_number: respondent.phoneNumber,
+            lga_id: respondent.lgaId,
+            nin: respondent.nin,
+            consent_marketplace: respondent.consentMarketplace ?? false,
+            consent_enriched: respondent.consentEnriched ?? false,
+            email: peeked.email,
+            // L9 fix — campaign tag so analytics can split supplemental
+            // submissions from canonical wizard submissions when needed
+            // (both share source='public' otherwise).
+            campaign: 'cohort_a_supplemental_survey',
+            // Step 4 questionnaire answers — flat-spread to match wizard
+            // handler's storage shape; analytics queries already key off these.
+            ...questionnaireResponses,
+          } as Record<string, unknown>,
+          gpsLatitude: null,
+          gpsLongitude: null,
+          completionTimeSeconds: null,
+          submittedAt: now,
+          source: 'public',
+          processed: true,
+          processedAt: now,
+        });
+
+        await AuditService.logActionTx(tx, {
+          actorId: peeked.userId ?? null,
+          action: AUDIT_ACTIONS.DATA_CREATE,
+          targetResource: 'respondent',
+          targetId: peeked.respondentId!,
+          details: {
+            trigger: 'supplemental_survey_submit',
+            campaign: 'cohort_a_supplemental_survey',
+            submissionUid: newSubmissionUid,
+          },
+          ipAddress: req.ip || 'unknown',
+          userAgent: req.get('user-agent') || 'unknown',
+        });
+      });
+
+      logger.info({
+        event: 'supplemental_survey.submission_written',
+        respondentId: peeked.respondentId,
+        submissionUid: newSubmissionUid,
+      });
+
+      return res.status(201).json({
+        status: 'ok',
+        data: { submissionUid: newSubmissionUid, respondentId: peeked.respondentId },
+      });
+    } catch (error) {
       next(error);
     }
   }

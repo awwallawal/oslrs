@@ -9,7 +9,11 @@ import { apiClient } from '../../../lib/api-client';
  *   - POST /auth/magic/consume {token, purpose} → CONSUME (atomic single-use)
  */
 
-export type MagicLinkPurpose = 'wizard_resume' | 'pending_nin_complete' | 'login';
+export type MagicLinkPurpose =
+  | 'wizard_resume'
+  | 'pending_nin_complete'
+  | 'login'
+  | 'supplemental_survey'; // Story 9-28 Path B — Cohort A Step 4-only landing
 
 export interface MagicLinkPeekResult {
   tokenId: string;

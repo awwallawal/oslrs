@@ -50,4 +50,13 @@ router.get('/draft', wizardDraftRateLimit, RegistrationController.getDraft);
 // follow-up (requires frontend hCaptcha widget on Step 5 of the wizard).
 router.post('/wizard', registrationRateLimit, RegistrationController.submitWizard);
 
+// Story 9-28 Path B — Cohort A supplemental-survey submission. Magic-link
+// token (purpose=supplemental_survey) authorizes a Step 4-only write for an
+// already-registered respondent. Same rate limit as the wizard submit.
+router.post(
+  '/supplemental',
+  registrationRateLimit,
+  RegistrationController.submitSupplementalSurvey,
+);
+
 export default router;

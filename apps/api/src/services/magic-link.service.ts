@@ -28,6 +28,7 @@ const TTL_MS_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
   wizard_resume: 72 * 60 * 60 * 1000, // 72h
   pending_nin_complete: 72 * 60 * 60 * 1000, // 72h
   login: 15 * 60 * 1000, // 15min
+  supplemental_survey: 14 * 24 * 60 * 60 * 1000, // 14 days (Story 9-28 Path B)
 };
 
 const APP_URL = process.env.PUBLIC_APP_URL || 'http://localhost:5173';
@@ -413,6 +414,13 @@ export class MagicLinkService {
           intro: 'You requested a sign-in link for your Oyo State Skills Registry account. The button below will sign you in.',
           ctaLabel: 'Sign in',
           footer: 'If you didn\'t request this sign-in link, you can safely ignore this email.',
+        };
+      case 'supplemental_survey':
+        return {
+          subject: 'One more step for your Oyo State Skills Registry profile (3 minutes)',
+          intro: 'Thank you for registering with the Oyo State Skills Registry. To match you with the most relevant training programs and job opportunities, please complete your skills questionnaire — it takes about 3 minutes and your existing registration details (name, phone, NIN, LGA) are already saved.',
+          ctaLabel: 'Complete my skills profile',
+          footer: 'Once complete, you will be eligible for tailored opportunity matching by sector, skill level, and location. If you are no longer interested, no action is needed — this link will expire automatically.',
         };
     }
   }

@@ -12,11 +12,14 @@ import { respondents } from './respondents.js';
  * > now() + used_at IS NULL. Atomic UPDATE on redemption sets used_at (race-safe
  * single-use enforcement via DB constraint).
  *
- * Three purposes:
+ * Four purposes:
  *   - wizard_resume        — TTL 72h; resumes a 5-step wizard mid-flow on a new device.
  *   - pending_nin_complete — TTL 72h; lets respondents whose status is
  *                            'pending_nin_capture' come back and add their NIN.
  *   - login                — TTL 15min; primary auth for existing public users.
+ *   - supplemental_survey  — TTL 14d; invites an already-registered respondent
+ *                            to complete the Step 4 skills questionnaire on a
+ *                            dedicated landing page (Story 9-28 Path B).
  *
  * Foreign keys are nullable to support the new-registration case where no user
  * record exists yet — the token is keyed by `email` until redemption issues a
@@ -32,6 +35,7 @@ export const magicLinkPurposes = [
   'wizard_resume',
   'pending_nin_complete',
   'login',
+  'supplemental_survey',
 ] as const;
 export type MagicLinkPurpose = typeof magicLinkPurposes[number];
 

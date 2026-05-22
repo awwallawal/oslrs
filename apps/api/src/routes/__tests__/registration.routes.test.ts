@@ -25,6 +25,7 @@ const {
   mockLogActionTx,
   mockRespondentsFindFirst,
   mockWizardDraftsFindFirst,
+  mockSubmissionsFindFirst,
   mockInsertReturning,
   mockUpdateReturning,
   mockUpdate,
@@ -40,6 +41,7 @@ const {
   mockLogActionTx: vi.fn(),
   mockRespondentsFindFirst: vi.fn(),
   mockWizardDraftsFindFirst: vi.fn(),
+  mockSubmissionsFindFirst: vi.fn(),
   mockInsertReturning: vi.fn(),
   mockUpdateReturning: vi.fn(),
   mockUpdate: vi.fn(),
@@ -80,6 +82,7 @@ vi.mock('../../services/audit.service.js', () => ({
     PENDING_NIN_PROMOTED: 'pending_nin.promoted',
     PENDING_NIN_DEFERRED: 'pending_nin.deferred_again',
     MAGIC_LINK_ISSUED: 'magic_link.issued',
+    OPERATOR_SUPPLEMENTAL_SURVEY_SENT: 'operator.supplemental_survey_sent',
   },
 }));
 
@@ -124,6 +127,7 @@ vi.mock('../../db/index.js', () => ({
     query: {
       respondents: { findFirst: mockRespondentsFindFirst },
       wizardDrafts: { findFirst: mockWizardDraftsFindFirst },
+      submissions: { findFirst: mockSubmissionsFindFirst },
     },
     insert: () => buildInsertChain(),
     update: () => buildUpdateChain(),
@@ -657,5 +661,170 @@ describe('POST /registration/wizard', () => {
       .send(validBody({ nin: '12345678901' }));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('NIN_DUPLICATE');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /registration/supplemental — Story 9-28 Path B (Cohort A recovery)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('POST /registration/supplemental', () => {
+  function validSupplementalBody() {
+    return {
+      token: 'a'.repeat(40),
+      questionnaireResponses: { employment_status: 'employed', skills_possessed: ['plumbing'] },
+    };
+  }
+
+  it('returns 400 INVALID_INPUT when token is missing or too short', async () => {
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send({ questionnaireResponses: {} });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('SUPPLEMENTAL_INVALID_INPUT');
+  });
+
+  it('returns 400 when peeked token has no respondentId', async () => {
+    mockPeekToken.mockResolvedValueOnce({
+      id: 't1',
+      email: 'a@b.c',
+      respondentId: null,
+      userId: null,
+    });
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send(validSupplementalBody());
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('SUPPLEMENTAL_TOKEN_NO_RESPONDENT');
+  });
+
+  it('returns 404 when respondent row not found', async () => {
+    mockPeekToken.mockResolvedValueOnce({
+      id: 't1',
+      email: 'a@b.c',
+      respondentId: 'r-1',
+      userId: null,
+    });
+    mockRespondentsFindFirst.mockResolvedValueOnce(undefined);
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send(validSupplementalBody());
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('RESPONDENT_NOT_FOUND');
+  });
+
+  it('returns 409 with existingSubmissionUid when respondent already has a submission', async () => {
+    mockPeekToken.mockResolvedValueOnce({
+      id: 't1',
+      email: 'a@b.c',
+      respondentId: 'r-1',
+      userId: null,
+    });
+    mockRespondentsFindFirst.mockResolvedValueOnce({
+      id: 'r-1',
+      firstName: 'Akinola',
+      lastName: 'Oluwaseun',
+      dateOfBirth: '1990-01-01',
+      phoneNumber: '+2348000000000',
+      lgaId: 'lga-1',
+      nin: '12345678901',
+      consentMarketplace: true,
+      consentEnriched: true,
+    });
+    mockSubmissionsFindFirst.mockResolvedValueOnce({
+      id: 'existing-submission-row-id',
+      submissionUid: '019e0000-0000-7000-8000-000000000001',
+    });
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send(validSupplementalBody());
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('SUPPLEMENTAL_ALREADY_SUBMITTED');
+    expect(res.body.data.existingSubmissionUid).toBe('019e0000-0000-7000-8000-000000000001');
+    // Token NOT consumed in this path (the idempotency gate runs BEFORE the
+    // transaction, so consumeTokenTx is never invoked).
+    expect(mockConsumeTokenTx).not.toHaveBeenCalled();
+  });
+
+  it('consumes the token + writes submissions + audits + returns 201 on success', async () => {
+    mockPeekToken.mockResolvedValueOnce({
+      id: 't1',
+      email: 'recovery@example.com',
+      respondentId: 'r-1',
+      userId: null,
+    });
+    mockRespondentsFindFirst.mockResolvedValueOnce({
+      id: 'r-1',
+      firstName: 'Akinola',
+      lastName: 'Oluwaseun',
+      dateOfBirth: '1990-01-01',
+      phoneNumber: '+2348000000000',
+      lgaId: 'lga-1',
+      nin: '12345678901',
+      consentMarketplace: true,
+      consentEnriched: true,
+    });
+    mockSubmissionsFindFirst.mockResolvedValueOnce(undefined);
+    mockInsertReturning.mockResolvedValue([{ id: 'sub-row-id' }]);
+
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send(validSupplementalBody());
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.data).toHaveProperty('submissionUid');
+    expect(res.body.data).toHaveProperty('respondentId', 'r-1');
+    expect(mockConsumeTokenTx).toHaveBeenCalledTimes(1);
+    expect(mockLogActionTx).toHaveBeenCalledTimes(1);
+    expect(mockLogActionTx.mock.calls[0][1]).toMatchObject({
+      action: 'data.create',
+      targetResource: 'respondent',
+      targetId: 'r-1',
+      details: expect.objectContaining({
+        trigger: 'supplemental_survey_submit',
+        campaign: 'cohort_a_supplemental_survey',
+      }),
+    });
+  });
+
+  // Scope-tightened idempotency check (2026-05-22 follow-up to formal CR):
+  // an enumerator/clerk submission for the SAME respondent must NOT block
+  // a supplemental-survey submission. The check now filters by
+  // `questionnaireFormId = SUPPLEMENTAL_SURVEY_FORM_ID` so only PRIOR
+  // supplemental submissions block. This test pins the contract.
+  it('does NOT block when respondent has a non-supplemental submission (enumerator/clerk source)', async () => {
+    mockPeekToken.mockResolvedValueOnce({
+      id: 't1',
+      email: 'recovery@example.com',
+      respondentId: 'r-1',
+      userId: null,
+    });
+    mockRespondentsFindFirst.mockResolvedValueOnce({
+      id: 'r-1',
+      firstName: 'Akinola',
+      lastName: 'Oluwaseun',
+      dateOfBirth: '1990-01-01',
+      phoneNumber: '+2348000000000',
+      lgaId: 'lga-1',
+      nin: '12345678901',
+      consentMarketplace: true,
+      consentEnriched: true,
+    });
+    // mockSubmissionsFindFirst.mockResolvedValueOnce(undefined) — the controller
+    // scope-tightened query (`AND questionnaireFormId = 'supplemental-survey'`)
+    // returns no row because the respondent's existing submission is from a
+    // different source (enumerator/clerk) with a DIFFERENT questionnaireFormId.
+    // The mock returns undefined, simulating "no PRIOR SUPPLEMENTAL submission".
+    mockSubmissionsFindFirst.mockResolvedValueOnce(undefined);
+    mockInsertReturning.mockResolvedValue([{ id: 'sub-row-id' }]);
+
+    const res = await request(buildApp())
+      .post('/registration/supplemental')
+      .send(validSupplementalBody());
+
+    expect(res.status).toBe(201);
+    expect(mockConsumeTokenTx).toHaveBeenCalledTimes(1);
+    expect(mockLogActionTx).toHaveBeenCalledTimes(1);
   });
 });

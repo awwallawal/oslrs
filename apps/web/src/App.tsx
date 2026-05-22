@@ -29,6 +29,7 @@ const VerificationPage = lazy(() => import('./features/onboarding/pages/Verifica
 // Story 9-12 Task 8 — public registration wizard (replaces legacy RegistrationPage at /register).
 // Legacy `RegistrationPage` + `RegistrationForm` source files deleted in this commit.
 const WizardPage = lazy(() => import('./features/registration/pages/WizardPage'));
+const SupplementalSurveyPage = lazy(() => import('./features/registration/pages/SupplementalSurveyPage'));
 const CompleteNinPage = lazy(() => import('./features/registration/pages/CompleteNinPage'));
 const RegistrationCompletePage = lazy(() => import('./features/registration/pages/RegistrationCompletePage'));
 // Story 9-12 MR-8 (2026-05-11 session 8) — magic-link landing page closes the
@@ -590,6 +591,17 @@ function App() {
               element={
                 <Suspense fallback={<AuthLoadingFallback />}>
                   <CompleteNinPage />
+                </Suspense>
+              }
+            />
+
+            {/* Story 9-28 Path B — Cohort A supplemental survey landing
+                (magic-link purpose=supplemental_survey → Step 4-only flow). */}
+            <Route
+              path="register/supplemental"
+              element={
+                <Suspense fallback={<AuthLoadingFallback />}>
+                  <SupplementalSurveyPage />
                 </Suspense>
               }
             />

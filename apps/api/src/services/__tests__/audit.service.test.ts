@@ -176,8 +176,10 @@ describe('AuditService', () => {
       //   PENDING_NIN_CREATED, PENDING_NIN_PROMOTED → 40.
       // Story 9-27 Part A (Operator re-engagement email blast) added 1 more:
       //   OPERATOR_REENGAGEMENT_EMAIL_SENT → 41.
+      // Story 9-28 Path B (Cohort A supplemental survey) added 1 more:
+      //   OPERATOR_SUPPLEMENTAL_SURVEY_SENT → 42.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(41);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(42);
     });
   });
 

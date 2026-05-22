@@ -52,10 +52,21 @@ const PURPOSE_COPY: Record<MagicLinkPurpose, { title: string; body: string; cta:
     body: '',
     cta: '',
   },
+  supplemental_survey: {
+    title: 'Complete your skills profile',
+    body:
+      'Thank you for registering with the Oyo State Skills Registry. Your registration details are already saved — we just need a few minutes of your skills information to match you with the right training programs and opportunities.',
+    cta: 'Complete my skills profile',
+  },
 };
 
 function isMagicLinkPurpose(v: string | null): v is MagicLinkPurpose {
-  return v === 'wizard_resume' || v === 'pending_nin_complete' || v === 'login';
+  return (
+    v === 'wizard_resume' ||
+    v === 'pending_nin_complete' ||
+    v === 'login' ||
+    v === 'supplemental_survey'
+  );
 }
 
 export default function MagicLinkLandingPage() {
@@ -189,12 +200,32 @@ export default function MagicLinkLandingPage() {
     );
   }
 
+  // At this point TS has narrowed `purpose` to exclude 'login' (the
+  // early-return above handles it), so the switch below has 3 cases.
   const copy = PURPOSE_COPY[purpose];
   const handleContinue = () => {
-    const destination =
-      purpose === 'wizard_resume'
-        ? `/register?token=${encodeURIComponent(token)}`
-        : `/register/complete-nin?token=${encodeURIComponent(token)}`;
+    let destination: string;
+    switch (purpose) {
+      case 'wizard_resume':
+        destination = `/register?token=${encodeURIComponent(token)}`;
+        break;
+      case 'supplemental_survey':
+        destination = `/register/supplemental?token=${encodeURIComponent(token)}`;
+        break;
+      case 'pending_nin_complete':
+        destination = `/register/complete-nin?token=${encodeURIComponent(token)}`;
+        break;
+      default: {
+        // M7 fix — exhaustive switch on the narrowed MagicLinkPurpose union;
+        // if a new variant is added to the type without updating this switch,
+        // TS errors at compile time. Replaces the previous default-fall-
+        // through that silently routed unknowns to /register/complete-nin.
+        const _exhaustive: never = purpose;
+        void _exhaustive;
+        destination = '/login';
+        break;
+      }
+    }
     navigate(destination, { replace: true });
   };
 

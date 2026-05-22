@@ -304,3 +304,7 @@ The wizard handler currently logs `PENDING_NIN_CREATED` or `DATA_CREATE` audit a
 - `_bmad-output/implementation-artifacts/9-12-public-wizard-pending-nin-magic-link.md` (modified — § L7 added)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — 9-26 entry)
 - `MEMORY.md` + `feedback_unified_ingestion_pipeline.md` (memory consolidation)
+
+## Cohort A disposition cross-reference
+
+The 63 already-completed wizard respondents whose Step 4 was dropped pre-9-26 are **Cohort A**. Their disposition is tracked in **Story 9-28** (`9-28-cohort-a-step4-recovery-decision.md`). Operator chose Path B (targeted supplemental-survey recovery) on 2026-05-22 with Option 2 wording. The 9-28 implementation (Phase A + Phase B) ships the recovery script + landing page that lets these respondents re-submit their Step 4 answers via a `supplemental_survey` magic-link.
