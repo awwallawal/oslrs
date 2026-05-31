@@ -1,6 +1,6 @@
 # Story 9.30: Unblock Cloudflare Web Analytics — add `cloudflareinsights.com` to CSP `connect-src`
 
-Status: ready-for-dev
+Status: review (deployed 2026-05-31 via commit `095bb1c`; AC#10 live-curl confirmed both domains; AC#11+#12 await 24-48h post-deploy validation)
 
 <!--
 Authored 2026-05-31 by Bob (SM) via canonical *create-story --yolo template.
@@ -269,7 +269,32 @@ Net story-9-30 diff after all fixes (verified via `git diff HEAD`):
 
 ### Live-curl confirmation (AC #10)
 
-(to be populated post-deploy)
+Run 2026-05-31 ~11:39 UTC, immediately after CI deploy completed (commit `095bb1c`, deploy job ran 11:37:22 → 11:38:43 UTC = 81 seconds).
+
+```
+$ curl -sI https://oyotradeministry.com.ng/ | grep -i "content-security-policy" | grep -oE "connect-src[^;]+"
+connect-src 'self' wss://oyotradeministry.com.ng wss://oyoskills.com https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com https://cdn.jsdelivr.net https://cloudflareinsights.com
+
+$ curl -sI https://oyoskills.com/ | grep -i "content-security-policy" | grep -oE "connect-src[^;]+"
+connect-src 'self' wss://oyotradeministry.com.ng wss://oyoskills.com https://accounts.google.com https://hcaptcha.com https://*.hcaptcha.com https://cdn.jsdelivr.net https://cloudflareinsights.com
+```
+
+Both production domains now serve `https://cloudflareinsights.com` as the 7th entry in `connect-src`, positioned immediately after `https://cdn.jsdelivr.net` exactly as specified by AC#1/#2. Header is the enforcing variant `Content-Security-Policy` (not `-Report-Only`) on root-path 200 responses. AC#10 SATISFIED.
+
+**CI/CD pipeline summary** for commit `095bb1c`:
+
+| Job | Duration | Result |
+|---|---|---|
+| lint-and-build | 1m21s | ✅ |
+| test-api | 1m45s | ✅ |
+| test-web | 2m50s | ✅ |
+| test-unit (testing) | 21s | ✅ |
+| test-unit (utils) | 24s | ✅ |
+| lighthouse | 3m18s | ✅ |
+| dashboard | 23s | ✅ |
+| deploy | 1m21s | ✅ |
+
+Total push → live: ~6 minutes wall-clock.
 
 ### 24h post-deploy validation (AC #11)
 
