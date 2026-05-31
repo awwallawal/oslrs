@@ -153,6 +153,7 @@ interface FormQuestion {
 
 interface FormSchema {
   formId: string;
+  version: string;
   title: string;
   questions: FormQuestion[];
 }
@@ -165,6 +166,7 @@ interface SyntheticPayload {
   formData: {
     submissionId: string;
     formId: string;
+    formVersion: string;
     responses: Record<string, unknown>;
     submittedAt: string;
     gpsLatitude: number;
@@ -283,6 +285,7 @@ function buildPayload(
     formData: {
       submissionId,
       formId: formSchema.formId,
+      formVersion: formSchema.version,
       responses,
       submittedAt: new Date().toISOString(),
       gpsLatitude: 7.39,
@@ -319,12 +322,13 @@ async function fetchActiveFormSchema(targetHost: string): Promise<FormSchema> {
     throw new Error(`Could not fetch active form: HTTP ${res.status} ${await res.text()}`);
   }
   const json = (await res.json()) as {
-    data?: { formId?: string; id?: string; title?: string; questions?: FormQuestion[] };
+    data?: { formId?: string; id?: string; version?: string; title?: string; questions?: FormQuestion[] };
   };
   const formId = json.data?.formId ?? json.data?.id;
   if (!formId) throw new Error(`Active form response missing data.formId: ${JSON.stringify(json).slice(0, 200)}`);
   return {
     formId,
+    version: json.data?.version ?? '1.0.0',
     title: json.data?.title ?? '<untitled>',
     questions: json.data?.questions ?? [],
   };
