@@ -37,6 +37,7 @@ import { uuidv7 } from 'uuidv7';
 import { db } from '../src/db/index.js';
 import { users, roles, respondents, submissions, auditLogs, systemSettings, questionnaireForms } from '../src/db/schema/index.js';
 import { TokenService } from '../src/services/token.service.js';
+import { NativeFormService } from '../src/services/native-form.service.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import pino from 'pino';
 
@@ -345,22 +346,21 @@ async function fetchActiveFormSchema(targetHost: string): Promise<FormSchema> {
     throw new Error(`Form ${rowId} not found or not published (status=${formRow?.status ?? 'missing'})`);
   }
 
-  const schema = formRow.formSchema as { id?: string; version?: string; title?: string; sections?: Array<{ questions: FormQuestion[] }> } | null;
-  if (!schema) throw new Error(`Form ${rowId} has null form_schema`);
+  if (!formRow.formSchema) throw new Error(`Form ${rowId} has null form_schema`);
 
-  // Flatten sections into a question array (matches what /public-active returns)
-  const questions: FormQuestion[] = [];
-  for (const section of schema.sections ?? []) {
-    for (const q of section.questions ?? []) {
-      questions.push(q);
-    }
-  }
+  // Delegate to NativeFormService.flattenForRender so choice-list keys get resolved
+  // (raw JSONB stores question.choices as a STRING key into schema.choiceLists; the
+  // flatten step resolves it into the actual [{label, value}] array that the smoke
+  // test's buildResponseForQuestion expects). Then OVERRIDE formId with the row PK
+  // (flattenForRender returns the buggy schema.id by default — see top-of-function
+  // comment for the production-bug context).
+  const flattened = NativeFormService.flattenForRender(formRow.formSchema as Parameters<typeof NativeFormService.flattenForRender>[0]);
 
   return {
-    formId: formRow.id, // <-- ROW id (canonical FK target), NOT schema.id
-    version: schema.version ?? '1.0.0',
-    title: schema.title ?? '<untitled>',
-    questions,
+    formId: formRow.id, // <-- ROW id (canonical FK target), NOT flattened.formId (= schema.id)
+    version: flattened.version,
+    title: flattened.title,
+    questions: flattened.questions as unknown as FormQuestion[],
   };
 }
 
