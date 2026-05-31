@@ -512,6 +512,75 @@ describe('SubmissionProcessingService', () => {
     });
   });
 
+  // ── Story 9-33 Bug #2 — DATA_CREATE audit on active-respondent creation ─────
+  // The active branch (NIN present) previously emitted NO audit event, leaving
+  // the Story 6-1 hash-chain ledger with zero provenance record for
+  // enumerator/clerk-collected respondents (NDPA forensic gap).
+  describe('findOrCreateRespondent — active-respondent audit (Story 9-33)', () => {
+    it('emits DATA_CREATE audit when an active respondent is created (NIN present)', async () => {
+      const { AuditService } = await import('../audit.service.js');
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          nin: '12345678901',
+          firstName: 'Adewale',
+          lastName: 'Johnson',
+          phoneNumber: '+2348012345678',
+          consentMarketplace: false,
+          consentEnriched: false,
+        },
+        'enumerator',
+        'submitter-user-id',
+      );
+
+      expect(result._isNew).toBe(true);
+      expect(AuditService.logAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'data.create',
+          targetResource: 'respondent',
+          targetId: result.id,
+          actorId: 'submitter-user-id',
+          details: expect.objectContaining({
+            creation_path: 'submission_queue_processor',
+            source: 'enumerator',
+          }),
+        }),
+      );
+      // Mutual exclusion: the active branch must NOT emit PENDING_NIN_CREATED.
+      expect(AuditService.logAction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'pending_nin.created' }),
+      );
+      // Story 9-33 review L3 — exactly one audit event per creation (a
+      // double-emit regression would otherwise slip through the assertions above).
+      expect(AuditService.logAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('pending-NIN creation emits only PENDING_NIN_CREATED (never DATA_CREATE)', async () => {
+      const { AuditService } = await import('../audit.service.js');
+      await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          firstName: 'NoNin',
+          lastName: 'Person',
+          phoneNumber: '+2348011112222',
+          consentMarketplace: false,
+          consentEnriched: false,
+        },
+        'public',
+      );
+
+      expect(AuditService.logAction).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'pending_nin.created' }),
+      );
+      expect(AuditService.logAction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'data.create' }),
+      );
+      // Story 9-33 review L3 — exactly one audit event per creation.
+      expect(AuditService.logAction).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('determineSubmitterRole', () => {
     it('should return "public" when submitterId is null', async () => {
       const result = await SubmissionProcessingService.determineSubmitterRole(null);

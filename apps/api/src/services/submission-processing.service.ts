@@ -496,6 +496,31 @@ export class SubmissionProcessingService {
           targetId: created.id,
           details: { source },
         });
+      } else {
+        // Story 9-33 Bug #2 — emit DATA_CREATE for ACTIVE-respondent creation via
+        // the submission-ingestion queue (enumerator / clerk / public with a
+        // valid NIN). Without this, the Story 6-1 hash-chain audit ledger has
+        // zero record of these respondents' provenance — an NDPA forensic gap.
+        // Mutually exclusive with the PENDING_NIN_CREATED branch above, so
+        // exactly one audit event fires per respondent creation. Fire-and-forget
+        // to mirror the sibling branch (audit-chain failure must not block the
+        // INSERT that already succeeded). `creation_path` distinguishes this
+        // queue-processor channel from the wizard controller's DATA_CREATE
+        // emissions; `source` records the actual collection channel
+        // (enumerator / clerk / public-with-NIN — all flow through this worker).
+        // NOTE: this branch only runs when status === 'active', which is exactly
+        // when data.nin is truthy, so a `has_nin` detail would be a constant
+        // `true` — omitted as redundant (Story 9-33 review L1).
+        AuditService.logAction({
+          actorId: submitterId ?? null,
+          action: AUDIT_ACTIONS.DATA_CREATE,
+          targetResource: 'respondent',
+          targetId: created.id,
+          details: {
+            source,
+            creation_path: 'submission_queue_processor',
+          },
+        });
       }
 
       return { id: created.id, _isNew: true };

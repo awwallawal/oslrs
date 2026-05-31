@@ -1,6 +1,6 @@
 # Story 9.33: Hotfix — enumerator-path formId mismatch + missing audit on active-respondent creation
 
-Status: ready-for-dev
+Status: review
 
 <!--
 Authored 2026-05-31 by Bob (SM) via canonical *create-story --yolo workflow.
@@ -104,9 +104,11 @@ The smoke test's Bug #1 workaround (reading the setting + row PK directly via DB
    ```
    Uses the EXISTING `DATA_CREATE` action enum value (`audit.service.ts:47` — already in the schema; no new enum value needed). The `creation_path` detail distinguishes this from other DATA_CREATE emission sites (the 24 existing prod DATA_CREATE entries likely come from the wizard's `submitWizard` controller).
 
+   > **As-built (code review L1/L2):** the `submission_uid` key was dropped (the `submission` object is out of scope inside `findOrCreateRespondent` — see Decision Log), `has_nin` was dropped (it is a constant `true` in this branch — Decision Log), and `creation_path` was named **`'submission_queue_processor'`** rather than `'enumerator_queue_processor'` because the branch also fires for `clerk`/`public-with-NIN` sources. The actual collection channel is captured by the `source` detail.
+
 10. **AC#B2 — Audit emission survives transaction rollback semantics**. The `AuditService.logAction` call is fire-and-forget (matches existing line 491-499 pattern; no `await`). It runs OUTSIDE the respondent INSERT transaction. If the audit chain itself fails (Story 6-1 hash-chain serialization), the respondent still exists — accept that asymmetry per existing codebase precedent.
 
-11. **AC#B3 — Unit test for audit emission**. Add a test in `submission-processing.service.test.ts` (or wherever the existing PENDING_NIN_CREATED audit is covered): seed an active-respondent submission, run `processSubmission`, then assert `AuditService.logAction` was called with `action: AUDIT_ACTIONS.DATA_CREATE` + `targetId: <created respondent's id>` + `details.creation_path: 'enumerator_queue_processor'`. Mock `AuditService.logAction` per existing patterns.
+11. **AC#B3 — Unit test for audit emission**. Add a test in `submission-processing.service.test.ts` (or wherever the existing PENDING_NIN_CREATED audit is covered): seed an active-respondent submission, run `processSubmission`, then assert `AuditService.logAction` was called with `action: AUDIT_ACTIONS.DATA_CREATE` + `targetId: <created respondent's id>` + `details.creation_path: 'submission_queue_processor'` (renamed from `'enumerator_queue_processor'` per code review L2). Mock `AuditService.logAction` per existing patterns.
 
 12. **AC#B4 — No effect on PENDING_NIN_CREATED branch**. The audit emission at line 491-499 (for `status === 'pending_nin_capture'`) is UNCHANGED. The new emission at AC#B1 is mutually exclusive with the existing pending-NIN audit — the `if (status !== 'pending_nin_capture')` guard ensures exactly ONE audit emits per respondent creation.
 
@@ -139,39 +141,39 @@ The smoke test's Bug #1 workaround (reading the setting + row PK directly via DB
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Bug #1 — `flattenForRender` signature change + all 4 call sites (AC: #A1, #A2, #A3, #A4, #A5)**
-  - [ ] 1.1: Update `NativeFormService.flattenForRender` signature + return value (line 424-463). Add JSDoc note explaining that `formId` returned in `FlattenedForm` is the row primary key, NOT the JSONB inner `schema.id`.
-  - [ ] 1.2: Update `getPublicActiveForm` (line 417) to pass `form.id`.
-  - [ ] 1.3: Decision point: refactor `getPublishedFormSchema` + `getFormSchema` to return `{ id, schema }` (recommended per AC#A6), OR inline the controller-side row id lookup. Document the choice in the story Dev Agent Record.
-  - [ ] 1.4: Update `form.controller.ts:78-89` (`getFormForRender`).
-  - [ ] 1.5: Update `form.controller.ts:95-106` (`previewForm`).
-  - [ ] 1.6: Audit + update `questionnaire.controller.ts:286` call site.
-  - [ ] 1.7: Grep for any other `flattenForRender` call site that didn't show up in the initial audit. Surface in Dev Agent Record if found.
+- [x] **Task 1: Bug #1 — `flattenForRender` signature change + all 4 call sites (AC: #A1, #A2, #A3, #A4, #A5)**
+  - [x] 1.1: Updated `NativeFormService.flattenForRender(schema, formRowId)` signature + return value (`formId: formRowId`). Added JSDoc warning that `formId` is the row PK, NOT the JSONB inner `schema.id`.
+  - [x] 1.2: Updated `getPublicActiveForm` to pass `form.id`.
+  - [x] 1.3: **Decision: chose option (b) — inline the row id at each call site** (the `:id` URL param IS the row PK; `getPublicActiveForm` already holds it via `form.id`). AC#A6 helper return-shape refactor DEFERRED. See Pre-impl Decision Log.
+  - [x] 1.4: Updated `form.controller.ts` `getFormForRender` → `flattenForRender(schema, id)`.
+  - [x] 1.5: Updated `form.controller.ts` `previewForm` → `flattenForRender(schema, id)`.
+  - [x] 1.6: Updated `questionnaire.controller.ts` `getFormPreview` → `flattenForRender(schema, id)`.
+  - [x] 1.7: Grepped the whole `apps/api/src` tree for `flattenForRender` callers. Confirmed exactly **4** call sites (the 3 controllers + `getPublicActiveForm`) — no hidden 5th. All 4 now pass the row PK.
 
-- [ ] **Task 2: Bug #2 — audit emission for active-respondent creation (AC: #B1, #B2, #B4)**
-  - [ ] 2.1: Add `AuditService.logAction` call at `submission-processing.service.ts` (immediately after line 486 `.returning()`, in an `else` or `if (status !== 'pending_nin_capture')` block, parallel to lines 491-499).
-  - [ ] 2.2: Use `AUDIT_ACTIONS.DATA_CREATE` (existing — no new enum value needed; symmetric with the wizard's existing 24 DATA_CREATE audit emissions in prod).
-  - [ ] 2.3: Verify the `if` branch is mutually exclusive with the existing PENDING_NIN_CREATED emission so exactly one audit fires per respondent creation.
+- [x] **Task 2: Bug #2 — audit emission for active-respondent creation (AC: #B1, #B2, #B4)**
+  - [x] 2.1: Added `AuditService.logAction` in an `else` branch parallel to the PENDING_NIN_CREATED emission in `findOrCreateRespondent`.
+  - [x] 2.2: Used `AUDIT_ACTIONS.DATA_CREATE` (existing enum, no new value).
+  - [x] 2.3: Verified mutual exclusion — `if (status === 'pending_nin_capture') {...} else {...}` guarantees exactly one audit per creation.
 
-- [ ] **Task 3: Tests + regression coverage (AC: #A7, #A8, #B3, #C3)**
-  - [ ] 3.1: Update `form.controller.test.ts:161` mock assertion for the new signature (or relevant test file).
-  - [ ] 3.2: Add new test in `native-form.service.test.ts` `flattenForRender` describe block — assert `formId === passed-rowId` (NOT `schema.id`).
-  - [ ] 3.3: Add new test in `submission-processing.service.test.ts` — assert active-respondent path emits `DATA_CREATE` audit with `targetResource: 'respondent'`, `targetId: <createdId>`, `details.creation_path: 'enumerator_queue_processor'`.
-  - [ ] 3.4: Verify mutual exclusion test — pending-NIN path still emits PENDING_NIN_CREATED only (NOT both).
-  - [ ] 3.5: Run `pnpm --filter @oslsr/api test` — expect ~3-5 net new tests, all passing, zero regressions. Confirm full `pnpm test` 4/4 packages green.
-  - [ ] 3.6: tsc clean both apps.
+- [x] **Task 3: Tests + regression coverage (AC: #A7, #A8, #B3, #C3)**
+  - [x] 3.1: Updated `form.controller.test.ts` mock assertion → `toHaveBeenCalledWith(mockSchema, 'form-uuid-1')`. (The other 3 `flattenForRender` callers are exercised through `native-form.service.test.ts` and integration coverage; no further mock-arity updates needed.)
+  - [x] 3.2: Added AC#A8 regression test in `native-form.service.test.ts` — `formId === passed-rowId` and `!== schema.id`.
+  - [x] 3.3: Added Bug #2 test in `submission-processing.service.test.ts` — active path emits `DATA_CREATE` with `targetResource`/`targetId`/`actorId`/`details.creation_path`.
+  - [x] 3.4: Added mutual-exclusion tests (active≠pending and pending≠active).
+  - [x] 3.5: `pnpm --filter @oslsr/api test` → **2228 passed / 7 skipped / 0 failed**; +3 net new tests; zero regressions.
+  - [x] 3.6: tsc clean both apps (API exit 0, web exit 0); API lint exit 0.
 
-- [ ] **Task 4: Smoke-test workaround removal + verification (AC: #C1, #C2)**
-  - [ ] 4.1: After Tasks 1-3 commit + push + CI deploy, edit `apps/api/scripts/_enumerator-path-smoke-test.ts` `fetchActiveFormSchema` to use the canonical `/forms/public-active` endpoint directly. Keep the old workaround code commented out with a date+story marker for future archaeology.
-  - [ ] 4.2: Operator runs `--dry-run --count 5` on VPS — confirm payload preview shows the row-PK as `formId` (NOT the inner schema.id).
-  - [ ] 4.3: Operator runs `--confirm-i-am-not-dry-running --count 5` on VPS. Capture output. Expected: 5/5 across all four columns (sub / resp / raw_data / **audit ✅**).
-  - [ ] 4.4: If any verification ❌: STOP, document in Dev Agent Record, do NOT mark story done. Operator triages.
-  - [ ] 4.5: If 5/5 ✅: store the captured output in story Dev Agent Record. Story flips review → done.
+- [~] **Task 4: Smoke-test workaround removal + verification (AC: #C1, #C2)** — 4.1 done; 4.2–4.5 OPERATOR/post-deploy
+  - [x] 4.1: Edited `_enumerator-path-smoke-test.ts` `fetchActiveFormSchema` to use canonical `/forms/public-active`. Old DB-direct workaround preserved commented with date+story marker.
+  - [ ] 4.2: ⏳ OPERATOR — `--dry-run --count 5` on VPS post-deploy; confirm payload `formId` = row PK.
+  - [ ] 4.3: ⏳ OPERATOR — `--confirm-i-am-not-dry-running --count 5`; expect 5/5 across sub/resp/raw_data/audit.
+  - [ ] 4.4: ⏳ OPERATOR — any ❌ → STOP, document, do NOT flip done.
+  - [ ] 4.5: ⏳ OPERATOR — 5/5 ✅ → paste output into §Smoke-test re-verification; flip review → done.
 
-- [ ] **Task 5: Pre-merge code review on uncommitted tree (AC: #A1-#C3 collectively)**
-  - [ ] 5.1: Per project `feedback_review_before_commit.md` discipline, run `/code-review` (or `bmad:bmm:workflows:code-review`) on the uncommitted working tree before any commit. Auto-fix HIGH/MEDIUM findings per established Story 9-12 / 9-17 / 9-27 / 9-30 patterns. LOW findings may be deferred to §Review Follow-ups (AI) with rationale.
-  - [ ] 5.2: Verify the audit emission's mutual exclusion is unambiguous (single branch, no double-emit risk).
-  - [ ] 5.3: Verify `flattenForRender` JSDoc explicitly warns future-readers that `formId` IS the row PK — prevents accidental re-introduction of the bug.
+- [x] **Task 5: Pre-merge code review on uncommitted tree (AC: #A1-#C3 collectively)**
+  - [x] 5.1: ✅ DONE 2026-05-31 — ran `bmad:bmm:workflows:code-review` on the uncommitted tree per `feedback_review_before_commit.md`. 0 Critical / 0 High / 3 Medium / 3 Low; all 6 findings fixed same session. See § Review Follow-ups (AI).
+  - [x] 5.2: Self-check — audit mutual exclusion unambiguous (single `if/else`, covered by dedicated tests incl. the new `toHaveBeenCalledTimes(1)` assertions).
+  - [x] 5.3: Self-check — `flattenForRender` JSDoc explicitly warns `formId` IS the row PK.
 
 ## Dev Notes
 
@@ -196,12 +198,39 @@ The workaround (reading `wizard.public_form_id` setting + querying `questionnair
 ### File-level overlap with parallel-track stories
 
 - **Story 9-16 (magic-link login)**: no overlap. 9-16 touches `auth.service.ts` + `auth.controller.ts` + frontend; 9-33 touches `native-form.service.ts` + `submission-processing.service.ts`. Safe to ship in parallel.
-- **Story 9-17 (form pin + Pattern C dedup)**: no overlap. 9-17 is frontend wizard + Q.M. page changes.
-- **Story 9-18 (wizard NIN-first)**: no overlap. 9-18 is wizard frontend + `submitWizard` controller.
+- **Story 9-17 (form pin + Pattern C dedup)**: no FILE overlap. 9-17 is frontend wizard + Q.M. page changes. **BUT see the contract-level caveat below.**
+- **Story 9-18 (wizard NIN-first)**: no FILE overlap. 9-18 is wizard frontend + `submitWizard` controller. **BUT see the contract-level caveat below.**
 - **Story 9-27 Part B (SMS via Termii)**: no overlap.
 - **Story 9-32 (account-settings)**: no overlap.
 
 The hotfix can ship FAST without coordination with any other in-flight story.
+
+#### ⚠️ Contract-level blast radius (added 2026-05-31 by code review — finding M1)
+
+The original "no overlap" claim above was true at the **file** level but **false at the contract level**. Bug #1's fix changes what `GET /api/v1/forms/public-active` returns in `data.formId` (was the JSONB `schema.id`; now the row PK). The **public wizard** consumes that exact field:
+
+- `apps/web/src/features/registration/pages/Step4Questionnaire.tsx:73` stamps `questionnaireFormId: form.formId` into the wizard draft.
+- `registration.controller.ts:submitWizard` (line ~574) persists that value into `submissions.questionnaireFormId`.
+
+So **every public-wizard submission is also affected** by this change, not just the enumerator path. The impact is **benign-to-positive**, verified during review:
+- `submitWizard` inserts the submissions row with `processed: true` and never re-resolves the form via the ingestion worker, so the changed `questionnaireFormId` is not looked up → no runtime break.
+- The new value (row PK) is a **valid FK** into `questionnaire_forms.id`, whereas the old `schema.id` was an orphan reference. The fix therefore *improves* wizard submission integrity as a side effect.
+
+No web-side code change is required. Logged here so the blast radius is documented rather than implied-absent.
+
+#### Cutover data inconsistency in `submissions.questionnaireFormId` — accepted forward-only (code review finding M2)
+
+This fix is **forward-only**. Rows written before deploy carry the old identifier; rows after carry the row PK:
+
+- **Wizard rows (`source='public'`)**: pre-fix rows stored `schema.id`; post-fix store the row PK. Any analytics/grouping query keyed on `submissions.questionnaireFormId` will see two distinct values for the same logical form across the cutover boundary.
+- **Enumerator/worker rows**: only **1** production enumerator submission has ever existed (per the 2026-05-31 data-integrity check), and it was orphaned (`respondent_id` NULL) by Bug #1. This fix does **not** retroactively re-link that historical row.
+
+**Decision: accept the inconsistency; no backfill migration in this hotfix.** Rationale:
+1. The pinned public form is currently a single form, so analytics queries that need a stable key should group on `submissions.source` or `raw_data` accessors (which is already the dominant pattern) rather than `questionnaireFormId`.
+2. A backfill would have to rewrite historical `questionnaireFormId` values and re-resolve the single orphaned enumerator submission — a riskier, separately-testable change than this small, hot-path fix warrants under field-deployment time pressure.
+3. The volume is tiny (≤1 orphaned enumerator row; wizard rows are not broken, just keyed differently).
+
+**Follow-up:** if a future story needs a uniform `questionnaireFormId` across the cutover, raise it alongside the **Story 9-34 audit-pattern unification** candidate (below) — both are "sweep all historical rows for consistency" tasks.
 
 ### Sequencing — locked 2026-05-31
 
@@ -240,13 +269,21 @@ PARALLEL (in flight)
 
 ### Agent Model Used
 
-(to be populated by dev-story — likely Amelia / Claude Opus 4.7)
+Claude Opus 4.8 (1M context) — `claude-opus-4-8[1m]` — via dev-story workflow, 2026-05-31.
 
 ### Pre-impl Decision Log
 
-(to be populated — particularly AC#A6 refactor scope decision)
+- **AC#A6 (helper return-shape refactor) — DEFERRED; chose AC#A3/A4 option (b).** Rather than change `getFormSchema` / `getPublishedFormSchema` to return `{ id, schema }`, the row PK is passed inline at each call site. In every render/preview endpoint the `:id` URL param IS the questionnaire_forms row PK (these helpers look up `eq(questionnaireForms.id, formId)`), and `getPublicActiveForm` already holds the row PK in scope (`form.id`). Inlining is a smaller, lower-risk surface than changing two helpers' return shape, introduces no second DB query, and is provably correct. Call sites remain trivially adaptable if a future story wants the safer shape.
+- **Bug #2 audit details keys.** Final as-built keys: `{ source, creation_path: 'submission_queue_processor' }`. Dropped the AC pseudocode's `submission_uid` key — the `submission` object is NOT in scope inside `findOrCreateRespondent(data, source, submitterId)`; the sibling PENDING_NIN_CREATED audit at this site likewise logs only `{ source }`. `source` already records the collection channel.
+  - **Code review L1 — dropped `has_nin`.** The else branch runs only when `status === 'active'`, which (per `status = data.nin ? 'active' : 'pending_nin_capture'`) means `data.nin` is always truthy, so `has_nin` would be a constant `true`. Removed as redundant/misleading.
+  - **Code review L2 — renamed `creation_path` → `'submission_queue_processor'`.** The branch fires for ANY active creation via the ingestion worker (enumerator / clerk / public-with-NIN), so the original `'enumerator_queue_processor'` label undercounted the channel. The `source` detail records the true channel. Safe to rename: Bug #2 meant zero prod audit rows carried the old value, so no historical data references it.
+- **Fire-and-forget (no `await`)** mirroring the sibling branch (AC#B2) — audit-chain failure must not roll back the INSERT that already succeeded.
 
 ### Debug Log References
+
+- **Call-site audit (Task 1.7).** Grepped the entire `apps/api/src` tree: exactly 4 `flattenForRender` callers exist (3 controllers + `getPublicActiveForm`), matching the story's expectation. No hidden call sites. (`respondent.service.ts` builds its render sections via `buildChoiceMaps`, not `flattenForRender`, so it is unaffected.)
+- **Tool-channel caution during this session.** Interleaved/stale tool results briefly suggested a non-existent "5th call site"; re-verified against disk (`grep` of the live tree) before finalizing — the authoritative count is 4. Lesson logged so the File List reflects only files actually changed (confirmed via `git status`).
+- **Validation (definitive, sequential runs):** API `pnpm test` → 2228 passed / 7 skipped / 0 failed (155 files); +3 net new tests (1 AC#A8 + 2 Bug #2). API tsc exit 0; web tsc exit 0; API lint exit 0.
 
 - Smoke test commit chain (the bug-discovery archaeology):
   - `b4c41cc chore(9-18): standalone enumerator-path smoke test script`
@@ -259,16 +296,55 @@ PARALLEL (in flight)
 
 ### Completion Notes List
 
-(to be populated)
+- **Bug #1 fixed.** `NativeFormService.flattenForRender(schema, formRowId)` now requires + returns the row PK as `formId`. All **4** call sites updated to pass the row PK (3 controllers — `getFormForRender` / `previewForm` / `getFormPreview` — plus `getPublicActiveForm`). Enumerator/public/clerk submissions resolve `questionnaire_forms` by the correct PK — no more orphaned respondent linkage.
+- **Bug #2 fixed.** Active-respondent creation via the submission-ingestion queue now emits a `DATA_CREATE` audit (fire-and-forget), closing the NDPA forensic gap. Mutually exclusive with PENDING_NIN_CREATED.
+- **AC#C1 done.** Smoke-test `fetchActiveFormSchema` switched to the canonical `/forms/public-active` endpoint; the DB-direct workaround is preserved commented for archaeology.
+- **Validation (sequential, definitive):** API `pnpm test` → 2228 passed / 7 skipped / 0 failed (155 files), +3 net new tests; API tsc + web tsc exit 0; API lint exit 0.
+- **Remaining (not dev-completable here):** AC#C2 operator smoke-test on the VPS post-deploy (Tasks 4.2–4.5) flips review → done; Task 5.1 adversarial code-review recommended on a different LLM/session before commit.
 
 ### File List
 
-(to be populated — expected ~3 modified + ~3 test-modified + 1 smoke-test-simplification = ~7 files)
+Modified (production code):
+- `apps/api/src/services/native-form.service.ts` — `flattenForRender` signature + JSDoc + `getPublicActiveForm` call
+- `apps/api/src/controllers/form.controller.ts` — `getFormForRender` + `previewForm` call sites
+- `apps/api/src/controllers/questionnaire.controller.ts` — `getFormPreview` call site
+- `apps/api/src/services/submission-processing.service.ts` — Bug #2 DATA_CREATE audit emission
+
+Modified (tests):
+- `apps/api/src/services/__tests__/native-form.service.test.ts` — AC#A8 regression test + signature update
+- `apps/api/src/controllers/__tests__/form.controller.test.ts` — signature assertion update + `previewForm` row-PK test (code review M3)
+- `apps/api/src/services/__tests__/submission-processing.service.test.ts` — Bug #2 audit tests (AC#B3/B4) + `toHaveBeenCalledTimes(1)` (code review L3) + label/`has_nin` updates (L1/L2)
+
+Added (tests):
+- `apps/api/src/controllers/__tests__/questionnaire.controller.test.ts` — NEW; covers `getFormPreview` row-PK forwarding (code review M3 — no questionnaire-controller test file existed before)
+
+Modified (script):
+- `apps/api/scripts/_enumerator-path-smoke-test.ts` — AC#C1 endpoint switch + workaround removal
+
+Modified (tracking):
+- `_bmad-output/implementation-artifacts/9-33-enumerator-path-formid-and-audit-hotfix.md` — this story
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status flip
+
+### Change Log
+
+- 2026-05-31 — Implemented Bug #1 (formId row-PK fix across all 4 call sites) + Bug #2 (DATA_CREATE audit for active-respondent creation) + AC#C1 smoke-test endpoint switch. +3 tests; 2228 API tests green; tsc (both apps) + API lint clean. Status → review. Operator smoke-test (AC#C2, Tasks 4.2–4.5) + adversarial code-review (Task 5.1) remain.
+- 2026-05-31 — Adversarial code review (Task 5.1) on uncommitted tree: 0 Critical / 0 High / 3 Medium / 3 Low; all 6 fixed same session. M1 (contract-level blast-radius doc), M2 (forward-only cutover decision doc), M3 (added `previewForm` test + new `questionnaire.controller.test.ts` for the 2 previously-unasserted call sites), L1 (dropped tautological `has_nin`), L2 (renamed `creation_path` → `submission_queue_processor`), L3 (`toHaveBeenCalledTimes(1)` on audit tests). Affected suites re-run green (97 passed); API tsc + eslint exit 0. Status remains **review** — AC#C2 operator smoke-test on the VPS (Tasks 4.2–4.5) is still the gate to flip review → done.
 
 ### Review Follow-ups (AI)
 
-(to be populated post-code-review)
+Adversarial code review run 2026-05-31 via `bmad:bmm:workflows:code-review` on the uncommitted working tree (Task 5.1). 0 Critical, 0 High, 3 Medium, 3 Low. The `[x]` task audit was clean (every checked task had real evidence) and the git File List matched `git status` exactly (0 discrepancies). The core fix (flattenForRender row-PK across all 4 verified call sites + mutually-exclusive Bug #2 audit) is correct with non-vacuous tests. Findings below were ALL fixed in the same session.
+
+- [x] **[AI-Review][Critical]** _none found._
+- [x] **[AI-Review][High]** _none found._
+- [x] **[AI-Review][Medium] M1 — "no overlap" claim was false at the contract level.** Bug #1 changes the `/forms/public-active` contract, which the public wizard ALSO consumes (`Step4Questionnaire.tsx:73` → `submissions.questionnaireFormId`). Verified impact is benign-to-positive (wizard bypasses the worker; new value is a valid FK). FIXED: Dev Notes § "Contract-level blast radius" documents the real blast radius. [`_bmad-output/.../9-33-...md` Dev Notes]
+- [x] **[AI-Review][Medium] M2 — forward-only cutover splits `submissions.questionnaireFormId` (pre-fix `schema.id` vs post-fix row PK); no backfill, unacknowledged.** FIXED (decision documented): accept forward-only; no backfill in this hotfix (volume tiny; analytics should key on `source`/`raw_data`). Follow-up tied to Story 9-34. [Dev Notes § "Cutover data inconsistency"]
+- [x] **[AI-Review][Medium] M3 — regression net had a hole for 2 of 4 call sites.** `previewForm` (form.controller) and `getFormPreview` (questionnaire.controller) had no unit assertion forwarding the row PK; a revert of either inline edit would pass CI. FIXED: added a `previewForm` test in `form.controller.test.ts` and created `questionnaire.controller.test.ts` (new file) covering `getFormPreview`. [`apps/api/src/controllers/__tests__/*`]
+- [x] **[AI-Review][Low] L1 — `has_nin: !!data.nin` was a tautology** (always `true` in the active branch). FIXED: removed from the audit `details` + updated the test; added an explanatory code comment. [`submission-processing.service.ts:~510`]
+- [x] **[AI-Review][Low] L2 — `creation_path: 'enumerator_queue_processor'` mislabeled clerk/public sources.** FIXED: renamed to `'submission_queue_processor'`; `source` carries the true channel. Updated code, test, and AC#B1/B3 text. [`submission-processing.service.ts:~512`]
+- [x] **[AI-Review][Low] L3 — audit tests didn't assert "exactly once".** A double-emit regression would have passed. FIXED: added `toHaveBeenCalledTimes(1)` to both the active and pending audit tests. [`submission-processing.service.test.ts`]
+
+**Post-fix validation:** affected suites re-run green — `submission-processing` (42), `form.controller` (33), `questionnaire.controller` (2, new), `native-form.service` (20) = **97 passed**. API `tsc --noEmit` exit 0; API eslint exit 0.
 
 ### Smoke-test re-verification (AC #C2)
 
-(to be populated post-deploy — expected 5/5 ✅ across all four verification columns)
+(to be populated post-deploy by operator — expected 5/5 ✅ across all four verification columns: sub / resp / raw_data / audit)

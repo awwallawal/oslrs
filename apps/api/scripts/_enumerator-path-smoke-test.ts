@@ -35,9 +35,8 @@
 import os from 'node:os';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../src/db/index.js';
-import { users, roles, respondents, submissions, auditLogs, systemSettings, questionnaireForms } from '../src/db/schema/index.js';
+import { users, roles, respondents, submissions, auditLogs } from '../src/db/schema/index.js';
 import { TokenService } from '../src/services/token.service.js';
-import { NativeFormService } from '../src/services/native-form.service.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import pino from 'pino';
 
@@ -318,50 +317,43 @@ async function findEnumerator(override: string | null): Promise<{ id: string; em
 }
 
 async function fetchActiveFormSchema(targetHost: string): Promise<FormSchema> {
-  // PRODUCTION-BUG WORKAROUND (discovered 2026-05-31 via this smoke test):
-  // GET /api/v1/forms/public-active returns data.formId = schema_inner.id (a JSONB-embedded
-  // id), NOT the questionnaire_forms row primary key. The submission-processing worker
-  // looks up by row primary key, so submitting with the public-endpoint's formId causes
-  // "Form schema not found" permanent_error and respondents never get linked. This script
-  // bypasses the broken endpoint by reading wizard.public_form_id setting directly +
-  // querying questionnaire_forms by that row id. The HTTP endpoint is still hit for the
-  // questions array (which the smoke test uses for payload generation), but the FormId
-  // sent in the submission body is the canonical row id.
-  //
-  // Filed as critical hotfix story candidate — every real enumerator submission would
-  // hit this bug without prior knowledge of the row-id-vs-schema-id discrepancy.
-  const setting = await db.query.systemSettings.findFirst({
-    where: eq(systemSettings.key, 'wizard.public_form_id'),
-  });
-  if (!setting?.value) {
-    throw new Error('wizard.public_form_id setting not found — no active form configured');
+  // Story 9-33 (Bug #1 fixed): GET /api/v1/forms/public-active now returns
+  // data.formId = questionnaire_forms ROW PK — the same id submission-ingestion
+  // looks up — so the smoke test can trust the canonical public endpoint
+  // directly. This is the real path a field enumerator's client hits; testing
+  // through it (not a DB-direct bypass) is what makes the smoke test meaningful.
+  const res = await fetch(`${targetHost}/api/v1/forms/public-active`);
+  if (!res.ok) {
+    throw new Error(`/api/v1/forms/public-active returned HTTP ${res.status}`);
   }
-  const rowId = String(setting.value).replace(/^"|"$/g, '');
-
-  const formRow = await db.query.questionnaireForms.findFirst({
-    where: eq(questionnaireForms.id, rowId),
-    columns: { id: true, status: true, formSchema: true },
-  });
-  if (!formRow || formRow.status !== 'published') {
-    throw new Error(`Form ${rowId} not found or not published (status=${formRow?.status ?? 'missing'})`);
+  const body = (await res.json()) as { data: { formId: string; version: string; title: string; questions: FormQuestion[] } };
+  const { formId, version, title, questions } = body.data;
+  if (!formId) {
+    throw new Error('/forms/public-active returned no formId — is wizard.public_form_id configured?');
   }
 
-  if (!formRow.formSchema) throw new Error(`Form ${rowId} has null form_schema`);
+  return { formId, version, title, questions };
 
-  // Delegate to NativeFormService.flattenForRender so choice-list keys get resolved
-  // (raw JSONB stores question.choices as a STRING key into schema.choiceLists; the
-  // flatten step resolves it into the actual [{label, value}] array that the smoke
-  // test's buildResponseForQuestion expects). Then OVERRIDE formId with the row PK
-  // (flattenForRender returns the buggy schema.id by default — see top-of-function
-  // comment for the production-bug context).
-  const flattened = NativeFormService.flattenForRender(formRow.formSchema as Parameters<typeof NativeFormService.flattenForRender>[0]);
-
-  return {
-    formId: formRow.id, // <-- ROW id (canonical FK target), NOT flattened.formId (= schema.id)
-    version: flattened.version,
-    title: flattened.title,
-    questions: flattened.questions as unknown as FormQuestion[],
-  };
+  /* ---------------------------------------------------------------------------
+   * Removed 2026-05-31 after the Story 9-33 hotfix made /forms/public-active
+   * return the row PK as formId. Preserved (commented) for archaeology — this
+   * DB-direct workaround is how the smoke test originally CAUGHT Bug #1 (formId
+   * mismatch) AND Bug #2 (missing active-respondent audit):
+   *
+   *   const setting = await db.query.systemSettings.findFirst({
+   *     where: eq(systemSettings.key, 'wizard.public_form_id'),
+   *   });
+   *   if (!setting?.value) throw new Error('wizard.public_form_id setting not found');
+   *   const rowId = String(setting.value).replace(/^"|"$/g, '');
+   *   const formRow = await db.query.questionnaireForms.findFirst({
+   *     where: eq(questionnaireForms.id, rowId),
+   *     columns: { id: true, status: true, formSchema: true },
+   *   });
+   *   if (!formRow || formRow.status !== 'published') throw new Error(`Form ${rowId} not published`);
+   *   const flattened = NativeFormService.flattenForRender(formRow.formSchema as ..., formRow.id);
+   *   return { formId: formRow.id, version: flattened.version, title: flattened.title,
+   *            questions: flattened.questions as unknown as FormQuestion[] };
+   * ------------------------------------------------------------------------- */
 }
 
 async function fireSubmission(

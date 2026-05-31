@@ -80,7 +80,10 @@ export class FormController {
       const { id } = req.params;
 
       const schema = await NativeFormService.getPublishedFormSchema(id);
-      const flattened = NativeFormService.flattenForRender(schema);
+      // Story 9-33 Bug #1: the `:id` URL param IS the questionnaire_forms row PK
+      // (getPublishedFormSchema looks up by id). Pass it through so the rendered
+      // formId matches what submission-ingestion expects — no second DB query needed.
+      const flattened = NativeFormService.flattenForRender(schema, id);
 
       res.json({ data: flattened });
     } catch (err) {
@@ -97,7 +100,8 @@ export class FormController {
       const { id } = req.params;
 
       const schema = await NativeFormService.getFormSchema(id);
-      const flattened = NativeFormService.flattenForRender(schema);
+      // Story 9-33 Bug #1: `:id` URL param IS the questionnaire_forms row PK.
+      const flattened = NativeFormService.flattenForRender(schema, id);
 
       res.json({ data: flattened });
     } catch (err) {

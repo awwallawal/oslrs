@@ -389,7 +389,7 @@ describe('NativeFormService.flattenForRender', () => {
       },
     });
 
-    const result = NativeFormService.flattenForRender(schema);
+    const result = NativeFormService.flattenForRender(schema, 'form-row-pk-1');
 
     expect(result.questions).toHaveLength(3);
     expect(result.questions[0]).toEqual(
@@ -410,6 +410,22 @@ describe('NativeFormService.flattenForRender', () => {
         sectionTitle: 'Section 2',
       })
     );
+  });
+
+  // Story 9-33 AC#A8 — lock in the Bug #1 fix permanently: flattenForRender
+  // returns the row PK passed by the caller as `formId`, NEVER the JSONB-embedded
+  // schema.id. Returning schema.id orphaned every enumerator submission because
+  // submission-ingestion looks up questionnaire_forms by row PK.
+  it('returns the passed row PK as formId, never schema.id (Bug #1 regression)', () => {
+    const schemaWithInnerId = makeValidSchema({ id: 'inner-schema-id-DO-NOT-USE' });
+
+    const result = NativeFormService.flattenForRender(
+      schemaWithInnerId,
+      'row-pk-uuid-canonical',
+    );
+
+    expect(result.formId).toBe('row-pk-uuid-canonical');
+    expect(result.formId).not.toBe('inner-schema-id-DO-NOT-USE');
   });
 });
 

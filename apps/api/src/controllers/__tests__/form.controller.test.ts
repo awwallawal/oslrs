@@ -158,7 +158,8 @@ describe('FormController', () => {
       );
 
       expect(NativeFormService.getPublishedFormSchema).toHaveBeenCalledWith('form-uuid-1');
-      expect(NativeFormService.flattenForRender).toHaveBeenCalledWith(mockSchema);
+      // Story 9-33 Bug #1: the row PK (`:id` param) must be forwarded to flattenForRender.
+      expect(NativeFormService.flattenForRender).toHaveBeenCalledWith(mockSchema, 'form-uuid-1');
       expect(jsonMock).toHaveBeenCalledWith({ data: mockFlattened });
     });
 
@@ -211,6 +212,46 @@ describe('FormController', () => {
       );
 
       expect(mockNext).toHaveBeenCalledWith(error);
+    });
+  });
+
+  // Story 9-33 review M3 — close the regression hole: the second call site of
+  // flattenForRender in this controller (previewForm) must also forward the row
+  // PK. Without this test a revert of the previewForm inline edit would pass CI.
+  describe('previewForm', () => {
+    const mockSchema = {
+      id: 'inner-schema-id-DO-NOT-USE',
+      title: 'Labour Survey',
+      version: '1.0.0',
+      status: 'published' as const,
+      sections: [],
+      choiceLists: {},
+      createdAt: '2026-02-10T00:00:00.000Z',
+    };
+
+    const mockFlattened = {
+      formId: 'form-uuid-9',
+      title: 'Labour Survey',
+      version: '1.0.0',
+      questions: [],
+      choiceLists: {},
+    };
+
+    it('forwards the row PK (:id param) to flattenForRender (Story 9-33 Bug #1)', async () => {
+      mockReq.params = { id: 'form-uuid-9' };
+
+      vi.mocked(NativeFormService.getFormSchema).mockResolvedValue(mockSchema);
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(mockFlattened);
+
+      await FormController.previewForm(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
+
+      expect(NativeFormService.getFormSchema).toHaveBeenCalledWith('form-uuid-9');
+      expect(NativeFormService.flattenForRender).toHaveBeenCalledWith(mockSchema, 'form-uuid-9');
+      expect(jsonMock).toHaveBeenCalledWith({ data: mockFlattened });
     });
   });
 

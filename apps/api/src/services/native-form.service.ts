@@ -414,14 +414,24 @@ export class NativeFormService {
     }
 
     const schema = form.formSchema as NativeFormSchema;
-    return this.flattenForRender(schema);
+    return this.flattenForRender(schema, form.id);
   }
 
   /**
    * Flatten the nested form schema into an ordered array of questions with section metadata.
    * Resolves choice list keys to actual Choice arrays.
+   *
+   * Story 9-33 (Bug #1): `formId` in the returned {@link FlattenedForm} is the
+   * questionnaire_forms ROW PRIMARY KEY (`form.id`), NOT the JSONB-embedded
+   * `schema.id`. The inner `schema.id` is a version-tracking metadata artifact
+   * and does NOT match the row PK that downstream submission-ingestion lookups
+   * (submission-processing.service.ts resolveFormSchema) use. Returning the
+   * inner id orphaned every enumerator submission. ALWAYS pass the row PK.
+   *
+   * @param schema     the form's JSONB schema
+   * @param formRowId  the questionnaire_forms row primary key (canonical client-facing formId)
    */
-  static flattenForRender(schema: NativeFormSchema): FlattenedForm {
+  static flattenForRender(schema: NativeFormSchema, formRowId: string): FlattenedForm {
     const questions: FlattenedQuestion[] = [];
     const sectionShowWhen: Record<string, Question['showWhen']> = {};
 
@@ -453,7 +463,7 @@ export class NativeFormService {
     }
 
     return {
-      formId: schema.id,
+      formId: formRowId,
       title: schema.title,
       version: schema.version,
       questions,

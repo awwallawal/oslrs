@@ -283,7 +283,8 @@ export class QuestionnaireController {
     try {
       const { id } = req.params;
       const schema = await NativeFormService.getFormSchema(id);
-      const flattened = NativeFormService.flattenForRender(schema);
+      // Story 9-33 Bug #1: `:id` URL param IS the questionnaire_forms row PK.
+      const flattened = NativeFormService.flattenForRender(schema, id);
 
       res.json({ data: flattened });
     } catch (err) {
