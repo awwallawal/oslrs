@@ -171,6 +171,7 @@ export const cspDirectives = {
         "https://hcaptcha.com",
         "https://*.hcaptcha.com",
         "https://cdn.jsdelivr.net",
+        "https://cloudflareinsights.com",
       ],
       frameSrc: [
         "https://accounts.google.com",

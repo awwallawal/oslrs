@@ -2,6 +2,18 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 
+// Extracts a specific CSP directive value, anchored to the directive name.
+// Returns the value (everything between "<name> " and the next ";") or null
+// if the directive is absent. Centralised here (Story 9-30 code-review F3
+// follow-up) so the four directive-anchored assertions in this file share
+// one regex source — when a future CSP spec edge case forces the pattern to
+// evolve (e.g., source-expression embedded commas, report-to group lists),
+// only this helper needs updating.
+function getDirective(csp: string, name: string): string | null {
+  const match = csp.match(new RegExp(`(?:^|;)\\s*${name}\\s+([^;]+)`));
+  return match ? match[1] : null;
+}
+
 describe('CSP Header Integration', () => {
   it('should include Content-Security-Policy-Report-Only header on API responses', async () => {
     const res = await request(app).get('/health');
@@ -26,22 +38,22 @@ describe('CSP Header Integration', () => {
 
   // Story 9-8 promotion gate: violations from the 18-day Report-Only window
   // identified two missing allowlist entries needed before flipping to enforcing.
-  // Assertions are positional (regex-anchored to the specific directive) so a
-  // future regression that moves the URL into a different directive would fail.
+  // Anchored via getDirective so a future regression that moves the URL into a
+  // different directive (or drops it from script-src) would fail loudly.
   it('should allowlist Cloudflare Browser Insights beacon in script-src', async () => {
     const res = await request(app).get('/health');
     const csp = res.headers['content-security-policy-report-only'];
-    const scriptSrcMatch = csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
-    expect(scriptSrcMatch).not.toBeNull();
-    expect(scriptSrcMatch![1]).toContain('https://static.cloudflareinsights.com');
+    const scriptSrc = getDirective(csp, 'script-src');
+    expect(scriptSrc).not.toBeNull();
+    expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
   });
 
   it('should allowlist Google Sign-In stylesheet in style-src', async () => {
     const res = await request(app).get('/health');
     const csp = res.headers['content-security-policy-report-only'];
-    const styleSrcMatch = csp.match(/(?:^|;)\s*style-src\s+([^;]+)/);
-    expect(styleSrcMatch).not.toBeNull();
-    expect(styleSrcMatch![1]).toContain('https://accounts.google.com');
+    const styleSrc = getDirective(csp, 'style-src');
+    expect(styleSrc).not.toBeNull();
+    expect(styleSrc).toContain('https://accounts.google.com');
   });
 
   it('should contain object-src none', async () => {
@@ -65,9 +77,15 @@ describe('CSP Header Integration', () => {
     expect(csp).toContain("style-src");
     expect(csp).toContain("'unsafe-inline'");
 
-    // connect-src with CDN and WebSocket
-    expect(csp).toContain("connect-src");
-    expect(csp).toContain("https://cdn.jsdelivr.net");
+    // connect-src — anchored via getDirective so a future refactor that
+    // moves cdn.jsdelivr.net to a different directive (e.g., script-src
+    // for a CDN-hosted polyfill) while dropping the connect-src entry is
+    // caught. Pre-existing naked toContain was upgraded as a Story 9-30
+    // code-review F2 follow-up, matching the rigor of the dedicated
+    // Cloudflare-Insights connect-src test below.
+    const connectSrc = getDirective(csp, 'connect-src');
+    expect(connectSrc).not.toBeNull();
+    expect(connectSrc).toContain("https://cdn.jsdelivr.net");
 
     // frame-src for OAuth and hCaptcha iframes
     expect(csp).toContain("frame-src");
@@ -93,13 +111,28 @@ describe('CSP Header Integration', () => {
 
     // Story 9-8: script-src-attr pinned explicitly (was implicit Helmet default
     // before 9-8 — made explicit so the csp-parity test can compare cleanly
-    // against the nginx mirror without false-positive drift). Anchored regex
-    // ensures the value is genuinely in the script-src-attr directive (a naked
+    // against the nginx mirror without false-positive drift). Anchored via
+    // getDirective ensures the value is genuinely in script-src-attr (a naked
     // toContain would pass even if "script-src-attr 'none'" appeared as a
     // substring of an unrelated directive).
-    const scriptSrcAttrMatch = csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/);
-    expect(scriptSrcAttrMatch).not.toBeNull();
-    expect(scriptSrcAttrMatch![1].trim()).toBe("'none'");
+    const scriptSrcAttr = getDirective(csp, 'script-src-attr');
+    expect(scriptSrcAttr).not.toBeNull();
+    expect(scriptSrcAttr!.trim()).toBe("'none'");
+  });
+
+  // Story 9-30: the Cloudflare Web Analytics beacon (shipped 2026-05-19 in
+  // Story 9-20) loads from static.cloudflareinsights.com (script-src, above)
+  // but POSTs RUM telemetry to the root host cloudflareinsights.com/cdn-cgi/rum.
+  // Without the connect-src entry, beacon POSTs fail and Web Analytics goes
+  // silently dark. Anchored via getDirective: pins the host to the connect-src
+  // directive specifically, so a refactor that drops it (e.g., while
+  // consolidating Cloudflare hosts into a wildcard elsewhere) is caught.
+  it('should allowlist Cloudflare Insights RUM beacon target in connect-src', async () => {
+    const res = await request(app).get('/health');
+    const csp = res.headers['content-security-policy-report-only'];
+    const connectSrc = getDirective(csp, 'connect-src');
+    expect(connectSrc).not.toBeNull();
+    expect(connectSrc).toContain('https://cloudflareinsights.com');
   });
 
   it('should contain report-to directive', async () => {

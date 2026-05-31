@@ -96,3 +96,7 @@ aptitude-tests/
 
 # Briefing HTML intermediates — regenerable from .md via scripts/render-briefing-pdf.mjs
 docs/briefings/*.html
+
+# Production data snapshots (PII) — never commit
+docs/vps-snapshots/
+docs/emails-sent-*.csv
