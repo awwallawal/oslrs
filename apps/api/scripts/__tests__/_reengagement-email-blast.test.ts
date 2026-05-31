@@ -144,43 +144,91 @@ describe('_reengagement-email-blast — escapeHtml', () => {
   });
 });
 
-describe('_reengagement-email-blast — buildEmail', () => {
+describe('_reengagement-email-blast — buildEmail (two-template branching by current_step)', () => {
   const URL = 'https://oyoskills.com/auth/magic?token=abc&purpose=wizard_resume';
 
-  it('uses the canonical subject', () => {
-    const e = buildEmail('Alice', URL);
-    expect(e.subject).toBe(
-      'Complete your Oyo State Skills Registry registration (2 minutes)',
-    );
+  // Story 9-30 follow-up: two-template branching. Step >= 4 ("high-progress")
+  // gets the "90% done" copy; Step <= 3 ("low-progress") gets the softer
+  // "your profile is saved" copy. Threshold is HIGH_PROGRESS_STEP_THRESHOLD = 4.
+
+  it('uses 90%-done subject for high-progress steps (4-5)', () => {
+    expect(buildEmail('Alice', URL, 4).subject).toBe('Alice, 90% done. 2 min to complete');
+    expect(buildEmail('Alice', URL, 5).subject).toBe('Alice, 90% done. 2 min to complete');
   });
 
-  it('personalizes the first-name in both text and html', () => {
-    const e = buildEmail('Alice', URL);
-    expect(e.text).toContain('Hi Alice,');
-    expect(e.html).toContain('Hi <strong>Alice</strong>');
+  it('uses saved-profile subject for low-progress steps (1-3)', () => {
+    expect(buildEmail('Alice', URL, 1).subject).toBe('Alice, your Oyo Skills profile is saved');
+    expect(buildEmail('Alice', URL, 2).subject).toBe('Alice, your Oyo Skills profile is saved');
+    expect(buildEmail('Alice', URL, 3).subject).toBe('Alice, your Oyo Skills profile is saved');
   });
 
-  it('html-escapes hostile first-name (L12 finding)', () => {
-    const e = buildEmail('<script>alert(1)</script>', URL);
-    expect(e.html).not.toContain('<script>alert(1)');
-    expect(e.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  it('uses "Finish my registration" CTA for high-progress', () => {
+    const e = buildEmail('Alice', URL, 5);
+    expect(e.html).toContain('Finish my registration');
+    expect(e.html).not.toContain('Continue my registration');
   });
 
-  it('embeds the resume URL in both text and html', () => {
-    const e = buildEmail('Alice', URL);
-    expect(e.text).toContain(URL);
-    expect(e.html).toContain(URL);
+  it('uses "Continue my registration" CTA for low-progress', () => {
+    const e = buildEmail('Alice', URL, 2);
+    expect(e.html).toContain('Continue my registration');
+    expect(e.html).not.toContain('Finish my registration');
   });
 
-  it('contains no apology / admission copy (audit-safe framing)', () => {
-    const e = buildEmail('Alice', URL);
-    const all = `${e.subject} ${e.text} ${e.html}`.toLowerCase();
-    expect(all).not.toContain('sorry');
-    expect(all).not.toContain('apolog');
-    expect(all).not.toContain('data loss');
-    expect(all).not.toContain('inconvenience');
-    expect(all).not.toContain('bug');
-    expect(all).not.toContain('issue');
+  it('high-progress copy claims "90% complete" / "answers are all saved"', () => {
+    const e = buildEmail('Alice', URL, 4);
+    expect(e.text).toContain('90% complete');
+    expect(e.text).toContain('answers are all saved');
+    expect(e.html).toContain('90% complete');
+  });
+
+  it('low-progress copy does NOT claim 90% (accuracy gate)', () => {
+    const e = buildEmail('Alice', URL, 2);
+    const all = `${e.subject} ${e.text} ${e.html}`;
+    expect(all).not.toContain('90%');
+    expect(all).not.toContain('answers are all saved');
+    expect(e.text).toContain('progress so far is saved');
+  });
+
+  it('personalizes the first-name in both text and html (both branches)', () => {
+    for (const step of [2, 5]) {
+      const e = buildEmail('Alice', URL, step);
+      expect(e.text).toContain('Hi Alice,');
+      expect(e.html).toContain('Hi <strong>Alice</strong>');
+    }
+  });
+
+  it('html-escapes hostile first-name in both branches (L12 finding)', () => {
+    for (const step of [2, 5]) {
+      const e = buildEmail('<script>alert(1)</script>', URL, step);
+      expect(e.html).not.toContain('<script>alert(1)');
+      expect(e.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    }
+  });
+
+  it('embeds the resume URL in both text and html (both branches)', () => {
+    for (const step of [2, 5]) {
+      const e = buildEmail('Alice', URL, step);
+      expect(e.text).toContain(URL);
+      expect(e.html).toContain(URL);
+    }
+  });
+
+  it('contains no apology / admission copy in either branch (audit-safe framing)', () => {
+    for (const step of [1, 2, 3, 4, 5]) {
+      const e = buildEmail('Alice', URL, step);
+      const all = `${e.subject} ${e.text} ${e.html}`.toLowerCase();
+      expect(all).not.toContain('sorry');
+      expect(all).not.toContain('apolog');
+      expect(all).not.toContain('data loss');
+      expect(all).not.toContain('inconvenience');
+      expect(all).not.toContain('bug');
+      expect(all).not.toContain('issue');
+    }
+  });
+
+  it('threshold boundary: step=3 is low-progress, step=4 is high-progress', () => {
+    expect(buildEmail('Alice', URL, 3).subject).toContain('profile is saved');
+    expect(buildEmail('Alice', URL, 4).subject).toContain('90% done');
   });
 });
 

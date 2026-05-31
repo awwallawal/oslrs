@@ -1,8 +1,22 @@
 /**
  * Story 9-27 Part A — Operator-gated re-engagement email blast.
  *
- * One-shot script that contacts wizard_drafts holding preserved Step 4 answers,
- * inviting recipients to resume via the Story 9-12 MR-8 wizard_resume magic-link.
+ * One-shot script that contacts ALL non-expired wizard_drafts (any current_step)
+ * whose email is NOT already a completed registrant's email, inviting recipients
+ * to resume via the Story 9-12 MR-8 wizard_resume magic-link.
+ *
+ * Two-template branching by current_step (Story 9-30 follow-up, 2026-05-31):
+ *   Step 4-5 (high-progress): "${firstName}, 90% done. 2 min to complete"
+ *                             + "your name, phone, and answers are all saved"
+ *                             + CTA "Finish my registration"
+ *   Step 1-3 (low-progress):  "${firstName}, your Oyo Skills profile is saved"
+ *                             + "pick up where you left off"
+ *                             + CTA "Continue my registration"
+ *
+ * Cohort = wizard_drafts WHERE
+ *   form_data ->> 'email' IS NOT NULL
+ *   AND expires_at > NOW()
+ *   AND NOT EXISTS (any matching completed-respondent email)  ← Cat1 exclusion
  *
  * Audit-safe framing principle (see story § "Audit-safe framing"): this is a
  * product-marketing re-engagement campaign. NO apology, NO admission, NO
@@ -164,45 +178,107 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function buildEmail(firstName: string, resumeUrl: string): {
+// Step >= HIGH_PROGRESS_STEP_THRESHOLD gets the "90% done" copy; below it
+// gets the softer "your profile is saved" copy. Threshold matches the wizard's
+// Step 4 (questionnaire) — by Step 4 the respondent has committed enough data
+// (name, phone, LGA, identity) that "90% done" is empirically defensible
+// (per cohort step-distribution analysis 2026-05-31: Steps 4+5 = 81% of stalls).
+const HIGH_PROGRESS_STEP_THRESHOLD = 4;
+
+export function buildEmail(firstName: string, resumeUrl: string, currentStep: number): {
   subject: string;
   text: string;
   html: string;
 } {
-  const subject = 'Complete your Oyo State Skills Registry registration (2 minutes)';
-  const text = `Hi ${firstName},
+  const isHighProgress = currentStep >= HIGH_PROGRESS_STEP_THRESHOLD;
+  const safeFirstName = escapeHtml(firstName);
 
-You started registering for the Oyo State Skills Registry recently — your
-progress is saved. Click below to finish in under 2 minutes:
+  if (isHighProgress) {
+    // Step 4-5 — high-progress: "90% done" framing
+    const subject = `${firstName}, 90% done. 2 min to complete`;
+    const text = `Hi ${firstName},
+
+Your Oyo State Skills Registry registration is 90% complete — your name,
+phone, and answers are all saved.
+
+Just one short step remains. Click below to finish in under 2 minutes:
 
   ${resumeUrl}
 
-Once registered, you'll be in the database that helps Oyo State plan better
-training programs and connect residents to job opportunities.
-
-Registration is free + your data is protected under the Nigeria Data
-Protection Act (NDPA).
-
-If you're no longer interested, no action is needed — your draft will expire
-automatically.
+Once complete:
+  - You're eligible to be matched with training programs
+  - Opportunities sent to you based on your skills and LGA
+  - Your data stays protected under the Nigeria Data Protection Act (NDPA)
 
 The Oyo State Skills Registry team
-${SUPPORT_EMAIL}`;
+${SUPPORT_EMAIL}
 
-  const safeFirstName = escapeHtml(firstName);
+If you're no longer interested, no action is needed — your saved progress
+will expire automatically.`;
+
+    const html = `<!doctype html>
+<html><body style="font-family:system-ui,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:24px;">
+  <h2 style="color:${BRAND};margin:0 0 16px;">You're 90% done</h2>
+  <p>Hi <strong>${safeFirstName}</strong>,</p>
+  <p>Your Oyo State Skills Registry registration is <strong>90% complete</strong> — your name, phone, and answers are all saved.</p>
+  <p>Just <strong>one short step</strong> remains. Click below to finish in under 2 minutes:</p>
+  <p style="margin:28px 0;text-align:center;">
+    <a href="${resumeUrl}" style="display:inline-block;background:${BRAND};color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:16px;">Finish my registration</a>
+  </p>
+  <p style="margin-top:24px;"><strong>Once complete:</strong></p>
+  <ul style="color:#333;line-height:1.6;">
+    <li>You're eligible to be matched with training programs</li>
+    <li>Opportunities sent to you based on your skills and LGA</li>
+    <li>Your data stays protected under the Nigeria Data Protection Act (NDPA)</li>
+  </ul>
+  <hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px;" />
+  <p style="color:#777;font-size:13px;">The Oyo State Skills Registry team<br/><a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a></p>
+  <p style="color:#999;font-size:12px;margin-top:16px;">If you're no longer interested, no action is needed — your saved progress will expire automatically.</p>
+</body></html>`;
+
+    return { subject, text, html };
+  }
+
+  // Step 1-3 — low-progress: "your profile is saved" framing (no 90% claim)
+  const subject = `${firstName}, your Oyo Skills profile is saved`;
+  const text = `Hi ${firstName},
+
+You started registering for the Oyo State Skills Registry recently — your
+progress so far is saved.
+
+Pick up where you left off in just a few minutes:
+
+  ${resumeUrl}
+
+Once complete:
+  - You're eligible to be matched with training programs
+  - Opportunities sent to you based on your skills and LGA
+  - Your data stays protected under the Nigeria Data Protection Act (NDPA)
+
+The Oyo State Skills Registry team
+${SUPPORT_EMAIL}
+
+If you're no longer interested, no action is needed — your saved progress
+will expire automatically.`;
+
   const html = `<!doctype html>
 <html><body style="font-family:system-ui,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:24px;">
-  <h2 style="color:${BRAND};margin:0 0 16px;">Complete your registration</h2>
+  <h2 style="color:${BRAND};margin:0 0 16px;">Your profile is saved</h2>
   <p>Hi <strong>${safeFirstName}</strong>,</p>
-  <p>You started registering for the Oyo State Skills Registry recently — your progress is saved. Click below to finish in under 2 minutes:</p>
-  <p style="margin:24px 0;text-align:center;">
-    <a href="${resumeUrl}" style="display:inline-block;background:${BRAND};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Resume my registration</a>
+  <p>You started registering for the Oyo State Skills Registry recently — your progress so far is saved.</p>
+  <p>Pick up where you left off in just a few minutes:</p>
+  <p style="margin:28px 0;text-align:center;">
+    <a href="${resumeUrl}" style="display:inline-block;background:${BRAND};color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:16px;">Continue my registration</a>
   </p>
-  <p>Once registered, you'll be in the database that helps Oyo State plan better training programs and connect residents to job opportunities.</p>
-  <p style="color:#555;font-size:14px;">Registration is free + your data is protected under the Nigeria Data Protection Act (NDPA).</p>
-  <p style="color:#777;font-size:13px;">If you're no longer interested, no action is needed — your draft will expire automatically.</p>
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-  <p style="color:#777;font-size:12px;">The Oyo State Skills Registry team<br/><a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a></p>
+  <p style="margin-top:24px;"><strong>Once complete:</strong></p>
+  <ul style="color:#333;line-height:1.6;">
+    <li>You're eligible to be matched with training programs</li>
+    <li>Opportunities sent to you based on your skills and LGA</li>
+    <li>Your data stays protected under the Nigeria Data Protection Act (NDPA)</li>
+  </ul>
+  <hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px;" />
+  <p style="color:#777;font-size:13px;">The Oyo State Skills Registry team<br/><a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a></p>
+  <p style="color:#999;font-size:12px;margin-top:16px;">If you're no longer interested, no action is needed — your saved progress will expire automatically.</p>
 </body></html>`;
 
   return { subject, text, html };
@@ -214,14 +290,28 @@ interface DraftRow {
   formData: unknown;
   createdAt: Date;
   expiresAt: Date;
+  currentStep: number;
 }
 
 async function selectCohort(args: Args): Promise<DraftRow[]> {
+  // Cat1 exclusion (Story 9-30 follow-up, 2026-05-31): drop any draft whose
+  // email is already attached to a completed-registration respondent. Joins
+  // magic_link_tokens (which holds the public-wizard email) -> respondents
+  // -> submissions. Without this, ~21 completed users with new drafts (per
+  // 2026-05-31 cohort refresh) would get confusing "finish your registration"
+  // nudges. The questionnaireResponses filter from Part A's original ship is
+  // INTENTIONALLY removed here — operator directive 2026-05-31 to reach all
+  // stalled drafts (including Steps 1-3), with copy branched in buildEmail.
   const conditions = [
-    sql`${wizardDrafts.formData} ? 'questionnaireResponses'`,
-    sql`${wizardDrafts.formData}->'questionnaireResponses' != '{}'::jsonb`,
     sql`${wizardDrafts.formData}->>'email' IS NOT NULL`,
     gt(wizardDrafts.expiresAt, sql`NOW()`),
+    sql`NOT EXISTS (
+      SELECT 1
+      FROM magic_link_tokens mlt
+      INNER JOIN respondents r ON mlt.respondent_id = r.id
+      INNER JOIN submissions s ON s.respondent_id = r.id
+      WHERE mlt.email = ${wizardDrafts.email}
+    )`,
   ];
 
   if (args.since) {
@@ -238,6 +328,7 @@ async function selectCohort(args: Args): Promise<DraftRow[]> {
       formData: wizardDrafts.formData,
       createdAt: wizardDrafts.createdAt,
       expiresAt: wizardDrafts.expiresAt,
+      currentStep: wizardDrafts.currentStep,
     })
     .from(wizardDrafts)
     .where(and(...conditions))
@@ -305,8 +396,9 @@ async function main() {
       const fd = (row.formData ?? {}) as Record<string, unknown>;
       const fullName = typeof fd.fullName === 'string' ? fd.fullName : '';
       const firstName = firstNameFrom(fullName);
+      const templateTag = row.currentStep >= HIGH_PROGRESS_STEP_THRESHOLD ? '90%-done' : 'saved';
       console.log(
-        `  ${maskEmail(row.email).padEnd(40)} ${firstName.padEnd(20)} draft=${row.id} created=${row.createdAt.toISOString()}`,
+        `  ${maskEmail(row.email).padEnd(40)} ${firstName.padEnd(20)} step=${row.currentStep} tpl=${templateTag.padEnd(8)} draft=${row.id} created=${row.createdAt.toISOString()}`,
       );
     }
     console.log(
@@ -334,7 +426,7 @@ async function main() {
         purpose: 'wizard_resume',
       });
       const resumeUrl = MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'wizard_resume');
-      const emailContent = buildEmail(firstName, resumeUrl);
+      const emailContent = buildEmail(firstName, resumeUrl, row.currentStep);
 
       const result = await EmailService.sendGenericEmail({
         to: row.email,
