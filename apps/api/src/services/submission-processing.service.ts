@@ -21,7 +21,7 @@ import {
   normaliseNigerianPhone,
   normaliseDate,
 } from '../lib/normalise/index.js';
-import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -492,7 +492,7 @@ export class SubmissionProcessingService {
         AuditService.logAction({
           actorId: submitterId ?? null,
           action: AUDIT_ACTIONS.PENDING_NIN_CREATED,
-          targetResource: 'respondent',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: created.id,
           details: { source },
         });
@@ -514,7 +514,7 @@ export class SubmissionProcessingService {
         AuditService.logAction({
           actorId: submitterId ?? null,
           action: AUDIT_ACTIONS.DATA_CREATE,
-          targetResource: 'respondent',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: created.id,
           details: {
             source,
@@ -606,7 +606,7 @@ export class SubmissionProcessingService {
     AuditService.logAction({
       actorId: submitterId ?? null,
       action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-      targetResource: 'respondent',
+      targetResource: AUDIT_TARGETS.RESPONDENT,
       targetId: promotedId,
       details: { trigger: 'race_resolution_merge' },
     });

@@ -35,8 +35,9 @@
 import os from 'node:os';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../src/db/index.js';
-import { users, roles, respondents, submissions, auditLogs } from '../src/db/schema/index.js';
+import { users, roles, respondents, submissions, auditLogs, fraudDetections, magicLinkTokens, marketplaceProfiles } from '../src/db/schema/index.js';
 import { TokenService } from '../src/services/token.service.js';
+import { AUDIT_TARGETS } from '../src/services/audit.service.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import pino from 'pino';
 
@@ -398,62 +399,109 @@ async function verifySubmission(submissionUid: string): Promise<VerifyResult> {
   const respondentRowFound = subRow.respondentId !== null;
   const rawDataNonEmpty = subRow.rawData !== null && Object.keys(subRow.rawData as Record<string, unknown>).length > 0;
 
-  const auditMatches = await db
-    .select({ id: auditLogs.id })
-    .from(auditLogs)
-    .where(eq(auditLogs.targetId, subRow.id))
-    .limit(1);
+  // Story 9-33 Bug #2 audit emission targets the RESPONDENT row (not the
+  // submission row): submission-processing.service.ts emits `data.create`
+  // with `targetResource: AUDIT_TARGETS.RESPONDENT` + `targetId: created.id`
+  // (the respondent's id). Query accordingly; querying by submission.id
+  // never matches and produces a permanent false-negative.
+  //
+  // F1 (review-fix 2026-06-01): both the verifier and the emit-sites
+  // reference the shared `AUDIT_TARGETS.RESPONDENT` constant rather than
+  // a string literal, so a future rename causes a compile error rather
+  // than a silent drift between sides — the SAME class of bug this
+  // smoke test was originally authored to catch.
+  //
+  // F3 (review-fix 2026-06-01): exact-count assertion. Story 9-33 design
+  // intent is mutually-exclusive single emission per respondent creation
+  // (the PENDING_NIN_CREATED branch at submission-processing.service.ts
+  // is mutually exclusive with the new DATA_CREATE branch). A future
+  // regression that double-emits would silently double the audit-chain
+  // volume; `.limit(2)` + exact-1 check makes that observable.
+  let auditRowFound = false;
+  if (subRow.respondentId) {
+    const auditMatches = await db
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(and(
+        eq(auditLogs.targetResource, AUDIT_TARGETS.RESPONDENT),
+        eq(auditLogs.targetId, subRow.respondentId),
+      ))
+      .limit(2);
+    if (auditMatches.length === 1) {
+      auditRowFound = true;
+    } else if (auditMatches.length > 1) {
+      logger.warn({
+        event: 'enumerator_smoke.audit_double_emit',
+        respondentId: subRow.respondentId,
+        rowsFound: auditMatches.length,
+        note: 'Story 9-33 Bug #2 invariant violated — exactly one audit event expected per respondent creation. Possible double-emit regression upstream of submission-processing.service.ts.',
+      });
+      // auditRowFound stays false — double-emit is a verification failure.
+    }
+  }
 
   return {
     submissionUid,
     submissionRowFound: true,
     respondentRowFound,
     rawDataNonEmpty,
-    auditRowFound: auditMatches.length > 0,
+    auditRowFound,
   };
 }
 
-async function cleanupSynthetic(submissionUids: string[]): Promise<{ deletedSubmissions: number; deletedRespondents: number }> {
-  if (submissionUids.length === 0) return { deletedSubmissions: 0, deletedRespondents: 0 };
+async function cleanupSynthetic(): Promise<{ deletedSubmissions: number; deletedRespondents: number }> {
+  // F2 (review-fix 2026-06-01): sweep ALL synthetic respondents (nin LIKE
+  // '99999%') and their FK-linked rows, NOT just the current run's
+  // `submissionUids`. Rationale: the synthetic-NIN generator is deterministic
+  // on `seq` alone (ignoring runStamp), so cross-run collisions are possible
+  // when a prior run's cleanup partially failed. The original UID-scoped
+  // cleanup only swept the current run's rows — leaving prior-run orphans
+  // that would block the next run's INSERTs on the partial unique-NIN
+  // index (FR21 duplicate-rejection path). Sweeping by the synthetic-NIN
+  // gate makes the cleanup idempotent: every run leaves a clean DB
+  // regardless of what previous runs failed to clean. The `nin LIKE '99999%'`
+  // pattern is the primary safety filter (real NIMC NINs don't start 99999).
+  //
+  // FK cascade order: respondents is referenced by magic_link_tokens +
+  // marketplace_profiles + submissions; submissions is referenced by
+  // fraud_detections. Children deleted first.
+  const allSyntheticRespondents = await db
+    .select({ id: respondents.id })
+    .from(respondents)
+    .where(sql`${respondents.nin} LIKE '99999%'`);
+  const respondentIds = allSyntheticRespondents.map((r) => r.id);
 
-  // FK cascade order discovered via the 2026-05-31 first run: respondents is
-  // referenced by magic_link_tokens + marketplace_profiles + submissions;
-  // submissions is referenced by fraud_detections. Must delete children first.
-  // Cleanup is restricted by synthetic-NIN pattern (LIKE '99999%') as the
-  // defense-in-depth gate against accidentally nuking real data.
-  const subRows = await db
-    .select({ id: submissions.id, respondentId: submissions.respondentId })
+  if (respondentIds.length === 0) {
+    return { deletedSubmissions: 0, deletedRespondents: 0 };
+  }
+
+  const linkedSubmissions = await db
+    .select({ id: submissions.id })
     .from(submissions)
-    .where(inArray(submissions.submissionUid, submissionUids));
-
-  const respondentIds = subRows.map((r) => r.respondentId).filter((id): id is string => id !== null);
-  const submissionIds = subRows.map((r) => r.id);
+    .where(inArray(submissions.respondentId, respondentIds));
+  const submissionIds = linkedSubmissions.map((s) => s.id);
 
   if (submissionIds.length > 0) {
     // 1. fraud_detections references submissions
-    await db.execute(sql`DELETE FROM fraud_detections WHERE submission_id = ANY(${submissionIds})`);
+    await db.delete(fraudDetections).where(inArray(fraudDetections.submissionId, submissionIds));
   }
 
-  if (respondentIds.length > 0) {
-    // 2. magic_link_tokens + marketplace_profiles reference respondents
-    await db.execute(sql`DELETE FROM magic_link_tokens WHERE respondent_id = ANY(${respondentIds})`);
-    await db.execute(sql`DELETE FROM marketplace_profiles WHERE respondent_id = ANY(${respondentIds})`);
-  }
+  // 2. magic_link_tokens + marketplace_profiles reference respondents
+  await db.delete(magicLinkTokens).where(inArray(magicLinkTokens.respondentId, respondentIds));
+  await db.delete(marketplaceProfiles).where(inArray(marketplaceProfiles.respondentId, respondentIds));
 
   if (submissionIds.length > 0) {
     // 3. submissions
     await db.delete(submissions).where(inArray(submissions.id, submissionIds));
   }
 
-  let deletedResps = 0;
-  if (respondentIds.length > 0) {
-    // 4. respondents (synthetic NIN gate as belt-and-braces)
-    const ninFilter = sql`${respondents.nin} LIKE '99999%'`;
-    await db.delete(respondents).where(and(inArray(respondents.id, respondentIds), ninFilter));
-    deletedResps = respondentIds.length;
-  }
+  // 4. respondents (synthetic NIN gate as the canonical filter — same one
+  // we used to find them above, applied again as belt-and-braces against
+  // any accidental id-leak from a parallel query).
+  const ninFilter = sql`${respondents.nin} LIKE '99999%'`;
+  await db.delete(respondents).where(and(inArray(respondents.id, respondentIds), ninFilter));
 
-  return { deletedSubmissions: submissionIds.length, deletedRespondents: deletedResps };
+  return { deletedSubmissions: submissionIds.length, deletedRespondents: respondentIds.length };
 }
 
 async function main() {
@@ -543,7 +591,7 @@ async function main() {
 
   if (args.cleanup) {
     console.log('\nCleaning up synthetic rows...');
-    const { deletedSubmissions, deletedRespondents } = await cleanupSynthetic(payloads.map((p) => p.submissionId));
+    const { deletedSubmissions, deletedRespondents } = await cleanupSynthetic();
     console.log(`  Deleted ${deletedSubmissions} submissions row(s), ${deletedRespondents} respondents row(s)`);
     console.log('  audit_logs entries PRESERVED (chain integrity + forensic trail)');
   } else {

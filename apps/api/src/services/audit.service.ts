@@ -99,6 +99,25 @@ export const AUDIT_ACTIONS = {
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 
 /**
+ * Canonical `targetResource` values for audit-log entries (Story 9-33 F1).
+ *
+ * Extracted as constants to make the verifier-vs-emit-site coupling explicit:
+ * a future rename of any value here causes a compile error at every reference
+ * site (both producers and consumers), rather than silently drifting between
+ * 'respondent' (current dominant pattern) and 'respondents' (one outlier at
+ * backfill-input-sanitisation.ts). The smoke-test verifier at
+ * `apps/api/scripts/_enumerator-path-smoke-test.ts` and the production
+ * emission sites in `submission-processing.service.ts` both reference this
+ * constant — drift between them was the false-negative class that the
+ * Story 9-33 hotfix originally hid.
+ */
+export const AUDIT_TARGETS = {
+  RESPONDENT: 'respondent',
+} as const;
+
+export type AuditTarget = (typeof AUDIT_TARGETS)[keyof typeof AUDIT_TARGETS];
+
+/**
  * Backward-compatible PII_ACTIONS alias (Task 5.2).
  * Existing 9 consumer call sites continue using PII_ACTIONS unchanged.
  */
