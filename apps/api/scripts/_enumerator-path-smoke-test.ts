@@ -424,6 +424,11 @@ async function verifySubmission(submissionUid: string): Promise<VerifyResult> {
 async function cleanupSynthetic(submissionUids: string[]): Promise<{ deletedSubmissions: number; deletedRespondents: number }> {
   if (submissionUids.length === 0) return { deletedSubmissions: 0, deletedRespondents: 0 };
 
+  // FK cascade order discovered via the 2026-05-31 first run: respondents is
+  // referenced by magic_link_tokens + marketplace_profiles + submissions;
+  // submissions is referenced by fraud_detections. Must delete children first.
+  // Cleanup is restricted by synthetic-NIN pattern (LIKE '99999%') as the
+  // defense-in-depth gate against accidentally nuking real data.
   const subRows = await db
     .select({ id: submissions.id, respondentId: submissions.respondentId })
     .from(submissions)
@@ -432,20 +437,30 @@ async function cleanupSynthetic(submissionUids: string[]): Promise<{ deletedSubm
   const respondentIds = subRows.map((r) => r.respondentId).filter((id): id is string => id !== null);
   const submissionIds = subRows.map((r) => r.id);
 
-  const deletedSubs = submissionIds.length > 0
-    ? await db.delete(submissions).where(inArray(submissions.id, submissionIds))
-    : null;
+  if (submissionIds.length > 0) {
+    // 1. fraud_detections references submissions
+    await db.execute(sql`DELETE FROM fraud_detections WHERE submission_id = ANY(${submissionIds})`);
+  }
+
+  if (respondentIds.length > 0) {
+    // 2. magic_link_tokens + marketplace_profiles reference respondents
+    await db.execute(sql`DELETE FROM magic_link_tokens WHERE respondent_id = ANY(${respondentIds})`);
+    await db.execute(sql`DELETE FROM marketplace_profiles WHERE respondent_id = ANY(${respondentIds})`);
+  }
+
+  if (submissionIds.length > 0) {
+    // 3. submissions
+    await db.delete(submissions).where(inArray(submissions.id, submissionIds));
+  }
 
   let deletedResps = 0;
   if (respondentIds.length > 0) {
+    // 4. respondents (synthetic NIN gate as belt-and-braces)
     const ninFilter = sql`${respondents.nin} LIKE '99999%'`;
-    await db
-      .delete(respondents)
-      .where(and(inArray(respondents.id, respondentIds), ninFilter));
+    await db.delete(respondents).where(and(inArray(respondents.id, respondentIds), ninFilter));
     deletedResps = respondentIds.length;
   }
 
-  void deletedSubs;
   return { deletedSubmissions: submissionIds.length, deletedRespondents: deletedResps };
 }
 
