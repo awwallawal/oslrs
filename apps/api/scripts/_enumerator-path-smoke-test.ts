@@ -142,12 +142,26 @@ export function generateSyntheticNin(seq: number): string {
   return `${prefix}${check}`;
 }
 
+interface FormQuestion {
+  id: string;
+  name: string;
+  type: string;
+  label?: string;
+  required?: boolean;
+  choices?: { label: string; value: string }[];
+}
+
+interface FormSchema {
+  formId: string;
+  title: string;
+  questions: FormQuestion[];
+}
+
 interface SyntheticPayload {
   submissionId: string;
   nin: string;
   email: string;
   phone: string;
-  fullName: string;
   formData: {
     submissionId: string;
     formId: string;
@@ -159,36 +173,117 @@ interface SyntheticPayload {
   };
 }
 
-function buildPayload(seq: number, formId: string, lgaId: string | null, runStamp: number): SyntheticPayload {
+/**
+ * Build a response value for a single question. Identity fields use synthetic
+ * markers (NIN starts 99999, phone uses 234800 prefix, email uses .invalid);
+ * other fields get type-driven defaults (first choice for select_one, etc.).
+ */
+function buildResponseForQuestion(
+  q: FormQuestion,
+  seq: number,
+  runStamp: number,
+  enumeratorLgaId: string | null,
+  syntheticNin: string,
+  syntheticPhone: string,
+  syntheticEmail: string,
+): unknown {
+  // Identity-field special cases
+  switch (q.name) {
+    case 'nin':
+      return syntheticNin;
+    case 'phone_number':
+    case 'phone':
+      return syntheticPhone;
+    case 'email':
+      return syntheticEmail;
+    case 'surname':
+    case 'last_name':
+    case 'lastname':
+      return `Test${seq}`;
+    case 'firstname':
+    case 'first_name':
+    case 'given_name':
+      return 'Smoke';
+    case 'fullName':
+    case 'full_name':
+      return `Smoke Test #${seq}`;
+    case 'dob':
+    case 'date_of_birth':
+      return '1990-01-15';
+    case 'lga_id':
+    case 'lgaId':
+      // Prefer enumerator's lga if the form's choices include it; otherwise first choice.
+      if (enumeratorLgaId && q.choices?.some((c) => c.value === enumeratorLgaId)) return enumeratorLgaId;
+      return q.choices?.[0]?.value ?? enumeratorLgaId ?? null;
+    case 'household_size':
+      return 1;
+    case 'dependents_count':
+      return 0;
+    case 'hours_worked':
+      return 40;
+  }
+
+  // Generic by type
+  switch (q.type) {
+    case 'note':
+      return null; // display-only, no response needed
+    case 'geopoint':
+      return null; // GPS lives in top-level gpsLatitude/gpsLongitude, not in responses
+    case 'select_one':
+      return q.choices?.[0]?.value ?? null;
+    case 'select_multiple':
+      return q.choices?.length ? [q.choices[0].value] : [];
+    case 'number':
+      return 1;
+    case 'integer':
+      return 1;
+    case 'date':
+      return '2000-01-01';
+    case 'datetime':
+      return new Date().toISOString();
+    case 'boolean':
+      return false;
+    case 'text':
+    case 'string':
+      return `synthetic-${seq}`;
+    default:
+      return null;
+  }
+}
+
+function buildPayload(
+  seq: number,
+  formSchema: FormSchema,
+  enumeratorLgaId: string | null,
+  runStamp: number,
+): SyntheticPayload {
   const submissionId = uuidv7();
   const nin = generateSyntheticNin(seq);
+  // E.164 NG synthetic — keep 14 chars total, uniqueness per (runStamp, seq)
+  const phoneSuffix = `${String(runStamp % 100000).padStart(5, '0')}${String(seq).padStart(2, '0')}`;
+  const phone = `+234800${phoneSuffix}`.slice(0, 14);
   const email = `smoketest-${runStamp}-${seq}@oslsr-test.invalid`;
-  const phone = `+23480000${String(runStamp % 10000).padStart(4, '0')}`.slice(0, 14) +
-    String(seq).padStart(2, '0');
-  const fullName = `Smoke Test Enumerator #${seq}`;
+
+  const responses: Record<string, unknown> = {};
+  for (const q of formSchema.questions) {
+    const val = buildResponseForQuestion(q, seq, runStamp, enumeratorLgaId, nin, phone, email);
+    if (val !== null && val !== undefined) {
+      responses[q.name] = val;
+    }
+  }
+  // Ensure these are always present even if not in the form schema (controllers extract them)
+  responses.email = responses.email ?? email;
+  responses.consent_basic = responses.consent_basic ?? 'yes';
 
   return {
     submissionId,
     nin,
     email,
     phone,
-    fullName,
     formData: {
       submissionId,
-      formId,
-      responses: {
-        nin,
-        fullName,
-        firstName: 'Smoke',
-        lastName: `Test${seq}`,
-        dateOfBirth: '1990-01-15',
-        gender: 'male',
-        phone,
-        email,
-        lgaId: lgaId ?? 'atiba',
-        consentMarketplace: true,
-        consentEnriched: false,
-      },
+      formId: formSchema.formId,
+      responses,
       submittedAt: new Date().toISOString(),
       gpsLatitude: 7.39,
       gpsLongitude: 3.89,
@@ -218,15 +313,21 @@ async function findEnumerator(override: string | null): Promise<{ id: string; em
   return rows[0];
 }
 
-async function fetchActiveFormId(targetHost: string): Promise<string> {
+async function fetchActiveFormSchema(targetHost: string): Promise<FormSchema> {
   const res = await fetch(`${targetHost}/api/v1/forms/public-active`);
   if (!res.ok) {
     throw new Error(`Could not fetch active form: HTTP ${res.status} ${await res.text()}`);
   }
-  const json = (await res.json()) as { data?: { id?: string } };
-  const formId = json.data?.id;
-  if (!formId) throw new Error(`Active form response missing data.id: ${JSON.stringify(json)}`);
-  return formId;
+  const json = (await res.json()) as {
+    data?: { formId?: string; id?: string; title?: string; questions?: FormQuestion[] };
+  };
+  const formId = json.data?.formId ?? json.data?.id;
+  if (!formId) throw new Error(`Active form response missing data.formId: ${JSON.stringify(json).slice(0, 200)}`);
+  return {
+    formId,
+    title: json.data?.title ?? '<untitled>',
+    questions: json.data?.questions ?? [],
+  };
 }
 
 async function fireSubmission(
@@ -331,16 +432,16 @@ async function main() {
   const enumerator = await findEnumerator(args.enumeratorId);
   logger.info({ event: 'enumerator_smoke.user_selected', userId: enumerator.id, email: enumerator.email });
 
-  const formId = await fetchActiveFormId(args.targetHost);
-  logger.info({ event: 'enumerator_smoke.form_resolved', formId });
+  const formSchema = await fetchActiveFormSchema(args.targetHost);
+  logger.info({ event: 'enumerator_smoke.form_resolved', formId: formSchema.formId, questionCount: formSchema.questions.length });
 
   const runStamp = Date.now();
-  const payloads = Array.from({ length: args.count }, (_, i) => buildPayload(i + 1, formId, enumerator.lgaId, runStamp));
+  const payloads = Array.from({ length: args.count }, (_, i) => buildPayload(i + 1, formSchema, enumerator.lgaId, runStamp));
 
   if (args.dryRun) {
     console.log(`\n[DRY-RUN] Would fire ${args.count} concurrent submissions as enumerator ${enumerator.email} (${enumerator.id})`);
     console.log(`  Target: ${args.targetHost}/api/v1/forms/submissions`);
-    console.log(`  Form:   ${formId}`);
+    console.log(`  Form:   ${formSchema.formId} (${formSchema.questions.length} questions, ${formSchema.questions.filter((q) => q.required).length} required)`);
     console.log(`  Run stamp: ${runStamp}`);
     console.log('\n  Synthetic payload preview (n=1):');
     console.log(JSON.stringify(payloads[0], null, 2).replace(/^/gm, '    '));
