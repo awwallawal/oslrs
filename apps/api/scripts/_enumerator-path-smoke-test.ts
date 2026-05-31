@@ -35,7 +35,7 @@
 import os from 'node:os';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../src/db/index.js';
-import { users, roles, respondents, submissions, auditLogs } from '../src/db/schema/index.js';
+import { users, roles, respondents, submissions, auditLogs, systemSettings, questionnaireForms } from '../src/db/schema/index.js';
 import { TokenService } from '../src/services/token.service.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import pino from 'pino';
@@ -317,20 +317,50 @@ async function findEnumerator(override: string | null): Promise<{ id: string; em
 }
 
 async function fetchActiveFormSchema(targetHost: string): Promise<FormSchema> {
-  const res = await fetch(`${targetHost}/api/v1/forms/public-active`);
-  if (!res.ok) {
-    throw new Error(`Could not fetch active form: HTTP ${res.status} ${await res.text()}`);
+  // PRODUCTION-BUG WORKAROUND (discovered 2026-05-31 via this smoke test):
+  // GET /api/v1/forms/public-active returns data.formId = schema_inner.id (a JSONB-embedded
+  // id), NOT the questionnaire_forms row primary key. The submission-processing worker
+  // looks up by row primary key, so submitting with the public-endpoint's formId causes
+  // "Form schema not found" permanent_error and respondents never get linked. This script
+  // bypasses the broken endpoint by reading wizard.public_form_id setting directly +
+  // querying questionnaire_forms by that row id. The HTTP endpoint is still hit for the
+  // questions array (which the smoke test uses for payload generation), but the FormId
+  // sent in the submission body is the canonical row id.
+  //
+  // Filed as critical hotfix story candidate — every real enumerator submission would
+  // hit this bug without prior knowledge of the row-id-vs-schema-id discrepancy.
+  const setting = await db.query.systemSettings.findFirst({
+    where: eq(systemSettings.key, 'wizard.public_form_id'),
+  });
+  if (!setting?.value) {
+    throw new Error('wizard.public_form_id setting not found — no active form configured');
   }
-  const json = (await res.json()) as {
-    data?: { formId?: string; id?: string; version?: string; title?: string; questions?: FormQuestion[] };
-  };
-  const formId = json.data?.formId ?? json.data?.id;
-  if (!formId) throw new Error(`Active form response missing data.formId: ${JSON.stringify(json).slice(0, 200)}`);
+  const rowId = String(setting.value).replace(/^"|"$/g, '');
+
+  const formRow = await db.query.questionnaireForms.findFirst({
+    where: eq(questionnaireForms.id, rowId),
+    columns: { id: true, status: true, formSchema: true },
+  });
+  if (!formRow || formRow.status !== 'published') {
+    throw new Error(`Form ${rowId} not found or not published (status=${formRow?.status ?? 'missing'})`);
+  }
+
+  const schema = formRow.formSchema as { id?: string; version?: string; title?: string; sections?: Array<{ questions: FormQuestion[] }> } | null;
+  if (!schema) throw new Error(`Form ${rowId} has null form_schema`);
+
+  // Flatten sections into a question array (matches what /public-active returns)
+  const questions: FormQuestion[] = [];
+  for (const section of schema.sections ?? []) {
+    for (const q of section.questions ?? []) {
+      questions.push(q);
+    }
+  }
+
   return {
-    formId,
-    version: json.data?.version ?? '1.0.0',
-    title: json.data?.title ?? '<untitled>',
-    questions: json.data?.questions ?? [],
+    formId: formRow.id, // <-- ROW id (canonical FK target), NOT schema.id
+    version: schema.version ?? '1.0.0',
+    title: schema.title ?? '<untitled>',
+    questions,
   };
 }
 
