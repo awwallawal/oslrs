@@ -25,11 +25,32 @@ Story 9-9 Operate-phase). 9-15 (prod-gate-telegram-alerts) shipped to
 9-17 (form-pin UI + Pattern C field dedup) authored 2026-05-12. 9-18
 is the next sequential slot in Epic 9.
 
-Pre-impl decision flagged: AC#C3 retires the magic-link / password /
-skip auth-choice radio set. Awwal must confirm this is intentional
-BEFORE the dev agent starts (the alternative is keeping the radio set
-on Step 5 alongside the summary; current spec assumes retirement
-based on Awwal's verbatim message "the 5th step would be the message").
+Pre-impl decision RESOLVED 2026-05-31 by Awwal: AC#C3 = auth-choice
+retirement CONFIRMED (Option B). Implementation split: Story 9-18
+removes the auth-choice fieldset from the WIZARD entirely (magic-link
+as the universal default for new registrations). Story 9-32 (post-
+launch, off critical path) adds an "opt in to a password" affordance
+to a future public-user account-settings page. Net user experience is
+"magic-link by default at registration; password is an opt-in power-
+user feature later" — but the wizard surface is clean of choice.
+
+AMENDMENT 2026-05-31: Part F added (given-name / family-name split +
+backfill) — promotes the previously-out-of-scope "Story 9-29 candidate"
+into 9-18 since it touches the same Step 1 surface that Part A
+redesigns. Avoids a second UAT cycle on the same form.
+
+AMENDMENT 2026-05-31: Task 0 (Pre-flight operations) added — operator-
+audited SQL extends wizard_drafts.expires_at +30d for ALL 267 Cohort B
+drafts (covers the 4-5 week wizard-redesign timeline against draft
+expiry), and a deliberate enumerator dry-run seeds 5-10 test
+submissions through POST /forms/submissions to scale-test the
+enumerator path before field deployment (currently only 1 production
+enumerator submission has ever exercised that code path).
+
+Critical-path sequence locked 2026-05-31: 9-16 → 9-17 → 9-18 → field
+deployment + blasts → 9-32 (post-launch). Wizard must ship perfect
+BEFORE enumerators trigger viral self-serve registrations from their
+respondents' referrals (the "avalanche" anti-pattern).
 -->
 
 ## Story
@@ -113,12 +134,12 @@ So that **the wizard feels coherent, my NIN gets validated immediately rather th
 
     Per project "no technical debt" discipline: no `_deprecated` files left around. No re-export shims. The deletions are explicit and complete in the same PR.
 
-13. **AC#C3 — Auth-choice retires (DECISION FLAGGED — Awwal pre-impl confirm).** Today Step 5 forces users to pick `magic-link` / `password` / `skip` BEFORE submit per Story 9-12 AC#3-5 + the `AuthChoiceFieldset` at [Source: apps/web/src/features/registration/pages/Step5NinCaptured.tsx]. After 9-18:
+13. **AC#C3 — Auth-choice retires (RESOLVED 2026-05-31 by Awwal — Option B confirmed).** Today Step 5 forces users to pick `magic-link` / `password` / `skip` BEFORE submit per Story 9-12 AC#3-5 + the `AuthChoiceFieldset` at [Source: apps/web/src/features/registration/pages/Step5NinCaptured.tsx]. After 9-18:
     - The `authChoice` field is removed from the wizard UI entirely.
     - Every successful submission triggers a `purpose: 'login'` magic-link email (or `purpose: 'pending_nin_complete'` if pending) — the backend behavior already supports this default at [Source: apps/web/src/features/registration/pages/WizardPage.tsx:202-208].
-    - The submit-time choice between password creation and magic-link disappears from this surface; users who want password access can set one from the post-login Profile page (no UI work needed in this story — confirm with Awwal).
+    - The submit-time choice between password creation and magic-link disappears from THIS surface (the wizard). Users who want password access can opt in via Story 9-32's account-settings page (post-launch, NOT in this story's scope).
 
-    **Awwal: this AC needs your confirmation BEFORE the dev agent starts.** The alternative is keeping the AuthChoiceFieldset on Step 5 alongside the summary card. Default assumption: retirement, per your verbatim *"the 5th step would be the message"* directive 2026-05-12.
+    **Decision rationale captured 2026-05-31**: cognitive-load reduction at the highest-friction moment (Step 5 = 42% of stalls). Magic-link is canonical via Story 9-16 (which ships first). Existing password-using accounts continue to work at /login (backward compatibility). 9-32 satisfies the "power user wants a password" demographic without polluting the registration flow. See [Source: _bmad-output/implementation-artifacts/9-32-public-account-settings-and-ndpa-rights.md] for the opt-in implementation.
 
 14. **AC#C4 — `RegistrationCompletePage` gains a magic-link confirmation line.** [Source: apps/web/src/features/registration/pages/RegistrationCompletePage.tsx] — append a line below the existing success copy:
     - For ACTIVE submissions: *"We've emailed you a one-click link at <email> to view, edit, or withdraw your registration anytime."*
@@ -213,7 +234,52 @@ Added 2026-05-19 after 5 days of production data confirmed the Step-4 stall patt
 
 30. **AC#E9 — Step-4 stall ratio drops measurably post-deploy**. The success metric for Part E is Story 9-19's dashboard `Step 4 stall %` metric dropping from baseline ~63% to <30% within 7 days of deploy. If it doesn't, the redesign hasn't worked and we re-open.
 
+### Part F — Given-name / Family-name split + backfill (AMENDMENT 2026-05-31, absorbed from prior Story 9-29 candidate)
+
+Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Story 9-28's Dev Agent Record. The current wizard parses a single "Full Name" field into `first_name` (first token) + `last_name` (last token) — but Yoruba (and many Nigerian) naming conventions are surname-first, which silently flips the semantic mapping. The 2026-05-22 Cohort A dry-run greeted "OLOWU KAYODE" as "Hi OLOWU" (surname) when the given name is KAYODE. Acceptable as a one-off ("formal surname greeting") but not as the long-term default. Same Step 1 surface that Part A redesigns; consolidates the UAT cycle.
+
+31. **AC#F1 — Step 1 splits "Full Name" into TWO explicit inputs.** `Step1BasicInfo.tsx` ([Source: apps/web/src/features/registration/pages/Step1BasicInfo.tsx]) replaces the single fullName field with: (a) `givenName` — labeled `Given name (first / personal name)`, placeholder `e.g. Kayode`, required, min length 2; (b) `familyName` — labeled `Family name (surname)`, placeholder `e.g. Olowu`, required, min length 2. No first-token-parse. No "Full Name" field. Form layout: stacked vertically on mobile, side-by-side on `md:` breakpoint. Both fields use the existing input markup pattern. `data-testid="wizard-step1-given-name"` and `data-testid="wizard-step1-family-name"`. The wizard's `formData` schema (in `useWizardDraft`) gains `givenName: string` and `familyName: string`; the legacy `fullName` field is REMOVED from `formData` entirely. Existing wizard_drafts rows in the wild keep their `form_data.fullName` JSON (best-effort migration in Task 5.4 below).
+
+32. **AC#F2 — Backend `submitWizard` stores explicit columns; no parsing.** `apps/api/src/controllers/registration.controller.ts` `submitWizardSchema` adds `givenName: z.string().min(2).max(80)` and `familyName: z.string().min(2).max(80)`; removes `fullName`. The respondent INSERT writes `first_name = givenName` and `last_name = familyName` (column names unchanged; semantics tightened — `first_name` now canonically means "given/personal name", `last_name` means "family/surname"). No DB migration; the columns already exist with the right shape. The change is at the WRITE path only; existing rows untouched until backfill (Task 5.5).
+
+33. **AC#F3 — Email templates use canonical given-name; drop `firstNameFrom(fullName)` first-token-parse.** Three call sites lose the parse:
+    - `apps/api/scripts/_reengagement-email-blast.ts` — `firstNameFrom(fullName)` becomes `respondents.first_name` direct read (now semantically the given name post-backfill). The script's `formData.fullName` access (line ~328) becomes `formData.givenName` for in-flight drafts that completed via the new wizard, with a back-compat fallback to the legacy path for pre-9-18 drafts (one-line: `firstName = fd.givenName ?? firstNameFrom(fd.fullName)`).
+    - `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` — same back-compat pattern; reads `respondents.first_name` (post-backfill) with the fullName fallback for any unbackfilled rows.
+    - `MagicLinkService.send*` template rendering — wherever it interpolates a name into the email body, use the respondent's canonical given name.
+
+34. **AC#F4 — ID card renders canonical order: `Given Family`.** `apps/api/src/services/id-card.service.ts` (per memory: PDFKit-based, CR80 card size) currently renders `respondents.first_name + ' ' + respondents.last_name`. After 9-18 + backfill, that's already "Given Family" by canonical mapping — no code change needed; the change is purely in the DATA via Task 5.5 backfill. Verify by visual diff of an ID card pre-vs-post-backfill in Task 5 of this Part F.
+
+35. **AC#F5 — Backfill operator-runbook for existing 136 respondents.** A new operator-gated, audit-logged script at `apps/api/scripts/_backfill-name-canonicalization.ts` reads all existing `respondents` rows, writes a CSV at `_bmad-output/scratch/name-backfill-{TIMESTAMP}/proposed.csv` with columns `[respondent_id, current_first_name, current_last_name, proposed_first_name, proposed_family_name, decision_pending]`. Operator reviews the CSV — for each row, marks the `decision_pending` column as either `swap` / `keep` / `skip`. Operator re-runs the script with `--apply --confirm-i-am-not-dry-running --csv <path>` and the script applies the marked swaps inside a transaction, emitting one `OPERATOR_RESPONDENT_NAME_CANONICALIZED` audit event per row (NEW audit action; count 42 → 43). Each event captures `details: { respondent_id, previous: {first_name, last_name}, new: {first_name, last_name}, decision: 'swap'|'keep', operator_marker: 'manual_csv_review' }`. The 11 phone-only Cohort A respondents (no email) get skipped automatically (don't need name-fix for SMS context). KNOWN_FLAGS pattern; --help; Resend not used (this is pure DB-write). Dry-run mode prints proposed changes without writing.
+
+36. **AC#F6 — Tests + backfill validation:**
+    - `Step1BasicInfo.test.tsx` extensions (3 new cases): given-name field renders + required validation, family-name field renders + required validation, form submits with `givenName` + `familyName` keys (NOT `fullName`)
+    - `submitWizard.controller.test.ts` extension (2 new cases): payload with `givenName`/`familyName` accepted, payload with legacy `fullName` rejected (Zod error)
+    - `_backfill-name-canonicalization.test.ts` (NEW, ~12 tests): dry-run prints proposed without writing; apply-mode writes only marked rows; audit events emit one-per-row; phone-only Cohort A skipped; transaction rolls back on any per-row failure; CSV parse rejects unknown decision values; KNOWN_FLAGS typo defense; --help shows usage; back-compat fallback in firstNameFrom is exercised
+    - `_reengagement-email-blast.test.ts` extension (1 new case): `firstName` derivation prefers `respondents.first_name` over `firstNameFrom(formData.fullName)` parse
+    - Visual-diff verification of an ID card pre-vs-post-backfill (~1 row spot check); capture in Dev Agent Record
+
 ## Tasks / Subtasks
+
+- [ ] **Task 0: Pre-flight operations (NEW 2026-05-31)** — must run BEFORE any wizard-redesign code touches production
+  - [ ] 0.1: **Expiry extension SQL** for ALL Cohort B drafts (preserves preserved-answers during the 4-5 week wizard-redesign window). Operator-gated. Script at `apps/api/scripts/_cohort-b-expiry-extension.ts` (NEW, mirrors the canonical operator-script pattern: --dry-run mandatory first, --confirm-i-am-not-dry-running for live, KNOWN_FLAGS, --help, audit event per row). Target query:
+    ```sql
+    UPDATE wizard_drafts SET expires_at = expires_at + INTERVAL '30 days'
+    WHERE form_data->>'email' IS NOT NULL
+      AND expires_at > NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM magic_link_tokens mlt
+        INNER JOIN respondents r ON mlt.respondent_id = r.id
+        INNER JOIN submissions s ON s.respondent_id = r.id
+        WHERE mlt.email = wizard_drafts.email
+      );
+    ```
+    Expected: 267 rows updated (verified by Story 9-30 cohort refresh 2026-05-31). Each row emits an `OPERATOR_WIZARD_DRAFT_EXPIRY_EXTENDED` audit event (NEW audit action; count gets bumped). Cohort A is unaffected (Cat 1 NOT-EXISTS clause excludes completers). Operator runs --dry-run then live during week 1 of 9-18 dev (before any of the 4-5 weeks erodes).
+  - [ ] 0.2: **Enumerator dry-run** — author `apps/api/scripts/_enumerator-path-smoke-test.ts` (NEW) that authenticates as a designated test enumerator account, submits 5-10 synthetic form responses via `POST /api/v1/forms/submissions`, then verifies (a) each created a `submissions` row, (b) each linked to a (newly-found-or-created) `respondents` row, (c) each emitted an audit event in the chain, (d) `raw_data` is non-empty + matches the input payload. Tear-down deletes the synthetic rows (audit events kept for forensic trail). Smoke test runs ONCE before field-deployment commitment — current production has only 1 enumerator submission ever; this scale-tests the path against a 10× volume burst before 50+ enumerators deploy.
+  - [ ] 0.3: Document both Pre-flight runs in this story's Dev Agent Record before any frontend dev work begins. Pre-flight outputs are operator-gated; tasks below stay in `pending` until Pre-flight is verified.
+
+- [ ] **Task 1: Pre-impl decision confirmation (AC: #C3) — RESOLVED 2026-05-31**
+  - [x] 1.1: Awwal confirmed Option B (auth-choice retires from wizard; opt-in lives in Story 9-32). Decision rationale captured in AC#C3 + Dev Notes "Pre-impl Decision Log" subsection.
+  - [ ] 1.2: ~~If Awwal opts to KEEP the AuthChoiceFieldset~~ — N/A; Option B locked.
 
 - [ ] **Task 1: Pre-impl decision confirmation (AC: #C3)** — BLOCKER
   - [ ] 1.1: Get Awwal's explicit confirmation on AC#C3 (auth-choice retirement). Document the decision in this story file's Dev Notes "Pre-impl Decision Log" subsection before proceeding to Task 2.
@@ -244,7 +310,17 @@ Added 2026-05-19 after 5 days of production data confirmed the Step-4 stall patt
   - [ ] 4.6: Update `RegistrationCompletePage.tsx` with the magic-link confirmation copy per AC#C4. Extend `CompletionData` interface with `email`.
   - [ ] 4.7: Verify the submit payload shape per AC#C5 (no backend code change; just confirm wizard frontend always sends `authChoice: 'magic-link'`).
 
-- [ ] **Task 5: Tests (AC: #D1, #D2, #D3, #D4, #D5, #D6)**
+- [ ] **Task 5: Given-name / Family-name split + backfill (Part F — AC: #F1, #F2, #F3, #F4, #F5)**
+  - [ ] 5.1: Update `Step1BasicInfo.tsx` per AC#F1 — replace single `fullName` input with two inputs: `givenName` + `familyName`. Keep the field ordering: NIN (from Part A) → Given name → Family name → DOB → Gender. Both required, min length 2.
+  - [ ] 5.2: Update `useWizardDraft` schema — drop `fullName` from the `formData` shape; add `givenName: string` + `familyName: string`. Best-effort migration when loading legacy drafts: if `formData.fullName` exists and `formData.givenName` is absent, split on first whitespace and warn-log (not a fatal error).
+  - [ ] 5.3: Update `submitWizardSchema` in `apps/api/src/controllers/registration.controller.ts` per AC#F2 — add `givenName` + `familyName`; remove `fullName`. The respondent INSERT writes `first_name = givenName` and `last_name = familyName`.
+  - [ ] 5.4: Author `apps/api/scripts/_backfill-name-canonicalization.ts` per AC#F5 — operator-gated, audit-logged, --dry-run mandatory first, --confirm-i-am-not-dry-running for live, KNOWN_FLAGS, --help. New audit action `OPERATOR_RESPONDENT_NAME_CANONICALIZED` (count 42 → 43).
+  - [ ] 5.5: Operator runbook — Awwal runs dry-run + CSV review + apply during week 1 of dev (so post-9-18 ships, existing 136 rows are canonical). Document in story Dev Agent Record.
+  - [ ] 5.6: Update `_reengagement-email-blast.ts` + `_cohort-a-supplemental-survey-blast.ts` per AC#F3 — prefer `respondents.first_name` over `firstNameFrom(formData.fullName)` with back-compat fallback. The story 9-30 follow-up `_reengagement-email-blast.ts` two-template refactor (committed to uncommitted tree today) inherits this fix in the same edit window.
+  - [ ] 5.7: Update `MagicLinkService` email-template renderers per AC#F3 — use canonical given name token in interpolations.
+  - [ ] 5.8: Visual-diff verification — render an ID card pre-vs-post-backfill for one Yoruba-named row (e.g. OLOWU KAYODE → KAYODE OLOWU). Capture screenshot in Dev Agent Record.
+
+- [ ] **Task 6: Tests (AC: #D1, #D2, #D3, #D4, #D5, #D6, #F6)**
   - [ ] 5.1: Extend `Step1BasicInfo.test.tsx` with the 8 cases in AC#D1.
   - [ ] 5.2: Create `Step5ReviewAndSave.test.tsx` with the 8 cases in AC#D2.
   - [ ] 5.3: Confirm `Step5NinAndAuth.test.tsx` is DELETED (was 9 tests). Document the count in Dev Agent Record.
@@ -252,14 +328,14 @@ Added 2026-05-19 after 5 days of production data confirmed the Step-4 stall patt
   - [ ] 5.5: Update `e2e/wizard-registration.spec.ts` + `e2e/nin-validation.spec.ts` per AC#D5.
   - [ ] 5.6: Run the full registration-feature test suite + Playwright. Confirm no regressions per AC#D6. Document test-count delta in Dev Agent Record.
 
-- [ ] **Task 6: Documentation + sprint-status update**
-  - [ ] 6.1: Update `_bmad-output/implementation-artifacts/sprint-status.yaml` flip 9-18 from `ready-for-dev` → `in-progress` at dev start, → `review` at dev end.
-  - [ ] 6.2: Update Story 9-12's status to add a note: "Step 5 state-aware dispatcher superseded by 9-18; the `bea7545` hotfix kept production correct in the gap." (Story 9-12 doesn't get re-opened — just a footnote so future readers trace the supersession.)
-  - [ ] 6.3: Update memory files if applicable (CLAUDE.md, MEMORY.md).
+- [ ] **Task 7: Documentation + sprint-status update**
+  - [ ] 7.1: Update `_bmad-output/implementation-artifacts/sprint-status.yaml` flip 9-18 from `ready-for-dev` → `in-progress` at dev start, → `review` at dev end.
+  - [ ] 7.2: Update Story 9-12's status to add a note: "Step 5 state-aware dispatcher superseded by 9-18; the `bea7545` hotfix kept production correct in the gap." (Story 9-12 doesn't get re-opened — just a footnote so future readers trace the supersession.)
+  - [ ] 7.3: Update memory files if applicable (CLAUDE.md, MEMORY.md).
 
-- [ ] **Task 7: Pre-merge review (BMAD code-review workflow on uncommitted tree)**
-  - [ ] 7.1: Per project feedback "review-before-commit": run the canonical `/bmad:bmm:workflows:code-review` workflow on the uncommitted working tree before any push. Auto-fix findings per the established Story 9-12 / 9-17 pattern.
-  - [ ] 7.2: Verify Modulus-11 is enforced exactly ONCE in the new design (Step 1 entry-time validation). No duplicate validation hooks. Grep for `modulus11Check` calls before / after — the count should drop from 3 (Step5NinAndAuth.tsx readQuestionnaireNin + Step5NinInput.tsx ninStatus + WizardPage.tsx readQuestionnaireNin) to 1 (Step1BasicInfo.tsx ninStatus).
+- [ ] **Task 8: Pre-merge review (BMAD code-review workflow on uncommitted tree)**
+  - [ ] 8.1: Per project feedback "review-before-commit": run the canonical `/bmad:bmm:workflows:code-review` workflow on the uncommitted working tree before any push. Auto-fix findings per the established Story 9-12 / 9-17 pattern.
+  - [ ] 8.2: Verify Modulus-11 is enforced exactly ONCE in the new design (Step 1 entry-time validation). No duplicate validation hooks. Grep for `modulus11Check` calls before / after — the count should drop from 3 (Step5NinAndAuth.tsx readQuestionnaireNin + Step5NinInput.tsx ninStatus + WizardPage.tsx readQuestionnaireNin) to 1 (Step1BasicInfo.tsx ninStatus).
 
 ## Dev Notes
 

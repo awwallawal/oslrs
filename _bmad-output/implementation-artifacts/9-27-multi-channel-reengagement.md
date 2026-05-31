@@ -93,6 +93,8 @@ So that **we recover registrations from abandoned funnel sessions where the user
 
 ### Part B — SMS channel
 
+> **📋 Implementation-ready scope authored as sibling file 2026-05-31**: see `_bmad-output/implementation-artifacts/9-27-part-b-sms-via-termii.md` for the complete 37-AC + 8-Task spec (Termii adapter via env-var config — zero code change to existing `sms.service.ts`; project-hosted URL shortener at `/r/:code`; STOP-keyword Termii webhook + NCC-compliant opt-out tracking via `respondents.metadata.sms_opted_out` JSONB; two-template branching by `current_step` mirroring Part A's 2026-05-31 refactor; cohort-a-phone-only branch for the 11 unique-to-SMS recipients; cross-channel coordination scaffolding for Part D forward-compat). The bullets below (AC#B1-#B5) are the ORIGINAL 2026-05-20 high-level Part B outline; the sibling file is the canonical implementation-ready expansion (2026-05-31). **Read the sibling first for dev-story**.
+
 8. **AC#B1 — Reuse Story 9-12 SMS adapter**: the SMS OTP infrastructure shipped in Story 9-12 (apps/api/src/services/sms-otp.service.ts + sms-provider.adapter.ts) provides an SMS adapter. Extend it to send NON-OTP transactional messages (like this re-engagement nudge) OR thin-wrap the existing adapter with a `SmsService.sendGeneric()` method.
 
 9. **AC#B2 — One-shot script**: `apps/api/scripts/_reengagement-sms-blast.ts`. Same filter+cohort logic as email blast, but selects `form_data->>'phone'` instead of email. Issues the magic-link, embeds shortened URL via project URL-shortener (TBD per AC#B5).
