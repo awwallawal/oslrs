@@ -75,10 +75,23 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has exactly 16 sidebar items', () => {
-      // 13 base items + Audit Log (Story 9-11) + Settings (prep-settings-landing) + MFA Settings (Story 9-13)
+    it('super_admin has exactly 17 sidebar items', () => {
+      // 13 base items + Audit Log (Story 9-11) + Settings (prep-settings-landing)
+      // + MFA Settings (Story 9-13) + Operations (Story 9-19)
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBe(16);
+      expect(items.length).toBe(17);
+    });
+
+    // Story 9-19 — Operations Dashboard nav, peer of Settings, placed right
+    // after System Health (both observability surfaces).
+    it('super_admin has Operations sidebar item after System Health', () => {
+      const items = sidebarConfig.super_admin;
+      const opsIdx = items.findIndex((i) => i.label === 'Operations');
+      const systemIdx = items.findIndex((i) => i.label === 'System Health');
+      expect(opsIdx).toBeGreaterThan(-1);
+      expect(items[opsIdx].href).toBe('/dashboard/super-admin/operations');
+      expect(items[opsIdx].testId).toBe('sidebar-operations');
+      expect(opsIdx).toBeGreaterThan(systemIdx);
     });
 
     it('super_admin has Audit Log sidebar item between System Health and MFA Settings', () => {

@@ -37,6 +37,7 @@ export function SidebarNav({ items, collapsed = false, responsiveCollapse = fals
             to={item.href}
             end={item.end !== undefined ? item.end : item.href.split('/').length <= 3}
             onClick={onItemClick}
+            data-testid={item.testId}
             className={({ isActive }) =>
               cn(
                 'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',

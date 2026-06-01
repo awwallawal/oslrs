@@ -1,6 +1,6 @@
 # Story 9.19: Operations Dashboard — CLI + Super Admin UI + Telegram digest
 
-Status: in-progress  <!-- Part A shipped; Parts B + C ready-for-dev -->
+Status: done  <!-- Parts A+B+C implemented 2026-06-01; Task 7 adversarial code review DONE 2026-06-01 (7 findings, all auto-fixed, suites green) → flipped review → done. -->
 
 <!--
 Authored 2026-05-19 by Bob (SM) via canonical *create-story --yolo template.
@@ -69,25 +69,37 @@ So that **I can act on data instead of guessing, hand over to a future operator 
   - [x] 1.1: Author `apps/api/scripts/dashboard.ts` with 5 sections + graceful degradation
   - [x] 1.2: Wire `"dashboard": "tsx scripts/dashboard.ts"` into `apps/api/package.json` scripts
   - [x] 1.3: tsc + lint clean
-- [ ] **Task 2 (Part B) — Extract shared thresholds module** (AC: #B1)
-  - [ ] 2.1: Create `apps/api/src/lib/ops-thresholds.ts` exporting `T` constant
-  - [ ] 2.2: Refactor `dashboard.ts` to import `T` from this module
-  - [ ] 2.3: Re-export from `packages/types/src/index.ts` for web consumption
-- [ ] **Task 3 (Part B) — OperationsService + endpoint** (AC: #B2)
-  - [ ] 3.1: Extract data-gathering functions from `dashboard.ts` into `OperationsService` class
-  - [ ] 3.2: Author `apps/api/src/controllers/operations.controller.ts` with `getDashboard()` handler
-  - [ ] 3.3: Wire route `GET /admin/operations/dashboard` in `apps/api/src/routes/admin.routes.ts` with super_admin guard + 60/min rate limiter
-- [ ] **Task 4 (Part B) — Frontend page** (AC: #B3, #B4, #B5, #B6)
-  - [ ] 4.1: Author `apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx`
-  - [ ] 4.2: `useOperationsDashboard()` TanStack Query hook with `refetchInterval: 30000`
-  - [ ] 4.3: Sidebar nav addition + route registration in `App.tsx`
-  - [ ] 4.4: 5 card components (System / Adoption / Email / Queue / Recommendations)
-- [ ] **Task 5 (Part C) — Telegram digest worker** (AC: #C1, #C2, #C3)
-  - [ ] 5.1: Author `apps/api/src/queues/ops-digest.queue.ts` + repeating job
-  - [ ] 5.2: Author `apps/api/src/workers/ops-digest.worker.ts` that calls `OperationsService.getDashboardSnapshot()` + `TelegramChannel.send()`
-  - [ ] 5.3: Wire `isAlertSendEnabled()` gate (reuses 9-15 logic)
-- [ ] **Task 6 — Tests** (AC: #D1-D5)
-- [ ] **Task 7 — Pre-merge BMAD code review on uncommitted tree** (per `feedback_review_before_commit.md`)
+- [x] **Task 2 (Part B) — Extract shared thresholds module** (AC: #B1)
+  - [x] 2.1: Create shared thresholds module — placed in `packages/types/src/ops-thresholds.ts` (canonical for BOTH api + web; `OPS_THRESHOLDS` + `opsStatusLevel` + snapshot DTO types) rather than `apps/api/src/lib/` so the web bundle imports the exact same source. Dev-Notes option ("OR re-export to web") satisfied directly.
+  - [x] 2.2: Refactor `dashboard.ts` to import `T` (= `OPS_THRESHOLDS`) + gathering fns from the service; `main()` guarded so the file is import-safe for tests
+  - [x] 2.3: Re-export from `packages/types/src/index.ts` for web consumption
+- [x] **Task 3 (Part B) — OperationsService + endpoint** (AC: #B2)
+  - [x] 3.1: Extracted data-gathering fns from `dashboard.ts` into `apps/api/src/services/operations.service.ts` (`getSystemHealth`/`getTraffic`/`getResendStatus`/`getQueueHealth`/`buildRecommendations`/`getDashboardSnapshot` + 30s cache). Fixed Part A's latent queue-name bug (`'email'` → real `'email-notification'` via `getEmailQueueStats`).
+  - [x] 3.2: Handler implemented inline in `operations.routes.ts` (delegates to `OperationsService`) — matches the established settings.routes/audit-log-viewer convention (no separate thin controller file in this codebase). `?force=1` bypasses the 30s cache.
+  - [x] 3.3: Wired `GET /admin/operations/dashboard` via `admin.routes.ts` sub-router with `authorize(SUPER_ADMIN)` + new `operationsReadRateLimit` (60/min/user)
+- [x] **Task 4 (Part B) — Frontend page** (AC: #B3, #B4, #B5, #B6)
+  - [x] 4.1: Authored `apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx`
+  - [x] 4.2: `useOperationsDashboard()` hook with `refetchInterval: 30000` + forced manual-refresh mutation
+  - [x] 4.3: Sidebar nav addition (Operations, peer of Settings, after System Health) + route registration in `App.tsx`
+  - [x] 4.4: 5 cards (System / Adoption / Email / Queue / Recommendations) with shared-threshold status dots + section-unavailable + error states
+- [x] **Task 5 (Part C) — Telegram digest worker** (AC: #C1, #C2, #C3)
+  - [x] 5.1: Authored `apps/api/src/queues/ops-digest.queue.ts` + `scheduleOpsDigest` repeating job (`0 6,18 * * *`)
+  - [x] 5.2: Authored `apps/api/src/workers/ops-digest.worker.ts` (`runOpsDigest` → `getDashboardSnapshot({force})` + MarkdownV2 `formatDigest` + `sendTelegramMessage`); audit-logs `OPS_DIGEST_SENT`; silent push on healthy days
+  - [x] 5.3: Reuses 9-15 `isAlertSendEnabled()` gate via the new generic `sendTelegramMessage` (refactored `sendCriticalTelegramAlert` to delegate to it)
+- [x] **Task 6 — Tests** (AC: #D1-D5) — +43 new tests (9 CLI + 13 service + 5 route + 8 worker on API; 8 page on web), audit-action count 42→43, sidebar count 16→17. Full suites green: API 2266 pass / 7 skip / 0 fail; web 2474 pass / 0 fail. tsc + eslint clean both apps.
+- [x] **Task 7 — Pre-merge BMAD code review on uncommitted tree** (per `feedback_review_before_commit.md`) — DONE 2026-06-01 via `/bmad:bmm:workflows:code-review`. 7 findings (1 High, 3 Medium, 3 Low); all auto-fixed in the same session (see Review Follow-ups below + Dev Agent Record).
+
+### Review Follow-ups (AI) — 2026-06-01 adversarial code review
+
+All items below were fixed automatically in the same session (status: ✅ resolved). Listed critical→low for traceability.
+
+- [x] [AI-Review][High] H1 — `getSystemHealth()` ran 4 synchronous `execSync` calls (up to ~11s) that blocked the Node event loop on the shared API endpoint (and `Promise.resolve(getSystemHealth())` defeated the parallel fetch). Converted to async callback-based `exec` so the loop is never blocked and the four sources truly run in parallel. [apps/api/src/services/operations.service.ts:62]
+- [x] [AI-Review][Med] M1 — Resend metrics were silently capped at the latest 100 sends (`emails.list({ limit: 100 })`), so `todayCount` undercounts on blast days and could hide the ≥80% red "upgrade Pro" recommendation. Added a `truncated` flag surfaced as `100+` in the UI + digest. [apps/api/src/services/operations.service.ts:171]
+- [x] [AI-Review][Med] M2 — `formatDigest` hard-trim (`slice(0, MAX-4)`) could cut mid-escape / leave an unclosed `*bold*`, making Telegram reject the digest with a 400. Now trims on whole-line boundaries + appends an escaped truncation note. [apps/api/src/workers/ops-digest.worker.ts:116]
+- [x] [AI-Review][Med] M3 — Rate-limit had zero real test coverage despite AC#D2 listing it (route test stubs it; middleware self-bypasses in test mode). Added `operations-rate-limit.test.ts` covering the test-mode skip + middleware wiring. [apps/api/src/middleware/__tests__/operations-rate-limit.test.ts]
+- [x] [AI-Review][Low] L1 — Audit "top actions" (the 5th source per AC#A2) sat inside `getTraffic`'s single try/catch, so one audit-query failure nulled the entire adoption/funnel card. Pulled it into its own catch → degrades to `[]` independently. [apps/api/src/services/operations.service.ts:116]
+- [x] [AI-Review][Low] L2 — Resend free-tier ceiling `100` was hardcoded across service/worker/UI, undercutting the "single source of truth" claim. Exported `RESEND_FREE_TIER_DAILY` from `@oslsr/types` and consumed it everywhere. [packages/types/src/ops-thresholds.ts]
+- [x] [AI-Review][Low] L3 — Funnel/traffic queries built `WHERE created_at >= '${LAUNCH_DATE}'` by string interpolation (no injection today, but inconsistent with the `$1`-parameterised 24h query). Parameterised all five. [apps/api/src/services/operations.service.ts:116]
 
 ## Dev Notes
 
@@ -125,6 +137,76 @@ The recommendation-to-story binding (Step-4 stall ≥ 40% → Story 9-17 critica
 
 ## File List
 
-(Populated by dev agent. Part A files for this commit:)
+### Part A (prior commit)
 - `apps/api/scripts/dashboard.ts` (new, ~330 lines)
 - `apps/api/package.json` (`"dashboard"` script entry added)
+
+### Parts B + C (2026-06-01 session)
+**New:**
+- `packages/types/src/ops-thresholds.ts` — canonical `OPS_THRESHOLDS` + `opsStatusLevel` + snapshot DTO types (AC#B1)
+- `apps/api/src/services/operations.service.ts` — shared data-gathering + recommendations + 30s cache (AC#B2)
+- `apps/api/src/routes/operations.routes.ts` — `GET /admin/operations/dashboard` (AC#B2)
+- `apps/api/src/middleware/operations-rate-limit.ts` — 60/min/user limiter
+- `apps/api/src/queues/ops-digest.queue.ts` — twice-daily digest queue + scheduler (AC#C1)
+- `apps/api/src/workers/ops-digest.worker.ts` — digest worker + `formatDigest`/`escapeMarkdownV2` (AC#C2/#C3)
+- `apps/web/src/features/dashboard/api/operations.api.ts` — `useOperationsDashboard` hook (AC#B4)
+- `apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx` — 5-card page (AC#B3/#B5/#B6)
+- `apps/api/scripts/__tests__/dashboard.test.ts` — AC#D1 (9 tests)
+- `apps/api/src/services/__tests__/operations.service.test.ts` — AC#D2 (13 tests)
+- `apps/api/src/routes/__tests__/operations.routes.test.ts` — AC#D2 (5 tests)
+- `apps/api/src/workers/__tests__/ops-digest.worker.test.ts` — AC#D4 (8 tests)
+- `apps/web/src/features/dashboard/pages/__tests__/OperationsDashboardPage.test.tsx` — AC#D3 (8 tests)
+- `apps/api/src/middleware/__tests__/operations-rate-limit.test.ts` — code-review M3 (2 tests; closes the rate-limit coverage gap)
+
+**Modified (code-review fixes 2026-06-01):**
+- `packages/types/src/ops-thresholds.ts` — exported `RESEND_FREE_TIER_DAILY` (L2) + added `OpsResendStatus.truncated` (M1)
+
+**Modified:**
+- `apps/api/scripts/dashboard.ts` — refactored to consume shared module + service; `main()` import-guarded
+- `packages/types/src/index.ts` — re-export `ops-thresholds.js`
+- `apps/api/src/queues/email.queue.ts` — added `getEmailFailedSamples()` helper
+- `apps/api/src/routes/admin.routes.ts` — mount `/operations` sub-router
+- `apps/api/src/services/alerting/telegram-channel.ts` — export `isAlertSendEnabled` + new generic `sendTelegramMessage`; `sendCriticalTelegramAlert` now delegates
+- `apps/api/src/services/audit.service.ts` — add `OPS_DIGEST_SENT` action
+- `apps/api/src/services/__tests__/audit.service.test.ts` — action-count 42→43
+- `apps/api/src/workers/index.ts` — register ops-digest worker + scheduler + graceful close
+- `apps/web/src/features/dashboard/config/sidebarConfig.ts` — add Operations nav item + optional `testId` on `NavItem`
+- `apps/web/src/layouts/components/SidebarNav.tsx` — render `data-testid` from `item.testId`
+- `apps/web/src/features/dashboard/__tests__/sidebarConfig.test.ts` — super_admin count 16→17 + Operations position assertion
+- `apps/web/src/App.tsx` — lazy import + `operations` route (super_admin)
+
+## Dev Agent Record
+
+### Completion Notes (Parts B + C — 2026-06-01, Amelia / dev-story)
+
+- **Single source of truth (AC#B1):** Threshold constants + status-level logic live in `@oslsr/types` `ops-thresholds.ts`. The CLI re-exports the SAME `OPS_THRESHOLDS` object (asserted referentially equal in `dashboard.test.ts`), the API service imports it, and the React page imports it — drift is structurally impossible.
+- **DRY recommendations (AC#B5/#C2):** `buildRecommendations()` is the one place metric breaches map to story IDs. CLI colours by `severity`, the UI colours by `severity`, the Telegram digest renders the same wording — all three surfaces are guaranteed identical.
+- **Latent Part-A bug fixed:** the CLI's `getQueueHealth` queried a queue literally named `'email'`; the real BullMQ queue is `'email-notification'`, so the CLI's queue counts were always zero. The extracted service routes through `getEmailQueueStats()` (correct queue) — the UI, digest, AND the CLI are now accurate.
+- **9-15 reuse (AC#C3):** refactored `telegram-channel.ts` to expose a generic `sendTelegramMessage(text, opts)` honouring the exact same env gate (`isAlertSendEnabled`) + token/chat-id checks + never-throws contract. `sendCriticalTelegramAlert` now delegates; all 17 existing 9-15 tests still pass.
+- **Healthy-day silence (Risk #4):** the digest sends with `disable_notification: true` when there are zero recommendations, so the operator only gets a buzz on days that need attention.
+- **Risk #3 cache:** `OperationsService.getDashboardSnapshot()` memoises for 30s; concurrent viewers + the 30s poll coalesce. UI manual-refresh sends `?force=1` to bypass it.
+- **System health off-VPS (Risk #1):** `getSystemHealth()` degrades to `null` when `pm2 jlist`/`free`/`df` are unavailable (e.g. a developer laptop) and the page renders a "section unavailable" placeholder. The API endpoint runs ON the VPS so the real values surface in production.
+- **Controller deviation (Task 3.2):** no separate `operations.controller.ts` — the route handler delegates straight to `OperationsService`, matching the codebase's settings.routes / audit-log-viewer convention. Functionally equivalent to the task's intent.
+- **Operator residual:** for the Telegram digest to actually fire in production, `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` must be set on the VPS `.env` (already present from Story 9-15) and the API process restarted so the scheduler registers the repeatable job. No new env vars introduced.
+- **Quality:** API tsc + eslint clean; web tsc + eslint clean. API 2266 pass / 7 skip / 0 fail; web 2474 pass / 2 todo / 0 fail. +43 net-new tests. No new deps, no migrations, no schema changes.
+
+### Code Review Close-out (Task 7 — 2026-06-01, `/bmad:bmm:workflows:code-review`)
+
+Adversarial review surfaced 7 findings (1 High, 3 Medium, 3 Low); File List was 100% accurate vs git (0 discrepancies). All findings auto-fixed in-session:
+
+- **H1 (event-loop block):** `getSystemHealth()` converted from 4× synchronous `execSync` (up to ~11s of blocking) to async callback `exec` via an `execCapture()` helper; `getDashboardSnapshot()`/CLI `main()` drop the `Promise.resolve(...)` wrapper so the four sources now genuinely run in parallel and never freeze concurrent API requests.
+- **M1 (Resend 100-row cap):** added `OpsResendStatus.truncated` (set when a full Resend page returns); CLI, UI, and digest now render `100+` so blast-day undercounts can't masquerade as the exact total or hide the red Pro-upgrade rec.
+- **M2 (MarkdownV2 trim):** `formatDigest` now trims on whole-line boundaries + appends an escaped `… (truncated)` note instead of slicing mid-escape (which Telegram 400s).
+- **M3 (rate-limit coverage):** new `operations-rate-limit.test.ts` exercises the test-mode skip + middleware wiring (2 tests).
+- **L1 (audit degradation):** audit "top actions" query pulled out of `getTraffic`'s shared try/catch into its own catch → degrades to `[]` independently per AC#A2.
+- **L2 (magic number):** `RESEND_FREE_TIER_DAILY` exported from `@oslsr/types` and consumed by service/CLI/worker/UI.
+- **L3 (SQL interpolation):** all five funnel/traffic queries parameterised (`$1` = `LAUNCH_DATE`).
+
+**Post-fix verification:** API targeted suites green (operations.service 13, dashboard 9, ops-digest 8, operations.routes 5, operations-rate-limit 2); web OperationsDashboardPage 8/8. API + web `tsc --noEmit` clean; eslint clean on all changed files. Net +2 tests (45 total for the story). Status flipped review → done.
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-06-01 | Parts B + C implemented (dev-story, Amelia). Shared `ops-thresholds` module, `OperationsService` + `/admin/operations/dashboard` endpoint, Super Admin Operations page (30s poll + manual refresh), twice-daily Telegram digest worker. +43 tests. Status in-progress → review. Task 7 (adversarial code review) remains. |
+| 2026-06-01 | Task 7 adversarial code review (`/bmad:bmm:workflows:code-review`). 7 findings (1 High / 3 Med / 3 Low), File List 0 discrepancies. All auto-fixed: async `exec` (H1), Resend `truncated`/`100+` (M1), line-boundary digest trim (M2), rate-limit tests (M3), independent audit degradation (L1), shared `RESEND_FREE_TIER_DAILY` (L2), parameterised SQL (L3). Suites green, tsc + eslint clean. Status review → done. |

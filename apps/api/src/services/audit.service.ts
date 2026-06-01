@@ -94,6 +94,9 @@ export const AUDIT_ACTIONS = {
   // Per-send audit trail for outbound supplemental-questionnaire invitations
   // to already-completed wizard respondents whose Step 4 data was missing.
   OPERATOR_SUPPLEMENTAL_SURVEY_SENT: 'operator.supplemental_survey_sent',
+  // Operations Dashboard Telegram digest (Story 9-19 Part C)
+  // Per-send audit trail for the twice-daily ops digest pushed to the operator.
+  OPS_DIGEST_SENT: 'ops.digest_sent',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

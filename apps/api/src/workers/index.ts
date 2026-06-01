@@ -14,11 +14,13 @@ import { backupWorker, closeBackupWorker } from './backup.worker.js';
 import { disputeAutoCloseWorker, closeDisputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 import { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
 import { reminderWorker, closeReminderWorker } from './reminder.worker.js';
+import { opsDigestWorker, closeOpsDigestWorker } from './ops-digest.worker.js';
 import { closeMarketplaceExtractionQueue } from '../queues/marketplace-extraction.queue.js';
 import { scheduleNightlySnapshot } from '../queues/productivity-snapshot.queue.js';
 import { scheduleDailyBackup } from '../queues/backup.queue.js';
 import { scheduleDisputeAutoClose } from '../queues/dispute-autoclose.queue.js';
 import { scheduleDailyReminders, closeReminderQueue } from '../queues/reminder.queue.js';
+import { scheduleOpsDigest, closeOpsDigestQueue } from '../queues/ops-digest.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
 import { closeAllConnections } from '../lib/redis.js';
@@ -36,6 +38,7 @@ export { backupWorker } from './backup.worker.js';
 export { disputeAutoCloseWorker } from './dispute-autoclose.worker.js';
 export { marketplaceExtractionWorker } from './marketplace-extraction.worker.js';
 export { reminderWorker, closeReminderWorker } from './reminder.worker.js';
+export { opsDigestWorker, closeOpsDigestWorker } from './ops-digest.worker.js';
 
 /**
  * Initialize all workers
@@ -47,7 +50,7 @@ export async function initializeWorkers(): Promise<void> {
   // Just log that they're ready
   logger.info({
     event: 'workers.initialized',
-    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose', 'marketplace-extraction', 'pending-nin-reminders'],
+    workers: ['import', 'email', 'webhook-ingestion', 'fraud-detection', 'productivity-snapshot', 'database-backup', 'dispute-autoclose', 'marketplace-extraction', 'pending-nin-reminders', 'ops-digest'],
     importWorkerRunning: importWorker.isRunning(),
     emailWorkerRunning: emailWorker.isRunning(),
     webhookIngestionWorkerRunning: webhookIngestionWorker.isRunning(),
@@ -57,6 +60,7 @@ export async function initializeWorkers(): Promise<void> {
     disputeAutoCloseWorkerRunning: disputeAutoCloseWorker?.isRunning() ?? false,
     marketplaceExtractionWorkerRunning: marketplaceExtractionWorker?.isRunning() ?? false,
     reminderWorkerRunning: reminderWorker?.isRunning() ?? false,
+    opsDigestWorkerRunning: opsDigestWorker?.isRunning() ?? false,
   });
 
   // Schedule nightly productivity snapshot
@@ -70,6 +74,9 @@ export async function initializeWorkers(): Promise<void> {
 
   // Schedule daily pending-NIN reminders (Story 9-12 AC#10)
   await scheduleDailyReminders();
+
+  // Schedule twice-daily operations digest (Story 9-19 Part C)
+  await scheduleOpsDigest();
 
   // Schedule email digest flush (every 30 minutes)
   await scheduleDigestFlush();
@@ -132,6 +139,8 @@ export async function closeAllWorkers(): Promise<void> {
     closeMarketplaceExtractionQueue(),
     closeReminderWorker(),
     closeReminderQueue(),
+    closeOpsDigestWorker(),
+    closeOpsDigestQueue(),
   ]);
 
   // Close factory-tracked Redis connections (singleton + any remaining dedicated)

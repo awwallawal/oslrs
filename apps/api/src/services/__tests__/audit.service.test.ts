@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 40 total action types across all categories', () => {
+    it('should have 43 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -178,8 +178,10 @@ describe('AuditService', () => {
       //   OPERATOR_REENGAGEMENT_EMAIL_SENT → 41.
       // Story 9-28 Path B (Cohort A supplemental survey) added 1 more:
       //   OPERATOR_SUPPLEMENTAL_SURVEY_SENT → 42.
+      // Story 9-19 Part C (Operations Dashboard Telegram digest) added 1 more:
+      //   OPS_DIGEST_SENT ('ops.digest_sent') → 43.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(42);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(43);
     });
   });
 

@@ -71,63 +71,81 @@ export interface CriticalAlertContext {
  * Strictness is intentional — Boolean coercion of env strings is a recurring
  * footgun (e.g., "false" is truthy under !!), so we require the canonical value.
  */
-const isAlertSendEnabled = (): boolean => {
+export const isAlertSendEnabled = (): boolean => {
   if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') return false;
   if (process.env.NODE_ENV === 'production') return true;
   return process.env.ENABLE_TELEGRAM_ALERTS === 'true';
 };
 
-export async function sendCriticalTelegramAlert(
-  ctx: CriticalAlertContext,
-): Promise<void> {
+export interface TelegramSendOptions {
+  /** Telegram parse mode (e.g. 'MarkdownV2'). Omit for plain text. */
+  parseMode?: 'MarkdownV2' | 'HTML';
+  /** Send silently (no phone vibration / sound) — used for healthy digests. */
+  disableNotification?: boolean;
+}
+
+/**
+ * Low-level Telegram send used by all push surfaces (critical alerts + Story
+ * 9-19 ops digest). Honours the same env gate + token/chat-id presence checks
+ * and NEVER throws — failures are logged at `warn`/`debug` and swallowed.
+ *
+ * Returns `true` iff a message was actually dispatched to the Telegram API and
+ * accepted (2xx). Returns `false` on any gate/config/transport failure so
+ * callers (e.g. the digest worker's audit log) can record whether the send
+ * really went out.
+ */
+export async function sendTelegramMessage(
+  text: string,
+  opts?: TelegramSendOptions,
+): Promise<boolean> {
   if (!isAlertSendEnabled()) {
-    logger.debug({ event: 'telegram.skipped_non_production', metricKey: ctx.metricKey });
-    return;
+    logger.debug({ event: 'telegram.skipped_non_production' });
+    return false;
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_OPERATOR_CHAT_ID;
 
   if (!token || !chatId) {
-    logger.debug({ event: 'telegram.skipped_no_config', metricKey: ctx.metricKey });
-    return;
+    logger.debug({ event: 'telegram.skipped_no_config' });
+    return false;
   }
 
-  const text = formatAlertMessage(ctx);
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+  };
+  if (opts?.parseMode) body.parse_mode = opts.parseMode;
+  if (opts?.disableNotification) body.disable_notification = true;
 
   try {
     const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      logger.warn({
-        event: 'telegram.api_error',
-        status: response.status,
-        body: body.substring(0, 200),
-        metricKey: ctx.metricKey,
-      });
-      return;
+      const errBody = await response.text().catch(() => '');
+      logger.warn({ event: 'telegram.api_error', status: response.status, body: errBody.substring(0, 200) });
+      return false;
     }
 
-    logger.info({
-      event: 'telegram.alert_sent',
-      metricKey: ctx.metricKey,
-      value: ctx.value,
-    });
+    logger.info({ event: 'telegram.message_sent' });
+    return true;
   } catch (err) {
-    logger.warn({
-      event: 'telegram.fetch_failed',
-      error: (err as Error).message,
-      metricKey: ctx.metricKey,
-    });
+    logger.warn({ event: 'telegram.fetch_failed', error: (err as Error).message });
+    return false;
+  }
+}
+
+export async function sendCriticalTelegramAlert(
+  ctx: CriticalAlertContext,
+): Promise<void> {
+  const sent = await sendTelegramMessage(formatAlertMessage(ctx));
+  if (sent) {
+    logger.info({ event: 'telegram.alert_sent', metricKey: ctx.metricKey, value: ctx.value });
   }
 }
 

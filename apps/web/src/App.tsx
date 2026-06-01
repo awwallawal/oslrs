@@ -50,6 +50,9 @@ const AuditLogPage = lazy(() => import('./features/audit-log/pages/AuditLogPage'
 // prep-settings-landing-and-feature-flags — Super Admin settings landing
 const SettingsLandingPage = lazy(() => import('./features/settings/pages/SettingsLandingPage'));
 
+// Story 9-19 — Super Admin Operations Dashboard
+const OperationsDashboardPage = lazy(() => import('./features/dashboard/pages/OperationsDashboardPage'));
+
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
 
@@ -872,6 +875,15 @@ function App() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <SettingsLandingPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 9-19 — Operations Dashboard (super_admin only) */}
+                <Route
+                  path="operations"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <OperationsDashboardPage />
                     </Suspense>
                   }
                 />

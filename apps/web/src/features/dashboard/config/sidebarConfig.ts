@@ -42,6 +42,7 @@ import {
   BarChart3,
   ScrollText,
   Settings,
+  Gauge,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -54,6 +55,8 @@ export interface NavItem {
   icon: LucideIcon;
   badge?: number;
   end?: boolean;
+  /** Optional stable test hook applied to the rendered NavLink. */
+  testId?: string;
 }
 
 /**
@@ -155,6 +158,9 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Survey Analytics', href: '/dashboard/super-admin/survey-analytics', icon: BarChart3 },
     { label: 'Fraud Thresholds', href: '/dashboard/super-admin/settings/fraud-thresholds', icon: SlidersHorizontal },
     { label: 'System Health', href: '/dashboard/super-admin/system', icon: Activity },
+    // Story 9-19 — Operations Dashboard (peer of Settings, not nested under it).
+    // end:true so it doesn't stay highlighted on future nested ops routes.
+    { label: 'Operations', href: '/dashboard/super-admin/operations', icon: Gauge, end: true, testId: 'sidebar-operations' },
     // Story 9-11 — Super Admin audit log viewer (between System Health and MFA Settings;
     // when prep-settings-landing-and-feature-flags lands, Settings inserts after Audit Log)
     // R3-F1: end:true prevents accidental highlight on nested routes

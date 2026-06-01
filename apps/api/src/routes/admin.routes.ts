@@ -9,6 +9,7 @@ import { getEmailQueueStats, getDeferredCount } from '../queues/email.queue.js';
 import { db } from '../db/index.js';
 import auditLogViewerRoutes from './audit-log-viewer.routes.js';
 import settingsRoutes from './settings.routes.js';
+import operationsRoutes from './operations.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -23,6 +24,10 @@ router.use('/audit-logs', auditLogViewerRoutes);
 // prep-settings-landing-and-feature-flags — sub-router for system_settings
 // management at /admin/settings/*. Super-admin-gated inside the sub-router.
 router.use('/settings', settingsRoutes);
+
+// Story 9-19 — sub-router for the Operations Dashboard at /admin/operations/*.
+// Super-admin-gated inside the sub-router.
+router.use('/operations', operationsRoutes);
 
 /**
  * GET /api/v1/admin/email-budget

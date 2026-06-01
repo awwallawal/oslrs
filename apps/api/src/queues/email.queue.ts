@@ -457,6 +457,25 @@ export async function getEmailQueueStats(): Promise<{
 }
 
 /**
+ * Get a sample of the most-recently-failed email jobs (Story 9-19 ops dashboard).
+ *
+ * Reuses the singleton queue connection (no transient Redis connection). Returns
+ * `[]` in test mode and on the happy path when nothing has failed.
+ */
+export async function getEmailFailedSamples(
+  limit = 5,
+): Promise<Array<{ id: string | undefined; name: string; reason: string }>> {
+  if (isTestMode()) return [];
+  const queue = getEmailQueue();
+  const jobs = await queue.getFailed(0, Math.max(0, limit - 1));
+  return jobs.map((j) => ({
+    id: j.id,
+    name: j.name,
+    reason: (j.failedReason ?? '').slice(0, 120),
+  }));
+}
+
+/**
  * Pause the email queue (used when budget is exhausted)
  */
 export async function pauseEmailQueue(): Promise<void> {
