@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "vitest": "^4.0.16"
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "bcrypt": "6.0.0"
