@@ -1,6 +1,6 @@
 # Story 9.26: Unified ingestion pipeline — wizard writes submissions + CSV phone-format fix + recovery email
 
-Status: review
+Status: done
 
 <!--
 Authored 2026-05-19 by Bob (SM) via canonical *create-story --yolo template.
@@ -185,7 +185,7 @@ So that **(1) every wizard registration from this point forward has its full que
 - [x] **Task 2 (Part B) — Backfill loss marker** (AC: #B1-B3)
   - [x] 2.1: Author `_backfill-wizard-questionnaire-loss.ts` script
   - [x] 2.2: New audit action `OPERATOR_BACKFILL_DATA_LOSS_MARKER`
-  - [ ] 2.3: Run on prod via SSH after Part A deploys — **OPERATOR RESIDUAL** (one-shot; script + tests ready, --dry-run gated)
+  - [x] 2.3: Run on prod via SSH — **DONE 2026-06-01** (Tailscale SSH; dry-run showed 55-row cohort, live run `marked=55 failed=0 total=55`, confirmatory re-dry-run `count=0` proving idempotency + completeness). 55 `OPERATOR_BACKFILL_DATA_LOSS_MARKER` audit rows written atomically with the markers.
 - [x] **Task 3 (Part C) — Docblock fix** (AC: #C1) — shipped commit `e95b8ec`
 - [x] **Task 4 (Part D) — Tests** (AC: #D1-D6)
 - [x] **Task 5 (Part E) — Memory + MEMORY.md** (AC: #E1-E2)
@@ -313,12 +313,12 @@ The wizard handler currently logs `PENDING_NIN_CREATED` or `DATA_CREATE` audit a
 
 **Quality:** `pnpm --filter @oslsr/api exec tsc --noEmit` clean; new + touched suites green (registration.routes 33, survey-analytics 34, audit.service 38, backfill 13, recover 13). Test delta vs story estimate (~+8): +29 (3 pipeline + 13 backfill + 13 recover; the higher count reflects the two operator scripts each getting a full parseArgs/flag/helper suite per project script-test discipline).
 
-**Operator residuals (gate review → done):**
+**Operator residuals (ALL CLEARED for done):**
 1. ✅ Part H pre-merge code review — DONE 2026-06-01 (separate session; 2 Medium + 5 Low all fixed; see Review Follow-ups → "Part H").
-2. Task 2.3 — run `_backfill-wizard-questionnaire-loss.ts --dry-run` then live on prod (Tailscale SSH). **← only near-term action.** Internal-only marker; safe to run anytime.
-3. Task 10.3 (Part J recovery emails) — **HELD until Story 9-18 ships** (operator decision 2026-06-01). Rationale: Part J sends live magic-links that pull users back into the wizard, which collides with the locked field-readiness sequencing (no wizard-bound blasts until 9-18 — `project_field_readiness_sequence_2026_05_31`). It is also a narrower sibling of **9-27 Part A** (whose blast is already 9-18-gated) and needs Resend Pro active. The abandoned-draft answers remain safe in `wizard_drafts`; only the resume-nudge decays. Revisit post-9-18 OR fold into 9-27 Part A (likely skip-as-superseded). **NOT a review→done blocker.**
+2. ✅ Task 2.3 — Part B backfill RUN ON PROD 2026-06-01 (Tailscale SSH): `marked=55 failed=0`, idempotency confirmed. 55 forensic audit rows written.
+3. Task 10.3 (Part J recovery emails) — **HELD until Story 9-18 ships** (operator decision 2026-06-01) — explicitly NOT a done-blocker. Rationale: Part J sends live magic-links that pull users back into the wizard, which collides with the locked field-readiness sequencing (no wizard-bound blasts until 9-18 — `project_field_readiness_sequence_2026_05_31`). It is also a narrower sibling of **9-27 Part A** (whose blast is already 9-18-gated) and needs Resend Pro active. The abandoned-draft answers remain safe in `wizard_drafts`; only the resume-nudge decays. Revisit post-9-18 OR fold into 9-27 Part A (likely skip-as-superseded). Tracked as a forward follow-up, NOT 9-26 debt.
 
-> **review→done gate (revised 2026-06-01):** Part H is done and Part J is held (not a blocker), so the ONLY remaining gate is Task 2.3 — run the Part B backfill on prod (dry-run → live). Flip review→done once that completes.
+> **✅ STATUS: DONE (2026-06-01).** Part H code review complete (all findings fixed), Part B backfill run + verified on prod, all other parts (A/C/D/E/F/G/I) shipped. Part J is the only deferred item — held-until-9-18 by explicit operator decision and carried as a forward follow-up, not a 9-26 blocker. The 55 affected respondents' dropped answers remain permanently lost (documented, NDPA-clean); the pipeline can no longer silently regress (Part D locks).
 
 ### Change Log
 
@@ -326,6 +326,7 @@ The wizard handler currently logs `PENDING_NIN_CREATED` or `DATA_CREATE` audit a
 |---|---|---|
 | 2026-05-20 | Parts A/C/I shipped (commit `e95b8ec`) — wizard writes submissions in same tx + docblock fix + CSV phone/NIN text-format. | SEVERE: stop active per-submission data loss within 24h. |
 | 2026-06-01 | Full close-out (Amelia, dev-story): Part D regression locks (+3), Part B backfill script + audit action (+13 tests), Part J recovery script + audit action (+13 tests), AUDIT_ACTIONS 43→45, RespondentMetadata markers, Part E memory, Part F §L8, Part G sprint-status flip review + 9-12 note. tsc clean. Status ready-for-dev → review. | Operator chose full close-out over A/C/I-only. Residuals: Part H code review + Parts B/J prod one-shot runs. |
+| 2026-06-01 | Part B backfill RUN ON PROD (Tailscale SSH) — Task 2.3 DONE. Dry-run → 55-row cohort (all `source=public`, 2026-05-16→05-19, matches the 05-19 launch peak); live `marked=55 failed=0 total=55`; confirmatory re-dry-run `count=0` (idempotency + completeness). 55 `OPERATOR_BACKFILL_DATA_LOSS_MARKER` audit rows. **Status review → DONE.** Part J held-until-9-18 (operator decision; not a blocker). | Sole remaining done-gate cleared; story complete. Dropped answers stay permanently lost (documented); pipeline regression-locked by Part D. |
 | 2026-06-01 | Part H canonical code review (separate session) — Task 8 DONE. 2 Medium + 5 Low found (no Critical/High), ALL FIXED: H-M1 recovery audit flush-safety (logActionTx), H-M2 cohort-SQL lock tests via exported buildCohortQuery (+5 tests), H-L1 no-silent-cap warnings, H-L2 AC#D1 title, H-L3 "72 hours" copy lock, H-L4 redundant email predicate removed, H-L5 redundant cast removed. tsc + lint clean; 136 affected tests green (backfill 15, recover 16, audit 38, registration.routes 33, survey-analytics 34). | Operator directive: create action items (Critical→Low) AND fix all automatically. AC#H1 satisfied; status stays review pending only the operator prod one-shot runs (2.3 + 10.3). |
 
 ### Review Follow-ups (AI)
