@@ -11,10 +11,35 @@ the smoke-test verifier using a hardcoded `'respondent'` string-literal
 fix extracted `AUDIT_TARGETS = { RESPONDENT: 'respondent' } as const`
 in `apps/api/src/services/audit.service.ts:99-115` and migrated 4
 sites (3 emit-sites in `submission-processing.service.ts` + the
-verifier). BUT 8 production emit-sites + 3 test sites STILL use the
-string literal across other files, INCLUDING ONE OUTLIER that uses
+verifier). BUT 9 production emit-sites + 3 test sites STILL use the
+string literal across other files, INCLUDING TWO OUTLIERS that use
 the plural form `'respondents'` (the exact drift the constant exists
 to prevent). This story closes the migration.
+
+AMENDED 2026-06-01 (same-day, post-9-26-close-out re-grep) — scope grew
+by 2 operator-script sites that landed today + 2026-05-22 but the
+original 9-34 grep missed them (grep was scoped to `apps/api/src/` and
+omitted `apps/api/scripts/`):
+  (1) NEW singular site `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts:272`
+      added by commit `20f4297` (Story 9-26 Part B close-out, today).
+  (2) NEW plural outlier `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts:360`
+      added by commit `9a44228` (Story 9-28 Phase A, 2026-05-22).
+Net effect: Part A grows by 1 AC (#A7); Part B's plural-migration AC
+(#B1) grows to cover BOTH outliers; cutover-comment AC (#B2) stays
+scoped to `backfill-input-sanitisation.ts:257` only (rationale in §B2
+below — the newer plural outlier has zero historical audit_logs rows
+because the Cohort A supplemental-survey blast has never been live-fired
+yet, so no historical-spelling-bridge problem to solve there).
+
+EMPIRICAL VALIDATION (load-bearing for the "why now" justification):
+TWO independent operator-script authors INDEPENDENTLY chose the plural
+form (the operator on 2026-05-22 for the Cohort A blast; the dev agent
+today for the wizard-questionnaire-loss backfill correctly chose
+singular — but the prior-art plural example was right next to it in
+the file tree and could have flipped either way). Without the constant
++ a lint rule, the drift will keep happening on every new operator-
+script audit emission. This story's migration-then-lint pattern is the
+only durable fix.
 
 PRIORITY: LOW (developer-hygiene / silent-drift prevention). NOT
 field-deployment-blocking; NOT urgent. Pickup whenever bandwidth
@@ -31,7 +56,7 @@ PRECEDENT: this story mirrors the pattern Story 9-33 F1 established
 
 As the **maintainer of the OSLSR audit chain**,
 I want **every production emit-site for respondent-targeted audit events to reference the shared `AUDIT_TARGETS.RESPONDENT` constant rather than a hardcoded string literal**,
-So that **(1) future renames cause TypeScript compile errors at every reference site rather than silent runtime drift, (2) the existing `'respondents'` plural outlier at `backfill-input-sanitisation.ts:257` gets canonicalised, (3) the audit chain has a single source of truth for `targetResource='respondent'` going forward, and (4) Story 9-33 F1's "smoke-test-vs-emit-site drift" failure class is permanently closed across the entire codebase, not just the 4 sites already migrated**.
+So that **(1) future renames cause TypeScript compile errors at every reference site rather than silent runtime drift, (2) the existing `'respondents'` plural outliers at `backfill-input-sanitisation.ts:257` AND `_cohort-a-supplemental-survey-blast.ts:360` get canonicalised, (3) the audit chain has a single source of truth for `targetResource='respondent'` going forward, and (4) Story 9-33 F1's "smoke-test-vs-emit-site drift" failure class is permanently closed across the entire codebase, not just the 4 sites already migrated**.
 
 ## Background — why this story exists
 
@@ -51,9 +76,11 @@ The fix did two things:
 
 ### What remains drifty
 
-A grep on 2026-06-01 shows **8 production emit-sites + 3 test-assertion sites still use the literal**. ONE of those (the backfill outlier) uses the PLURAL form `'respondents'` — exactly the drift the constant exists to prevent.
+A grep on 2026-06-01 (re-run after `apps/api/scripts/` was confirmed in-scope) shows **9 production emit-sites + 3 test-assertion sites still use the literal**. TWO of those (the prep-input-sanitisation backfill outlier from 2026-05 + the Cohort A supplemental-survey blast added 2026-05-22 + augmented today) use the PLURAL form `'respondents'` — exactly the drift the constant exists to prevent.
 
-Until those references migrate to the constant, a future rename of `AUDIT_TARGETS.RESPONDENT` produces compile errors at the 4 migrated sites and SILENT MISSES at the 11 unmigrated sites. The asymmetry IS the bug. Story 9-34 closes it.
+The plural drift is empirically validated as a recurring failure mode: TWO independent operator-script authors INDEPENDENTLY emitted with the plural form across separate stories (`backfill-input-sanitisation.ts:257` in the prep-input-sanitisation backfill and `_cohort-a-supplemental-survey-blast.ts:360` in Story 9-28 Phase A). Without a shared constant + lint rule, every new operator-script audit emission is a coin-flip between singular and plural. The migration + lint pattern this story establishes is the only durable fix.
+
+Until those references migrate to the constant, a future rename of `AUDIT_TARGETS.RESPONDENT` produces compile errors at the 4 migrated sites and SILENT MISSES at the 12 unmigrated sites. The asymmetry IS the bug. Story 9-34 closes it.
 
 ### Why now (not later)
 
@@ -63,7 +90,7 @@ Recommended pickup: any time during the wizard-redesign arc (9-16 → 9-17 → 9
 
 ## Concrete migration targets (verified via grep 2026-06-01)
 
-### Production emit-sites — SINGULAR `'respondent'` (5 sites; all migrate to `AUDIT_TARGETS.RESPONDENT`)
+### Production emit-sites — SINGULAR `'respondent'` (6 sites; all migrate to `AUDIT_TARGETS.RESPONDENT`)
 
 | File | Line | Context |
 |---|---|---|
@@ -72,12 +99,14 @@ Recommended pickup: any time during the wizard-redesign arc (9-16 → 9-17 → 9
 | `apps/api/src/controllers/registration.controller.ts` | 615 | Pending-NIN-complete handler |
 | `apps/api/src/controllers/registration.controller.ts` | 849 | Supplemental-survey handler (Story 9-28 Phase B) |
 | `apps/api/src/workers/reminder.worker.ts` | 207 | Pending-NIN reminder cron audit |
+| `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` | 272 | Operator-gated data-loss marker backfill (Story 9-26 Part B; commit `20f4297`, 2026-06-01). Action: `OPERATOR_BACKFILL_DATA_LOSS_MARKER`. |
 
-### Production emit-site — PLURAL `'respondents'` outlier (1 site; canonical bug)
+### Production emit-sites — PLURAL `'respondents'` outliers (2 sites; canonical bugs)
 
 | File | Line | Notes |
 |---|---|---|
-| `apps/api/src/scripts/backfill-input-sanitisation.ts` | 257 | Action: `RESPONDENT_BACKFILLED_NORMALISATION` (singular noun in the action name — confirms canonical convention is SINGULAR; the `'respondents'` literal at line 257 is the bug). |
+| `apps/api/src/scripts/backfill-input-sanitisation.ts` | 257 | Action: `RESPONDENT_BACKFILLED_NORMALISATION` (singular noun in the action name — confirms canonical convention is SINGULAR; the `'respondents'` literal at line 257 is the bug). **HISTORICAL ROWS EXIST** in production `audit_logs` from the prep-input-sanitisation backfill run; AC#B2 cutover comment required here. |
+| `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` | 360 | Action: `OPERATOR_SUPPLEMENTAL_SURVEY_SENT` (Story 9-28 Phase A; commit `9a44228`, 2026-05-22). **ZERO HISTORICAL ROWS** in production `audit_logs` — the Cohort A supplemental-survey blast capability shipped but has never been live-fired against prod (per memory `feedback_cohort_a_disposition_decision`). Simple constant swap; NO cutover comment needed (AC#B1 covers; AC#B2 explicitly excludes this site — see B2 rationale). |
 
 ### Test-assertion sites — SINGULAR `'respondent'` (3 sites; optional migration)
 
@@ -105,11 +134,17 @@ Test sites are LOWER priority than production sites because they assert known-va
 
 6. **AC#A6 — Migrate `reminder.worker.ts:207`** — `targetResource: 'respondent'` → `targetResource: AUDIT_TARGETS.RESPONDENT`. Add `AUDIT_TARGETS` to the existing import (or add a new import line if no audit.service import exists yet).
 
+7. **AC#A7 — Migrate `_backfill-wizard-questionnaire-loss.ts:272`** (operator-script in `apps/api/scripts/`, added 2026-06-01 by commit `20f4297` as part of Story 9-26 Part B close-out) — `targetResource: 'respondent'` → `targetResource: AUDIT_TARGETS.RESPONDENT`. Extend the existing import line `import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';` (line 48) to add `AUDIT_TARGETS`. Note: this file lives under `apps/api/scripts/` (operator-scripts directory), NOT under `apps/api/src/scripts/` — verify path before editing. The audit emission is inside a `db.transaction()` block calling `AuditService.logActionTx(tx, {...})`; constant swap only — atomicity and flush-safety semantics already correct (Part H code-review fix from Story 9-26).
+
 ### Part B — Plural outlier migration + audit-chain cutover documentation
 
-7. **AC#B1 — Migrate `backfill-input-sanitisation.ts:257`** from `targetResource: 'respondents'` (plural) to `targetResource: AUDIT_TARGETS.RESPONDENT` (which evaluates to `'respondent'` singular). Add `AUDIT_TARGETS` to the existing import.
+8. **AC#B1 — Migrate BOTH plural outliers** from `targetResource: 'respondents'` (plural) to `targetResource: AUDIT_TARGETS.RESPONDENT` (which evaluates to `'respondent'` singular):
+    - **(a) `apps/api/src/scripts/backfill-input-sanitisation.ts:257`** — Add `AUDIT_TARGETS` to the existing import; constant swap + cutover comment per AC#B2 below.
+    - **(b) `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts:360`** — Add `AUDIT_TARGETS` to the existing import line (`import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';`); constant swap only. NO cutover comment needed (rationale at AC#B2).
 
-8. **AC#B2 — Add inline cutover comment** at `backfill-input-sanitisation.ts:257`. The comment MUST explicitly mark the cutover date and explain the historical-rows semantics so a future NDPA forensic auditor can resolve the audit-chain spelling difference without re-deriving the history. Suggested wording:
+9. **AC#B2 — Add inline cutover comment** at `apps/api/src/scripts/backfill-input-sanitisation.ts:257` ONLY. The comment MUST explicitly mark the cutover date and explain the historical-rows semantics so a future NDPA forensic auditor can resolve the audit-chain spelling difference without re-deriving the history. **Why ONLY this site (not the second plural outlier):** the prep-input-sanitisation backfill has been LIVE-FIRED against prod and produced historical `audit_logs` rows with `target_resource='respondents'` (verifiable via `SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM audit_logs WHERE target_resource='respondents';` — expected non-zero count, dating to the 2026-05 backfill window). The `_cohort-a-supplemental-survey-blast.ts:360` site is from Story 9-28 Phase A which has NEVER been live-fired against prod (the capability shipped but the operator deferred the blast pending Story 9-18 — per memory `feedback_cohort_a_disposition_decision` + sprint-status 9-28 entry). Therefore the Cohort A blast script has produced ZERO `'respondents'` rows in the production audit chain; nothing to bridge; nothing to document. **Add a brief inline marker comment at line 360 of `_cohort-a-supplemental-survey-blast.ts`** explaining the no-historical-rows decision (suggested: `// Story 9-34 cutover 2026-06-XX: constant swap — this script has NEVER been live-fired against prod (per Story 9-28 Phase A deferral), so the production audit_logs chain contains ZERO 'respondents' rows from this site. No cutover comment block needed (see AC#B2 of Story 9-34 for the symmetric backfill-input-sanitisation.ts cutover).`) — keeps the asymmetry self-documenting.
+
+    Suggested cutover comment wording for `backfill-input-sanitisation.ts:257`:
     ```typescript
     // Story 9-34 cutover 2026-06-XX: this site previously emitted
     // `targetResource: 'respondents'` (plural — the codebase outlier).
@@ -149,14 +184,17 @@ Test sites are LOWER priority than production sites because they assert known-va
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Production emit-site migration (AC: #A2-#A6)**
-  - [ ] 1.1: Update `registration.controller.ts` import line to include `AUDIT_TARGETS` from `'../services/audit.service.js'`
-  - [ ] 1.2: Migrate 4 literal references at lines 211, 294, 615, 849 to `AUDIT_TARGETS.RESPONDENT`
-  - [ ] 1.3: Update `reminder.worker.ts` import + migrate line 207
+- [ ] **Task 1 — Production emit-site migration (AC: #A2-#A7)**
+  - [ ] 1.1: Update `apps/api/src/controllers/registration.controller.ts` import line to include `AUDIT_TARGETS` from `'../services/audit.service.js'`
+  - [ ] 1.2: Migrate 4 literal references in `registration.controller.ts` at lines 211, 294, 615, 849 to `AUDIT_TARGETS.RESPONDENT`
+  - [ ] 1.3: Update `apps/api/src/workers/reminder.worker.ts` import + migrate line 207
+  - [ ] 1.4: Update `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` import line (line 48) to add `AUDIT_TARGETS` from `'../src/services/audit.service.js'`; migrate line 272 to `AUDIT_TARGETS.RESPONDENT`. **Note operator-script path** — file lives in `apps/api/scripts/` (operator-scripts), NOT `apps/api/src/scripts/`; the relative import depth is `../src/services/...` (one `..` traversal to escape `scripts/` and one more level into `src/`).
 
-- [ ] **Task 2 — Plural outlier migration + cutover comment (AC: #B1, #B2)**
-  - [ ] 2.1: Update `backfill-input-sanitisation.ts` import + migrate line 257
-  - [ ] 2.2: Add the inline cutover comment per AC#B2 wording. Replace `YYYY-MM-DD` placeholder with the actual commit date.
+- [ ] **Task 2 — Plural outlier migration + cutover documentation (AC: #B1, #B2)**
+  - [ ] 2.1: Update `apps/api/src/scripts/backfill-input-sanitisation.ts` import + migrate line 257 (the historically-significant outlier — has live audit_logs rows)
+  - [ ] 2.2: Add the inline cutover comment per AC#B2 wording at `backfill-input-sanitisation.ts:257`. Replace `YYYY-MM-DD` placeholder with the actual commit date.
+  - [ ] 2.3: Update `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` import (line ~7 — same `'../src/services/audit.service.js'` pattern as Task 1.4) to add `AUDIT_TARGETS`; migrate line 360 to `AUDIT_TARGETS.RESPONDENT`. Add the brief "no-historical-rows" marker comment per AC#B2 wording (single-line inline comment, NOT a multi-line block — keeps the asymmetry vs the backfill-input-sanitisation cutover self-documenting).
+  - [ ] 2.4: **Verification step** — before declaring Task 2 complete, run the prod audit_logs query from AC#B2 against the live database (via Tailscale SSH + psql) to confirm the expected historical-rows asymmetry: `SELECT target_resource, COUNT(*) FROM audit_logs WHERE target_resource = 'respondents' GROUP BY target_resource;` — expected: non-zero count from the backfill-input-sanitisation site, validating the AC#B2 historical-bridge rationale. Capture the count in Dev Agent Record. If the count is ZERO (e.g. operator never ran the backfill against prod), record that AND update AC#B2's comment block to drop the historical-rows paragraph (a comment about something that didn't happen is misleading future auditors).
 
 - [ ] **Task 3 — Optional test-site migration (AC: #C1, #C2, #C3) — dev judgment**
   - [ ] 3.1: Migrate `audit.service.test.ts:273` if convenient (1-line change if import exists)
@@ -236,16 +274,16 @@ That said, the insurance IS valuable: when the next drift event happens (Story 9
 
 ### Verification strategy
 
-The migration is mechanical; the verification is "tests pass + tsc clean + grep shows zero remaining `targetResource: 'respondent'` or `'respondents'` literals in production code." A quick sanity grep at the end of Task 5:
+The migration is mechanical; the verification is "tests pass + tsc clean + grep shows zero remaining `targetResource: 'respondent'` or `'respondents'` literals in production code (incl. operator-scripts)." A quick sanity grep at the end of Task 5 — **note BOTH `apps/api/src` AND `apps/api/scripts` are in scope** (the 2026-06-01 amendment to this story surfaced two operator-script sites in `apps/api/scripts/` that the original grep missed):
 ```bash
-grep -rn "targetResource:\s*['\"]respondents\?['\"]" apps/api/src \
+grep -rn "targetResource:\s*['\"]respondents\?['\"]" apps/api/src apps/api/scripts \
   | grep -v "__tests__"  # exclude test-site literals which are intentionally left
 ```
 should return zero lines (or only the 3 test sites if AC#C1-C3 were deferred). Document the grep output in Dev Agent Record.
 
 ### Project Structure Notes
 
-No file moves; no migrations; no new tables; no new audit-action enum values. Pure import + literal-to-constant changes across 6 files (5 production + 1 backfill script). If optional test-site migration runs, +3 files.
+No file moves; no migrations; no new tables; no new audit-action enum values. Pure import + literal-to-constant changes across **5 production files** (1 controller + 1 worker + 3 operator/backfill scripts) covering **8 emit-sites** (4 in `registration.controller.ts` at lines 211/294/615/849 + 1 each in `reminder.worker.ts:207`, `_backfill-wizard-questionnaire-loss.ts:272`, `backfill-input-sanitisation.ts:257`, `_cohort-a-supplemental-survey-blast.ts:360`). Plus 2 inline cutover/marker comments (1 multi-line block at `backfill-input-sanitisation.ts:257`, 1 single-line at `_cohort-a-supplemental-survey-blast.ts:360`). If optional test-site migration runs, +3 files.
 
 ### References
 
@@ -253,8 +291,13 @@ No file moves; no migrations; no new tables; no new audit-action enum values. Pu
 - [Source: apps/api/src/services/submission-processing.service.ts:495, 517, 609] — example pattern of constant usage from Story 9-33 F1 migration
 - [Source: _bmad-output/implementation-artifacts/9-33-enumerator-path-formid-and-audit-hotfix.md § "Change Log" 2026-06-01] — Story 9-33 F1 finding text + close-out
 - [Source: _bmad-output/implementation-artifacts/9-32-public-account-settings-and-ndpa-rights.md] — future story that will add new audit emit-sites; flag 9-32's dev agent to use `AUDIT_TARGETS.RESPONDENT` from inception
+- [Source: apps/api/scripts/_backfill-wizard-questionnaire-loss.ts:269-282] — operator-script audit emission in a `db.transaction()` calling `AuditService.logActionTx(tx, {...})`; pattern to mirror in AC#A7 migration. Added by commit `20f4297` (2026-06-01, Story 9-26 Part B close-out).
+- [Source: apps/api/scripts/_cohort-a-supplemental-survey-blast.ts:357-371] — operator-script audit emission (plural-outlier site #2). Added by commit `9a44228` (2026-05-22, Story 9-28 Phase A). Per memory `feedback_cohort_a_disposition_decision`: shipped but never live-fired — zero historical `'respondents'` rows in production audit_logs from this site.
+- [Source: _bmad-output/implementation-artifacts/9-26-unified-ingestion-pipeline.md § "Part H" + "Part B"] — Story 9-26 Part B close-out which introduced the new singular operator-script site that AC#A7 migrates.
+- [Source: _bmad-output/implementation-artifacts/9-28-cohort-a-step4-recovery-decision.md] — Cohort A Path B story; capability shipped but blast deferred (rationale for "zero historical rows" claim in AC#B2 + AC#B1(b)).
 - Memory: [[feedback_review_before_commit]] — Task 5 discipline
 - Memory: [[project_field_readiness_sequence_2026_05_31]] — 9-34 sequencing (post-launch, off critical path)
+- Memory: [[feedback_cohort_a_disposition_decision]] — supports AC#B2's "zero historical rows" claim for `_cohort-a-supplemental-survey-blast.ts:360`
 
 ## Dev Agent Record
 
