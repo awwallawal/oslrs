@@ -1,6 +1,6 @@
 # Story 9.26: Unified ingestion pipeline — wizard writes submissions + CSV phone-format fix + recovery email
 
-Status: ready-for-dev
+Status: review
 
 <!--
 Authored 2026-05-19 by Bob (SM) via canonical *create-story --yolo template.
@@ -178,28 +178,28 @@ So that **(1) every wizard registration from this point forward has its full que
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 (Part A) — Wizard handler writes submissions** (AC: #A1-A5)
-  - [ ] 1.1: In `submitWizard`, fetch `questionnaireFormId` from wizard_draft BEFORE the existing delete
-  - [ ] 1.2: Add `tx.insert(submissions).values({...})` after the respondents insert
-  - [ ] 1.3: Move audit-log JSONB to include `submissionId`
-- [ ] **Task 2 (Part B) — Backfill loss marker** (AC: #B1-B3)
-  - [ ] 2.1: Author `_backfill-wizard-questionnaire-loss.ts` script
-  - [ ] 2.2: New audit action `OPERATOR_BACKFILL_DATA_LOSS_MARKER`
-  - [ ] 2.3: Run on prod via SSH after Part A deploys
-- [ ] **Task 3 (Part C) — Docblock fix** (AC: #C1)
-- [ ] **Task 4 (Part D) — Tests** (AC: #D1-D6)
-- [ ] **Task 5 (Part E) — Memory + MEMORY.md** (AC: #E1-E2)
-- [ ] **Task 6 (Part F) — Story 9-12 § L7** (AC: #F1)
-- [ ] **Task 7 (Part G) — Sprint-status + 9-12 note** (AC: #G1-G2)
-- [ ] **Task 8 (Part H) — Pre-merge code review** (AC: #H1)
-- [ ] **Task 9 (Part I) — CSV phone-format fix** (AC: #I1-I4)
-  - [ ] 9.1: Extend `ExportColumn` interface with optional `format` field
-  - [ ] 9.2: Update `generateCsvExport()` to apply tab prefix for text-formatted columns
-  - [ ] 9.3: Mark phoneNumber + nin columns as `format: 'text'` in export.controller
-- [ ] **Task 10 (Part J) — Recovery email script** (AC: #J1-J4)
-  - [ ] 10.1: Author `_recover-abandoned-wizard-drafts.ts`
-  - [ ] 10.2: New audit action `OPERATOR_RECOVERY_EMAIL_SENT`
-  - [ ] 10.3: Dry-run first; then live run on prod via SSH after Part A deploys
+- [x] **Task 1 (Part A) — Wizard handler writes submissions** (AC: #A1-A5) — shipped commit `e95b8ec`
+  - [x] 1.1: In `submitWizard`, fetch `questionnaireFormId` from wizard_draft BEFORE the existing delete
+  - [x] 1.2: Add `tx.insert(submissions).values({...})` after the respondents insert
+  - [x] 1.3: Move audit-log JSONB to include `submissionId`
+- [x] **Task 2 (Part B) — Backfill loss marker** (AC: #B1-B3)
+  - [x] 2.1: Author `_backfill-wizard-questionnaire-loss.ts` script
+  - [x] 2.2: New audit action `OPERATOR_BACKFILL_DATA_LOSS_MARKER`
+  - [ ] 2.3: Run on prod via SSH after Part A deploys — **OPERATOR RESIDUAL** (one-shot; script + tests ready, --dry-run gated)
+- [x] **Task 3 (Part C) — Docblock fix** (AC: #C1) — shipped commit `e95b8ec`
+- [x] **Task 4 (Part D) — Tests** (AC: #D1-D6)
+- [x] **Task 5 (Part E) — Memory + MEMORY.md** (AC: #E1-E2)
+- [x] **Task 6 (Part F) — Story 9-12 § L7** (AC: #F1) — filed as §L8 (L7 taken by 9-28); renumbering noted in story
+- [x] **Task 7 (Part G) — Sprint-status + 9-12 note** (AC: #G1-G2)
+- [x] **Task 8 (Part H) — Pre-merge code review** (AC: #H1) — **DONE 2026-06-01 in a SEPARATE session** per `feedback_review_before_commit.md` + dev-story Step 10. Canonical adversarial `/bmad:bmm:workflows:code-review` on the uncommitted tree: 2 Medium + 5 Low surfaced (no Critical/High), ALL FIXED this session. Full findings + fixes in Dev Agent Record → Review Follow-ups (AI) → "Part H — CANONICAL adversarial code review". tsc + lint clean; 136 affected tests green.
+- [x] **Task 9 (Part I) — CSV phone-format fix** (AC: #I1-I4) — shipped commit `e95b8ec`
+  - [x] 9.1: Extend `ExportColumn` interface with optional `format` field
+  - [x] 9.2: Update `generateCsvExport()` to apply tab prefix for text-formatted columns
+  - [x] 9.3: Mark phoneNumber + nin columns as `format: 'text'` in export.controller
+- [x] **Task 10 (Part J) — Recovery email script** (AC: #J1-J4)
+  - [x] 10.1: Author `_recover-abandoned-wizard-drafts.ts`
+  - [x] 10.2: New audit action `OPERATOR_RECOVERY_EMAIL_SENT`
+  - [ ] 10.3: Dry-run first; then live run on prod via SSH after Part A deploys — **OPERATOR RESIDUAL** (one-shot; script + tests ready)
 
 ## Dev Notes
 
@@ -288,22 +288,99 @@ The wizard handler currently logs `PENDING_NIN_CREATED` or `DATA_CREATE` audit a
 
 🔴 **SEVERE** — active data loss every minute new wizard registrations come in. 43 respondents at 2026-05-19 ~16:30 UTC, climbing. Should ship Part A within 24h.
 
+## Dev Agent Record
+
+### Completion Notes (2026-06-01, Amelia — dev-story full close-out)
+
+**Pre-existing (shipped commit `e95b8ec`, 2026-05-20 — verified present, not re-implemented):**
+- Part A — `submitWizard` writes the canonical `submissions` row in the same `db.transaction` (raw_data carries 8 identity + email/gender/auth_choice + spread questionnaireResponses; `processed:true`, `source:'public'`, completionTimeSeconds from draft; audit gains `submissionUid`). Data loss stopped.
+- Part C — inaccurate `submission-processing.service.ts:81-86` docblock corrected.
+- Part I — `ExportColumn.format?: 'text'|'number'|'date'` + tab-prefix in `generateCsvExport()` (line 205) + phone/NIN marked `format:'text'`.
+
+**Implemented this session:**
+- **Part D (AC#D1-D6)** — pipeline-lock regression tests:
+  - `registration.routes.test.ts`: AC#D1 captures the submissions-insert payload and asserts the full 13-field `raw_data` shape + analytics-visibility invariants (`respondentId`/`source`/`processed`/`submittedAt`/`questionnaireFormId` non-null); AC#D2 simulates a submissions-insert failure and asserts the controller surfaces an error (no half-state 201).
+  - `survey-analytics.service.test.ts`: AC#D3 asserts `getRegistrySummary` counts wizard (`source='public'`) rows and that the default query binds **no** `s.source =` exclusion (regression that re-hides wizard rows fails loudly).
+  - AC#D4/D5 (enumerator/clerk flows unchanged) covered by the existing green submission-processing + analytics suites (those paths still flow through the submission-processing queue; wizard is the only direct-insert path).
+  - Net: +3 wizard/analytics tests; full files 67/67 green.
+- **Part B (AC#B1-B3)** — `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts`: operator-gated, `--dry-run` mandatory, `--since`/`--until` window (default 2026-05-14 → 2026-05-20 Part-A cutover, making it idempotent + safe post-deploy), `IS DISTINCT FROM 'true'` skip for already-marked rows, per-row `OPERATOR_BACKFILL_DATA_LOSS_MARKER` audit. +13 unit tests.
+- **Part J (AC#J1-J4)** — `apps/api/scripts/_recover-abandoned-wizard-drafts.ts`: operator-gated recovery email (narrow cohort = drafts with non-empty `questionnaireResponses` + not expired), `--dry-run`/`--since`/`--rate-per-minute`/Resend-Pro confirm gate, per-send `OPERATOR_RECOVERY_EMAIL_SENT` audit. Header documents that 9-27 Part A is the broader production successor and 9-28 Path B handles completed Cohort A. +13 unit tests.
+- **Audit actions** — `OPERATOR_BACKFILL_DATA_LOSS_MARKER` + `OPERATOR_RECOVERY_EMAIL_SENT` added (43 → 45); count test + comment bumped.
+- **Schema** — `RespondentMetadata` extended with `questionnaire_data_lost` / `lost_at` / `recovery_email_eligible` (TypeScript-only; JSONB column, no migration).
+- **Part E** — saved memory `feedback_unified_ingestion_pipeline.md` (+ MEMORY.md Key Patterns index line).
+- **Part F** — Story 9-12 Post-Launch UAT Session Log **§L8** (root-cause incident lesson; filed L8 because Story 9-28 already took L7 — renumbering noted inline).
+- **Part G** — sprint-status 9-26 → `review` with close-out paragraph + AC#G2 note appended to the 9-12 entry.
+
+**Quality:** `pnpm --filter @oslsr/api exec tsc --noEmit` clean; new + touched suites green (registration.routes 33, survey-analytics 34, audit.service 38, backfill 13, recover 13). Test delta vs story estimate (~+8): +29 (3 pipeline + 13 backfill + 13 recover; the higher count reflects the two operator scripts each getting a full parseArgs/flag/helper suite per project script-test discipline).
+
+**Operator residuals (gate review → done):**
+1. ✅ Part H pre-merge code review — DONE 2026-06-01 (separate session; 2 Medium + 5 Low all fixed; see Review Follow-ups → "Part H").
+2. Task 2.3 — run `_backfill-wizard-questionnaire-loss.ts --dry-run` then live on prod (Tailscale SSH). **← only near-term action.** Internal-only marker; safe to run anytime.
+3. Task 10.3 (Part J recovery emails) — **HELD until Story 9-18 ships** (operator decision 2026-06-01). Rationale: Part J sends live magic-links that pull users back into the wizard, which collides with the locked field-readiness sequencing (no wizard-bound blasts until 9-18 — `project_field_readiness_sequence_2026_05_31`). It is also a narrower sibling of **9-27 Part A** (whose blast is already 9-18-gated) and needs Resend Pro active. The abandoned-draft answers remain safe in `wizard_drafts`; only the resume-nudge decays. Revisit post-9-18 OR fold into 9-27 Part A (likely skip-as-superseded). **NOT a review→done blocker.**
+
+> **review→done gate (revised 2026-06-01):** Part H is done and Part J is held (not a blocker), so the ONLY remaining gate is Task 2.3 — run the Part B backfill on prod (dry-run → live). Flip review→done once that completes.
+
+### Change Log
+
+| Date | Change | Rationale |
+|---|---|---|
+| 2026-05-20 | Parts A/C/I shipped (commit `e95b8ec`) — wizard writes submissions in same tx + docblock fix + CSV phone/NIN text-format. | SEVERE: stop active per-submission data loss within 24h. |
+| 2026-06-01 | Full close-out (Amelia, dev-story): Part D regression locks (+3), Part B backfill script + audit action (+13 tests), Part J recovery script + audit action (+13 tests), AUDIT_ACTIONS 43→45, RespondentMetadata markers, Part E memory, Part F §L8, Part G sprint-status flip review + 9-12 note. tsc clean. Status ready-for-dev → review. | Operator chose full close-out over A/C/I-only. Residuals: Part H code review + Parts B/J prod one-shot runs. |
+| 2026-06-01 | Part H canonical code review (separate session) — Task 8 DONE. 2 Medium + 5 Low found (no Critical/High), ALL FIXED: H-M1 recovery audit flush-safety (logActionTx), H-M2 cohort-SQL lock tests via exported buildCohortQuery (+5 tests), H-L1 no-silent-cap warnings, H-L2 AC#D1 title, H-L3 "72 hours" copy lock, H-L4 redundant email predicate removed, H-L5 redundant cast removed. tsc + lint clean; 136 affected tests green (backfill 15, recover 16, audit 38, registration.routes 33, survey-analytics 34). | Operator directive: create action items (Critical→Low) AND fix all automatically. AC#H1 satisfied; status stays review pending only the operator prod one-shot runs (2.3 + 10.3). |
+
+### Review Follow-ups (AI)
+
+**Implementing-session PRE-PASS (NOT the canonical Part H).** The canonical adversarial `/bmad:bmm:workflows:code-review` runs in a separate CLI/session with a different LLM (BMAD discipline). This pre-pass (2026-06-01, high-effort, 2 parallel finder agents on the uncommitted tree) surfaced 5 candidates; 3 fixed inline, 2 accepted-by-pattern. The separate-session review may surface more — its findings supersede/extend this list:
+
+- **[FIXED][HIGH] F1 — backfill audit writes could be lost on exit.** `_backfill-wizard-questionnaire-loss.ts` used fire-and-forget `AuditService.logAction` (returns void, runs a detached hash-chain tx) in a tight, delay-free loop followed by an immediate `process.exit()`. The detached audit writes might not flush before Node exits — silently losing the forensic trail the script exists to produce, while the row marker (idempotently skipped on re-run) persists. Fixed by wrapping each row's marker-update + audit in ONE `db.transaction` using the awaited `AuditService.logActionTx(tx, …)` — atomic and flush-guaranteed.
+- **[FIXED][MED] F2 — recovery email overstated link validity.** Copy said "expires in 7 days" / "Link expires in 7 days", but `wizard_resume` tokens have a **72h** TTL (`magic-link.service.ts:28`). Recipients opening on days 3–7 would hit dead links. Corrected to "72 hours".
+- **[FIXED][LOW] F3 — AC#D2 test name overstated coverage.** With a mocked `db.transaction` the test verifies the controller surfaces the error (no half-state 201), not on-disk rollback. Renamed + commented to describe exactly what it locks; noted true atomicity needs an integration test.
+- **[ACCEPTED][LOW] F4 — recovery script has no per-send idempotency marker.** A partial-failure re-run would re-email already-contacted recipients. This matches the production-blessed `_reengagement-email-blast.ts` sibling exactly (operator-gated, mandatory `--dry-run`, `--max-recipients` cap). Part J's AC does not require a sent-marker; matching the blessed pattern is correct. Operator mitigates via dry-run + cohort review.
+- **[ACCEPTED][LOW] F5 — cohort gate checks draft `expires_at`, not link lifetime.** A still-resumable draft can be emailed a freshly-issued 72h token; "still resumable" refers to the draft, and the token is always fresh per send. Combined with the F2 copy fix, no user-facing mismatch remains.
+
+Verifier confirmed (clean, no fix needed): AC#D3 SQL-string inspection is discriminating (not tautological); AC#D1 raw_data shape matches the controller exactly; audit-action count of 45 is correct; `IS DISTINCT FROM 'true'` JSONB idempotency check is semantically sound; all MagicLinkService/EmailService call signatures match the known-good sibling.
+
+> Per project discipline (`feedback_review_before_commit.md` + dev-story Step 10), a second adversarial pass in a **different session/LLM** is still recommended before the commit lands — this self-review ran in the implementing session.
+
+---
+
+**Part H — CANONICAL adversarial code review (separate session, 2026-06-01).** Ran `/bmad:bmm:workflows:code-review` on the uncommitted tree per BMAD discipline. Independently re-verified: git-vs-File-List clean; every `[x]` task honest (Parts A/C/I confirmed live via the AC#D1 test capturing the real controller payload; the two `[ ]` items 2.3/10.3 correctly marked operator-residual); all test claims validated by re-running (67 Part D + 64 script/audit green); `wizard_resume` TTL confirmed 72h; all MagicLink/Email/Audit signatures match. **No Critical, no High** — no false claims, no unimplemented AC, no security hole. Surfaced **2 Medium + 5 Low**, ALL FIXED this session (operator chose "create action items + fix all automatically"):
+
+- **[FIXED][MED] H-M1 — recovery script's final-send audit could be lost to the same `process.exit()` race F1 fixed in backfill.** `_recover-abandoned-wizard-drafts.ts` still used fire-and-forget `AuditService.logAction` (detached hash-chain tx, `audit.service.ts:297-301`); the inter-send delay is skipped on the last iteration, then `process.exit()` fires immediately — so the FINAL recipient's audit row could be lost (a silent forensic gap, exactly the class the per-send audit exists to prevent). F1 set the flush-safe precedent in backfill but it wasn't applied to the newly-authored recovery code. Fixed: per-send audit now runs through awaited `AuditService.logActionTx` inside its own `db.transaction` (flush-guaranteed); a post-send audit failure is logged (`recover_drafts.audit_failed`) but does NOT flip the send to `failed` (the email already went out).
+- **[FIXED][MED] H-M2 — cohort-selection SQL (the highest-risk logic in both scripts) had zero automated coverage.** Both test files covered only pure helpers; `selectCohort` was guarded solely by operator dry-run eyeballing — yet the Part-J narrow-cohort predicates and Part-B window+idempotency predicates are precisely what decide who gets emailed / which rows get the irreversible marker. Fixed: extracted an exported `buildCohortQuery(args)` from each script and added `.toSQL()`-based lock tests (mirroring the AC#D3 string-assertion technique) — recover locks `? 'questionnaireResponses'` + `<> '{}'::jsonb` + `expires_at`/`NOW()` + the `--since` bound; backfill locks `= 'public'` + `IS DISTINCT FROM 'true'` + both `created_at` window bounds. +5 tests.
+- **[FIXED][LOW] H-L1 — silent truncation at `--max-rows`/`--max-recipients` (default 200).** `.limit(...)` truncated with no signal when the cohort exactly filled the cap, so an operator could believe the cohort was drained (violates the project "no silent caps" value). Fixed: both scripts now warn loudly (`*.cap_hit`) when `cohort.length === limit`.
+- **[FIXED][LOW] H-L2 — AC#D1 test title field-count mismatch.** Title said "all 11 fields" but asserted 13 and the Dev Agent Record says "13-field"; retitled to "all 13 unified-pipeline fields (8 identity + 3 wizard-extra + 2 answers)".
+- **[FIXED][LOW] H-L3 — `buildEmail` test didn't lock the "72 hours" copy (the F2 fix).** A regression back to "7 days" would have passed CI. Added an assertion that both bodies contain "72 hours" and NOT "7 days".
+- **[FIXED][LOW] H-L4 — redundant query predicate.** Recovery `selectCohort` filtered `form_data->>'email' IS NOT NULL`, a no-op (the `email` column is `NOT NULL UNIQUE` and is what we send to). Removed. (The `recovery_email_eligible` field written-but-unread is RETAINED — documented as intentional forward-compat for a later disposition pass, not dead code.)
+- **[FIXED][LOW] H-L5 — redundant `rows as RespondentRow[]` cast** in backfill `selectCohort`; removed (the Drizzle select is already typed).
+
+**Part H result:** tsc clean, lint clean, 136 affected tests green (backfill 15, recover 16, audit 38, registration.routes 33, survey-analytics 34). All Medium + Low fixed. Code-review gate (AC#H1) SATISFIED. Status stays **review** — the only remaining `done` gate is the two operator one-shot prod runs (Task 2.3 backfill + Task 10.3 recovery via Tailscale SSH); flip review→done after those execute.
+
 ## File List
 
-(Populated by dev agent. Expected:)
-- `apps/api/src/controllers/registration.controller.ts` (modified — submissions insert added)
-- `apps/api/src/services/submission-processing.service.ts` (modified — docblock fix)
-- `apps/api/src/services/audit.service.ts` (modified — new action codes)
-- `apps/api/src/services/export.service.ts` (modified — text format support)
-- `apps/api/src/controllers/export.controller.ts` (modified — column format annotations)
-- `apps/api/src/controllers/__tests__/registration.controller.test.ts` (modified — submissions assertion)
-- `apps/api/src/services/__tests__/survey-analytics.service.test.ts` (modified — wizard fixture)
-- `apps/api/src/services/__tests__/export.service.test.ts` (modified — text-format tests)
-- `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` (new, one-shot)
-- `apps/api/scripts/_recover-abandoned-wizard-drafts.ts` (new, one-shot)
-- `_bmad-output/implementation-artifacts/9-12-public-wizard-pending-nin-magic-link.md` (modified — § L7 added)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — 9-26 entry)
-- `MEMORY.md` + `feedback_unified_ingestion_pipeline.md` (memory consolidation)
+**Already shipped (commit `e95b8ec`, Parts A/C/I — listed for traceability, NOT re-touched this session):**
+- `apps/api/src/controllers/registration.controller.ts` (submitWizard writes submissions in same tx)
+- `apps/api/src/services/submission-processing.service.ts` (docblock fix, Part C)
+- `apps/api/src/services/export.service.ts` (ExportColumn.format + tab prefix, Part I)
+- `apps/api/src/controllers/export.controller.ts` (phone/NIN format: 'text', Part I)
+
+**Created this session (2026-06-01 close-out):**
+- `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` (new, one-shot — Part B)
+- `apps/api/scripts/_recover-abandoned-wizard-drafts.ts` (new, one-shot — Part J)
+- `apps/api/scripts/__tests__/_backfill-wizard-questionnaire-loss.test.ts` (new, +13 tests)
+- `apps/api/scripts/__tests__/_recover-abandoned-wizard-drafts.test.ts` (new, +13 tests)
+- `<project-memory>/feedback_unified_ingestion_pipeline.md` (new memory — Part E)
+
+**Modified this session:**
+- `apps/api/src/services/audit.service.ts` (+2 AUDIT_ACTIONS: OPERATOR_BACKFILL_DATA_LOSS_MARKER, OPERATOR_RECOVERY_EMAIL_SENT; 43→45)
+- `apps/api/src/db/schema/respondents.ts` (RespondentMetadata: questionnaire_data_lost / lost_at / recovery_email_eligible)
+- `apps/api/src/routes/__tests__/registration.routes.test.ts` (Part D — AC#D1 raw_data shape + AC#D2 error-propagation)
+- `apps/api/src/services/__tests__/survey-analytics.service.test.ts` (Part D — AC#D3 wizard-visibility + no source exclusion)
+- `apps/api/src/services/__tests__/audit.service.test.ts` (count 43→45 + comment)
+- `_bmad-output/implementation-artifacts/9-12-public-wizard-pending-nin-magic-link.md` (§L8 root-cause lesson — Part F)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (9-26 → review + 9-12 AC#G2 note — Part G)
+- `<project-memory>/MEMORY.md` (Key Patterns index line — Part E)
+- `_bmad-output/implementation-artifacts/9-26-unified-ingestion-pipeline.md` (this file — Status, tasks, Dev Agent Record)
 
 ## Cohort A disposition cross-reference
 

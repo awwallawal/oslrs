@@ -1262,5 +1262,23 @@ Between 2026-05-14 (production launch) and 2026-05-20 09:00 UTC (Story 9-26 Part
 
 **Disposition decision**: Path B (Cohort-A-targeted supplemental survey, Option 2 wording — "Complete your skills profile"). Tracked under **Story 9-28** (`_bmad-output/implementation-artifacts/9-28-cohort-a-step4-recovery-decision.md`). Operator decided 2026-05-22 without external counsel review; rationale + rejected-path reasoning captured in 9-28 Dev Agent Record.
 
+#### L8 — The wizard silently dropped `questionnaireResponses` for 43 respondents (2026-05-14 → 2026-05-19)
+
+> **Numbering note**: Story 9-26 AC#F1 specified this lesson as "L7", but by implementation time the L7 slot was already taken by Story 9-28's Cohort-A-disposition lesson (above). Filed as **L8** to avoid clobbering it. L8 (this lesson) is the root-cause incident; L7 is the downstream disposition decision for the affected cohort. Read them together.
+
+**Incident chronology**:
+- 2026-05-14 — public launch; wizard live. `submitWizard` inserts a `respondents` row but **no `submissions` row**.
+- 2026-05-14 → 2026-05-19 — every wizard submission silently discards `questionnaireResponses` (Step 4), `gender`, and `authChoice`. Email survives only in `magic_link_tokens.email`. Affected respondents are also **invisible** to the Registry/analytics pages (analytics requires a `submissions` row).
+- 2026-05-19 ~16:00 UTC — operator notices "Registry shows 1 respondent but actual count is 43"; investigation surfaces the dropped-field bug + the analytics-visibility consequence.
+- 2026-05-20 — Story 9-26 Part A (commit `e95b8ec`) ships the fix: wizard writes the canonical `submissions` row in the same transaction. Data loss stops.
+
+**Root cause**: the wizard handler accepted `questionnaireResponses` (+ `gender`, `authChoice`) in its request schema but never persisted them — they were read into the validated `data` object and then ignored. No submissions row meant no canonical home for the answers.
+
+**Data-loss scope**: 43 respondents (climbing during the window as adoption surged; final bound 63 per L7) × their Step 4 answers. Volume is modest (~10 answers × ~14 chars × 43 ≈ tens of KB) but business value is immense — the questionnaire IS the registry's reason to exist. Unrecoverable: request bodies were never logged anywhere.
+
+**Root-cause-of-root-cause**: Story 9-12's own docblock (at `submission-processing.service.ts:81-86`) claimed the wizard followed the unified-ingestion design, but the implementation took a shortcut (direct `respondents` insert, no `submissions` write), and the 9-12 code review missed the documentation-vs-implementation drift. The intent was documented; the implementation diverged silently; review didn't catch it. This is why Story 9-26 Part C corrected the docblock and Part E codified the "every respondent has a submissions row" rule as a saved memory ([[feedback_unified_ingestion_pipeline]]).
+
+**Forward fix**: Story 9-26 (`_bmad-output/implementation-artifacts/9-26-unified-ingestion-pipeline.md`) — Part A (handler writes submissions in same tx), Part C (docblock), Part D (regression tests that lock the behavior), Part I (CSV phone/NIN text-format), Parts B/J (operator-gated loss-marker + recovery scripts). The 43-respondent answer loss remains permanent; the pipeline can no longer silently regress (Part D tests fail loudly if `raw_data` or `respondent_id` go null).
+
 End of Post-Launch UAT Session Log.
 

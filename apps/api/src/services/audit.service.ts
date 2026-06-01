@@ -97,6 +97,14 @@ export const AUDIT_ACTIONS = {
   // Operations Dashboard Telegram digest (Story 9-19 Part C)
   // Per-send audit trail for the twice-daily ops digest pushed to the operator.
   OPS_DIGEST_SENT: 'ops.digest_sent',
+  // Unified ingestion pipeline backfill + recovery (Story 9-26 Parts B + J)
+  // Per-row forensic trail for the one-shot operator scripts that (B) stamp
+  // the metadata.questionnaire_data_lost marker on the 43 pre-fix wizard
+  // respondents and (J) email the 70 abandoned-but-data-rich wizard drafts a
+  // resume magic-link. Per-row/per-send audit keeps the operator action out of
+  // the silent-forensic-gap class the 2026-05-13 incident exposed.
+  OPERATOR_BACKFILL_DATA_LOSS_MARKER: 'operator.backfill_data_loss_marker',
+  OPERATOR_RECOVERY_EMAIL_SENT: 'operator.recovery_email_sent',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

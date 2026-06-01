@@ -381,6 +381,38 @@ describe('SurveyAnalyticsService', () => {
       const result = await SurveyAnalyticsService.getRegistrySummary(personalScope);
       expect(result.totalRespondents).toBe(5);
     });
+
+    // Story 9-26 Part D (AC#D3) — wizard respondents (source='public') were
+    // invisible to analytics pre-9-26 because the wizard never wrote a
+    // submissions row, and buildWhereFragments() requires `raw_data IS NOT
+    // NULL AND respondent_id IS NOT NULL`. Part A now writes that row, so
+    // wizard respondents ARE counted. This test locks the analytics side of
+    // the contract: with no source param, the generated WHERE clause must NOT
+    // restrict to a single source (which would re-hide wizard rows), and a
+    // wizard-style count flows through unchanged.
+    it('AC#D3 — counts wizard (source=public) respondents; no source exclusion in default query', async () => {
+      mockExecute.mockResolvedValueOnce(mockRows([{
+        total: '43',
+        employed: '20',
+        female: '18',
+        avg_age: '29.0',
+        biz_owners: '8',
+        consent_marketplace_pct: '70.0',
+        consent_enriched_pct: '40.0',
+      }]));
+
+      const result = await SurveyAnalyticsService.getRegistrySummary(systemScope);
+      // The 43 wizard respondents from the 2026-05-14→2026-05-19 window are now
+      // visible in the registry summary.
+      expect(result.totalRespondents).toBe(43);
+
+      // No `s.source = ...` filter is bound when params.source is omitted — all
+      // sources (public/enumerator/clerk) are counted together. A regression
+      // that hard-codes a source restriction would surface here.
+      const sqlString = JSON.stringify(mockExecute.mock.calls[0][0]);
+      expect(sqlString).toContain('s.respondent_id IS NOT NULL');
+      expect(sqlString).not.toContain('s.source =');
+    });
   });
 
   describe('getPipelineSummary', () => {

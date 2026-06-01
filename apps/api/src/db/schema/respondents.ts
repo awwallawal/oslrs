@@ -60,6 +60,24 @@ export interface RespondentMetadata {
    * enumerators with a high "no reason provided" rate.
    */
   defer_reason_nin?: string;
+  /**
+   * Story 9-26 Part B — marks the 43 wizard respondents created in the
+   * 2026-05-14 → 2026-05-19 data-loss window, whose Step 4 `questionnaireResponses`
+   * (+ `gender`, `authChoice`) were silently dropped by the pre-9-26 wizard
+   * handler. The data is unrecoverable (request bodies were never logged); this
+   * marker is an NDPA-clean record of what we know we don't have, set by the
+   * one-shot `_backfill-wizard-questionnaire-loss.ts` script.
+   */
+  questionnaire_data_lost?: boolean;
+  /** ISO timestamp the data-loss marker was applied (Story 9-26 Part B). */
+  lost_at?: string;
+  /**
+   * Whether this lost-data respondent is eligible for a recovery outreach.
+   * Seeded `false` by Part B (their answers can't be recovered — only future
+   * re-submission would help; Cohort A recovery is handled separately by
+   * Story 9-28 Path B). Kept on the row for any later disposition pass.
+   */
+  recovery_email_eligible?: boolean;
 }
 
 export const respondents = pgTable('respondents', {

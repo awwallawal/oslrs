@@ -662,6 +662,141 @@ describe('POST /registration/wizard', () => {
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('NIN_DUPLICATE');
   });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Story 9-26 Part D — unified-pipeline regression locks
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('AC#D1 — submissions row raw_data carries all 13 unified-pipeline fields (8 identity + 3 wizard-extra + 2 answers)', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    let captured: Record<string, unknown> | undefined;
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({
+          returning: () => Promise.resolve([{ id: 'resp-d1', status: 'active' }]),
+        }),
+      };
+      // Capture the submissions insert payload so we can assert its shape.
+      const submissionsInsertChain = {
+        values: (v: Record<string, unknown>) => {
+          captured = v;
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: 'form-uuid-d1' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({
+        nin: '12345678901',
+        questionnaireResponses: { employment_status: 'employed', skills_possessed: ['plumbing'] },
+      }));
+
+    expect(res.status).toBe(201);
+    expect(captured).toBeDefined();
+
+    // Analytics-visibility invariants (AC#D3): buildWhereFragments() in
+    // survey-analytics.service.ts requires BOTH `raw_data IS NOT NULL` AND
+    // `respondent_id IS NOT NULL` with NO source exclusion. A wizard row is
+    // counted by every analytics query precisely because Part A sets both of
+    // these — assert the invariants here so a future regression that nulls
+    // either field (re-hiding wizard respondents) fails loudly.
+    expect(captured!.respondentId).toBe('resp-d1');
+    expect(captured!.source).toBe('public');
+    expect(captured!.processed).toBe(true);
+    expect(captured!.submittedAt).toBeInstanceOf(Date);
+    expect(captured!.questionnaireFormId).toBe('form-uuid-d1');
+
+    const raw = captured!.rawData as Record<string, unknown>;
+    expect(raw).toMatchObject({
+      // 8 identity fields (snake_case for the s.raw_data->>'X' accessors)
+      first_name: 'Awwal',
+      last_name: 'Lawal',
+      date_of_birth: '1990-01-01',
+      phone_number: '+2348012345678',
+      lga_id: 'lga-egbeda',
+      nin: '12345678901',
+      consent_marketplace: true,
+      consent_enriched: false,
+      // 3 wizard-collected fields formerly dropped pre-9-26
+      email: 'awwal@example.com',
+      gender: 'male',
+      auth_choice: 'magic-link',
+      // Step 4 questionnaire answers — formerly dropped, now canonical
+      employment_status: 'employed',
+      skills_possessed: ['plumbing'],
+    });
+  });
+
+  // NOTE: db.transaction is mocked here, so this asserts the CONTROLLER side of
+  // the rollback contract — a submissions-insert failure propagates out of the
+  // tx callback so the controller returns an error, never a half-state 201.
+  // True on-disk atomicity (the respondents insert being discarded) is the
+  // db.transaction guarantee and would need an integration test to observe
+  // directly; this lock catches the regression where the submissions insert is
+  // moved outside the transaction or its error is swallowed.
+  it('AC#D2 — submissions-insert failure propagates as an error, never a half-state 201', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    let respondentInsertAttempted = false;
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({
+          returning: () => {
+            respondentInsertAttempted = true;
+            return Promise.resolve([{ id: 'resp-d2', status: 'active' }]);
+          },
+        }),
+      };
+      // Submissions insert blows up. In production the surrounding
+      // db.transaction discards the respondents insert + audit + draft delete.
+      // We assert the controller surfaces an error rather than a half-state 201.
+      const submissionsInsertChain = {
+        values: () => Promise.reject(new Error('submissions insert failed (simulated)')),
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: 'form-uuid-d2' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      // The throw inside cb rejects the transaction promise, exactly as the
+      // real db.transaction propagates a rolled-back transaction's error.
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678901' }));
+
+    expect(respondentInsertAttempted).toBe(true); // respondent insert ran...
+    expect(res.status).not.toBe(201);              // ...but no success returned
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
