@@ -1,6 +1,6 @@
 # Story 9.34: Audit-pattern unification — migrate `targetResource` literals to `AUDIT_TARGETS.RESPONDENT`
 
-Status: review
+Status: done
 
 <!--
 Authored 2026-06-01 by Bob (SM) via canonical *create-story --yolo workflow.
@@ -400,16 +400,23 @@ apps/api/src/services/__tests__/submission-processing.service.test.ts:542:      
 
 ### Operator action items (post-merge)
 
-1. **Task 2.4 verification query** — run via Tailscale SSH + psql on prod:
+1. **Task 2.4 verification query — CLOSED 2026-06-02** (commit `b301b0a` deployed; CI run `26797226634` green). Ran via Tailscale SSH + `docker exec oslsr-postgres psql`:
     ```sql
     SELECT target_resource, COUNT(*) AS rows, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
     FROM audit_logs
     WHERE target_resource = 'respondents'
     GROUP BY target_resource;
     ```
-    Expected: non-zero `rows` count, validating the AC#B2 historical-bridge rationale (the prep-input-sanitisation backfill ran against prod and produced 'respondents'-plural rows). If `rows = 0`, parent Claude follows up to drop the historical-rows paragraph from the AC#B2 cutover comment block at `backfill-input-sanitisation.ts:259-269`.
+    Result:
+    ```
+     target_resource | rows |         first_seen         |         last_seen
+    -----------------+------+----------------------------+----------------------------
+     respondents     |   34 | 2026-03-13 15:57:23.572+00 | 2026-05-20 14:44:55.748+00
+    (1 row)
+    ```
+    **34 historical `'respondents'`-plural rows** in production audit_logs, spanning ~2.3 months (2026-03-13 → 2026-05-20). All produced by the `RESPONDENT_BACKFILLED_NORMALISATION` audit action from `backfill-input-sanitisation.ts` runs during the prep-input-sanitisation work. The AC#B2 cutover-comment block at `backfill-input-sanitisation.ts:249-269` accurately describes the situation — historical rows exist, retain plural spelling, hash-chain unaffected (`targetResource` not in `computeHash` payload), forensic queries spanning the cutover need `target_resource IN ('respondent','respondents')` OR filter by the stable `action` column. NO comment correction needed.
 
-2. **Pre-merge code review (Task 5)** — parent Claude runs `/code-review` on the uncommitted tree before commit + push. Per `feedback_review_before_commit.md` discipline.
+2. **Pre-merge code review (Task 5) — CLOSED 2026-06-01/02** via parent Claude `/code-review` skill on uncommitted tree. 15 findings produced, 7 auto-fixed inline, 8 carved out to Stories 9-36 + 9-37 (both marked `backlog` per operator scope-review). Full triage in §"Review Follow-ups (AI)" above.
 
 ### Review Follow-ups (AI)
 
