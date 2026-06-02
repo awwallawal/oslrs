@@ -1486,6 +1486,32 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 
 ---
 
+### Pitfall #36: `pnpm install` sets the exec bit on package `bin` files → mode-only diff on the VPS is a latent `git pull` deploy blocker
+
+**Symptom**: `git status` on the VPS shows a tracked source file as **modified**, but the content diff is empty — `git diff <file>` prints only `old mode 100644` / `new mode 100755` with `0 insertions, 0 deletions`. The laptop/repo working tree is clean; only the VPS shows it dirty. (Observed 2026-06-02 on `packages/testing/src/cli.ts`.)
+
+**Detection**:
+1. `git diff --stat <file>` → `1 file changed, 0 insertions(+), 0 deletions(-)` — the tell is zero content churn.
+2. `git diff <file>` → an `old mode 100644 / new mode 100755` block and nothing else.
+3. The file appears in some package's `package.json` `bin` map (here `packages/testing` → `"oslsr-test-dashboard": "./src/cli.ts"`).
+
+**Cause**: `pnpm install` — which runs on every VPS deploy — sets the executable bit (`+x` → `755`) on files declared as package `bin` entries. The file is committed `644`, so the VPS working tree permanently differs by mode. Harmless in isolation, but a **latent landmine**: the day a commit edits that file's *content*, the deploy's `git pull origin main` aborts with *"Your local changes to the following files would be overwritten by merge"* and the deploy fails. Earlier deploys survive only because no commit has touched the file since the bit was set.
+
+**Fix (durable + self-documenting — PREFERRED)**: commit the exec bit so repo and runtime agree, making pnpm's chmod a no-op forever and on every clone (survives a droplet rebuild):
+```
+git update-index --chmod=+x packages/testing/src/cli.ts
+git commit -m "fix(deploy): commit +x on the oslsr-test-dashboard bin"
+```
+On the next deploy the committed mode (`755`) equals the VPS working-tree mode (`755`), so the `git pull` is clean and the dirty state disappears. (Shipped alongside this Pitfall entry.)
+
+**Fix (tactical, VPS-local — NOT preferred)**: `git config core.fileMode false` inside the VPS repo makes git ignore exec-bit differences. It works, but leaves **no git trail**, is repo-local, and is **lost on a droplet rebuild** — so it must be remembered and re-applied by hand. Use only as an emergency unblock when a deploy is already wedged on a mode diff.
+
+**Lesson**: a "modified" file with a zero-content diff is a *mode* change, not code drift — read `git diff` before assuming the worst. For any file in a package `bin` map, commit it `+x` at authoring time so the runtime's `pnpm install` chmod is idempotent. Mode-only diffs are silent until a content commit lands on the same file — then they break the deploy.
+
+**Reference**: 2026-06-02 — surfaced on `packages/testing/src/cli.ts` (the `oslsr-test-dashboard` bin) while pulling production registration data over Tailscale. Diagnosed read-only (`git diff` showed mode-only), and fixed by committing the bit rather than the VPS-local `core.fileMode false` hack — chosen specifically so the fix is self-documenting (git history + this entry) and rebuild-proof.
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1498,6 +1524,7 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 *Updated: 2026-05-09 — Pitfall #31 added: GH Actions Playwright cache key must track resolved version (pnpm-lock.yaml), not declaration (package.json). Plus visibility lesson on `continue-on-error: true` as silent-failure mask.*
 *Updated: 2026-05-10 — Pitfalls #32-35 added per BMAD compliance restoration tracker (`docs/bmad-compliance-restoration-2026-05-10.md` R4 + F5a): #32 selector rot under accessibility-name UI changes (commit `235563c`); #33 WebSocket-refresh flake masquerading as flaky test (commit `c375254`); #34 `continue-on-error: true` as silent-failure mask (commit `235563c`); #35 in-process worker CPU spike contaminates API latency rolling buffer (commit `609e06e` Story 9-10 PC1).*
 *Updated: 2026-05-09 — Pitfall #31 added: GH Actions E2E job had been silently failing across 2 commits (fe878af + 096086e) with `chromium_headless_shell-1208 doesn't exist` because the Playwright browser cache key tracked `apps/web/package.json` text instead of `pnpm-lock.yaml` resolved version, AND the `restore-keys` fallback was too permissive (matched broken v1 caches). Compounded by `pnpm dlx playwright install` fetching a latest Playwright that targeted a newer browser revision than the project's pinned `@playwright/test` expects. Fix: cache key includes `pnpm-lock.yaml` + manual `v2-` prefix; restore-keys narrowed to `v2-`-only; dlx swapped for `pnpm --filter @oslsr/web exec` so project-pinned Playwright drives both install and runtime. Visibility lesson: `continue-on-error: true` on a CI job needs a separate visible-red signal or red becomes wallpaper.*
+*Updated: 2026-06-02 — Pitfall #36 added: `pnpm install` sets the exec bit on package `bin` files (`packages/testing/src/cli.ts`), creating a mode-only diff on the VPS that is a latent `git pull` deploy blocker. Fixed durably by committing the `+x` bit (`git update-index --chmod=+x`) rather than the VPS-local `core.fileMode false` hack — the commit is self-documenting and survives a droplet rebuild. Surfaced while pulling prod registration data 2026-06-02.*
 
 ## Part 12: Encrypted Backup Restore (added 2026-05-09 per Story 9-9 AC#5)
 
