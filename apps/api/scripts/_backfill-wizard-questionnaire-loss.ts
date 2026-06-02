@@ -45,7 +45,7 @@ import pino from 'pino';
 import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/index.js';
 import type { RespondentMetadata } from '../src/db/schema/respondents.js';
-import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 
 const logger = pino({ name: 'backfill-wizard-questionnaire-loss' });
 
@@ -269,7 +269,7 @@ async function main() {
         await AuditService.logActionTx(tx, {
           actorId: null,
           action: AUDIT_ACTIONS.OPERATOR_BACKFILL_DATA_LOSS_MARKER,
-          targetResource: 'respondent',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: row.id,
           details: {
             marker: 'questionnaire_data_lost',

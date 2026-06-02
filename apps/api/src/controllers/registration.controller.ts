@@ -6,7 +6,7 @@ import { db } from '../db/index.js';
 import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
 import { uuidv7 } from 'uuidv7';
 import { MagicLinkService } from '../services/magic-link.service.js';
-import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-controller' });
@@ -208,7 +208,7 @@ export class RegistrationController {
       AuditService.logAction({
         actorId: peeked.userId ?? null,
         action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-        targetResource: 'respondent',
+        targetResource: AUDIT_TARGETS.RESPONDENT,
         targetId: peeked.respondentId,
         details: {
           trigger: 'magic_link_complete_nin',
@@ -291,7 +291,7 @@ export class RegistrationController {
       AuditService.logAction({
         actorId: peeked.userId ?? null,
         action: AUDIT_ACTIONS.PENDING_NIN_DEFERRED,
-        targetResource: 'respondent',
+        targetResource: AUDIT_TARGETS.RESPONDENT,
         targetId: peeked.respondentId,
         details: {
           tokenId: peeked.id,
@@ -612,7 +612,7 @@ export class RegistrationController {
           action: pendingNin
             ? AUDIT_ACTIONS.PENDING_NIN_CREATED
             : AUDIT_ACTIONS.DATA_CREATE,
-          targetResource: 'respondent',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: row.id,
           details: {
             trigger: 'public_wizard_submit',
@@ -846,7 +846,7 @@ export class RegistrationController {
         await AuditService.logActionTx(tx, {
           actorId: peeked.userId ?? null,
           action: AUDIT_ACTIONS.DATA_CREATE,
-          targetResource: 'respondent',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: peeked.respondentId!,
           details: {
             trigger: 'supplemental_survey_submit',

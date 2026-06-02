@@ -29,7 +29,7 @@ import { db } from '../db/index.js';
 import { respondents } from '../db/schema/index.js';
 import type { RespondentMetadata } from '../db/schema/respondents.js';
 import { eq, sql } from 'drizzle-orm';
-import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import {
   normaliseNigerianPhone,
   normaliseDate,
@@ -251,10 +251,26 @@ async function main(args: BackfillArgs): Promise<void> {
       // contention with regular write traffic is negligible; if back-fill ever
       // runs against millions of rows, batch via a single INSERT … VALUES
       // (...) (...) (...) statement.
+      //
+      // Story 9-34 cutover 2026-06-01 (logAction below):
+      // This site previously emitted `targetResource: 'respondents'` (plural —
+      // the codebase outlier). Historical audit_logs rows written BEFORE this
+      // commit retain the plural form. The Story 6-1 hash chain over those rows
+      // is unaffected because `targetResource` is NOT part of the hash payload
+      // (see `AuditService.computeHash` at apps/api/src/services/audit.service.ts:183-193,
+      // which hashes only `id | action | actorId | createdAt | canonicalJSON(details)
+      // | previousHash`). We CHOOSE not to backfill the plural rows purely on
+      // YAGNI grounds; backfill would be hash-chain-safe but adds no forensic
+      // value. All NEW emissions from this script use the canonical
+      // `AUDIT_TARGETS.RESPONDENT` constant (= 'respondent' singular).
+      // Forensic queries that filter by `targetResource` across the cutover
+      // must accept BOTH spellings: `target_resource IN ('respondent','respondents')`,
+      // OR filter by the unchanged `action = 'respondent.backfilled_normalisation'`
+      // (always singular).
       AuditService.logAction({
         actorId: null,
         action: AUDIT_ACTIONS.RESPONDENT_BACKFILLED_NORMALISATION,
-        targetResource: 'respondents',
+        targetResource: AUDIT_TARGETS.RESPONDENT,
         targetId: plan.rowId,
         details: {
           fields: plan.auditDetails.fields,

@@ -30,7 +30,7 @@ import { magicLinkTokens } from '../db/schema/magic-link-tokens.js';
 import type { Respondent } from '../db/schema/respondents.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { MagicLinkService } from '../services/magic-link.service.js';
-import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import {
   resolveReminderDestination,
   type ReminderDestination,
@@ -204,7 +204,7 @@ async function transitionToNinUnavailable(respondent: Respondent): Promise<void>
   AuditService.logAction({
     actorId: null,
     action: AUDIT_ACTIONS.PENDING_NIN_TRANSITIONED,
-    targetResource: 'respondent',
+    targetResource: AUDIT_TARGETS.RESPONDENT,
     targetId: respondent.id,
     details: { trigger: 'reminder_worker_30d_window', source: respondent.source },
   });

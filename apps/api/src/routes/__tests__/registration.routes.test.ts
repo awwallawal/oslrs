@@ -84,6 +84,16 @@ vi.mock('../../services/audit.service.js', () => ({
     MAGIC_LINK_ISSUED: 'magic_link.issued',
     OPERATOR_SUPPLEMENTAL_SURVEY_SENT: 'operator.supplemental_survey_sent',
   },
+  // Story 9-34 — registration.controller.ts now reads AUDIT_TARGETS.RESPONDENT
+  // for every audit emission (post-9-33 F1 constant-extraction). Explicit-
+  // factory mocks must mirror the real audit.service.ts export shape; without
+  // this entry, production code throws `Cannot read properties of undefined
+  // (reading 'RESPONDENT')` and every wizard/supplemental route returns 500.
+  // (Tests asserting `targetResource: 'respondent'` literal still match this
+  // mock value — they're checking value contracts, not constant references.)
+  AUDIT_TARGETS: {
+    RESPONDENT: 'respondent',
+  },
 }));
 
 vi.mock('../../db/schema/index.js', () => ({

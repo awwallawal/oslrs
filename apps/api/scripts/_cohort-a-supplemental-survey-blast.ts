@@ -30,7 +30,7 @@ import { db } from '../src/db/index.js';
 import { sql } from 'drizzle-orm';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { EmailService } from '../src/services/email.service.js';
-import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'cohort-a-supplemental-survey-blast' });
@@ -354,10 +354,11 @@ async function main() {
           email: row.email,
           messageId: result.messageId ?? null,
         });
+        // Story 9-34 cutover 2026-06-01: constant swap; zero historical 'respondents' rows in prod (never live-fired — see AC#B2 of Story 9-34).
         AuditService.logAction({
           actorId: null,
           action: AUDIT_ACTIONS.OPERATOR_SUPPLEMENTAL_SURVEY_SENT,
-          targetResource: 'respondents',
+          targetResource: AUDIT_TARGETS.RESPONDENT,
           targetId: row.respondent_id,
           details: {
             email: row.email,

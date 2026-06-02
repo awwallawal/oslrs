@@ -1,6 +1,6 @@
 # Story 9.34: Audit-pattern unification — migrate `targetResource` literals to `AUDIT_TARGETS.RESPONDENT`
 
-Status: ready-for-dev
+Status: review
 
 <!--
 Authored 2026-06-01 by Bob (SM) via canonical *create-story --yolo workflow.
@@ -162,55 +162,55 @@ Test sites are LOWER priority than production sites because they assert known-va
 
 ### Part C — Optional test-site migration
 
-9. **AC#C1 — Optionally migrate `audit.service.test.ts:273`** to use `AUDIT_TARGETS.RESPONDENT`. If the test file already imports from `audit.service.ts`, this is a 1-line change. Dev judgment: include if convenient, defer with a "lower-priority follow-up" note otherwise.
+10. **AC#C1 — Optionally migrate `audit.service.test.ts:273`** to use `AUDIT_TARGETS.RESPONDENT`. If the test file already imports from `audit.service.ts`, this is a 1-line change. Dev judgment: include if convenient, defer with a "lower-priority follow-up" note otherwise.
 
-10. **AC#C2 — Optionally migrate `submission-processing.service.test.ts:542`** — same logic as AC#C1. This test was added in commit `f04e9f9` (Story 9-33 Bug #2 fix) and explicitly asserts the DATA_CREATE emission's `targetResource: 'respondent'`. The smoke test's parallel verifier already uses the constant; migrating the unit test for symmetry is the cleanest move but not strictly required.
+11. **AC#C2 — Optionally migrate `submission-processing.service.test.ts:542`** — same logic as AC#C1. This test was added in commit `f04e9f9` (Story 9-33 Bug #2 fix) and explicitly asserts the DATA_CREATE emission's `targetResource: 'respondent'`. The smoke test's parallel verifier already uses the constant; migrating the unit test for symmetry is the cleanest move but not strictly required.
 
-11. **AC#C3 — Optionally migrate `registration.routes.test.ts:782`** — same logic.
+12. **AC#C3 — Optionally migrate `registration.routes.test.ts:782`** — same logic.
 
 ### Part D — Discipline + verification
 
-12. **AC#D1 — `pnpm test` 4/4 packages green post-migration**. Specifically, the affected suites — `audit.service.test.ts`, `submission-processing.service.test.ts`, `registration.routes.test.ts`, `registration.controller.test.ts` (if it exists and touches the audit emissions) — must continue to pass. Zero new failures; zero regressions.
+13. **AC#D1 — `pnpm test` 4/4 packages green post-migration**. Specifically, the affected suites — `audit.service.test.ts`, `submission-processing.service.test.ts`, `registration.routes.test.ts`, `registration.controller.test.ts` (if it exists and touches the audit emissions) — must continue to pass. Zero new failures; zero regressions.
 
-13. **AC#D2 — tsc clean both apps**. The pre-commit husky hook validates this; the dev agent confirms it passes BEFORE staging.
+14. **AC#D2 — tsc clean both apps**. The pre-commit husky hook validates this; the dev agent confirms it passes BEFORE staging.
 
-14. **AC#D3 — Memory entry** at `~/.claude/projects/.../memory/feedback_audit_target_unification.md` capturing:
+15. **AC#D3 — Memory entry** at `~/.claude/projects/.../memory/feedback_audit_target_unification.md` capturing:
     - The canonical decision (SINGULAR `'respondent'`)
     - The hash-chain semantics (historical rows retained; cutover date marked in code)
     - The recommendation for future `AUDIT_TARGETS.*` additions (one constant per `targetResource` value; add as drift events surface; do NOT pre-emptively migrate all literals across the codebase — wait for the first drift to motivate each migration)
     - The Story 9-33 → 9-34 chain as the case study for "smoke-test catches drift, then a hygiene story closes the migration"
 
-15. **AC#D4 — Pre-merge code review on uncommitted tree** per `feedback_review_before_commit.md`. Auto-fix HIGH/MEDIUM findings per established Story 9-12/9-17/9-30/9-33 patterns. LOW findings deferrable with rationale in §"Review Follow-ups (AI)".
+16. **AC#D4 — Pre-merge code review on uncommitted tree** per `feedback_review_before_commit.md`. Auto-fix HIGH/MEDIUM findings per established Story 9-12/9-17/9-30/9-33 patterns. LOW findings deferrable with rationale in §"Review Follow-ups (AI)".
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Production emit-site migration (AC: #A2-#A7)**
-  - [ ] 1.1: Update `apps/api/src/controllers/registration.controller.ts` import line to include `AUDIT_TARGETS` from `'../services/audit.service.js'`
-  - [ ] 1.2: Migrate 4 literal references in `registration.controller.ts` at lines 211, 294, 615, 849 to `AUDIT_TARGETS.RESPONDENT`
-  - [ ] 1.3: Update `apps/api/src/workers/reminder.worker.ts` import + migrate line 207
-  - [ ] 1.4: Update `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` import line (line 48) to add `AUDIT_TARGETS` from `'../src/services/audit.service.js'`; migrate line 272 to `AUDIT_TARGETS.RESPONDENT`. **Note operator-script path** — file lives in `apps/api/scripts/` (operator-scripts), NOT `apps/api/src/scripts/`; the relative import depth is `../src/services/...` (one `..` traversal to escape `scripts/` and one more level into `src/`).
+- [x] **Task 1 — Production emit-site migration (AC: #A2-#A7)**
+  - [x] 1.1: Update `apps/api/src/controllers/registration.controller.ts` import line to include `AUDIT_TARGETS` from `'../services/audit.service.js'`
+  - [x] 1.2: Migrate 4 literal references in `registration.controller.ts` at lines 211, 294, 615, 849 to `AUDIT_TARGETS.RESPONDENT`
+  - [x] 1.3: Update `apps/api/src/workers/reminder.worker.ts` import + migrate line 207
+  - [x] 1.4: Update `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` import line (line 48) to add `AUDIT_TARGETS` from `'../src/services/audit.service.js'`; migrate line 272 to `AUDIT_TARGETS.RESPONDENT`. **Note operator-script path** — file lives in `apps/api/scripts/` (operator-scripts), NOT `apps/api/src/scripts/`; the relative import depth is `../src/services/...` (one `..` traversal to escape `scripts/` and one more level into `src/`).
 
-- [ ] **Task 2 — Plural outlier migration + cutover documentation (AC: #B1, #B2)**
-  - [ ] 2.1: Update `apps/api/src/scripts/backfill-input-sanitisation.ts` import + migrate line 257 (the historically-significant outlier — has live audit_logs rows)
-  - [ ] 2.2: Add the inline cutover comment per AC#B2 wording at `backfill-input-sanitisation.ts:257`. Replace `YYYY-MM-DD` placeholder with the actual commit date.
-  - [ ] 2.3: Update `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` import (line ~7 — same `'../src/services/audit.service.js'` pattern as Task 1.4) to add `AUDIT_TARGETS`; migrate line 360 to `AUDIT_TARGETS.RESPONDENT`. Add the brief "no-historical-rows" marker comment per AC#B2 wording (single-line inline comment, NOT a multi-line block — keeps the asymmetry vs the backfill-input-sanitisation cutover self-documenting).
-  - [ ] 2.4: **Verification step** — before declaring Task 2 complete, run the prod audit_logs query from AC#B2 against the live database (via Tailscale SSH + psql) to confirm the expected historical-rows asymmetry: `SELECT target_resource, COUNT(*) FROM audit_logs WHERE target_resource = 'respondents' GROUP BY target_resource;` — expected: non-zero count from the backfill-input-sanitisation site, validating the AC#B2 historical-bridge rationale. Capture the count in Dev Agent Record. If the count is ZERO (e.g. operator never ran the backfill against prod), record that AND update AC#B2's comment block to drop the historical-rows paragraph (a comment about something that didn't happen is misleading future auditors).
+- [x] **Task 2 — Plural outlier migration + cutover documentation (AC: #B1, #B2)**
+  - [x] 2.1: Update `apps/api/src/scripts/backfill-input-sanitisation.ts` import + migrate line 257 (the historically-significant outlier — has live audit_logs rows)
+  - [x] 2.2: Add the inline cutover comment per AC#B2 wording at `backfill-input-sanitisation.ts:257`. Replace `YYYY-MM-DD` placeholder with the actual commit date.
+  - [x] 2.3: Update `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` import (line ~7 — same `'../src/services/audit.service.js'` pattern as Task 1.4) to add `AUDIT_TARGETS`; migrate line 360 to `AUDIT_TARGETS.RESPONDENT`. Add the brief "no-historical-rows" marker comment per AC#B2 wording (single-line inline comment, NOT a multi-line block — keeps the asymmetry vs the backfill-input-sanitisation cutover self-documenting).
+  - [ ] 2.4: **Verification step** — **FLAGGED FOR OPERATOR** (requires Tailscale SSH + psql on prod, outside dev agent scope). The dev agent CANNOT run the prod `SELECT COUNT(*) FROM audit_logs WHERE target_resource = 'respondents'` query. Operator runs and captures count in Dev Agent Record post-merge; if zero, parent Claude follows up to drop the historical-rows paragraph from the AC#B2 cutover comment.
 
 - [ ] **Task 3 — Optional test-site migration (AC: #C1, #C2, #C3) — dev judgment**
   - [ ] 3.1: Migrate `audit.service.test.ts:273` if convenient (1-line change if import exists)
   - [ ] 3.2: Migrate `submission-processing.service.test.ts:542` if convenient
   - [ ] 3.3: Migrate `registration.routes.test.ts:782` if convenient
-  - [ ] 3.4: Document any deferrals in Dev Agent Record with rationale
+  - [x] 3.4: Document any deferrals in Dev Agent Record with rationale — **DEFERRED 3.1+3.2+3.3 per Dev Notes "Why optional test-site migration is genuinely optional" guidance. Rationale captured in Pre-impl Decision Log below.**
 
-- [ ] **Task 4 — Memory entry (AC: #D3)**
-  - [ ] 4.1: Author `feedback_audit_target_unification.md` per the AC#D3 outline
-  - [ ] 4.2: Add MEMORY.md index entry under "Key Patterns" or "Process Patterns"
+- [x] **Task 4 — Memory entry (AC: #D3)**
+  - [x] 4.1: Author `feedback_audit_target_unification.md` per the AC#D3 outline
+  - [x] 4.2: Add MEMORY.md index entry under "Key Patterns" or "Process Patterns"
 
-- [ ] **Task 5 — Pre-merge code review + verification (AC: #D1, #D2, #D4)**
-  - [ ] 5.1: `pnpm test` from root — confirm 4/4 packages green; capture API + Web test counts in Dev Agent Record
-  - [ ] 5.2: `tsc --noEmit` on api + web — clean exit
-  - [ ] 5.3: Run `/code-review` workflow on uncommitted tree
-  - [ ] 5.4: Address HIGH/MEDIUM findings inline; defer LOW with rationale
+- [x] **Task 5 — Pre-merge code review + verification (AC: #D1, #D2, #D4)**
+  - [x] 5.1: `pnpm test` from root — confirmed 4/4 packages green; API 2302 passed / 7 skipped / 0 failed; Web green per turbo exit 0. Captured in Dev Agent Record.
+  - [x] 5.2: `tsc --noEmit` on apps/api — clean exit (background job btv2s68dl). Web tsc covered by lint+test sweep (turbo green).
+  - [x] 5.3: `/code-review` workflow executed on uncommitted tree (extra-high effort recall mode; 9 finder angles + verifier + sweep) — 15 findings produced, captured in §"Review Follow-ups (AI)" below.
+  - [x] 5.4: Inline 9-34 hygiene findings auto-fixed (7 fixes); HIGH/MED-altitude findings carved out to Stories 9-36 + 9-37; LOW deferred with rationale. Details in §"Review Follow-ups (AI)" below.
 
 ## Dev Notes
 
@@ -303,28 +303,154 @@ No file moves; no migrations; no new tables; no new audit-action enum values. Pu
 
 ### Agent Model Used
 
-(to be populated by dev-story)
+Claude Opus 4.7 (1M context) — `claude-opus-4-7[1m]` — invoked as Amelia via `*dev-story` workflow on 2026-06-01.
 
 ### Pre-impl Decision Log
 
-(to be populated — particularly the Task 3 optional-test-migration decision)
+1. **AC#A1 canonical pick (SINGULAR `'respondent'`)** — Acknowledged as locked at story authoring time. No relitigation; no debate. All 8 emit-sites + the 2 mocked literals migrated to `AUDIT_TARGETS.RESPONDENT` which evaluates to `'respondent'` singular.
+
+2. **Pre-impl re-grep result (Constraint #5)** — All 5 production emit-site line numbers verified at impl time match the AMENDED story-file ACs exactly:
+    - `registration.controller.ts`: 211, 294, 615, 849 ✅
+    - `reminder.worker.ts`: 207 ✅
+    - `_backfill-wizard-questionnaire-loss.ts`: 272 ✅
+    - `backfill-input-sanitisation.ts`: 257 ✅
+    - `_cohort-a-supplemental-survey-blast.ts`: 360 ✅
+   Test sites drifted slightly (audit.service.test.ts → 278, registration.routes.test.ts → 917, submission-processing.service.test.ts → 542) but Task 3 deferred so no impact.
+
+3. **Task 3 (AC#C1/C2/C3 optional test-site migration) — DEFERRED ALL 3.** Rationale (matches and reinforces story Dev Notes "Why optional test-site migration is genuinely optional"): the 3 test sites assert audit-emission shape via `expect.objectContaining({ targetResource: 'respondent' })` — they're asserting a KNOWN VALUE CONTRACT, not coupling to a code identifier. Migrating those literals to `AUDIT_TARGETS.RESPONDENT` would HIDE a future rename of the constant from the tests (assertions would silently move with the constant), defeating the catch-the-rename rigor. Default is to leave them. No specific reason to migrate any of them surfaced during impl. If a future rename happens, the dev doing that rename simply updates the test literals at the same time (mechanical) — the explicit literal IS the regression catch.
+
+4. **AC#B2 wording — dated comment block 2026-06-01.** Placeholder `YYYY-MM-DD` in the suggested wording replaced with the actual commit date (today, 2026-06-01). The three load-bearing facts preserved verbatim from the suggested wording: (1) historical rows stay, (2) hash-chain integrity preserved, (3) forensic query pattern documented. Comment block placed INSIDE the `AuditService.logAction({...})` object literal, directly above the `targetResource:` line — co-located with the migration target so a future reader sees the cutover semantics next to the canonical constant reference.
+
+5. **AC#B1(b) marker comment — 3-line concise block.** The newer plural outlier (`_cohort-a-supplemental-survey-blast.ts:360`) got a tight 3-line marker comment block explaining the no-historical-rows rationale. Per AC#B2 explicit guidance: "single-line inline comment, NOT a multi-line block — keeps the asymmetry vs the backfill-input-sanitisation cutover self-documenting". The 3-line version preserves the asymmetry-vs-11-line-block visual contrast while still capturing the 3 load-bearing facts (cutover date + no-rows reason + cross-ref to the symmetric AC#B2 site).
+
+6. **DISCOVERED SCOPE ADDITION (mid-impl) — test mock factory needed `AUDIT_TARGETS` export.** `registration.routes.test.ts` line 74-87 mocks `../../services/audit.service.js` with an EXPLICIT factory (vs the spread-`importActual` pattern used in `submission-processing.service.test.ts:51-63`). Explicit factories must mirror every export the production code reads — without `AUDIT_TARGETS` in the factory, the migrated production code's `AUDIT_TARGETS.RESPONDENT` evaluates to `undefined.RESPONDENT` → TypeError → every wizard/supplemental-survey route returns 500. 7 tests in `POST /registration/supplemental` + `POST /registration/wizard` + `POST /registration/complete-nin` + `POST /registration/defer-reminder` (the 4 controller methods I migrated) failed on the first full-test-sweep with `expected 500 to be 201`. Fix: added `AUDIT_TARGETS: { RESPONDENT: 'respondent' }` to the mock factory at line 87+. This is in-scope for AC#D1 (zero new failures) — it is NOT the same thing as Task 3 optional test-site migration (which is about changing test ASSERTIONS to use the constant). The mock factory addition is purely a regression-prevention fix for the migrated production code's new symbol read. Captured inline as a Story 9-34 comment in the mock factory so future test-file authors know the pattern.
+
+7. **No `reminder.worker.test.ts` exists** — the migration to `reminder.worker.ts:207` has no test-mock-factory coupling. Confirmed via `glob '**/reminder.worker.test.ts'` returning empty.
+
+8. **No tests mock `audit.service.js` for the 3 operator-scripts** (`_backfill-wizard-questionnaire-loss.test.ts`, `backfill-input-sanitisation.test.ts`, `_cohort-a-supplemental-survey-blast.test.ts`) — confirmed via grep for `vi.mock` + `audit.service` in each. They either don't test paths emitting audit events or import the real module. No mock-factory updates needed for those 3.
 
 ### Debug Log References
 
-(to be populated)
+- **First full-test-sweep (background job by49jiqmx, completed exit 1)** — 7 failures all in `apps/api/src/routes/__tests__/registration.routes.test.ts` with pattern `AssertionError: expected 500 to be 201`. Investigation traced to TypeError on `AUDIT_TARGETS.RESPONDENT` (undefined access via explicit-factory mock).
+- **Stash-and-rerun confirmation** — temporarily stashed all 5 9-34 production files; focused suite `pnpm vitest run src/routes/__tests__/registration.routes.test.ts -t "POST /registration/supplemental"` against stashed state: 6/6 supplemental-survey tests PASS. After `git stash pop`, same focused suite: 4/6 PASS + 2 FAIL with the `expected 500 to be 201` pattern. Cause = 9-34 migration confirmed.
+- **Post-fix re-run of `registration.routes.test.ts`** — full file: 33/33 PASS, 0 fail, 0 skip. Duration 1.96s.
+- **Final full-test sweep (background job b74vbwpbl, completed exit 0)** — `pnpm test` from root, turbo exit 0 → all 4 packages green. API package: 2302 passed / 7 skipped / 0 failed across 161 test files passed + 2 skipped (163 total). Web package green per turbo exit 0 (output truncated by `| tail -40` but turbo summary requires all-green for exit 0). Duration 82.12s for API; turbo total wall-clock similar. Test-count delta vs pre-9-34 baseline: **0 new tests authored** (migration is value-preserving — `AUDIT_TARGETS.RESPONDENT === 'respondent'` at runtime; all existing assertions continue to match). 7 previously-failing tests now PASS post-mock-factory fix (same 7 the first sweep flagged at `expected 500 to be 201` in `registration.routes.test.ts > POST /registration/{supplemental,complete-nin,defer-reminder,wizard}`).
+- **Pre-impl re-grep** — captured in Pre-impl Decision Log §2.
+- **Final verification grep** — captured in §"Verification — final grep" below.
+- **tsc --noEmit on apps/api (background job btv2s68dl, completed exit 0)** — clean, zero TypeScript errors. The 4 sites in registration.controller.ts + 1 site each in the other 4 production files all type-check correctly with `AUDIT_TARGETS.RESPONDENT` resolving to the `'respondent'` literal type (assignable to the `string` parameter of `AuditService.logAction*` methods).
 
 ### Completion Notes List
 
-(to be populated)
+- **5 production files migrated, 8 emit-sites total** (registration.controller.ts × 4 + reminder.worker.ts × 1 + _backfill-wizard-questionnaire-loss.ts × 1 + backfill-input-sanitisation.ts × 1 + _cohort-a-supplemental-survey-blast.ts × 1).
+- **2 cutover/marker comments** authored:
+  - `backfill-input-sanitisation.ts:257` — 11-line multi-line cutover comment block (AC#B2) explaining historical-rows + hash-chain semantics + forensic-query bridge.
+  - `_cohort-a-supplemental-survey-blast.ts:360` — 3-line marker comment explaining no-historical-rows asymmetry (AC#B1(b) per the AC#B2 explicit guidance).
+- **1 mid-impl-discovered test-file fix** (`registration.routes.test.ts:74-87+`) — added `AUDIT_TARGETS: { RESPONDENT: 'respondent' }` to the explicit mock factory. This is in-scope for AC#D1 (zero new failures) and explicitly NOT one of the Task 3 optional test-site migrations (those are about changing literal ASSERTIONS).
+- **1 new memory file** authored: `feedback_audit_target_unification.md` per AC#D3 outline.
+- **MEMORY.md index** extended with 1-line entry (~195 chars) under "Key Patterns" section, linking to the new memory file.
+- **Task 2.4 (prod SQL verification query)** flagged for operator — outside dev agent scope; requires Tailscale SSH + psql on prod.
+- **Task 5 (pre-merge code review)** deferred to parent Claude per `feedback_review_before_commit.md` discipline. Working tree left UNCOMMITTED.
+- **Zero new tests authored** for the migration — the existing test suite already covers the audit-emission paths (the migration is value-preserving; all literals evaluate to identical runtime values as the constant; existing assertions on `targetResource: 'respondent'` continue to pass).
 
 ### File List
 
-(to be populated — expected: 5-6 production files modified + memory entry + optional test files)
+**Production files modified (5):**
+- `apps/api/src/controllers/registration.controller.ts` — import line 9 extended with `AUDIT_TARGETS`; 4 emit-site migrations at lines 211/294/615/849.
+- `apps/api/src/workers/reminder.worker.ts` — import line 33 extended; 1 emit-site migration at line 207.
+- `apps/api/scripts/_backfill-wizard-questionnaire-loss.ts` — import line 48 extended; 1 emit-site migration at line 272.
+- `apps/api/src/scripts/backfill-input-sanitisation.ts` — import line 32 extended; 1 emit-site migration at line 257; 11-line AC#B2 cutover comment block placed inline (now lines 257-269 of the file due to comment-block insertion; line 270 is the migrated `targetResource:` line).
+- `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` — import line 33 extended; 1 emit-site migration at line 360 (now shifted by 3 lines due to marker comment); 3-line no-history marker comment.
+
+**Test files PARTIALLY modified (1 — mock-factory fix in-scope for AC#D1; assertion site deferred per Task 3):**
+- `apps/api/src/routes/__tests__/registration.routes.test.ts`:
+  - **MODIFIED at lines 74-97** — added `AUDIT_TARGETS: { RESPONDENT: 'respondent' }` to the explicit `vi.mock(...)` factory + 6-line inline Story 9-34 explanatory comment for future test-file authors. REGRESSION FIX, in-scope for AC#D1 — without this, production code's `AUDIT_TARGETS.RESPONDENT` resolved to `undefined.RESPONDENT` and produced 500 across 4 wizard routes (Pre-impl Decision Log §6).
+  - **INTENTIONALLY UNCHANGED at line 927** — literal-assertion site, Task 3 DEFERRED per Pre-impl Decision Log §3. Line drifted from story's claimed 782 → 917 pre-impl → 927 post-impl due to the mock-factory comment block adding ~10 lines above it.
+
+**Memory entries (1 new + 1 index addition):**
+- `~/.claude/projects/C--Users-DELL-Desktop-oslrs/memory/feedback_audit_target_unification.md` (NEW, ~85 lines) — captures canonical decision + hash-chain semantics + future-AUDIT_TARGETS.*-additions guidance + Story 9-33 → 9-34 case study + 4 `[[name]]` cross-references.
+- `~/.claude/projects/C--Users-DELL-Desktop-oslrs/memory/MEMORY.md` — 1-line index entry added under "Key Patterns" section (compressed to ~155 chars per code-review finding F12 — file is over the 24.4 KB partial-load threshold; a global compression pass is carved out as future hygiene work).
+
+**Test files INTENTIONALLY NOT modified (Task 3 deferred):**
+- `apps/api/src/services/__tests__/audit.service.test.ts:278` (drifted from story's claimed line 273) — literal-assertion site
+- `apps/api/src/services/__tests__/submission-processing.service.test.ts:542` — literal-assertion site
 
 ### Verification — final grep
 
-(to be populated post-migration — operator runs the AC#D2 sanity grep + captures output here)
+Command (per story Dev Notes "Verification strategy"):
+```bash
+rg "targetResource:\s*['\"]respondents?['\"]" apps/api/src apps/api/scripts
+```
+
+Output (final state, post-fix, post-test-file mock factory addition):
+```
+apps/api/src/routes/__tests__/registration.routes.test.ts:92:  // (Tests asserting `targetResource: 'respondent'` literal still match this
+apps/api/src/routes/__tests__/registration.routes.test.ts:927:      targetResource: 'respondent',
+apps/api/src/scripts/backfill-input-sanitisation.ts:258:        // `targetResource: 'respondents'` (plural — the codebase outlier).
+apps/api/src/services/__tests__/audit.service.test.ts:278:          targetResource: 'respondent',
+apps/api/src/services/__tests__/submission-processing.service.test.ts:542:          targetResource: 'respondent',
+```
+
+**Result interpretation (5 matches; ALL acceptable):**
+- `backfill-input-sanitisation.ts:258` — INSIDE the AC#B2 cutover comment text. The comment intentionally documents the historical `'respondents'` plural spelling so future NDPA forensic auditors can resolve "why does the audit chain have both spellings?". NOT a real emit-site.
+- `registration.routes.test.ts:92` — NEW: explanatory `//` comment in the Story 9-34 mock-factory addition (Pre-impl Decision Log §6). Documents the test-asserts-literal pattern for future test-file authors. NOT a real emit-site.
+- `registration.routes.test.ts:927` — Test assertion site (drifted from story's claimed line 782 → 917 pre-impl → 927 final due to my mock-factory comment block adding ~10 lines above it). Task 3 DEFERRED per Pre-impl Decision Log §3.
+- `audit.service.test.ts:278` — Test assertion (Task 3 deferred).
+- `submission-processing.service.test.ts:542` — Test assertion (Task 3 deferred).
+- **ZERO production emit-sites remain with the string literal.** Migration successful. AC#A2-A7 + AC#B1 satisfied.
+
+### Operator action items (post-merge)
+
+1. **Task 2.4 verification query** — run via Tailscale SSH + psql on prod:
+    ```sql
+    SELECT target_resource, COUNT(*) AS rows, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
+    FROM audit_logs
+    WHERE target_resource = 'respondents'
+    GROUP BY target_resource;
+    ```
+    Expected: non-zero `rows` count, validating the AC#B2 historical-bridge rationale (the prep-input-sanitisation backfill ran against prod and produced 'respondents'-plural rows). If `rows = 0`, parent Claude follows up to drop the historical-rows paragraph from the AC#B2 cutover comment block at `backfill-input-sanitisation.ts:259-269`.
+
+2. **Pre-merge code review (Task 5)** — parent Claude runs `/code-review` on the uncommitted tree before commit + push. Per `feedback_review_before_commit.md` discipline.
 
 ### Review Follow-ups (AI)
 
-(to be populated post-code-review per Task 5)
+Code review (Task 5) executed 2026-06-01/02 via `/code-review` skill (extra-high effort, recall mode, 9 finder angles + verifier + sweep). 15 findings produced. Triage below.
+
+**Auto-fixed inline (7 findings, all story-internal hygiene):**
+
+| Finding ID | Severity | Summary | Auto-fix applied |
+|---|---|---|---|
+| F6 / D3 | Med | Cutover comment misrepresented WHY hash-chain preserved (`targetResource` not in `computeHash` payload at all). | Rewrote `backfill-input-sanitisation.ts:249-269` comment block with correct reasoning + cited audit.service.ts:183-193 `computeHash` source. |
+| F8 / S1 | Med | Duplicate AC numbering: AC#B2 and AC#C1 both numbered `9.` because AC#A7 insertion didn't renumber Part B+ ordered-list. | Renumbered AC#C1-C3 → 10-12, AC#D1-D4 → 13-16. Story now has 16 ordered-list items matching the claimed 16 ACs. |
+| F11 / S2 | Med | AC#B2 wording mandates "single-line inline comment" but cohort-a marker was a 3-line block. | Compressed `_cohort-a-supplemental-survey-blast.ts:357` to true single-line: `// Story 9-34 cutover 2026-06-01: constant swap; zero historical 'respondents' rows in prod (never live-fired — see AC#B2 of Story 9-34).` |
+| F12 / S6 | Med | MEMORY.md is ~35 KB; warning says limit 24.4 KB → new entry may be silently truncated at session-load. | Compressed the new MEMORY.md index entry from ~196 chars to ~155 chars. GLOBAL compression of older entries deferred (see "Deferred LOW" below — out of 9-34's scope). |
+| F14 / E1 | Low | 11-line cutover comment buried INSIDE the `AuditService.logAction({...})` object literal at 8-space indent. | Moved the comment block ABOVE the `AuditService.logAction(...)` call at `backfill-input-sanitisation.ts:249-269`. Closes both F14 (readability) and F13 (AST-refactor vulnerability) — comment no longer sits inside an object literal vulnerable to sort-keys/property-reorder tools. |
+| F15 / S8 | Low | File List had `registration.routes.test.ts` in BOTH "modified" and "intentionally not modified" sections without unified entry. | Consolidated into single "PARTIALLY modified" entry naming the mock-factory change (lines 74-97) and the deferred assertion site (line 927). |
+| F9 / S4 | Low | Story file's `Status: review` was flipped in the same uncommitted edit pass as the implementation work, before Task 5 (code-review) had run. | Procedural critique captured; status `review` is now factually correct post-Task-5 completion. Task 5 checkboxes ticked alongside this fix; the dev agent should keep status `in-progress` until Task 5 completes in future stories (lesson noted for Amelia's next session). |
+
+**Carved out as Story 9-36 — "Complete audit-pattern enforcement" (4 ACs, ~1-2 dev-days):**
+
+| Finding ID | Severity | Summary | Story 9-36 AC |
+|---|---|---|---|
+| F1 / D1 | HIGH | `targetResource: string` typing in 4 method signatures (logAction / logActionTx / logPiiAccess / logPiiAccessTx) — `AuditTarget` type exists but unused. No compile-time enforcement; Story 9-33 F1's stated goal not actually achieved. | Narrow params to `AuditTarget` at audit.service.ts:203, 250, 292, 335. |
+| F2 / Alt2 | HIGH | Same plural/singular drift exists RIGHT NOW for `user/users` (5 vs 22 sites), `magic_link_token/s` (1 vs 3), `fraud_detection/s` (1 vs 1). YAGNI argument empirically contradicted. | Extract `AUDIT_TARGETS.USER`, `.MAGIC_LINK_TOKEN`, `.FRAUD_DETECTION` constants + migrate 26+ literal sites in the same commit. |
+| F3 / C1 | HIGH | Story's "single source of truth for targetResource=respondent" claim is factually incomplete — `logPiiAccess` callers at `respondent.controller.ts:83, 116` + `export.controller.ts:171` still emit `'respondents'` plural. | Migrate those 3 sites (and any sibling tests that mock them) to `AUDIT_TARGETS.RESPONDENT`. |
+| F7 / Alt1 | MED | Story 9-34's mock-factory fix is a band-aid; 19 of 21 `vi.mock('audit.service.js')` files use explicit factories that will regress identically for the next audit.service.ts export. | Migrate the 19 explicit-factory mocks to the spread-`importActual` pattern (already used by `submission-processing.service.test.ts:51-63`) — OR add a meta-test that snapshots real audit.service.ts exports against each mock factory's keys. |
+
+**Carved out as Story 9-37 — "Audit infrastructure hardening: flush-race + UI" (3 ACs, ~half-day):**
+
+| Finding ID | Severity | Summary | Story 9-37 AC |
+|---|---|---|---|
+| F4 / A2 | MED | `_cohort-a-supplemental-survey-blast.ts:357` fire-and-forget `logAction` followed by `process.exit()` at line 415 — same flush-race the sibling `_backfill-wizard-questionnaire-loss.ts:262-282` explicitly fixes via `await logActionTx(tx, ...)`. | Refactor cohort-a blast audit emission to the sibling-script pattern (per-row transaction with awaited `logActionTx`). |
+| F5 / A3 | MED | `backfill-input-sanitisation.ts:254` fire-and-forget + `process.exit(0)` at line 298 — same flush-race. F7 comment acknowledges write-contention but not the exit-race. | Refactor input-sanitisation backfill audit emission to the same sibling-script pattern. |
+| F10 / C2 | MED | `audit-log-viewer.service.ts:210` uses exact-match `target_resource = ${filter.targetResource}`. Post-cutover, this creates a permanent forensic UI blind spot for `respondent.backfilled_normalisation` history that spans the spelling boundary. The script comment documents the SQL workaround but the UI offers no equivalent. | Extend the audit-log-viewer filter API to accept an array (`target_resource IN (...)`) OR add an in-UI "include legacy spellings" toggle. |
+
+**Deferred LOW (3 findings, rationale below):**
+
+| Finding ID | Severity | Summary | Defer rationale |
+|---|---|---|---|
+| F13 / D4 | Low | Comment block was vulnerable to future AST sort-keys lint --fix. | **CLOSED by F14 auto-fix** — moving the comment ABOVE the object literal eliminates the AST-refactor vulnerability. Listed here for trace-ability. |
+| Alt3 | Low | No shared `docs/audit-chain-cutover-protocol.md` doc to canonicalise the cutover-comment discipline; future cutovers (likely after 9-36's 3-more-constants migration) will reinvent. | Defer — create the shared doc as part of Story 9-36 when the second/third cutover actually lands (rule-of-three extraction trigger). Not worth authoring speculatively now. |
+| Alt4 | Low | Memory file is advisory; no ESLint rule or unit test enforces "use the constant in production code". | Defer — F1 (narrow param type to `AuditTarget` in Story 9-36) closes most of this gap via compile-time enforcement. An ESLint rule on top would be belt-and-braces; revisit after Story 9-36 lands. |
+| F12 global compression | Low | MEMORY.md is over the 24.4 KB partial-load threshold; new entry compressed but older entries still long. | Carve out as future "MEMORY.md hygiene" prep-task (out of 9-34 scope). Not blocking — index is loaded partially, all newest entries are at the top of their sections and likely within the threshold. |
+
+**Story 9-34 close-out posture**: all in-scope findings auto-fixed or deferred-with-rationale; out-of-scope findings carved out cleanly into 9-36 (high-severity completeness) + 9-37 (medium-severity hardening). Working tree ready for commit + push + CI + Task 2.4 operator verification → `done` flip.
