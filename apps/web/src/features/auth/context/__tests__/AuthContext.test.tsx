@@ -259,6 +259,63 @@ describe('AuthContext', () => {
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.error).toBe('Invalid credentials');
     });
+
+    // Story 9-13 regression — operator UAT 2026-06-02 surfaced that the MFA-
+    // pending branch left `isLoading: true` (the original code dispatched only
+    // CLEAR_ERROR which doesn't reset isLoading). PublicOnlyRoute's loading
+    // fallback then rendered the SkeletonForm on top of /auth/mfa-challenge
+    // until the user manually refreshed. Fix: new AUTH_MFA_PENDING action
+    // resets isLoading to false in the same branch. This regression-locks
+    // that fix.
+    it('resets isLoading after MFA-pending response so PublicOnlyRoute does not render the skeleton fallback', async () => {
+      const mfaChallengeResponse = {
+        requiresMfa: true as const,
+        mfaChallengeToken: 'challenge-token-abc123',
+        expiresIn: 300,
+      };
+
+      mockAuthApi.staffLogin.mockResolvedValueOnce(mfaChallengeResponse);
+      mockAuthApi.refreshToken.mockRejectedValueOnce(new Error('No session'));
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let outcome: { requiresMfa: boolean; mfaChallengeToken?: string; expiresIn?: number } | undefined;
+      await act(async () => {
+        outcome = await result.current.loginStaff({
+          email: 'mfa-user@oyoskills.com',
+          password: 'password123',
+          captchaToken: 'captcha-token',
+          rememberMe: false,
+        });
+      });
+
+      // The MFA-pending branch must propagate the challenge token to the caller.
+      expect(outcome).toEqual({
+        requiresMfa: true,
+        mfaChallengeToken: 'challenge-token-abc123',
+        expiresIn: 300,
+      });
+
+      // The load-bearing regression assertion — PublicOnlyRoute reads isLoading
+      // and renders SkeletonForm when true. After step-1 resolves with MFA
+      // pending, we must NOT be in loading state (the request is no longer
+      // in flight; step-2 will happen on /auth/mfa-challenge).
+      expect(result.current.isLoading).toBe(false);
+
+      // We are NOT yet authenticated — step-2 (TOTP verify) is required.
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(result.current.accessToken).toBeNull();
+
+      // No error from the partial-success branch.
+      expect(result.current.error).toBeNull();
+    });
   });
 
   describe('Logout', () => {

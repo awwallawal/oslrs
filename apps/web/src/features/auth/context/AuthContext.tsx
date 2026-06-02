@@ -38,7 +38,12 @@ type AuthAction =
   | { type: 'TOKEN_REFRESH'; payload: string }
   | { type: 'REQUIRE_REAUTH'; payload: string }
   | { type: 'REAUTH_COMPLETE' }
-  | { type: 'CLEAR_ERROR' };
+  | { type: 'CLEAR_ERROR' }
+  // Story 9-13 — staff login resolved with an MFA challenge (not a full session
+  // yet). Resets `isLoading` so PublicOnlyRoute's skeleton fallback doesn't
+  // render on top of /auth/mfa-challenge after navigation. The caller is about
+  // to complete step-2; final auth state will land via AUTH_SUCCESS then.
+  | { type: 'AUTH_MFA_PENDING' };
 
 // Initial state
 const initialState: AuthState = {
@@ -102,6 +107,17 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
     case 'CLEAR_ERROR':
       return {
         ...state,
+        error: null,
+      };
+    case 'AUTH_MFA_PENDING':
+      // Step-1 of staff MFA login succeeded — the API issued a challenge token
+      // instead of access/refresh tokens. We're NOT authenticated yet, but the
+      // request is no longer in flight, so reset the loading flag. Without this,
+      // PublicOnlyRoute's `if (isLoading)` guard renders the skeleton fallback
+      // on top of /auth/mfa-challenge until the user manually refreshes.
+      return {
+        ...state,
+        isLoading: false,
         error: null,
       };
     default:
@@ -292,8 +308,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Story 9-13 — 2-step pending. Don't dispatch AUTH_SUCCESS; let caller
       // navigate to /auth/mfa-challenge where step-2 completes the login.
+      // MUST reset isLoading here — AUTH_START set it true; if we left it true
+      // the PublicOnlyRoute wrapping /auth/mfa-challenge would render its
+      // skeleton fallback until the user manually refreshes (operator UAT bug
+      // surfaced 2026-06-02).
       if ('requiresMfa' in response && response.requiresMfa) {
-        dispatch({ type: 'CLEAR_ERROR' });
+        dispatch({ type: 'AUTH_MFA_PENDING' });
         return {
           requiresMfa: true,
           mfaChallengeToken: response.mfaChallengeToken,

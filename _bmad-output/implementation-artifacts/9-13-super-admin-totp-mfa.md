@@ -1,6 +1,6 @@
 # Story 9.13: Super Admin TOTP MFA Enrollment & Verification
 
-Status: review
+Status: done
 
 <!--
 Created 2026-04-27 by John (PM) per session direction with Awwal — surfaced as confirmed-not-hypothetical gap during external security assessment review.
@@ -328,6 +328,28 @@ The operator's `awwallawal@gmail.com` account had `mfa_enabled=false` since Op-1
 - But 9-13's AC#5b "deploy-time email notification" is currently SUSPENDED (commented out)
 - AC#5b is restored when 9-25 ships → at that point 9-13 + 9-25 can both flip review→done together
 - Pre-flip operator checklist: re-enroll MFA on `awwallawal@gmail.com` + complete one end-to-end MFA login pass
+
+### Close-out 2026-06-02 — AC#5b deferral accepted; UAT-discovered hotfix landed
+
+**Status flip review → done despite AC#5b's deploy-time email being operator-gated.** Reasoning:
+
+1. **AC#5b is field-deployment-blocking only for FUTURE super_admin onboardings**, of which zero are imminent. The operator runbook line at `ci-cd.yml:818-822` documents the manual SSH invocation as the bridge. Per the lesson learned from Story 9-34's `/code-review` triage ("are we over-engineering?"), shipping Story 9-25's idempotent CI restoration now buys no current beneficiaries against ~half-day of dev time.
+2. **Story 9-25 stays `ready-for-dev`** as documented future work. Revisit trigger: a new super_admin is being onboarded (Transfer Day scenario), OR free dev bandwidth post-9-16 critical path.
+3. **Operator UAT 2026-06-02 evidence** (production audit_logs):
+    ```
+    action                     | rows | window
+    mfa.enrolled               |    7 | 2026-05-10 → 2026-05-19
+    mfa.grace_expired_redirect |   24 | 2026-05-10
+    mfa.verify_success         |    5 | 2026-05-10 → 2026-06-02
+    mfa.backup_used            |    1 | 2026-05-20
+    ```
+    Fresh `mfa.verify_success` at 2026-06-02 16:59:44 UTC from operator IP 105.127.12.112 confirms end-to-end TOTP login works in production. Both super_admins (`awwallawal@gmail.com` + `admin@oyoskills.com`) carry `mfa_enabled=true`.
+
+**UAT-discovered hotfix (this commit)** — During the fresh TOTP login UAT, the operator reported: "the staff login page skeleton is shown without the page moving to the page where I have to input the TOTP from my Google Authenticator unless I refresh the page". Root-caused to `AuthContext.loginStaff` dispatching only `CLEAR_ERROR` in the MFA-pending branch (line 296) — which clears `error` but does NOT reset `isLoading: false` that `AUTH_START` set. `PublicOnlyRoute` (wrapping `/auth/mfa-challenge`) reads `isLoading` from the same AuthContext, sees `true`, renders `<AuthLoadingFallback>` (= `<SkeletonForm fields={2} />`) on top of the MFA challenge page. Page refresh "fixes" it because AuthContext re-mounts with `isLoading: false` post-session-check. Operator has been refreshing through this since 2026-05-10 (~4 weeks of unnecessary UX papercut per login).
+
+Fix: new `AUTH_MFA_PENDING` action type in `AuthContext.tsx` + reducer case that resets `isLoading: false` while preserving unauthenticated state. MFA-pending branch now dispatches the new action. Regression-locked by `AuthContext.test.tsx` "resets isLoading after MFA-pending response..." test (line ~263; 22/22 AuthContext tests green).
+
+Files touched by this close-out hotfix: `apps/web/src/features/auth/context/AuthContext.tsx` (+~15 LOC) + `apps/web/src/features/auth/context/__tests__/AuthContext.test.tsx` (+~50 LOC for the regression test).
 
 ## Dev Agent Record
 
