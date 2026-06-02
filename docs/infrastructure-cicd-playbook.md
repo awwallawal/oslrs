@@ -1502,7 +1502,14 @@ Three changes: (a) cache key now tracks `pnpm-lock.yaml` (where the resolved ver
 git update-index --chmod=+x packages/testing/src/cli.ts
 git commit -m "fix(deploy): commit +x on the oslsr-test-dashboard bin"
 ```
-On the next deploy the committed mode (`755`) equals the VPS working-tree mode (`755`), so the `git pull` is clean and the dirty state disappears. (Shipped alongside this Pitfall entry.)
+Fresh clones are then `755` == committed `755`, so no diff ever appears again. (Shipped commit `78f64b6`.)
+
+**⚠️ Rollout gotcha (learned the hard way 2026-06-02)**: committing `+x` does NOT auto-heal a checkout that is *already* dirty with the mode change — and the VPS is exactly that. git aborts the pull with *"Your local changes to the following files would be overwritten by merge"* **even though the incoming mode is identical to the local mode** (git treats any local mode delta as a conflict, period). The first deploy of this very fix failed for that reason. One-time unblock on the box, then re-run the deploy:
+```
+cd ~/oslrs && git checkout -- packages/testing/src/cli.ts   # drop the stale mode change
+# then re-run the deploy job; `git pull` now fast-forwards to the +x commit
+```
+After that single clear, the committed `755` takes over and every subsequent deploy is clean.
 
 **Fix (tactical, VPS-local — NOT preferred)**: `git config core.fileMode false` inside the VPS repo makes git ignore exec-bit differences. It works, but leaves **no git trail**, is repo-local, and is **lost on a droplet rebuild** — so it must be remembered and re-applied by hand. Use only as an emergency unblock when a deploy is already wedged on a mode diff.
 
