@@ -2831,7 +2831,43 @@ The original ADR-015 (Google OAuth primary, Hybrid Magic-Link/OTP fallback) was 
 
 ---
 
-> 🏗️ **AMENDMENT PROPOSED 2026-06-03 by Story 9-16 (magic-link login wiring)** — magic-link login is now SUPPORTED as a passwordless public-user channel alongside email+password. Single-use, 15-min TTL, MFA-aware, anti-enumeration on request. Rate-limit: the request endpoint (`/auth/public/magic-link`) is keyed per-email at 3/hour (NFR4.4 budget); the token-consume endpoints (`/magic/consume`, `/magic/login`) carry no email and therefore key per-IP at 3/hour (combined bucket) — single-use 32-byte token entropy is the primary brute-force control there (corrected per Story 9-16 review M1). Forward-compatible with future passwordless wizard accounts (no `passwordHash IS NOT NULL` gate); this also makes magic-link the de-facto migration path for legacy `authProvider='google'` accounts that the retired Google OAuth gate (`AUTH_GOOGLE_ONLY`) blocks on password login — a deliberate cross-channel asymmetry (Story 9-16 review L3). Audit-logged via the login-success entry with a `trigger: 'magic_link'` detail (password logins carry `trigger: 'password'`) so the Story 9-11 viewer can filter password vs magic-link logins. Winston to author the full amendment when picking up the architecture follow-up; this story does NOT block on the amendment text. Implementation reference: `apps/api/src/services/auth.service.ts` (`loginByMagicLinkToken`), `apps/api/src/controllers/magic-link.controller.ts` (`loginByMagicLink`), route `POST /api/v1/auth/magic/login`.
+#### Magic-link login activation (2026-06-03 amendment — Story 9-16, authored by Winston)
+
+**Context.** ADR-015's 2026-04-24 decision named magic-link the "primary authentication channel" (above) — but that was design *intent*. The runtime *login* mechanism (session/JWT issuance when a returning user redeems a link) was explicitly deferred from Story 9-12 (Task 1.7); the landing page rendered a "magic-link sign-in coming soon" notice for the `login` purpose. Story 9-16 closes that gap. The ADR's "primary channel" claim is now true in code, not just on paper.
+
+**Decision (deployed 2026-06-03, commit `1ee3c3e`).** A returning **public** user can sign in by redeeming a `login`-purpose magic link: request from `/login` → `POST /auth/public/magic-link` (anti-enumeration) → email link → landing-page Confirm → `POST /auth/magic/login` → `AuthService.loginByMagicLinkToken` consumes the token (atomic single-use) and issues a session. Existing email+password login (`/auth/public/login`) is **unchanged**; magic-link is an additive channel, not a replacement. Implementation: `auth.service.ts` (`loginByMagicLinkToken`), `magic-link.controller.ts` (`loginByMagicLink`), route `POST /api/v1/auth/magic/login`, shared `lib/cookie-config.ts`.
+
+**Security envelope (authoritative — refines the simplified bullet under "Magic-link as primary / Decision 2.5" above for the *consume + login* endpoints):**
+
+| Property | Value | Note |
+|---|---|---|
+| Token | 32-byte base64url, SHA-256 at rest, single-use via `used_at` | unchanged from Decision 2.5 |
+| TTL (login purpose) | 15 minutes | shorter than wizard_resume / pending_nin_complete (72h) to minimise stolen-link window |
+| Rate-limit — request (`/auth/public/magic-link`) | **per-email**, 3/hour | NFR4.4 budget pool; body carries `email` |
+| Rate-limit — consume/login (`/magic/consume`, `/magic/login`) | **per-IP**, 3/hour (combined bucket) | bodies carry **no email** → limiter falls back to IP. 32-byte single-use token entropy is the primary brute-force control; the IP cap is a secondary throttle. **Corrects the "3/email/hour" simplification at Decision 2.5 for these two endpoints** (Story 9-16 review M1). Shared-network (cybercafé) lockout tradeoff acknowledged — raise the cap if field telemetry shows false positives. |
+| MFA | honoured — `mfaEnabled` users get the Story 9-13 challenge branch | magic-link MUST NOT bypass MFA, or it silently defeats the 9-13 uplift |
+| Anti-enumeration | generic 200 on request regardless of account existence; generic `AUTH_INVALID_CREDENTIALS` 401 on unknown-account login | |
+| Forward-compat | **no `passwordHash IS NOT NULL` gate** | passwordless accounts can log in; do NOT add such a gate in a future "tighten auth" story |
+| Audit | single `auth.login_success` entry with `details.trigger ∈ {password, magic_link}` | one entry per login (no double-log); Story 9-11 viewer filters on `trigger` |
+
+**Scope reality — who can use magic-link login TODAY (load-bearing clarification, ⚠️ do not gloss):**
+
+1. **Public-only.** `loginByMagicLinkToken` rejects any non-`public_user` role. Staff (incl. super_admins) cannot use this channel — they authenticate via `/staff/login` (password + MFA).
+2. **No production runtime path currently creates `public_user` rows.** The two historical public-user factories — legacy `/auth/public/register` and Google OAuth — were both **retired in Story 9-12**. The wizard creates `respondents`, **not** `users`. Verified 2026-06-03: the only non-test `.insert(users)` call sites are `db/seeds/index.ts` (seed) and `staff.service.ts` (staff invites → staff roles). **Therefore the live audience for magic-link login is the pre-9-12 legacy `public_user` cohort** (plus any seeded accounts) — NOT new wizard respondents.
+3. **The "forward-compatible with future passwordless wizard accounts" property is aspirational, not active.** A future story MUST wire *wizard-respondent → `public_user` row creation* before any brand-new respondent can log in by **any** channel (magic-link OR password). Until then, 9-16's reach is bounded. → **Open decision flagged below.**
+4. **Legacy `authProvider='google'` accounts** (passwordless; blocked by `AUTH_GOOGLE_ONLY` on password login) **can now sign in via magic-link** — a deliberate migration affordance now that Google OAuth is retired (Story 9-16 review L3).
+
+**UAT / testability note.** Because the channel is public-only and no runtime path mints `public_user`s, end-to-end verification requires a `public_user` row with a controllable inbox — a legacy account or a deliberately seeded one (e.g. `lawalkolade+pubtest@gmail.com`, status `active`). Staff accounts cannot exercise the path. Check the live cohort with: `SELECT u.email, u.status FROM users u JOIN roles r ON u.role_id = r.id WHERE r.name = 'public_user';` (psql absent on VPS — run via a tsx/drizzle one-off over Tailscale).
+
+**Trade-offs:**
+- ✅ ADR intent ("magic-link is the primary channel") now matches deployed code — the record no longer over-promises.
+- ✅ Security envelope is now recorded as a *decision* (single-use, 15-min TTL, per-IP throttle, MFA-aware, no-password-gate), so it can't be silently eroded.
+- ❌ Live reach is bounded to legacy public_users until wizard→`users` wiring lands — must not be mistaken for "all respondents can now log in."
+- 🔭 **Open decision (proposed follow-up story):** wizard-account creation — emit a passwordless `public_user` row at wizard submit (or first magic-link request) so new respondents gain a durable account. This is the missing link that turns the forward-compat promise into reality; it also unblocks Story 9-32 (public account settings / NDPA rights), which assumes a `users` row exists.
+
+**Cross-references:** Story 9-16 (delivery + code-review M1/L3), Story 9-12 Task 1.7 (deferral this closes), Story 9-13 (MFA challenge honoured), Story 9-11 (audit-log viewer / `trigger` filter), Story 9-32 (downstream consumer of public-user accounts). Implementation source-of-truth: commit `1ee3c3e`.
+
+> _Note for a future pass — out of 9-16 scope:_ the "Magic-link as primary / Decision 2.5" bullet above still reads "uses AWS SES via the existing `EmailService`," but production email now routes through Resend → ImprovMX (per ops state). That SES→Resend drift predates 9-16 and should be reconciled when the email-infrastructure decision is next revisited.
 
 ---
 
