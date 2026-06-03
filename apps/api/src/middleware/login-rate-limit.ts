@@ -19,8 +19,22 @@ export const shouldSkipRateLimit = () => isTestMode();
 
 /**
  * Rate limiter for login attempts
- * - 5 attempts per 15 minutes per IP
+ * - 5 FAILED attempts per 15 minutes per IP (successful logins do NOT count)
  * - 30-minute block after 10 failed attempts (handled in AuthService)
+ *
+ * Story 9-13 close-out UAT 2026-06-02 surfaced that the original config counted
+ * ALL requests (including successful logins). An operator iterating on the
+ * MFA-pending skeleton bug fix hit the 5/15min limit on the 4th-5th successful
+ * TOTP verify (`mfa.verify_success` audit rows confirm 3 successes in 35 min →
+ * 4th-5th attempts tripped the limit despite all being legitimate). Adding
+ * `skipSuccessfulRequests: true` means only FAILED logins count against the
+ * counter (any 4xx/5xx response from the wrapped route). Attacker defense is
+ * preserved: brute-force attackers spam wrong passwords/codes which return
+ * 401/403/429 and DO count. Legitimate operators iterating on real credentials
+ * are not penalised. Defense-in-depth: `strictLoginRateLimit` (10/hour, all
+ * requests counted) still catches sustained activity including successful
+ * brute-forces; per-user `users.mfa_locked_until` (5 failures/15min) still
+ * locks accounts on credential abuse.
  */
 export const loginRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
@@ -29,7 +43,11 @@ export const loginRateLimit = rateLimit({
     prefix: 'rl:login:',
   }),
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  max: 5, // 5 FAILED requests per window (successful logins skipped — see docblock)
+  // Story 9-13 close-out — only count failed responses (4xx/5xx). Successful
+  // 2xx logins do not increment the counter. Operator iteration friendly;
+  // attacker defense preserved (failed brute-force attempts still counted).
+  skipSuccessfulRequests: true,
   message: {
     status: 'error',
     code: 'AUTH_RATE_LIMIT_EXCEEDED',

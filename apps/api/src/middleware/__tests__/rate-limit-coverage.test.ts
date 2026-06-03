@@ -23,8 +23,8 @@
  *
  *   | Limiter                          | Threshold      | Source        |
  *   |----------------------------------|----------------|---------------|
- *   | loginRateLimit                   | 5/IP/15min     | NFR4.4 line 1 |
- *   | strictLoginRateLimit             | 10/IP/1hr      | defense-in-depth |
+ *   | loginRateLimit                   | 5/IP/15min FAILED ONLY | NFR4.4 line 1 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) |
+ *   | strictLoginRateLimit             | 10/IP/1hr (all responses counted) | defense-in-depth |
  *   | refreshRateLimit                 | 10/IP/1min     | sensible default |
  *   | passwordResetRateLimit (IP)      | 10/IP/1hr      | defense-in-depth |
  *   | PasswordResetService.checkRate   | 3/email/1hr    | NFR4.4 line 5 (service layer) |
