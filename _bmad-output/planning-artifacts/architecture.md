@@ -2801,6 +2801,34 @@ The original ADR-015 (Google OAuth primary, Hybrid Magic-Link/OTP fallback) was 
 - **Architecture:** Decision 1.5 (schema), Decision 2.5 (magic-link), Decision 2.6 (SMS OTP infra-only)
 - **ADR-018** (multi-source registry / pending-NIN) — companion decision
 
+#### Rate-limit semantics post-9-13 close-out (2026-06-03 amendment)
+
+**Context.** Story 9-13 (Super Admin TOTP MFA) close-out UAT on 2026-06-02/03 surfaced that the `loginRateLimit` middleware at `apps/api/src/middleware/login-rate-limit.ts` counted ALL requests against its 5/15-minute budget — both successful and failed logins. The operator hit the limit on the 4th–5th SUCCESSFUL TOTP verify during legitimate iteration on the MFA-pending skeleton bug retest cycle (audit_logs: `mfa.verify_success` × 3 in 35 minutes from IP `105.127.12.112`, with the 4th–5th attempts tripping a 429 despite all being legitimate). Brute-force defence was never the constraint: attackers spam wrong codes that return 401/403/429 — all FAILED responses — which still count fully.
+
+**Decision (commit `fd53642`, deployed 2026-06-03 10:38:51Z).** Added `skipSuccessfulRequests: true` to `loginRateLimit` only. The 5/15-minute budget now counts only 4xx/5xx responses. The other three rate-limit layers in this design (sustained, MFA edge, per-user lockout) were unchanged — each still counts the responses it was designed to track.
+
+**Stratified defence post-amendment** — which layer counts WHICH responses:
+
+| Layer | Middleware / source | Limit | Counts |
+|---|---|---|---|
+| **Burst limiter** (per-IP) | `loginRateLimit` (`login-rate-limit.ts:25-58`) | 5 / 15 min | **Failed responses only** (4xx/5xx) — 2xx successful logins skipped via `skipSuccessfulRequests: true` |
+| **Sustained limiter** (per-IP) | `strictLoginRateLimit` (`login-rate-limit.ts:60-87`) | 10 / 1 hour | **All responses** — catches sustained activity incl. successful brute-forces |
+| **Edge gate** (per-IP) | `mfaRateLimit` (`mfa-rate-limit.ts`) | 10 / 1 minute | **All responses** — gates burst attacks at the edge (Story 9-13 AC#7) |
+| **Per-user lockout** | `users.mfa_locked_until` via `mfa.service.ts recordFailure` | 5 failures / 15 min → 15-min lock | **Failed TOTP verifies only** — final stop on the per-user axis |
+
+**Attacker model unchanged.** A brute-force attacker spamming wrong passwords or wrong TOTP codes produces 401/403/429 responses on every attempt. ALL FOUR layers continue to count those: the attacker still hits `mfaRateLimit` first (1-minute window), then `loginRateLimit` (15-minute window of failures), then `strictLoginRateLimit` (1-hour window of all responses), and the per-user lockout eventually fires on the credential-abuse axis. The attacker's path through the stratified defence is unaltered by the 2026-06-03 amendment.
+
+**Legitimate-operator model.** An operator using correct credentials produces 2xx responses on every attempt. The burst limiter (which would otherwise have caught friendly fire from a UAT iteration session — the failure mode surfaced by Story 9-13 close-out) now skips these. The other three layers continue to track activity at their respective windows — the sustained limiter at 10/hour is well outside any legitimate iteration session, the MFA edge gate at 10/minute is permissive for a human operator, and the per-user lockout only counts FAILED TOTP verifies so legitimate operators never trip it.
+
+**Why no new ADR was authored.** This is a configuration tuning of an existing design (NFR4.4), not a strategic decision. The stratified defence model itself was not changed — only the per-layer response-counting was tuned to remove the friendly-fire scenario. ADRs in this project are reserved for strategic pivots (e.g. ADR-015 retiring Google OAuth, ADR-018 multi-source registry). Configuration tuning amendments are retrofit-documented at NFR4.4 in the PRD + this architecture subsection. The rate-limit-coverage test at `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` carries the canonical contract; that test's documented threshold table was updated in the same commit (`fd53642`) to reflect the new "FAILED ONLY" semantics on `loginRateLimit`.
+
+**Cross-references:**
+- PRD V8.3 NFR4.4 (amended 2026-06-03 — "Login Attempts" sub-bullet now itemises the stratified four-layer defence)
+- Commit `fd53642` (production source-of-truth)
+- `apps/api/src/middleware/login-rate-limit.ts:18-37` (in-code docblock, behaviour matrix)
+- `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` (canonical threshold-table contract)
+- Story 9-13 close-out doc at `_bmad-output/implementation-artifacts/9-13-super-admin-totp-mfa.md` (UAT discovery context)
+
 ---
 
 #### Superseded — Original ADR-015 (2026-01-22)
