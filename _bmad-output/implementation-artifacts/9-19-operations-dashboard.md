@@ -37,7 +37,7 @@ So that **I can act on data instead of guessing, hand over to a future operator 
 1. **AC#A1 — Single command runs on prod VPS**: `pnpm --filter @oslsr/api dashboard` (registered in `apps/api/package.json:38` per this story's commit). Run via Tailscale SSH (`ssh root@oslsr-home-app && cd /root/oslrs && pnpm --filter @oslsr/api dashboard`). Outputs ASCII dashboard with 5 sections in ~3-5 seconds.
 2. **AC#A2 — Five data sources, parallel fetch, graceful degradation**: System (pm2 jlist + uptime + free -m + df), Traffic (Postgres respondents/wizard_drafts/magic_link_tokens/audit_logs), Resend (emails.list API), Queue (BullMQ getXxxCount), Audit (top actions). Each source failing produces "section unavailable" line, NOT process abort.
 3. **AC#A3 — Threshold-coded color output**: ANSI green/yellow/red dots per metric. Constants declared at top of `apps/api/scripts/dashboard.ts` as `T` object (e.g. `T.step4StallPctYellow: 30, T.step4StallPctRed: 50`). Source-of-truth for Part B's UI color-coding.
-4. **AC#A4 — Metric → Story binding recommendations**: Each metric breach maps to a specific story or operational action. Step-4 stall ≥40% → "Story 9-17 Part B is critical-path"; Resend ≥70% → "upgrade Pro tier"; disk ≥80% → "DO live-resize"; queue.failed >0 → "investigate samples"; etc.
+4. **AC#A4 — Metric → Story binding recommendations**: Each metric breach maps to a specific story or operational action. Step-4 stall ≥40% → "Story 9-18 Part E (section-as-step) + Part B (Pattern C dedup) is the structural fix" (re-pointed from "9-17 Part B" after the 2026-06-03 harmonization that absorbed Pattern C into 9-18); Resend ≥70% → "upgrade Pro tier"; disk ≥80% → "DO live-resize"; queue.failed >0 → "investigate samples"; etc.
 5. **AC#A5 — No new deps**: reuses `pg`, `resend`, `ioredis`, `bullmq` already in `apps/api/package.json`.
 
 ### Part B — Super Admin Operations Dashboard UI [ready-for-dev]
@@ -118,7 +118,7 @@ The recommendation-to-story binding (Step-4 stall ≥ 40% → Story 9-17 critica
 - **Story 9-15** — telegram channel infra (`isAlertSendEnabled`, `TelegramChannel`). Part C reuses verbatim.
 - **Story 6-1** — audit chain. Part C audit-logs digest sends.
 - **prep-settings-landing-and-feature-flags** — admin route patterns + rate-limit middleware reused.
-- **Story 9-17** — when its Step-4-stall trigger fires, the dashboard recommendation points users to 9-17 Part B. Loose runtime dependency (string match by story ID), not a build dep.
+- **Story 9-18** — after the 2026-06-03 harmonization, the Step-4-stall trigger points users to 9-18 (Part E section-as-step + Part B Pattern C dedup) which collectively own the wizard redesign that addresses Step-4 friction. Previous reference to "9-17 Part B" is obsolete (Pattern C moved into 9-18). Loose runtime dependency (string match by story ID), not a build dep. The recommendation engine's string output in `apps/api/scripts/dashboard.ts` should be updated to reference "9-18" instead of "9-17 Part B" when 9-18 work begins — flagged here for the 9-18 dev agent.
 
 ### Risks
 

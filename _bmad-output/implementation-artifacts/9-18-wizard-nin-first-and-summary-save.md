@@ -3,6 +3,46 @@
 Status: ready-for-dev
 
 <!--
+ABSORBED Pattern C from 9-17 Part B (2026-06-03 harmonization per parent-Claude
+scope-review session, Option B).
+
+WHAT WAS ABSORBED:
+The full Pattern C wizard field dedup infrastructure that was originally
+planned to land in Story 9-17 Part B. Specifically:
+- The `WIZARD_PROVIDED_FIELD_NAMES` alias map module + its unit-test file
+  (incl. case-insensitive matching helper + `WizardDraftData.prefilledQuestionNames`
+  TypeScript extension)
+- The `FormRenderer.hideQuestionNames?: ReadonlySet<string>` prop + the
+  iteration / skip-logic-engine filtering through hidden questions
+- The Step 4 schema-introspection extension that auto-fills wizard data into
+  questionnaire responses + the `<aside role="status">` banner copy
+- The collision-detector test (now ships once asserting the canonical state,
+  no polarity-inversion problem)
+
+WHY THE ABSORPTION:
+Previously, 9-17 Part B was going to ship `WIZARD_PROVIDED_FIELD_NAMES` with
+NIN EXPLICITLY EXCLUDED, plus a collision-detector test asserting NIN was NOT
+in the map. This story (9-18) Part B was then going to INVERT both — add NIN
+to the map AND invert the collision-detector test polarity. A 2026-05-12
+FORWARD-COMPAT addendum on Story 9-17 documented the planned inversion but
+the inversion itself was structural noise — 9-17 would have shipped
+infrastructure that 9-18 partially unmade days later.
+
+Single-ownership of the wizard redesign surface in this story (9-18)
+eliminates the inversion. Pattern C ships ONCE, correctly, with all 5 fields
+(NIN + name + phone + email + DOB) in the alias map from the start. The
+collision-detector test asserts the canonical state in one polarity only.
+
+EFFORT REVISION: 6-10 days → 7-11 days (modest increase reflecting the
+absorbed infrastructure; the marginal work of building `WIZARD_PROVIDED_FIELD_NAMES`
++ FormRenderer prop + collision test is ~1 day on top of the existing Part B
+extension work).
+
+REFERENCE: see Story 9-17 (`9-17-form-pin-ui-on-questionnaire-management.md`)
+which is now scoped to JUST Part A (form-pin UI on Q.M. page). Sibling story;
+ships independently; zero file-level overlap.
+
+ORIGINAL AUTHORSHIP HISTORY (preserved for trace):
 Authored 2026-05-12 by Bob (SM) via canonical *create-story --yolo workflow.
 
 Strategic UX redesign of the public registration wizard surfaced during
@@ -80,25 +120,72 @@ So that **the wizard feels coherent, my NIN gets validated immediately rather th
 
 5. **AC#A5 — `NinHelpHint` retains the "I don't have my NIN now" link on Step 1.** The inline link inside `NinHelpHint` at [Source: apps/web/src/features/registration/components/NinHelpHint.tsx:123-130] calls `onPendingNinClick` which Step 1 wires to `() => mergeFields({ pendingNinToggle: true })`. Clicking the link is functionally equivalent to pressing the toggle switch. Both code paths produce the same `formData.pendingNinToggle === true` state.
 
-### Part B — Step 4 questionnaire auto-fills NIN (extends 9-17 Pattern C)
+### Part B — Pattern C wizard field dedup (ABSORBED FROM 9-17 PART B, 2026-06-03 harmonization)
 
-6. **AC#B1 — Add `nin` to `WIZARD_PROVIDED_FIELD_NAMES`.** The dedup-map module created by 9-17 Part B AC#B1 at `apps/web/src/features/registration/lib/wizard-provided-field-names.ts` gains a new key:
+This part ships the FULL Pattern C dedup infrastructure (auto-fill + banner + skip-from-renderer) as part of 9-18, including the alias map, the FormRenderer prop, the Step 4 introspection, the banner copy generator, and the collision-detector test. NIN is included in the map from inception (no two-step "ship-then-extend" pattern; no polarity-inverted test).
+
+6. **AC#B1 — Create the `WIZARD_PROVIDED_FIELD_NAMES` alias map module.** New file `apps/web/src/features/registration/lib/wizard-provided-field-names.ts` exports a constant that maps each wizard-collected identity field — INCLUDING NIN from the start — to its common questionnaire-question-name aliases:
+
    ```ts
-   nin: ['nin', 'national_id'],
+   export const WIZARD_PROVIDED_FIELD_NAMES = {
+     fullName:  ['full_name', 'fullname', 'name'],
+     givenName: ['given_name', 'first_name', 'firstname'],
+     familyName: ['family_name', 'last_name', 'lastname', 'surname'],
+     phone:     ['phone', 'phone_number', 'mobile', 'mobile_number'],
+     email:     ['email', 'email_address'],
+     dob:       ['date_of_birth', 'dob', 'birth_date'],
+     nin:       ['nin', 'national_id'],
+   } as const;
    ```
-   The aliases match the `NIN_QUESTION_NAMES` constant currently at [Source: apps/web/src/features/registration/lib/nin-question-names.ts:14] exactly, so no behavior drift between the two paths. The collision-detector test at 9-17 AC#B7 bullet 2.3 (which today asserts `'nin' NOT IN WIZARD_PROVIDED_FIELD_NAMES`) flips to assert `'nin' IN WIZARD_PROVIDED_FIELD_NAMES` — both polarities documented as conscious choices per the 9-17 forward-compat addendum at [Source: _bmad-output/implementation-artifacts/9-17-wizard-form-pin-ui-and-field-dedup.md § "Forward-compat with proposed Story 9-18"].
 
-7. **AC#B2 — Delete `nin-question-names.ts` (consolidation, not migration).** With NIN merged into `WIZARD_PROVIDED_FIELD_NAMES`, the standalone `nin-question-names.ts` becomes redundant. Delete it. Migrate the two import sites — `FormFillerPage.tsx` and `ClerkDataEntryPage.tsx` — to import from `wizard-provided-field-names.ts` (they only use the array for the inline `pending-NIN` link gate; the union type can be re-exported from the dedup module or replaced with `string` since the use sites just do `.includes()` checks). Per project "no technical debt" discipline: no shim, no `_deprecated` re-export, the file is gone after this change.
+   The `nin` aliases match the legacy `NIN_QUESTION_NAMES` constant at [Source: apps/web/src/features/registration/lib/nin-question-names.ts:14] exactly, so no behavior drift during the consolidation. The `givenName` / `familyName` keys honor the Part F (AC#F1) Yoruba-naming-convention split — Step 1 collects two fields, and any questionnaire question that asks for them gets pre-filled / hidden.
 
-8. **AC#B3 — Step 4 auto-fills questionnaire NIN from wizard data.** The schema-introspection useEffect at [Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:62-76] (which 9-17 Part B already extended to introspect identity fields) gains a NIN branch. On schema-land:
-   - Find all questionnaire questions whose `name` is in `WIZARD_PROVIDED_FIELD_NAMES.nin`.
-   - For each match, if `formData.nin` is set: write `formData.nin` into `questionnaireResponses[questionName]`.
-   - Add the matched question names to the `hideQuestionNames` Set passed to `<FormRenderer>` (the prop added by 9-17 Part B AC#B3 at [Source: apps/web/src/features/forms/components/FormRenderer.tsx]).
-   - The Step 4 banner copy (per 9-17 Part B AC#B4) extends to include "NIN" in the comma-separated list: e.g., *"We've pre-filled NIN, Name, Phone, Email from your earlier answers."* — banner enumeration logic is field-agnostic so adding NIN requires no banner-component change beyond the alias map.
+   Also export:
+   - `WIZARD_PROVIDED_FIELD_KEY` type alias for the keys.
+   - Helper `function findWizardFieldForQuestionName(questionName: string): WIZARD_PROVIDED_FIELD_KEY | null` doing case-insensitive matching across all alias arrays. Step 4's introspection becomes a one-liner per question.
 
-9. **AC#B4 — Pending-NIN inline link retires from `<FormRenderer>` wizard context.** The inline "I don't have my NIN now" link inside FormRenderer at [Source: apps/web/src/features/forms/components/FormRenderer.tsx:281-289] is no longer needed in the wizard context (NIN is captured at Step 1, never re-asked in Step 4). The link still exists for clerk-data-entry / form-filler-page contexts where NIN is asked directly. Implementation: gate the inline-link rendering on the `onPendingNinClick` prop being truthy (already the case at line 281 — `{isCurrentNin && onPendingNinClick && !disabled && (...)}`). Then in `Step4Questionnaire.tsx`, pass `onPendingNinClick={undefined}` to FormRenderer. Net: no FormRenderer source change; just the wizard caller stops passing the callback. Clerk contexts continue to pass it.
+   Extend the `WizardDraftData` TypeScript interface in `apps/web/src/features/registration/api/wizard.api.ts` with `prefilledQuestionNames?: string[]` (persisted shape — arrays serialize through JSONB naturally; convert to/from `ReadonlySet<string>` at the React boundary).
 
-10. **AC#B5 — `handlePendingNinTriggered` in `WizardPage.tsx` is deleted.** The callback at [Source: apps/web/src/features/registration/pages/WizardPage.tsx:150-159] exists solely to bridge the Step-4 inline link to the wizard draft. With AC#B4 removing the inline link from the wizard context, this callback has no caller. Delete it. Step 4 no longer needs the `onPendingNinTriggered` prop in its `Step4Props` interface ([Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:38]) — remove the prop.
+7. **AC#B2 — Delete `apps/web/src/features/registration/lib/nin-question-names.ts` (consolidation).** With NIN merged into `WIZARD_PROVIDED_FIELD_NAMES`, the standalone `nin-question-names.ts` becomes redundant. Delete it. Migrate the two import sites — `FormFillerPage.tsx` and `ClerkDataEntryPage.tsx` — to import from `wizard-provided-field-names.ts` (they only use the array for the inline `pending-NIN` link gate; the union type re-exports from the dedup module if needed, or the use sites become `WIZARD_PROVIDED_FIELD_NAMES.nin.includes(name)` calls). Per project "no technical debt" discipline: no shim, no `_deprecated` re-export, the file is gone after this change.
+
+8. **AC#B3 — Extend `<FormRenderer>` with a `hideQuestionNames?: ReadonlySet<string>` prop.** Update `FormRenderer` at [Source: apps/web/src/features/forms/components/FormRenderer.tsx] with a new optional prop. When supplied:
+   - The question iteration / `currentIndex` math filters OUT those questions from the user-visible flow.
+   - The skip-logic engine (`getNextVisibleIndex` per Story 9-12 Task 5.4.3) advances past hidden questions in both directions.
+   - The questions still exist in the underlying schema (form-version locking unchanged); they're only skipped at the renderer level.
+   - The submit payload (`onComplete`'s `allAnswers` argument) STILL includes the pre-filled answers for the hidden questions, because they're already in `initialResponses` (per AC#B4 below).
+
+   Step 4 passes `hideQuestionNames={prefilledQuestionNames}` so the user never sees the duplicates. Existing `FormFillerPage` / clerk-data-entry consumers pass `hideQuestionNames={undefined}` (prop is optional) and behave unchanged.
+
+9. **AC#B4 — Step 4 introspection + auto-fill of wizard answers into questionnaire responses.** In `Step4Questionnaire.tsx` [Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:62-76] — the existing `useEffect` that already stamps `formHasNinQuestion` + `questionnaireFormId` + `questionnaireFormVersionId` — extend the schema-introspection pass to ALSO:
+   - Build a `prefilledQuestionNames: Set<string>` containing every question name from `form.questions` that matches (case-insensitive exact match) any alias in `WIZARD_PROVIDED_FIELD_NAMES` (via the `findWizardFieldForQuestionName` helper from AC#B1).
+   - For each match, write the corresponding wizard `formData.<field>` value into `questionnaireResponses[questionName]` via a SINGLE `mergeFields({ questionnaireResponses: { ...existing, ...prefilled } })` call. Do NOT split into per-field merges — that races the React state batching (URL-race lesson from commit `427a80d`).
+   - Stamp the `prefilledQuestionNames` set (as an array) into `wizard_drafts.formData.prefilledQuestionNames` so the banner copy (AC#B5) survives page refreshes.
+   - **Pending-NIN edge case:** when `formData.pendingNinToggle === true` AND a NIN question exists in the schema, the NIN question is STILL hidden (don't ask) but no value is auto-filled (because `formData.nin` is unset). The banner copy omits NIN from the pre-filled list (or notes it as "NIN (pending)" — dev judgment; see AC#D4 test #3 for the assertion).
+
+10. **AC#B5 — Step 4 banner copy with dynamic field list.** When `prefilledQuestionNames.size > 0`, Step 4 renders a small `<aside role="status" aria-live="polite" data-testid="step4-prefilled-banner">` ABOVE the `<FormRenderer>` with copy that names the specific fields filled. Generate the human-readable label list from the wizard-field keys (NOT the questionnaire question names), using this label map:
+
+    | wizard field key | banner label |
+    |---|---|
+    | fullName / givenName / familyName | "Name" (collapse all three into a single "Name" if any matched) |
+    | phone | "Phone" |
+    | email | "Email" |
+    | dob | "Date of Birth" |
+    | nin | "NIN" |
+
+    Copy template: `"We've pre-filled <comma-separated labels> from your earlier answers. Click Back to edit anything."` Oxford comma for 3+ items. When exactly 2: "Name and Phone". When 1: "Name". Banner background Info-50, text Info-800. No em-dashes (per 2026-05-12 copy-discipline directive).
+
+11. **AC#B6 — Single canonical collision-detector test (no polarity inversion).** New unit-test file `apps/web/src/features/registration/lib/__tests__/wizard-provided-field-names.test.ts` asserts the canonical state of the alias map IN ONE POLARITY ONLY (no two-step ship-then-extend pattern; the test ships once asserting the final shape):
+
+    1. Map keys are exactly `fullName | givenName | familyName | phone | email | dob | nin` (asserted via `Object.keys(map).sort()`).
+    2. Each alias array contains lowercase strings only (case-insensitive matching is the caller's responsibility, but the canonical form is lowercase).
+    3. **`nin` key IS present** with the exact aliases `['nin', 'national_id']` (matches the deleted `NIN_QUESTION_NAMES`).
+    4. **`nin-question-names.ts` is DELETED** — asserted via filesystem check OR via Vite glob import that resolves empty (dev agent picks the cleanest test pattern).
+    5. Snapshot test of the full map shape so unintended edits surface in code review.
+    6. `findWizardFieldForQuestionName` case-insensitive matching across all 7 keys.
+
+12. **AC#B7 — Pending-NIN inline link retires from `<FormRenderer>` wizard context.** The inline "I don't have my NIN now" link inside FormRenderer at [Source: apps/web/src/features/forms/components/FormRenderer.tsx:281-289] is no longer needed in the wizard context (NIN is captured at Step 1, never re-asked in Step 4). The link still exists for clerk-data-entry / form-filler-page contexts where NIN is asked directly. Implementation: gate the inline-link rendering on the `onPendingNinClick` prop being truthy (already the case at line 281 — `{isCurrentNin && onPendingNinClick && !disabled && (...)}`). Then in `Step4Questionnaire.tsx`, pass `onPendingNinClick={undefined}` to FormRenderer. Net: no FormRenderer source change; just the wizard caller stops passing the callback. Clerk contexts continue to pass it.
+
+13. **AC#B8 — `handlePendingNinTriggered` in `WizardPage.tsx` is deleted.** The callback at [Source: apps/web/src/features/registration/pages/WizardPage.tsx:150-159] exists solely to bridge the Step-4 inline link to the wizard draft. With AC#B7 removing the inline link from the wizard context, this callback has no caller. Delete it. Step 4 no longer needs the `onPendingNinTriggered` prop in its `Step4Props` interface ([Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:38]) — remove the prop.
 
 ### Part C — Step 5 becomes Review-and-Save summary
 
@@ -294,12 +381,21 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [ ] 2.6: Wire `NinHelpHint` inline link → `mergeFields({ pendingNinToggle: true })`.
   - [ ] 2.7: Verify `useWizardDraft` correctly persists `nin` + `pendingNinToggle` via the existing debounced autosave (no hook changes required; just confirm at impl time).
 
-- [ ] **Task 3: Step 4 questionnaire auto-fills NIN (AC: #B1, #B2, #B3, #B4, #B5)**
-  - [ ] 3.1: Extend `wizard-provided-field-names.ts` (created by 9-17) with the `nin: ['nin', 'national_id']` key.
-  - [ ] 3.2: Delete `apps/web/src/features/registration/lib/nin-question-names.ts`. Migrate the two import sites (`FormFillerPage.tsx`, `ClerkDataEntryPage.tsx`) to import the NIN aliases from the dedup module — they only use it for `.includes()` checks so a simple destructure works.
-  - [ ] 3.3: Extend the Step 4 schema-introspection useEffect at [Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:62-76] to auto-fill questionnaire NIN from `formData.nin` and add the question name(s) to `hideQuestionNames`.
-  - [ ] 3.4: Extend the banner copy enumeration logic to include "NIN" when the NIN question was hidden.
-  - [ ] 3.5: Delete `handlePendingNinTriggered` from `WizardPage.tsx` ([Source: apps/web/src/features/registration/pages/WizardPage.tsx:150-159]). Remove the `onPendingNinTriggered` prop from `Step4Props` interface. Stop passing it to FormRenderer (so the inline link disappears in wizard context; FormRenderer's existing `{isCurrentNin && onPendingNinClick && ...}` gate handles this transparently).
+- [ ] **Task 3: Pattern C dedup infrastructure + Step 4 NIN auto-fill (AC: #B1, #B2, #B3, #B4, #B5, #B6, #B7, #B8)** — absorbs work originally planned for 9-17 Part B
+  - [ ] 3.1: Create `apps/web/src/features/registration/lib/wizard-provided-field-names.ts` per AC#B1 with the full alias map (all 7 keys including `nin`) + the `findWizardFieldForQuestionName` helper + the `WIZARD_PROVIDED_FIELD_KEY` type alias.
+  - [ ] 3.2: Extend `WizardDraftData` interface at `apps/web/src/features/registration/api/wizard.api.ts` with `prefilledQuestionNames?: string[]` (persisted shape — convert to/from Set at the React boundary).
+  - [ ] 3.3: Create `apps/web/src/features/registration/lib/__tests__/wizard-provided-field-names.test.ts` per AC#B6 with the 6 canonical-state assertions (keys-list, lowercase aliases, `nin` IS present, `nin-question-names.ts` is deleted, snapshot, helper function). Run RED first to confirm the module doesn't yet exist; then green after Task 3.1.
+  - [ ] 3.4: Delete `apps/web/src/features/registration/lib/nin-question-names.ts` per AC#B2. Migrate the two import sites (`FormFillerPage.tsx`, `ClerkDataEntryPage.tsx`) to import the NIN aliases from the dedup module — they only use it for `.includes()` checks so a simple `WIZARD_PROVIDED_FIELD_NAMES.nin.includes(name)` works.
+  - [ ] 3.5: Add the `hideQuestionNames?: ReadonlySet<string>` prop to `<FormRenderer>` per AC#B3. Update the iteration / `currentIndex` math + the `getNextVisibleIndex` skip-logic engine to filter through hidden questions in both directions. Verify existing FormFillerPage tests (~540 lines) still pass unchanged (zero-regression discipline).
+  - [ ] 3.6: Extend the Step 4 schema-introspection useEffect at [Source: apps/web/src/features/registration/pages/Step4Questionnaire.tsx:62-76] per AC#B4:
+    - Compute the `prefilledQuestionNames` Set via the `findWizardFieldForQuestionName` helper.
+    - Write the auto-fills into `questionnaireResponses` via a SINGLE `mergeFields` call (not per-field; URL-race lesson).
+    - Stamp `prefilledQuestionNames: [...Array.from(set)]` into `wizard_drafts.formData` for refresh-persistence.
+    - Handle the pending-NIN edge case (NIN question hidden but not auto-filled when `formData.nin` is unset).
+  - [ ] 3.7: Render the `<aside role="status" aria-live="polite" data-testid="step4-prefilled-banner">` above `<FormRenderer>` per AC#B5 with dynamic field-list copy. Banner enumeration logic is field-agnostic (no per-step-number hardcoding).
+  - [ ] 3.8: Pass `hideQuestionNames={prefilledQuestionNames}` to `<FormRenderer>` from `Step4Questionnaire`.
+  - [ ] 3.9: Per AC#B7: in `Step4Questionnaire.tsx`, pass `onPendingNinClick={undefined}` to FormRenderer. (No FormRenderer source change; the existing `{isCurrentNin && onPendingNinClick && ...}` gate at line 281 handles the empty prop transparently.) Clerk contexts continue to pass the callback.
+  - [ ] 3.10: Per AC#B8: delete `handlePendingNinTriggered` from `WizardPage.tsx` ([Source: apps/web/src/features/registration/pages/WizardPage.tsx:150-159]). Remove the `onPendingNinTriggered` prop from `Step4Props` interface.
 
 - [ ] **Task 4: Step 5 becomes Review-and-Save summary (AC: #C1, #C2, #C4, #C5)**
   - [ ] 4.1: Create `apps/web/src/features/registration/pages/Step5ReviewAndSave.tsx` per AC#C1. Renders the summary card + Save button + Edit links.
@@ -408,27 +504,29 @@ Commit `bea7545` (2026-05-12) shipped two changes that are STRUCTURALLY supersed
 
 **Task 1.1 blocks all other tasks until Awwal confirms AC#C3.**
 
-### Forward-compat with 9-17 — extension contract honored
+### Pattern C consolidation (2026-06-03 harmonization)
 
-The 9-17 forward-compat addendum at [Source: _bmad-output/implementation-artifacts/9-17-wizard-form-pin-ui-and-field-dedup.md § "Forward-compat with proposed Story 9-18"] documented these contracts. 9-18 honors all of them:
+Originally, 9-17 Part B was going to ship the Pattern C dedup infrastructure (`WIZARD_PROVIDED_FIELD_NAMES` map without NIN, `FormRenderer.hideQuestionNames` prop, Step 4 introspection, banner) AND a collision-detector test asserting `'nin' NOT IN WIZARD_PROVIDED_FIELD_NAMES`. This story (9-18) Part B was then going to INVERT both — add NIN to the map + invert the collision-detector test. The 9-17 forward-compat addendum documented the planned inversion.
 
-1. ✅ **`WIZARD_PROVIDED_FIELD_NAMES` open for additions** — AC#B1 adds `nin` key (no closed type union violated).
-2. ✅ **`FormRenderer.hideQuestionNames` as canonical extension point** — AC#B3 adds NIN names to the same Set; no FormRenderer source change.
-3. ✅ **Banner copy reads generically** — AC#B3 extends the field-agnostic enumeration logic; no step-number hardcoding.
-4. ✅ **Collision-detector test polarity flips consciously** — AC#B1 explicitly documents the flip from "NIN NOT in map" → "NIN IN map" + updates the test assertion.
-5. ✅ **Part A of 9-17 (form-pin UI) is orthogonal — unaffected by 9-18** — 9-18 doesn't touch Q.M. page or Settings landing mirror card.
+The 2026-06-03 harmonization moved the full Pattern C infrastructure into THIS story so the canonical state ships once, no inversion, no two-step build-then-invert. Specifically:
+
+1. ✅ **`WIZARD_PROVIDED_FIELD_NAMES` includes NIN from inception** — AC#B1 creates the map with all 7 keys (`fullName + givenName + familyName + phone + email + dob + nin`); the legacy `nin-question-names.ts` is deleted in AC#B2 as part of the same consolidation.
+2. ✅ **`FormRenderer.hideQuestionNames` prop ships with NIN already as a valid value** — AC#B3 adds the prop; Step 4 passes a Set that includes NIN question-names when applicable.
+3. ✅ **Banner copy reads generically + supports NIN** — AC#B5 extends the field-agnostic enumeration logic with a NIN label.
+4. ✅ **Single canonical collision-detector test** — AC#B6 asserts the final canonical state in ONE polarity. No "flipping" of the assertion. The test ships once, correctly.
+5. ✅ **Story 9-17 is now Part A only** — form-pin UI on the Q.M. page + Settings mirror card. Zero file-level overlap with 9-18. Ships first or in parallel (no HARD dep).
 
 ### Dependencies
 
 - **Story 9-12** (HARD) — provides the wizard skeleton (`WizardPage`, `useWizardDraft`, `Step1`-`Step4` components), public form discovery (`fetchPublicActiveForm`, `getPublicActiveForm`, `wizard.public_form_id` setting), magic-link service (`magic-link.service.ts`), pending-NIN respondent status (`pending_nin_capture`), `RegistrationCompletePage`, draft persistence schema, and URL-race fix from `427a80d`. 9-18 evolves Steps 1/4/5 but does NOT rewrite the foundation.
 
-- **Story 9-17** (HARD) — provides `WIZARD_PROVIDED_FIELD_NAMES` map + `FormRenderer.hideQuestionNames` prop + Step 4 introspection extension + banner UX pattern. 9-18 cannot ship before 9-17 because Part B of this story directly extends 9-17 Part B's machinery. The 9-17 forward-compat addendum encodes the extension contract; 9-18 honors it.
+- **Story 9-17** (NOT HARD — sibling) — after 2026-06-03 harmonization, 9-17 is scoped to JUST Part A (form-pin UI on Q.M. page + Settings mirror card). It no longer ships any wizard-related Pattern C infrastructure; that work is absorbed into THIS story's Part B (AC#B1-B8). 9-17 and 9-18 have zero file-level overlap. Ships in any order — neither blocks the other.
 
 - **Story 9-12 hotfix commit `bea7545`** — Modulus-11 in State A + State B undo. Currently in production. SUPERSEDED by 9-18's dispatcher elimination (the entire Step5NinAndAuth file is deleted) — but the hotfix stays in place until 9-18 ships, since it's the only line of defense against the State-B-stuck-at-true bug in the meantime.
 
 - **Story 3-7** — global NIN uniqueness enforcement via `respondents.nin` unique index + the FR21 duplicate-NIN error code. Unchanged; reused by `useNinCheck` at Step 1.
 
-- **Story 6-1** — audit hash chain. Used transitively by `wizard.public_form_id` settings PATCH (9-17). Not directly touched by 9-18.
+- **Story 6-1** — audit hash chain. No direct write from 9-18 (the wizard submit's audit emission was wired in 9-12).
 
 ### Risks
 
