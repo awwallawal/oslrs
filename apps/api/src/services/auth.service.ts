@@ -9,6 +9,7 @@ import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
 import { AuditService } from './audit.service.js';
 import { MfaService } from './mfa.service.js';
+import { MagicLinkService } from './magic-link.service.js';
 import pino from 'pino';
 
 /**
@@ -22,6 +23,23 @@ import pino from 'pino';
 export type StaffLoginResult =
   | (LoginResponse & { refreshToken: string; sessionId: string; requiresMfa?: false })
   | { requiresMfa: true; mfaChallengeToken: string; expiresIn: number };
+
+/**
+ * Story 9-16 — `loginByMagicLinkToken` returns the same discriminated union as
+ * `loginStaff`: either a full session (no MFA) or a 2-step challenge (MFA
+ * enrolled). The magic-link login controller branches on `requiresMfa`.
+ */
+export type MagicLinkLoginResult =
+  | (LoginResponse & { refreshToken: string; sessionId: string; requiresMfa?: false })
+  | { requiresMfa: true; mfaChallengeToken: string; expiresIn: number };
+
+/**
+ * Story 9-16 — distinguishes the auth channel that minted a login session so
+ * the Story 9-11 audit-log viewer can filter password vs magic-link logins.
+ * Threaded into `createLoginSession`'s single login-success audit entry rather
+ * than emitting a second entry (avoids double-logging one login event).
+ */
+export type LoginTrigger = 'password' | 'magic_link';
 
 const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
 
@@ -556,6 +574,121 @@ export class AuthService {
   }
 
   /**
+   * Story 9-16 — Public-user sign-in via a one-time magic-link token.
+   *
+   * A NEW passwordless auth channel layered on the Story 9-12 magic-link
+   * primitive — NOT a replacement for `loginPublic` (email + password still
+   * works for all existing public_users). Forward-compatible with future
+   * passwordless wizard accounts: deliberately does NOT gate on a non-null
+   * `passwordHash` (unlike `loginPublic`, which bcrypt-compares).
+   *
+   * Order of operations matters:
+   *   1. Consume the `login`-purpose token FIRST (atomic single-use; throws
+   *      MAGIC_LINK_* 400 on invalid/expired/already-used).
+   *   2. Look up the user by the token's canonical (lowercased) email.
+   *   3. Account-state gates in the SAME shape + error codes as `loginPublic`.
+   *   4. MFA-aware — Story 9-13's 2-step challenge is honoured; magic-link
+   *      login MUST NOT bypass MFA.
+   */
+  static async loginByMagicLinkToken(args: {
+    plaintext: string;
+    rememberMe?: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<MagicLinkLoginResult> {
+    const { plaintext, rememberMe = false, ipAddress, userAgent } = args;
+
+    // 1. Atomic single-use consume. Throws MAGIC_LINK_INVALID / _EXPIRED /
+    //    _ALREADY_USED (all 400) before any user lookup.
+    const consumed = await MagicLinkService.consumeToken({ plaintext, purpose: 'login' });
+
+    // Generic error to prevent email enumeration (parity with loginPublic).
+    const genericError = new AppError(
+      'AUTH_INVALID_CREDENTIALS',
+      'Invalid email or password',
+      401
+    );
+
+    // 2. Look up by the canonical email (already lowercased+trimmed at issue time).
+    const user = await db.query.users.findFirst({
+      where: eq(users.email, consumed.email),
+      with: {
+        role: true,
+      },
+    });
+
+    // 3a. User not found → generic 401 (anti-enumeration).
+    if (!user) {
+      logger.warn({
+        event: 'auth.login_failed',
+        reason: 'user_not_found',
+        email: consumed.email,
+        ipAddress,
+        loginType: 'public',
+        trigger: 'magic_link',
+      });
+      throw genericError;
+    }
+
+    // 3b. Locked account → 429 (reuse existing code + constant).
+    if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+      throw new AppError(
+        'AUTH_ACCOUNT_LOCKED',
+        'Account is temporarily locked. Please try again later.',
+        429
+      );
+    }
+
+    // 3c. Suspended / deactivated → 403.
+    if (user.status === 'suspended' || user.status === 'deactivated') {
+      throw new AppError(
+        'AUTH_ACCOUNT_SUSPENDED',
+        'Your account has been suspended.',
+        403
+      );
+    }
+
+    // 3d. Magic-link login is PUBLIC-ONLY. Staff accounts must use the staff
+    //     login (MFA + password). The frontend only surfaces the magic-link
+    //     entry-point on `type='public'`, so this is defence-in-depth.
+    if (user.role.name !== UserRole.PUBLIC_USER) {
+      throw new AppError(
+        'AUTH_INVALID_CREDENTIALS',
+        'Please use the staff login for staff accounts',
+        401
+      );
+    }
+
+    // 4. MFA branch — honour Story 9-13's 2-step challenge BEFORE issuing a
+    //    session. Bypassing this would silently defeat the MFA security uplift.
+    if (user.mfaEnabled) {
+      const mfaChallengeToken = await MfaService.mintChallengeToken({
+        userId: user.id,
+        email: user.email,
+        rememberMe,
+      });
+
+      logger.info({
+        event: 'auth.login_mfa_required',
+        userId: user.id,
+        rememberMe,
+        ipAddress,
+        trigger: 'magic_link',
+      });
+
+      return {
+        requiresMfa: true,
+        mfaChallengeToken,
+        expiresIn: MFA_CHALLENGE_TTL_SECONDS,
+      };
+    }
+
+    // 5. Success — create session + tokens. The 'magic_link' trigger is folded
+    //    into the single login-success audit entry (see createLoginSession).
+    return this.createLoginSession(user, rememberMe, ipAddress, userAgent, 'magic_link');
+  }
+
+  /**
    * Creates login session and tokens (shared between staff and public login)
    */
   private static async createLoginSession(
@@ -563,7 +696,10 @@ export class AuthService {
     user: any,
     rememberMe: boolean,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    // Story 9-16 — auth channel marker folded into the audit entry so the
+    // Story 9-11 viewer can filter password vs magic-link logins.
+    trigger: LoginTrigger = 'password'
   ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
     // Create session (invalidates previous sessions - single session enforcement)
     const sessionInfo = await SessionService.createSession(user.id, rememberMe);
@@ -614,7 +750,9 @@ export class AuthService {
       ipAddress,
     });
 
-    // Audit log (fire-and-forget — login succeeds even if audit fails)
+    // Audit log (fire-and-forget — login succeeds even if audit fails).
+    // Story 9-16 — `trigger` distinguishes password vs magic-link logins for
+    // the Story 9-11 audit-log viewer (single entry per login, no duplication).
     AuditService.logAction({
       actorId: user.id,
       action: 'auth.login_success',
@@ -623,6 +761,7 @@ export class AuthService {
       details: {
         rememberMe,
         sessionId: sessionInfo.sessionId,
+        trigger,
       },
       ipAddress: ipAddress || 'unknown',
       userAgent: userAgent || 'unknown',

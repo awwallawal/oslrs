@@ -2,10 +2,13 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { MagicLinkService } from '../services/magic-link.service.js';
 import { AuditService } from '../services/audit.service.js';
+import { AuthService } from '../services/auth.service.js';
 import { AppError } from '@oslsr/utils';
 import { AUDIT_ACTIONS } from '../services/audit.service.js';
 import type { MagicLinkPurpose } from '../db/schema/index.js';
 import { magicLinkPurposes } from '../db/schema/index.js';
+// Story 9-16 — shared refresh-cookie config (same source as auth.controller.ts).
+import { REFRESH_TOKEN_COOKIE_NAME, COOKIE_OPTIONS, refreshCookieMaxAge } from '../lib/cookie-config.js';
 
 /**
  * Story 9-12 AC#6 — magic-link auth endpoints.
@@ -35,6 +38,17 @@ const requestMagicLinkSchema = z.object({
 const redeemMagicLinkQuerySchema = z.object({
   token: z.string().min(8, 'Magic-link token is missing or too short'),
   purpose: z.enum(magicLinkPurposes),
+});
+
+/**
+ * Story 9-16 — body schema for `POST /auth/magic/login`. Purpose is pinned to
+ * the `login` literal (this endpoint NEVER signs in a wizard_resume /
+ * pending_nin_complete token). `rememberMe` is optional (defaults to false).
+ */
+const loginByMagicLinkSchema = z.object({
+  token: z.string().min(8, 'Magic-link token is missing or too short'),
+  purpose: z.literal('login'),
+  rememberMe: z.boolean().optional(),
 });
 
 export class MagicLinkController {
@@ -203,6 +217,74 @@ export class MagicLinkController {
           email: redeemed.email,
           userId: redeemed.userId,
           respondentId: redeemed.respondentId,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /auth/magic/login — body { token, purpose: 'login', rememberMe? }.
+   *
+   * Story 9-16 — consume a `login`-purpose magic-link token AND issue a
+   * session. Kept SEPARATE from `/auth/magic/consume` (which stays
+   * single-purpose for the wizard / pending-NIN flows): conflating "tell me
+   * what this token was for" with "sign me in" would muddy both contracts.
+   *
+   * On success without MFA: sets the httpOnly refresh-token cookie and returns
+   * `{ accessToken, user, expiresIn }` (NEVER the refresh token in the body).
+   * On MFA-enrolled accounts: returns `{ requiresMfa, mfaChallengeToken,
+   * expiresIn }` so the frontend can route to the Story 9-13 challenge page.
+   */
+  static async loginByMagicLink(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validation = loginByMagicLinkSchema.safeParse(req.body);
+      if (!validation.success) {
+        // Match the sibling magic-link endpoints' generic 400 (anti-enumeration;
+        // no field-level leakage about which part of the body was malformed).
+        throw new AppError(
+          'MAGIC_LINK_INVALID',
+          'Magic-link token is missing or malformed',
+          400,
+        );
+      }
+
+      const { token, rememberMe = false } = validation.data;
+      // Story 9-16 review L2 — mirror the sibling controllers' IP derivation
+      // (staffLogin / publicLogin use the same `req.ip || socket` fallback).
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.get('user-agent') || undefined;
+
+      const result = await AuthService.loginByMagicLinkToken({
+        plaintext: token,
+        rememberMe,
+        ipAddress,
+        userAgent,
+      });
+
+      // 2-step MFA pending — hand back the challenge token, no JWT yet.
+      if ('requiresMfa' in result && result.requiresMfa === true) {
+        return res.status(200).json({
+          data: {
+            requiresMfa: true,
+            mfaChallengeToken: result.mfaChallengeToken,
+            expiresIn: result.expiresIn,
+          },
+        });
+      }
+
+      // Full session — refresh token goes in the httpOnly cookie only.
+      res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: refreshCookieMaxAge(rememberMe),
+      });
+
+      return res.status(200).json({
+        data: {
+          accessToken: result.accessToken,
+          user: result.user,
+          expiresIn: result.expiresIn,
         },
       });
     } catch (error) {

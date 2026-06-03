@@ -49,6 +49,7 @@ function mockAuth(role: string) {
     loginStaff: vi.fn(),
     loginPublic: vi.fn(),
     loginWithGoogle: vi.fn(),
+    loginWithMagicLink: vi.fn(),
     logout: vi.fn(),
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),

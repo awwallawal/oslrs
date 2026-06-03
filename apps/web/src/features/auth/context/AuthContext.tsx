@@ -139,6 +139,9 @@ interface AuthContextValue extends AuthState {
   loginStaff: (request: LoginRequest) => Promise<StaffLoginOutcome>;
   loginPublic: (request: LoginRequest) => Promise<void>;
   completeStaffLoginAfterMfa: (response: LoginResponse, rememberMe: boolean) => Promise<void>;
+  // Story 9-16 — finalise a public-user session after a successful magic-link
+  // sign-in (the backend already authenticated; we just mount the session).
+  loginWithMagicLink: (response: LoginResponse, rememberMe: boolean) => Promise<void>;
   loginWithGoogle: (response: LoginResponse) => Promise<void>;
   logout: () => Promise<void>;
   confirmLogout: () => Promise<void>;
@@ -399,6 +402,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
+  // Story 9-16 — finalise a public-user session after a successful magic-link
+  // sign-in. Same post-success bookkeeping as `completeStaffLoginAfterMfa`:
+  // the backend already issued the access + refresh tokens; we mount them.
+  const loginWithMagicLink = useCallback(
+    async (response: LoginResponse, rememberMe: boolean) => {
+      saveToken(response.accessToken);
+      updateActivity();
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: {
+          user: response.user,
+          accessToken: response.accessToken,
+          rememberMe,
+        },
+      });
+      scheduleTokenRefresh(response.expiresIn);
+      await initOfflineForUser(response.user.id);
+    },
+    [saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser],
+  );
+
   // Google OAuth login (Story 3.0) — called after backend verification is complete
   const loginWithGoogle = useCallback(async (response: LoginResponse) => {
     saveToken(response.accessToken);
@@ -613,6 +637,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginStaff,
     loginPublic,
     loginWithGoogle,
+    loginWithMagicLink,
     completeStaffLoginAfterMfa,
     logout,
     confirmLogout,

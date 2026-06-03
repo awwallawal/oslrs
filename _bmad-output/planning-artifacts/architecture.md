@@ -2831,6 +2831,10 @@ The original ADR-015 (Google OAuth primary, Hybrid Magic-Link/OTP fallback) was 
 
 ---
 
+> 🏗️ **AMENDMENT PROPOSED 2026-06-03 by Story 9-16 (magic-link login wiring)** — magic-link login is now SUPPORTED as a passwordless public-user channel alongside email+password. Single-use, 15-min TTL, MFA-aware, anti-enumeration on request. Rate-limit: the request endpoint (`/auth/public/magic-link`) is keyed per-email at 3/hour (NFR4.4 budget); the token-consume endpoints (`/magic/consume`, `/magic/login`) carry no email and therefore key per-IP at 3/hour (combined bucket) — single-use 32-byte token entropy is the primary brute-force control there (corrected per Story 9-16 review M1). Forward-compatible with future passwordless wizard accounts (no `passwordHash IS NOT NULL` gate); this also makes magic-link the de-facto migration path for legacy `authProvider='google'` accounts that the retired Google OAuth gate (`AUTH_GOOGLE_ONLY`) blocks on password login — a deliberate cross-channel asymmetry (Story 9-16 review L3). Audit-logged via the login-success entry with a `trigger: 'magic_link'` detail (password logins carry `trigger: 'password'`) so the Story 9-11 viewer can filter password vs magic-link logins. Winston to author the full amendment when picking up the architecture follow-up; this story does NOT block on the amendment text. Implementation reference: `apps/api/src/services/auth.service.ts` (`loginByMagicLinkToken`), `apps/api/src/controllers/magic-link.controller.ts` (`loginByMagicLink`), route `POST /api/v1/auth/magic/login`.
+
+---
+
 #### Superseded — Original ADR-015 (2026-01-22)
 
 > The text below is preserved verbatim from the Epic 1 retrospective decision for audit traceability. **It is no longer in force.** Implementations must follow the rewritten ADR-015 above. Any future revival of Google OAuth requires a new SCP and a fresh ADR.

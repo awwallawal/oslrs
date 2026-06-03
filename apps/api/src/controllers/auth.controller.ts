@@ -20,15 +20,9 @@ import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-
-// Cookie configuration
-const REFRESH_TOKEN_COOKIE_NAME = 'refreshToken';
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
-  path: '/api/v1/auth',
-};
+// Story 9-16 — cookie config extracted to a shared module so the magic-link
+// login controller can reuse the identical name + options + max-age policy.
+import { REFRESH_TOKEN_COOKIE_NAME, COOKIE_OPTIONS, refreshCookieMaxAge } from '../lib/cookie-config.js';
 
 export class AuthController {
   /**
@@ -145,13 +139,9 @@ export class AuthController {
       }
 
       // Set refresh token as httpOnly cookie
-      const refreshCookieMaxAge = rememberMe
-        ? 30 * 24 * 60 * 60 * 1000 // 30 days
-        : 7 * 24 * 60 * 60 * 1000;  // 7 days
-
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
         ...COOKIE_OPTIONS,
-        maxAge: refreshCookieMaxAge,
+        maxAge: refreshCookieMaxAge(rememberMe),
       });
 
       // Don't expose refresh token in response body
@@ -191,13 +181,9 @@ export class AuthController {
       );
 
       // Set refresh token as httpOnly cookie
-      const refreshCookieMaxAge = rememberMe
-        ? 30 * 24 * 60 * 60 * 1000
-        : 7 * 24 * 60 * 60 * 1000;
-
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
         ...COOKIE_OPTIONS,
-        maxAge: refreshCookieMaxAge,
+        maxAge: refreshCookieMaxAge(rememberMe),
       });
 
       res.status(200).json({

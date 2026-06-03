@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../../../lib/api-client';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { useAuth } from '../context/AuthContext';
 import {
   peekMagicLink,
+  loginByMagicLink,
+  isMagicLinkMfaRequired,
   type MagicLinkPeekResult,
   type MagicLinkPurpose,
 } from '../api/magic-link.api';
@@ -48,9 +51,9 @@ const PURPOSE_COPY: Record<MagicLinkPurpose, { title: string; body: string; cta:
     cta: 'Add my NIN',
   },
   login: {
-    title: 'Magic-link sign-in',
-    body: '',
-    cta: '',
+    title: 'Continue signing in',
+    body: 'Click Continue to sign in on this device.',
+    cta: 'Continue to sign-in',
   },
   supplemental_survey: {
     title: 'Complete your skills profile',
@@ -78,9 +81,48 @@ export default function MagicLinkLandingPage() {
   const purposeRaw = searchParams.get('purpose');
   const purpose: MagicLinkPurpose | null = isMagicLinkPurpose(purposeRaw) ? purposeRaw : null;
 
+  const { loginWithMagicLink } = useAuth();
+
   const [peeked, setPeeked] = useState<MagicLinkPeekResult | null>(null);
   const [peekError, setPeekError] = useState<{ code: string; message: string } | null>(null);
   const [isPeekingDone, setIsPeekingDone] = useState(false);
+
+  // Story 9-16 — login-branch confirm flow state.
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState<{ code: string; message: string } | null>(null);
+
+  const handleLoginConfirm = async () => {
+    setIsSigningIn(true);
+    setLoginError(null);
+    try {
+      const result = await loginByMagicLink({ token, rememberMe: false });
+      if (isMagicLinkMfaRequired(result)) {
+        // MFA-enrolled account — hand off to the Story 9-13 challenge page.
+        navigate('/auth/mfa-challenge', {
+          replace: true,
+          state: {
+            mfaChallengeToken: result.mfaChallengeToken,
+            expiresIn: result.expiresIn,
+            rememberMe: false,
+            redirectTo: '/dashboard',
+          },
+        });
+        return;
+      }
+      await loginWithMagicLink(result, false);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setIsSigningIn(false);
+      if (err instanceof ApiError) {
+        setLoginError({ code: err.code ?? 'MAGIC_LINK_INVALID', message: err.message });
+      } else {
+        setLoginError({
+          code: 'NETWORK_ERROR',
+          message: 'Could not sign you in. Please try again in a moment.',
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     if (!token || !purpose) {
@@ -175,27 +217,57 @@ export default function MagicLinkLandingPage() {
     );
   }
 
-  // Login purpose: JWT issuance for magic-link login is deferred (see story
-  // Review Follow-ups MR-8). Show informational notice + path to /login.
+  // Story 9-16 — Login purpose: confirm + sign in. On Confirm we consume the
+  // token at POST /auth/magic/login, mount the session, and route to the
+  // dashboard (or to the MFA challenge page when the account is enrolled).
   if (purpose === 'login') {
+    if (loginError) {
+      const friendly = loginFriendlyErrorCopy(loginError.code);
+      return (
+        <CenteredCard testId="magic-link-login-error">
+          <h1 className="text-xl font-semibold text-neutral-900">{friendly.title}</h1>
+          <p className="mt-3 text-sm text-neutral-700">{friendly.body}</p>
+          <div className="mt-6 flex flex-col gap-2">
+            <Link
+              to="/login"
+              className="rounded-md bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
+            >
+              Go to sign-in
+            </Link>
+            {friendly.showSupport ? (
+              <Link
+                to="/support"
+                className="rounded-md border border-neutral-300 px-4 py-2 text-center text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+              >
+                Contact support
+              </Link>
+            ) : null}
+          </div>
+        </CenteredCard>
+      );
+    }
+
     return (
-      <CenteredCard testId="magic-link-login-deferred">
-        <h1 className="text-xl font-semibold text-neutral-900">Magic-link sign-in coming soon</h1>
-        <p className="mt-3 text-sm text-neutral-700">
-          Magic-link sign-in is not yet available. For now, please sign in with your email and
-          password.
-        </p>
+      <CenteredCard testId="magic-link-login-confirm">
+        <h1 className="text-xl font-semibold text-neutral-900">{PURPOSE_COPY.login.title}</h1>
+        <p className="mt-3 text-sm text-neutral-700">{PURPOSE_COPY.login.body}</p>
         {peeked?.email ? (
           <p className="mt-2 text-xs text-neutral-500" data-testid="magic-link-login-email">
-            Link is valid for <span className="font-mono">{peeked.email}</span>.
+            Signing in as <span className="font-mono">{peeked.email}</span>.
           </p>
         ) : null}
-        <Link
-          to="/login"
-          className="mt-6 block rounded-md bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
+        <button
+          type="button"
+          onClick={handleLoginConfirm}
+          disabled={isSigningIn}
+          data-testid="magic-link-confirm-button"
+          className="mt-6 w-full rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-400"
         >
-          Go to sign-in
-        </Link>
+          {isSigningIn ? 'Signing in…' : PURPOSE_COPY.login.cta}
+        </button>
+        <p className="mt-3 text-center text-xs text-neutral-500">
+          If you didn't request this link, you can safely close this tab.
+        </p>
       </CenteredCard>
     );
   }
@@ -277,6 +349,43 @@ function friendlyErrorCopy(code: string): { title: string; body: string } {
         body:
           'The link may have been mistyped, or it was generated by a different system. Try copying it from your email again, or request a new one.',
       };
+  }
+}
+
+/**
+ * Story 9-16 — login-branch error copy. Adds the account-state codes the
+ * `/auth/magic/login` endpoint can surface on top of the MAGIC_LINK_* codes
+ * the consume step shares with the other purposes.
+ */
+function loginFriendlyErrorCopy(
+  code: string,
+): { title: string; body: string; showSupport: boolean } {
+  switch (code) {
+    case 'AUTH_INVALID_CREDENTIALS':
+      return {
+        title: 'We couldn\'t find your account',
+        body:
+          'We couldn\'t find an account for this email. The link may have been issued to an old address.',
+        showSupport: false,
+      };
+    case 'AUTH_ACCOUNT_LOCKED':
+      return {
+        title: 'Your account is temporarily locked',
+        body:
+          'Too many recent sign-in attempts. Please wait a little while and try again, or contact support if you need help.',
+        showSupport: true,
+      };
+    case 'AUTH_ACCOUNT_SUSPENDED':
+      return {
+        title: 'Your account is suspended',
+        body: 'This account has been suspended. Please contact support for assistance.',
+        showSupport: true,
+      };
+    default: {
+      // MAGIC_LINK_* + NETWORK_ERROR reuse the shared peek-error copy.
+      const base = friendlyErrorCopy(code);
+      return { ...base, showSupport: false };
+    }
   }
 }
 

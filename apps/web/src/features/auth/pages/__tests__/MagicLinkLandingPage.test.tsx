@@ -8,16 +8,34 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 expect.extend(matchers);
 
-const { mockPeekMagicLink } = vi.hoisted(() => ({
+const { mockPeekMagicLink, mockLoginByMagicLink, mockLoginWithMagicLink } = vi.hoisted(() => ({
   mockPeekMagicLink: vi.fn(),
+  mockLoginByMagicLink: vi.fn(),
+  mockLoginWithMagicLink: vi.fn(),
 }));
 
 vi.mock('../../api/magic-link.api', () => ({
   peekMagicLink: (...args: unknown[]) => mockPeekMagicLink(...args),
+  loginByMagicLink: (...args: unknown[]) => mockLoginByMagicLink(...args),
+  // Real discriminator impl (the page imports it alongside the fetchers).
+  isMagicLinkMfaRequired: (r: { requiresMfa?: boolean }) =>
+    'requiresMfa' in r && r.requiresMfa === true,
+}));
+
+// Story 9-16 — the page now finalises the session via the auth context.
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ loginWithMagicLink: mockLoginWithMagicLink }),
 }));
 
 import MagicLinkLandingPage from '../MagicLinkLandingPage';
 import { ApiError } from '../../../../lib/api-client';
+import { useLocation } from 'react-router-dom';
+
+function MfaChallengeProbe() {
+  const location = useLocation();
+  const state = (location.state ?? {}) as { mfaChallengeToken?: string };
+  return <div data-testid="redirected-mfa-challenge">{state.mfaChallengeToken}</div>;
+}
 
 interface RenderOptions {
   token?: string | null;
@@ -42,6 +60,8 @@ function renderAt({ token, purpose }: RenderOptions = {}) {
           element={<div data-testid="redirected-complete-nin">complete-nin</div>}
         />
         <Route path="/login" element={<div data-testid="redirected-login">login</div>} />
+        <Route path="/dashboard" element={<div data-testid="redirected-dashboard">dashboard</div>} />
+        <Route path="/auth/mfa-challenge" element={<MfaChallengeProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -160,8 +180,8 @@ describe('MagicLinkLandingPage (Story 9-12 MR-8)', () => {
     });
   });
 
-  describe('Peek succeeds (login purpose — deferred)', () => {
-    it('renders the deferred-login notice (NOT the confirm CTA)', async () => {
+  describe('Peek succeeds (login purpose — Story 9-16)', () => {
+    it('renders the sign-in Confirm card (with the confirm CTA) for purpose=login', async () => {
       mockPeekMagicLink.mockResolvedValueOnce({
         tokenId: 'tid-5',
         purpose: 'login',
@@ -174,13 +194,67 @@ describe('MagicLinkLandingPage (Story 9-12 MR-8)', () => {
       renderAt({ token: 'tok-login', purpose: 'login' });
 
       await waitFor(() => {
-        expect(screen.getByTestId('magic-link-login-deferred')).toBeInTheDocument();
+        expect(screen.getByTestId('magic-link-login-confirm')).toBeInTheDocument();
       });
-      expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
-      expect(screen.getByTestId('magic-link-login-email')).toHaveTextContent(
-        'existing@example.com',
-      );
-      expect(screen.queryByTestId('magic-link-confirm-button')).not.toBeInTheDocument();
+      expect(screen.getByText(/Continue signing in/i)).toBeInTheDocument();
+      expect(screen.getByTestId('magic-link-login-email')).toHaveTextContent('existing@example.com');
+      // The confirm CTA is now PRESENT (was absent in the deferred-notice era).
+      expect(screen.getByTestId('magic-link-confirm-button')).toBeInTheDocument();
+    });
+
+    it('Confirm click → POSTs /auth/magic/login → mounts session → redirects to /dashboard', async () => {
+      mockPeekMagicLink.mockResolvedValueOnce({
+        tokenId: 'tid-6',
+        purpose: 'login',
+        email: 'existing@example.com',
+        userId: 'user-1',
+        respondentId: null,
+        requiresConsume: true,
+      });
+      mockLoginByMagicLink.mockResolvedValueOnce({
+        accessToken: 'access-1',
+        user: { id: 'user-1', email: 'existing@example.com', role: 'public_user' },
+        expiresIn: 900,
+      });
+
+      renderAt({ token: 'tok-login', purpose: 'login' });
+      await waitFor(() => expect(screen.getByTestId('magic-link-confirm-button')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByTestId('magic-link-confirm-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('redirected-dashboard')).toBeInTheDocument();
+      });
+      expect(mockLoginByMagicLink).toHaveBeenCalledWith({ token: 'tok-login', rememberMe: false });
+      expect(mockLoginWithMagicLink).toHaveBeenCalled();
+    });
+
+    it('Confirm click → MFA-required response → navigates to /auth/mfa-challenge with the token', async () => {
+      mockPeekMagicLink.mockResolvedValueOnce({
+        tokenId: 'tid-7',
+        purpose: 'login',
+        email: 'mfa@example.com',
+        userId: 'user-2',
+        respondentId: null,
+        requiresConsume: true,
+      });
+      mockLoginByMagicLink.mockResolvedValueOnce({
+        requiresMfa: true,
+        mfaChallengeToken: 'challenge-abc',
+        expiresIn: 300,
+      });
+
+      renderAt({ token: 'tok-mfa', purpose: 'login' });
+      await waitFor(() => expect(screen.getByTestId('magic-link-confirm-button')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByTestId('magic-link-confirm-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('redirected-mfa-challenge')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('redirected-mfa-challenge')).toHaveTextContent('challenge-abc');
+      // MFA path must NOT mount a session.
+      expect(mockLoginWithMagicLink).not.toHaveBeenCalled();
     });
   });
 

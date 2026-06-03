@@ -143,6 +143,11 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   // magicLinkRateLimit so a brute-force consumer can't iterate tokens at
   // line-rate. Token entropy (32 bytes) is the primary control.
   { method: 'POST', path: '/magic/consume', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
+  // Story 9-16 — magic-link login (consume + session issuance). Reuses
+  // magicLinkRateLimit; like /magic/consume the body carries no email, so it
+  // keys per-IP (3/hour combined bucket), NOT per-email. Token entropy (32
+  // bytes) is the primary control; the IP cap is a secondary throttle.
+  { method: 'POST', path: '/magic/login', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
 
   // Story 9-12 AC#7 — SMS OTP infra-only endpoints. Both gated by
   // `auth.sms_otp_enabled` system_setting (default false → 503 on every

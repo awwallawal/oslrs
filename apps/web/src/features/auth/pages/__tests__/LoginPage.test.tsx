@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
+
+// Story 9-16 — stub the magic-link request fetcher used by the entry-point.
+const { mockRequestLoginMagicLink } = vi.hoisted(() => ({
+  mockRequestLoginMagicLink: vi.fn(),
+}));
+vi.mock('../../api/magic-link.api', () => ({
+  requestLoginMagicLink: (...args: unknown[]) => mockRequestLoginMagicLink(...args),
+}));
 
 import LoginPage from '../LoginPage';
 import { AuthProvider } from '../../context/AuthContext';
@@ -155,5 +164,38 @@ describe('LoginPage', () => {
     });
     expect(screen.queryByTestId('login-page-cutover-banner')).toBeNull();
     expect(screen.queryByTestId('login-page-existing-user-header')).toBeNull();
+  });
+
+  // Story 9-16 — magic-link sign-in entry-point (public-only).
+  it('renders the "Send me a sign-in link" entry-point on public login', async () => {
+    renderWithProviders(<LoginPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('magic-link-entry-point')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('magic-link-reveal-button')).toHaveTextContent(/send me a sign-in link/i);
+  });
+
+  it('does NOT render the magic-link entry-point on staff login', async () => {
+    renderWithProviders(<LoginPage type="staff" />);
+    await waitFor(() => {
+      expect(screen.getByText('Staff Login')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('magic-link-entry-point')).toBeNull();
+  });
+
+  it('submits a login-purpose magic-link request and shows the generic confirmation', async () => {
+    mockRequestLoginMagicLink.mockResolvedValueOnce(undefined);
+    renderWithProviders(<LoginPage />);
+    await waitFor(() => expect(screen.getByTestId('magic-link-reveal-button')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId('magic-link-reveal-button'));
+    await userEvent.type(screen.getByTestId('magic-link-email-input'), 'returning@example.com');
+    await userEvent.click(screen.getByTestId('magic-link-submit-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('magic-link-sent-message')).toBeInTheDocument();
+    });
+    expect(mockRequestLoginMagicLink).toHaveBeenCalledWith({ email: 'returning@example.com' });
+    expect(screen.getByTestId('magic-link-sent-message')).toHaveTextContent(/if your account exists/i);
   });
 });

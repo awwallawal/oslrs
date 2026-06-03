@@ -21,12 +21,14 @@ const {
   mockRedeemToken,
   mockSendMagicLinkEmail,
   mockLogAction,
+  mockLoginByMagicLink,
 } = vi.hoisted(() => ({
   mockIssueToken: vi.fn(),
   mockPeekToken: vi.fn(),
   mockRedeemToken: vi.fn(),
   mockSendMagicLinkEmail: vi.fn(),
   mockLogAction: vi.fn(),
+  mockLoginByMagicLink: vi.fn(),
 }));
 
 // ── Middleware: pass-through ─────────────────────────────────────────────
@@ -113,6 +115,13 @@ vi.mock('../../services/audit.service.js', () => ({
     MAGIC_LINK_ISSUED: 'magic_link.issued',
     MAGIC_LINK_REDEEMED: 'magic_link.redeemed',
   },
+}));
+
+// Story 9-16 — the magic-link controller now calls AuthService for the
+// /magic/login endpoint. Stub it so the route test stays isolated from the
+// real session/token/db machinery.
+vi.mock('../../services/auth.service.js', () => ({
+  AuthService: { loginByMagicLinkToken: mockLoginByMagicLink },
 }));
 
 const { default: router } = await import('../auth.routes.js');
@@ -307,5 +316,75 @@ describe('POST /api/v1/auth/magic/consume (CONSUME, C1)', () => {
       .send({ token: 'already-used-token', purpose: 'login' });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('MAGIC_LINK_ALREADY_USED');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// POST /api/v1/auth/magic/login — CONSUME + SESSION ISSUANCE (Story 9-16)
+// ────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/auth/magic/login (Story 9-16)', () => {
+  it('returns 400 MAGIC_LINK_INVALID on malformed body (Zod failure)', async () => {
+    const res = await request(buildApp())
+      .post('/api/v1/auth/magic/login')
+      .send({ token: 'short' /* missing purpose */ });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('MAGIC_LINK_INVALID');
+    expect(mockLoginByMagicLink).not.toHaveBeenCalled();
+  });
+
+  it('passes through a MAGIC_LINK_* error from the service (e.g. already used)', async () => {
+    const { AppError } = await import('@oslsr/utils');
+    mockLoginByMagicLink.mockRejectedValueOnce(
+      new AppError('MAGIC_LINK_ALREADY_USED', 'This magic link has already been used', 400),
+    );
+    const res = await request(buildApp())
+      .post('/api/v1/auth/magic/login')
+      .send({ token: 'already-used-token', purpose: 'login' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('MAGIC_LINK_ALREADY_USED');
+  });
+
+  it('happy path: sets the refresh-token cookie + returns the access token (never the refresh token in body)', async () => {
+    mockLoginByMagicLink.mockResolvedValueOnce({
+      accessToken: 'access-jwt-123',
+      user: { id: 'user-1', email: 'returning@example.com', role: 'public_user' },
+      expiresIn: 900,
+      refreshToken: 'refresh-secret-do-not-leak',
+      sessionId: 'sess-1',
+    });
+
+    const res = await request(buildApp())
+      .post('/api/v1/auth/magic/login')
+      .send({ token: 'valid-login-token', purpose: 'login', rememberMe: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ accessToken: 'access-jwt-123', expiresIn: 900 });
+    // Refresh token lives ONLY in the httpOnly cookie, never the body.
+    expect(JSON.stringify(res.body)).not.toContain('refresh-secret-do-not-leak');
+    const setCookie = res.headers['set-cookie'];
+    expect(setCookie).toBeDefined();
+    expect(String(setCookie)).toContain('refreshToken=');
+    expect(String(setCookie)).toContain('HttpOnly');
+  });
+
+  it('MFA-required: returns requiresMfa + challenge token, sets NO cookie', async () => {
+    mockLoginByMagicLink.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaChallengeToken: 'challenge-xyz',
+      expiresIn: 300,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/v1/auth/magic/login')
+      .send({ token: 'valid-login-token', purpose: 'login' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      requiresMfa: true,
+      mfaChallengeToken: 'challenge-xyz',
+      expiresIn: 300,
+    });
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 });

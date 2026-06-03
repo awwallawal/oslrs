@@ -35,6 +35,16 @@ export const magicLinkRateLimit = rateLimit({
   keyGenerator: (req, _res) => {
     // Primary key: lowercased email; fall back to IP if email is missing or non-string
     // (defensive — schema validation runs AFTER middleware in some Express stacks).
+    //
+    // Story 9-16 NOTE: the token-bearing endpoints that share this middleware —
+    // `POST /magic/consume` and `POST /magic/login` — carry NO `email` in their
+    // body (only `{ token, purpose, ... }`), so they ALWAYS take the IP branch.
+    // For those endpoints the effective budget is 3-per-IP-per-hour (a combined
+    // bucket under the `rl:magic-link:` prefix), NOT 3-per-email. That is by
+    // design: a single-use token with 32 bytes of entropy is the primary brute
+    // -force control; the IP cap is a secondary throttle. Only the request
+    // endpoint (`/auth/public/magic-link`, which DOES carry `email`) is keyed
+    // per-email. Shared-network tradeoff acknowledged in Story 9-16 review M1.
     const rawEmail = req.body?.email;
     if (typeof rawEmail === 'string' && rawEmail.includes('@')) {
       return rawEmail.toLowerCase().trim();

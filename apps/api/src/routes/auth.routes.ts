@@ -215,6 +215,19 @@ router.post('/magic/consume',
   MagicLinkController.consumeMagicLink
 );
 
+// POST /api/v1/auth/magic/login — body { token, purpose: 'login', rememberMe? }
+// Story 9-16 — consume a login-purpose token AND issue a session (sets the
+// refresh-token cookie, returns the access token). Reuses magicLinkRateLimit;
+// because the body carries no `email`, this endpoint keys per-IP at 3/hour
+// (combined bucket shared with /magic/consume — see the keyGenerator note in
+// middleware/magic-link-rate-limit.ts). Single-use 32-byte token entropy is the
+// primary control. MFA-aware (returns requiresMfa when the account is
+// MFA-enrolled). PUBLIC-ONLY (the service rejects staff roles).
+router.post('/magic/login',
+  magicLinkRateLimit,
+  MagicLinkController.loginByMagicLink
+);
+
 // ---------------------------------------------------------------------------
 // Story 9-12 AC#7 — SMS OTP infra-only / feature-flagged off by default.
 // Both endpoints short-circuit with 503 SMS_OTP_DISABLED when

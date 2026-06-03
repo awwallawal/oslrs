@@ -1,6 +1,6 @@
 # Story 9.16: Public-User Magic-Link Sign-In (login-purpose JWT issuance)
 
-Status: ready-for-dev
+Status: review
 
 <!--
 Authored 2026-05-11 by Bob (SM) via canonical *create-story --yolo workflow.
@@ -50,7 +50,7 @@ So that **I can access my dashboard from any device without having to remember a
    - **Forward-compat: does NOT check `passwordHash IS NOT NULL`** — Story 9-12 wizard is forward-compat with passwordless public_users; magic-link must work for those accounts too. (`loginPublic` rejects null `passwordHash` at line 513-515 because it tries to bcrypt-compare; magic-link login skips that path entirely since it doesn't compare a password.)
    - Returns the same `LoginResponse & { refreshToken, sessionId } | { requiresMfa: true, mfaChallengeToken, expiresIn }` discriminated-union shape as `loginStaff` / `loginPublic` after `createLoginSession` runs (see [Source: apps/api/src/services/auth.service.ts:22-24, 561-621] for the type + the createLoginSession helper).
 
-3. **AC#3 — Backend route `POST /api/v1/auth/magic/login`.** New endpoint mounted in `apps/api/src/routes/auth.routes.ts` between the existing `POST /magic/consume` (added in 9-12 MR-8) and the SMS-OTP routes. Wraps `magicLinkRateLimit` middleware (3/email/hour shared with the magic-link request endpoint — see [Source: apps/api/src/middleware/magic-link-rate-limit.ts]). Body: `{ token: string, purpose: 'login', rememberMe?: boolean }`. Validation via a new Zod schema in `magic-link.controller.ts` (mirroring `redeemMagicLinkQuerySchema` shape at [Source: apps/api/src/controllers/magic-link.controller.ts:35-38] + `rememberMe` optional). New controller method `MagicLinkController.loginByMagicLink` (NOT `consumeMagicLink` — keep them separate so the `/magic/consume` endpoint stays single-purpose for the wizard/pending-NIN flow). On success: sets the `refreshToken` httpOnly cookie via the existing `REFRESH_TOKEN_COOKIE_NAME` + `COOKIE_OPTIONS` constants at [Source: apps/api/src/controllers/auth.controller.ts:25-31], returns `{ accessToken, user, expiresIn }` in the response body (NEVER the refresh token in the body — matches `staffLogin`/`publicLogin` discipline at [Source: apps/api/src/controllers/auth.controller.ts:152-164, 197-209]). On `requiresMfa: true`: returns `{ requiresMfa: true, mfaChallengeToken, expiresIn }` with status 200 (matches existing pattern at [Source: apps/api/src/controllers/auth.controller.ts:136-145]).
+3. **AC#3 — Backend route `POST /api/v1/auth/magic/login`.** New endpoint mounted in `apps/api/src/routes/auth.routes.ts` between the existing `POST /magic/consume` (added in 9-12 MR-8) and the SMS-OTP routes. Wraps `magicLinkRateLimit` middleware (see [Source: apps/api/src/middleware/magic-link-rate-limit.ts]). **[Code-review M1 correction 2026-06-03]** the original "3/email/hour" wording was inaccurate for this endpoint: the body carries no `email`, so the limiter keys per-IP at 3/hour (a combined bucket shared with `/magic/consume`), NOT per-email. Single-use 32-byte token entropy is the primary control; the per-IP cap is a secondary throttle (shared-network tradeoff acknowledged). Body: `{ token: string, purpose: 'login', rememberMe?: boolean }`. Validation via a new Zod schema in `magic-link.controller.ts` (mirroring `redeemMagicLinkQuerySchema` shape at [Source: apps/api/src/controllers/magic-link.controller.ts:35-38] + `rememberMe` optional). New controller method `MagicLinkController.loginByMagicLink` (NOT `consumeMagicLink` — keep them separate so the `/magic/consume` endpoint stays single-purpose for the wizard/pending-NIN flow). On success: sets the `refreshToken` httpOnly cookie via the existing `REFRESH_TOKEN_COOKIE_NAME` + `COOKIE_OPTIONS` constants at [Source: apps/api/src/controllers/auth.controller.ts:25-31], returns `{ accessToken, user, expiresIn }` in the response body (NEVER the refresh token in the body — matches `staffLogin`/`publicLogin` discipline at [Source: apps/api/src/controllers/auth.controller.ts:152-164, 197-209]). On `requiresMfa: true`: returns `{ requiresMfa: true, mfaChallengeToken, expiresIn }` with status 200 (matches existing pattern at [Source: apps/api/src/controllers/auth.controller.ts:136-145]).
 
 4. **AC#4 — Frontend `MagicLinkLandingPage` login branch fully wired.** Replace the "Magic-link sign-in coming soon" notice block in `apps/web/src/features/auth/pages/MagicLinkLandingPage.tsx` (currently at lines 152-176; see also the `PURPOSE_COPY.login` entry at lines 39-44 which has empty `body`/`cta`) with a real Confirm flow:
    - On peek success for `purpose='login'`: render a Confirm card with title "Continue signing in", body "Click Continue to sign in as user@example.com on this device.", CTA "Continue to sign-in".
@@ -72,71 +72,60 @@ So that **I can access my dashboard from any device without having to remember a
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Write failing tests for the new service method (AC: #2, #5, #7)** _(red half of red-green-refactor)_
-  - [ ] 1.1 In `apps/api/src/services/__tests__/auth.service.test.ts`, add a new `describe('loginByMagicLinkToken', ...)` block with 7 tests. Mock `MagicLinkService.consumeToken` + `MfaService.mintChallengeToken` + `SessionService.createSession` + `TokenService.generateAccessToken` + `TokenService.generateRefreshToken` + db (mirror the existing `loginPublic` test setup in the same file for the mock shape). Cases enumerated in AC#7 bullet 1.
-  - [ ] 1.2 Run `pnpm vitest run apps/api/src/services/__tests__/auth.service.test.ts` — confirm the 7 new tests FAIL (the method doesn't exist yet). Existing `loginPublic` + `loginStaff` tests stay GREEN.
+- [x] **Task 1 — Write failing tests for the new service method (AC: #2, #5, #7)** _(red half of red-green-refactor)_
+  - [x] 1.1 In `apps/api/src/services/__tests__/auth.service.test.ts`, add a new `describe('loginByMagicLinkToken', ...)` block. **NOTE: there was NO existing `loginPublic` test in this file to mirror — it only tested `decodeBase64Image`. Built the mock setup from scratch:** mock `../magic-link.service.js` (`consumeToken`), `../mfa.service.js` (`mintChallengeToken`), and `../../db/index.js` (`db.query.users.findFirst`); the happy-path spies the private `createLoginSession` so Redis/JWT are never touched. Wrote **9 tests** (7 from AC#7 + a forward-compat passwordless-user test + a consume-error passthrough test).
+  - [x] 1.2 Ran the file — confirmed the new tests fail before impl, then pass after (red→green).
 
-- [ ] **Task 2 — Implement `AuthService.loginByMagicLinkToken` (AC: #2, #5)** _(green half — Task 1 tests pass)_
-  - [ ] 2.1 Add the method to `apps/api/src/services/auth.service.ts` directly below `loginPublic` (around line 555). Signature per AC#2.
-  - [ ] 2.2 Body: call `MagicLinkService.consumeToken({ plaintext, purpose: 'login' })` first — this enforces single-use atomically AND throws `MAGIC_LINK_*` 400s for invalid/expired/used tokens. The `await` of this is the FIRST async operation, so a thrown error from here is the response shape.
-  - [ ] 2.3 Look up user by `peeked.email` (the consume return shape includes the canonical email). Apply the 4-step account-state gate per AC#2 in the EXACT order specified — order matters for the anti-enumeration discipline (user-not-found check first to keep the timing profile similar to `loginPublic`'s; verify against the existing pattern).
-  - [ ] 2.4 MFA check per AC#5 — if `user.mfaEnabled`, mint a challenge token via `MfaService.mintChallengeToken({ userId: user.id, email: user.email })` and return the `requiresMfa: true` branch.
-  - [ ] 2.5 Else, call `createLoginSession(user, rememberMe ?? false, ipAddress, userAgent)` (the existing private helper at line 561) and return its result.
-  - [ ] 2.6 Audit-log via `AuditService.logAction({ action: AUDIT_ACTIONS.AUTH_LOGIN, actorId: user.id, targetResource: 'users', targetId: user.id, details: { trigger: 'magic_link', loginType: 'public' } })` — note the `trigger` detail so the Story 9-11 audit-log viewer can filter password vs magic-link logins.
-  - [ ] 2.7 Run `pnpm vitest run apps/api/src/services/__tests__/auth.service.test.ts` — all 7 new tests pass, existing tests still pass.
+- [x] **Task 2 — Implement `AuthService.loginByMagicLinkToken` (AC: #2, #5)** _(green half — Task 1 tests pass)_
+  - [x] 2.1 Added the method to `apps/api/src/services/auth.service.ts` directly below `loginPublic`. Signature: `({ plaintext, rememberMe?, ipAddress?, userAgent? })`. Added `MagicLinkLoginResult` + `LoginTrigger` exported types.
+  - [x] 2.2 Body calls `MagicLinkService.consumeToken({ plaintext, purpose: 'login' })` FIRST — atomic single-use + throws `MAGIC_LINK_*` 400s before any user lookup.
+  - [x] 2.3 Looks up user by `consumed.email`; applies the 4-step gate in the EXACT order (not-found 401 → locked 429 → suspended/deactivated 403 → non-public-role 401). Forward-compat: NO `passwordHash IS NOT NULL` gate.
+  - [x] 2.4 MFA branch via `MfaService.mintChallengeToken({ userId, email, rememberMe })` (passes `rememberMe` so the post-MFA session preserves the choice) → returns `requiresMfa: true` branch.
+  - [x] 2.5 Else calls `createLoginSession(user, rememberMe, ipAddress, userAgent, 'magic_link')`.
+  - [x] 2.6 **Audit: DEVIATION FROM LITERAL WORDING (reviewer-friendly).** `createLoginSession` ALREADY emits the canonical `auth.login_success` audit entry for every login. Rather than emit a SECOND `AUDIT_ACTIONS.AUTH_LOGIN` entry (double-logging one login event — a smell given the project's audit-pattern-unification discipline, Stories 9-33/34/36/37), the `trigger: 'password' | 'magic_link'` marker is threaded into the existing single entry's `details`. The Story 9-11 viewer still filters magic-link logins via `details.trigger`. Intent of AC#2.6 fully met with one clean entry per login.
+  - [x] 2.7 Ran the service test — 9 new pass, existing `decodeBase64Image` tests still pass.
 
-- [ ] **Task 3 — Write failing supertests for the new route (AC: #3, #7)**
-  - [ ] 3.1 In `apps/api/src/routes/__tests__/magic-link.routes.test.ts`, extend the file with a new `describe('POST /api/v1/auth/magic/login', ...)` block. Mock `AuthService.loginByMagicLinkToken` (add `mockLoginByMagicLink: vi.fn()` to the hoisted bag + the `vi.mock` of auth.service.js — note the test currently stubs AuthController not AuthService, so this means EXTENDING the auth.service.js mock; if no current mock exists, ADD one carefully so it doesn't break the magic-link or sms-otp test files in the same router). Tests per AC#7 bullet 2.
-  - [ ] 3.2 Verify the 4 new tests FAIL (route doesn't exist), existing 12 magic-link tests + 8 sms-otp tests in adjacent files all GREEN.
+- [x] **Task 3 — Write failing supertests for the new route (AC: #3, #7)**
+  - [x] 3.1 Extended `apps/api/src/routes/__tests__/magic-link.routes.test.ts`: added `mockLoginByMagicLink` to the hoisted bag + a NEW `vi.mock('../../services/auth.service.js', ...)` (the controller now imports AuthService directly). Added a `describe('POST /api/v1/auth/magic/login', ...)` block with **4 tests**.
+  - [x] 3.2 Confirmed the new tests fail before the route exists, then pass. The adjacent `sms-otp.routes.test.ts` MagicLinkController stub also needed `loginByMagicLink: vi.fn()` added (it mounts the real auth.routes) — fixed.
 
-- [ ] **Task 4 — Implement the new route + controller method (AC: #3)** _(green half)_
-  - [ ] 4.1 Add a new Zod schema `loginByMagicLinkSchema = z.object({ token: z.string().min(8), purpose: z.literal('login'), rememberMe: z.boolean().optional() })` in `apps/api/src/controllers/magic-link.controller.ts` (near the existing `redeemMagicLinkQuerySchema` at line 35-38).
-  - [ ] 4.2 Add a new controller method `MagicLinkController.loginByMagicLink(req, res, next)` after the existing `consumeMagicLink` at line 169-208. Validate via Zod (generic 400 INVALID_INPUT on failure per anti-enumeration discipline established by 9-12 L4 fix). Extract `token` + `rememberMe ?? false` + `ipAddress = req.ip` + `userAgent = req.get('user-agent')`. Call `AuthService.loginByMagicLinkToken({ plaintext: token, rememberMe, ipAddress, userAgent })`.
-  - [ ] 4.3 Branch on the discriminated union return:
-    - `'requiresMfa' in result && result.requiresMfa === true` → `res.status(200).json({ data: { requiresMfa: true, mfaChallengeToken: result.mfaChallengeToken, expiresIn: result.expiresIn } })`.
-    - Else → set the `refreshToken` httpOnly cookie via the existing `REFRESH_TOKEN_COOKIE_NAME` + `COOKIE_OPTIONS` constants (import them from `auth.controller.ts` OR redeclare with shared pattern; cleanest: factor them into a small `lib/cookie-config.ts` shared file IF this is the second consumer — verify current usage first). Set `maxAge` per the existing `refreshCookieMaxAge` ternary at [Source: apps/api/src/controllers/auth.controller.ts:148-150]. Return `{ data: { accessToken, user, expiresIn } }` (NEVER the refresh token in the body).
-  - [ ] 4.4 In `apps/api/src/routes/auth.routes.ts`, mount the new route between line 228 (the closing `}` of `POST /magic/consume`) and the SMS OTP section header at line 230-234. Pattern:
-    ```ts
-    router.post('/magic/login',
-      magicLinkRateLimit,
-      MagicLinkController.loginByMagicLink
-    );
-    ```
-  - [ ] 4.5 In `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts`, add a new entry for the new route in the `AUTH_RATE_LIMIT_COVERAGE` array (around line 144 where the `/magic/consume` entry lives — keep them adjacent for grep-ability):
-    ```ts
-    { method: 'POST', path: '/magic/login', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
-    ```
-  - [ ] 4.6 Run `pnpm vitest run apps/api/src/routes/__tests__/magic-link.routes.test.ts apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` — all green.
+- [x] **Task 4 — Implement the new route + controller method (AC: #3)** _(green half)_
+  - [x] 4.1 Added `loginByMagicLinkSchema = z.object({ token: z.string().min(8), purpose: z.literal('login'), rememberMe: z.boolean().optional() })` in `magic-link.controller.ts`.
+  - [x] 4.2 Added `MagicLinkController.loginByMagicLink` after `consumeMagicLink`. Zod failure → **`MAGIC_LINK_INVALID` 400** (chosen over `INVALID_INPUT` for consistency with the sibling magic-link endpoints in the same controller — both `redeemMagicLink` + `consumeMagicLink` already use this generic code). Extracts token + rememberMe + ip + user-agent; calls `AuthService.loginByMagicLinkToken`.
+  - [x] 4.3 Branches on the union. **Cookie config refactor (Risk #6 resolved):** extracted `REFRESH_TOKEN_COOKIE_NAME` + `COOKIE_OPTIONS` + a new `refreshCookieMaxAge(rememberMe)` helper into `apps/api/src/lib/cookie-config.ts` (this controller is the SECOND consumer, per the story's "cleanest path"); `auth.controller.ts` now imports from there too and its two inline ternaries were deduped.
+  - [x] 4.4 Mounted `POST /magic/login` between `/magic/consume` and the SMS-OTP section in `auth.routes.ts`, wrapped in `magicLinkRateLimit`.
+  - [x] 4.5 Added the `/magic/login` entry to `AUTH_RATE_LIMIT_COVERAGE` in `rate-limit-coverage.test.ts`.
+  - [x] 4.6 Ran the route + coverage tests — all green.
 
-- [ ] **Task 5 — Frontend magic-link API extensions (AC: #1, #4)**
-  - [ ] 5.1 In `apps/web/src/features/auth/api/magic-link.api.ts`, add a new `requestLoginMagicLink({ email })` function that POSTs `/auth/public/magic-link` with `{ email, purpose: 'login' }` (the email entry-point on /login uses this — separate from the existing `/wizard_resume` and `/pending_nin_complete` paths the wizard uses).
-  - [ ] 5.2 In the same file, add a new `loginByMagicLink({ token, rememberMe })` function that POSTs `/auth/magic/login` with `{ token, purpose: 'login', rememberMe }`. Returns the discriminated union shape: `{ requiresMfa: true, mfaChallengeToken, expiresIn } | { accessToken, user, expiresIn }`.
+- [x] **Task 5 — Frontend magic-link API extensions (AC: #1, #4)**
+  - [x] 5.1 Added `requestLoginMagicLink({ email })` → POSTs `/auth/public/magic-link` with `{ email, purpose: 'login' }`.
+  - [x] 5.2 Added `loginByMagicLink({ token, rememberMe })` → POSTs `/auth/magic/login`. **Uses `credentials: 'include'`** (apiClient omits it by default — required so the browser stores the httpOnly refresh cookie). Returns the discriminated union; added `MagicLinkLoginResult` type + `isMagicLinkMfaRequired` type-guard.
 
-- [ ] **Task 6 — `MagicLinkLandingPage` login-branch wiring (AC: #4, #5, #7)**
-  - [ ] 6.1 In `apps/web/src/features/auth/pages/MagicLinkLandingPage.tsx`, replace the empty `PURPOSE_COPY.login` entry (lines 39-44) with `{ title: 'Continue signing in', body: 'Click Continue to sign in as <email> on this device.', cta: 'Continue to sign-in' }`. (Email interpolation happens at render time via `peeked.email`.)
-  - [ ] 6.2 Replace the `if (purpose === 'login') { return <CenteredCard testId="magic-link-login-deferred">...` block (currently at lines 152-176) with a Confirm card that on click calls `loginByMagicLink({ token, rememberMe: false })`. State machine: `idle | confirming | error`. Error branches per AC#4 bullet 5.
-  - [ ] 6.3 On successful response without `requiresMfa`: integrate with the existing AuthProvider. Read the current LoginPage/LoginForm integration to identify the canonical path — preferred order: (a) the AuthProvider exposes a `setSession({ accessToken, user })` setter; (b) else a custom `useLogin().mutate` is invoked with synthetic args; (c) else call the lib/api-client's auth-state-store directly if one exists. Whichever path matches, use it. Then `navigate('/dashboard', { replace: true })`.
-  - [ ] 6.4 On `requiresMfa: true` response: `navigate('/mfa-challenge', { replace: true, state: { mfaChallengeToken: result.mfaChallengeToken } })` — mirroring whatever `LoginForm.tsx` already does for the public-mode MFA branch (verify exact shape; if the staff variant uses a different state key, match the public-variant key for consistency with the MFA challenge page's expectations).
-  - [ ] 6.5 Extend `apps/web/src/features/auth/pages/__tests__/MagicLinkLandingPage.test.tsx` with the 3 new login-branch tests per AC#7 bullet 3. Replace the existing "renders the deferred-login notice" test (test name `'renders the deferred-login notice (NOT the confirm CTA)'`) — keep the assertion that `magic-link-confirm-button` IS now in the document for login; remove the previous "NOT in document" assertion.
+- [x] **Task 6 — `MagicLinkLandingPage` login-branch wiring (AC: #4, #5, #7)**
+  - [x] 6.1 Updated `PURPOSE_COPY.login` → `{ title: 'Continue signing in', body: 'Click Continue to sign in on this device.', cta: 'Continue to sign-in' }` (email rendered separately via `peeked.email`).
+  - [x] 6.2 Replaced the deferred-notice block with a Confirm card (`isSigningIn` / `loginError` state) that calls `loginByMagicLink({ token, rememberMe: false })`. Error branches via new `loginFriendlyErrorCopy` (handles `AUTH_INVALID_CREDENTIALS` / `AUTH_ACCOUNT_LOCKED` / `AUTH_ACCOUNT_SUSPENDED` + delegates MAGIC_LINK_* / NETWORK_ERROR to the shared `friendlyErrorCopy`).
+  - [x] 6.3 Session integration: added a new `loginWithMagicLink(response, rememberMe)` method to `AuthContext` (mirrors `loginWithGoogle`/`completeStaffLoginAfterMfa` — the canonical "mount a session from a LoginResponse" path). On success → `navigate('/dashboard', { replace: true })`.
+  - [x] 6.4 On `requiresMfa: true` → `navigate('/auth/mfa-challenge', { replace: true, state: { mfaChallengeToken, expiresIn, rememberMe: false, redirectTo: '/dashboard' } })` — matches the EXACT state shape `useLogin.ts` + `MfaChallengePage.tsx` use (route is `/auth/mfa-challenge`, not `/mfa-challenge`).
+  - [x] 6.5 Replaced the deferred-notice test with **3 login-branch tests** (Confirm card renders with CTA; Confirm → /dashboard on success; Confirm → /auth/mfa-challenge on MFA). Mock now exposes `loginByMagicLink` + `isMagicLinkMfaRequired` + a `useAuth` stub.
 
-- [ ] **Task 7 — `LoginPage` magic-link entry-point (AC: #1, #7)**
-  - [ ] 7.1 In `apps/web/src/features/auth/pages/LoginPage.tsx`, on `type='public'`, add a new `<section data-testid="magic-link-entry-point">` below the existing `LoginForm` rendering. Header text: "Or sign in with a magic link". Body: a small `<button>` "Send me a sign-in link" that on click reveals an inline email input + submit button. On submit, call `requestLoginMagicLink({ email })` and ALWAYS show the generic "If your account exists, we've sent a sign-in link to that address. Check your inbox." message regardless of the API response (anti-enumeration).
-  - [ ] 7.2 NEVER render this section on `type='staff'` (`StaffLoginPage` is untouched — but `LoginPage` is shared and branches on the `type` prop per its Story 9-12 Task 8 cutover-banner pattern; verify the prop shape).
-  - [ ] 7.3 Extend `apps/web/src/features/auth/pages/__tests__/LoginPage.test.tsx` with the 3 new tests per AC#7 bullet 4.
+- [x] **Task 7 — `LoginPage` magic-link entry-point (AC: #1, #7)**
+  - [x] 7.1 Added a `MagicLinkSignInEntry` component (in `LoginPage.tsx`): `data-testid="magic-link-entry-point"`, "Send me a sign-in link" reveal → email input + submit → `requestLoginMagicLink({ email })` → ALWAYS shows the generic "If your account exists…" message (anti-enumeration; API errors swallowed).
+  - [x] 7.2 Rendered only on `type='public'` (staff login untouched).
+  - [x] 7.3 Added **3 LoginPage tests** (CTA present on public; absent on staff; submit calls the fetcher with `{ email }` + shows the generic message).
 
-- [ ] **Task 8 — ADR-015 amendment flag (AC: #6)**
-  - [ ] 8.1 In `_bmad-output/planning-artifacts/architecture.md` around line 2713 (where ADR-015 lives — see [Source: _bmad-output/planning-artifacts/architecture.md:2713]), add an Amendment-Needed note after the current rewritten ADR-015 body but BEFORE the Superseded section: "🏗️ AMENDMENT PROPOSED 2026-05-11 by Story 9-16 (magic-link login wiring) — magic-link login is now SUPPORTED as a passwordless public-user channel alongside email+password. Single-use, 15-min TTL, MFA-aware, anti-enumeration on request, shared rate-limit with password-reset budget per NFR4.4. Winston to author the full amendment when picking up the architecture follow-up; this story does NOT block on the amendment text."
-  - [ ] 8.2 Do NOT modify the ADR's body or its "Decision" section — those changes belong to Winston. This task ONLY adds the flag line for Winston's followup queue.
+- [x] **Task 8 — ADR-015 amendment flag (AC: #6)**
+  - [x] 8.1 Added the `🏗️ AMENDMENT PROPOSED 2026-06-03 by Story 9-16` note in `architecture.md`, after the ADR-015 cross-references block and BEFORE the "Superseded — Original ADR-015" section. Captures all design constraints (single-use, 15-min TTL, MFA-aware, anti-enumeration, shared rate-limit, forward-compat, audit `trigger`) for Winston.
+  - [x] 8.2 Did NOT touch the ADR Decision body — flag line only.
 
-- [ ] **Task 9 — Sprint-status flip + full regression sweep (AC: #7)**
-  - [ ] 9.1 In `_bmad-output/implementation-artifacts/sprint-status.yaml`, locate the `9-16-magic-link-login: ready-for-dev` line (added by this story's authoring commit). After implementation completes, flip it to `in-progress` at start-of-work, then `review` at PR, then `done` at merge (canonical lifecycle).
-  - [ ] 9.2 Run the full pre-commit regression: `cd apps/api && pnpm tsc --noEmit && pnpm exec eslint src --max-warnings=0 && pnpm exec vitest run` — must show **zero new failures** vs the 5 pre-existing DB-constraint failures + 7 skipped baseline; **+~14 net new tests** (7 auth.service + 4 magic-link.routes + 3 MagicLinkLandingPage); rate-limit-coverage map test must still pass with the new `/magic/login` entry.
-  - [ ] 9.3 `cd apps/web && pnpm exec tsc --noEmit && pnpm exec vitest run` — must show zero failures; net new tests +6 (3 MagicLinkLandingPage + 3 LoginPage); no test deletions.
-  - [ ] 9.4 Run a focused smoke through the 3 existing magic-link flows to verify zero regression: (a) request → wizard_resume link → click → /register hydrates; (b) request → pending_nin_complete link → click → /register/complete-nin handles save; (c) request → login link → click → MagicLinkLandingPage Confirm → /dashboard. Capture in Dev Notes / Completion Notes for review-pass evidence.
+- [x] **Task 9 — Sprint-status flip + full regression sweep (AC: #7)**
+  - [x] 9.1 Flipped `9-16-magic-link-login` → `in-progress` at start; → `review` at completion (below).
+  - [x] 9.2 API: `pnpm tsc --noEmit` clean, `eslint src --max-warnings=0` clean, full `vitest run` = **2315 passed / 7 skipped / 0 failed** (163 files). NOTE: the "5 pre-existing DB-constraint failures" mentioned in the story baseline are NO LONGER present (test DB is in sync). Net new API tests: +9 auth.service, +4 magic-link.routes (+ rate-limit-coverage map entry, + sms-otp stub fix).
+  - [x] 9.3 Web: `tsc --noEmit` clean, `eslint src --max-warnings=0` clean, full `vitest run` = **2480 passed / 2 todo / 0 failed** (228 files). Net new web tests: +3 MagicLinkLandingPage (net +2 vs the replaced deferred test) + 3 LoginPage. Also added `loginWithMagicLink: vi.fn()` to 7 pre-existing AuthContext mock objects (required field on the context value).
+  - [x] 9.4 Flow regression coverage (verified via the green test suites rather than a manual browser smoke, since this session has no interactive app): (a) `wizard_resume` → /register and (b) `pending_nin_complete` → /register/complete-nin are unchanged and still covered by the existing MagicLinkLandingPage tests; (c) `login` → Confirm → /dashboard is covered by the new login-branch tests. No behaviour drift in the two pre-existing branches.
 
-- [ ] **Task 10 — Code review (per `feedback_review_before_commit.md`)**
-  - [ ] 10.1 Run `/bmad:bmm:workflows:code-review` on the uncommitted working tree once Tasks 1-9 are green. Auto-fix all HIGH/Medium severity findings; document Low-severity deferrals in Review Follow-ups (AI) per project convention.
-  - [ ] 10.2 Only after code review passes, commit and mark status `review`.
+- [x] **Task 10 — Code review (per `feedback_review_before_commit.md`)**
+  - [x] 10.1 Ran `/bmad:bmm:workflows:code-review` on the uncommitted working tree (2026-06-03, Opus 4.8). 2 Medium + 4 Low found (0 Critical/High); ALL fixed in-session per user directive + catalogued in Review Follow-ups (AI). Targeted suites re-run green post-fix.
+  - [ ] 10.2 Only after code review passes, commit and mark status `review`. **(Operator step — review-discipline keeps commit off the agent; status stays `review` pending commit + human UAT signal.)**
 
 ## Dev Notes
 
@@ -178,7 +167,7 @@ Story 9-12 retired the legacy `/auth/public/register` flow but existing accounts
 #### Auth surface area expansion mitigations
 
 Adding a NEW auth channel widens the attack surface. Mitigations:
-1. Shared rate-limit budget per NFR4.4 (no separate quota — magic-link request endpoint already at 3/email/hour; this story's new `/auth/magic/login` endpoint reuses the same `magicLinkRateLimit` middleware so the budget is unified).
+1. Shared `magicLinkRateLimit` middleware (no separate quota). **[M1 correction]** the request endpoint (`/auth/public/magic-link`) keys per-email at 3/hour (NFR4.4 budget); the token-consume endpoints (`/magic/consume`, `/magic/login`) carry no email and key per-IP at 3/hour (combined bucket). The "unified per-email budget" framing was wrong — for the login endpoint the IP cap is a secondary throttle behind single-use 32-byte token entropy.
 2. Single-use enforcement on every login token via the atomic UPDATE at [Source: apps/api/src/services/magic-link.service.ts:111-181].
 3. 15-min TTL on `login`-purpose tokens (intentionally shorter than `wizard_resume`'s 72h and `pending_nin_complete`'s 72h — minimises window of opportunity for a stolen email-link).
 4. MFA-aware — Story 9-13's 2-step challenge is honoured (AC#5).
@@ -197,7 +186,7 @@ Cleaner: keep `/magic/consume` single-purpose (used by `MagicLinkLandingPage` fo
 Per AC#6 + Task 8 — Winston authors the amendment. Design constraints for him:
 - Single-use enforcement on every login token (atomic UPDATE at the DB layer).
 - 15-min TTL on login-purpose tokens (shorter than wizard_resume/pending_nin_complete's 72h to minimise stolen-link window).
-- Rate-limit shared with magic-link request endpoint (3/email/hour, per NFR4.4 budget pool).
+- Rate-limit: request endpoint keyed per-email (3/hour, NFR4.4 pool); token-consume endpoints (`/magic/consume`, `/magic/login`) keyed per-IP (3/hour, combined) since their bodies carry no email — single-use token entropy is the primary control (M1 correction).
 - Anti-enumeration on request (generic 200 regardless of email match).
 - MFA-aware — Story 9-13's 2-step challenge flow is honoured for any magic-link login into an MFA-enrolled account.
 - Forward-compat with passwordless public_users (no `passwordHash IS NOT NULL` gate).
@@ -254,26 +243,81 @@ Per AC#6 + Task 8 — Winston authors the amendment. Design constraints for him:
 
 ### Agent Model Used
 
-_(Dev agent will fill in on pickup)_
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context) — dev-story workflow, 2026-06-03.
 
 ### Debug Log References
 
-_(Dev agent will fill in on pickup)_
+- API auth-route cluster (auth.service + magic-link.routes + rate-limit-coverage + sms-otp.routes): 45/45 pass.
+- Full API suite: 2315 pass / 7 skip / 0 fail (163 files).
+- Full web suite: 2480 pass / 2 todo / 0 fail (228 files).
+- One self-introduced regression caught + fixed: `sms-otp.routes.test.ts` mounts the real `auth.routes.ts`, so its `MagicLinkController` stub needed the new `loginByMagicLink: vi.fn()` (Express throws on an `undefined` route handler otherwise).
 
 ### Completion Notes List
 
-_(Dev agent will fill in on pickup)_
+- ✅ All 7 ACs implemented. New passwordless public-user auth channel layered on the Story 9-12 magic-link primitive; existing email+password login unchanged.
+- ✅ **AC#2 audit deviation (documented, reviewer-friendly):** the `trigger: 'magic_link'` marker is folded into `createLoginSession`'s existing single `auth.login_success` audit entry rather than emitting a second `AUDIT_ACTIONS.AUTH_LOGIN` entry. Avoids double-logging one login event while still letting the Story 9-11 viewer filter on `details.trigger`. Threaded as a `LoginTrigger` param (default `'password'`) so staff/public password logins are unaffected.
+- ✅ **AC#3 controller Zod-failure code:** uses `MAGIC_LINK_INVALID` 400 (consistent with the sibling `redeemMagicLink`/`consumeMagicLink` endpoints) rather than a bespoke `INVALID_INPUT`.
+- ✅ **Risk #6 resolved:** cookie config extracted to `apps/api/src/lib/cookie-config.ts` (shared by `auth.controller.ts` + `magic-link.controller.ts`); the two duplicated `refreshCookieMaxAge` ternaries in auth.controller were deduped into a helper.
+- ✅ **AC#5 MFA:** magic-link login does NOT bypass MFA — `mfaEnabled` users get the `requiresMfa` challenge branch (`mintChallengeToken` receives `rememberMe`), and the frontend routes to the existing `/auth/mfa-challenge` page with the identical router-state shape password login uses. No changes to `/login/mfa` or the MFA completion path (channel-agnostic post-step-1).
+- ✅ **Forward-compat:** `loginByMagicLinkToken` does NOT gate on a non-null `passwordHash` — a future passwordless wizard account can sign in (unit-tested).
+- ✅ **Anti-enumeration:** `/login` entry-point always shows the generic "If your account exists…" message; service returns generic `AUTH_INVALID_CREDENTIALS` on user-not-found; backend request endpoint already returns 200 regardless.
+- ✅ **credentials: 'include'** added to the frontend `loginByMagicLink` fetcher so the httpOnly refresh cookie is actually stored (apiClient omits credentials by default — a silent gap that would have broken token refresh).
+- ✅ **AC#4 session integration:** new `AuthContext.loginWithMagicLink(response, rememberMe)` method (mirrors `loginWithGoogle`/`completeStaffLoginAfterMfa`). Adding it as a required context field required updating 7 pre-existing test mock objects.
+- ✅ Quality gates: API + web tsc clean; API + web eslint `--max-warnings=0` clean; full suites green, zero regressions.
+- ☐ **Task 10 (code review) NOT yet run** — per `feedback_review_before_commit.md`, code review runs on the uncommitted tree, ideally in a SEPARATE session with a different LLM. Story flipped to `review` for that pass. No commit made.
+- Operator/Winston follow-up: ADR-015 amendment flagged (Task 8) — Winston authors the full amendment text; implementation does not block on it.
 
 ### File List
 
-_(Dev agent will fill in on pickup)_
+**New files:**
+- `apps/api/src/lib/cookie-config.ts` — shared refresh-cookie name + options + `refreshCookieMaxAge` helper.
+
+**Modified — API:**
+- `apps/api/src/services/auth.service.ts` — `loginByMagicLinkToken` method + `MagicLinkLoginResult`/`LoginTrigger` types; `createLoginSession` gains a `trigger` param folded into the audit entry; `MagicLinkService` import.
+- `apps/api/src/controllers/magic-link.controller.ts` — `loginByMagicLink` method + `loginByMagicLinkSchema`; imports `AuthService` + shared cookie-config.
+- `apps/api/src/controllers/auth.controller.ts` — consumes shared cookie-config; deduped two `refreshCookieMaxAge` ternaries.
+- `apps/api/src/routes/auth.routes.ts` — mounts `POST /magic/login`.
+
+**Modified — API tests:**
+- `apps/api/src/services/__tests__/auth.service.test.ts` — +9 `loginByMagicLinkToken` tests + mock scaffolding.
+- `apps/api/src/routes/__tests__/magic-link.routes.test.ts` — +4 `/magic/login` supertests + auth.service mock.
+- `apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts` — `/magic/login` coverage entry.
+- `apps/api/src/routes/__tests__/sms-otp.routes.test.ts` — `loginByMagicLink: vi.fn()` added to the MagicLinkController stub (real-router mount).
+
+**Modified — Web:**
+- `apps/web/src/features/auth/api/magic-link.api.ts` — `requestLoginMagicLink` + `loginByMagicLink` + `MagicLinkLoginResult`/`isMagicLinkMfaRequired`.
+- `apps/web/src/features/auth/context/AuthContext.tsx` — `loginWithMagicLink` method.
+- `apps/web/src/features/auth/pages/MagicLinkLandingPage.tsx` — login-branch Confirm flow + `loginFriendlyErrorCopy`; updated `PURPOSE_COPY.login`.
+- `apps/web/src/features/auth/pages/LoginPage.tsx` — `MagicLinkSignInEntry` entry-point (public-only).
+
+**Modified — Web tests:**
+- `apps/web/src/features/auth/pages/__tests__/MagicLinkLandingPage.test.tsx` — 3 login-branch tests (replaced the deferred-notice test).
+- `apps/web/src/features/auth/pages/__tests__/LoginPage.test.tsx` — 3 entry-point tests.
+- `apps/web/src/layouts/components/SmartCta.test.tsx`, `apps/web/src/layouts/components/MobileNav.test.tsx`, `apps/web/src/layouts/__tests__/DashboardLayout.test.tsx`, `apps/web/src/features/dashboard/__tests__/rbac-routes.test.tsx`, `apps/web/src/features/dashboard/__tests__/DashboardRedirect.test.tsx`, `apps/web/src/features/dashboard/pages/__tests__/AssessorOfficialRbac.test.tsx`, `apps/web/src/features/dashboard/pages/__tests__/PublicUserRbac.test.tsx` — added `loginWithMagicLink: vi.fn()` to the AuthContext mock objects.
+
+**Modified — Planning/tracking:**
+- `_bmad-output/planning-artifacts/architecture.md` — ADR-015 amendment-proposed flag (Task 8); rate-limit + Google-migration corrections (code-review M1/L3).
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `9-16` → `in-progress` → `review`.
+- `_bmad-output/implementation-artifacts/9-16-magic-link-login.md` — this file.
+
+**Modified — repo tooling (unrelated to 9-16, documented per code-review M2):**
+- `.gitignore` — adds `SESSION_LOG.md` (local Claude-Code session-continuity log; append-only, never committed). NOT a 9-16 deliverable; bundled in the same working tree. Documented here for File-List/git transparency rather than reverted, since the ignore rule guards against accidentally committing a local narrative log.
 
 ### Review Follow-ups (AI)
 
-_(Populated by code-review agent during/after `dev-story` execution per Task 10.)_
+**Adversarial code review — 2026-06-03 (Opus 4.8, `/bmad:bmm:workflows:code-review`, Task 10.1).** Read every File-List file + cross-referenced sources (rate-limit middleware, `loginPublic`/`loginStaff` gates, `mintChallengeToken` signature, `apiClient`). All 7 ACs verified implemented with real code + substantive tests (gate coverage, MFA-no-bypass asserted, refresh-token-never-in-body asserted, anti-enumeration asserted). No Critical/High. 2 Medium + 4 Low found; **all fixed in the same session** (user directive: create action items AND auto-fix).
+
+- [x] **[AI-Review][Medium] M1 — "3/email/hour shared budget" claim was false for `/magic/login`; it silently keys per-IP.** `magicLinkRateLimit` keys on `req.body?.email` and falls back to `req.ip`; the login (and consume) bodies carry no email, so both key per-IP at 3/hour (combined `rl:magic-link:` bucket). The per-email framing in AC#3 / mitigations §1 / Dev-Notes ADR flag / route comment / coverage comment / architecture.md was inaccurate, and the shared-IP cap risks shared-network (cybercafé) lockouts — the exact scenario the middleware's own comment warns about. **Fix:** runtime kept as per-IP (single-use 32-byte token entropy is the real control); corrected every claim to state per-IP keying + documented the tradeoff. Files: `middleware/magic-link-rate-limit.ts:35` (keyGenerator note), `routes/auth.routes.ts:218`, `middleware/__tests__/rate-limit-coverage.test.ts:146`, `architecture.md:2834`, story AC#3 + mitigations §1 + ADR-015 flag bullet.
+- [x] **[AI-Review][Medium] M2 — undocumented out-of-scope `.gitignore` change in the working tree.** `.gitignore` adds `SESSION_LOG.md`, unrelated to 9-16 and absent from the File List. **Fix:** documented in the File List under "repo tooling (unrelated to 9-16)" rather than reverted (the ignore rule prevents accidental commit of a local PII-ish session log). Operator may unstage from the 9-16 commit if preferred.
+- [x] **[AI-Review][Low] L1 — `trigger` now decorates every login's audit `details` (incl. password logins).** `createLoginSession` defaults `trigger='password'`, so all staff/public password logins now emit `details.trigger='password'`. Documented AC#2.6 deviation; suite green confirms no consumer asserts the old shape. **Fix:** behaviour confirmed acceptable; recorded explicitly in architecture.md so the Story 9-11 viewer contract notes both trigger values. `auth.service.ts:696-766`.
+- [x] **[AI-Review][Low] L2 — `ipAddress` derivation diverged from sibling controllers.** `loginByMagicLink` used `req.ip`; `staffLogin`/`publicLogin` use `req.ip || req.socket.remoteAddress`. **Fix:** aligned to the same fallback. `magic-link.controller.ts:254`.
+- [x] **[AI-Review][Low] L3 — magic-link signs in legacy `authProvider='google'`/passwordless accounts that password-login gates (`AUTH_GOOGLE_ONLY`).** Intentional forward-compat + de-facto migration path for retired-Google accounts. **Fix:** documented the cross-channel asymmetry in the ADR-015 amendment brief for Winston. `architecture.md:2834`.
+- [x] **[AI-Review][Low] L4 — anti-enumeration "sent" confirmation lacked an aria-live region.** Screen-reader users may not hear it. **Fix:** added `role="status"` + `aria-live="polite"`. `LoginPage.tsx:40`.
 
 ## Change Log
 
 | Date | Change | Rationale |
 |---|---|---|
+| 2026-06-03 | Code review (Task 10.1, Opus 4.8, adversarial). 0 Critical/High; 2 Medium (M1 rate-limit per-IP-vs-per-email claim correction; M2 undocumented `.gitignore` change) + 4 Low (L1 audit-trigger payload note; L2 ipAddress fallback alignment; L3 Google-migration asymmetry doc; L4 aria-live) — ALL fixed in-session + catalogued in Review Follow-ups (AI). Touched: `magic-link-rate-limit.ts`, `auth.routes.ts`, `rate-limit-coverage.test.ts`, `magic-link.controller.ts`, `LoginPage.tsx`, `architecture.md`, this story. Targeted suites green post-fix. Status stays `review` (commit + done-flip are operator steps). | Closes Task 10.1. M1 was the load-bearing fix — the per-email budget claim misrepresented a security control; runtime kept per-IP (token entropy is the real control) with all docs corrected. |
+| 2026-06-03 | Implemented Tasks 1–9 (dev-story, Opus 4.8). New `AuthService.loginByMagicLinkToken` + `POST /api/v1/auth/magic/login` + `MagicLinkController.loginByMagicLink`; shared `lib/cookie-config.ts`; frontend `MagicLinkLandingPage` login-branch Confirm flow + `LoginPage` "Send me a sign-in link" entry-point + `AuthContext.loginWithMagicLink`. MFA-aware, anti-enumeration, forward-compat with passwordless accounts. ADR-015 amendment flagged for Winston. +13 API tests / +6 web tests; full suites green (API 2315 / web 2480, 0 fail), tsc + lint clean both packages. Audit `trigger` folded into the single login entry (documented deviation from the literal AC#2.6 second-entry wording). Status → review; Task 10 (code review) handed to a separate session per `feedback_review_before_commit.md`. | Closes the JWT-issuance feature gap Story 9-12 Task 1.7 deferred. Head of the locked field-readiness wizard-redesign sequence (9-16 → 9-17 → 9-18). |
 | 2026-05-11 | Story drafted by Bob (SM) via `*create-story --yolo` per Awwal directive. 7 ACs covering: frontend public-mode magic-link entry-point on `/login`, backend `AuthService.loginByMagicLinkToken` method, new `POST /auth/magic/login` route, `MagicLinkLandingPage` login-branch wiring, MFA challenge integration (Story 9-13 honoured), ADR-015 amendment FLAGGED for Winston, tests + zero-regression discipline. Effort: ~3-5 dev-days. Priority: post-field-survey unless escalated — existing `/auth/public/login` (email + password) covers all current public_users; this is a NEW channel, not a fix. HARD deps: Story 9-12 (magic-link primitive) + Story 9-13 (MFA challenge). | Cross-story follow-up filed from Story 9-12 Review Follow-ups MR-8 entry. Closes the JWT-issuance feature gap that Story 9-12 Task 1.7 explicitly deferred by design. Authored autonomously with comprehensive brief from Awwal session 2026-05-11 — no elicitation needed; all 7 ACs, 10 Tasks, and source citations derived from the brief + verified against the live codebase. |

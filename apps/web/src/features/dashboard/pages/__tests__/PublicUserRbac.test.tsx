@@ -49,6 +49,7 @@ function createAuthValue(user: AuthUser) {
     completeStaffLoginAfterMfa: vi.fn(),
     loginPublic: vi.fn(),
     loginWithGoogle: vi.fn(),
+    loginWithMagicLink: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     reAuthenticate: vi.fn(),
     clearError: vi.fn(),

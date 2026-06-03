@@ -100,3 +100,9 @@ docs/briefings/*.html
 # Production data snapshots (PII) — never commit
 docs/vps-snapshots/
 docs/emails-sent-*.csv
+
+# Session continuity log — narrative bridge between Claude Code sessions.
+# Append-only across days. Never committed; mirrors local working memory.
+# Cold-start checklist + open commitments + per-session notes live here.
+# If working directory is shared (e.g. another machine), recreate from scratch.
+SESSION_LOG.md

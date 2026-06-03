@@ -89,6 +89,7 @@ vi.mock('../../controllers/magic-link.controller.js', () => ({
     requestMagicLink: vi.fn(),
     redeemMagicLink: vi.fn(),
     consumeMagicLink: vi.fn(),
+    loginByMagicLink: vi.fn(),
   },
 }));
 
