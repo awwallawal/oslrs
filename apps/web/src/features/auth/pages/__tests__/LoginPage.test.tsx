@@ -167,12 +167,12 @@ describe('LoginPage', () => {
   });
 
   // Story 9-16 — magic-link sign-in entry-point (public-only).
-  it('renders the "Send me a sign-in link" entry-point on public login', async () => {
+  it('renders the magic-link sign-in entry-point on public login', async () => {
     renderWithProviders(<LoginPage />);
     await waitFor(() => {
       expect(screen.getByTestId('magic-link-entry-point')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('magic-link-reveal-button')).toHaveTextContent(/send me a sign-in link/i);
+    expect(screen.getByTestId('magic-link-reveal-button')).toHaveTextContent(/email me a sign-in link/i);
   });
 
   it('does NOT render the magic-link entry-point on staff login', async () => {

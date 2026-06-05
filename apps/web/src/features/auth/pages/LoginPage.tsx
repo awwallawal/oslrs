@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Mail } from 'lucide-react';
 import { LoginForm } from '../components/LoginForm';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { requestLoginMagicLink } from '../api/magic-link.api';
@@ -51,23 +51,28 @@ function MagicLinkSignInEntry() {
   }
 
   return (
-    <section
-      className="rounded-lg border border-neutral-200 bg-white p-4"
-      data-testid="magic-link-entry-point"
-    >
-      <h2 className="text-sm font-medium text-neutral-900">Or sign in with a magic link</h2>
+    <section className="space-y-3" data-testid="magic-link-entry-point">
+      {/* Visual divider so the magic-link option reads as a clear alternative
+          to the password form above (Story 9-16 — prominence fix 2026-06-05). */}
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <span className="h-px flex-1 bg-neutral-200" />
+        <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">or</span>
+        <span className="h-px flex-1 bg-neutral-200" />
+      </div>
+
       {!expanded ? (
         <button
           type="button"
           onClick={() => setExpanded(true)}
           data-testid="magic-link-reveal-button"
-          className="mt-2 text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary-300 bg-white px-4 py-2.5 text-sm font-semibold text-primary-700 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
-          Send me a sign-in link
+          <Mail className="h-4 w-4" aria-hidden="true" />
+          Email me a sign-in link (no password)
         </button>
       ) : (
-        <form onSubmit={handleSubmit} className="mt-3 space-y-2">
-          <label htmlFor="magic-link-email" className="block text-sm text-neutral-700">
+        <form onSubmit={handleSubmit} className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/40 p-4">
+          <label htmlFor="magic-link-email" className="block text-sm font-medium text-neutral-700">
             Email address
           </label>
           <input
@@ -89,6 +94,9 @@ function MagicLinkSignInEntry() {
           >
             {isSending ? 'Sending…' : 'Email me a sign-in link'}
           </button>
+          <p className="text-xs text-neutral-500">
+            We'll email you a one-time link — no password needed.
+          </p>
         </form>
       )}
     </section>
