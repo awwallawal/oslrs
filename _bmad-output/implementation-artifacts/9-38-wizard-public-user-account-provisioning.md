@@ -56,6 +56,8 @@ So that **I can return later and sign in with a magic link to view or complete m
 
 8. **AC#8 — Tests + zero regression.** New unit tests for `provisionPublicUserForWizard` (creates passwordless public_user; idempotent on existing email — no clobber; sets `respondents.user_id`; non-fatal on throw). New `submitWizard` integration coverage asserting (a) account created when email present, (b) NO account when email absent, (c) wizard still succeeds when provisioning throws. Migration smoke (column exists, FK + ON DELETE SET NULL). Backfill script unit tests (dry-run prints, idempotent, skips unrecoverable-email rows). Full API + web suites green; no behaviour drift in `submitWizard`'s existing respondents-creation path or in 9-16 magic-link login.
 
+10. **AC#10 — `GET /me/registration-status` read-model (shared spine for 9-39 + 9-40).** New authenticated endpoint returning the caller's registration state for the public-user journey: `{ state: 'none' | 'draft' | 'pending_nin' | 'complete', draftStep?: number, draftTotalSteps?: number, respondent?: { id, status, lgaId, ninStatus, consentMarketplace, ...summary } }`. Resolves the respondent via the new `respondents.user_id` link (AC#3), falling back to a wizard-draft lookup by the user's email for the `draft` state. This is the single source of truth the dashboard (Story 9-40 state machine) and the entry wrong-door recovery (Story 9-39 AC#4) both read. Anti-enumeration: only returns the *caller's own* status (auth required); never accepts an arbitrary email. +unit/route tests for each state.
+
 9. **AC#9 — Fix the new-registrant landing-page copy (folded from the 9-16 review).** Story 9-16's `MagicLinkLandingPage` `loginFriendlyErrorCopy` renders, on `AUTH_INVALID_CREDENTIALS` (user-not-found), *"We couldn't find an account for this email. The link may have been issued to an old address."* [Source: apps/web/src/features/auth/pages/MagicLinkLandingPage.tsx loginFriendlyErrorCopy]. That copy is wrong for the dominant real case — a person who **never registered** typing their email at `/login` → "send me a sign-in link" (the request endpoint emails a link unconditionally for anti-enumeration). Change the copy to guide them to register: title "Let's get you registered first", body "We couldn't find an account for that email. If you haven't registered yet, start here.", and add a `/register` CTA (mirror the existing `showSupport` link pattern). This is a permanent UX fix (not just a pre-9-38 band-aid): after 9-38, wizard registrants have accounts, but a genuinely-unregistered visitor still hits this path. ~5-line copy + one CTA; +1 landing-page test asserting the register link renders on `AUTH_INVALID_CREDENTIALS`.
 
 ## Tasks / Subtasks
@@ -76,14 +78,18 @@ So that **I can return later and sign in with a magic link to view or complete m
 - [ ] **Task 5 — Backfill script (AC: #6)**
   - [ ] 5.1 `scripts/_backfill-wizard-public-users.ts` (dry-run default, `--confirm`, `--help`); recover email from `wizard_drafts` / `submissions.rawData`; idempotent; skip+count unrecoverable.
   - [ ] 5.2 Unit tests for arg-parse + idempotency + skip path.
-- [ ] **Task 6 — New-registrant landing copy fix (AC: #9)**
-  - [ ] 6.1 Update `MagicLinkLandingPage` `loginFriendlyErrorCopy` `AUTH_INVALID_CREDENTIALS` branch → "register first" copy + `/register` CTA.
-  - [ ] 6.2 +1 test: register link renders on `AUTH_INVALID_CREDENTIALS`.
-- [ ] **Task 7 — Regression sweep + status flip (AC: #8)**
-  - [ ] 7.1 API + web tsc + lint + full vitest green; document net-new test counts.
-  - [ ] 7.2 Re-run `scripts/_list-public-users.ts` (Story 9-16 aid) to confirm new wizard accounts appear.
-- [ ] **Task 8 — Code review (per `feedback_review_before_commit.md`)**
-  - [ ] 8.1 Run `/bmad:bmm:workflows:code-review` on the uncommitted tree; auto-fix HIGH/MED; commit after.
+- [ ] **Task 6 — `GET /me/registration-status` read-model (AC: #10)** _(shared spine for 9-39 + 9-40)_
+  - [ ] 6.1 Service: resolve caller's state (none/draft/pending_nin/complete) via `respondents.user_id`, falling back to wizard-draft-by-email for `draft`.
+  - [ ] 6.2 Authenticated route + controller; returns caller's-own status only (anti-enumeration; no arbitrary-email param).
+  - [ ] 6.3 Unit + route tests for each of the 4 states.
+- [ ] **Task 7 — New-registrant landing copy fix (AC: #9)**
+  - [ ] 7.1 Update `MagicLinkLandingPage` `loginFriendlyErrorCopy` `AUTH_INVALID_CREDENTIALS` branch → "register first" copy + `/register` CTA.
+  - [ ] 7.2 +1 test: register link renders on `AUTH_INVALID_CREDENTIALS`.
+- [ ] **Task 8 — Regression sweep + status flip (AC: #8)**
+  - [ ] 8.1 API + web tsc + lint + full vitest green; document net-new test counts.
+  - [ ] 8.2 Re-run `scripts/_list-public-users.ts` (Story 9-16 aid) to confirm new wizard accounts appear.
+- [ ] **Task 9 — Code review (per `feedback_review_before_commit.md`)**
+  - [ ] 9.1 Run `/bmad:bmm:workflows:code-review` on the uncommitted tree; auto-fix HIGH/MED; commit after.
 
 ## Dev Notes
 
@@ -137,5 +143,6 @@ _(unset — authored by Bob/SM; dev agent fills on pickup)_
 
 | Date | Change | Rationale |
 |---|---|---|
+| 2026-06-06 | AC#10 + Task 6 added — `GET /me/registration-status` read-model, the shared spine consumed by Story 9-39 (wrong-door recovery) + Story 9-40 (dashboard state machine). Routed by the Public-User Journey Harmonization SCP. Counts now 10 ACs / 9 Tasks. 9-38 confirmed as the keystone of the harmonization (account + link + read-model). | The dashboard + entry-IA both need one authoritative "what's this user's registration state" source; colocating it with the account/link layer keeps the spine together. |
 | 2026-06-05 | AC#9 + Task 6 added — fold the 9-16 review's new-registrant landing-copy fix into this story (per Awwal "make it better" follow-up). Counts now 9 ACs / 8 Tasks. | The "couldn't find your account — old address" copy mis-serves never-registered visitors; redirect them to /register. |
 | 2026-06-03 | Story drafted by Bob (SM) via `*create-story --yolo`. 8 ACs / 7 Tasks. Provisions a passwordless `public_user` at wizard submit (email-presence-driven), adds `respondents.user_id` FK, idempotent-no-clobber, non-fatal to wizard, operator-gated backfill, Iris NDPA review. ~3-5 dev-days (migration + service + wiring + backfill + tests). Priority: unblocks Story 9-32; closes the 9-16 reachability gap for new registrants. | Carved from the Story 9-16 code-review + ADR-015 amendment finding that NO production path creates public_user rows post-9-12, leaving magic-link/password login unreachable for new wizard respondents. |
