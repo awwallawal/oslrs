@@ -3478,6 +3478,32 @@ This is the project's first formal expression of a **tiered-cap pattern for expe
 - **BENCHMARK lane** — `.github/workflows/benchmarks.yml`
 - **Story 10-1 (forthcoming partner-API contract)** — must document the HTTP 413 response shape
 
+### ADR-022: Access-Token Client Storage (In-Memory + Silent Refresh)
+
+**Decision:** The **access token** is held **in browser memory only** (AuthContext state/closure) and is **never** persisted to `localStorage`/`sessionStorage`. On app boot / reload (token absent), AuthContext performs a **silent `/refresh`** against the existing **httpOnly refresh cookie** to re-mint the access token before any authed request fires; concurrent authed requests during boot **queue until the refresh resolves**. The **Bearer-header transport is unchanged** (no move to cookie-auth, so no new CSRF surface). This documents the **ratified disposition** of the access-token-storage decision; it is the post-launch target (Option C), **not** the launch posture.
+
+**Status:** Accepted 2026-06-08 (Awwal/PO ratified). Source: `_bmad-output/planning-artifacts/decision-request-2026-06-08-access-token-storage.md` (Party-Mode: John/PM + Winston/architect). Implementation: **Story 9-49** (post-launch). **Launch posture = Option A** (access token in `sessionStorage`) is accepted as lifetime-bounded (see findings-register note G); this ADR is the forward target, scheduled post-launch.
+
+**Context:** F-004 (Story 9-42) corrected a *dead* `localStorage.getItem('token')` read but left the access token in `sessionStorage` — still JS/XSS-readable. The high-value refresh token is already httpOnly (login / magic-link / F-022 rotation). Removing the access token's at-rest XSS reachability is the remaining hardening.
+
+**Options considered:**
+
+| Option | Approach | Outcome |
+|---|---|---|
+| **A — `sessionStorage`** | Status quo | **Accepted for launch only** — token short-lived (~15 min), refresh already httpOnly; exposure lifetime-bounded. |
+| **C — in-memory + silent refresh** (SELECTED) | Token in JS memory; re-mint via httpOnly refresh cookie on reload; queue requests until ready | Removes at-rest exposure; reuses the hardened refresh path; Bearer transport unchanged. Post-launch. |
+| **B — httpOnly access cookie** | Move access token to a cookie | **Rejected** — forces cookie-auth transport + an app-wide **CSRF** model for marginal gain on a 15-min token. |
+
+**Hard dependency / sequencing:** Option C **MUST land after Story 9-48** (the M1 refresh-rotation grace window). Boot-time silent-refresh is frequently concurrent across tabs; without the grace window it would trip F-022 reuse-detection and revoke the token family on every reload. 9-49 is therefore gated on 9-48.
+
+**Consequences:**
+- AuthContext owns an in-memory token holder + a boot-time silent-refresh + a request-queue-until-ready gate; logout clears the holder (server-side already invalidated via F-012).
+- A page reload incurs one `/refresh` round-trip before authed calls (small, bounded latency); acceptable.
+- No schema/transport change; no CSRF re-architecture (that was Option B's cost, rejected).
+- Implementation line-refs are deliberately deferred to 9-49 dev time (post-9-48) to avoid drift, since 9-48 reshapes the token services.
+
+**Cross-references:** Story 9-49 (`9-49-access-token-storage-hardening.md`); Story 9-48 (hard dependency); findings-register note G; F-004 (Story 9-42); ADR-019 (API consumer auth — distinct surface). Next ADR is ADR-023.
+
 ---
 
 ## Operational Procedures

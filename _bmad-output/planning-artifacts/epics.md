@@ -242,7 +242,7 @@ _**Revised 2026-04-27** per cost-aware roadmap session with Awwal: item #5 (aler
 | 4 | `prep-input-sanitisation-layer` merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill executed (9-9 AC#5) **[REVISED 2026-04-27]** | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section (D4 subset) drafted (`.md` source + print-ready HTML/PDF artifact) **[REVISED 2026-05-04: Ministry office-printer print run downstream of `done`, NOT field-blocking; closure-gate relaxed per Awwal directive]** | `prep-operations-manual-enumerator-section` | ✅ Done 2026-05-05 (drafted + rendered + AI-persona-ratified + adversarial code review pass clean; real-Iris + real-Gabe ratification + Awwal placeholder fills tracked as v1.1 follow-ups OUTSIDE this story's scope per Awwal directive 2026-05-05) |
-| 7 | Zero open R2 security findings (`sec-r2-20260603`) — Highs F-011 + F-024, full F-007 reveal-accountability hardening, and the Tier-2/3 dev tail all closed **[ADDED 2026-06-06 per SCP-2026-06-06-security-r2-remediation]** | 9-41…9-45 + 9-9 (origin-lock) | ⏳ Backlog |
+| 7 | Zero open R2 security findings (`sec-r2-20260603`) — Highs F-011 + F-024, full F-007 reveal-accountability hardening, and the Tier-2/3 dev tail all closed **[ADDED 2026-06-06 per SCP-2026-06-06-security-r2-remediation; UPDATED 2026-06-08: +9-48 (OPS-3, carved from 9-42 review) added as a gate. Non-gates: 9-46/9-47 hygiene, 9-49 post-launch.]** | 9-41…9-45 + 9-48 + 9-9 (origin-lock) | ⏳ Backlog |
 
 **Tier B items** (Stories 9-10, 9-11, DPIA filing, OS patching, super-admin TOTP MFA Story 9-13) can ship during the first weeks of field operation without blocking start. Note: Story 9-13 is Tier B per FRC but is slotted in Wave 0 because it's zero-cost and small (~1-2 days) — recommended to land before field rather than during.
 
@@ -2404,6 +2404,8 @@ So that every feature in the analytics specification is either live, threshold-g
 | **marketplace-contact-broker-relay** | Brokered employer↔candidate contact — **PARKED/DORMANT** (Phase 3; pull-triggers in roadmap) | backlog | **SCP-2026-06-06 security-r2** |
 | **9-46** | **Security Findings-Register Reconciliation** (F-007 sev + NODE_ENV/F-005 + F-006 host; F-001 carved to 9-47; hygiene, not a gate) | ready-for-dev | **register-audit 2026-06-07** |
 | **9-47** | **CSP `style-src` nonce/hash hardening (F-001)** — spike-first; outcome may be partial; hygiene, not a gate | ready-for-dev | **F-001 fix elected 2026-06-07** |
+| **9-48** | **Refresh-Token Lifecycle Hardening** (OPS-3 hash-at-rest + M1 rotation grace-window + L3 reset atomic single-use) — **LAUNCH GATE** | ready-for-dev | **SCP-2026-06-08 / carved from 9-42 review** |
+| **9-49** | **Access-Token Client Storage Hardening** (in-memory + silent refresh; ADR-022) — **POST-LAUNCH**, depends-on 9-48; not a gate | ready-for-dev (depends-on 9-48) | **9-42 review N3 → ratified 2026-06-08** |
 
 **Numbers not used:** 9-14, 9-29 (surname-split "Part F" — absorbed into 9-18), 9-31 — intentionally skipped during planning.
 
