@@ -28,6 +28,14 @@ Should the **access token** continue to live in `sessionStorage` (client JS-read
 ## SM recommendation (non-binding)
 **Option C**, **post-launch** (unless the XSS surface is judged a launch blocker). It removes at-rest exposure with moderate effort, reuses the hardened httpOnly-refresh + rotation already shipping in 9-42/9-48, and avoids B's app-wide CSRF re-architecture. If accepted as-is for launch, record **Option A** with rationale in the findings-register.
 
-## Disposition (fill in)
-- [ ] Decision: A / B / C — by ______ (John + Winston), date ______
-- [ ] If B/C → carve spike/story (id: ______); if A → register note + close
+## Disposition
+
+**Panel recommendation (advisory — Party Mode 2026-06-08: John/PM + Winston/architect, Bob/SM facilitating; pending Awwal's ratification as PO):**
+- **Launch → Option A (accept `sessionStorage`).** Access token is short-lived (~15 min) and the high-value refresh token is already httpOnly; residual XSS exposure is lifetime-bounded. **NOT launch-gating.** On ratification, record an Option-A-accepted note in `docs/security/findings-register.md` with this rationale.
+- **Post-launch → Option C (in-memory access token + silent refresh).** Removes at-rest exposure with the least disruption and reuses the hardened refresh path. **Reject B** (httpOnly cookie) — forces a cookie-auth transport + new app-wide CSRF model for marginal gain on a 15-min token.
+- **Dependency / sequencing:** Option C **MUST land after 9-48** (the M1 rotation grace-window) — boot-time silent-refresh would otherwise risk the multi-tab reuse false-positive revoking families on every reload. Carve C as its own post-launch spike/story; architect ADR covers: in-memory holder, boot-time silent-refresh, request-queue-until-token-ready, explicit logout.
+
+**Ratification (PO):**
+- [ ] Awwal accepts the panel rec (A for launch / C post-launch, depends-on 9-48) — date ______
+- [ ] On accept → (a) findings-register: add the Option-A-accepted note for launch; (b) create the post-launch Option-C spike/story (depends-on 9-48)
+- [ ] OR Awwal overrides → record alternative decision + rationale here
