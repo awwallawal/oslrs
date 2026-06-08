@@ -2397,7 +2397,7 @@ So that every feature in the analytics specification is either live, threshold-g
 | 9-39 | Public Entry-IA Sign-In Door & Magic-Link | ready-for-dev | SCP-2026-06-06 journey-harmonization |
 | 9-40 | Public Dashboard Registration-Status Home | ready-for-dev | SCP-2026-06-06 journey-harmonization |
 | **9-41** | **Marketplace Reveal Accountability Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
-| **9-42** | **Auth, Token & Session Hardening** (+ OPS-RL-1 IPv6 bypass) | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **9-42** | **Auth, Token & Session Hardening** (+ OPS-RL-1 IPv6 bypass) | done | **SCP-2026-06-06 security-r2** |
 | **9-43** | **Export & Reporting Data-Safety Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
 | **9-44** | **Upload Pipeline Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
 | **9-45** | **Platform Access-Control & Boot Hardening** (+ F-026 NODE_ENV/node-dist) | ready-for-dev | **SCP-2026-06-06 security-r2** |

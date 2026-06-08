@@ -3379,7 +3379,7 @@ A future engineer reading "SSH firewall = `0.0.0.0/0`" might assume sloppiness o
 
 **Cross-references:**
 
-- **NFR9** (architecture), and PRD V8.2 NFR9 + Operator Access bullet under Technical Assumptions §Infrastructure & Deployment — note: PRD NFR9 + the bullet still describe the original tailnet-only firewall posture as of architecture revision date 2026-04-25; **flagged for John (PM) to bump PRD V8.2 → V8.3** at the next PRD touch
+- **NFR9** (architecture), and PRD NFR9 + Operator Access bullet under Technical Assumptions §Infrastructure & Deployment — ✅ **RESOLVED (verified by parity check 2026-06-08):** PRD **V8.3** (2026-04-25, John/PM) rewrote NFR9 *and* the Operator Access bullet end-to-end to the as-deployed dual-source posture (sshd-key-only primary control, Tailscale daily-driver, dual-source firewall, fail2ban load-bearing). PRD is now V8.4 and aligned with this ADR; the earlier "bump V8.2 → V8.3" flag is closed
 - **Story 9-9 implementation artifact** — Change Log entries 2026-04-23 (Tailscale + SSH hardening subtask) and 2026-04-25 (OS upgrade subtask + DO Console finding + firewall amendment); File List captures both deployments
 - **Sprint-status §10-11** — 2026-04-25 entries record the OS upgrade and the DO Console architectural finding
 - **`docs/emergency-recovery-runbook.md`** — §1.1 (current infrastructure state, must reflect dual-source firewall + DOTTY-as-Console-mechanism) and §2.2 (DO Console access path details), §6.1 (quarterly drill + monthly-reboot checklist)
