@@ -240,6 +240,112 @@ describe('TokenService', () => {
     });
   });
 
+  // F-012 (Story 9-42) — positive logout invalidation of the refresh token.
+  describe('invalidateUserRefreshTokens', () => {
+    it('deletes the active refresh token + reverse index, returns 1', async () => {
+      mockRedis.get.mockResolvedValueOnce('logout-refresh-token'); // reverse index
+      mockRedis.del.mockResolvedValue(1);
+
+      const result = await TokenService.invalidateUserRefreshTokens('user-logout');
+
+      expect(mockRedis.get).toHaveBeenCalledWith('user_refresh_token:user-logout');
+      expect(mockRedis.del).toHaveBeenCalledWith('refresh:logout-refresh-token');
+      expect(mockRedis.del).toHaveBeenCalledWith('user_refresh_token:user-logout');
+      expect(result).toBe(1);
+    });
+
+    it('does NOT stamp a global tokens_revoked_at timestamp (avoids re-login race)', async () => {
+      mockRedis.get.mockResolvedValueOnce('logout-refresh-token');
+      mockRedis.del.mockResolvedValue(1);
+
+      await TokenService.invalidateUserRefreshTokens('user-logout');
+
+      // Unlike revokeAllUserTokens, no `set` of the revocation timestamp.
+      expect(mockRedis.set).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when the user has no active refresh token', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+
+      const result = await TokenService.invalidateUserRefreshTokens('user-none');
+
+      expect(mockRedis.del).not.toHaveBeenCalled();
+      expect(result).toBe(0);
+    });
+
+    it('post-invalidation, the prior refresh token fails validation (returns null)', async () => {
+      // Invalidate — the active token is deleted.
+      mockRedis.get.mockResolvedValueOnce('prior-token'); // reverse index lookup
+      mockRedis.del.mockResolvedValue(1);
+      await TokenService.invalidateUserRefreshTokens('user-x');
+
+      // Validate — the deleted token no longer resolves.
+      mockRedis.get.mockResolvedValueOnce(null);
+      const result = await TokenService.validateRefreshToken('prior-token');
+      expect(result).toBeNull();
+    });
+  });
+
+  // F-022 (Story 9-42) — refresh-token rotation + reuse detection.
+  describe('rotateRefreshToken', () => {
+    it('tombstones the consumed token, retires it, and mints a new token', async () => {
+      mockRedis.setex.mockResolvedValue('OK');
+      mockRedis.del.mockResolvedValue(1);
+
+      const newToken = await TokenService.rotateRefreshToken('old-token', 'user-rot', 'sess-1', false);
+
+      // Tombstone the consumed token for the replay window.
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'refresh_consumed:old-token',
+        7 * 24 * 60 * 60, // REFRESH_TOKEN_EXPIRY (non-remember-me)
+        'user-rot',
+      );
+      // Retire the old active token.
+      expect(mockRedis.del).toHaveBeenCalledWith('refresh:old-token');
+      // New token is distinct + the reverse index was updated to it.
+      expect(newToken).not.toBe('old-token');
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'user_refresh_token:user-rot',
+        expect.any(Number),
+        newToken,
+      );
+    });
+
+    it('uses the 30-day tombstone TTL for remember-me sessions', async () => {
+      mockRedis.setex.mockResolvedValue('OK');
+      mockRedis.del.mockResolvedValue(1);
+
+      await TokenService.rotateRefreshToken('old-token', 'user-rm', 'sess-1', true);
+
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'refresh_consumed:old-token',
+        30 * 24 * 60 * 60, // REMEMBER_ME_SESSION_EXPIRY
+        'user-rm',
+      );
+    });
+  });
+
+  describe('consumed-token tombstone accessors', () => {
+    it('getConsumedRefreshTokenUser returns the tombstoned userId', async () => {
+      mockRedis.get.mockResolvedValueOnce('user-replay');
+      const result = await TokenService.getConsumedRefreshTokenUser('replayed-token');
+      expect(mockRedis.get).toHaveBeenCalledWith('refresh_consumed:replayed-token');
+      expect(result).toBe('user-replay');
+    });
+
+    it('getConsumedRefreshTokenUser returns null for a never-rotated token', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+      const result = await TokenService.getConsumedRefreshTokenUser('fresh-token');
+      expect(result).toBeNull();
+    });
+
+    it('clearConsumedRefreshToken deletes the tombstone', async () => {
+      mockRedis.del.mockResolvedValue(1);
+      await TokenService.clearConsumedRefreshToken('replayed-token');
+      expect(mockRedis.del).toHaveBeenCalledWith('refresh_consumed:replayed-token');
+    });
+  });
+
   describe('invalidateRefreshToken cleans up reverse index', () => {
     it('deletes reverse index when it points to the invalidated token', async () => {
       mockRedis.get

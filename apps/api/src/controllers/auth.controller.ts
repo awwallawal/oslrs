@@ -20,9 +20,12 @@ import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
+import pino from 'pino';
 // Story 9-16 — cookie config extracted to a shared module so the magic-link
 // login controller can reuse the identical name + options + max-age policy.
 import { REFRESH_TOKEN_COOKIE_NAME, COOKIE_OPTIONS, refreshCookieMaxAge } from '../lib/cookie-config.js';
+
+const logger = pino({ name: 'auth-controller' });
 
 export class AuthController {
   /**
@@ -249,6 +252,14 @@ export class AuthController {
       const ipAddress = req.ip || req.socket.remoteAddress;
       const result = await AuthService.refreshToken(refreshToken, ipAddress);
 
+      // F-022 (Story 9-42): refresh tokens are now rotated on every use. Set the
+      // freshly-minted refresh token as the httpOnly cookie (replacing the
+      // consumed one), preserving the original session's Remember-Me lifetime.
+      res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: refreshCookieMaxAge(result.rememberMe),
+      });
+
       res.status(200).json({
         data: {
           accessToken: result.accessToken,
@@ -274,14 +285,27 @@ export class AuthController {
       const { email } = validation.data;
       const result = await PasswordResetService.requestReset(email);
 
-      // Send email if token was generated (user exists)
+      // Send email if token was generated (user exists).
+      // F-018 (Story 9-42): dispatch the email OFF the response path (setImmediate,
+      // not awaited) so the existing-email and non-existing-email branches return
+      // on the same latency envelope. Awaiting the network send only on the
+      // exists branch was a timing oracle for account enumeration. Send failures
+      // are logged, never surfaced (the anti-enumeration response is identical
+      // regardless of outcome).
       if (result.token) {
         const resetUrl = EmailService.generateResetUrl(result.token);
-        await EmailService.sendPasswordResetEmail({
-          email,
-          fullName: email.split('@')[0], // Fallback, could lookup user name
-          resetUrl,
-          expiresInHours: 1,
+        setImmediate(() => {
+          EmailService.sendPasswordResetEmail({
+            email,
+            fullName: email.split('@')[0], // Fallback, could lookup user name
+            resetUrl,
+            expiresInHours: 1,
+          }).catch((err) => {
+            logger.error({
+              event: 'auth.password_reset_email_failed',
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
         });
       }
 

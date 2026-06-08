@@ -50,6 +50,35 @@ export class PasswordResetService {
   }
 
   /**
+   * F-018 follow-up (Story 9-42, Review Follow-ups #5/#6): hash once, fetch once,
+   * validate once. Returns BOTH the Redis key and the parsed token data so callers
+   * (validateToken, resetPassword) don't re-hash and re-GET. Throws the same
+   * invalid/used/expired AppErrors the public `validateToken` contract already
+   * raised, so its external shape is unchanged.
+   */
+  private static async lookupValidToken(token: string): Promise<{ key: string; data: ResetTokenData }> {
+    const redis = getRedisClient();
+    const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
+
+    const raw = await redis.get(key);
+    if (!raw) {
+      throw new AppError('AUTH_RESET_TOKEN_INVALID', 'This reset link is invalid or has expired', 400);
+    }
+
+    const data: ResetTokenData = JSON.parse(raw);
+
+    if (data.used) {
+      throw new AppError('AUTH_RESET_TOKEN_INVALID', 'This reset link has already been used', 400);
+    }
+
+    if (new Date() > new Date(data.expiresAt)) {
+      throw new AppError('AUTH_RESET_TOKEN_EXPIRED', 'This reset link has expired', 400);
+    }
+
+    return { key, data };
+  }
+
+  /**
    * Checks rate limit for password reset requests
    * Returns true if within limit, false if exceeded
    */
@@ -162,6 +191,16 @@ export class PasswordResetService {
 
     // Store token in Redis — F-011: the key is the SHA-256 hash, NOT the raw token.
     const redis = getRedisClient();
+
+    // F-018 follow-up (single-active-token): retire any prior live reset link for
+    // this user before issuing a new one. Validation is Redis-keyed, so without
+    // this two requests within the hour would leave two independently-valid tokens
+    // (the DB column only ever reflects the latest). `user.passwordResetToken`
+    // holds the PRIOR hash (F-011). Scoped to the reset subsystem.
+    if (user.passwordResetToken) {
+      await redis.del(`${RESET_TOKEN_KEY_PREFIX}${user.passwordResetToken}`);
+    }
+
     const tokenHash = this.hashToken(token);
     const tokenData: ResetTokenData = {
       userId: user.id,
@@ -198,42 +237,10 @@ export class PasswordResetService {
     userId: string;
     email: string;
   }> {
-    const redis = getRedisClient();
-    const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
-
-    const data = await redis.get(key);
-
-    if (!data) {
-      throw new AppError(
-        'AUTH_RESET_TOKEN_INVALID',
-        'This reset link is invalid or has expired',
-        400
-      );
-    }
-
-    const tokenData: ResetTokenData = JSON.parse(data);
-
-    // Check if token has been used
-    if (tokenData.used) {
-      throw new AppError(
-        'AUTH_RESET_TOKEN_INVALID',
-        'This reset link has already been used',
-        400
-      );
-    }
-
-    // Check expiry (Redis TTL handles this, but double-check)
-    if (new Date() > new Date(tokenData.expiresAt)) {
-      throw new AppError(
-        'AUTH_RESET_TOKEN_EXPIRED',
-        'This reset link has expired',
-        400
-      );
-    }
-
+    const { data } = await this.lookupValidToken(token);
     return {
-      userId: tokenData.userId,
-      email: tokenData.email,
+      userId: data.userId,
+      email: data.email,
     };
   }
 
@@ -242,8 +249,10 @@ export class PasswordResetService {
    * Invalidates all existing sessions after password change
    */
   static async resetPassword(token: string, newPassword: string): Promise<void> {
-    // Validate token first
-    const { userId } = await this.validateToken(token);
+    // F-018 follow-up: validate + locate the token ONCE (hash once, fetch once);
+    // reuse the same key + data below for the mark-used write.
+    const { key, data } = await this.lookupValidToken(token);
+    const { userId } = data;
 
     // Hash the new password
     const passwordHash = await hashPassword(newPassword);
@@ -260,18 +269,11 @@ export class PasswordResetService {
       })
       .where(eq(users.id, userId));
 
-    // Mark token as used in Redis
+    // Mark token as used in Redis (reuse the key + data already fetched).
     const redis = getRedisClient();
-    const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
-    const data = await redis.get(key);
-
-    if (data) {
-      const tokenData: ResetTokenData = JSON.parse(data);
-      tokenData.used = true;
-
-      // Keep for 1 hour to prevent reuse attempts from showing success
-      await redis.setex(key, 3600, JSON.stringify(tokenData));
-    }
+    data.used = true;
+    // Keep for 1 hour to prevent reuse attempts from showing success
+    await redis.setex(key, 3600, JSON.stringify(data));
 
     // Invalidate all existing sessions for this user
     await SessionService.invalidateAllUserSessions(userId);

@@ -8,7 +8,7 @@
  * Mock convention mirrors token.service.test.ts (vi.hoisted + vi.mock).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 
 // Stateful Redis mock — setex writes to a Map, get reads it, so the
@@ -135,5 +135,61 @@ describe('PasswordResetService — F-011 token hashing at rest', () => {
     await expect(
       PasswordResetService.validateToken(token as string),
     ).rejects.toThrow(/already been used/i);
+  });
+});
+
+/**
+ * F-019 (Story 9-42 AC#6) — password-reset rate-limit keys by normalized email
+ * + the documented max matches NFR4.4 (3/email/hour).
+ *
+ * Disposition: ALREADY SATISFIED AT HEAD. The NFR4.4 per-email budget is
+ * enforced at the SERVICE layer (`PasswordResetService.checkRateLimit`, keyed
+ * `password_reset_rate:<lowercased-email>`, max = RESET_RATE_LIMIT = 3, window
+ * = RESET_RATE_WINDOW = 3600s). The route middleware `passwordResetRateLimit`
+ * is a deliberate SECONDARY per-IP throttle (10/IP/hr defense-in-depth), as
+ * documented in middleware/__tests__/rate-limit-coverage.test.ts. These tests
+ * pin the per-email keying + max so a regression on either is caught.
+ *
+ * `checkRateLimit` short-circuits in test mode, so this block temporarily
+ * disables test mode to exercise the real Redis-keyed branch.
+ */
+describe('PasswordResetService — F-019 per-email rate-limit keying (NFR4.4)', () => {
+  const origVitest = process.env.VITEST;
+  const origNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRedis._store.clear();
+    delete process.env.VITEST;
+    process.env.NODE_ENV = 'development';
+  });
+
+  afterEach(() => {
+    if (origVitest !== undefined) process.env.VITEST = origVitest;
+    else delete process.env.VITEST;
+    process.env.NODE_ENV = origNodeEnv;
+  });
+
+  it('keys the rate-limit counter by the lowercased+trimmed email', async () => {
+    const res = await PasswordResetService.checkRateLimit('  Mixed.Case@Example.COM ');
+
+    expect(mockRedis.get).toHaveBeenCalledWith('password_reset_rate:mixed.case@example.com');
+    expect(res.allowed).toBe(true);
+  });
+
+  it('blocks the request once the per-email count reaches the max (3)', async () => {
+    const email = 'limit@example.com';
+    mockRedis._store.set(`password_reset_rate:${email}`, '3'); // already at NFR4.4 cap
+
+    const res = await PasswordResetService.checkRateLimit(email);
+
+    expect(res.allowed).toBe(false);
+    expect(res.remaining).toBe(0);
+  });
+
+  it('exposes the NFR4.4 contract constants (3 per 1-hour window)', () => {
+    const c = PasswordResetService.getConstants();
+    expect(c.RESET_RATE_LIMIT).toBe(3);
+    expect(c.RESET_RATE_WINDOW).toBe(60 * 60);
   });
 });

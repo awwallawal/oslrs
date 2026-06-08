@@ -17,6 +17,9 @@ const REMEMBER_ME_SESSION_EXPIRY = 30 * 24 * 60 * 60; // 30 days
 const BLACKLIST_KEY_PREFIX = 'jwt:blacklist:';
 const REFRESH_TOKEN_KEY_PREFIX = 'refresh:';
 const USER_REFRESH_KEY_PREFIX = 'user_refresh_token:';
+// F-022 (Story 9-42): tombstone for a rotated (consumed) refresh token. Presenting
+// a tombstoned token at /refresh is a replay → the whole token family is revoked.
+const CONSUMED_REFRESH_KEY_PREFIX = 'refresh_consumed:';
 
 export class TokenService {
   private static isTestMode(): boolean {
@@ -138,6 +141,81 @@ export class TokenService {
         await redis.del(`${USER_REFRESH_KEY_PREFIX}${userId}`);
       }
     }
+  }
+
+  /**
+   * F-012 (Story 9-42): positively invalidate a user's active refresh token at
+   * logout, via the reverse index. Unlike `revokeAllUserTokens`, this does NOT
+   * stamp a global `tokens_revoked_at` timestamp — logout already blacklists the
+   * access-token JTI, and skipping the timestamp avoids a sub-second
+   * logout→re-login race where a freshly issued access token could be wrongly
+   * treated as revoked. Returns the number of refresh tokens deleted (0 or 1).
+   */
+  static async invalidateUserRefreshTokens(userId: string): Promise<number> {
+    const redis = getRedisClient();
+    const refreshToken = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
+    if (refreshToken) {
+      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`);
+      await redis.del(`${USER_REFRESH_KEY_PREFIX}${userId}`);
+      return 1;
+    }
+    return 0;
+  }
+
+  /**
+   * F-022 (Story 9-42): rotate a refresh token on use (one-time-use semantics).
+   * Tombstones the presented token (so a later replay is caught as reuse), deletes
+   * its active entry, and mints a brand-new refresh token (which also overwrites
+   * the per-user reverse index). The tombstone TTL matches the token's own
+   * lifetime so the full replay window is covered.
+   *
+   * Concurrency note (multi-tab) — read honestly: if two /refresh calls read the
+   * SAME active token BEFORE either rotates, both mint a new token and the last
+   * Set-Cookie wins — no tombstone is presented, so reuse detection does NOT fire.
+   * BUT there is a narrow RESIDUAL race: if tab B's validateRefreshToken runs
+   * AFTER tab A has already rotated (active entry deleted + tombstone set), tab B
+   * presents the now-consumed token and DOES trip reuse detection → the whole
+   * family is revoked → both tabs are forced to re-log-in. This is ACCEPTED: the
+   * window is sub-second, the consequence is a benign forced re-login (not account
+   * compromise), and erring toward revoke is the safe default against a genuine
+   * stolen-token replay. If multi-tab re-logins become a support burden, the
+   * documented enhancement is a short grace window that RE-ISSUES the already-minted
+   * token instead of revoking — see Story 9-42 Review Follow-ups M1.
+   */
+  static async rotateRefreshToken(
+    oldToken: string,
+    userId: string,
+    sessionId: string,
+    rememberMe = false,
+  ): Promise<string> {
+    const redis = getRedisClient();
+    const ttlSeconds = rememberMe ? REMEMBER_ME_SESSION_EXPIRY : REFRESH_TOKEN_EXPIRY;
+
+    // Tombstone the consumed token for the full replay window, then retire it.
+    await redis.setex(`${CONSUMED_REFRESH_KEY_PREFIX}${oldToken}`, ttlSeconds, userId);
+    await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${oldToken}`);
+
+    // Mint the replacement (updates the reverse index to the new token).
+    return this.generateRefreshToken(userId, sessionId, rememberMe);
+  }
+
+  /**
+   * F-022: returns the userId associated with a consumed (tombstoned) refresh
+   * token, or null if the token was never rotated. A non-null result at /refresh
+   * means a replay → revoke the whole family.
+   */
+  static async getConsumedRefreshTokenUser(token: string): Promise<string | null> {
+    const redis = getRedisClient();
+    return redis.get(`${CONSUMED_REFRESH_KEY_PREFIX}${token}`);
+  }
+
+  /**
+   * F-022: clears a consumed-token tombstone (called after reuse detection has
+   * revoked the family, so the same replay can't repeatedly trigger revocation).
+   */
+  static async clearConsumedRefreshToken(token: string): Promise<void> {
+    const redis = getRedisClient();
+    await redis.del(`${CONSUMED_REFRESH_KEY_PREFIX}${token}`);
   }
 
   /**

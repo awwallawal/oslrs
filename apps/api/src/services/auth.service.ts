@@ -792,6 +792,11 @@ export class AuthService {
     // Blacklist the access token
     await TokenService.addToBlacklist(jti);
 
+    // F-012 (Story 9-42): positively invalidate the refresh token rather than
+    // relying on the indirect session-key check at /refresh. The access token is
+    // already blacklisted above; this kills the refresh token too.
+    await TokenService.invalidateUserRefreshTokens(userId);
+
     // Invalidate the session
     await SessionService.invalidateSession(sessionId, 'logout');
 
@@ -829,11 +834,26 @@ export class AuthService {
   static async refreshToken(
     refreshToken: string,
     ipAddress?: string
-  ): Promise<{ accessToken: string; expiresIn: number }> {
+  ): Promise<{ accessToken: string; expiresIn: number; refreshToken: string; rememberMe: boolean }> {
     // Validate refresh token
     const tokenData = await TokenService.validateRefreshToken(refreshToken);
 
     if (!tokenData) {
+      // F-022 (Story 9-42): reuse detection. A token that is no longer active
+      // might simply be expired — OR it might be a replay of a token we already
+      // rotated (consumed). If it matches a consumed-token tombstone, the entire
+      // token family is revoked (defends against a stolen-then-replayed token).
+      const consumedUserId = await TokenService.getConsumedRefreshTokenUser(refreshToken);
+      if (consumedUserId) {
+        await TokenService.revokeAllUserTokens(consumedUserId);
+        await TokenService.clearConsumedRefreshToken(refreshToken);
+        logger.warn({
+          event: 'auth.refresh_reuse_detected',
+          userId: consumedUserId,
+          ipAddress,
+        });
+        throw new AppError('AUTH_TOKEN_REUSE_DETECTED', 'Please log in again', 401);
+      }
       throw new AppError('AUTH_INVALID_TOKEN', 'Invalid or expired refresh token', 401);
     }
 
@@ -896,6 +916,17 @@ export class AuthService {
       tokenData.rememberMe
     );
 
+    // F-022 (Story 9-42): rotate the refresh token (one-time use). The presented
+    // token is tombstoned + retired and a fresh refresh token is minted; the
+    // controller sets it as the new httpOnly cookie. A later replay of the
+    // now-consumed token trips the reuse-detection branch above.
+    const newRefreshToken = await TokenService.rotateRefreshToken(
+      refreshToken,
+      tokenData.userId,
+      tokenData.sessionId,
+      tokenData.rememberMe
+    );
+
     // Update session with new token JTI
     await SessionService.linkTokenToSession(tokenData.sessionId, jti);
 
@@ -909,7 +940,7 @@ export class AuthService {
       ipAddress,
     });
 
-    return { accessToken, expiresIn };
+    return { accessToken, expiresIn, refreshToken: newRefreshToken, rememberMe: tokenData.rememberMe };
   }
 
   /**
