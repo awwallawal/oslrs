@@ -361,6 +361,98 @@ jobs:
           if-no-files-found: warn
 
   # ============================================
+  # Auth refresh-token lifecycle smoke (Story 9-42 close-out)
+  # Black-box HTTP check of F-022 rotation + reuse-detection + F-012 logout
+  # against a real running API. `deploy` needs this job → it is a HARD pre-deploy
+  # gate, closing the "E2E doesn't gate deploy" gap for the auth/refresh flow.
+  # Permanent regression gate for Stories 9-48 (rotation grace / OPS-3 hash-at-rest)
+  # and 9-49 (boot silent-refresh). Runner: scripts/uat-refresh-rotation-smoke.ts.
+  # ============================================
+  auth-smoke:
+    needs: lint-and-build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # NODE_ENV=development makes captcha.ts skip hCaptcha so the seeded account
+      # can log in headlessly (same as e2e.yml).
+      NODE_ENV: development
+      DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci
+      REFRESH_TOKEN_SECRET: test-refresh-token-secret-for-ci
+      PUBLIC_APP_URL: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Push database schema
+        run: pnpm --filter @oslsr/api db:push:force
+
+      - name: Seed dev accounts
+        run: pnpm --filter @oslsr/api db:seed:dev
+
+      - name: Start API server (background)
+        run: pnpm --filter @oslsr/api dev > /tmp/api.log 2>&1 &
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/health >/dev/null; then echo "API healthy"; exit 0; fi
+            sleep 2
+          done
+          echo "API did not become healthy in 120s"; cat /tmp/api.log || true; exit 1
+
+      - name: Refresh-rotation smoke (F-022 rotation + reuse + F-012 logout)
+        run: >-
+          pnpm exec tsx scripts/uat-refresh-rotation-smoke.ts
+          --base-url=http://localhost:3000
+          --login --login-path=/auth/staff/login
+          --email=enumerator@dev.local --password=enum123
+
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/api.log || true
+
+  # ============================================
   # Job 4: Web Tests (no services, but larger)
   # ============================================
   test-web:
@@ -716,7 +808,9 @@ jobs:
   # Job 7: Deploy (only on main, after tests pass)
   # ============================================
   deploy:
-    needs: dashboard
+    # auth-smoke gates deploy (Story 9-42 close-out): a broken refresh-token
+    # rotation / reuse-detection / logout flow blocks the deploy.
+    needs: [dashboard, auth-smoke]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
