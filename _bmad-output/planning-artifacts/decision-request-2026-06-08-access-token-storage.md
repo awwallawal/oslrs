@@ -1,6 +1,6 @@
 # Decision Request — Access-token client storage (sessionStorage vs httpOnly cookie vs in-memory)
 
-**Status:** 🔵 OPEN — needs **PM (John)** priority/sequencing call + **Architect (Winston)** design/ADR
+**Status:** ✅ RATIFIED 2026-06-08 (Awwal/PO) — Launch = Option A (accept) · Post-launch = Option C → **Story 9-49** (depends-on 9-48)
 **Raised:** 2026-06-08 by Bob (SM)
 **Source:** Story 9-42 post-hoc code-review finding **N3** (carried in `9-48-refresh-token-lifecycle-hardening.md` → "Carried review nits"); itself surfaced by **F-004 / N2** (the "in-memory token" framing was inaccurate).
 **This is NOT a launch-gate item** unless the decision below says so.
@@ -36,6 +36,7 @@ Should the **access token** continue to live in `sessionStorage` (client JS-read
 - **Dependency / sequencing:** Option C **MUST land after 9-48** (the M1 rotation grace-window) — boot-time silent-refresh would otherwise risk the multi-tab reuse false-positive revoking families on every reload. Carve C as its own post-launch spike/story; architect ADR covers: in-memory holder, boot-time silent-refresh, request-queue-until-token-ready, explicit logout.
 
 **Ratification (PO):**
-- [ ] Awwal accepts the panel rec (A for launch / C post-launch, depends-on 9-48) — date ______
-- [ ] On accept → (a) findings-register: add the Option-A-accepted note for launch; (b) create the post-launch Option-C spike/story (depends-on 9-48)
-- [ ] OR Awwal overrides → record alternative decision + rationale here
+- [x] Awwal accepts the panel rec (A for launch / C post-launch, depends-on 9-48) — **2026-06-08**
+- [x] (a) findings-register: Option-A-accepted-for-launch note added (note G)
+- [x] (b) post-launch Option-C spike/story created → **Story 9-49** (`9-49-access-token-storage-hardening.md`, depends-on 9-48), sprint-status `backlog`
+- [x] No override.
