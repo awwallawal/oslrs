@@ -57,6 +57,15 @@ so that **a secondary leak (Redis/DB backup) cannot be replayed into account tak
   - [ ] 5.1 Full API + web suites green; `tsc` + lint clean (api + web). Document net-new test counts + per-item commit hashes.
   - [ ] 5.2 Pre-commit fresh-context `[CR]` on the uncommitted tree per [[feedback-review-before-commit]]; then the three atomic commits.
 
+## Carried review nits from 9-42 post-hoc review (LOW / opportunistic — NOT launch-gate)
+
+> ⚠️ **NOT part of AC#1–#6 and NOT launch-gating.** Low-severity hygiene/accuracy items surfaced by the independent post-hoc code-review of the 9-42 tail (`2d9a093..164ff6b`), parked here so they're tracked without muddling 9-42's committed/deployed work. Do them opportunistically; none block launch. **N3 is an architecture decision, not a code fix.** These must NOT be folded into the OPS-3/M1/L3 atomic commits.
+
+- [ ] **N1 [LOW — type safety]** F-023 `uploadSelfie` reads `(req as any).user?.sub` with an `eslint-disable @typescript-eslint/no-explicit-any` [apps/api/src/controllers/user.controller.ts ~30]. The codebase already exposes a typed `AuthenticatedRequest` (e.g. `operations-rate-limit.ts`). Swap the `as any` cast for `(req as AuthenticatedRequest).user?.sub` and drop the disable. Functionally correct today — pure type hygiene; do only if already touching `user.controller.ts`.
+- [ ] **N2 [LOW — doc/framing accuracy]** F-004's AC#8 said it moves auth to the "in-memory access token," but `useAuth().accessToken` is **sessionStorage-backed** (`AuthContext.saveToken`) → XSS reachability is ~unchanged. The genuine win was correcting a DEAD `localStorage.getItem('token')` key (ID-card download + selfie upload were effectively always-unauthenticated). The `docs/security/findings-register.md` row is already accurate; only the AC wording overclaims. **Action:** none on F-004 itself — but do NOT claim F-004 "eliminated XSS token exposure" anywhere.
+- [x] **N3 [SEPARATE consideration — HANDED OFF to PM/architect 2026-06-08; NOT a 9-48 dev task]** Raised by N2: should the access token live in `sessionStorage` at all, vs. an httpOnly cookie (as the refresh token already is) or true in-memory? App-wide architecture decision — **routed out of 9-48** to a standalone decision request: `_bmad-output/planning-artifacts/decision-request-2026-06-08-access-token-storage.md` (John/PM priority + Winston/architect design+ADR; SM rec = Option C, post-launch). Do NOT action here; if accepted/scheduled it gets its own spike/story.
+- [ ] **N4 [OBSERVATION — accepted/disclosed]** F-018 residual timing: the exists branch still does extra Redis writes (token gen + del-prior + setex) vs. the non-exists branch — a small residual delta after the dominant network-email oracle was removed via `setImmediate`. Already documented/accepted in 9-42. Optional future enhancement: equivalent dummy work / constant-time path on the non-exists branch. Low priority; revisit only if timing-enumeration resurfaces.
+
 ## Dev Notes
 
 - **One atomic commit per item** for assessor 1:1 retest: `fix(sec): OPS-3 hash refresh tokens at rest` · `fix(sec): F-022 rotation grace window (multi-tab reuse FP)` · `fix(sec): password-reset atomic single-use`. Flip the OPS-3 register row in the OPS-3 commit.
@@ -101,3 +110,9 @@ _(to be filled by dev)_
 ### Completion Notes List
 
 ### File List
+
+### Change Log
+| Date | Change | By |
+|------|--------|-----|
+| 2026-06-08 | Added non-gating section "Carried review nits from 9-42 post-hoc review" (N1 F-023 `(req as any)` → typed `AuthenticatedRequest`; N2 F-004 "in-memory" framing vs sessionStorage reality; N3 access-token-storage architecture consideration → needs PM/architect; N4 F-018 residual timing). Sourced from the independent post-hoc code-review of the 9-42 tail (`2d9a093..164ff6b`). Explicitly NOT launch-gating, separate from AC#1–#6 and the OPS-3/M1/L3 commits. 9-42 left untouched (committed/deployed). | Bob (SM) |
+| 2026-06-08 | N3 handed off to PM/architect: created `planning-artifacts/decision-request-2026-06-08-access-token-storage.md` (A=accept sessionStorage / B=httpOnly cookie / C=in-memory; SM rec C, post-launch). N3 marked routed-out in the Carried-nits section. | Bob (SM) |
