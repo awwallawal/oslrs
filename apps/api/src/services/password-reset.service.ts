@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { getRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
@@ -7,8 +7,10 @@ import { AppError, hashPassword } from '@oslsr/utils';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 
-// Password reset constants — exported so the AC#4 rate-limit-coverage test
-// can sentinel them as the canonical NFR4.4 password-reset 3/email/hour contract.
+// Password reset constants — exported so the AC#6 (F-019) rate-limit-coverage
+// test can sentinel them as the canonical NFR4.4 password-reset 3/email/hour
+// contract. (NOTE: in Story 9-42, AC#4 is refresh-token rotation; the reset
+// rate-limit verification is AC#6/F-019.)
 const RESET_TOKEN_EXPIRY = 60 * 60;           // 1 hour (in seconds)
 export const RESET_RATE_LIMIT = 3;            // 3 requests per hour (NFR4.4)
 export const RESET_RATE_WINDOW = 60 * 60;     // 1 hour in seconds (NFR4.4)
@@ -34,6 +36,17 @@ export class PasswordResetService {
    */
   private static generateSecureToken(): string {
     return randomBytes(32).toString('base64url');
+  }
+
+  /**
+   * F-011 (sec-r2): SHA-256 hex of a reset token. The plaintext token is emailed
+   * exactly once and NEVER persisted; only this hash is stored (Redis key +
+   * `users.passwordResetToken`), and the incoming token is hashed before lookup.
+   * Mirrors the magic-link.service.ts pattern so a DB/Redis backup leak cannot be
+   * turned into an account takeover.
+   */
+  private static hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -147,8 +160,9 @@ export class PasswordResetService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + RESET_TOKEN_EXPIRY * 1000);
 
-    // Store token in Redis
+    // Store token in Redis — F-011: the key is the SHA-256 hash, NOT the raw token.
     const redis = getRedisClient();
+    const tokenHash = this.hashToken(token);
     const tokenData: ResetTokenData = {
       userId: user.id,
       email: normalizedEmail,
@@ -158,20 +172,21 @@ export class PasswordResetService {
     };
 
     await redis.setex(
-      `${RESET_TOKEN_KEY_PREFIX}${token}`,
+      `${RESET_TOKEN_KEY_PREFIX}${tokenHash}`,
       RESET_TOKEN_EXPIRY,
       JSON.stringify(tokenData)
     );
 
-    // Also store token in database for audit trail
+    // Also store the token HASH in the database for audit trail (F-011: never the raw token)
     await db.update(users)
       .set({
-        passwordResetToken: token,
+        passwordResetToken: tokenHash,
         passwordResetExpiresAt: expiresAt,
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
 
+    // Return the PLAINTEXT token for the email link; only its hash was persisted.
     return { token, userId: user.id };
   }
 
@@ -184,7 +199,7 @@ export class PasswordResetService {
     email: string;
   }> {
     const redis = getRedisClient();
-    const key = `${RESET_TOKEN_KEY_PREFIX}${token}`;
+    const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
 
     const data = await redis.get(key);
 
@@ -247,7 +262,7 @@ export class PasswordResetService {
 
     // Mark token as used in Redis
     const redis = getRedisClient();
-    const key = `${RESET_TOKEN_KEY_PREFIX}${token}`;
+    const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
     const data = await redis.get(key);
 
     if (data) {

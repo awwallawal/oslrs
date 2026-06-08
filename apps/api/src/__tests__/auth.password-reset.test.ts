@@ -7,6 +7,7 @@ import { eq, sql } from 'drizzle-orm';
 import { hashPassword } from '@oslsr/utils';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { Redis } from 'ioredis';
+import { createHash } from 'node:crypto';
 
 const request = supertest(app);
 
@@ -240,9 +241,10 @@ describe('Auth Password Reset Integration', () => {
         used: false,
       };
 
-      // Store in Redis with a short TTL (token won't auto-expire in test, but expiry check will fail)
+      // Store in Redis under the HASHED key (F-011: reset tokens are hashed at rest)
+      // so the service's hashed lookup finds it and the expiry check fires.
       await testRedisClient.setex(
-        `password_reset:${expiredToken}`,
+        `password_reset:${createHash('sha256').update(expiredToken).digest('hex')}`,
         3600, // Keep in Redis for test
         JSON.stringify(tokenData)
       );
@@ -257,8 +259,8 @@ describe('Auth Password Reset Integration', () => {
         }
         await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       });
-      // Clean up Redis token
-      await testRedisClient.del(`password_reset:${expiredToken}`);
+      // Clean up Redis token (hashed key, F-011)
+      await testRedisClient.del(`password_reset:${createHash('sha256').update(expiredToken).digest('hex')}`);
     });
 
     it('should reject expired token on validation', async () => {
