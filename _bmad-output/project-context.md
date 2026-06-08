@@ -1326,6 +1326,10 @@ docker compose -f docker/docker-compose.dev.yml up
 
 **🔁 Security findings-register sync rule:** every `fix(sec): F-XXX` commit (or any disposition change) updates that finding's row in `docs/security/findings-register.md` **in the same change** (flip to `Fixed-in-<hash>`). That register is the auditor's **1:1 retest map** and the in-repo source of truth for finding dispositions — the external assessment package does NOT travel at BOT transfer, so the register must stay current and self-contained.
 
+**🔎 Parity sweep (read-time catch-net for the two sync rules above):** the rules above are *write-time* discipline; back them with a *read-time* audit run whenever a story closes / flips status or an ADR lands. Cross-check **`epics.md` story table ↔ `sprint-status.yaml` ↔ `findings-register.md` ↔ ADR/PRD cross-reference flags** for the touched cluster: every story present in all sources with the **same status**, every register/ADR pointer resolving to a **real, current** target. **Stale "flagged for X to do Y" pointers are drift too** — when Y already shipped elsewhere, close the flag (don't "fix" the already-correct target). Run via the SM `*sprint-planning` / `*workflow-status` path (audit-only — never the destructive regenerate, which clobbers curated `sprint-status.yaml` comments).
+
+**Why:** 2026-06-08 the 9-4x cluster drifted three ways *despite* the sync rules — 9-42 status (`epics.md` `ready-for-dev` vs story-file/sprint-status `done`), and a stale ADR-020 flag still demanding a "PRD V8.2→V8.3 bump" whose PRD fix had already shipped in V8.3. Write-time discipline slips under mid-flight story churn (9-46/47/48/49 all spawned mid-sprint); the read-time sweep is what catches the slip.
+
 ---
 
 ## User Skill Level Notes (Awwal - Intermediate, MERN Background)
