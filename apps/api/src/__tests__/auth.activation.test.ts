@@ -770,6 +770,40 @@ describe('Auth Activation Integration', () => {
     });
   });
 
+  describe('L1: bulk-import invitation email ownership (createManual skipInvitationEmail)', () => {
+    it('should NOT queue the invitation email yet still return the plaintext token when skipInvitationEmail is set', async () => {
+      // L1 (9-46): the import worker owns budget-aware emailing, so createManual
+      // must not also send (pre-fix it double-sent + the worker's copy was broken).
+      const allRoles = await db.select().from(roles);
+      const superAdminRole = allRoles.find(r => r.name === 'super_admin')!;
+      const email = `l1-skip-${Date.now()}@example.com`;
+
+      const urlSpy = vi.spyOn(EmailService, 'generateStaffActivationUrl');
+      try {
+        const result = await StaffService.createManual(
+          {
+            fullName: 'L1 Skip User',
+            email,
+            phone: `080${Date.now().toString().slice(-8)}`,
+            roleId: superAdminRole.id,
+          },
+          testUserId,
+          { skipInvitationEmail: true },
+        );
+
+        // createManual must NOT build/queue the email — the worker owns that.
+        expect(urlSpy).not.toHaveBeenCalled();
+        // ...but it must return the plaintext token so the caller can email it,
+        // while the column still holds only the hash.
+        expect(result.invitationToken).toMatch(/^[0-9a-f]{32}$/);
+        const persisted = await db.query.users.findFirst({ where: eq(users.id, result.user.id) });
+        expect(persisted?.invitationToken).toBe(hashInvitationToken(result.invitationToken));
+      } finally {
+        urlSpy.mockRestore();
+      }
+    });
+  });
+
   describe('Role classification constants', () => {
     it('should classify back-office roles correctly', () => {
       expect(isBackOfficeRole(UserRole.SUPER_ADMIN)).toBe(true);

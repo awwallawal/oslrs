@@ -587,12 +587,19 @@ export class StaffService {
    * Manually creates a new staff member.
    * @param data validated staff data
    * @param actorId ID of the admin performing the action
-   * @returns Created user with emailStatus field (AC8: Graceful Degradation)
+   * @param options.skipInvitationEmail When true, do NOT queue the invitation
+   *   email here — the caller owns sending it (the bulk-import worker does this
+   *   with budget-aware deferral). The returned `invitationToken` (plaintext)
+   *   lets the caller build the activation URL; it is never persisted (the
+   *   column holds only its hash). 9-46 / L1 fix.
+   * @returns Created user, emailStatus (AC8: Graceful Degradation), and the
+   *   plaintext invitationToken (in-memory only — for the caller's email URL).
    */
   static async createManual(
     data: CreateStaffDto,
-    actorId: string
-  ): Promise<{ user: typeof users.$inferSelect; emailStatus: EmailStatus }> {
+    actorId: string,
+    options: { skipInvitationEmail?: boolean } = {}
+  ): Promise<{ user: typeof users.$inferSelect; emailStatus: EmailStatus; invitationToken: string }> {
     // Pre-normalise PII fields so the DB always holds canonical values.
     // Warnings are logged (no metadata column on `users`); back-fill flow
     // for legacy rows lives in scripts/backfill-input-sanitisation.ts.
@@ -684,8 +691,13 @@ export class StaffService {
         throw err instanceof Error ? err : new Error(String(err));
     }
 
-    // AC8: Graceful Degradation - Queue invitation email (failure doesn't block user creation)
-    if (!EmailService.isEnabled()) {
+    // AC8: Graceful Degradation - Queue invitation email (failure doesn't block user creation).
+    // L1 (9-46): when the caller owns emailing (bulk-import worker, with budget-aware
+    // deferral), skip here so the invite isn't sent twice. emailStatus stays the
+    // caller's concern in that case (the worker tracks queued/deferred counts).
+    if (options.skipInvitationEmail) {
+      // No-op: caller will queue the email using the returned plaintext token.
+    } else if (!EmailService.isEnabled()) {
       emailStatus = 'not_configured';
       logger.warn({
         event: 'staff.email.disabled',
@@ -728,14 +740,16 @@ export class StaffService {
       }
     }
 
-    return { user: newUser, emailStatus };
+    return { user: newUser, emailStatus, invitationToken: token };
   }
 
   /**
    * Processes a single import row (lookup IDs, create user)
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async processImportRow(row: StaffImportRow, actorId: string): Promise<any> {
+  static async processImportRow(
+    row: StaffImportRow,
+    actorId: string
+  ): Promise<{ user: typeof users.$inferSelect; emailStatus: EmailStatus; invitationToken: string }> {
       // Lookup Role - DB lookup is acceptable here because:
       // 1. Roles table is tiny (~7 rows), lookup is sub-millisecond
       // 2. Bulk imports are infrequent (weekly/monthly operations)
@@ -761,13 +775,16 @@ export class StaffService {
           lgaId = lgaRecord.id;
       }
 
+      // L1 (9-46): the import worker owns invitation email (budget-aware deferral),
+      // so createManual must NOT also send it. It returns the plaintext token for
+      // the worker to build the activation URL.
       return this.createManual({
           fullName: row.full_name,
           email: row.email,
           phone: row.phone,
           roleId: roleRecord.id,
           lgaId: lgaId
-      }, actorId);
+      }, actorId, { skipInvitationEmail: true });
   }
 
   /**

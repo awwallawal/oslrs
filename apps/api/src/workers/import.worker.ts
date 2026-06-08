@@ -56,8 +56,14 @@ export const importWorker = new Worker(
 
     for (const [index, row] of rows.entries()) {
       try {
-        // Process the row and create user
-        const user = await StaffService.processImportRow(row, actorId);
+        // Process the row and create user. processImportRow returns
+        // { user, emailStatus, invitationToken } — destructure so `user` is the
+        // actual row (not the wrapper) and we have the plaintext token for the
+        // activation URL. L1 (9-46): pre-fix this read `user.invitationToken` /
+        // `user.email` off the wrapper → all undefined, so the worker's email was
+        // broken and createManual silently double-sent. Now the worker is the
+        // single, budget-aware sender.
+        const { user, invitationToken } = await StaffService.processImportRow(row, actorId);
         results.succeeded++;
 
         // Try to queue invitation email (AC7)
@@ -66,7 +72,7 @@ export const importWorker = new Worker(
 
           if (budgetCheck.allowed) {
             // Queue the email immediately
-            const activationUrl = EmailService.generateStaffActivationUrl(user.invitationToken);
+            const activationUrl = EmailService.generateStaffActivationUrl(invitationToken);
 
             await queueStaffInvitationEmail(
               {
@@ -91,7 +97,7 @@ export const importWorker = new Worker(
           } else {
             // Daily/monthly limit reached - defer email
             const deliveryDate = calculateEstimatedDeliveryDate();
-            const activationUrl = EmailService.generateStaffActivationUrl(user.invitationToken);
+            const activationUrl = EmailService.generateStaffActivationUrl(invitationToken);
 
             // Queue with scheduled delivery for tomorrow
             await queueStaffInvitationEmail(
