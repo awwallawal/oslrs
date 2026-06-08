@@ -27,8 +27,11 @@ export class UserController {
       }
 
       // Check if user is authenticated (middleware should have set req.user)
+      // F-023 (Story 9-42): the JWT payload keys the principal under `.sub`
+      // (see TokenService.generateAccessToken). Reading `.userId` always
+      // yielded undefined → a live 401 on every real upload. Use `.sub`.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const userId = (req as any).user?.userId;
+      const userId = (req as any).user?.sub;
       if (!userId) {
         throw new AppError('AUTH_REQUIRED', 'User not authenticated', 401);
       }

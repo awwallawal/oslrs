@@ -45,8 +45,13 @@ describe('User Selfie Upload', () => {
     }).returning();
 
     userId = user.id;
+    // F-023 (Story 9-42): sign the token the way the app actually issues it —
+    // the principal under `.sub` (+ a `jti`), NOT `.userId`. The prior fixture
+    // used `{ userId }`, which masked the controller bug (`req.user.userId`).
+    // With the real `.sub` shape, a regression to `.userId` in the controller
+    // would surface here as a 401, regression-locking the always-401 bug.
     authToken = jwt.sign(
-        { userId: user.id, role: 'TEST_ROLE', email: user.email },
+        { sub: user.id, jti: 'selfie-test-jti', role: 'TEST_ROLE', email: user.email },
         process.env.JWT_SECRET || 'test-secret',
         { expiresIn: '1h' }
     );
