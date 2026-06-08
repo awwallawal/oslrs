@@ -39,7 +39,7 @@ These are `review` or operator-gated — they need a decision or a validation, n
 - **9-22 → 9-23** operator-audit helper → publish-path convergence (9-22 first; 9-23 validated **hygiene, not a 9-18 blocker** — pairs with the Q.M. surface 9-17 touches; bundle with 9-17 if a dev is already there)
 - **9-24** local-db-drift prevention
 - **prep-typecheck-operator-scripts** — static-check the prod-mutating Tailscale scripts
-- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** 9-41 (reveal accountability) · 9-42 (auth/token) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. _See SCP `sprint-change-proposal-2026-06-06-security-r2-remediation.md`._
+- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** ~~9-42 (auth/token)~~ ✅ **DONE+deployed 2026-06-08** (`5bbb824`..`164ff6b`; F-011/012/018/019/022/023/004 + OPS-RL-1/OPS-2) · **9-48 (refresh-token lifecycle: hash-at-rest OPS-3 + M1 rotation grace + L3 reset-atomic) — NEW launch-gate, carved from the 9-42 review** · 9-41 (reveal accountability) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. **9-48 MUST land before any blast** (hard hash-only cutover = forced global re-login; ≈0 pre-traffic, painful after). _See SCPs `…-2026-06-06-security-r2-remediation.md` + `…-2026-06-08-refresh-token-lifecycle-hardening.md`._
 - **Operator (continuous):** Resend Pro + Termii account signups — needed for Phase 2
 
 ---
@@ -55,13 +55,14 @@ Fire the blasts only when **all** are green:
 - wizard **Step-4 stall <30%** (9-18, measured on the 9-19 dashboard)
 - **coherent public journey shipped** (9-38 + 9-39 + 9-40)
 - **capacity** ready (9-20) · **analytics live** (9-30) · **blast infra** live (Resend Pro + Termii)
-- **zero open R2 security findings** (`sec-r2-20260603`): Highs F-011 + F-024, full F-007 reveal-accountability hardening, and the Tier-2/3 dev tail all closed — Stories 9-41…9-45 + 9-9 origin-lock. _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt._
+- **zero open R2 security findings** (`sec-r2-20260603`): High F-011 ✅ closed (`4fee9b9`); High **F-024 still open** (origin-lock, operator). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45 + 9-9 origin-lock. **Scorecard: 1 of 6 dev gate stories closed (9-42); 9-48 must precede the blasts.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
 
 ---
 
 ## Phase 3 — Post-launch public enhancement
 
 - **9-32** public account settings + NDPA self-service rights (depends on 9-38 + 9-39)
+- **9-49** access-token client storage hardening (in-memory + silent refresh; Option C per ADR-022) — **depends-on 9-48** (M1 grace window); closes the residual XSS-at-rest exposure F-004 left. Launch posture = Option A (sessionStorage) accepted; this is the post-launch upgrade. _NOT a gate._
 - **`marketplace-contact-broker-relay` — DORMANT/PARKED** (9-36/9-37 pattern). Brokers employer↔candidate contact so raw PII never leaves until the candidate replies → collapses harvest value to ~0. **NOT a launch gate:** F-007 the *finding* is closed by 9-41; this is defense-in-depth *beyond* a closed finding. **Pull triggers (any):** `getSuspiciousDevices` alerts sustained > threshold post-launch · per-profile-cap rejections climbing · Ministry requests stronger PII-minimization · operator-pool > 1. New channel (~dev-weeks); current messaging is supervisor↔enumerator only. _See SCP `sprint-change-proposal-2026-06-06-security-r2-remediation.md`._
 
 ## Phase 4 — Hygiene / debt (interleave or one cleanup sprint; non-blocking)

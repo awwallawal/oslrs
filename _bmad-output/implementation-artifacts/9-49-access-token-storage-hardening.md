@@ -1,6 +1,11 @@
 # Story 9.49: Access-Token Client Storage Hardening (in-memory + silent refresh)
 
-Status: ready-for-dev  ⛔ DEPENDS-ON 9-48 (do not start until 9-48 ships) · POST-LAUNCH (not a gate)
+Status: backlog  ⛔ DEPENDS-ON 9-48 (do not start until 9-48 ships) · POST-LAUNCH (not a gate)
+
+<!-- Status is `backlog` (not ready-for-dev): a HARD unmet dependency on 9-48 (M1 grace
+     window) means it is not pickable yet, and it is post-launch / not a gate. Flips to
+     ready-for-dev once 9-48 ships. Reconciled 2026-06-08 to match findings-register note G. -->
+
 
 <!--
 Authored 2026-06-08 by Bob (SM). Expanded from the 2026-06-08 stub after ADR-022 + PO ratification.
@@ -69,3 +74,4 @@ _(to be filled by dev)_
 |------|--------|-----|
 | 2026-06-08 | Stub created (N3 handoff). | Bob (SM) |
 | 2026-06-08 | Expanded stub → ready-for-dev after ADR-022 + PO ratification: 7 ACs / 6 Tasks (Option C in-memory + silent refresh). DEPENDS-ON 9-48; POST-LAUNCH; impl line-refs deferred. | Bob (SM) |
+| 2026-06-08 | Status reconciled `ready-for-dev` → **`backlog`** (story + sprint-status) to match findings-register note G — a hard unmet dependency on 9-48 means it is not pickable yet; flips to ready-for-dev when 9-48 ships. | Awwal (review) |
