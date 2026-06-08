@@ -11,7 +11,7 @@
  * Applied to export download endpoint only (not count preview).
  */
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
@@ -41,7 +41,9 @@ export const exportRateLimit = rateLimit({
     const role = (req as AuthRequest).user?.role ?? '';
     return ROLE_RATE_LIMITS[role] ?? DEFAULT_RATE_LIMIT;
   },
-  keyGenerator: (req) => (req as AuthRequest).user?.sub ?? req.ip ?? 'unknown',
+  // OPS-RL-1 sweep (Story 9-42): IPv6-safe IP fallback via `ipKeyGenerator`.
+  keyGenerator: (req) =>
+    (req as AuthRequest).user?.sub ?? (req.ip ? ipKeyGenerator(req.ip) : 'unknown'),
   handler: (req, res) => {
     const role = (req as AuthRequest).user?.role ?? '';
     const limit = ROLE_RATE_LIMITS[role] ?? DEFAULT_RATE_LIMIT;

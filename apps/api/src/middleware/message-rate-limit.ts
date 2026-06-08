@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
@@ -28,8 +28,9 @@ export const messageRateLimit = rateLimit({
   windowMs: 60_000, // 1 minute
   max: 30, // 30 messages per minute per user
   keyGenerator: (req) => {
+    // OPS-RL-1 sweep (Story 9-42): IPv6-safe IP fallback via `ipKeyGenerator`.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (req as any).user?.sub || req.ip || 'unknown';
+    return (req as any).user?.sub || (req.ip ? ipKeyGenerator(req.ip) : 'unknown');
   },
   message: {
     status: 'error',

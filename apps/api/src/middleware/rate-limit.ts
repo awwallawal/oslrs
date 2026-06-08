@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
@@ -19,7 +19,9 @@ export const ninCheckRateLimit = rateLimit({
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 20, // 20 requests per minute per user (AC 3.7.3)
-  keyGenerator: (req) => (req as Request & { user?: { sub: string } }).user?.sub ?? req.ip ?? 'unknown',
+  // OPS-RL-1 sweep (Story 9-42): IPv6-safe IP fallback via `ipKeyGenerator`.
+  keyGenerator: (req) =>
+    (req as Request & { user?: { sub: string } }).user?.sub ?? (req.ip ? ipKeyGenerator(req.ip) : 'unknown'),
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -40,7 +42,9 @@ export const profileUpdateRateLimit = rateLimit({
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 10, // 10 profile updates per minute per user
-  keyGenerator: (req) => (req as Request & { user?: { sub: string } }).user?.sub ?? req.ip ?? 'unknown',
+  // OPS-RL-1 sweep (Story 9-42): IPv6-safe IP fallback via `ipKeyGenerator`.
+  keyGenerator: (req) =>
+    (req as Request & { user?: { sub: string } }).user?.sub ?? (req.ip ? ipKeyGenerator(req.ip) : 'unknown'),
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',

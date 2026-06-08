@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import { isTestMode, shouldSkipRateLimit } from './login-rate-limit.js';
@@ -49,7 +49,9 @@ export const magicLinkRateLimit = rateLimit({
     if (typeof rawEmail === 'string' && rawEmail.includes('@')) {
       return rawEmail.toLowerCase().trim();
     }
-    return req.ip || 'unknown';
+    // OPS-RL-1 sweep (Story 9-42): IPv6-safe IP fallback via `ipKeyGenerator`
+    // (the token-bearing endpoints that share this limiter key per-IP).
+    return req.ip ? ipKeyGenerator(req.ip) : 'unknown';
   },
   message: {
     status: 'error',

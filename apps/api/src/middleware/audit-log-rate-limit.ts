@@ -10,7 +10,7 @@
  * `req.user.sub` so each operator gets their own bucket — prevents one
  * operator's automation from blocking another.
  */
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
@@ -46,7 +46,8 @@ const keyByUser = (req: Request) => {
       { path: req.path, ip: req.ip },
       'audit-log rate-limit fell back to req.ip — auth middleware may not have run before this limiter (regression?)'
     );
-    return req.ip;
+    // OPS-RL-1 sweep (Story 9-42): IPv6-safe bucketing via `ipKeyGenerator`.
+    return ipKeyGenerator(req.ip);
   }
   // Both missing means the auth middleware did not populate req.user AND
   // express's trust-proxy chain did not resolve req.ip. Either is a
