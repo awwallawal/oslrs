@@ -39,6 +39,7 @@ These are `review` or operator-gated — they need a decision or a validation, n
 - **9-22 → 9-23** operator-audit helper → publish-path convergence (9-22 first; 9-23 validated **hygiene, not a 9-18 blocker** — pairs with the Q.M. surface 9-17 touches; bundle with 9-17 if a dev is already there)
 - **9-24** local-db-drift prevention
 - **prep-typecheck-operator-scripts** — static-check the prod-mutating Tailscale scripts
+- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** 9-41 (reveal accountability) · 9-42 (auth/token) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. _See SCP `sprint-change-proposal-2026-06-06-security-r2-remediation.md`._
 - **Operator (continuous):** Resend Pro + Termii account signups — needed for Phase 2
 
 ---
@@ -54,12 +55,14 @@ Fire the blasts only when **all** are green:
 - wizard **Step-4 stall <30%** (9-18, measured on the 9-19 dashboard)
 - **coherent public journey shipped** (9-38 + 9-39 + 9-40)
 - **capacity** ready (9-20) · **analytics live** (9-30) · **blast infra** live (Resend Pro + Termii)
+- **zero open R2 security findings** (`sec-r2-20260603`): Highs F-011 + F-024, full F-007 reveal-accountability hardening, and the Tier-2/3 dev tail all closed — Stories 9-41…9-45 + 9-9 origin-lock. _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt._
 
 ---
 
 ## Phase 3 — Post-launch public enhancement
 
 - **9-32** public account settings + NDPA self-service rights (depends on 9-38 + 9-39)
+- **`marketplace-contact-broker-relay` — DORMANT/PARKED** (9-36/9-37 pattern). Brokers employer↔candidate contact so raw PII never leaves until the candidate replies → collapses harvest value to ~0. **NOT a launch gate:** F-007 the *finding* is closed by 9-41; this is defense-in-depth *beyond* a closed finding. **Pull triggers (any):** `getSuspiciousDevices` alerts sustained > threshold post-launch · per-profile-cap rejections climbing · Ministry requests stronger PII-minimization · operator-pool > 1. New channel (~dev-weeks); current messaging is supervisor↔enumerator only. _See SCP `sprint-change-proposal-2026-06-06-security-r2-remediation.md`._
 
 ## Phase 4 — Hygiene / debt (interleave or one cleanup sprint; non-blocking)
 

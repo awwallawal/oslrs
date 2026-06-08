@@ -242,6 +242,7 @@ _**Revised 2026-04-27** per cost-aware roadmap session with Awwal: item #5 (aler
 | 4 | `prep-input-sanitisation-layer` merged | prep task | ✅ Done 2026-05-03 |
 | 5 | Backup AES-256 client-side encryption + restore drill executed (9-9 AC#5) **[REVISED 2026-04-27]** | 9-9 (subtask 5) | ⏳ Backlog (Wave 1) |
 | 6 | Operations Manual enumerator-section (D4 subset) drafted (`.md` source + print-ready HTML/PDF artifact) **[REVISED 2026-05-04: Ministry office-printer print run downstream of `done`, NOT field-blocking; closure-gate relaxed per Awwal directive]** | `prep-operations-manual-enumerator-section` | ✅ Done 2026-05-05 (drafted + rendered + AI-persona-ratified + adversarial code review pass clean; real-Iris + real-Gabe ratification + Awwal placeholder fills tracked as v1.1 follow-ups OUTSIDE this story's scope per Awwal directive 2026-05-05) |
+| 7 | Zero open R2 security findings (`sec-r2-20260603`) — Highs F-011 + F-024, full F-007 reveal-accountability hardening, and the Tier-2/3 dev tail all closed **[ADDED 2026-06-06 per SCP-2026-06-06-security-r2-remediation]** | 9-41…9-45 + 9-9 (origin-lock) | ⏳ Backlog |
 
 **Tier B items** (Stories 9-10, 9-11, DPIA filing, OS patching, super-admin TOTP MFA Story 9-13) can ship during the first weeks of field operation without blocking start. Note: Story 9-13 is Tier B per FRC but is slotted in Wave 0 because it's zero-cost and small (~1-2 days) — recommended to land before field rather than during.
 
@@ -2347,6 +2348,78 @@ So that every feature in the analytics specification is either live, threshold-g
 **Source:** `_bmad-output/implementation-artifacts/polish-and-migration-plan-2026-03-14.md`; expanded scope per `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.1.
 
 **Context:** After 8 feature epics + 2 security hardening phases, the platform is functionally complete. This epic addresses polish, UX fixes, infrastructure readiness for a professional domain, **security hardening (incl. Tailscale operator-access overlay deployed 2026-04-23 + OS upgrade 2026-04-25)**, **field-survey UX readiness (5-step wizard + pending-NIN + magic-link)**, and **admin audit visibility prior to Transfer**. The expanded scope is driven by the Monday 2026-04-20 distributed SSH brute-force incident, ITF-SUPA secondary-data ingestion request, and field-friction findings on NIN capture.
+
+### Epic 9 — Story Index (authoritative list)
+
+> **Single source of truth for which Epic 9 stories exist.** Story *files* in `_bmad-output/implementation-artifacts/` remain the detail; this table is the complete index. Story 9.1–9.12 prose below is retained as historical detail.
+>
+> **🔁 MAINTENANCE RULE:** any SCP or new story MUST add its row here in the **same change** (see `_bmad-output/project-context.md` → "Planning Artifact Discipline"). Reconciled 2026-06-07 after Epic-9 drift (9-13…9-40 existed in `sprint-status.yaml` + story files + roadmap but were never indexed here; Epics 10/11 verified complete).
+>
+> _Status mirrors `sprint-status.yaml` (2026-06-07). Origin = best-known source SCP/event ("—" = not confidently attributed)._
+
+| ID | Title | Status | Origin |
+|----|-------|--------|--------|
+| 9-1 | Profile Page & Auth/Me Fix + Editable Profile | done | Epic 9 baseline |
+| 9-2 | Domain Migration (→ oyoskills.com) | done | Epic 9 baseline |
+| 9-3 | Trust Section & Footer Polish | done | Epic 9 baseline |
+| 9-4 | Email Setup — Resend Domain Verification | done | Epic 9 baseline |
+| 9-5 | Fix Domain/Email Bugs & Centralize Config | done | Epic 9 baseline |
+| 9-6 | Fix Supervisor Analytics + Registry Bugs | done | Epic 9 baseline |
+| 9-7 | Security Hotfix — Nginx Forward-Fix + Drizzle | done | Hotfix 2026-04-11 |
+| 9-8 | CSP — Nginx Mirror Rollout | done | Hotfix 2026-04-11 |
+| 9-9 | Infrastructure Security Hardening | in-progress | SCP-2026-04-22 |
+| 9-10 | PM2 Restart-Loop Investigation | done | SCP-2026-04-22 |
+| 9-11 | Admin Audit Log Viewer | done | SCP-2026-04-22 |
+| 9-12 | Public Wizard + Pending-NIN + Magic-Link | review | SCP-2026-04-22 |
+| 9-13 | Super-Admin TOTP MFA | done | Cost-aware roadmap 2026-04-27 |
+| 9-15 | Prod-Gate Telegram Alerts | done | Hotfix 2026-05-11 |
+| 9-16 | Magic-Link Login | done | 9-12 MR-8 follow-up |
+| 9-17 | Form-PIN UI on Questionnaire Mgmt | ready-for-dev | Field-readiness seq 2026-05-31 |
+| 9-18 | Wizard NIN-First & Summary-Save | ready-for-dev | Field-readiness seq 2026-05-31 |
+| 9-19 | Operations Dashboard | done | — |
+| 9-20 | Pre-Viral Capacity Prep | in-progress | — |
+| 9-21 | Route-Registration Integration Test | ready-for-dev | — |
+| 9-22 | Operator DB-Audit Discipline | ready-for-dev | — |
+| 9-23 | Questionnaire Publish-Path Convergence | ready-for-dev | — |
+| 9-24 | Local-DB-Drift Prevention | ready-for-dev | — |
+| 9-25 | MFA-Reminder Idempotency | ready-for-dev | — |
+| 9-26 | Unified Ingestion Pipeline | done | Hemorrhage fix 2026-05-20 |
+| 9-27 | Multi-Channel Re-engagement | in-progress | Cohort re-engagement |
+| 9-28 | Cohort-A Step-4 Recovery Decision | review | Cohort re-engagement |
+| 9-30 | CSP connect-src Cloudflare Analytics Unblock | review | Story 9-30 2026-05-31 |
+| 9-32 | Public Account Settings & NDPA Rights | ready-for-dev | Field-readiness seq (post-launch) |
+| 9-33 | Enumerator Path/FormID & Audit Hotfix | done | Audit unification |
+| 9-34 | Audit Pattern Unification (target_resource) | done | Audit unification |
+| 9-35 | Backup Monthly-Promotion .enc Suffix Fix | ready-for-dev | Backup hygiene |
+| 9-36 | Complete Audit-Pattern Enforcement | backlog (dormant) | Audit hygiene |
+| 9-37 | Audit Infra Hardening (Flush-Race & UI) | backlog (dormant) | Audit hygiene |
+| 9-38 | Wizard Public-User Account Provisioning | ready-for-dev | SCP-2026-06-06 journey-harmonization |
+| 9-39 | Public Entry-IA Sign-In Door & Magic-Link | ready-for-dev | SCP-2026-06-06 journey-harmonization |
+| 9-40 | Public Dashboard Registration-Status Home | ready-for-dev | SCP-2026-06-06 journey-harmonization |
+| **9-41** | **Marketplace Reveal Accountability Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **9-42** | **Auth, Token & Session Hardening** (+ OPS-RL-1 IPv6 bypass) | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **9-43** | **Export & Reporting Data-Safety Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **9-44** | **Upload Pipeline Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **9-45** | **Platform Access-Control & Boot Hardening** (+ F-026 NODE_ENV/node-dist) | ready-for-dev | **SCP-2026-06-06 security-r2** |
+| **marketplace-contact-broker-relay** | Brokered employer↔candidate contact — **PARKED/DORMANT** (Phase 3; pull-triggers in roadmap) | backlog | **SCP-2026-06-06 security-r2** |
+| **9-46** | **Security Findings-Register Reconciliation** (F-007 sev + NODE_ENV/F-005 + F-006 host; F-001 carved to 9-47; hygiene, not a gate) | ready-for-dev | **register-audit 2026-06-07** |
+| **9-47** | **CSP `style-src` nonce/hash hardening (F-001)** — spike-first; outcome may be partial; hygiene, not a gate | ready-for-dev | **F-001 fix elected 2026-06-07** |
+
+**Numbers not used:** 9-14, 9-29 (surname-split "Part F" — absorbed into 9-18), 9-31 — intentionally skipped during planning.
+
+**Epic 9 prep tasks (authoritative):**
+
+| Prep task | Status |
+|---|---|
+| prep-input-sanitisation-layer | done |
+| prep-operations-manual-enumerator-section | done |
+| prep-settings-landing-and-feature-flags | done |
+| prep-export-row-cap-and-redirect | ready-for-dev |
+| prep-build-off-vps-cloud-runner | done |
+| prep-tsc-pre-commit-hook | done |
+| prep-typecheck-operator-scripts | ready-for-dev |
+
+---
 
 ### Story 9.1: Profile Page & Auth/Me Fix + Editable Profile
 

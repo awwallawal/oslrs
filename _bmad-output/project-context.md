@@ -1318,6 +1318,14 @@ docker compose -f docker/docker-compose.dev.yml up
 - Commit messages: Conventional Commits format
 - PR requirements: Tests pass, no ESLint errors, reviewed by 1+ person
 
+### Planning Artifact Discipline (BMAD)
+
+**🔁 Story Index sync rule:** Any `correct-course` SCP or newly-created story MUST add its row to the relevant **Epic Story Index** in `epics.md` in the **same change** that creates the story file and/or updates `sprint-status.yaml`. The Story Index is the authoritative list of which stories exist; story files hold the detail; `sprint-status.yaml` holds live status. Keep all three in lockstep.
+
+**Why:** Epic 9 silently drifted — stories 9-13…9-40 existed in `sprint-status.yaml` + story files + the roadmap but were never reflected in `epics.md`, because SCPs updated the registry and story files but not the epic index. Discovered + reconciled 2026-06-07. Do not re-introduce this gap.
+
+**🔁 Security findings-register sync rule:** every `fix(sec): F-XXX` commit (or any disposition change) updates that finding's row in `docs/security/findings-register.md` **in the same change** (flip to `Fixed-in-<hash>`). That register is the auditor's **1:1 retest map** and the in-repo source of truth for finding dispositions — the external assessment package does NOT travel at BOT transfer, so the register must stay current and self-contained.
+
 ---
 
 ## User Skill Level Notes (Awwal - Intermediate, MERN Background)
