@@ -11,32 +11,20 @@ expect.extend(matchers);
 // Mock global fetch
 globalThis.fetch = vi.fn();
 
-// Mock localStorage
-const localStorageMock = (function() {
-  let store: Record<string, string> = {};
-  return {
-    getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value.toString();
-    }),
-    clear: vi.fn(() => {
-      store = {};
-    }),
-    removeItem: vi.fn((key: string) => {
-      delete store[key];
-    })
-  };
-})();
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock
-});
+// F-004 (Story 9-42): the component now reads the access token from the in-memory
+// auth context (useAuth), NOT localStorage. Mock useAuth so the token is supplied
+// the same way the real app supplies it (in memory), and so the component no
+// longer depends on any localStorage key.
+const mockUseAuth = vi.fn(() => ({ accessToken: 'fake-token' as string | null }));
+vi.mock('../../../auth/context/AuthContext', () => ({
+  useAuth: () => mockUseAuth(),
+}));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.restoreAllMocks(); // Important to restore mocks created by mockDownload
-  localStorageMock.clear();
+  mockUseAuth.mockReturnValue({ accessToken: 'fake-token' });
 });
 
 describe('IDCardDownload', () => {
@@ -47,8 +35,7 @@ describe('IDCardDownload', () => {
 
     it('should handle download process', async () => {
         const { click, createObjectURL, revokeObjectURL } = mockDownload();
-        
-        localStorageMock.setItem('token', 'fake-token');
+
         const mockBlob = new Blob(['%PDF-MOCK'], { type: 'application/pdf' });
         (globalThis.fetch as any).mockResolvedValue({
             ok: true,
@@ -71,6 +58,15 @@ describe('IDCardDownload', () => {
             expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/users/id-card'), expect.anything());
         });
 
+        // F-004: the Authorization header must carry the IN-MEMORY token (from
+        // useAuth), proving the component no longer depends on localStorage.
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                headers: expect.objectContaining({ Authorization: 'Bearer fake-token' }),
+            }),
+        );
+
         await waitFor(() => {
             expect(button).toBeEnabled();
             expect(screen.queryByText(/generating/i)).not.toBeInTheDocument();
@@ -82,8 +78,22 @@ describe('IDCardDownload', () => {
         expect(revokeObjectURL).toHaveBeenCalledTimes(1);
     });
 
+    it('should error when no in-memory token is available (not from localStorage)', async () => {
+        mockUseAuth.mockReturnValue({ accessToken: null });
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        render(<IDCardDownload />);
+        fireEvent.click(screen.getByRole('button', { name: /download id card/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/authentication required/i)).toBeInTheDocument();
+        });
+        // No network call attempted without a token.
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        consoleSpy.mockRestore();
+    });
+
     it('should handle error', async () => {
-        localStorageMock.setItem('token', 'fake-token');
         (globalThis.fetch as any).mockResolvedValue({
             ok: false,
             status: 500,

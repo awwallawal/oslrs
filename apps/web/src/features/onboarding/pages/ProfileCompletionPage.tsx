@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { SkeletonCard } from '../../../components/skeletons';
 import IDCardDownload from '../components/IDCardDownload';
+import { useAuth } from '../../auth/context/AuthContext';
 
 // Lazy load LiveSelfieCapture to split @vladmandic/human (~1.2MB) into separate chunk
 // Only loads when user clicks "Start Verification"
@@ -10,6 +11,11 @@ const LiveSelfieCapture = lazy(() => import('../components/LiveSelfieCapture'));
 
 const ProfileCompletionPage: React.FC = () => {
   const navigate = useNavigate();
+  // F-004 (Story 9-42): use the auth-context session token (sessionStorage-backed
+  // via AuthContext, not strictly in-memory) instead of the dead
+  // `localStorage.getItem('token')` key. The win is reading the live/correct key;
+  // sessionStorage carries similar XSS exposure to localStorage. (L1)
+  const { accessToken } = useAuth();
   const [step, setStep] = useState<'intro' | 'selfie' | 'success'>('intro');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +29,7 @@ const ProfileCompletionPage: React.FC = () => {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token'); 
+      const token = accessToken;
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
       
       const res = await fetch(`${apiUrl}/users/selfie`, {

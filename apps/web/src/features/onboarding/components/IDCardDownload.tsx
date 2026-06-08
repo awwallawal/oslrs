@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { logger } from '../../../lib/logger';
+import { useAuth } from '../../auth/context/AuthContext';
 
 const IDCardDownload: React.FC = () => {
+    // F-004 (Story 9-42): read the live session token from the auth context
+    // instead of `localStorage.getItem('token')`, which read a DEAD key — the
+    // ID-card download was effectively always-unauthenticated. AuthContext persists
+    // the token in sessionStorage (saveToken), so this is NOT "in-memory" and
+    // carries a similar XSS exposure to localStorage; the wins here are (1) using
+    // the correct/live key and (2) not keeping a second copy under 'token'. (L1)
+    const { accessToken } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -9,9 +17,7 @@ const IDCardDownload: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            // Retrieve token from localStorage (assuming standard auth flow)
-            // Adjust based on actual auth implementation if different
-            const token = localStorage.getItem('token');
+            const token = accessToken;
             if (!token) {
                 throw new Error('Authentication required. Please log in.');
             }

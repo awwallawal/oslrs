@@ -80,6 +80,29 @@ export default tseslint.config(
 
       // General rules
       'no-console': 'warn',
+
+      // F-004 (Story 9-42): ban auth-token access via localStorage. AuthContext
+      // holds the access token in sessionStorage (NOT localStorage, and NOT purely
+      // in-memory); persisting a SECOND copy under a 'token' key in localStorage
+      // adds XSS-reachable bearer state, and the old `localStorage.getItem('token')`
+      // read a dead key. This guard is BEST-EFFORT (L2): it matches string-LITERAL
+      // keys containing "token" on both `localStorage.*` and `window.localStorage.*`;
+      // variable keys, other window aliases, and sessionStorage are not covered.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.name='localStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
+          message:
+            'F-004: do not store/read auth tokens in localStorage. Use the auth-context session token (useAuth().accessToken).',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.property.name='localStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
+          message:
+            'F-004: do not store/read auth tokens in window.localStorage. Use the auth-context session token (useAuth().accessToken).',
+        },
+      ],
     },
   },
   // Test files - with Vitest globals
