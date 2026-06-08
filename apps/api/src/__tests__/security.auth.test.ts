@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
-import { generateInvitationToken } from '@oslsr/utils';
+import { generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { eq } from 'drizzle-orm';
 
@@ -45,7 +45,7 @@ describe('Security: Authentication & Authorization', () => {
         fullName: 'Expiry Test',
         roleId,
         status: 'invited',
-        invitationToken: token,
+        invitationToken: hashInvitationToken(token), // OPS-2: stored hashed at rest
         invitedAt: new Date(), // Will use mocked time
       });
 

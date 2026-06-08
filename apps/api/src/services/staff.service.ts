@@ -5,7 +5,7 @@ import { parse } from 'csv-parse/sync';
 import { Redis } from 'ioredis';
 import pino from 'pino';
 import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type CreateStaffDto, type EmailStatus } from '@oslsr/types';
-import { AppError, generateInvitationToken } from '@oslsr/utils';
+import { AppError, generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
 import { AuditService } from './audit.service.js';
@@ -400,7 +400,9 @@ export class StaffService {
           .set({
             status: newStatus,
             passwordHash: null,
-            invitationToken,
+            // OPS-2 (Story 9-42 AC#11): store the hash; the plaintext lives only
+            // in the activation URL below.
+            invitationToken: hashInvitationToken(invitationToken),
             invitedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -650,7 +652,9 @@ export class StaffService {
                 roleId,
                 lgaId: lgaId || null,
                 status: 'invited',
-                invitationToken: token,
+                // OPS-2 (Story 9-42 AC#11): store sha256(token); the plaintext
+                // `token` is only ever placed in the activation URL below.
+                invitationToken: hashInvitationToken(token),
                 invitedAt: new Date(),
             }).returning();
 
@@ -868,7 +872,9 @@ export class StaffService {
       // Update user with new token
       await tx.update(users)
         .set({
-          invitationToken: newToken,
+          // OPS-2 (Story 9-42 AC#11): store the hash; the plaintext `newToken`
+          // is used only for the activation URL below.
+          invitationToken: hashInvitationToken(newToken),
           invitedAt: new Date(),
         })
         .where(eq(users.id, userId));

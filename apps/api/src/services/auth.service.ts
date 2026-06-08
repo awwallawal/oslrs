@@ -1,7 +1,7 @@
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
-import { AppError, hashPassword, comparePassword } from '@oslsr/utils';
+import { AppError, hashPassword, comparePassword, hashInvitationToken } from '@oslsr/utils';
 import type { ActivationWithSelfiePayload, BackOfficeActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
 import { UserRole, isBackOfficeRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
@@ -63,8 +63,10 @@ export class AuthService {
     expired?: boolean;
     roleName?: string;
   }> {
+    // OPS-2 (Story 9-42 AC#11): the column stores sha256(token); hash the
+    // incoming plaintext before lookup so the raw token is never compared.
     const user = await db.query.users.findFirst({
-      where: eq(users.invitationToken, token),
+      where: eq(users.invitationToken, hashInvitationToken(token)),
       with: {
         role: true,
       },
@@ -111,8 +113,9 @@ export class AuthService {
     userAgent?: string
   ): Promise<{ id: string; email: string; fullName: string; status: string }> {
     // 1. Find user by token (role already known from prior validateActivationToken call)
+    //    OPS-2: hash the incoming plaintext before lookup (column holds sha256).
     const user = await db.query.users.findFirst({
-      where: eq(users.invitationToken, token),
+      where: eq(users.invitationToken, hashInvitationToken(token)),
     });
 
     if (!user) {

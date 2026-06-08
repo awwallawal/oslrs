@@ -1,4 +1,4 @@
-import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 import bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 12;
@@ -13,6 +13,27 @@ const AUTH_TAG_LENGTH = 16; // 16 bytes for authentication tag
  */
 export const generateInvitationToken = (): string => {
   return randomBytes(16).toString('hex');
+};
+
+/**
+ * OPS-2 (sec-r2 / Story 9-42 AC#11): SHA-256 hex of a bearer secret.
+ *
+ * Staff invitation tokens (like password-reset and magic-link tokens) must be
+ * stored HASHED at rest so a secondary DB leak cannot be turned into an
+ * account takeover. The plaintext token is emailed exactly once (in the
+ * activation URL) and NEVER persisted; only this hash is stored in
+ * `users.invitation_token`, and the incoming token is hashed before lookup.
+ *
+ * Unsalted SHA-256 is correct here: the input is 16 bytes of `randomBytes`
+ * (high-entropy), so there is no dictionary/rainbow risk a salt would defend
+ * against, and a per-token salt would break the lookup-by-hash design. Mirrors
+ * the `magic-link.service.ts` / `password-reset.service.ts` (F-011) pattern.
+ *
+ * @param token Plaintext token
+ * @returns {string} 64-character lowercase hex SHA-256 digest
+ */
+export const hashInvitationToken = (token: string): string => {
+  return createHash('sha256').update(token).digest('hex');
 };
 
 /**

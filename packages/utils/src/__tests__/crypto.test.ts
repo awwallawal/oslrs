@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { generateInvitationToken, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
+import { generateInvitationToken, hashInvitationToken, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
+import { createHash } from 'node:crypto';
 
 describe('Crypto Utils', () => {
   it('should generate a 32-character hex token', () => {
@@ -13,6 +14,37 @@ describe('Crypto Utils', () => {
     const token1 = generateInvitationToken();
     const token2 = generateInvitationToken();
     expect(token1).not.toBe(token2);
+  });
+});
+
+describe('hashInvitationToken (OPS-2 / Story 9-42 AC#11)', () => {
+  it('should return a 64-character lowercase hex SHA-256 digest', () => {
+    const token = generateInvitationToken();
+    const hash = hashInvitationToken(token);
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('should differ from the plaintext token (never store the raw token)', () => {
+    const token = generateInvitationToken();
+    expect(hashInvitationToken(token)).not.toBe(token);
+  });
+
+  it('should be deterministic (same input → same hash, enables lookup-by-hash)', () => {
+    const token = generateInvitationToken();
+    expect(hashInvitationToken(token)).toBe(hashInvitationToken(token));
+  });
+
+  it('should match a reference SHA-256 hex digest', () => {
+    const token = 'a'.repeat(32);
+    const expected = createHash('sha256').update(token).digest('hex');
+    expect(hashInvitationToken(token)).toBe(expected);
+  });
+
+  it('should produce different hashes for different tokens', () => {
+    expect(hashInvitationToken(generateInvitationToken())).not.toBe(
+      hashInvitationToken(generateInvitationToken()),
+    );
   });
 });
 

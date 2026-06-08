@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import supertest from 'supertest';
 import sharp from 'sharp';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { generateInvitationToken } from '@oslsr/utils';
+import { generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
+import { StaffService } from '../services/staff.service.js';
+import { EmailService } from '../services/email.service.js';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { BACK_OFFICE_ROLES, FIELD_ROLES, isBackOfficeRole, UserRole } from '@oslsr/types';
 
@@ -75,7 +77,7 @@ describe('Auth Activation Integration', () => {
           fullName: 'Activate Test',
           roleId: fieldRoleId,
           status: 'invited',
-          invitationToken: testUserToken,
+          invitationToken: hashInvitationToken(testUserToken), // OPS-2: stored hashed at rest
           invitedAt: new Date(),
       }).returning();
 
@@ -158,7 +160,7 @@ describe('Auth Activation Integration', () => {
           fullName: 'NIN Test',
           roleId: fieldRoleId, // Must be field role to trigger NIN validation
           status: 'invited',
-          invitationToken: newToken,
+          invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
       });
 
       const res = await request
@@ -189,7 +191,7 @@ describe('Auth Activation Integration', () => {
           fullName: 'No Selfie Test',
           roleId: fieldRoleId, // Field role — selfie is optional, profile required
           status: 'invited',
-          invitationToken: newToken,
+          invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
           invitedAt: new Date(),
       });
 
@@ -222,7 +224,7 @@ describe('Auth Activation Integration', () => {
           fullName: 'Bad Selfie Test',
           roleId: fieldRoleId, // Field role — selfie validation applies
           status: 'invited',
-          invitationToken: newToken,
+          invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
           invitedAt: new Date(),
       });
 
@@ -278,7 +280,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Selfie S3 Test',
         roleId: fieldRoleId,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       }).returning();
 
@@ -334,7 +336,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Validate Valid Test',
         roleId: fieldRoleId,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -367,7 +369,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Validate Expired Test',
         roleId: fieldRoleId,
         status: 'invited',
-        invitationToken: expiredToken,
+        invitationToken: hashInvitationToken(expiredToken), // OPS-2: stored hashed at rest
         invitedAt: expiredDate,
       });
 
@@ -387,7 +389,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Validate Activated Test',
         roleId: fieldRoleId,
         status: 'active', // Already activated
-        invitationToken: usedToken,
+        invitationToken: hashInvitationToken(usedToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -410,7 +412,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Validate Role Test',
         roleId,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -436,7 +438,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Back Office User',
         roleId: superAdminRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -470,7 +472,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Assessor User',
         roleId: assessorRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -494,7 +496,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Official User',
         roleId: officialRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -519,7 +521,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Supervisor User',
         roleId: supervisorRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -554,7 +556,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Clerk User',
         roleId: clerkRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -588,7 +590,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Field User',
         roleId: enumeratorRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -614,7 +616,7 @@ describe('Auth Activation Integration', () => {
         fullName: 'Field Full User',
         roleId: enumeratorRole.id,
         status: 'invited',
-        invitationToken: newToken,
+        invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
         invitedAt: new Date(),
       });
 
@@ -634,6 +636,137 @@ describe('Auth Activation Integration', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('active');
+    });
+  });
+
+  describe('OPS-2: invitation token hashed at rest (Story 9-42 AC#11)', () => {
+    it('should store a 64-hex SHA-256 hash (NOT the 32-hex raw token) when creating staff', async () => {
+      const allRoles = await db.select().from(roles);
+      const superAdminRole = allRoles.find(r => r.name === 'super_admin')!;
+      const email = `ops2-store-${Date.now()}@example.com`;
+
+      const { user } = await StaffService.createManual(
+        {
+          fullName: 'OPS2 Store User',
+          email,
+          phone: `080${Date.now().toString().slice(-8)}`,
+          roleId: superAdminRole.id,
+        },
+        testUserId, // real users.id — satisfies audit_logs.actor_id FK
+      );
+
+      const persisted = await db.query.users.findFirst({ where: eq(users.id, user.id) });
+      // sha256 hex = 64 chars; the legacy raw token was 32 hex chars — the length
+      // alone proves the column holds a hash, not the plaintext token.
+      expect(persisted?.invitationToken).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('should activate end-to-end with the PLAINTEXT token while only its hash is stored', async () => {
+      const plaintext = generateInvitationToken();
+      const email = `ops2-lookup-${Date.now()}@example.com`;
+
+      const [created] = await db.insert(users).values({
+        email,
+        fullName: 'OPS2 Lookup User',
+        roleId: fieldRoleId, // enumerator → field role (needs full profile)
+        status: 'invited',
+        invitationToken: hashInvitationToken(plaintext), // only the hash at rest
+        invitedAt: new Date(),
+      }).returning();
+
+      // Sanity: the stored value is the hash, not the plaintext.
+      expect(created.invitationToken).toBe(hashInvitationToken(plaintext));
+      expect(created.invitationToken).not.toBe(plaintext);
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${plaintext}`)
+        .send({
+          password: 'password123',
+          nin: generateValidNin(),
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test St, Ibadan',
+          bankName: 'Test Bank',
+          accountNumber: '0123456789',
+          accountName: 'OPS2 Lookup User',
+          nextOfKinName: 'NOK Test',
+          nextOfKinPhone: '08012345678',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+
+      const after = await db.query.users.findFirst({ where: eq(users.id, created.id) });
+      expect(after?.invitationToken).toBeNull(); // invalidated on activation
+    });
+
+    it('should REJECT submitting the stored hash as the token (proves lookup re-hashes input)', async () => {
+      const plaintext = generateInvitationToken();
+      const storedHash = hashInvitationToken(plaintext);
+      const email = `ops2-hash-as-token-${Date.now()}@example.com`;
+
+      await db.insert(users).values({
+        email,
+        fullName: 'OPS2 Hash-As-Token User',
+        roleId: fieldRoleId,
+        status: 'invited',
+        invitationToken: storedHash,
+        invitedAt: new Date(),
+      });
+
+      // Submitting the HASH itself must fail: the service hashes the input, so
+      // sha256(storedHash) ≠ storedHash. A DB/Redis leak of the column is useless.
+      const res = await request
+        .post(`/api/v1/auth/activate/${storedHash}`)
+        .send({
+          password: 'password123',
+          nin: generateValidNin(),
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test St, Ibadan',
+          bankName: 'Test Bank',
+          accountNumber: '0123456789',
+          accountName: 'OPS2 Hash-As-Token User',
+          nextOfKinName: 'NOK Test',
+          nextOfKinPhone: '08012345678',
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body.code).toBe('AUTH_INVALID_TOKEN');
+    });
+
+    it('should email the PLAINTEXT token while persisting only its hash (store-path regression lock)', async () => {
+      // M2 (code-review 2026-06-08): the hash-at-rest tests above insert the
+      // hash manually, bypassing the real store sites. This locks the OTHER
+      // half of the security property — that createManual emails the PLAINTEXT
+      // token and stores its hash — so a regression that emailed the hash
+      // (which would silently break activation) fails loudly here.
+      const allRoles = await db.select().from(roles);
+      const superAdminRole = allRoles.find(r => r.name === 'super_admin')!;
+      const email = `ops2-email-${Date.now()}@example.com`;
+
+      const urlSpy = vi.spyOn(EmailService, 'generateStaffActivationUrl');
+      try {
+        const { user } = await StaffService.createManual(
+          {
+            fullName: 'OPS2 Email User',
+            email,
+            phone: `080${Date.now().toString().slice(-8)}`,
+            roleId: superAdminRole.id,
+          },
+          testUserId,
+        );
+
+        // The activation URL must carry the PLAINTEXT token (32-hex), never the
+        // 64-hex SHA-256 hash that lands in the column.
+        expect(urlSpy).toHaveBeenCalledTimes(1);
+        const emailedToken = urlSpy.mock.calls[0][0];
+        expect(emailedToken).toMatch(/^[0-9a-f]{32}$/);
+
+        const persisted = await db.query.users.findFirst({ where: eq(users.id, user.id) });
+        expect(persisted?.invitationToken).toBe(hashInvitationToken(emailedToken));
+        expect(persisted?.invitationToken).not.toBe(emailedToken);
+      } finally {
+        urlSpy.mockRestore();
+      }
     });
   });
 
