@@ -14,7 +14,7 @@ Severities are the **assessor's calibrated** ratings (subagent "High"s downgrade
 
 | ID | Title | Sev | Disposition | Rationale / notes | Verify |
 |----|-------|-----|-------------|-------------------|--------|
-| F-011 | Reset token stored plaintext (Redis+DB) | **High** | In-story 9-42 (Task 1, in progress) | confirmed open at HEAD; copy `magic-link.service.ts` sha256 pattern | test: 64-hex at rest, e2e reset ok |
+| F-011 | Reset token stored plaintext (Redis+DB) | **High** | ✅ **Fixed-in-`4fee9b9`** | sha256 at rest (Redis key + DB col) + hash-before-lookup; review-clean | test: 64-hex at rest, e2e reset ok |
 | F-024 | Origin reachable around Cloudflare | **High** | Deferred-operator (`docs/f-024-origin-lock-runbook.md`) + dev step-2 (9-9 #11) | `oyotradeministry.com.ng` grey/direct → origin; gates Phase-2 blasts | runbook §5 matrix |
 | F-005 | Fail-open to dev mode if `NODE_ENV` unset | Medium | In-story 9-45 | **LATENT, not active** — prod confirms NODE_ENV=production (dev routes 404, CSP enforced); fix = fail-closed boot | test: unset → non-zero exit |
 | F-007 | Marketplace reveal — bulk PII via account fan-out | Medium | In-story 9-41 | **downgraded High→Medium** after open-by-design confirmed (control = registration+audit+caps, not role gate) | 9-41 AC#1–#8 |
@@ -40,7 +40,7 @@ Severities are the **assessor's calibrated** ratings (subagent "High"s downgrade
 | F-003 | Dev artifacts in prod client bundle | Info | In-story 9-45 | strip dev/localhost from build | build check |
 | F-023 | `uploadSelfie` reads wrong JWT field (fails closed) | Info | In-story 9-42 | `.userId` → `.sub` | test: route succeeds w/ token |
 | OPS-RL-1 | IPv6 rate-limit bypass (`operations-rate-limit.ts` keyGenerator) | Low *(local)* | In-story 9-42 | locally discovered 2026-06-06 (not R2); wrap IP in `ipKeyGenerator` | test: IPv6 bucketed |
-| OPS-2 | Staff `invitationToken` stored + looked up RAW at rest | Medium *(local)* | In-story 9-42 | locally discovered 2026-06-07 via the F-011 class-sweep (not R2); same class as F-011 — DB/backup leak → activation hijack of a not-yet-activated staff invite (token nulled on activation, `auth.service.ts:175`). Hash at store (`staff.service.ts:~403`) + lookup (`auth.service.ts:67/115`), mirror F-011 | test: hash-at-rest |
+| OPS-2 | Staff `invitationToken` stored + looked up RAW at rest | Medium *(local)* | ✅ **Fixed-in-`8ba810a`** | locally discovered 2026-06-07 via the F-011 class-sweep (not R2); same class as F-011 — DB/backup leak → activation hijack of a not-yet-activated staff invite (token nulled on activation, `auth.service.ts:175`). `hashInvitationToken()` at 3 store sites + 2 lookup sites, mirror F-011. **Deploy: flushes in-flight invitations (raw→hashed cutover, 24h TTL) — operator re-sends `invited` users.** | test: hash-at-rest + store-path plaintext-email |
 
 ### Notes & reconciliations (read these — they correct earlier session framing)
 
