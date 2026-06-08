@@ -50,7 +50,7 @@ so that **a secondary leak (DB/Redis backup, SQLi elsewhere) cannot be turned in
 - [ ] **Task 3 — F-022 refresh rotation + reuse detection (AC: #4)**
 - [ ] **Task 4 — F-023 uploadSelfie `.sub` fix + test (AC: #5)**
 - [ ] **Task 5 — F-019 reset rate-limit keying/max (verify; "already fixed" if closed) (AC: #6)**
-- [ ] **Task 6 — F-018 forgot-password latency equalization (AC: #7)**
+- [ ] **Task 6 — F-018 forgot-password latency equalization (AC: #7)** — _also fold in the `lookupValidToken` refactor + single-active-token cleanup from Review Follow-ups #5/#6 (same file); design captured under Review Follow-ups._
 - [ ] **Task 7 — F-004 localStorage token removal + lint ban (AC: #8)**
 - [ ] **Task 8 — OPS-RL-1 IPv6 keyGenerator fix + sweep (AC: #9)**
 - [ ] **Task 9 — Regression sweep + per-F-ID commit hashes (AC: #10)**
@@ -63,8 +63,28 @@ _Adversarial code-review of the F-011 change (Task 1), 2026-06-08 by Awwal. Scop
 - [x] [AI-Review][Med] Backward-compat: in-flight reset links break on deploy (raw-keyed Redis/DB entries no longer match the hashed lookup). Documented as a **deliberate** decision bounded by the 1h TTL — see Dev Notes "F-011 deploy note". [password-reset.service.ts:161-185]
 - [x] [AI-Review][Low] Stale AC reference — `RESET_RATE_LIMIT` export comment cited "AC#4 rate-limit test"; in this story AC#4 is refresh rotation, the reset rate-limit is AC#6/F-019. Corrected. [password-reset.service.ts:10-13]
 - [x] [AI-Review][Low] Unit-coverage gap — no test exercised `resetPassword` single-use through the hashed key. Added test #4 (post-reset re-validate of the same plaintext is rejected). [password-reset.service.test.ts]
-- [ ] [AI-Review][Low][ACCEPTED] Redundant double-hash: `resetPassword` calls `validateToken` (hashes once) then re-hashes at `:263` to build the mark-used key. Negligible cost; removing it would require changing `validateToken`'s return contract. Not worth the churn — accepted. [password-reset.service.ts:244,263]
-- [ ] [AI-Review][Low][DEFER→F-022] Pre-existing: validation is Redis-only, so two `requestReset` calls within the hour leave two independently-valid tokens (DB column reflects only the latest). Not introduced by F-011. Route single-active-token semantics into the AC#4/F-022 refresh-rotation + reuse-detection work. [password-reset.service.ts:178-188]
+- [ ] [AI-Review][Low][DEFER→Task 6/F-018] Redundant double-hash + double Redis-GET: `resetPassword` calls `validateToken` (hashes + fetches once) then re-hashes/re-fetches at `:262-263` to build the mark-used key. Negligible perf, but it's a clean simplification. **NOT folded into F-011** to keep that security commit minimal/atomic for 1:1 assessor retest. **Routing corrected 2026-06-08:** this lives entirely in `password-reset.service.ts`, so it belongs with the next task touching that file (Task 6/F-018), NOT F-022 (which is refresh-token rotation in `token.service.ts` — a different subsystem). Design ready below. [password-reset.service.ts:244,262-263]
+- [ ] [AI-Review][Low][DEFER→Task 6/F-018] Pre-existing: validation is Redis-only, so two `requestReset` calls within the hour leave two independently-valid reset tokens (DB column reflects only the latest). Not introduced by F-011. **Routing corrected 2026-06-08** (was mis-pointed at F-022): single-active-token semantics for the *password-reset* token live in `password-reset.service.ts`; fold into Task 6/F-018 (or a standalone `refactor(auth):`). F-022's reuse-detection is for the JWT refresh family, a separate subsystem. [password-reset.service.ts:178-188]
+
+#### Deferred design — `lookupValidToken` private helper (for Task 6 / F-018)
+The clean fix for both follow-ups above (hash once, fetch once, no public-contract change). Carry this into the F-018 dev-story session so it isn't re-derived:
+
+```ts
+/** Hash once, fetch once, validate once. Private — validateToken's public shape is unchanged. */
+private static async lookupValidToken(token: string): Promise<{ key: string; data: ResetTokenData }> {
+  const redis = getRedisClient();
+  const key = `${RESET_TOKEN_KEY_PREFIX}${this.hashToken(token)}`;
+  const raw = await redis.get(key);
+  if (!raw) throw new AppError('AUTH_RESET_TOKEN_INVALID', 'This reset link is invalid or has expired', 400);
+  const data: ResetTokenData = JSON.parse(raw);
+  if (data.used) throw new AppError('AUTH_RESET_TOKEN_INVALID', 'This reset link has already been used', 400);
+  if (new Date() > new Date(data.expiresAt)) throw new AppError('AUTH_RESET_TOKEN_EXPIRED', 'This reset link has expired', 400);
+  return { key, data };
+}
+// validateToken() → return { userId, email } from lookupValidToken (same shape as today)
+// resetPassword() → const { key, data } = await this.lookupValidToken(token); reuse key+data for mark-used
+```
+For single-active-token (#6): on `requestReset`, before issuing a new token, delete the prior `users.passwordResetToken` hash's Redis key (or stamp the row) so only the latest reset link is live. Keep it scoped to the reset subsystem.
 
 ## Dev Notes
 
