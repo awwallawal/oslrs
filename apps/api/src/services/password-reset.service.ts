@@ -1,9 +1,9 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { getRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { AppError, hashPassword } from '@oslsr/utils';
+import { AppError, hashPassword, sha256Hex } from '@oslsr/utils';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 
@@ -46,7 +46,7 @@ export class PasswordResetService {
    * turned into an account takeover.
    */
   private static hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return sha256Hex(token);
   }
 
   /**

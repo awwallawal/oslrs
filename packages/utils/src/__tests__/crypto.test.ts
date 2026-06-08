@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { randomBytes } from 'node:crypto';
-import { generateInvitationToken, hashInvitationToken, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
-import { createHash } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
+import { generateInvitationToken, hashInvitationToken, sha256Hex, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
 
 describe('Crypto Utils', () => {
   it('should generate a 32-character hex token', () => {
@@ -45,6 +44,24 @@ describe('hashInvitationToken (OPS-2 / Story 9-42 AC#11)', () => {
     expect(hashInvitationToken(generateInvitationToken())).not.toBe(
       hashInvitationToken(generateInvitationToken()),
     );
+  });
+});
+
+describe('sha256Hex (shared bearer-secret hashing primitive)', () => {
+  it('should return a 64-character lowercase hex SHA-256 digest', () => {
+    const hash = sha256Hex('some-token');
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('should match a reference SHA-256 hex digest', () => {
+    const value = 'a'.repeat(32);
+    expect(sha256Hex(value)).toBe(createHash('sha256').update(value).digest('hex'));
+  });
+
+  it('hashInvitationToken should delegate to sha256Hex (identical output)', () => {
+    const token = generateInvitationToken();
+    expect(hashInvitationToken(token)).toBe(sha256Hex(token));
   });
 });
 

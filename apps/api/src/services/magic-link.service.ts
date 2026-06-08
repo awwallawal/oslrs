@@ -1,8 +1,8 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { db } from '../db/index.js';
 import { magicLinkTokens, type MagicLinkToken, type MagicLinkPurpose } from '../db/schema/index.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { AppError } from '@oslsr/utils';
+import { AppError, sha256Hex } from '@oslsr/utils';
 import { EmailService } from './email.service.js';
 import pino from 'pino';
 
@@ -71,7 +71,7 @@ export class MagicLinkService {
     }
 
     const tokenPlaintext = randomBytes(TOKEN_BYTES).toString('base64url');
-    const tokenHash = createHash('sha256').update(tokenPlaintext).digest('hex');
+    const tokenHash = sha256Hex(tokenPlaintext);
     const expiresAt = new Date(Date.now() + TTL_MS_BY_PURPOSE[purpose]);
 
     const [row] = await db
@@ -116,7 +116,7 @@ export class MagicLinkService {
       throw new AppError('MAGIC_LINK_INVALID', 'Magic-link token is missing or empty', 400);
     }
 
-    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+    const tokenHash = sha256Hex(plaintext);
 
     // Atomic: only matches an unused, unexpired token of the requested purpose.
     // The single UPDATE marks `used_at = NOW()` returning the row — race-safe
@@ -200,7 +200,7 @@ export class MagicLinkService {
       throw new AppError('MAGIC_LINK_INVALID', 'Magic-link token is missing or empty', 400);
     }
 
-    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+    const tokenHash = sha256Hex(plaintext);
 
     const existing = await db.query.magicLinkTokens.findFirst({
       where: and(
@@ -246,7 +246,7 @@ export class MagicLinkService {
     if (!plaintext) {
       throw new AppError('MAGIC_LINK_INVALID', 'Magic-link token is missing or empty', 400);
     }
-    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
+    const tokenHash = sha256Hex(plaintext);
 
     const result = await tx.execute(sql`
       UPDATE "magic_link_tokens"

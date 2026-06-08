@@ -16,25 +16,37 @@ export const generateInvitationToken = (): string => {
 };
 
 /**
- * OPS-2 (sec-r2 / Story 9-42 AC#11): SHA-256 hex of a bearer secret.
+ * Shared SHA-256 hex primitive for hashing high-entropy bearer secrets at rest
+ * (invitation / password-reset / magic-link tokens). Centralized here so every
+ * subsystem hashes identically — drift in the algorithm would silently break
+ * lookup-by-hash. Prefer the named wrappers (e.g. {@link hashInvitationToken})
+ * at call sites for intent.
  *
- * Staff invitation tokens (like password-reset and magic-link tokens) must be
- * stored HASHED at rest so a secondary DB leak cannot be turned into an
- * account takeover. The plaintext token is emailed exactly once (in the
- * activation URL) and NEVER persisted; only this hash is stored in
+ * Unsalted is CORRECT for these inputs: they are 16+ bytes of `randomBytes`, so
+ * there is no dictionary/rainbow risk a salt would defend against, and a
+ * per-token salt would break the lookup-by-hash design. Do NOT use this for
+ * passwords — those go through bcrypt ({@link hashPassword}).
+ *
+ * @param value Plaintext high-entropy secret
+ * @returns {string} 64-character lowercase hex SHA-256 digest
+ */
+export const sha256Hex = (value: string): string => {
+  return createHash('sha256').update(value).digest('hex');
+};
+
+/**
+ * OPS-2 (sec-r2 / Story 9-42 AC#11): SHA-256 hex of a staff invitation token.
+ *
+ * Invitation tokens must be stored HASHED at rest so a secondary DB leak cannot
+ * be turned into account takeover. The plaintext token is emailed exactly once
+ * (in the activation URL) and NEVER persisted; only this hash is stored in
  * `users.invitation_token`, and the incoming token is hashed before lookup.
- *
- * Unsalted SHA-256 is correct here: the input is 16 bytes of `randomBytes`
- * (high-entropy), so there is no dictionary/rainbow risk a salt would defend
- * against, and a per-token salt would break the lookup-by-hash design. Mirrors
- * the `magic-link.service.ts` / `password-reset.service.ts` (F-011) pattern.
+ * Thin wrapper over {@link sha256Hex} for call-site intent.
  *
  * @param token Plaintext token
  * @returns {string} 64-character lowercase hex SHA-256 digest
  */
-export const hashInvitationToken = (token: string): string => {
-  return createHash('sha256').update(token).digest('hex');
-};
+export const hashInvitationToken = (token: string): string => sha256Hex(token);
 
 /**
  * Hashes a password using bcrypt.
