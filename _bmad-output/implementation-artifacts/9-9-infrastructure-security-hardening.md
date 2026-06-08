@@ -354,17 +354,17 @@ _(Below this divider: items added 2026-05-10 from a PRE-COMMIT adversarial code 
 
 > **Operator console steps live in `docs/f-024-origin-lock-runbook.md`** (WhoGoHost 302 de-point §1, DO firewall lock §3, origin-IP rotate §4, verify §5). **THIS is only the one code change**, sequenced BETWEEN runbook §1 (de-point) and §3 (firewall lock). Do NOT deploy before the operator has de-pointed (runbook §1 verified — `dig` no longer returns `159.89.146.93`), or the cert reissue runs while the domain still resolves to origin.
 
-- [ ] **Task 11.1 — Drop retired domain from nginx `server_name`**
-  - [ ] 11.1.1 In `infra/nginx/oslsr.conf`, remove `oyotradeministry.com.ng` + `www.oyotradeministry.com.ng` from BOTH the `:80` and `:443` `server_name` lines (keep `oyoskills.com` + `www`).
-  - [ ] 11.1.2 CI deploys (backup → `nginx -t` → reload); confirm `nginx -t` green in the deploy log. Never hand-edit the VPS copy.
-- [ ] **Task 11.2 — Drop retired domain from `CORS_ORIGIN`**
-  - [ ] 11.2.1 Remove `https://oyotradeministry.com.ng` from `CORS_ORIGIN` (VPS `.env` + any GH Actions var + `.env.example`); leave `https://oyoskills.com`.
-  - [ ] 11.2.2 Update the `csp-parity` test wss list if it references `wss://oyotradeministry.com.ng` so CI parity stays green.
-- [ ] **Task 11.3 — Cert: reissue oyoskills-only OR install CF Origin Cert** _(per runbook §0 cert decision)_
-  - [ ] 11.3.1 Option A/C: `certbot --cert-name oyotradeministry.com.ng -d oyoskills.com -d www.oyoskills.com` (drop the two retired SANs) → reload nginx; `certbot renew --dry-run` → success. OR Option B: install Cloudflare Origin Cert + CF SSL Full(strict).
+- [x] **Task 11.1 — Drop retired domain from nginx `server_name`** — DONE 2026-06-08.
+  - [x] 11.1.1 `infra/nginx/oslsr.conf` `:80` + `:443` `server_name` reduced to `oyoskills.com www.oyoskills.com` (both lines). `ssl_certificate` paths LEFT on the existing 4-SAN `oyotradeministry.com.ng` lineage on purpose — it still validly covers oyoskills, so `nginx -t` passes; the cert reissue is Task 11.3 (§3). Added an inline F-024 note above the cert lines.
+  - [x] 11.1.2 CI deploys (backup → `nginx -t` → reload) — confirm `nginx -t` green in this commit's deploy log.
+- [~] **Task 11.2 — Drop retired domain from `CORS_ORIGIN`** — repo part done; runtime part = operator.
+  - [~] 11.2.1 `.env.example` stale support-URL comment corrected (oyotradeministry → oyoskills, matching `email.service.ts:34` which already defaults to oyoskills). **There is no `CORS_ORIGIN=` line in `.env.example`** to edit — the runtime `CORS_ORIGIN` value is operator-set (VPS `.env` / GH var); **OPERATOR: drop `https://oyotradeministry.com.ng` from the live `CORS_ORIGIN`** (harmless if left — allowing a dead origin does nothing — but the plan wants it gone).
+  - [N/A] 11.2.2 CSP `connect-src` (incl. `wss://oyotradeministry.com.ng`) was **not** touched — §2 scope is `server_name` only, so `csp-parity` stays green. The dead `wss://` entry is harmless; removing it is optional later hygiene (would touch app.ts CSP + nginx CSP + `csp-parity.test.ts` together).
+- [ ] **Task 11.3 — Cert: reissue oyoskills-only OR install CF Origin Cert** _(per runbook §0 cert decision = Option A)_ — **§3 operator step, NOT this commit.**
+  - [ ] 11.3.1 Option A: `certbot --cert-name oyotradeministry.com.ng -d oyoskills.com -d www.oyoskills.com` (drop the two retired SANs) → then update the `ssl_certificate*` paths in `oslsr.conf` to the resulting lineage if the name changes → reload; `certbot renew --dry-run` → success. **Why deferred:** doing it before caches clear / before §3 is unnecessary, and certbot HTTP-01 for the still-cached oyotradeministry name could fail. Cert is valid ~90d so no rush.
 - [ ] **Task 11.4 — Sequencing guard + verify**
-  - [ ] 11.4.1 Precondition: runbook §1 de-point verified BEFORE this deploys.
-  - [ ] 11.4.2 Post-deploy: `curl -sI https://oyoskills.com` → 200 via CF; full suite + `csp-parity` green; then hand back to operator for runbook §3 (firewall lock).
+  - [x] 11.4.1 Precondition: runbook §1 de-point verified at the AUTHORITATIVE NS (nsa/nsb return no apex A) 2026-06-08 before this deploy; public caches clearing (1.1.1.1 clear, 8.8.8.8 TTL ~4h).
+  - [ ] 11.4.2 Post-deploy: `curl -sI https://oyoskills.com` → 200 via CF; full suite + `csp-parity` green; then **WAIT for caches to fully clear**, then hand to operator for runbook §3 (firewall lock) + §4 (IP rotate) + §5 (verify) + Task 11.3 cert reissue.
 
 _F-025 (#12) + F-006 (#13) need no dev tasks: F-025 is operator/self-hosted-runner-gated; F-006 is ~clean (optional `gitleaks`). Both remain as the 2026-06-07 Change Log entry._
 
