@@ -1594,3 +1594,21 @@ Expected: clean restore with table counts matching the manifest. Any divergence 
 
 *Updated: 2026-05-09 — Part 12 (encrypted backup restore) added per Story 9-9 AC#5. Restore script handles both encrypted and legacy backups via manifest auto-detection.*
 *Source project: OSLRS (Oyo State Labour & Skills Registry)*
+
+---
+
+## Part 13: Certificate Inventory — MANUAL certs, NO auto-renewal ⚠️ (F-024, 2026-06-09)
+
+**Read this at handover/BOT-transfer.** After the F-024 origin-lock, the origin moved OFF Let's Encrypt (which auto-renewed) onto a **Cloudflare Origin Certificate + Authenticated Origin Pulls**. These are long-lived but **manual** — nothing auto-renews them. If one lapses unnoticed, the site breaks (Origin Cert → CF `526`; AOP CA → mTLS handshake fail / `400`). **Part 2 (Let's Encrypt) above is SUPERSEDED** — `certbot.timer` is disabled; do not re-enable it.
+
+| Cert | Path on VPS | Purpose | Expires | How to renew |
+|------|-------------|---------|---------|--------------|
+| **Cloudflare Origin Cert** | `/etc/ssl/cloudflare/oyoskills-origin.pem` + `.key` (key `chmod 600`) | TLS for Cloudflare→origin (CF SSL mode = Full strict); covers `oyoskills.com` + `*.oyoskills.com` | **2041-06-05** | CF dashboard → `oyoskills.com` → SSL/TLS → Origin Server → Create Certificate → reinstall both files on the VPS → `nginx -t && systemctl reload nginx` |
+| **CF origin-pull CA** (AOP) | `/etc/ssl/cloudflare/origin-pull-ca.pem` | mTLS — nginx verifies CF's client cert (`ssl_verify_client on`) so only Cloudflare can reach the origin | **2029-11-01** | re-fetch `https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem` → reload nginx (sha256 of current: `c14fed0c…`) |
+| ~~LE `oyotradeministry.com.ng` lineage~~ | `/etc/letsencrypt/live/oyotradeministry.com.ng/` | former public TLS (4-SAN) | RETIRED | **Do not renew** — superseded by the Origin Cert; `certbot.timer` disabled (cron self-skips under systemd). Files can be left or removed. |
+
+**nginx config** (`infra/nginx/oslsr.conf`, CI-deployed — never hand-edit the VPS copy): `ssl_certificate*` → the Origin Cert; `ssl_client_certificate` + `ssl_verify_client on` → the AOP CA.
+
+**Monitoring:** **Story 9-50** surfaces a live expiry countdown for these certs on the Super Admin operations dashboard + fires a CRITICAL alert ahead of expiry (so this never depends on someone reading this table). Until 9-50 ships, this table is the manual record. Quick manual check: `openssl x509 -in <path> -noout -enddate`.
+
+*Updated: 2026-06-09 — Part 13 (Certificate Inventory) added per F-024 origin-lock close-out (Story 9-9 #11). See `docs/f-024-origin-lock-runbook.md` + `docs/security/findings-register.md` F-024.*
