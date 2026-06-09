@@ -1,8 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOnlineStatus } from './useOnlineStatus';
-
-const ACCESS_TOKEN_KEY = 'oslsr_access_token';
+// Story 9-49 (ADR-022): the access token lives only in the in-memory holder,
+// never web storage. Read it here for the socket handshake (the holder is kept
+// current by AuthContext on login / silent-refresh, so reconnects pick up
+// refreshed JWTs automatically — same property the old sessionStorage read had).
+import { getAccessToken } from '../lib/auth-token-holder';
 
 /** Extract origin from API URL, falling back to current page origin (dual-domain) or localhost */
 function getSocketUrl(): string {
@@ -64,16 +67,16 @@ export function useRealtimeConnection(): RealtimeConnectionReturn {
   }, []);
 
   useEffect(() => {
-    const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    const token = getAccessToken();
     if (!token || !isOnline) {
       return;
     }
 
     const socket = io(SOCKET_URL, {
-      // Function form: re-reads token on each reconnection attempt,
+      // Function form: re-reads the in-memory token on each reconnection attempt,
       // so refreshed JWTs from AuthContext are picked up automatically.
       auth: (cb) => {
-        cb({ token: sessionStorage.getItem(ACCESS_TOKEN_KEY) });
+        cb({ token: getAccessToken() });
       },
       transports: ['websocket'],
       autoConnect: true,

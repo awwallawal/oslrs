@@ -11,10 +11,9 @@ const LiveSelfieCapture = lazy(() => import('../components/LiveSelfieCapture'));
 
 const ProfileCompletionPage: React.FC = () => {
   const navigate = useNavigate();
-  // F-004 (Story 9-42): use the auth-context session token (sessionStorage-backed
-  // via AuthContext, not strictly in-memory) instead of the dead
-  // `localStorage.getItem('token')` key. The win is reading the live/correct key;
-  // sessionStorage carries similar XSS exposure to localStorage. (L1)
+  // F-004 (Story 9-42) + Story 9-49: use the auth-context access token instead of
+  // the dead `localStorage.getItem('token')` key. As of 9-49 the token is held in
+  // memory only (never web storage), so there is no XSS-at-rest exposure.
   const { accessToken } = useAuth();
   const [step, setStep] = useState<'intro' | 'selfie' | 'success'>('intro');
   const [isUploading, setIsUploading] = useState(false);

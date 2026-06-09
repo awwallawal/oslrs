@@ -4,9 +4,9 @@ import * as authApi from '../api/auth.api';
 import { AuthApiError } from '../api/auth.api';
 import { db } from '../../../lib/offline-db';
 import { syncManager } from '../../../services/sync-manager';
-
-// Token storage key
-const ACCESS_TOKEN_KEY = 'oslsr_access_token';
+// Story 9-49 (ADR-022): the access token lives in this in-memory holder, NEVER in
+// web storage. AuthContext writes it; lib/api-client.ts reads it for the Bearer header.
+import { setAccessToken, getAccessToken, clearAccessToken, setBootRefresh } from '../../../lib/auth-token-holder';
 
 // Token refresh buffer (refresh 1 minute before expiry)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
@@ -187,29 +187,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showLogoutWarning, setShowLogoutWarning] = useState(false);
   const [unsyncedCount, setUnsyncedCount] = useState(0);
 
-  // Save access token to storage
+  // Story 9-49: hold the access token in module memory (never web storage).
   const saveToken = useCallback((token: string) => {
-    try {
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
-    } catch {
-      // Storage might be unavailable
-    }
+    setAccessToken(token);
   }, []);
 
-  // Get access token from storage (reserved for future session restoration)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _getStoredToken = useCallback(() => {
-    try {
-      return sessionStorage.getItem(ACCESS_TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  // Clear access token from storage
+  // Clear the in-memory access token + the (non-secret) last-activity marker.
   const clearToken = useCallback(() => {
+    clearAccessToken();
     try {
-      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
       sessionStorage.removeItem(LAST_ACTIVITY_KEY);
     } catch {
       // Storage might be unavailable
@@ -532,7 +518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh user data from /auth/me (Story 9.1: re-sync after profile edit)
   const refreshUser = useCallback(async () => {
-    const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    const token = getAccessToken();
     if (!token) return;
     try {
       const userInfo = await authApi.getCurrentUser(token);
@@ -573,14 +559,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Story 9-49 (AC#2 + AC#3): silent boot refresh from the httpOnly cookie.
+      // Register the in-flight /refresh so authed requests fired during boot queue
+      // behind it (single-flight) instead of racing to a 401, and publish the
+      // re-minted token to the in-memory holder as soon as it lands.
+      const bootRefresh = (async () => {
+        const response = await authApi.refreshToken();
+        setAccessToken(response.accessToken);
+        return response;
+      })();
+      setBootRefresh(bootRefresh);
+
       // Try to restore session from refresh token
       try {
-        const response = await authApi.refreshToken();
+        const response = await bootRefresh;
 
         // Get user info
         const userInfo = await authApi.getCurrentUser(response.accessToken);
 
-        saveToken(response.accessToken);
         updateActivity();
 
         dispatch({
@@ -608,7 +604,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initializeAuth();
-  }, [checkInactivityTimeout, clearToken, saveToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
+  }, [checkInactivityTimeout, clearToken, updateActivity, scheduleTokenRefresh, initOfflineForUser]);
 
   // Setup activity tracking when authenticated
   useEffect(() => {

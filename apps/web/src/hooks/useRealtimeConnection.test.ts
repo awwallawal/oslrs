@@ -39,11 +39,16 @@ vi.mock('socket.io-client', () => ({
 // ── Import under test ───────────────────────────────────────────────────────
 
 import { useRealtimeConnection } from './useRealtimeConnection';
+import { setAccessToken, __resetAuthTokenHolder } from '../lib/auth-token-holder';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+// Story 9-49: the socket reads the token from the in-memory holder, NOT web
+// storage. Drive auth state through the holder so the test exercises the real
+// production path (the old sessionStorage mock validated a path that no longer
+// populates in production).
 function setupSessionToken(token = 'test-jwt-token') {
-  vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(token);
+  setAccessToken(token);
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -52,6 +57,7 @@ describe('useRealtimeConnection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    __resetAuthTokenHolder(); // Story 9-49: start each test unauthenticated (holder null)
     mockIsOnline.value = true;
     mockSocket.connected = false;
     mockOn.mockImplementation(() => mockSocket);
@@ -73,7 +79,7 @@ describe('useRealtimeConnection', () => {
   });
 
   it('should return disconnected state when no token exists', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    // holder is null (reset in beforeEach) → unauthenticated
     const { result } = renderHook(() => useRealtimeConnection());
 
     expect(result.current.isConnected).toBe(false);
@@ -92,8 +98,18 @@ describe('useRealtimeConnection', () => {
     );
   });
 
+  it('Story 9-49: the auth handshake reads the in-memory holder token, not web storage', () => {
+    setupSessionToken('holder-jwt');
+    renderHook(() => useRealtimeConnection());
+
+    const authFn = (mockIo.mock.calls[0][1] as { auth: (cb: (d: { token: string | null }) => void) => void }).auth;
+    const cb = vi.fn();
+    authFn(cb);
+    expect(cb).toHaveBeenCalledWith({ token: 'holder-jwt' });
+  });
+
   it('should not connect when no token is available', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    // holder is null (reset in beforeEach) → no socket created
     const { result } = renderHook(() => useRealtimeConnection());
 
     expect(mockIo).not.toHaveBeenCalled();

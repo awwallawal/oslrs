@@ -7,6 +7,7 @@ import { renderHook } from '@testing-library/react';
 import { UserRole } from '@oslsr/types';
 import { AuthProvider, useAuth, useRequireRole } from '../AuthContext';
 import * as authApi from '../../api/auth.api';
+import { getAccessToken, __resetAuthTokenHolder } from '../../../../lib/auth-token-holder';
 
 afterEach(() => {
   cleanup();
@@ -315,6 +316,72 @@ describe('AuthContext', () => {
 
       // No error from the partial-success branch.
       expect(result.current.error).toBeNull();
+    });
+  });
+
+  describe('Story 9-49 — in-memory access token (ADR-022)', () => {
+    beforeEach(() => __resetAuthTokenHolder());
+
+    it('AC#1: after login the token is in the in-memory holder and NOT in web storage', async () => {
+      mockAuthApi.staffLogin.mockResolvedValueOnce({
+        accessToken: 'mem-only-token',
+        user: { id: 'u1', email: 's@example.com', fullName: 'S', role: 'enumerator', status: 'active' },
+        expiresIn: 900,
+      });
+      mockAuthApi.refreshToken.mockRejectedValueOnce(new Error('No session'));
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.loginStaff({ email: 's@example.com', password: 'pw', captchaToken: 'c', rememberMe: false });
+      });
+
+      expect(getAccessToken()).toBe('mem-only-token');        // in-memory holder set
+      expect(result.current.accessToken).toBe('mem-only-token'); // and React state (for useAuth consumers)
+      expect(sessionStorage.getItem('oslsr_access_token')).toBeNull(); // NEVER persisted
+      expect(localStorage.getItem('oslsr_access_token')).toBeNull();
+    });
+
+    it('AC#2: a valid refresh cookie on boot re-mints the token into the holder', async () => {
+      mockAuthApi.refreshToken.mockResolvedValueOnce({ accessToken: 'booted-token', expiresIn: 900 });
+      mockAuthApi.getCurrentUser.mockResolvedValueOnce({
+        id: 'u2', email: 'b@example.com', fullName: 'B', role: 'enumerator', status: 'active', rememberMe: false,
+      });
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+      });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+      expect(getAccessToken()).toBe('booted-token'); // holder populated by the silent boot refresh
+      expect(sessionStorage.getItem('oslsr_access_token')).toBeNull();
+    });
+
+    it('AC#4: logout clears the in-memory holder', async () => {
+      mockAuthApi.staffLogin.mockResolvedValueOnce({
+        accessToken: 'tok-to-clear',
+        user: { id: 'u3', email: 'l@example.com', fullName: 'L', role: 'enumerator', status: 'active' },
+        expiresIn: 900,
+      });
+      mockAuthApi.refreshToken.mockRejectedValueOnce(new Error('No session'));
+      mockAuthApi.logout.mockResolvedValueOnce({});
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await act(async () => {
+        await result.current.loginStaff({ email: 'l@example.com', password: 'pw', captchaToken: 'c', rememberMe: false });
+      });
+      expect(getAccessToken()).toBe('tok-to-clear');
+
+      await act(async () => { await result.current.logout(); });
+
+      expect(getAccessToken()).toBeNull(); // holder cleared (server-side F-012 invalidation unchanged)
+      expect(result.current.isAuthenticated).toBe(false);
     });
   });
 

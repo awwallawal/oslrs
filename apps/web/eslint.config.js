@@ -81,26 +81,38 @@ export default tseslint.config(
       // General rules
       'no-console': 'warn',
 
-      // F-004 (Story 9-42): ban auth-token access via localStorage. AuthContext
-      // holds the access token in sessionStorage (NOT localStorage, and NOT purely
-      // in-memory); persisting a SECOND copy under a 'token' key in localStorage
-      // adds XSS-reachable bearer state, and the old `localStorage.getItem('token')`
-      // read a dead key. This guard is BEST-EFFORT (L2): it matches string-LITERAL
-      // keys containing "token" on both `localStorage.*` and `window.localStorage.*`;
-      // variable keys, other window aliases, and sessionStorage are not covered.
+      // F-004 (Story 9-42) + Story 9-49: ban auth-token access via BOTH localStorage
+      // AND sessionStorage. The access token now lives ONLY in the in-memory holder
+      // (lib/auth-token-holder.ts) — never web storage — so a successful XSS cannot
+      // read a bearer token at rest. This guard is BEST-EFFORT: it matches string-
+      // LITERAL keys containing "token" on `localStorage.*` / `window.localStorage.*` /
+      // `sessionStorage.*` / `window.sessionStorage.*`; variable keys + other aliases
+      // are not covered. Use getAccessToken()/useAuth().accessToken instead.
       'no-restricted-syntax': [
         'error',
         {
           selector:
             "CallExpression[callee.object.name='localStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
           message:
-            'F-004: do not store/read auth tokens in localStorage. Use the auth-context session token (useAuth().accessToken).',
+            'Do not store/read auth tokens in localStorage (F-004/9-49). Use the in-memory token: getAccessToken() / useAuth().accessToken.',
         },
         {
           selector:
             "CallExpression[callee.object.property.name='localStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
           message:
-            'F-004: do not store/read auth tokens in window.localStorage. Use the auth-context session token (useAuth().accessToken).',
+            'Do not store/read auth tokens in window.localStorage (F-004/9-49). Use the in-memory token.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='sessionStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
+          message:
+            'Do not store/read auth tokens in sessionStorage (Story 9-49 — in-memory only). Use getAccessToken() / useAuth().accessToken.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.property.name='sessionStorage'][callee.property.name=/^(getItem|setItem|removeItem)$/][arguments.0.value=/token/i]",
+          message:
+            'Do not store/read auth tokens in window.sessionStorage (Story 9-49 — in-memory only). Use the in-memory token.',
         },
       ],
     },

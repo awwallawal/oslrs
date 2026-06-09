@@ -1,6 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+import { getAccessToken, awaitAccessToken } from './auth-token-holder';
 
-const ACCESS_TOKEN_KEY = 'oslsr_access_token';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 /**
  * Custom API error with additional context
@@ -20,16 +20,22 @@ export class ApiError extends Error {
 }
 
 /**
- * Get auth headers from sessionStorage (if token exists).
- * Exported for raw fetch calls that bypass apiClient (e.g. blob downloads, file uploads).
+ * Get auth headers from the in-memory token holder (Story 9-49 — token is never
+ * in web storage). Exported for raw fetch calls that bypass apiClient (e.g. blob
+ * downloads, file uploads). Synchronous: callers that may run during the boot
+ * refresh should `await awaitAccessToken()` first (apiClient does this for them).
  */
 export function getAuthHeaders(): Record<string, string> {
-  const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function apiClient(endpoint: string, options: RequestInit = {}) {
   const { headers, ...rest } = options;
+
+  // Story 9-49 (AC#3): queue behind any in-flight boot/silent refresh so requests
+  // issued during boot await the re-minted token instead of firing a 401 stampede.
+  await awaitAccessToken();
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
