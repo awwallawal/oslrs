@@ -192,17 +192,22 @@ async function main(): Promise<void> {
   if (!health) { console.error(`FATAL: ${API}/health not reachable. Check --base-url.`); process.exit(1); }
   note('health ok');
 
+  // ORDER MATTERS: all login-mode tests reuse the same seeded user, and
+  // test1bPostGraceReuse calls revokeAllUserTokens (stamps tokens_revoked_at for
+  // that user). Any fresh login in the SAME wall-clock second after that stamp gets
+  // a token whose iat == revoked_at → wrongly AUTH_TOKEN_REVOKED. So run the
+  // family-revoking test LAST, after rotation/grace + logout have used clean logins.
   if (LOGIN_MODE) {
     await test1RotationAndGrace((await loginFresh()).cookie);
-    await test1bPostGraceReuse(await loginFresh()); // fresh session (TEST 1 consumed its own)
     await test2LogoutInvalidation(await loginFresh());
+    await test1bPostGraceReuse(await loginFresh()); // revokes the family — LAST
   } else {
     if (PROVIDED_COOKIES.length === 0) { console.error('FATAL: provide --login OR at least one --refresh-cookie=<value>.'); process.exit(1); }
     await test1RotationAndGrace(PROVIDED_COOKIES[0]);
-    if (PROVIDED_COOKIES.length >= 2) await test1bPostGraceReuse({ cookie: PROVIDED_COOKIES[1] });
-    else { log('\nTEST 1b — post-grace reuse:'); skipped('needs a 2nd --refresh-cookie=<value>.'); }
     if (PROVIDED_COOKIES.length >= 3) await test2LogoutInvalidation(await deriveSession(PROVIDED_COOKIES[2]));
     else { log('\nTEST 2 — logout invalidation:'); skipped('needs a 3rd --refresh-cookie=<value>.'); }
+    if (PROVIDED_COOKIES.length >= 2) await test1bPostGraceReuse({ cookie: PROVIDED_COOKIES[1] }); // revokes — LAST
+    else { log('\nTEST 1b — post-grace reuse:'); skipped('needs a 2nd --refresh-cookie=<value>.'); }
   }
 
   log(`\n${'─'.repeat(60)}`);
