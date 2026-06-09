@@ -1,6 +1,6 @@
 # Story 9.49: Access-Token Client Storage Hardening (in-memory + silent refresh)
 
-Status: review  · POST-LAUNCH (not a gate)
+Status: done  · POST-LAUNCH (not a gate)
 
 <!-- 2026-06-09: dependency satisfied — Story 9-48 (M1 rotation grace window) is DONE +
      deployed, so the boot silent-refresh AC#6 multi-tab assumption now holds. Flipped
@@ -113,3 +113,4 @@ Claude Opus 4.8 (1M) — Amelia (dev), 2026-06-09.
 | 2026-06-09 | 9-48 dependency satisfied → `backlog` → ready-for-dev. | Awwal |
 | 2026-06-09 | Implemented (dev-story, Amelia): in-memory token holder + boot silent-refresh + request-queue + logout-clear + eslint sessionStorage ban. +13 web tests; full web suite 2495 pass/0 fail; tsc+lint clean; web-only diff. Status → review (pre-commit [CR] + commit pending). | Amelia (dev) |
 | 2026-06-09 | **Pre-commit `[CR]` (adversarial code-review, fresh context).** Found + fixed a live regression the green suite masked: `useRealtimeConnection.ts` (Socket.io handshake) still read the bearer token from `sessionStorage` → after 9-49 always null → realtime socket never connected (live messaging degraded to polling). Missed by the holder migration AND the eslint ban (variable key). Migrated the hook + its test to the in-memory holder (+1 regression test), refreshed 2 stale comments, removed a dead effect dep. Full web suite **2496 pass/0 fail**; tsc+lint clean. 6 follow-ups (1 High×2/2 Med/2 Low) all fixed. Verdict: PASS; only the atomic commit remains. Status stays `review` until commit. | Amelia (review) |
+| 2026-06-09 | Committed `d6f1b98` → `main`; CI/CD Pipeline + E2E both green (incl. `auth-smoke` deploy-gate), deployed to VPS (1m33s). Production runtime check confirmed the H1 fix: the Messages page connection indicator shows **Live** (radio-wave icon) — Socket.io handshake reads the in-memory token, realtime connects (no degrade-to-polling). All 7 ACs verified. Status `review` → **done**. | Awwal (verify) |
