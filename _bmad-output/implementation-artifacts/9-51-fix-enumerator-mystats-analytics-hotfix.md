@@ -4,7 +4,7 @@ Status: done
 Type: hotfix
 Discovered: 2026-06-09 (operator, on the live Enumerator account)
 Fixed: 2026-06-09
-Commit: 9eeb88e (fix) + this doc/test follow-up
+Commits: 9eeb88e (root-cause fix + resilience) · b307743 (real-DB analytics smoke + this doc) · 1dc036d (extend smoke: full survey-analytics surface + ops services) · 2152abb (seed payment batch/record/dispute for data-dependent paths)
 Related: Hotfix 9.6 (2026-04-05, same analytics raw-SQL class); Story 9-49 (in-flight when discovered — ruled out as cause)
 
 ## Summary
