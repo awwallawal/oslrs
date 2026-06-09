@@ -1,6 +1,14 @@
 # Story 9.48: Refresh-Token Lifecycle Hardening (hash-at-rest + rotation reuse-FP fix + reset single-use)
 
-Status: review
+Status: done
+
+<!-- CLOSED 2026-06-09: impl 304b4b2 (OPS-3 hash-at-rest + F-022 multi-tab grace window)
+     + 91bf3e2 (L3 password-reset atomic single-use) + c0190af (BMAD code-review record:
+     +M2 one-active-token reaping, +reset claim-release on failure); pushed + deployed.
+     Behavior verified live by the CI auth-smoke deploy gate (7/7: rotation, chain,
+     within-grace re-issue, post-grace reuse→401, family revoke, logout, post-logout).
+     OPS-3 register row → Fixed-in-304b4b2. -->
+
 
 <!--
 Authored 2026-06-08 by Bob (SM) via canonical *create-story --yolo workflow.

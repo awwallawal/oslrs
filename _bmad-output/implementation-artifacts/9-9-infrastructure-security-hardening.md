@@ -1,6 +1,18 @@
 # Story 9.9: Infrastructure Security Hardening — Tailscale, OS Patching, Field-Readiness, WAF (Expanded Scope per SCP-2026-04-22)
 
-Status: in-progress
+Status: done
+
+<!-- CLOSED-WITH-CARRY 2026-06-09 (PO Awwal invoked the AC#9 carry clause). All
+     implementation subtasks complete, incl. #11/F-024 origin-lock (de-point + nginx
+     server_name + 443→CF firewall + CF Origin Cert + AOP mTLS; commits 8a05785/e9ce191/
+     070fe69; F-024 register row → Fixed). AC#9 (SOC-style activity baseline) reframed as
+     ongoing Operate-phase observation per tracker §G. OUTSTANDING OPERATOR RESIDUALS (ops,
+     not implementation — tracked, do not block close): (a) AC#5 set BACKUP_ENCRYPTION_KEY
+     on the VPS .env + run the §7.2 restore drill; (b) F-024 cutover finish: revoke the GCP
+     OAuth client + `gh variable delete VITE_GOOGLE_CLIENT_ID` + remove GOOGLE_*/CORS
+     oyotradeministry from the VPS .env; (c) SSH-firewall re-narrow after a self-hosted
+     runner (Story 9-14 sibling, Operate-phase). -->
+
 
 <!--
 REGENERATED 2026-04-25 by Bob (SM) per SCP-2026-04-22 §A.5 + epics.md §Story 9.9.
