@@ -18,6 +18,11 @@ export const RESET_RATE_WINDOW = 60 * 60;     // 1 hour in seconds (NFR4.4)
 // Redis key patterns
 const RESET_TOKEN_KEY_PREFIX = 'password_reset:';
 const RESET_RATE_KEY_PREFIX = 'password_reset_rate:';
+// L3 (Story 9-48): atomic single-use claim. `resetPassword` SETs this NX before
+// mutating the password so two concurrent resets with the same valid token cannot
+// both succeed (the pre-existing `used` flag is checked, then written, non-atomically
+// — a TOCTOU two callers can both pass). Keyed by the token HASH, never the plaintext.
+const RESET_CLAIM_KEY_PREFIX = 'reset_claimed:';
 
 // Check if we're in test mode (vitest sets VITEST env var)
 const isTestMode = () => process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
@@ -254,32 +259,59 @@ export class PasswordResetService {
     const { key, data } = await this.lookupValidToken(token);
     const { userId } = data;
 
-    // Hash the new password
-    const passwordHash = await hashPassword(newPassword);
-
-    // Update password in database
-    await db.update(users)
-      .set({
-        passwordHash,
-        passwordResetToken: null,
-        passwordResetExpiresAt: null,
-        failedLoginAttempts: 0,  // Reset failed attempts
-        lockedUntil: null,       // Unlock account if locked
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
-
-    // Mark token as used in Redis (reuse the key + data already fetched).
     const redis = getRedisClient();
-    data.used = true;
-    // Keep for 1 hour to prevent reuse attempts from showing success
-    await redis.setex(key, 3600, JSON.stringify(data));
 
-    // Invalidate all existing sessions for this user
-    await SessionService.invalidateAllUserSessions(userId);
+    // L3 (Story 9-48): atomically CLAIM the token before mutating the password.
+    // `lookupValidToken` checks `used` and the mark-used write happens later, so two
+    // concurrent resets can both pass the check (TOCTOU). The NX claim — keyed by the
+    // token hash, TTL-bounded to the reset lifetime — ensures exactly one winner; the
+    // loser gets the existing "already used" contract.
+    const claimKey = `${RESET_CLAIM_KEY_PREFIX}${this.hashToken(token)}`;
+    const claimed = await redis.set(claimKey, '1', 'EX', RESET_TOKEN_EXPIRY, 'NX');
+    if (claimed !== 'OK') {
+      throw new AppError('AUTH_RESET_TOKEN_INVALID', 'This reset link has already been used', 400);
+    }
 
-    // Invalidate all tokens for this user (timestamp + refresh token deletion)
-    await TokenService.revokeAllUserTokens(userId);
+    // M1 (Story 9-48 review): the claim is taken BEFORE the password mutation, so a
+    // transient failure (db error, bcrypt throw) between here and the mark-used write
+    // would otherwise leave the claim set and permanently burn an otherwise-valid
+    // link — the user's retry would wrongly hit "already used". Release the claim on
+    // any failure so only a COMPLETED reset is single-use. The reopened window is the
+    // same micro-race the NX claim closes; one transient failure dead-linking the
+    // token is the worse outcome. The committed `used=true` marker (set on success
+    // below) remains the durable single-use record.
+    try {
+      // Hash the new password
+      const passwordHash = await hashPassword(newPassword);
+
+      // Update password in database
+      await db.update(users)
+        .set({
+          passwordHash,
+          passwordResetToken: null,
+          passwordResetExpiresAt: null,
+          failedLoginAttempts: 0,  // Reset failed attempts
+          lockedUntil: null,       // Unlock account if locked
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      // Mark token as used in Redis (reuse the key + data already fetched).
+      data.used = true;
+      // Keep for 1 hour to prevent reuse attempts from showing success
+      await redis.setex(key, 3600, JSON.stringify(data));
+
+      // Invalidate all existing sessions for this user
+      await SessionService.invalidateAllUserSessions(userId);
+
+      // Invalidate all tokens for this user (timestamp + refresh token deletion)
+      await TokenService.revokeAllUserTokens(userId);
+    } catch (err) {
+      // Reset did not complete — release the single-use claim so the link stays valid
+      // for a genuine retry. Best-effort: never mask the original failure.
+      await redis.del(claimKey).catch(() => undefined);
+      throw err;
+    }
   }
 
   /**

@@ -33,6 +33,16 @@ const mockRedis = vi.hoisted(() => {
       store.delete(key);
       return Promise.resolve(1);
     }),
+    // L3 (Story 9-48): NX-aware SET so the atomic single-use claim is exercised.
+    // Returns 'OK' on a successful claim, null when the key already exists (NX miss).
+    set: vi.fn((key: string, val: string, ...args: unknown[]) => {
+      const nx = args.includes('NX');
+      if (nx && store.has(key)) {
+        return Promise.resolve(null);
+      }
+      store.set(key, val);
+      return Promise.resolve('OK');
+    }),
   };
 });
 
@@ -135,6 +145,53 @@ describe('PasswordResetService — F-011 token hashing at rest', () => {
     await expect(
       PasswordResetService.validateToken(token as string),
     ).rejects.toThrow(/already been used/i);
+  });
+
+  // L3 (Story 9-48) — atomic single-use under concurrency.
+  it('two concurrent resetPassword calls with the same token → exactly one wins', async () => {
+    const { token } = await PasswordResetService.requestReset(EMAIL);
+    const updateCallsAfterRequest = mockDb.update.mock.calls.length; // 1 (token-hash store)
+
+    // Fire both resets "simultaneously" — both pass lookupValidToken (used=false),
+    // then race on the NX claim. Exactly one must succeed.
+    const results = await Promise.allSettled([
+      PasswordResetService.resetPassword(token as string, 'NewStr0ng!PassA'),
+      PasswordResetService.resetPassword(token as string, 'NewStr0ng!PassB'),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      message: expect.stringMatching(/already been used/i),
+    });
+
+    // Only the winner mutated the password row (loser short-circuited at the claim).
+    expect(mockDb.update.mock.calls.length).toBe(updateCallsAfterRequest + 1);
+  });
+
+  // M1 (Story 9-48 review) — a transient failure must NOT permanently burn the link.
+  it('releases the single-use claim when the password mutation fails (link stays retryable)', async () => {
+    const { token } = await PasswordResetService.requestReset(EMAIL);
+
+    // Simulate a transient failure on the password UPDATE, AFTER the NX claim is taken.
+    mockDb.update.mockImplementationOnce(() => ({
+      set: () => ({ where: () => Promise.reject(new Error('transient db error')) }),
+    }));
+    await expect(
+      PasswordResetService.resetPassword(token as string, 'NewStr0ng!PassA'),
+    ).rejects.toThrow(/transient db error/);
+
+    // The claim was RELEASED — no reset_claimed:* key lingers to dead-link the token.
+    expect(
+      [...mockRedis._store.keys()].filter((k) => k.startsWith('reset_claimed:')),
+    ).toHaveLength(0);
+
+    // A genuine retry with the same still-valid token now succeeds (not "already used").
+    await expect(
+      PasswordResetService.resetPassword(token as string, 'NewStr0ng!PassB'),
+    ).resolves.toBeUndefined();
   });
 });
 
