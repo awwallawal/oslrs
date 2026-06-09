@@ -1,6 +1,18 @@
 # Story 9.12: Public Wizard + Pending-NIN + NinHelpHint + Magic-Link Email
 
-Status: review
+Status: done
+
+<!-- CLOSED 2026-06-09 — done-SUPERSEDED. All 14 ACs shipped 2026-05-11. Final gate
+     Task 10.2 (revoke Google Cloud OAuth client) completed by operator 2026-06-09: GCP
+     client 130306069266-… deleted + GH Actions VITE_GOOGLE_CLIENT_ID var deleted + VPS
+     .env GOOGLE_*/CORS-oyotradeministry cleaned. The "first respondent completes the
+     wizard end-to-end" gate is SUPERSEDED, not met-as-imagined: the post-launch flood
+     exposed that completion ≠ success (data loss, Step-4 stall, undesigned return
+     journey). Those real-traffic gaps are owned by NEW stories — 9-26 (data-loss fix),
+     9-18 (wizard redesign / Step-4 stall), 9-38/9-39/9-40 (account + entry + dashboard).
+     Real validation of "does the journey work" lives in 9-18's Step-4-stall<30% metric +
+     the journey-harmonization arc, NOT in 9-12. FRC #3 reflects that arc. -->
+
 
 <!--
 Created 2026-04-25 by impostor-SM agent per SCP-2026-04-22 §A.5.
