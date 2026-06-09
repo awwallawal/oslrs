@@ -1,6 +1,6 @@
 # Story 9.48: Refresh-Token Lifecycle Hardening (hash-at-rest + rotation reuse-FP fix + reset single-use)
 
-Status: ready-for-dev
+Status: review
 
 <!--
 Authored 2026-06-08 by Bob (SM) via canonical *create-story --yolo workflow.
@@ -33,29 +33,39 @@ so that **a secondary leak (Redis/DB backup) cannot be replayed into account tak
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — M2/OPS-3: hash refresh tokens at rest (AC: #1, #2)** _(tests first)_
-  - [ ] 1.1 In `apps/api/src/services/token.service.ts`, add a private `hashToken(token)` that delegates to `sha256Hex` from `@oslsr/utils` (mirror `password-reset.service.ts.hashToken` / `hashInvitationToken`). Do not introduce a new crypto primitive.
-  - [ ] 1.2 `generateRefreshToken` (~line 82): mint the `uuidv7()` plaintext as today, but store the active entry under `refresh:<hashToken(token)>` and set the reverse index `user_refresh_token:<userId>` VALUE to `hashToken(token)`. RETURN the plaintext (for the cookie) unchanged.
-  - [ ] 1.3 `validateRefreshToken` (~106): hash the incoming token → look up `refresh:<hash>`.
-  - [ ] 1.4 `invalidateRefreshToken` (~127, legacy logout path): hash incoming for the `refresh:<hash>` read/del; the reverse-index guard becomes `if (currentToken === hashToken(refreshToken))`.
-  - [ ] 1.5 `invalidateUserRefreshTokens` (~150, F-012): the reverse-index value is now already a hash → `del(refresh:<value>)` directly (no re-hash of the value); confirm the F-012 logout test still passes.
-  - [ ] 1.6 `rotateRefreshToken` (~178, F-022): tombstone under `refresh_consumed:<hashToken(oldToken)>`; delete `refresh:<hashToken(oldToken)>`; `generateRefreshToken` for the replacement (already hash-safe via 1.2).
-  - [ ] 1.7 `getConsumedRefreshTokenUser` / `clearConsumedRefreshToken`: hash incoming → `refresh_consumed:<hash>`.
-  - [ ] 1.8 Tests (new, red-by-construction against the old raw storage): AC#1 (64-hex at rest across all 3 stores; e2e rotation chain) + AC#2 (hash-as-input rejected). Co-locate in `token.service.test.ts` + the orchestration in `auth.service.token-hardening.test.ts`.
-- [ ] **Task 2 — M1: rotation grace window (AC: #3)** _(tests first)_
-  - [ ] 2.1 Add `REFRESH_ROTATION_GRACE_SECONDS` (≤15; recommend 10). On `rotateRefreshToken`, stamp the tombstone with enough to recognise an in-grace replay (see Dev Notes "M1 grace-window design" — Approach B recommended: tombstone value = `JSON{ userId, rotatedAt }`, and within-grace presentation re-mints rather than revoking; Approach A = store a returnable replacement, only if true single-token convergence is required and the at-rest-plaintext invariant is honoured).
-  - [ ] 2.2 In `AuthService.refreshToken` (~834), the reuse-detection branch (currently: tombstone hit → `revokeAllUserTokens` + 401) gains a grace check: if the tombstone's `rotatedAt` is within `REFRESH_ROTATION_GRACE_SECONDS`, do NOT revoke — re-authenticate the caller (issue a fresh access + refresh token, set the rotated cookie) and log `auth.refresh_grace_reissue` (info). Outside grace → existing revoke-family + `AUTH_TOKEN_REUSE_DETECTED` 401 unchanged.
-  - [ ] 2.3 Update the misleading-comment fix from 9-42 to describe the NEW grace behavior (supersede the "ACCEPTED residual" note).
-  - [ ] 2.4 Tests: AC#3 (a) within-grace concurrent refresh → no family revoke, both authenticated; (b) post-grace replay → family revoked + 401. Ensure the genuine-expiry (no tombstone) branch still 401s WITHOUT revoke (regression-lock the 9-42 behavior).
-- [ ] **Task 3 — L3: password-reset atomic single-use (AC: #4)** _(tests first)_
-  - [ ] 3.1 In `apps/api/src/services/password-reset.service.ts.resetPassword`, atomically claim the token before the password `UPDATE` (recommend `redis.set('reset_claimed:'+hash, '1', 'NX', 'EX', 3600)`; null return → throw the existing `AUTH_RESET_TOKEN_INVALID` "already used"). Keep the existing `used=true` + 1h-retain so a later validate still reports "already used".
-  - [ ] 3.2 Tests: AC#4 concurrency (exactly-one-wins) + regression-lock the existing single-use-via-hash test (post-reset re-validate rejected).
-- [ ] **Task 4 — Cutover note + register reconciliation (AC: #5, #6)**
-  - [ ] 4.1 Add the "OPS-3 deploy note" to Dev Notes (hard hash-only cutover; forces re-login of active sessions; pre-launch → ≈0 impact; MUST precede blasts).
-  - [ ] 4.2 On commit, flip the `docs/security/findings-register.md` OPS-3 row → `Fixed-in-<hash>` in the SAME `fix(sec): OPS-3 …` commit (register maintenance rule).
-- [ ] **Task 5 — Regression sweep + atomic commits (AC: #6)**
-  - [ ] 5.1 Full API + web suites green; `tsc` + lint clean (api + web). Document net-new test counts + per-item commit hashes.
-  - [ ] 5.2 Pre-commit fresh-context `[CR]` on the uncommitted tree per [[feedback-review-before-commit]]; then the three atomic commits.
+- [x] **Task 1 — M2/OPS-3: hash refresh tokens at rest (AC: #1, #2)** _(tests first)_
+  - [x] 1.1 In `apps/api/src/services/token.service.ts`, add a private `hashToken(token)` that delegates to `sha256Hex` from `@oslsr/utils` (mirror `password-reset.service.ts.hashToken` / `hashInvitationToken`). Do not introduce a new crypto primitive.
+  - [x] 1.2 `generateRefreshToken`: mint the `uuidv7()` plaintext as today, but store the active entry under `refresh:<hashToken(token)>` and set the reverse index `user_refresh_token:<userId>` VALUE to `hashToken(token)`. RETURN the plaintext (for the cookie) unchanged.
+  - [x] 1.3 `validateRefreshToken`: hash the incoming token → look up `refresh:<hash>`.
+  - [x] 1.4 `invalidateRefreshToken` (legacy logout path): hash incoming for the `refresh:<hash>` read/del; the reverse-index guard becomes `if (currentToken === hashToken(refreshToken))`.
+  - [x] 1.5 `invalidateUserRefreshTokens` (F-012): the reverse-index value is now already a hash → `del(refresh:<value>)` directly (no re-hash of the value); confirm the F-012 logout test still passes.
+  - [x] 1.6 `rotateRefreshToken` (F-022): tombstone under `refresh_consumed:<hashToken(oldToken)>`; delete `refresh:<hashToken(oldToken)>`; `generateRefreshToken` for the replacement (already hash-safe via 1.2).
+  - [x] 1.7 `getConsumedRefreshToken` (replaces `getConsumedRefreshTokenUser` — see Completion Notes) / `clearConsumedRefreshToken`: hash incoming → `refresh_consumed:<hash>`.
+  - [x] 1.8 Tests (new, red-by-construction against the old raw storage): AC#1 (64-hex at rest across all 3 stores; e2e rotation chain) + AC#2 (hash-as-input rejected). Co-located in `token.service.test.ts` + the orchestration in `auth.service.token-hardening.test.ts`.
+- [x] **Task 2 — M1: rotation grace window (AC: #3)** _(tests first)_
+  - [x] 2.1 Added `REFRESH_ROTATION_GRACE_SECONDS` (10). On `rotateRefreshToken`, tombstone value = `JSON{ userId, sessionId, rememberMe, rotatedAt }` (Approach B — within-grace re-mints rather than revoking; no usable plaintext at rest).
+  - [x] 2.2 In `AuthService.refreshToken`, the reuse-detection branch gains a grace check: if `TokenService.isWithinRotationGrace(tombstone.rotatedAt)`, do NOT revoke — re-issue via the shared `completeRefresh(...,'reissue')` helper (fresh access + refresh token) and log `auth.refresh_grace_reissue` (info). Outside grace → existing revoke-family + `AUTH_TOKEN_REUSE_DETECTED` 401 unchanged.
+  - [x] 2.3 Updated the misleading-comment from 9-42 to describe the NEW grace behavior (superseded the "ACCEPTED residual" note in `rotateRefreshToken`).
+  - [x] 2.4 Tests: AC#3 (a) within-grace concurrent refresh → no family revoke, both authenticated; (b) post-grace replay → family revoked + 401. Genuine-expiry (no tombstone) branch still 401s WITHOUT revoke (regression-locked).
+- [x] **Task 3 — L3: password-reset atomic single-use (AC: #4)** _(tests first)_
+  - [x] 3.1 In `apps/api/src/services/password-reset.service.ts.resetPassword`, atomically claim the token before the password `UPDATE` via `redis.set('reset_claimed:'+hash, '1', 'EX', RESET_TOKEN_EXPIRY, 'NX')` (repo NX convention, checked `!== 'OK'` → throw the existing `AUTH_RESET_TOKEN_INVALID` "already used"). Kept the existing `used=true` + 1h-retain so a later validate still reports "already used".
+  - [x] 3.2 Tests: AC#4 concurrency (exactly-one-wins) + the existing single-use-via-hash regression test (post-reset re-validate rejected) still green.
+- [x] **Task 4 — Cutover note + register reconciliation (AC: #5, #6)**
+  - [x] 4.1 The "OPS-3 deploy note" is in Dev Notes (hard hash-only cutover; forces re-login of active sessions; pre-launch → ≈0 impact; MUST precede blasts).
+  - [ ] 4.2 On commit, flip the `docs/security/findings-register.md` OPS-3 row → `Fixed-in-<hash>` in the SAME `fix(sec): OPS-3 …` commit (register maintenance rule). **DEFERRED to commit time** — dev-story leaves the tree uncommitted for a fresh-context `[CR]` first (no commit hash exists yet); the register row still reads `In-story 9-48 (LAUNCH GATE)`, accurate for the review-staged state.
+- [~] **Task 5 — Regression sweep + atomic commits (AC: #6)**
+  - [x] 5.1 Full API suite green (2354 pass / 7 skip / 0 fail); `tsc` + lint clean (api + web); web tests untouched (zero web files changed). +7 net-new API tests.
+  - [ ] 5.2 Pre-commit fresh-context `[CR]` on the uncommitted tree per [[feedback-review-before-commit]]; then the three atomic commits. **OPERATOR/next-session** — code-review runs on the uncommitted tree (different LLM/session recommended) before the three `fix(sec):` commits.
+
+### Review Follow-ups (AI)
+
+> Adversarial code-review of the 9-48 uncommitted tree (BMAD `code-review`, 2026-06-09). 0 High, 2 Medium, 3 Low. AC#1–#5 verified IMPLEMENTED + test-backed; 0 git/File-List discrepancies. All findings below **fixed automatically in the same review session** (Awwal directive) — re-verified: API 2356 pass / 7 skip / 0 fail (+2 net-new), `tsc` + lint clean (api + web). The three `fix(sec):` atomic commits + OPS-3 register flip (Task 4.2/5.2) remain the only open launch-gate obligation; these review fixes ride the SAME commit batch.
+
+- [x] **[AI-Review][MEDIUM] M1 — password-reset NX claim was never released on failure → a transient db/bcrypt error between the claim and the mark-used write permanently dead-linked an otherwise-valid reset token (a behavioral regression vs pre-9-48, where mark-used came after the mutation so a failed reset stayed retryable).** Wrapped the password mutation in try/catch; on any failure `redis.del(reset_claimed:<hash>)` releases the claim (best-effort, never masks the original error) so only a COMPLETED reset is single-use. [apps/api/src/services/password-reset.service.ts:264] — test: "releases the single-use claim when the password mutation fails" [password-reset.service.test.ts].
+- [x] **[AI-Review][MEDIUM] M2 — grace re-issue (and any token supersession) orphaned the prior active `refresh:<hash>` entry; the single-valued reverse index forgot it, so logout (`invalidateUserRefreshTokens`, by userId) / `revokeAllUserTokens` deleted only the reverse-indexed token, leaving the orphan live until TTL (≤30d w/ rememberMe) and still able to mint access tokens — touching AC#6's "F-012 positive invalidation intact".** Root cause = single-valued reverse index vs. a keyspace that can briefly hold >1 token. Fix enforces the system's real invariant (single-session: `users.currentSessionId` is single-valued; logout is userId-keyed): `generateRefreshToken` now reaps the prior reverse-indexed active entry before writing the new one, so the reverse index stays an accurate, complete record and logout/revoke are exhaustive. The shared httpOnly cookie always carries the latest token, so a reaped orphan is never presented by a legitimate client (pure at-rest cleanup; multi-tab grace login still preserved). [apps/api/src/services/token.service.ts:138] — test: "M2 — minting reaps the prior active entry; no orphan survives logout" [token.service.test.ts].
+- [x] **[AI-Review][LOW] L1 — misleading variable name: `revokeAllUserTokens` read the reverse index into `const refreshToken`, but post-OPS-3 that value is a sha256 HASH (inconsistent with `invalidateUserRefreshTokens` which correctly names it `tokenHash`).** Renamed → `tokenHash` + clarifying comment. [apps/api/src/services/token.service.ts:362].
+- [x] **[AI-Review][LOW] L2 — `isWithinRotationGrace` uses wall-clock (`Date.now()` vs stored `rotatedAt`); correct on the single VPS but inter-instance clock skew would shift the grace boundary under horizontal scaling.** Doc-only: added an NTP-sync / Redis-relative-timestamp caveat to the method doc so a future multi-instance deploy doesn't silently widen the window. [apps/api/src/services/token.service.ts:71].
+- [x] **[AI-Review][LOW] L3 — `getRefreshSecret()` is dead code (refresh tokens are opaque `uuidv7`, never JWT-signed).** Reviewed — **retained, no change**: the method carries a deliberate "retained as defense-in-depth for future JWT-signed refresh tokens" comment; removing intentionally-parked scaffolding is out of scope for a security-hardening review. Logged for visibility only. [apps/api/src/services/token.service.ts:90].
 
 ## Carried review nits from 9-42 post-hoc review (LOW / opportunistic — NOT launch-gate)
 
@@ -103,16 +113,37 @@ On deploy, `validate`/`rotate`/`invalidate` hash the incoming token → the new 
 
 ## Dev Agent Record
 ### Agent Model Used
-_(to be filled by dev)_
+claude-opus-4-8[1m] (dev-story workflow, single session 2026-06-09)
 
 ### Debug Log References
+- `pnpm vitest run` token.service + auth.service.token-hardening → 32 pass (incl. new OPS-3 + grace + isWithinRotationGrace).
+- `pnpm vitest run` password-reset.service → 8 pass (incl. new AC#4 concurrency).
+- `pnpm --filter @oslsr/api exec tsc --noEmit` → clean (after fixing the ioredis `set` overload to the repo `('EX', ttl, 'NX')` order, matching `mfa.service.ts:185`).
+- `pnpm --filter @oslsr/api test` → **2354 pass / 7 skip / 0 fail** (164 files). `pnpm --filter @oslsr/api lint` → clean.
+- `pnpm --filter @oslsr/web exec tsc --noEmit` + `lint` → clean (web surface untouched).
 
 ### Completion Notes List
+- ✅ **AC#1/#2 (OPS-3 — hash refresh tokens at rest).** `TokenService.hashToken` delegates to `sha256Hex` (`@oslsr/utils`). All three Redis stores now key/value by the hash: active entry `refresh:<hash>`, reverse-index VALUE `user_refresh_token:<userId> → <hash>`, tombstone `refresh_consumed:<hash>`. Every lookup/mutation site hashes the incoming plaintext first (`validateRefreshToken`, `invalidateRefreshToken` incl. its reverse-index guard now comparing the hash, `rotateRefreshToken`, `getConsumedRefreshToken`, `clearConsumedRefreshToken`). `invalidateUserRefreshTokens` + `revokeAllUserTokens` were already value-agnostic (they delete `refresh:<reverse-index-value>`, which is now the hash) — no change needed beyond a clarifying comment. The plaintext exists only in transit (cookie) + the `generateRefreshToken`/rotate return values. A Map-backed e2e test proves the plaintext appears in no key/value, the rotation chain works, and a leaked at-rest hash replayed AS a token re-hashes to a miss.
+- ✅ **AC#3 (M1 — rotation grace window).** **Replaced** `getConsumedRefreshTokenUser` (returned bare userId) with `getConsumedRefreshToken` (returns the full tombstone `{ userId, sessionId, rememberMe, rotatedAt }`) — the richer record is required to re-mint a full session for a benign multi-tab replay. The old method had a single caller (`AuthService.refreshToken`); keeping it as a thin wrapper would have left dead code, so it was removed outright (no other `src` references). `REFRESH_ROTATION_GRACE_SECONDS = 10`. `TokenService.isWithinRotationGrace(rotatedAt)` is the decision helper. In `AuthService.refreshToken`, a consumed-token hit within grace re-issues (no family revoke, `auth.refresh_grace_reissue` info log); outside grace the existing revoke-family + `AUTH_TOKEN_REUSE_DETECTED` 401 is unchanged. Extracted a private `completeRefresh(...,mode)` helper shared by the normal `'rotate'` path and the grace `'reissue'` path — the grace path mints a FRESH refresh token (the presented one is already consumed) and **still runs the session-validity + user-status guards** so an in-grace re-issue cannot revive a suspended account or dead session (AC#6).
+- ✅ **AC#4 (L3 — password-reset atomic single-use).** `resetPassword` now `SET reset_claimed:<hash> '1' EX <ttl> NX` (repo convention per `mfa.service.ts`) before the password `UPDATE`; loser (`!== 'OK'`) throws the existing `AUTH_RESET_TOKEN_INVALID` "already used". The `used=true` + 1h-retain UX is preserved. Concurrency test: two simultaneous `resetPassword(sameToken)` → exactly one fulfilled + one "already used", and the password row is mutated exactly once.
+- ✅ **AC#5 (hard hash-only cutover documented).** OPS-3 deploy note present in Dev Notes; no dual-read, no migration (Redis-only, self-healing TTL). MUST ship before any blast (forced-relogin blast radius ≈ 0 pre-traffic).
+- ✅ **AC#6 (no control weakened + zero regression).** F-022 reuse detection (outside grace), F-012 logout invalidation, F-011/OPS-2 hash-at-rest, MFA, session/token revocation, parameterized SQL all intact. Full API suite green, tsc+lint clean both apps.
+- **Atomic-commit guidance (Task 5.2 / Dev Notes):** the three `fix(sec):` commits + the OPS-3 register-row flip are deferred to the operator after a fresh-context `[CR]` on the uncommitted tree ([[feedback-review-before-commit]] — dev-story never auto-commits). token.service.ts carries both the OPS-3 and M1 edits interleaved (the tombstone reshape is intrinsic to both), so sequential file-level commits or a deliberate split are the operator's call at commit time.
+- **No** schema migration, **no** new audit action, **no** web changes, **no** new deps — exactly as the story scoped.
+- **Carried 9-42 nits (N1–N4): NOT actioned** (non-gating, out of AC#1–#6 scope). N1 (F-023 `(req as any)`) left untouched — `user.controller.ts` was not in this story's edit set. N3 already routed to PM/architect.
 
 ### File List
+- `apps/api/src/services/token.service.ts` (M) — `hashToken` + `isWithinRotationGrace` + `RefreshTokenTombstone` export; hash at all store/lookup/mutation sites; JSON tombstone; `getConsumedRefreshTokenUser` → `getConsumedRefreshToken`.
+- `apps/api/src/services/auth.service.ts` (M) — `refreshToken` grace branch + extracted `completeRefresh('rotate'|'reissue')` helper.
+- `apps/api/src/services/password-reset.service.ts` (M) — `RESET_CLAIM_KEY_PREFIX` + atomic NX claim in `resetPassword`.
+- `apps/api/src/services/__tests__/token.service.test.ts` (M) — hashed-key assertions; new OPS-3 e2e (AC#1/#2) + `isWithinRotationGrace` + JSON-tombstone tests.
+- `apps/api/src/services/__tests__/auth.service.token-hardening.test.ts` (M) — mock swap to `getConsumedRefreshToken`/`isWithinRotationGrace`/`generateRefreshToken`; new within-grace re-issue test.
+- `apps/api/src/services/__tests__/password-reset.service.test.ts` (M) — NX-aware `set` mock + AC#4 concurrency test.
 
 ### Change Log
 | Date | Change | By |
 |------|--------|-----|
+| 2026-06-09 | **BMAD code-review (adversarial, uncommitted tree).** 0 High / 2 Medium / 3 Low; 0 git/File-List discrepancies; AC#1–#5 verified implemented + test-backed. Fixed all findings in-session (Awwal directive): M1 — release the password-reset NX claim on mutation failure (transient error no longer dead-links a valid token; `password-reset.service.ts`); M2 — `generateRefreshToken` reaps the prior active entry to enforce one-active-token-per-user so logout/revoke leave no orphan (`token.service.ts`); L1 rename, L2 multi-instance-clock doc caveat, L3 reviewed-and-retained. +2 net-new API tests (now 2356 pass / 7 skip / 0 fail); `tsc` + lint clean (api + web). See "Review Follow-ups (AI)". | code-review |
+| 2026-06-09 | Implemented AC#1–#6: OPS-3 refresh-token hash-at-rest (token.service.ts — all 3 stores + lookup sites), M1 rotation grace window (auth.service.ts `completeRefresh` helper + `isWithinRotationGrace`; tombstone reshaped to JSON), L3 password-reset atomic NX claim (password-reset.service.ts). +7 net-new API tests; full API suite 2354 pass / 0 fail; tsc+lint clean (api+web). Status ready-for-dev → review. Register OPS-3 flip + three `fix(sec):` atomic commits deferred to post-`[CR]` commit time. | Amelia (dev-story) |
 | 2026-06-08 | Added non-gating section "Carried review nits from 9-42 post-hoc review" (N1 F-023 `(req as any)` → typed `AuthenticatedRequest`; N2 F-004 "in-memory" framing vs sessionStorage reality; N3 access-token-storage architecture consideration → needs PM/architect; N4 F-018 residual timing). Sourced from the independent post-hoc code-review of the 9-42 tail (`2d9a093..164ff6b`). Explicitly NOT launch-gating, separate from AC#1–#6 and the OPS-3/M1/L3 commits. 9-42 left untouched (committed/deployed). | Bob (SM) |
 | 2026-06-08 | N3 handed off to PM/architect: created `planning-artifacts/decision-request-2026-06-08-access-token-storage.md` (A=accept sessionStorage / B=httpOnly cookie / C=in-memory; SM rec C, post-launch). N3 marked routed-out in the Carried-nits section. | Bob (SM) |
