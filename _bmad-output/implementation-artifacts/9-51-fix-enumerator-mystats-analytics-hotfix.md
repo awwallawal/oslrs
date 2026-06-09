@@ -78,9 +78,13 @@ in analytics services drifting from the schema, invisible to both `tsc` and the 
      ever change from `text` (which would invalidate the `::text` casts).
    - `ops-services-db-smoke.integration.test.ts` — `audit-log-viewer` (raw `db.execute`, real drift
      risk: listAuditLogs/getDistinctValues/searchPrincipals), plus `ProductivityService` (4 aggregation
-     methods) and `RemunerationService` (getPaymentBatches/getEligibleStaff). Productivity/remuneration
-     are Drizzle-query-builder (tsc-guarded, low drift risk) but smoked per the "extend to ops services"
-     follow-up so their multi-join aggregations are validated end-to-end against the real schema.
+     methods) and `RemunerationService`. Productivity/remuneration are Drizzle-query-builder (tsc-guarded,
+     low drift risk) but smoked per the "extend to ops services" follow-up so their multi-join
+     aggregations are validated end-to-end against the real schema. The remuneration block **seeds a real
+     payment chain (batch → record → dispute)** so the data-dependent read paths actually execute their
+     joins/filters — `getBatchDetail`, `getStaffPaymentHistory` (current-version `effectiveUntil` filter),
+     `getDisputeByRecordId` (exercises the `reopen_count` column the dispute-reopen `sql` fragment relies
+     on), `getStaffDisputes` — not just the empty-set branches.
 
    This coverage would have caught both this hotfix and Hotfix 9.6 in CI, not prod.
 
