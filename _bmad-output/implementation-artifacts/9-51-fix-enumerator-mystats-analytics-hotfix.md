@@ -64,15 +64,25 @@ in analytics services drifting from the schema, invisible to both `tsc` and the 
 
 ## Prevention
 
-1. **Real-DB analytics smoke** — `apps/api/src/services/__tests__/analytics-db-smoke.integration.test.ts`.
-   Executes the analytics services' RAW SQL against a live Postgres (CI `test-api` provides one via
-   `db:push:full:force`; a local Postgres is also expected, same as the respondents-constraints test).
-   Postgres validates column refs + operand types at PLAN time, so a renamed/removed column or a
-   text↔uuid mismatch throws even on zero rows. Seeds a real enumerator (lga + `enumerator` role, no
-   team assignment) + a submission, then asserts `getPersonalStats` / `getTeamQuality` /
-   `getEnumeratorReliability` resolve. Includes a schema-invariant guard that fails loudly if
-   `submissions.submitter_id`/`enumerator_id` ever change from `text` (which would invalidate the
-   `::text` casts). This smoke would have caught both this hotfix and Hotfix 9.6 in CI, not prod.
+1. **Real-DB smoke for raw-SQL services** — executes each service's queries against a live Postgres
+   (CI `test-api` provides one via `db:push:full:force`; a local Postgres is also expected, same as the
+   respondents-constraints test). Postgres validates column refs + operand types at PLAN time, so a
+   renamed/removed column or a text↔uuid mismatch throws even on zero rows. Two files:
+   - `analytics-db-smoke.integration.test.ts` — seeds a real enumerator (lga + `enumerator` role, no
+     team assignment) + a submission, then exercises `PersonalStatsService.getPersonalStats`,
+     `TeamQualityService.getTeamQuality`, and the **entire SurveyAnalyticsService system-scoped
+     surface** (getDemographics/Employment/Household/SkillsFrequency/Trends/RegistrySummary/
+     PipelineSummary/SkillsInventory/InferentialInsights/ExtendedEquity/ActivationStatus/
+     EnumeratorReliability — the 47-query service) plus `PublicInsightsService.getPublicInsights/getTrends`.
+     Includes a schema-invariant guard that fails loudly if `submissions.submitter_id`/`enumerator_id`
+     ever change from `text` (which would invalidate the `::text` casts).
+   - `ops-services-db-smoke.integration.test.ts` — `audit-log-viewer` (raw `db.execute`, real drift
+     risk: listAuditLogs/getDistinctValues/searchPrincipals), plus `ProductivityService` (4 aggregation
+     methods) and `RemunerationService` (getPaymentBatches/getEligibleStaff). Productivity/remuneration
+     are Drizzle-query-builder (tsc-guarded, low drift risk) but smoked per the "extend to ops services"
+     follow-up so their multi-join aggregations are validated end-to-end against the real schema.
+
+   This coverage would have caught both this hotfix and Hotfix 9.6 in CI, not prod.
 
 2. **Audit of the sibling hazard (text `submitter_id`/`enumerator_id` ↔ uuid `users.id`)** — swept all
    analytics services for column-to-column joins across that mismatch. **All are currently correct**
@@ -98,7 +108,8 @@ in analytics services drifting from the schema, invisible to both `tsc` and the 
 ## Files
 - `apps/api/src/services/personal-stats.service.ts` — roles join + `safeSection` resilience + wrapped team resolution.
 - `apps/api/src/services/__tests__/personal-stats.service.test.ts` — +2 (graceful-degradation; LGA-fallback SQL joins roles / no `u.role`).
-- `apps/api/src/services/__tests__/analytics-db-smoke.integration.test.ts` — **new** real-DB smoke (5 tests).
+- `apps/api/src/services/__tests__/analytics-db-smoke.integration.test.ts` — **new** real-DB smoke (personal-stats + team-quality + full survey-analytics surface + public-insights + schema-invariant guard).
+- `apps/api/src/services/__tests__/ops-services-db-smoke.integration.test.ts` — **new** real-DB smoke (audit-log-viewer + productivity + remuneration).
 
 ## Lessons
 - Raw `db.execute(sql)` + mocked-DB unit tests = invisible schema drift; analytics endpoints need at

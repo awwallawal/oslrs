@@ -10,6 +10,8 @@ import { respondents } from '../../db/schema/respondents.js';
 import { PersonalStatsService } from '../personal-stats.service.js';
 import { TeamQualityService } from '../team-quality.service.js';
 import { SurveyAnalyticsService } from '../survey-analytics.service.js';
+import { PublicInsightsService } from '../public-insights.service.js';
+import type { AnalyticsScope } from '../../middleware/analytics-scope.js';
 
 /**
  * Real-DB analytics SMOKE — executes the analytics services' RAW SQL against a
@@ -124,6 +126,33 @@ describe('analytics services — real-DB smoke (raw-SQL ↔ schema parity)', () 
   it('SurveyAnalyticsService.getEnumeratorReliability runs (submitter_id::text ↔ users.id join)', async () => {
     const result = await SurveyAnalyticsService.getEnumeratorReliability({ type: 'system' });
     expect(result).toBeTruthy();
+  });
+
+  // SurveyAnalyticsService — system-scoped descriptive endpoints. These hold the
+  // bulk of the raw SQL (47 db.execute calls). Each must EXECUTE against the real
+  // schema; values are not asserted (the DB may be empty in CI).
+  const SYSTEM: AnalyticsScope = { type: 'system' };
+  const surveyMethods: Array<[string, () => Promise<unknown>]> = [
+    ['getDemographics', () => SurveyAnalyticsService.getDemographics(SYSTEM)],
+    ['getEmployment', () => SurveyAnalyticsService.getEmployment(SYSTEM)],
+    ['getHousehold', () => SurveyAnalyticsService.getHousehold(SYSTEM)],
+    ['getSkillsFrequency', () => SurveyAnalyticsService.getSkillsFrequency(SYSTEM)],
+    ['getTrends', () => SurveyAnalyticsService.getTrends(SYSTEM)],
+    ['getRegistrySummary', () => SurveyAnalyticsService.getRegistrySummary(SYSTEM)],
+    ['getPipelineSummary', () => SurveyAnalyticsService.getPipelineSummary(SYSTEM)],
+    ['getSkillsInventory', () => SurveyAnalyticsService.getSkillsInventory(SYSTEM)],
+    ['getInferentialInsights', () => SurveyAnalyticsService.getInferentialInsights(SYSTEM)],
+    ['getExtendedEquity', () => SurveyAnalyticsService.getExtendedEquity(SYSTEM)],
+    ['getActivationStatus', () => SurveyAnalyticsService.getActivationStatus(SYSTEM)],
+  ];
+
+  it.each(surveyMethods)('SurveyAnalyticsService.%s runs against the real schema', async (_name, run) => {
+    await expect(run()).resolves.toBeTruthy();
+  });
+
+  it('PublicInsightsService.getPublicInsights + getTrends run (public, raw-SQL-heavy)', async () => {
+    await expect(PublicInsightsService.getPublicInsights()).resolves.toBeTruthy();
+    await expect(PublicInsightsService.getTrends()).resolves.toBeTruthy();
   });
 
   it('sanity: the documented schema invariants still hold (text submitter/enumerator, uuid users.id)', async () => {
