@@ -843,13 +843,39 @@ export class AuthService {
       // might simply be expired — OR it might be a replay of a token we already
       // rotated (consumed). If it matches a consumed-token tombstone, the entire
       // token family is revoked (defends against a stolen-then-replayed token).
-      const consumedUserId = await TokenService.getConsumedRefreshTokenUser(refreshToken);
-      if (consumedUserId) {
-        await TokenService.revokeAllUserTokens(consumedUserId);
+      const consumed = await TokenService.getConsumedRefreshToken(refreshToken);
+      if (consumed) {
+        // M1 (Story 9-48): grace window. A consumed token presented again within
+        // REFRESH_ROTATION_GRACE_SECONDS of its rotation is benign multi-tab
+        // concurrency (one shared httpOnly cookie, per-tab proactive refresh
+        // timers), NOT a replay — RE-ISSUE a fresh session instead of revoking the
+        // family. Outside the window it is a genuine reuse → revoke + 401. Within
+        // the window an attacker replaying a stolen-then-just-rotated token is also
+        // re-authenticated (the deliberate, bounded relaxation Auth0's refresh
+        // leeway makes); the small window caps that exposure.
+        if (TokenService.isWithinRotationGrace(consumed.rotatedAt)) {
+          const reissued = await this.completeRefresh(
+            consumed.userId,
+            consumed.sessionId,
+            consumed.rememberMe,
+            refreshToken,
+            ipAddress,
+            'reissue',
+          );
+          logger.info({
+            event: 'auth.refresh_grace_reissue',
+            userId: consumed.userId,
+            sessionId: consumed.sessionId,
+            ipAddress,
+          });
+          return reissued;
+        }
+
+        await TokenService.revokeAllUserTokens(consumed.userId);
         await TokenService.clearConsumedRefreshToken(refreshToken);
         logger.warn({
           event: 'auth.refresh_reuse_detected',
-          userId: consumedUserId,
+          userId: consumed.userId,
           ipAddress,
         });
         throw new AppError('AUTH_TOKEN_REUSE_DETECTED', 'Please log in again', 401);
@@ -865,12 +891,52 @@ export class AuthService {
       throw new AppError('AUTH_TOKEN_REVOKED', 'Please log in again', 401);
     }
 
+    const result = await this.completeRefresh(
+      tokenData.userId,
+      tokenData.sessionId,
+      tokenData.rememberMe,
+      refreshToken,
+      ipAddress,
+      'rotate',
+    );
+
+    logger.info({
+      event: 'auth.token_refreshed',
+      userId: tokenData.userId,
+      sessionId: tokenData.sessionId,
+      ipAddress,
+    });
+
+    return result;
+  }
+
+  /**
+   * Shared tail of /refresh: re-validate the session + user, then issue a fresh
+   * access token and refresh token. Used by both the normal rotation path
+   * (`mode: 'rotate'` — tombstones + retires the presented token) and the M1
+   * grace re-issue path (`mode: 'reissue'` — the presented token is already
+   * consumed, so a brand-new refresh token is minted instead of rotating). The
+   * same session/user-status guards run in both modes so an in-grace re-issue
+   * cannot revive a suspended account or an invalidated session (AC#6 — no control
+   * weakened).
+   */
+  private static async completeRefresh(
+    userId: string,
+    sessionId: string,
+    rememberMe: boolean,
+    presentedToken: string,
+    ipAddress: string | undefined,
+    mode: 'rotate' | 'reissue',
+  ): Promise<{ accessToken: string; expiresIn: number; refreshToken: string; rememberMe: boolean }> {
     // Validate session
-    const sessionValidation = await SessionService.validateSession(tokenData.sessionId);
+    const sessionValidation = await SessionService.validateSession(sessionId);
 
     if (!sessionValidation.valid) {
-      // Invalidate refresh token if session is invalid
-      await TokenService.invalidateRefreshToken(refreshToken);
+      // Invalidate the presented refresh token if it is still active (rotate mode).
+      // In reissue mode it is already consumed/retired, so there is nothing to kill.
+      if (mode === 'rotate') {
+        await TokenService.invalidateRefreshToken(presentedToken);
+      }
 
       const reason = sessionValidation.reason;
       if (reason === 'inactivity') {
@@ -884,7 +950,7 @@ export class AuthService {
 
     // Get user data for new token
     const user = await db.query.users.findFirst({
-      where: eq(users.id, tokenData.userId),
+      where: eq(users.id, userId),
       with: {
         role: true,
       },
@@ -896,7 +962,9 @@ export class AuthService {
 
     // Check user status
     if (user.status === 'suspended' || user.status === 'deactivated') {
-      await TokenService.invalidateRefreshToken(refreshToken);
+      if (mode === 'rotate') {
+        await TokenService.invalidateRefreshToken(presentedToken);
+      }
       throw new AppError('AUTH_ACCOUNT_SUSPENDED', 'Your account has been suspended', 403);
     }
 
@@ -913,34 +981,25 @@ export class AuthService {
     // Generate new access token
     const { token: accessToken, jti, expiresIn } = TokenService.generateAccessToken(
       authUser,
-      tokenData.rememberMe
+      rememberMe
     );
 
-    // F-022 (Story 9-42): rotate the refresh token (one-time use). The presented
-    // token is tombstoned + retired and a fresh refresh token is minted; the
-    // controller sets it as the new httpOnly cookie. A later replay of the
-    // now-consumed token trips the reuse-detection branch above.
-    const newRefreshToken = await TokenService.rotateRefreshToken(
-      refreshToken,
-      tokenData.userId,
-      tokenData.sessionId,
-      tokenData.rememberMe
-    );
+    // Issue the new refresh token. 'rotate' (F-022, Story 9-42): the presented
+    // token is tombstoned + retired and a fresh refresh token is minted; a later
+    // replay trips the reuse-detection branch. 'reissue' (M1, Story 9-48): the
+    // presented token was ALREADY consumed by the racing tab, so we mint a fresh
+    // token directly (the controller sets it as the new httpOnly cookie).
+    const newRefreshToken = mode === 'rotate'
+      ? await TokenService.rotateRefreshToken(presentedToken, userId, sessionId, rememberMe)
+      : await TokenService.generateRefreshToken(userId, sessionId, rememberMe);
 
     // Update session with new token JTI
-    await SessionService.linkTokenToSession(tokenData.sessionId, jti);
+    await SessionService.linkTokenToSession(sessionId, jti);
 
     // Update last activity
-    await SessionService.updateLastActivity(tokenData.sessionId);
+    await SessionService.updateLastActivity(sessionId);
 
-    logger.info({
-      event: 'auth.token_refreshed',
-      userId: user.id,
-      sessionId: tokenData.sessionId,
-      ipAddress,
-    });
-
-    return { accessToken, expiresIn, refreshToken: newRefreshToken, rememberMe: tokenData.rememberMe };
+    return { accessToken, expiresIn, refreshToken: newRefreshToken, rememberMe };
   }
 
   /**

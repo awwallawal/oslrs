@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getRedisClient } from '../lib/redis.js';
 import { uuidv7 } from 'uuidv7';
-import { AppError } from '@oslsr/utils';
+import { AppError, sha256Hex } from '@oslsr/utils';
 import type { JwtPayload, AuthUser } from '@oslsr/types';
 
 // Token expiry constants (in seconds)
@@ -21,9 +21,60 @@ const USER_REFRESH_KEY_PREFIX = 'user_refresh_token:';
 // a tombstoned token at /refresh is a replay → the whole token family is revoked.
 const CONSUMED_REFRESH_KEY_PREFIX = 'refresh_consumed:';
 
+// M1 (Story 9-48): grace window in which a just-rotated (consumed) refresh token
+// presented AGAIN is treated as benign multi-tab concurrency (re-issued) rather
+// than a replay (family-revoke). One httpOnly cookie is shared across tabs, each
+// with its own proactive refresh timer, so a near-simultaneous second /refresh is
+// normal. Kept SMALL to bound the stolen-then-just-rotated replay window; outside
+// it, full F-022 reuse detection + family revoke is unchanged.
+const REFRESH_ROTATION_GRACE_SECONDS = 10;
+
+/**
+ * OPS-3 (Story 9-48): persisted shape of a consumed-token tombstone. Stored as
+ * JSON (not a bare userId) so the grace-window branch can re-mint a full session
+ * (userId + sessionId + rememberMe) for a benign multi-tab replay, and decide
+ * benign-vs-replay from `rotatedAt`. Never carries a usable plaintext token.
+ */
+export interface RefreshTokenTombstone {
+  userId: string;
+  sessionId: string;
+  rememberMe: boolean;
+  rotatedAt: number; // epoch ms at rotation
+}
+
 export class TokenService {
   private static isTestMode(): boolean {
     return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  }
+
+  /**
+   * OPS-3 (sec-r2 / Story 9-48): SHA-256 hex of a refresh token for storage and
+   * lookup AT REST. Refresh tokens are persisted ONLY as this hash — the active
+   * entry key (`refresh:<hash>`), the per-user reverse-index VALUE, and the
+   * consumed-token tombstone key (`refresh_consumed:<hash>`). The plaintext exists
+   * only in transit (the httpOnly cookie) and in the return values that set it.
+   *
+   * Delegates to the shared `sha256Hex` primitive — identical rationale to
+   * F-011/OPS-2: refresh tokens are `uuidv7()` (high-entropy random), so unsalted
+   * SHA-256 carries no dictionary/rainbow risk a salt would defend, and a per-token
+   * salt would break the lookup-by-hash design. A secondary Redis-backup leak thus
+   * cannot be replayed into account takeover.
+   */
+  private static hashToken(token: string): string {
+    return sha256Hex(token);
+  }
+
+  /**
+   * M1 (Story 9-48): true if a consumed token was rotated within the grace window
+   * (benign multi-tab concurrency), false otherwise (treat as replay → revoke).
+   *
+   * Uses wall-clock (`Date.now()` vs the stored `rotatedAt`). Correct on the single
+   * VPS today. If the API is ever scaled horizontally, inter-instance clock skew
+   * would shift the grace boundary by that skew — keep instances NTP-synced, or move
+   * the decision to a Redis-server-relative timestamp, before multi-instance deploy.
+   */
+  static isWithinRotationGrace(rotatedAt: number): boolean {
+    return Date.now() - rotatedAt <= REFRESH_ROTATION_GRACE_SECONDS * 1000;
   }
 
   private static getJwtSecret(): string {
@@ -87,8 +138,28 @@ export class TokenService {
     // Calculate expiry based on Remember Me
     const expirySeconds = rememberMe ? REMEMBER_ME_SESSION_EXPIRY : REFRESH_TOKEN_EXPIRY;
 
-    // Store refresh token in Redis with metadata
-    const key = `${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`;
+    // OPS-3 (Story 9-48): persist ONLY the hash at rest; the plaintext is returned
+    // for the httpOnly cookie and never stored.
+    const tokenHash = this.hashToken(refreshToken);
+
+    // M2 (Story 9-48 review): enforce AT-MOST-ONE active refresh token per user.
+    // The system is single-session by design (`users.currentSessionId` is single-
+    // valued; logout invalidates by userId via the reverse index). Without this,
+    // a superseded token — e.g. the loser of a multi-tab grace re-issue, or a token
+    // replaced by a fresh login — is orphaned in the `refresh:` keyspace: the single-
+    // valued reverse index forgets it, so a later logout/revoke (which delete only
+    // the reverse-indexed entry) leave it live until TTL (up to 30d w/ rememberMe).
+    // Reaping the prior entry here keeps the reverse index an accurate, complete
+    // record of the user's one live token, so logout/revoke are exhaustive. The
+    // shared httpOnly cookie always carries the latest token, so a reaped orphan is
+    // never presented by a legitimate client — this is pure at-rest cleanup.
+    const priorHash = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
+    if (priorHash && priorHash !== tokenHash) {
+      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${priorHash}`);
+    }
+
+    // Store refresh token in Redis with metadata, keyed by the hash.
+    const key = `${REFRESH_TOKEN_KEY_PREFIX}${tokenHash}`;
     await redis.setex(key, expirySeconds, JSON.stringify({
       userId,
       sessionId,
@@ -96,8 +167,9 @@ export class TokenService {
       createdAt: new Date().toISOString(),
     }));
 
-    // Maintain reverse index for efficient user-level revocation
-    await redis.setex(`${USER_REFRESH_KEY_PREFIX}${userId}`, expirySeconds, refreshToken);
+    // Maintain reverse index for efficient user-level revocation. The VALUE is the
+    // hash (not the plaintext), so user-level deletes operate directly on the hash.
+    await redis.setex(`${USER_REFRESH_KEY_PREFIX}${userId}`, expirySeconds, tokenHash);
 
     return refreshToken;
   }
@@ -112,7 +184,10 @@ export class TokenService {
     createdAt: string;
   } | null> {
     const redis = getRedisClient();
-    const key = `${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`;
+    // OPS-3 (Story 9-48): hash the incoming plaintext before the lookup — Redis is
+    // keyed by hash, so a leaked at-rest hash presented AS a token re-hashes to a
+    // miss (proves the at-rest value is not itself a usable bearer secret).
+    const key = `${REFRESH_TOKEN_KEY_PREFIX}${this.hashToken(refreshToken)}`;
 
     const data = await redis.get(key);
     if (!data) {
@@ -127,7 +202,9 @@ export class TokenService {
    */
   static async invalidateRefreshToken(refreshToken: string): Promise<void> {
     const redis = getRedisClient();
-    const key = `${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`;
+    // OPS-3 (Story 9-48): hash the incoming plaintext for the active-entry read/del.
+    const tokenHash = this.hashToken(refreshToken);
+    const key = `${REFRESH_TOKEN_KEY_PREFIX}${tokenHash}`;
 
     // Read token data to get userId for reverse index cleanup
     const data = await redis.get(key);
@@ -135,9 +212,10 @@ export class TokenService {
 
     if (data) {
       const { userId } = JSON.parse(data);
-      // Clean up reverse index if it still points to this token
+      // Clean up reverse index if it still points to this token. The reverse-index
+      // VALUE is the hash (OPS-3), so compare against the hash, not the plaintext.
       const currentToken = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
-      if (currentToken === refreshToken) {
+      if (currentToken === tokenHash) {
         await redis.del(`${USER_REFRESH_KEY_PREFIX}${userId}`);
       }
     }
@@ -153,9 +231,11 @@ export class TokenService {
    */
   static async invalidateUserRefreshTokens(userId: string): Promise<number> {
     const redis = getRedisClient();
-    const refreshToken = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
-    if (refreshToken) {
-      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`);
+    // OPS-3 (Story 9-48): the reverse-index VALUE is already the hash, so the
+    // active-entry delete operates on it directly — no re-hash needed.
+    const tokenHash = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
+    if (tokenHash) {
+      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${tokenHash}`);
       await redis.del(`${USER_REFRESH_KEY_PREFIX}${userId}`);
       return 1;
     }
@@ -178,9 +258,9 @@ export class TokenService {
    * family is revoked → both tabs are forced to re-log-in. This is ACCEPTED: the
    * window is sub-second, the consequence is a benign forced re-login (not account
    * compromise), and erring toward revoke is the safe default against a genuine
-   * stolen-token replay. If multi-tab re-logins become a support burden, the
-   * documented enhancement is a short grace window that RE-ISSUES the already-minted
-   * token instead of revoking — see Story 9-42 Review Follow-ups M1.
+   * stolen-token replay. M1 (Story 9-48) softens this for the multi-tab case via a
+   * short grace window (see `isWithinRotationGrace` + AuthService.refreshToken):
+   * within the window a consumed-token presentation is RE-ISSUED, not revoked.
    */
   static async rotateRefreshToken(
     oldToken: string,
@@ -191,31 +271,51 @@ export class TokenService {
     const redis = getRedisClient();
     const ttlSeconds = rememberMe ? REMEMBER_ME_SESSION_EXPIRY : REFRESH_TOKEN_EXPIRY;
 
+    // OPS-3 (Story 9-48): tombstone + active-entry delete are keyed by the HASH.
+    const oldHash = this.hashToken(oldToken);
+
+    // M1 (Story 9-48): tombstone VALUE carries the data needed to re-mint a full
+    // session for an in-grace multi-tab replay (userId + sessionId + rememberMe)
+    // plus `rotatedAt` to decide benign-vs-replay. No usable plaintext at rest.
+    const tombstone: RefreshTokenTombstone = {
+      userId,
+      sessionId,
+      rememberMe,
+      rotatedAt: Date.now(),
+    };
+
     // Tombstone the consumed token for the full replay window, then retire it.
-    await redis.setex(`${CONSUMED_REFRESH_KEY_PREFIX}${oldToken}`, ttlSeconds, userId);
-    await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${oldToken}`);
+    await redis.setex(`${CONSUMED_REFRESH_KEY_PREFIX}${oldHash}`, ttlSeconds, JSON.stringify(tombstone));
+    await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${oldHash}`);
 
     // Mint the replacement (updates the reverse index to the new token).
     return this.generateRefreshToken(userId, sessionId, rememberMe);
   }
 
   /**
-   * F-022: returns the userId associated with a consumed (tombstoned) refresh
-   * token, or null if the token was never rotated. A non-null result at /refresh
-   * means a replay → revoke the whole family.
+   * F-022 / M1 (Story 9-48): returns the consumed (tombstoned) refresh token's
+   * record, or null if the token was never rotated. A non-null result at /refresh
+   * means the token was already consumed — within the grace window it is benign
+   * multi-tab concurrency (re-issue); outside it, a replay (revoke the family).
+   * OPS-3: the incoming plaintext is hashed before the lookup.
    */
-  static async getConsumedRefreshTokenUser(token: string): Promise<string | null> {
+  static async getConsumedRefreshToken(token: string): Promise<RefreshTokenTombstone | null> {
     const redis = getRedisClient();
-    return redis.get(`${CONSUMED_REFRESH_KEY_PREFIX}${token}`);
+    const raw = await redis.get(`${CONSUMED_REFRESH_KEY_PREFIX}${this.hashToken(token)}`);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as RefreshTokenTombstone;
   }
 
   /**
    * F-022: clears a consumed-token tombstone (called after reuse detection has
    * revoked the family, so the same replay can't repeatedly trigger revocation).
+   * OPS-3 (Story 9-48): hash the incoming plaintext before the delete.
    */
   static async clearConsumedRefreshToken(token: string): Promise<void> {
     const redis = getRedisClient();
-    await redis.del(`${CONSUMED_REFRESH_KEY_PREFIX}${token}`);
+    await redis.del(`${CONSUMED_REFRESH_KEY_PREFIX}${this.hashToken(token)}`);
   }
 
   /**
@@ -279,10 +379,11 @@ export class TokenService {
     // 1. Set revocation timestamp to invalidate existing access tokens
     await redis.set(`user:${userId}:tokens_revoked_at`, Date.now().toString());
 
-    // 2. Delete user's refresh token via reverse index
-    const refreshToken = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
-    if (refreshToken) {
-      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${refreshToken}`);
+    // 2. Delete user's refresh token via reverse index. OPS-3 (Story 9-48): the
+    // reverse-index VALUE is the token HASH, not the plaintext — delete by it directly.
+    const tokenHash = await redis.get(`${USER_REFRESH_KEY_PREFIX}${userId}`);
+    if (tokenHash) {
+      await redis.del(`${REFRESH_TOKEN_KEY_PREFIX}${tokenHash}`);
       await redis.del(`${USER_REFRESH_KEY_PREFIX}${userId}`);
       return 1;
     }

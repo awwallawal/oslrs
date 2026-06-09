@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'node:crypto';
 
 // Hoisted mock for Redis so we can configure per-test
 const mockRedis = vi.hoisted(() => ({
@@ -29,6 +30,10 @@ vi.mock('../../lib/redis.js', () => ({
 import { TokenService } from '../token.service.js';
 import { UserRole } from '@oslsr/types';
 import type { AuthUser } from '@oslsr/types';
+
+// OPS-3 (Story 9-48): refresh tokens are stored hashed at rest — same sha256 hex
+// the service uses. Mirrors the hash a Redis-backup leak would expose.
+const h = (token: string): string => createHash('sha256').update(token).digest('hex');
 
 const testUser: AuthUser = {
   id: '018e5f2a-1234-7890-abcd-1234567890ab',
@@ -200,18 +205,18 @@ describe('TokenService', () => {
 
       expect(refreshToken).toBeDefined();
 
-      // Should store the refresh token data
+      // OPS-3: active entry is keyed by the HASH, not the plaintext token.
       expect(mockRedis.setex).toHaveBeenCalledWith(
-        `refresh:${refreshToken}`,
+        `refresh:${h(refreshToken)}`,
         expect.any(Number),
         expect.stringContaining('user-789')
       );
 
-      // Should store the reverse index: user_refresh_token:{userId} → refreshToken
+      // OPS-3: reverse index VALUE is the hash, not the plaintext token.
       expect(mockRedis.setex).toHaveBeenCalledWith(
         'user_refresh_token:user-789',
         expect.any(Number),
-        refreshToken
+        h(refreshToken)
       );
     });
 
@@ -223,20 +228,20 @@ describe('TokenService', () => {
 
       expect(token1).not.toBe(token2);
 
-      // Both tokens stored individually
+      // OPS-3: both tokens stored individually, keyed by their hash.
       expect(mockRedis.setex).toHaveBeenCalledWith(
-        `refresh:${token1}`, expect.any(Number), expect.any(String)
+        `refresh:${h(token1)}`, expect.any(Number), expect.any(String)
       );
       expect(mockRedis.setex).toHaveBeenCalledWith(
-        `refresh:${token2}`, expect.any(Number), expect.any(String)
+        `refresh:${h(token2)}`, expect.any(Number), expect.any(String)
       );
 
-      // Reverse index was written twice — second call overwrites first
+      // Reverse index was written twice — second call overwrites first (hash value).
       const reverseIndexCalls = mockRedis.setex.mock.calls.filter(
         (call: unknown[]) => call[0] === 'user_refresh_token:user-multi'
       );
       expect(reverseIndexCalls).toHaveLength(2);
-      expect(reverseIndexCalls[1][2]).toBe(token2); // latest token wins
+      expect(reverseIndexCalls[1][2]).toBe(h(token2)); // latest token's hash wins
     });
   });
 
@@ -294,20 +299,26 @@ describe('TokenService', () => {
 
       const newToken = await TokenService.rotateRefreshToken('old-token', 'user-rot', 'sess-1', false);
 
-      // Tombstone the consumed token for the replay window.
-      expect(mockRedis.setex).toHaveBeenCalledWith(
-        'refresh_consumed:old-token',
-        7 * 24 * 60 * 60, // REFRESH_TOKEN_EXPIRY (non-remember-me)
-        'user-rot',
+      // OPS-3: tombstone keyed by HASH; M1: VALUE is JSON carrying the re-mint data.
+      const tombstoneCall = mockRedis.setex.mock.calls.find(
+        (call: unknown[]) => call[0] === `refresh_consumed:${h('old-token')}`,
       );
-      // Retire the old active token.
-      expect(mockRedis.del).toHaveBeenCalledWith('refresh:old-token');
-      // New token is distinct + the reverse index was updated to it.
+      expect(tombstoneCall).toBeDefined();
+      expect(tombstoneCall![1]).toBe(7 * 24 * 60 * 60); // REFRESH_TOKEN_EXPIRY
+      const tombstone = JSON.parse(tombstoneCall![2] as string);
+      expect(tombstone).toMatchObject({ userId: 'user-rot', sessionId: 'sess-1', rememberMe: false });
+      expect(typeof tombstone.rotatedAt).toBe('number');
+      // The plaintext token never appears in the tombstone value.
+      expect(tombstoneCall![2]).not.toContain('old-token');
+
+      // Retire the old active token (hashed key).
+      expect(mockRedis.del).toHaveBeenCalledWith(`refresh:${h('old-token')}`);
+      // New token is distinct + the reverse index was updated to its hash.
       expect(newToken).not.toBe('old-token');
       expect(mockRedis.setex).toHaveBeenCalledWith(
         'user_refresh_token:user-rot',
         expect.any(Number),
-        newToken,
+        h(newToken),
       );
     });
 
@@ -317,32 +328,46 @@ describe('TokenService', () => {
 
       await TokenService.rotateRefreshToken('old-token', 'user-rm', 'sess-1', true);
 
-      expect(mockRedis.setex).toHaveBeenCalledWith(
-        'refresh_consumed:old-token',
-        30 * 24 * 60 * 60, // REMEMBER_ME_SESSION_EXPIRY
-        'user-rm',
+      const tombstoneCall = mockRedis.setex.mock.calls.find(
+        (call: unknown[]) => call[0] === `refresh_consumed:${h('old-token')}`,
       );
+      expect(tombstoneCall).toBeDefined();
+      expect(tombstoneCall![1]).toBe(30 * 24 * 60 * 60); // REMEMBER_ME_SESSION_EXPIRY
+      expect(JSON.parse(tombstoneCall![2] as string)).toMatchObject({ userId: 'user-rm', rememberMe: true });
     });
   });
 
   describe('consumed-token tombstone accessors', () => {
-    it('getConsumedRefreshTokenUser returns the tombstoned userId', async () => {
-      mockRedis.get.mockResolvedValueOnce('user-replay');
-      const result = await TokenService.getConsumedRefreshTokenUser('replayed-token');
-      expect(mockRedis.get).toHaveBeenCalledWith('refresh_consumed:replayed-token');
-      expect(result).toBe('user-replay');
+    it('getConsumedRefreshToken returns the parsed tombstone (lookup hashes input)', async () => {
+      const tombstone = { userId: 'user-replay', sessionId: 'sess-r', rememberMe: false, rotatedAt: Date.now() };
+      mockRedis.get.mockResolvedValueOnce(JSON.stringify(tombstone));
+      const result = await TokenService.getConsumedRefreshToken('replayed-token');
+      // OPS-3: lookup keyed by the HASH of the incoming plaintext.
+      expect(mockRedis.get).toHaveBeenCalledWith(`refresh_consumed:${h('replayed-token')}`);
+      expect(result).toEqual(tombstone);
     });
 
-    it('getConsumedRefreshTokenUser returns null for a never-rotated token', async () => {
+    it('getConsumedRefreshToken returns null for a never-rotated token', async () => {
       mockRedis.get.mockResolvedValueOnce(null);
-      const result = await TokenService.getConsumedRefreshTokenUser('fresh-token');
+      const result = await TokenService.getConsumedRefreshToken('fresh-token');
       expect(result).toBeNull();
     });
 
-    it('clearConsumedRefreshToken deletes the tombstone', async () => {
+    it('clearConsumedRefreshToken deletes the tombstone by hashed key', async () => {
       mockRedis.del.mockResolvedValue(1);
       await TokenService.clearConsumedRefreshToken('replayed-token');
-      expect(mockRedis.del).toHaveBeenCalledWith('refresh_consumed:replayed-token');
+      expect(mockRedis.del).toHaveBeenCalledWith(`refresh_consumed:${h('replayed-token')}`);
+    });
+  });
+
+  // M1 (Story 9-48) — rotation grace window decision helper.
+  describe('isWithinRotationGrace', () => {
+    it('returns true for a token rotated within the grace window', () => {
+      expect(TokenService.isWithinRotationGrace(Date.now() - 1000)).toBe(true);
+    });
+
+    it('returns false for a token rotated well outside the grace window', () => {
+      expect(TokenService.isWithinRotationGrace(Date.now() - 60_000)).toBe(false);
     });
   });
 
@@ -350,29 +375,125 @@ describe('TokenService', () => {
     it('deletes reverse index when it points to the invalidated token', async () => {
       mockRedis.get
         .mockResolvedValueOnce(JSON.stringify({ userId: 'user-logout', sessionId: 's1', rememberMe: false, createdAt: new Date().toISOString() })) // token data
-        .mockResolvedValueOnce('the-refresh-token'); // reverse index lookup
+        .mockResolvedValueOnce(h('the-refresh-token')); // OPS-3: reverse index VALUE is the hash
       mockRedis.del.mockResolvedValue(1);
 
       await TokenService.invalidateRefreshToken('the-refresh-token');
 
-      // Should delete the refresh token key
-      expect(mockRedis.del).toHaveBeenCalledWith('refresh:the-refresh-token');
-      // Should delete the reverse index
+      // Should delete the refresh token key (hashed)
+      expect(mockRedis.del).toHaveBeenCalledWith(`refresh:${h('the-refresh-token')}`);
+      // Should delete the reverse index (guard matches the hash)
       expect(mockRedis.del).toHaveBeenCalledWith('user_refresh_token:user-logout');
     });
 
     it('preserves reverse index when it points to a different token', async () => {
       mockRedis.get
         .mockResolvedValueOnce(JSON.stringify({ userId: 'user-multi', sessionId: 's1', rememberMe: false, createdAt: new Date().toISOString() })) // token data
-        .mockResolvedValueOnce('newer-token'); // reverse index points to different token
+        .mockResolvedValueOnce(h('newer-token')); // reverse index points to a different token's hash
       mockRedis.del.mockResolvedValue(1);
 
       await TokenService.invalidateRefreshToken('old-token');
 
-      // Should delete the refresh token key
-      expect(mockRedis.del).toHaveBeenCalledWith('refresh:old-token');
+      // Should delete the refresh token key (hashed)
+      expect(mockRedis.del).toHaveBeenCalledWith(`refresh:${h('old-token')}`);
       // Should NOT delete the reverse index (it belongs to the newer token)
       expect(mockRedis.del).not.toHaveBeenCalledWith('user_refresh_token:user-multi');
     });
+  });
+});
+
+/**
+ * OPS-3 (Story 9-48) — refresh tokens hashed at rest, end-to-end.
+ *
+ * Uses a Map-backed Redis so the hash-at-store → hash-at-lookup round-trip is
+ * actually exercised (not just call-shape assertions). Proves the plaintext token
+ * is never persisted and that the at-rest hash, if leaked, is not a usable bearer
+ * secret (mirrors the F-011/OPS-2 "hash-as-input is useless" guarantee).
+ */
+describe('TokenService — OPS-3 refresh tokens hashed at rest', () => {
+  const store = new Map<string, string>();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store.clear();
+    mockRedis.setex.mockImplementation((key: string, _ttl: number, val: string) => {
+      store.set(key, val);
+      return Promise.resolve('OK');
+    });
+    mockRedis.get.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
+    mockRedis.del.mockImplementation((key: string) => {
+      store.delete(key);
+      return Promise.resolve(1);
+    });
+  });
+
+  it('AC#1 — persists only sha256(token) across active entry, reverse index, and tombstone', async () => {
+    const token = await TokenService.generateRefreshToken('user-h', 'sess-h', false);
+
+    // Active entry is keyed by the hash; the plaintext appears in NO key.
+    expect(store.has(`refresh:${h(token)}`)).toBe(true);
+    expect([...store.keys()].some((k) => k.includes(token))).toBe(false);
+    // Reverse-index VALUE is the hash, not the plaintext.
+    expect(store.get('user_refresh_token:user-h')).toBe(h(token));
+
+    // Rotate → tombstone keyed by the hash; the plaintext appears in no value either.
+    const newToken = await TokenService.rotateRefreshToken(token, 'user-h', 'sess-h', false);
+    expect(store.has(`refresh_consumed:${h(token)}`)).toBe(true);
+    expect([...store.values()].some((v) => v.includes(token))).toBe(false);
+    // Old active entry retired; replacement lives under its OWN hash.
+    expect(store.has(`refresh:${h(token)}`)).toBe(false);
+    expect(store.has(`refresh:${h(newToken)}`)).toBe(true);
+  });
+
+  it('AC#1 — login → refresh → refresh (rotation chain) works with the plaintext cookie token', async () => {
+    const token = await TokenService.generateRefreshToken('user-c', 'sess-c', false);
+    expect((await TokenService.validateRefreshToken(token))?.userId).toBe('user-c');
+
+    const token2 = await TokenService.rotateRefreshToken(token, 'user-c', 'sess-c', false);
+    // The just-rotated token no longer resolves; the replacement does.
+    expect(await TokenService.validateRefreshToken(token)).toBeNull();
+    expect((await TokenService.validateRefreshToken(token2))?.userId).toBe('user-c');
+
+    const token3 = await TokenService.rotateRefreshToken(token2, 'user-c', 'sess-c', false);
+    expect((await TokenService.validateRefreshToken(token3))?.userId).toBe('user-c');
+  });
+
+  it('AC#2 — submitting the stored hash AS the token does not resolve (lookup re-hashes input)', async () => {
+    const token = await TokenService.generateRefreshToken('user-z', 'sess-z', false);
+    const leakedHash = h(token); // what a Redis-backup leak would expose
+
+    // Replaying the at-rest hash hashes to sha256(hash) ≠ stored key → miss.
+    expect(await TokenService.validateRefreshToken(leakedHash)).toBeNull();
+
+    // And it must not resolve as a consumed tombstone after a rotation either.
+    await TokenService.rotateRefreshToken(token, 'user-z', 'sess-z', false);
+    expect(await TokenService.getConsumedRefreshToken(leakedHash)).toBeNull();
+    // The genuine plaintext, however, IS recognised as consumed.
+    expect(await TokenService.getConsumedRefreshToken(token)).toMatchObject({ userId: 'user-z' });
+  });
+
+  // M2 (Story 9-48 review) — at-most-one active refresh token per user. A second
+  // mint (multi-tab grace re-issue, or a fresh login) must REAP the prior active
+  // entry rather than orphan it, so the single-valued reverse index stays an accurate
+  // record and a later logout/revoke is exhaustive (no orphan live until TTL).
+  it('M2 — minting reaps the prior active entry; no orphan survives logout', async () => {
+    const tokenA = await TokenService.generateRefreshToken('user-orphan', 'sess-1', false);
+    expect(store.has(`refresh:${h(tokenA)}`)).toBe(true);
+
+    // Second mint for the same user → tokenA's active entry is reaped, not orphaned.
+    const tokenB = await TokenService.generateRefreshToken('user-orphan', 'sess-1', false);
+    expect(store.has(`refresh:${h(tokenB)}`)).toBe(true);
+    expect(store.has(`refresh:${h(tokenA)}`)).toBe(false);
+
+    // Exactly ONE active refresh entry exists for the user (the latest).
+    expect([...store.keys()].filter((k) => k.startsWith('refresh:'))).toEqual([
+      `refresh:${h(tokenB)}`,
+    ]);
+
+    // Logout (F-012, by userId via the reverse index) now clears it completely —
+    // pre-fix, tokenA would have lingered as a usable orphan until its TTL.
+    await TokenService.invalidateUserRefreshTokens('user-orphan');
+    expect([...store.keys()].filter((k) => k.startsWith('refresh:'))).toHaveLength(0);
+    expect(store.has('user_refresh_token:user-orphan')).toBe(false);
   });
 });
