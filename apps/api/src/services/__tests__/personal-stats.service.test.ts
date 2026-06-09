@@ -21,6 +21,24 @@ function mockRows(rows: Record<string, unknown>[]) {
 }
 
 /**
+ * Extract the static SQL text from a Drizzle `sql` template object by walking its
+ * queryChunks (StringChunk holds the literal fragments; params/values are skipped).
+ * Lets us assert on the generated SQL even though db.execute is mocked.
+ */
+function sqlToText(q: unknown): string {
+  const chunks = (q as { queryChunks?: unknown[] })?.queryChunks;
+  if (!Array.isArray(chunks)) return '';
+  let out = '';
+  for (const c of chunks) {
+    const val = (c as { value?: unknown })?.value;
+    if (typeof val === 'string') out += val;
+    else if (Array.isArray(val)) out += val.join(' ');
+    else if ((c as { queryChunks?: unknown[] })?.queryChunks) out += sqlToText(c); // nested SQL
+  }
+  return out;
+}
+
+/**
  * Universal default mock — returns one row with all fields any query might read.
  * Each query only reads what it expects, so extra fields are harmlessly ignored.
  */
@@ -110,6 +128,47 @@ describe('PersonalStatsService', () => {
       });
 
       expect(mockExecute).toHaveBeenCalled();
+    });
+
+    // --- Regression: production "Failed to load" on every card (2026-06-09) ---
+
+    it('degrades gracefully when a single section query fails (does not blank the whole page)', async () => {
+      // Primary metrics succeed; the daily-trend query rejects. The page must still
+      // resolve with the other sections rather than throwing (which 500s the endpoint
+      // and blanks every card).
+      let call = 0;
+      mockExecute.mockImplementation(() => {
+        call += 1;
+        // 2nd parallel query is getDailyTrend — force it to fail.
+        if (call === 2) return Promise.reject(new Error('boom'));
+        return Promise.resolve(mockRows([{
+          cumulative_count: '7', avg_completion_time: '200', gps_rate: '0.9', nin_rate: '0.8',
+          skip_rate: '0.1', fraud_rate: '0.02', avg_time: '210', supervisor_id: null, lga_id: null,
+          total: '7', count: '3', label: 'male', skill: 'tiling', id: 'e1',
+        }]));
+      });
+      mockGetEnumeratorIds.mockResolvedValue([]);
+
+      const result = await PersonalStatsService.getPersonalStats('user-1');
+
+      expect(result.cumulativeCount).toBe(7);     // primary metric still present
+      expect(result.dailyTrend).toEqual([]);      // failed section degraded to []
+    });
+
+    it('LGA-fallback team query joins the roles table and never references the non-existent u.role column', async () => {
+      // Schema reality: users.role_id → roles.id; there is no users.role column.
+      // No supervisor assignment → the team lookup must take the LGA fallback path.
+      setupUniversalMock({ supervisor_id: null });
+      mockGetEnumeratorIds.mockResolvedValue([]);
+
+      await PersonalStatsService.getPersonalStats('user-1');
+
+      const sqlText = mockExecute.mock.calls
+        .map(([q]) => sqlToText(q))
+        .join('\n');
+      expect(sqlText).toMatch(/join\s+roles/i);
+      // The bug was `u.role IN (...)` — assert that exact broken pattern is gone.
+      expect(sqlText).not.toMatch(/\bu\.role\b/i);
     });
   });
 

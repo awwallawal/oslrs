@@ -7,6 +7,7 @@
 
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
+import pino from 'pino';
 import type {
   PersonalStatsData,
   TrendDataPoint,
@@ -16,6 +17,23 @@ import type {
 } from '@oslsr/types';
 import { TeamAssignmentService } from './team-assignment.service.js';
 import { toBuckets } from '../utils/analytics-suppression.js';
+
+const logger = pino({ name: 'personal-stats' });
+
+/**
+ * Run a stats sub-query, degrading to a safe fallback (logged) instead of
+ * rejecting. A single failing section (e.g. a team-comparison metric) must never
+ * blank the whole "My Stats" page — the enumerator's own primary metrics should
+ * still render. Failures are logged so schema drift surfaces instead of hiding.
+ */
+async function safeSection<T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    logger.error({ event: 'personal_stats.section_failed', section: label, err }, `personal-stats section "${label}" failed; degrading to fallback`);
+    return fallback;
+  }
+}
 
 /** Optional fields for skip rate calculation */
 const OPTIONAL_FIELDS = [
@@ -45,6 +63,8 @@ export class PersonalStatsService {
   ): Promise<PersonalStatsData> {
     const dateConditions = PersonalStatsService.buildDateConditions(params);
 
+    // Each section degrades to a safe fallback (logged) rather than rejecting, so a
+    // single failing query can never blank the entire "My Stats" page.
     const [
       basicMetrics,
       dailyTrend,
@@ -55,14 +75,16 @@ export class PersonalStatsService {
       diversity,
       topSkills,
     ] = await Promise.all([
-      PersonalStatsService.getBasicMetrics(userId, dateConditions),
-      PersonalStatsService.getDailyTrend(userId, dateConditions),
-      PersonalStatsService.getFraudRate(userId, dateConditions),
-      PersonalStatsService.getTeamFraudRate(userId, dateConditions),
-      PersonalStatsService.getSkipRate(userId, dateConditions),
-      PersonalStatsService.getTeamAvgCompletionTime(userId, dateConditions),
-      PersonalStatsService.getRespondentDiversity(userId, dateConditions),
-      PersonalStatsService.getTopSkills(userId, dateConditions),
+      safeSection('basicMetrics', () => PersonalStatsService.getBasicMetrics(userId, dateConditions),
+        { cumulativeCount: 0, avgCompletionTime: null, gpsRate: null, ninRate: null }),
+      safeSection('dailyTrend', () => PersonalStatsService.getDailyTrend(userId, dateConditions), [] as TrendDataPoint[]),
+      safeSection('fraudRate', () => PersonalStatsService.getFraudRate(userId, dateConditions), null),
+      safeSection('teamFraudRate', () => PersonalStatsService.getTeamFraudRate(userId, dateConditions), null),
+      safeSection('skipRate', () => PersonalStatsService.getSkipRate(userId, dateConditions), null),
+      safeSection('teamAvgCompletionTime', () => PersonalStatsService.getTeamAvgCompletionTime(userId, dateConditions), null),
+      safeSection('respondentDiversity', () => PersonalStatsService.getRespondentDiversity(userId, dateConditions),
+        { genderSplit: [] as FrequencyBucket[], ageSpread: [] as FrequencyBucket[] }),
+      safeSection('topSkills', () => PersonalStatsService.getTopSkills(userId, dateConditions), [] as SkillsFrequency[]),
     ]);
 
     const gpsRate = basicMetrics.gpsRate;
@@ -483,6 +505,17 @@ export class PersonalStatsService {
    * Fallback chain: supervisor assignment → LGA-wide → empty.
    */
   private static async getTeamMemberIds(userId: string): Promise<string[]> {
+    try {
+      return await PersonalStatsService.resolveTeamMemberIds(userId);
+    } catch (err) {
+      // Team resolution is best-effort: on failure, treat as "no team" (team
+      // comparison metrics become null) rather than failing the whole request.
+      logger.error({ event: 'personal_stats.team_resolution_failed', userId, err }, 'team-member resolution failed; treating as no team');
+      return [];
+    }
+  }
+
+  private static async resolveTeamMemberIds(userId: string): Promise<string[]> {
     // Find supervisor for this user via team_assignments
     const supervisorRows = await db.execute(sql`
       SELECT ta.supervisor_id
@@ -504,11 +537,14 @@ export class PersonalStatsService {
     const lgaId = (lgaRows.rows[0] as { lga_id?: string } | undefined)?.lga_id;
     if (!lgaId) return [];
 
+    // NOTE: roles are normalised into the `roles` table (users.role_id → roles.id);
+    // there is no `users.role` column. Join through roles by name.
     const rows = await db.execute(sql`
       SELECT u.id::text AS id
       FROM users u
+      JOIN roles r ON r.id = u.role_id
       WHERE u.lga_id = ${lgaId}
-        AND u.role IN ('enumerator', 'data_entry_clerk')
+        AND r.name IN ('enumerator', 'data_entry_clerk')
         AND u.status IN ('active', 'verified')
     `);
 
