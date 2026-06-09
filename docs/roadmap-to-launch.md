@@ -55,7 +55,7 @@ Fire the blasts only when **all** are green:
 - wizard **Step-4 stall <30%** (9-18, measured on the 9-19 dashboard)
 - **coherent public journey shipped** (9-38 + 9-39 + 9-40)
 - **capacity** ready (9-20) · **analytics live** (9-30) · **blast infra** live (Resend Pro + Termii)
-- **zero open R2 security findings** (`sec-r2-20260603`): High F-011 ✅ closed (`4fee9b9`); High **F-024 still open** (origin-lock, operator). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45 + 9-9 origin-lock. **Scorecard: 1 of 6 dev gate stories closed (9-42); 9-48 must precede the blasts.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
+- **zero open R2 security findings** (`sec-r2-20260603`): **BOTH Highs now closed** — F-011 ✅ (`4fee9b9`) + **F-024 ✅ 2026-06-09** (origin-locked: de-point + 443→CF firewall + CF Origin Cert + AOP mTLS; known-IP accepted-residual). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45. **Scorecard: both Highs done; remaining gate = dev stories 9-48 + 9-41 + 9-43 + 9-44 + 9-45.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
 
 ---
 
