@@ -1,75 +1,70 @@
-# Story 9.50: Certificate Expiry Monitoring — ops-dashboard countdown + alerting
+# Story 9.50: Expiry Monitoring — TLS certs + domain registration + declared secrets (ops-dashboard countdown + alert)
 
 Status: ready-for-dev
 
 <!--
-Authored 2026-06-09 by Bob (SM) via canonical *create-story --yolo workflow.
-Source: F-024 origin-lock close-out (Story 9-9 #11). NOT a launch gate — ops hygiene.
-WHY: F-024 moved the origin OFF Let's Encrypt (auto-renew) onto MANUAL long-lived certs
-with NO auto-renewal — CF Origin Cert (exp 2041-06-05) + CF origin-pull CA for AOP
-(exp 2029-11-01). If one lapses unnoticed the site breaks (Origin Cert → CF 526;
-AOP CA → mTLS handshake fail / 400). A laptop reminder is the wrong tool (won't survive
-machine/personnel change / BOT transfer). Make the SYSTEM responsible: surface a live
-countdown on the Super Admin operations dashboard + a CRITICAL alert ahead of expiry.
-Refs: docs/infrastructure-cicd-playbook.md Part 13 (Certificate Inventory),
-docs/security/findings-register.md F-024, docs/f-024-origin-lock-runbook.md.
+Authored 2026-06-09 by Bob (SM) via canonical *create-story --yolo. BROADENED same day
+from "Certificate Expiry Monitoring" → a GENERIC expiry monitor (Awwal directive): the
+cert case generalizes to every silent-expiry infra risk via one framework + one dashboard
+card + one alert path. NOT a launch gate — ops hygiene / handover durability.
+WHY: F-024 introduced MANUAL certs (CF Origin Cert exp 2041 + AOP CA exp 2029, no
+auto-renewal). The SAME silent-lapse risk applies to DOMAIN REGISTRATION (let oyoskills.com
+lapse and the whole platform + email dies — worse than a cert) and any API token / paid
+service with an expiry. A laptop reminder is the wrong tool (won't survive machine/personnel
+change / BOT transfer) — make the SYSTEM responsible: dashboard countdown + proactive alert.
+Refs: docs/infrastructure-cicd-playbook.md Part 13 (Expiry Inventory), findings-register F-024.
 -->
 
 ## Story
 
 As **the OSLSR super_admin / custodian**,
-I want **the operations dashboard to show a live days-until-expiry countdown for the origin's TLS certificates, with a CRITICAL alert fired well before any expiry**,
-so that **the manual (non-auto-renewing) Cloudflare Origin Cert and origin-pull CA introduced by F-024 can never silently lapse and take the site down — regardless of who owns the project or which machine they use**.
+I want **the operations dashboard to show a live days-until-expiry countdown for every time-sensitive piece of infrastructure — TLS certs, domain registrations, and operator-declared expiries (API tokens / paid services) — each with a CRITICAL alert fired well ahead of expiry**,
+so that **no silent lapse (cert → CF 526, domain → total outage incl. email, token → integration failure) can take the platform down, regardless of who owns the project or which machine they use**.
 
 ## Acceptance Criteria
 
-1. **AC#1 — Backend reads cert expiry (config-driven, .pem only).** `MonitoringService.getSystemHealth()` reads the `notAfter` of a **configured list** of cert paths and computes `daysUntilExpiry` **server-side** for each. The list is config-driven (env var `CERT_MONITOR_PATHS` comma-separated, defaulting to the two known certs) or a directory scan of `/etc/ssl/cloudflare/*.pem` — **NOT hardcoded to today's two certs**, so a future cert auto-appears. Only public `.pem` files are read (never a `.key`; the Origin Cert key is `600 root`). A missing/unreadable cert is reported as a distinct `error` state, not silently omitted. [Source: apps/api/src/services/monitoring.service.ts → getSystemHealth; apps/api/src/controllers/system.controller.ts:18]
-2. **AC#2 — Health payload carries certificates.** `SystemHealthResponse` (packages/types) gains `certificates: CertHealthStats[]` where each entry is `{ name, path, notAfter (ISO), daysUntilExpiry, status: 'ok' | 'warning' | 'critical' | 'error' }`. `name` is a stable human label (e.g. `cloudflare-origin`, `cloudflare-aop-ca`) derived from the filename. [Source: packages/types/src/monitoring.ts:20 SystemHealthResponse + QueueHealthStats sibling pattern]
-3. **AC#3 — Alerting reuses the existing pipeline.** `alert.service.ts` gains a `cert_expiry` threshold `{ warningThreshold: 60, criticalThreshold: 30, direction: 'below' }` (days), and `evaluateAlerts` pushes one metric **per cert** keyed `cert_expiry:<name>` (mirroring the existing `queue_waiting:<name>` pattern). No parallel alert path — it flows through the same `evaluateMetric` → digest → Telegram/email (Story 9-15). **Test:** a cert at 25 days → CRITICAL transition + `alert.critical_evaluated`. [Source: apps/api/src/services/alert.service.ts:68-76 THRESHOLDS, :119-140 evaluateAlerts]
-4. **AC#4 — UAT-triggerable.** `scripts/uat-trigger-critical-alert.ts` accepts a synthetic `--metric=cert_expiry` (e.g. days=20) so the cert alert path is exercisable on demand like the other metrics (operator handover + regression check). [Source: scripts/uat-trigger-critical-alert.ts]
-5. **AC#5 — Operations dashboard countdown widget.** `OperationsDashboardPage.tsx` renders a "Certificates" card: one row per cert with name, expiry date, and a **days-until-expiry countdown**, color-coded **green > 60d / amber 30–60d / red < 30d** (matching the alert thresholds), and an explicit error badge for unreadable certs. super_admin-only (the existing operations route + `operations-rate-limit`). [Source: apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx]
-6. **AC#6 — Zero regression + tests.** Full API + web suites green; `tsc` + lint clean (api + web). New tests: backend cert-read (valid/expiring/missing → correct status + days), alert transition at threshold, dashboard widget render + color states. Document net-new test counts. No existing health/alert behavior changed.
+1. **AC#1 — Generic expiry framework (pluggable sources).** A `MonitoredExpiry` abstraction with source **adapters** keyed by `kind` (`cert` | `domain` | `manual`). Each adapter yields `{ name, kind, expiresAt (ISO|null), daysUntilExpiry (number|null), status: 'ok'|'warning'|'critical'|'error', detail }`. `daysUntilExpiry` is computed **server-side**. Adding a new monitored item or a new source kind is **additive** — no type/dashboard/alert change. A failing adapter yields `status:'error'` for that item and **never throws into `getSystemHealth`**. [Source: apps/api/src/services/monitoring.service.ts → getSystemHealth; apps/api/src/controllers/system.controller.ts:18]
+2. **AC#2 — Health payload carries expiries.** `SystemHealthResponse` (packages/types) gains `expiries: MonitoredExpiry[]`. [Source: packages/types/src/monitoring.ts:20 — sibling of QueueHealthStats]
+3. **AC#3 — `cert` adapter.** Reads a config-driven list of cert paths (`CERT_MONITOR_PATHS` env, default = the two F-024 certs / scan `/etc/ssl/cloudflare/*.pem`), `notAfter` via `crypto.X509Certificate(...).validTo`. **`.pem` only — never a `.key`** (Origin Cert key is `600 root`). Defaults: `cloudflare-origin` (`/etc/ssl/cloudflare/oyoskills-origin.pem`, ~2041), `cloudflare-aop-ca` (`/etc/ssl/cloudflare/origin-pull-ca.pem`, 2029-11-01).
+4. **AC#4 — `domain` adapter (registration expiry).** For configured domains (`DOMAIN_MONITOR_LIST`, default `oyoskills.com`), query **RDAP** (`https://rdap.org/domain/<d>` → registry RDAP; the structured WHOIS replacement) for the registration-expiry event. **Cache the result (≥12h)** and treat the network call as best-effort: timeout/unsupported-TLD → `status:'error'`/`unavailable`, never block or throw. **`oyoskills.com` (.com → Verisign RDAP, reliable) is the priority**; `oyotradeministry.com.ng` (.com.ng — RDAP often absent) falls back to a `manual` entry. _Domain lapse is the highest-impact item here — it kills web AND email._
+5. **AC#5 — `manual` adapter (declared expiries).** Operator-declared items in config (`MONITORED_EXPIRIES` JSON env or a small checked-in/`.env`-driven list): `[{ name, kind, expiresAt }]` — for things not auto-queryable: API tokens **that actually have an expiry** (e.g. a CF API token with a set expiry), paid-service renewals, and the `.com.ng` domain. _(Note: most API keys — Resend, Termii — do NOT expire; only declare ones with a real expiry. Don't invent dates.)_
+6. **AC#6 — Alerting reuses the existing pipeline.** `alert.service.ts` gains an `expiry` threshold `{ warningThreshold: 60, criticalThreshold: 30, direction: 'below' }` (days); `evaluateAlerts` pushes one metric per item keyed `expiry:<name>` (mirroring `queue_waiting:<name>`). Flows through the existing `evaluateMetric` → digest → Telegram/email (Story 9-15). `error`-status items raise a distinct low-noise warning (can't-determine-expiry is itself worth knowing). UAT-triggerable via `scripts/uat-trigger-critical-alert.ts --metric=expiry`. [Source: apps/api/src/services/alert.service.ts:68 THRESHOLDS, :119 evaluateAlerts]
+7. **AC#7 — Operations dashboard "Expiries" card.** `OperationsDashboardPage.tsx` renders one card grouping items by kind (Certificates / Domains / Tokens & services): name, expiry date, days-until-expiry countdown, color-coded **green > 60d / amber 30–60d / red < 30d** (matching the alert), explicit error badge for `status:'error'`. super_admin-only (existing operations route + `operations-rate-limit`). [Source: apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx]
+8. **AC#8 — Docs + zero regression.** `docs/infrastructure-cicd-playbook.md` Part 13 broadened from "Certificate Inventory" → **"Expiry Inventory"** (certs + domains + declared). Full API + web suites green; `tsc` + lint clean. Per-adapter tests (ok/warning/critical/error), alert transition, widget render. Document net-new test counts. No existing health/alert behavior changed.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Type + backend cert read (AC: #1, #2)** _(tests first)_
-  - [ ] 1.1 `packages/types/src/monitoring.ts`: add `CertHealthStats` + `certificates: CertHealthStats[]` to `SystemHealthResponse`.
-  - [ ] 1.2 `MonitoringService.getSystemHealth()`: resolve the cert list (`CERT_MONITOR_PATHS` env, comma-separated; default = the two F-024 certs / scan `/etc/ssl/cloudflare/*.pem`), read each `.pem` `notAfter` (Node `crypto.X509Certificate(readFileSync(path)).validTo`), compute `daysUntilExpiry`, map to status via the 60/30 thresholds; unreadable → `status:'error'`. Never open a `.key`.
-  - [ ] 1.3 Tests: valid cert (ok), <60d (warning), <30d (critical), missing file (error). Use fixture PEMs (generate self-signed in-test, or check in throwaway PEMs).
-- [ ] **Task 2 — Alerting (AC: #3, #4)** _(tests first)_
-  - [ ] 2.1 `alert.service.ts`: add `cert_expiry` to `THRESHOLDS` (`warning 60, critical 30, direction 'below'`); in `evaluateAlerts`, push `{ key: 'cert_expiry:'+c.name, value: c.daysUntilExpiry }` for each `health.certificates` entry (skip `error` entries OR alert them separately — dev judgment, document).
-  - [ ] 2.2 `scripts/uat-trigger-critical-alert.ts`: add `cert_expiry` synthetic metric (default 20 days) feeding a synthetic `certificates` entry into the `SystemHealthResponse` it builds.
-  - [ ] 2.3 Tests: 25d → critical transition; 45d → warning; 90d → none.
-- [ ] **Task 3 — Dashboard widget (AC: #5)** _(tests first)_
-  - [ ] 3.1 `OperationsDashboardPage.tsx`: "Certificates" card reading `health.certificates`; per-cert countdown + color (green/amber/red at 60/30) + error badge. Reuse the page's existing card/poll pattern.
-  - [ ] 3.2 Tests (`OperationsDashboardPage.test.tsx`): renders rows; green/amber/red by days; error badge for `status:'error'`.
-- [ ] **Task 4 — Regression + commit (AC: #6)**
-  - [ ] 4.1 Full suites green; `tsc` + lint clean; document net-new test counts.
-  - [ ] 4.2 Pre-commit fresh-context `[CR]` per [[feedback-review-before-commit]]; then commit.
+- [ ] **Task 1 — Type + framework (AC: #1, #2)** _(tests first)_ — `MonitoredExpiry` + `expiries: MonitoredExpiry[]` on `SystemHealthResponse`; a source-adapter registry in `MonitoringService`; `getSystemHealth` aggregates all adapters, each wrapped so a failure → `error` item (never throws). Shared `daysUntilExpiry(notAfter)` + status-from-thresholds helper.
+- [ ] **Task 2 — `cert` adapter (AC: #3)** _(tests first)_ — config-driven `.pem` read (`.pem` only), fixture PEMs for ok/<60/<30/missing.
+- [ ] **Task 3 — `domain` adapter (AC: #4)** _(tests first)_ — RDAP fetch + ≥12h cache + timeout/unsupported → `error`; mock the RDAP response in tests; default `oyoskills.com`.
+- [ ] **Task 4 — `manual` adapter (AC: #5)** _(tests first)_ — parse `MONITORED_EXPIRIES` config; `.env.example` entry + a documented shape; seed `oyotradeministry.com.ng` registration here (since .com.ng RDAP is unreliable).
+- [ ] **Task 5 — Alerting (AC: #6)** _(tests first)_ — `expiry` threshold + `expiry:<name>` fan-out in `evaluateAlerts`; `uat-trigger-critical-alert.ts --metric=expiry` synthetic item; tests at 25/45/90 days + an `error` item.
+- [ ] **Task 6 — Dashboard "Expiries" card (AC: #7)** _(tests first)_ — grouped card on `OperationsDashboardPage.tsx`; color/error states tested.
+- [ ] **Task 7 — Docs + regression (AC: #8)** — broaden playbook Part 13 → Expiry Inventory (add domain + declared rows + the `MONITORED_EXPIRIES`/`DOMAIN_MONITOR_LIST` config); full suites + tsc + lint; document counts; pre-commit `[CR]` per [[feedback-review-before-commit]] then commit.
 
 ## Dev Notes
 
-- **Read `.pem` only, never `.key`.** We only need `notAfter` (public cert metadata). The Origin Cert key is `600 root`; the API process must not require it. The AOP CA `.pem` and Origin Cert `.pem` are `644`.
-- **Server-side day math** — compute `daysUntilExpiry` on the backend from `notAfter` so the dashboard and the alert agree and it's immune to client clock skew. Frontend just renders the number + color.
-- **Thresholds match the alert** (60 warning / 30 critical, `direction:'below'`) — mirror `disk_free`'s shape exactly so behavior is consistent and the state machine / digest / hourly-rate-limit all work unchanged.
-- **Per-cert metric keys** (`cert_expiry:<name>`) mirror the existing `queue_waiting:<name>` fan-out in `evaluateAlerts` — each cert gets its own alert state.
-- **The two certs today** (defaults): `cloudflare-origin` = `/etc/ssl/cloudflare/oyoskills-origin.pem` (exp 2041), `cloudflare-aop-ca` = `/etc/ssl/cloudflare/origin-pull-ca.pem` (exp 2029-11-01). But the list MUST be config/scan-driven so it's not a maintenance trap.
-- **In dev/CI the cert paths won't exist** — getSystemHealth must degrade gracefully (report `error`/empty `certificates`, don't throw). Tests use fixture PEMs, not the prod paths.
-- Testing: backend `__tests__/` (vitest, `vi.mock` fs/crypto or fixture files); web vitest for the page.
+- **One framework, three adapters** — the cert case is the reference adapter; domain + manual reuse the same `MonitoredExpiry` shape, threshold (60/30 `below`), per-item alert key (`expiry:<name>`), and dashboard card. Don't fork three monitors.
+- **Domain registration is the highest-impact item** — a lapsed registration kills web *and* email *and* the AOP/CF setup, far worse than any cert. Prioritise `oyoskills.com`.
+- **RDAP, not WHOIS** — RDAP returns structured JSON (`events[].eventAction == 'expiration'`). `.com` (Verisign) is reliable; **`.com.ng` RDAP is often absent** → don't depend on it; declare `oyotradeministry.com.ng` via the `manual` adapter instead. Cache the RDAP call (≥12h) — it's an external network hop; `getSystemHealth` is polled and must stay fast + must never throw because RDAP timed out.
+- **Don't over-reach on API tokens** — Resend and Termii API keys do **not** expire; only declare items that genuinely have an expiry (e.g. a CF API token with a set TTL, a paid-service renewal date). Inventing dates creates false alerts. The `manual` adapter exists for the real ones.
+- **`.pem` only, server-side day math, graceful-in-dev** (cert paths/RDAP won't resolve in CI → `error`/empty, not a crash). Tests use fixtures/mocks, never prod paths or live RDAP.
+- **Thresholds match across dashboard + alert** (60 warning / 30 critical) — mirror `disk_free`'s `direction:'below'` shape so the state machine / digest / rate-limit all work unchanged.
 
 ### Project Structure Notes
-- Touch: `packages/types/src/monitoring.ts` (type), `apps/api/src/services/monitoring.service.ts` (cert read), `apps/api/src/services/alert.service.ts` (threshold + metric), `scripts/uat-trigger-critical-alert.ts` (synthetic metric), `apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx` (widget). Tests alongside each.
-- **No schema migration. No new audit action. No new route** (rides the existing `GET /system/health` → operations dashboard). super_admin-gated via the existing operations route + `operations-rate-limit`.
-- File-overlap caution: `alert.service.ts` + `OperationsDashboardPage.tsx` are shared with Stories 9-15 / 9-19; re-grep line numbers at impl. Add `CERT_MONITOR_PATHS` to `.env.example` if used.
+- Touch: `packages/types/src/monitoring.ts` (types), `apps/api/src/services/monitoring.service.ts` (framework + adapters), `apps/api/src/services/alert.service.ts` (threshold + fan-out), `scripts/uat-trigger-critical-alert.ts` (synthetic), `apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx` (card), `docs/infrastructure-cicd-playbook.md` (Part 13 broaden), `.env.example` (`CERT_MONITOR_PATHS` / `DOMAIN_MONITOR_LIST` / `MONITORED_EXPIRIES`). Tests alongside.
+- **No schema migration. No new audit action. No new route** (rides `GET /system/health`). super_admin-gated via the existing operations route + `operations-rate-limit`.
+- File-overlap: `alert.service.ts` (9-15), `OperationsDashboardPage.tsx` (9-19), `monitoring.service.ts` — re-grep at impl.
 
 ### References
-- [Source: docs/infrastructure-cicd-playbook.md → Part 13 Certificate Inventory] (the certs + expiries + renewal)
+- [Source: docs/infrastructure-cicd-playbook.md → Part 13 (Expiry Inventory — broadened by this story)]
 - [Source: docs/security/findings-register.md → F-024] · [Source: docs/f-024-origin-lock-runbook.md]
 - [Source: packages/types/src/monitoring.ts:20 → SystemHealthResponse]
 - [Source: apps/api/src/controllers/system.controller.ts:18 → getHealth → MonitoringService.getSystemHealth]
-- [Source: apps/api/src/services/alert.service.ts:68 THRESHOLDS, :119 evaluateAlerts (queue_waiting:<name> fan-out pattern)]
-- [Source: scripts/uat-trigger-critical-alert.ts] (Story 9-15 permanent alert UAT runner — extend)
+- [Source: apps/api/src/services/alert.service.ts:68 THRESHOLDS, :119 evaluateAlerts (`queue_waiting:<name>` fan-out)]
+- [Source: scripts/uat-trigger-critical-alert.ts] (Story 9-15 permanent alert UAT — extend)
 - [Source: apps/web/src/features/dashboard/pages/OperationsDashboardPage.tsx] (Story 9-19 ops dashboard)
+- RDAP: `https://rdap.org/domain/<domain>` (bootstrap → registry RDAP; `events[].eventAction='expiration'`)
 
 ## Dev Agent Record
 ### Agent Model Used
@@ -84,4 +79,5 @@ _(to be filled by dev)_
 ### Change Log
 | Date | Change | By |
 |------|--------|-----|
-| 2026-06-09 | Authored (F-024 close-out follow-up): cert-expiry monitoring — ops-dashboard countdown + alert via the existing pipeline. NOT a launch gate. 6 ACs / 4 Tasks. | Bob (SM) |
+| 2026-06-09 | Authored (F-024 close-out follow-up): cert-expiry monitoring — ops-dashboard countdown + alert. 6 ACs / 4 Tasks. | Bob (SM) |
+| 2026-06-09 | BROADENED (Awwal directive) → generic Expiry Monitoring: cert + domain-registration (RDAP) + manual-declared (API tokens / services) via one framework / one dashboard card / one alert path. Now 8 ACs / 7 Tasks; effort ~1.5–2 dev-days. Domain registration flagged as the highest-impact item. | Bob (SM) |

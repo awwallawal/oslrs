@@ -1597,9 +1597,12 @@ Expected: clean restore with table counts matching the manifest. Any divergence 
 
 ---
 
-## Part 13: Certificate Inventory — MANUAL certs, NO auto-renewal ⚠️ (F-024, 2026-06-09)
+## Part 13: Expiry Inventory — certs · domains · declared secrets ⚠️ (F-024, 2026-06-09)
 
-**Read this at handover/BOT-transfer.** After the F-024 origin-lock, the origin moved OFF Let's Encrypt (which auto-renewed) onto a **Cloudflare Origin Certificate + Authenticated Origin Pulls**. These are long-lived but **manual** — nothing auto-renews them. If one lapses unnoticed, the site breaks (Origin Cert → CF `526`; AOP CA → mTLS handshake fail / `400`). **Part 2 (Let's Encrypt) above is SUPERSEDED** — `certbot.timer` is disabled; do not re-enable it.
+**Read this at handover/BOT-transfer.** These are the platform's time-bombs — things that silently expire and take the site down if nobody renews them. After F-024 the origin moved OFF Let's Encrypt (auto-renew) onto **manual** certs, so several of these no longer auto-renew. **Part 2 (Let's Encrypt) above is SUPERSEDED** — `certbot.timer` is disabled; do not re-enable it.
+
+### TLS certificates (manual — no auto-renewal)
+If one lapses unnoticed, the site breaks (Origin Cert → CF `526`; AOP CA → mTLS handshake fail / `400`).
 
 | Cert | Path on VPS | Purpose | Expires | How to renew |
 |------|-------------|---------|---------|--------------|
@@ -1609,6 +1612,17 @@ Expected: clean restore with table counts matching the manifest. Any divergence 
 
 **nginx config** (`infra/nginx/oslsr.conf`, CI-deployed — never hand-edit the VPS copy): `ssl_certificate*` → the Origin Cert; `ssl_client_certificate` + `ssl_verify_client on` → the AOP CA.
 
-**Monitoring:** **Story 9-50** surfaces a live expiry countdown for these certs on the Super Admin operations dashboard + fires a CRITICAL alert ahead of expiry (so this never depends on someone reading this table). Until 9-50 ships, this table is the manual record. Quick manual check: `openssl x509 -in <path> -noout -enddate`.
+### Domain registrations ⚠️ HIGHEST IMPACT — a lapse kills web + email + the whole CF setup
+| Domain | Expires | Registrar | Renewal |
+|--------|---------|-----------|---------|
+| **oyoskills.com** (canonical) | **2028-04-26** | registrar of record | keep auto-renew ON + payment card valid; verify yearly |
+| oyotradeministry.com.ng (retired / BOT asset, de-pointed in F-024) | **2027-01-20** | WhoGoHost | keep registered as a transfer asset — don't let it lapse |
 
-*Updated: 2026-06-09 — Part 13 (Certificate Inventory) added per F-024 origin-lock close-out (Story 9-9 #11). See `docs/f-024-origin-lock-runbook.md` + `docs/security/findings-register.md` F-024.*
+_Expiries fetched via RDAP 2026-06-09 (`curl -sL https://rdap.org/domain/<d>` → `events[].eventAction='expiration'`); both TLDs (.com + .com.ng) resolved._
+
+### Declared expiries (API tokens / paid services)
+Most API keys do **not** expire (Resend, Termii) — nothing to monitor. Declare **only** items with a real expiry — e.g. a Cloudflare API token created with a TTL, or a paid-service renewal date — in `MONITORED_EXPIRIES` (see Story 9-50). **Don't invent dates** (false alerts).
+
+**Monitoring:** **Story 9-50 (Expiry Monitoring)** surfaces a live countdown for ALL of the above — certs, domains, and declared items — on the Super Admin operations dashboard + fires a CRITICAL alert ahead of each expiry (so this never depends on someone reading this table). Until 9-50 ships, these tables are the manual record. Quick checks: certs `openssl x509 -in <path> -noout -enddate`; domains `curl -sL https://rdap.org/domain/<d> | grep expiration`.
+
+*Updated: 2026-06-09 — Part 13 (Expiry Inventory: certs + domain registrations + declared) added per F-024 origin-lock close-out (Story 9-9 #11); monitored by Story 9-50. See `docs/f-024-origin-lock-runbook.md` + `docs/security/findings-register.md` F-024.*
