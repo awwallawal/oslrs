@@ -1,10 +1,13 @@
 # Story 9.49: Access-Token Client Storage Hardening (in-memory + silent refresh)
 
-Status: backlog  ⛔ DEPENDS-ON 9-48 (do not start until 9-48 ships) · POST-LAUNCH (not a gate)
+Status: ready-for-dev  · POST-LAUNCH (not a gate)
 
-<!-- Status is `backlog` (not ready-for-dev): a HARD unmet dependency on 9-48 (M1 grace
-     window) means it is not pickable yet, and it is post-launch / not a gate. Flips to
-     ready-for-dev once 9-48 ships. Reconciled 2026-06-08 to match findings-register note G. -->
+<!-- 2026-06-09: dependency satisfied — Story 9-48 (M1 rotation grace window) is DONE +
+     deployed, so the boot silent-refresh AC#6 multi-tab assumption now holds. Flipped
+     backlog → ready-for-dev. Still POST-LAUNCH / not a launch gate (launch posture =
+     Option A sessionStorage accepted, findings-register note G); pick up when bandwidth
+     allows. Impl line-refs were deferred to dev time (9-48 reshaped token.service /
+     auth.service / AuthContext) — re-grep at implementation. -->
 
 
 <!--
