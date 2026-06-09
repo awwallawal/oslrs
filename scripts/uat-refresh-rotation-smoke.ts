@@ -8,7 +8,8 @@
  *
  * Covers (Story 9-42, re-verified by every future change to the same flow):
  *   - F-022 rotation:        /refresh issues a NEW refresh cookie each call
- *   - F-022 reuse detection: replay of a consumed (rotated-away) token → 401 + family revoke
+ *   - 9-48 M1 grace window:  replay of a just-consumed token WITHIN ~10s (multi-tab) → 200 re-issue (NOT revoked)
+ *   - F-022 reuse detection: replay of a consumed token AFTER the grace window → 401 + family revoke
  *   - F-012 logout:          after logout, the session's refresh token is rejected
  * Reuse it as the regression gate for Story 9-48 (rotation grace window / OPS-3
  * hash-at-rest — the cookie contract is unchanged, so these assertions still hold)
@@ -120,8 +121,13 @@ async function loginFresh(): Promise<{ accessToken: string; cookie: string }> {
   return { accessToken: r.json.data.accessToken, cookie: r.refreshCookie };
 }
 
-async function test1RotationAndReuse(cookie0: string): Promise<void> {
-  log('\nTEST 1 — F-022 rotation + reuse detection (consumes this session):');
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+// Must exceed the server's REFRESH_ROTATION_GRACE_SECONDS (10s, Story 9-48 M1). Tunable.
+const GRACE_WAIT_MS = Number(val('grace-wait-ms') ?? 11000);
+
+// TEST 1 — rotation chain + 9-48 multi-tab grace window. Fast; consumes this session.
+async function test1RotationAndGrace(cookie0: string): Promise<void> {
+  log('\nTEST 1 — F-022 rotation + 9-48 multi-tab grace window:');
   const r1 = await post('/auth/refresh', { cookie: cookie0 });
   if (r1.status === 200 && r1.refreshCookie && r1.refreshCookie !== cookie0) ok('refresh rotated the cookie (new value issued)');
   else { bad(`expected 200 + a NEW refresh cookie; got status ${r1.status}, rotated=${!!r1.refreshCookie}`); return; }
@@ -130,13 +136,31 @@ async function test1RotationAndReuse(cookie0: string): Promise<void> {
   if (r2.status === 200 && r2.refreshCookie && r2.refreshCookie !== r1.refreshCookie) ok('rotation chains (2nd refresh issues another new cookie)');
   else bad(`expected chained rotation; got status ${r2.status}`);
 
+  // 9-48 M1: a just-consumed token replayed WITHIN the grace window (10s) is benign
+  // multi-tab concurrency → RE-ISSUED (200), NOT a family-revoking 401. cookie0 was
+  // consumed by r1 a fraction of a second ago, so this replay is inside the window.
   const r3 = await post('/auth/refresh', { cookie: cookie0 });
-  if (r3.status === 401) ok('replay of the consumed original token → 401 (reuse detected)');
-  else bad(`expected 401 on consumed-token replay; got ${r3.status}`);
+  if (r3.status === 200 && r3.refreshCookie) ok('within-grace replay of a consumed token → 200 re-issued (multi-tab benign; family NOT revoked)');
+  else bad(`expected 200 (9-48 grace re-issue) on within-grace consumed-token replay; got ${r3.status}`);
+}
 
-  const r4 = await post('/auth/refresh', { cookie: r2.refreshCookie ?? r1.refreshCookie });
-  if (r4.status === 401) ok('the still-current token is now rejected too → family revoked by reuse detection');
-  else bad(`expected 401 (family revoke) on the current token after reuse; got ${r4.status}`);
+// TEST 1b — post-grace reuse → 401 + family revoke (F-022, preserved OUTSIDE the 9-48
+// grace window). Needs a fresh session + a wait past the grace window.
+async function test1bPostGraceReuse(source: { cookie: string }): Promise<void> {
+  log(`\nTEST 1b — post-grace reuse detection (waits ~${Math.round(GRACE_WAIT_MS / 1000)}s past the grace window):`);
+  const rA = await post('/auth/refresh', { cookie: source.cookie });
+  if (rA.status !== 200 || !rA.refreshCookie) { bad(`setup: first refresh should rotate (200); got ${rA.status}`); return; }
+  const activeCookie = rA.refreshCookie; // current valid token; source.cookie is now consumed
+
+  await sleep(GRACE_WAIT_MS); // outlive REFRESH_ROTATION_GRACE_SECONDS so the replay is a genuine reuse
+
+  const replay = await post('/auth/refresh', { cookie: source.cookie });
+  if (replay.status === 401) ok('post-grace replay of the consumed token → 401 (reuse detected)');
+  else bad(`expected 401 on post-grace consumed-token replay; got ${replay.status}`);
+
+  const family = await post('/auth/refresh', { cookie: activeCookie });
+  if (family.status === 401) ok('the still-current token is now rejected too → family revoked');
+  else bad(`expected 401 (family revoke) after reuse; got ${family.status}`);
 }
 
 async function test2LogoutInvalidation(source: { accessToken: string; cookie: string }): Promise<void> {
@@ -169,20 +193,16 @@ async function main(): Promise<void> {
   note('health ok');
 
   if (LOGIN_MODE) {
-    const s1 = await loginFresh();
-    await test1RotationAndReuse(s1.cookie);
-    const s2 = await loginFresh(); // fresh session — TEST 1 revoked the first family
-    await test2LogoutInvalidation(s2);
+    await test1RotationAndGrace((await loginFresh()).cookie);
+    await test1bPostGraceReuse(await loginFresh()); // fresh session (TEST 1 consumed its own)
+    await test2LogoutInvalidation(await loginFresh());
   } else {
     if (PROVIDED_COOKIES.length === 0) { console.error('FATAL: provide --login OR at least one --refresh-cookie=<value>.'); process.exit(1); }
-    await test1RotationAndReuse(PROVIDED_COOKIES[0]);
-    if (PROVIDED_COOKIES.length >= 2) {
-      const s2 = await deriveSession(PROVIDED_COOKIES[1]);
-      await test2LogoutInvalidation(s2);
-    } else {
-      log('\nTEST 2 — F-012 logout invalidation:');
-      skipped('needs a 2nd independent session — pass a second --refresh-cookie=<value> to run it.');
-    }
+    await test1RotationAndGrace(PROVIDED_COOKIES[0]);
+    if (PROVIDED_COOKIES.length >= 2) await test1bPostGraceReuse({ cookie: PROVIDED_COOKIES[1] });
+    else { log('\nTEST 1b — post-grace reuse:'); skipped('needs a 2nd --refresh-cookie=<value>.'); }
+    if (PROVIDED_COOKIES.length >= 3) await test2LogoutInvalidation(await deriveSession(PROVIDED_COOKIES[2]));
+    else { log('\nTEST 2 — logout invalidation:'); skipped('needs a 3rd --refresh-cookie=<value>.'); }
   }
 
   log(`\n${'─'.repeat(60)}`);
