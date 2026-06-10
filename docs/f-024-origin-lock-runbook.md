@@ -134,3 +134,14 @@ When all green → mark 9-9 subtask #11 (F-024) **done** + flip the FRC/roadmap 
 - **HSTS:** a 1-yr `includeSubDomains` HSTS was served on `oyotradeministry.com.ng` → any future project on that domain must serve valid HTTPS.
 - **Sequence:** de-point (§1–§2) BEFORE firewall lock (§3) BEFORE IP rotate (§4). Don't release the old reserved IP until §5 passes.
 - **Gate:** all of this before the Phase-2 blasts.
+
+---
+
+## §7 — Postscript: completion state (2026-06-10)
+
+§1–§3 executed; origin lock **hardened beyond §3** and **verified**:
+- **§3 chose Option B in effect** — origin runs a **Cloudflare Origin Cert** (`/etc/ssl/cloudflare/oyoskills-origin.pem`); `certbot.timer` **inactive + disabled** (no Let's Encrypt HTTP-01).
+- **Port 80 ALSO locked (2026-06-10)** — DO Cloud Firewall `:80` source set to Cloudflare ranges (mirrors :443). The §3 "Option A: leave :80 open for HTTP-01" note is **superseded** (no HTTP-01 dependency exists). Verified: direct `:80` + `:443` to `159.89.146.93` both time out; `https://oyoskills.com` 200 + `cf-ray`; `http://` 301→https at the CF edge.
+- **§4 (IP rotation) deemed OPTIONAL** — with 80+443 both CF-only and SSH key-only, the known IP exposes nothing. Not executed; pull only if belt-and-suspenders is ever wanted.
+
+State recorded in `docs/pending-operator-actions.md` (✅ 2026-06-10) + memory `project-origin-lock-port80-residual`. Register F-024 stays **Fixed** (this is extra hardening, not a status change).

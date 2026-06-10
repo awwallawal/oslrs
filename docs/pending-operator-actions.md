@@ -11,6 +11,9 @@ _Convention: ✅ done · ⏳ pending · 🔁 recurring. Keep this in lockstep wi
 - **Google OAuth retirement (Task 10.2 / 9-12, 9-9 residual):** GCP OAuth client `130306069266-…` **deleted**; GH Actions `VITE_GOOGLE_CLIENT_ID` variable deleted; VPS `.env` `GOOGLE_*` removed + `oyotradeministry` dropped from `CORS_ORIGIN`. _(9-12 → done-superseded)_
 - **Origin Cert private key** scrubbed from `ssh_analysis.txt`.
 
+## ✅ Done (2026-06-10 — origin-lock completion)
+- **F-024 origin-lock — port 80 also closed:** DO Cloud Firewall `:80` source changed `0.0.0.0/0 + ::/0` → Cloudflare IP ranges (mirrors the :443 rule; safe because CF Origin Cert is in use + `certbot.timer` disabled, so no HTTP-01 dependency). **Verified:** direct `:80` AND `:443` to origin `159.89.146.93` both time out; normal path 200 + `cf-ray`; http→https now 301s at the CF edge. Origin is fully CF-only on 80+443 (SSH 22 key-only stays). **F-024 §4 IP rotation is now OPTIONAL** — the known IP exposes nothing. _(memory project-origin-lock-port80-residual; supersedes the §3 "Option A leave :80 open" note in the F-024 runbook)_
+
 ## ⏳ Pending — LAUNCH-GATE / pre-blast (roadmap Phase 2)
 - **Resend Pro** account/upgrade — required before the email re-engagement blasts (9-27 / 9-28).
 - **Termii** account + sender setup — required before the SMS blast (9-27 Part B).
