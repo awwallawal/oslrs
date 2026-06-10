@@ -44,6 +44,10 @@ import {
 } from '../src/services/operations.service.js';
 import { pool } from '../src/db/index.js';
 import { closeEmailQueue } from '../src/queues/email.queue.js';
+import {
+  getCloudflareDashboardSummary,
+  type CloudflareDashboardSummary,
+} from '../src/lib/cloudflare-analytics.js';
 
 // Re-export the shared threshold object + helper so the AC#D1 unit test can
 // assert the CLI and the shared module reference the same source of truth.
@@ -84,11 +88,52 @@ function bar(used: number, total: number, width = 20): string {
   return '[' + '█'.repeat(filled) + '░'.repeat(width - filled) + ']';
 }
 
+/** Cloudflare edge-traffic section. Reuses the shared lib so the CLI and the
+ * standalone cf-analytics deep-dive read the same data. CLI-only (does NOT
+ * touch the live API ops endpoint or the Telegram digest). */
+function renderCloudflare(cf: CloudflareDashboardSummary | null): void {
+  console.log(c.bold('  Edge traffic') + c.gray('  ·  Cloudflare (oyoskills.com zone)'));
+  if (!cf) {
+    console.log(c.dim('    section unavailable') + c.gray('  (set CLOUDFLARE_API_TOKEN in .env)'));
+    console.log();
+    return;
+  }
+
+  const z = cf.zone;
+  if (z) {
+    // Cache low / threats present are the two operator signals worth a colour.
+    const cacheIcon = z.cacheHitPct >= 40 ? c.green('●') : z.cacheHitPct >= 15 ? c.yellow('●') : c.red('●');
+    const threatIcon = z.threats === 0 ? c.green('●') : z.threats < 200 ? c.yellow('●') : c.red('●');
+    console.log(`    ${c.gray('·')} Requests        ${c.bold(z.requests.toLocaleString('en-US'))}  ${c.gray(`(${z.windowLabel}, daily)`)}  ·  uniques ${z.uniques.toLocaleString('en-US')}`);
+    console.log(`    ${cacheIcon} Cache hit ratio ${z.cacheHitPct}%  ${c.gray('(higher = less droplet load)')}`);
+    console.log(`    ${threatIcon} Threats blocked ${z.threats.toLocaleString('en-US')}`);
+    const errStatuses = z.status.filter((s) => s.code >= 400);
+    if (errStatuses.length) {
+      const errLine = errStatuses.slice(0, 4).map((s) => `${s.code}:${s.count.toLocaleString('en-US')}`).join('  ');
+      console.log(`    ${c.gray('·')} Errors          ${errLine}`);
+    }
+    const top = z.countries.slice(0, 5).map((x) => `${x.country} ${x.count.toLocaleString('en-US')}`).join('  ·  ');
+    console.log(`    ${c.gray('·')} Top countries   ${top}`);
+  } else {
+    console.log(c.dim('    zone data unavailable') + (cf.zoneError ? c.gray(`  (${cf.zoneError.slice(0, 60)})`) : ''));
+  }
+
+  const r = cf.rum;
+  if (r) {
+    const topPages = r.topPages.slice(0, 3).map((p) => p.page.replace(/^www\.|^oyoskills\.com/, '')).filter(Boolean);
+    console.log(`    ${c.gray('·')} Page views      ${r.pageViews.toLocaleString('en-US')}  ·  visits ${r.visits.toLocaleString('en-US')}  ${c.gray(`(top: ${topPages.join(', ') || '—'})`)}`);
+  } else if (cf.rumError) {
+    console.log(c.gray(`    · RUM unavailable (${cf.rumError.includes('access') ? 'token lacks Account Analytics:Read' : cf.rumError.slice(0, 50)})`));
+  }
+  console.log();
+}
+
 function render(
   sys: OpsSystemHealth | null,
   traffic: OpsTrafficSnapshot | null,
   resend: OpsResendStatus | null,
   queue: OpsQueueHealth | null,
+  cf: CloudflareDashboardSummary | null,
 ): void {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const sep = c.gray('─'.repeat(64));
@@ -176,6 +221,9 @@ function render(
   }
   console.log();
 
+  // Cloudflare edge traffic (CLI-only; reuses shared lib).
+  renderCloudflare(cf);
+
   // Recommendations — bind metric breaches to specific stories/actions.
   // Wording is derived by the SHARED buildRecommendations() so the CLI, UI,
   // and Telegram digest are always identical (Story 9-19 AC#B5 / AC#C2).
@@ -196,13 +244,14 @@ function render(
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 async function main() {
-  const [sys, traffic, resend, queue] = await Promise.all([
+  const [sys, traffic, resend, queue, cf] = await Promise.all([
     getSystemHealth(),
     getTraffic(),
     getResendStatus(),
     getQueueHealth(),
+    getCloudflareDashboardSummary(7).catch(() => null), // best-effort; never block the dashboard
   ]);
-  render(sys, traffic, resend, queue);
+  render(sys, traffic, resend, queue, cf);
   await closeEmailQueue().catch(() => { /* best-effort */ });
   await pool.end().catch(() => { /* best-effort */ });
 }
