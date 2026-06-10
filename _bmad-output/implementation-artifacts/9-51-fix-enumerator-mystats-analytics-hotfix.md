@@ -80,11 +80,15 @@ in analytics services drifting from the schema, invisible to both `tsc` and the 
      risk: listAuditLogs/getDistinctValues/searchPrincipals), plus `ProductivityService` (4 aggregation
      methods) and `RemunerationService`. Productivity/remuneration are Drizzle-query-builder (tsc-guarded,
      low drift risk) but smoked per the "extend to ops services" follow-up so their multi-join
-     aggregations are validated end-to-end against the real schema. The remuneration block **seeds a real
-     payment chain (batch → record → dispute)** so the data-dependent read paths actually execute their
-     joins/filters — `getBatchDetail`, `getStaffPaymentHistory` (current-version `effectiveUntil` filter),
-     `getDisputeByRecordId` (exercises the `reopen_count` column the dispute-reopen `sql` fragment relies
-     on), `getStaffDisputes` — not just the empty-set branches.
+     aggregations are validated end-to-end against the real schema. Two seeded blocks exercise the
+     **data-dependent branches**, not just the empty-set early returns:
+     - remuneration: a real payment chain (batch → record → dispute) → `getBatchDetail`,
+       `getStaffPaymentHistory` (current-version `effectiveUntil` filter), `getDisputeByRecordId`
+       (exercises the `reopen_count` column the dispute-reopen `sql` fragment relies on), `getStaffDisputes`.
+     - productivity: a full graph (lga → supervisor + enumerator → team_assignment → submission) →
+       `getAllStaffProductivity` (live-today count + snapshot lookups run), `getTeamProductivity`
+       (supervisor-team resolution → enumerator details/live-count branch), `getLgaSummary`,
+       `getLgaComparison`. Assertions confirm the seeded staff/LGA flow through the populated paths.
 
    This coverage would have caught both this hotfix and Hotfix 9.6 in CI, not prod.
 

@@ -4,6 +4,9 @@ import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { users } from '../../db/schema/users.js';
 import { roles } from '../../db/schema/roles.js';
+import { lgas } from '../../db/schema/lgas.js';
+import { teamAssignments } from '../../db/schema/team-assignments.js';
+import { submissions } from '../../db/schema/submissions.js';
 import { paymentBatches, paymentRecords, paymentDisputes } from '../../db/schema/remuneration.js';
 import { ProductivityService } from '../productivity.service.js';
 import { RemunerationService } from '../remuneration.service.js';
@@ -53,8 +56,83 @@ describe('ops services — real-DB smoke (query ↔ schema parity)', () => {
     ['getLgaComparison', () => ProductivityService.getLgaComparison({ period: 'month' })],
     ['getLgaSummary', () => ProductivityService.getLgaSummary({ period: 'month' })],
   ];
-  it.each(prodMethods)('ProductivityService.%s runs against the real schema', async (_name, run) => {
+  it.each(prodMethods)('ProductivityService.%s runs against the real schema (empty/ambient path)', async (_name, run) => {
     await expect(run()).resolves.toBeTruthy();
+  });
+
+  // Seed a full graph (lga → supervisor + enumerator → team_assignment → submission)
+  // so the productivity aggregations execute their DATA-DEPENDENT branches — the
+  // live-today submission count + snapshot lookups + supervisor-team resolution
+  // that the empty-DB path (above) skips. Confirms those queries run against the
+  // real schema with rows present, not just the zero-row early returns.
+  describe('with a seeded LGA + supervisor + enumerator + submission (populated branches)', () => {
+    const lgaId = uuidv7();
+    const supervisorId = uuidv7();
+    const enumeratorId = uuidv7();
+    const assignmentId = uuidv7();
+    const submissionId = uuidv7();
+    const TAG = '_ops_smoke_prod_';
+    const createdRoleIds: string[] = [];
+
+    async function ensureRole(name: string): Promise<string> {
+      const existing = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, name)).limit(1);
+      if (existing.length) return existing[0].id;
+      const id = uuidv7();
+      await db.insert(roles).values({ id, name, description: `${TAG}role` });
+      createdRoleIds.push(id);
+      return id;
+    }
+
+    beforeAll(async () => {
+      await db.insert(lgas).values({ id: lgaId, name: `${TAG}${lgaId}`, code: `${TAG}${lgaId}` });
+      const enumRoleId = await ensureRole('enumerator');
+      const supRoleId = await ensureRole('supervisor');
+      await db.insert(users).values([
+        { id: supervisorId, email: `${TAG}sup_${supervisorId}@example.com`, fullName: 'Smoke Supervisor', roleId: supRoleId, lgaId, status: 'active' },
+        { id: enumeratorId, email: `${TAG}enum_${enumeratorId}@example.com`, fullName: 'Smoke Enumerator', roleId: enumRoleId, lgaId, status: 'active' },
+      ]);
+      await db.insert(teamAssignments).values({ id: assignmentId, supervisorId, enumeratorId, lgaId }); // unassignedAt NULL = active
+      await db.insert(submissions).values({
+        id: submissionId,
+        submissionUid: `${TAG}${submissionId}`,
+        questionnaireFormId: 'smoke-form',
+        submitterId: enumeratorId,
+        enumeratorId,
+        rawData: { gender: 'female' },
+        completionTimeSeconds: 200,
+        submittedAt: new Date(),
+        source: 'webapp',
+      });
+    });
+
+    afterAll(async () => {
+      await db.delete(submissions).where(eq(submissions.id, submissionId));
+      await db.delete(teamAssignments).where(eq(teamAssignments.id, assignmentId));
+      await db.delete(users).where(inArray(users.id, [supervisorId, enumeratorId]));
+      await db.delete(lgas).where(eq(lgas.id, lgaId));
+      if (createdRoleIds.length) await db.delete(roles).where(inArray(roles.id, createdRoleIds));
+    });
+
+    it('getAllStaffProductivity includes the seeded staff (live-count + snapshot branches execute)', async () => {
+      const result = await ProductivityService.getAllStaffProductivity({ period: 'today', lgaIds: [lgaId] });
+      expect(result.rows.some((r) => r.id === enumeratorId)).toBe(true);
+      expect(result.totalItems).toBeGreaterThanOrEqual(2);
+    });
+
+    it("getTeamProductivity resolves the supervisor's enumerator (populated team branch)", async () => {
+      const result = await ProductivityService.getTeamProductivity(supervisorId, { period: 'today' });
+      expect(result.rows.some((r) => r.id === enumeratorId)).toBe(true);
+    });
+
+    it('getLgaSummary includes the seeded LGA', async () => {
+      const result = await ProductivityService.getLgaSummary({ period: 'today', lgaId });
+      expect(result.rows.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('getLgaComparison includes the seeded LGA', async () => {
+      const result = await ProductivityService.getLgaComparison({ period: 'today', lgaIds: [lgaId] });
+      expect(result.rows.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   // --- remuneration: GLOBAL read paths (run against ambient/empty data) ---
