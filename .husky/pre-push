@@ -1,0 +1,47 @@
+#!/usr/bin/env sh
+# =============================================================================
+# Pre-push gate (added 2026-06-10, large-story workflow — see
+# docs/large-story-workflow.md)
+#
+# Design rationale:
+#   - pre-commit already runs `pnpm lint` + `tsc --noEmit` on every commit, so
+#     any committed code is already type- and lint-clean. It does NOT run the
+#     test suite (too slow per-commit).
+#   - CI (.github/workflows/ci-cd.yml + e2e.yml) only fires on push to `main`
+#     or PR-to-`main`. A backup push of a feature branch triggers nothing.
+#
+# Therefore this hook is asymmetric:
+#   - Pushing to `main`  → run the FULL suite (`pnpm test`). This is the
+#     belt-and-suspenders gate for a local rebase-merge → push-main, so the
+#     single "coherent push" can never be a surprise CI failure.
+#   - Pushing anything else (feature-branch backups, WIP) → skip the suite so
+#     off-site backups stay instant. The PR's CI is the authority for those.
+#
+# Force the full suite on any push:  PREPUSH_FULL=1 git push ...
+# Emergency bypass (use sparingly):  git push --no-verify
+# =============================================================================
+set -e
+
+push_to_main=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip branch deletions (local_sha is all-zeros).
+  case "$local_sha" in
+    *[!0]*) : ;;   # has a non-zero char → a real push
+    *) continue ;; # all zeros → deletion, nothing to test
+  esac
+  case "$remote_ref" in
+    refs/heads/main) push_to_main=1 ;;
+  esac
+done
+
+if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
+  echo ""
+  echo "[pre-push] Push targets main (or PREPUSH_FULL=1) → running full suite: pnpm test"
+  echo "[pre-push] (bypass for emergencies only: git push --no-verify)"
+  echo ""
+  pnpm test
+else
+  echo "[pre-push] Feature-branch/backup push → skipping full suite."
+  echo "[pre-push] pre-commit already gated tsc+lint; the PR's CI is the full gate."
+  echo "[pre-push] Force the suite locally with: PREPUSH_FULL=1 git push"
+fi
