@@ -483,7 +483,9 @@ describe('GET /registration/draft', () => {
       currentStep: 3,
       formData: { fullName: 'Awwal' },
       lastUpdatedAt: new Date('2026-05-11T09:00:00Z'),
-      expiresAt: new Date('2026-06-10T09:00:00Z'),
+      // Relative future so the test never expires (was a hardcoded
+      // 2026-06-10T09:00:00Z that lapsed on 2026-06-10).
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
     const res = await request(buildApp()).get('/registration/draft?token=good-token');
     expect(res.status).toBe(200);
