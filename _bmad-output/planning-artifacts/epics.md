@@ -2406,6 +2406,10 @@ So that every feature in the analytics specification is either live, threshold-g
 | **9-47** | **CSP `style-src` nonce/hash hardening (F-001)** — spike-first; outcome may be partial; hygiene, not a gate | ready-for-dev | **F-001 fix elected 2026-06-07** |
 | **9-48** | **Refresh-Token Lifecycle Hardening** (OPS-3 hash-at-rest + M1 rotation grace-window + L3 reset atomic single-use) — **LAUNCH GATE** | ready-for-dev | **SCP-2026-06-08 / carved from 9-42 review** |
 | **9-49** | **Access-Token Client Storage Hardening** (in-memory + silent refresh; ADR-022) — **POST-LAUNCH**, depends-on 9-48; not a gate | ready-for-dev (depends-on 9-48) | **9-42 review N3 → ratified 2026-06-08** |
+| **9-50** | Certificate + Expiry Monitoring (certs + domain registration + declared tokens via one framework) — HYGIENE/ops, not a gate | ready-for-dev | Emerged from F-024 close-out; broadened 2026-06-09 |
+| **9-51** | Enumerator "My Stats" analytics 500 hotfix (roles-table join + safeSection guards + real-DB analytics smoke) | done | Hotfix 2026-06-09 (`9eeb88e`) |
+| **9-52** | CF Traffic-Watch Alert (cron + `cloudflare-analytics` lib + 9-15 Telegram; pages on requests-spike-while-pageviews-flat / threats / error-ratio) — monitoring, not a gate | ready-for-dev | Emergent 2026-06-10 (CF analytics session) |
+| **9-53** | oyotradeministry.com.ng Residual Cleanup (dead dual-domain refs post-F-024; reference-only) — hygiene, not a gate | ready-for-dev | Emergent 2026-06-10 (drift sweep) |
 
 **Numbers not used:** 9-14, 9-29 (surname-split "Part F" — absorbed into 9-18), 9-31 — intentionally skipped during planning.
 
