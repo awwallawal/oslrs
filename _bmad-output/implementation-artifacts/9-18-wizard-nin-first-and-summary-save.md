@@ -364,18 +364,18 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [x] 0.2: **Enumerator dry-run** — author `apps/api/scripts/_enumerator-path-smoke-test.ts` (NEW) that authenticates as a designated test enumerator account, submits 5-10 synthetic form responses via `POST /api/v1/forms/submissions`, then verifies (a) each created a `submissions` row, (b) each linked to a (newly-found-or-created) `respondents` row, (c) each emitted an audit event in the chain, (d) `raw_data` is non-empty + matches the input payload. Tear-down deletes the synthetic rows (audit events kept for forensic trail). Smoke test runs ONCE before field-deployment commitment — current production has only 1 enumerator submission ever; this scale-tests the path against a 10× volume burst before 50+ enumerators deploy.
   - [x] 0.3: Document both Pre-flight runs in this story's Dev Agent Record before any frontend dev work begins. Pre-flight outputs are operator-gated; tasks below stay in `pending` until Pre-flight is verified. **[Done — see Dev Agent Record → Task 0 Pre-flight Log.]**
 
-- [ ] **Task 1: Pre-impl decision confirmation (AC: #C3) — RESOLVED 2026-05-31**
+- [x] **Task 1: Pre-impl decision confirmation (AC: #C3) — RESOLVED 2026-05-31**
   - [x] 1.1: Awwal confirmed Option B (auth-choice retires from wizard; opt-in lives in Story 9-32). Decision rationale captured in AC#C3 + Dev Notes "Pre-impl Decision Log" subsection.
   - [x] 1.2: ~~If Awwal opts to KEEP the AuthChoiceFieldset~~ — N/A; Option B locked.
 
-- [ ] **Task 2: NIN moves to Step 1 (AC: #A1, #A2, #A3, #A4, #A5)**
-  - [ ] 2.1: Add NIN input + `NinHelpHint` + `PendingNinToggle` to `Step1BasicInfo.tsx` mirroring the markup at [Source: apps/web/src/features/registration/pages/Step5NinInput.tsx:115-159].
-  - [ ] 2.2: Add the `ninStatus` state machine (incomplete / valid / invalid) using `modulus11Check` from `@oslsr/utils/src/validation`.
-  - [ ] 2.3: Wire `useNinCheck` hook ([Source: apps/web/src/features/forms/hooks/useNinCheck.ts]) for live duplicate detection. Render duplicate-block UI on FR21 error mirroring `CompleteNinPage` pattern.
-  - [ ] 2.4: Gate the Continue button per AC#A3 (NIN-valid OR pending-pressed) PLUS existing Step 1 validations.
-  - [ ] 2.5: Wire pending-toggle press → NIN field disabled + consequence card visible.
-  - [ ] 2.6: Wire `NinHelpHint` inline link → `mergeFields({ pendingNinToggle: true })`.
-  - [ ] 2.7: Verify `useWizardDraft` correctly persists `nin` + `pendingNinToggle` via the existing debounced autosave (no hook changes required; just confirm at impl time).
+- [x] **Task 2: NIN moves to Step 1 (AC: #A1, #A2, #A3, #A4, #A5)** ✅ Part A done 2026-06-10
+  - [x] 2.1: Add NIN input + `NinHelpHint` + `PendingNinToggle` to `Step1BasicInfo.tsx` mirroring the markup at [Source: apps/web/src/features/registration/pages/Step5NinInput.tsx:115-159].
+  - [x] 2.2: Add the `ninStatus` state machine (incomplete / valid / invalid) using `modulus11Check` from `@oslsr/utils/src/validation`.
+  - [x] 2.3: Wire `useNinCheck` hook ([Source: apps/web/src/features/forms/hooks/useNinCheck.ts]) for live duplicate detection. Render duplicate-block UI on FR21 error mirroring `CompleteNinPage` pattern.
+  - [x] 2.4: Gate the Continue button per AC#A3 (NIN-valid OR pending-pressed) PLUS existing Step 1 validations.
+  - [x] 2.5: Wire pending-toggle press → NIN field disabled + consequence card visible.
+  - [x] 2.6: Wire `NinHelpHint` inline link → `mergeFields({ pendingNinToggle: true })`.
+  - [x] 2.7: Verify `useWizardDraft` correctly persists `nin` + `pendingNinToggle` via the existing debounced autosave (no hook changes required; just confirm at impl time).
 
 - [x] **Task 3: Pattern C dedup infrastructure + Step 4 NIN auto-fill (AC: #B1, #B2, #B3, #B4, #B5, #B6, #B7, #B8)** — absorbs work originally planned for 9-17 Part B ✅ Part B done 2026-06-10 (awaiting operator code-review + commit)
   - [x] 3.1: Create `apps/web/src/features/registration/lib/wizard-provided-field-names.ts` per AC#B1 with the full alias map (all 7 keys including `nin`) + the `findWizardFieldForQuestionName` helper + the `WIZARD_PROVIDED_FIELD_KEY` type alias.
@@ -402,10 +402,10 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [ ] 4.6: Update `RegistrationCompletePage.tsx` with the magic-link confirmation copy per AC#C4. Extend `CompletionData` interface with `email`.
   - [ ] 4.7: Verify the submit payload shape per AC#C5 (no backend code change; just confirm wizard frontend always sends `authChoice: 'magic-link'`).
 
-- [ ] **Task 5: Given-name / Family-name split + backfill (Part F — AC: #F1, #F2, #F3, #F4, #F5)**
-  - [ ] 5.1: Update `Step1BasicInfo.tsx` per AC#F1 — replace single `fullName` input with two inputs: `givenName` + `familyName`. Keep the field ordering: NIN (from Part A) → Given name → Family name → DOB → Gender. Both required, min length 2.
-  - [ ] 5.2: Update `useWizardDraft` schema — drop `fullName` from the `formData` shape; add `givenName: string` + `familyName: string`. Best-effort migration when loading legacy drafts: if `formData.fullName` exists and `formData.givenName` is absent, split on first whitespace and warn-log (not a fatal error).
-  - [ ] 5.3: Update `submitWizardSchema` in `apps/api/src/controllers/registration.controller.ts` per AC#F2 — add `givenName` + `familyName`; remove `fullName`. The respondent INSERT writes `first_name = givenName` and `last_name = familyName`.
+- [ ] **Task 5: Given-name / Family-name split + backfill (Part F — AC: #F1, #F2, #F3, #F4, #F5)** — write-path (5.1-5.3) done 2026-06-10; backfill + downstream (5.4-5.8) DEFERRED to "Part F tail" follow-up chunk
+  - [x] 5.1: Update `Step1BasicInfo.tsx` per AC#F1 — replace single `fullName` input with two inputs: `givenName` + `familyName`. Keep the field ordering: NIN (from Part A) → Given name → Family name → DOB → Gender. Both required, min length 2.
+  - [x] 5.2: Update `useWizardDraft` schema — drop `fullName` from the `formData` shape; add `givenName: string` + `familyName: string`. Best-effort migration when loading legacy drafts: if `formData.fullName` exists and `formData.givenName` is absent, split on first whitespace and warn-log (not a fatal error).
+  - [x] 5.3: Update `submitWizardSchema` in `apps/api/src/controllers/registration.controller.ts` per AC#F2 — add `givenName` + `familyName`; remove `fullName`. The respondent INSERT writes `first_name = givenName` and `last_name = familyName`.
   - [ ] 5.4: Author `apps/api/scripts/_backfill-name-canonicalization.ts` per AC#F5 — operator-gated, audit-logged, --dry-run mandatory first, --confirm-i-am-not-dry-running for live, KNOWN_FLAGS, --help. New audit action `OPERATOR_RESPONDENT_NAME_CANONICALIZED` (count 42 → 43).
   - [ ] 5.5: Operator runbook — Awwal runs dry-run + CSV review + apply during week 1 of dev (so post-9-18 ships, existing 136 rows are canonical). Document in story Dev Agent Record.
   - [ ] 5.6: Update `_reengagement-email-blast.ts` + `_cohort-a-supplemental-survey-blast.ts` per AC#F3 — prefer `respondents.first_name` over `firstNameFrom(formData.fullName)` with back-compat fallback. The story 9-30 follow-up `_reengagement-email-blast.ts` two-template refactor (committed to uncommitted tree today) inherits this fix in the same edit window.
@@ -440,7 +440,42 @@ Findings from the `/bmad:bmm:workflows:code-review` pass on the uncommitted Part
 - [x] **[AI-Review][Low] `dob` auto-fill format unverified + untested** [Step4Questionnaire.test.tsx]. **Fix:** added a `date_of_birth` auto-fill test locking the YYYY-MM-DD verbatim round-trip + documented the contract in a comment.
 - [x] **[AI-Review][Low] Story doc hygiene** [this file]. Removed a duplicate stale "Task 1 — BLOCKER" block (Task 1 is resolved) and renumbered Task 6 subtasks `5.1–5.6` → `6.1–6.6`.
 
+### Review Follow-ups (AI) — Part A + Part-F-write-path code-review (2026-06-10, Opus 4.8)
+
+Findings from the review pass on the uncommitted Part A (Task 2 / AC#A1-A5) + Part F write-path (Tasks 5.1-5.3 / AC#F1-F2) tree. Re-verified: web tsc ✓, api tsc ✓, eslint ✓; web 106/0 across registration+forms pages, api registration routes 33/0. Listed critical→low.
+
+- [x] **[AI-Review][Critical] Working tree was RED — `WizardPage.test.tsx` failed 4/5** (the dev's "full web …/0-fail" did not reproduce). The file lacked the `afterEach(cleanup)` every other RTL test file has, so tests 2..N collided on leftover DOM ("multiple elements by step1-stub"). **Pre-existing in the Part B commit `dd94702`** (the Part B review caught a fluke green on it) — the load-bearing 427a80d URL-race guard had been silently unreliable. **Fix:** added `afterEach(cleanup)`; now 5/5, robust across repeated runs.
+- [x] **[AI-Review][High] Part F silently broke Part B's most common dedup case** [Step4Questionnaire.tsx]. Part F stopped writing `formData.fullName`, but Pattern C still keyed a questionnaire `name`/`full_name` question to `fullName` → it was no longer auto-filled/hidden, so the user got re-asked their name in Step 4. The Part B test hid this by setting `fullName` directly. **Fix:** `computePrefill` composes the `fullName` value from `givenName + familyName` (mononym-safe), with a legacy `formData.fullName` fallback. 2 regression tests added.
+- [x] **[AI-Review][Med] `NAME_PATTERN` was ASCII-only, rejecting Yoruba diacritics** [Step1BasicInfo.tsx] (Ọláwálé, Ṣadé) — ironic given Part F's Nigerian-name rationale. **Fix:** Unicode-aware `/^[\p{L}\p{M}\s\-']{2,80}$/u`; diacritic test added.
+- [x] **[AI-Review][Med] Mononym users were blocked** (both names required min 2 at UI + backend; prior system supported single-token names + NULL last_name). **Product decision (Awwal 2026-06-10): DON'T block — accept mononyms for inclusivity, but nudge for a surname.** **Fix:** familyName now OPTIONAL (Step 1 validation, `submitWizardSchema`, `WizardPage` submit, `SubmitWizardRequest`); backend stores `last_name = NULL` when absent (restores the 2026-05-11 H4 race-merge behaviour); Step 1 shows a non-blocking "No surname? That's fine…" nudge + "— optional" label. Mononym test added.
+- [x] **[AI-Review][Low→RESOLVED+DEFERRED] Age gate (was ≥16, UI-only) — neutralised here; proper gate pipelined as its own story** [Step1BasicInfo.tsx]. The dev's unspecified `≥16` block was removed (kept only sane date bounds: not-future, ≤120). **Decision (Awwal 2026-06-10): Option A — fix the forms engine properly rather than a structured quick-fix.** Floor = 15 (ILO), with the ILO Art. 6 apprenticeship carve-out + NDPA guardian-consent capture, surfaced via a conditional questionnaire group (shared across wizard/enumerator/clerk/supervisor) + a server-side shared rule keyed on `dob`. **Blocked on forms-engine work → carved to Story 9-54 (engine fidelity) + Story 9-55 (the age-gate itself, depends-on 9-54); both launch-gating** (see Dev Notes "Forms-engine fidelity & minor age-gate"). Interim: no exclusionary age block (prod has none today — verified).
+- [ ] **[AI-Review][Med] Pattern C dedup gaps surfaced by the real questionnaire** [wizard-provided-field-names.ts / Step4Questionnaire.tsx]. The pinned `oslsr_master_v3` form asks `gender`, `lga_id`, `consent_marketplace`, `consent_enriched` — all collected by the wizard but ABSENT from `WIZARD_PROVIDED_FIELD_NAMES`, so the wizard re-asks them in Step 4 (works against the Step-4-stall-reduction goal). (`surname`/`firstname`/`phone_number`/`dob`/`nin` already match.) **To fix within 9-18** (add `gender`/`lga`/consent keys + their formData mappings) in a later batch — small, but defer until after the engine story so the consent fields aren't double-handled.
+- [x] **[AI-Review][Low→WON'T-FIX] Continue could slip past during the in-flight duplicate check** [Step1BasicInfo.tsx]. Considered gating on `!isChecking`, but that adds friction to EVERY valid-NIN registration on slow networks to prevent a sub-second race the backend submit already rejects authoritatively. Deliberately not changed; rationale recorded in code.
+- [x] **[AI-Review][Low] NIN status messages not wired to the input's `aria-describedby`; invalid line lacked `role="alert"`** [Step1BasicInfo.tsx]. **Fix:** `aria-describedby` now points at the live status message id; invalid line gets `role="alert"` (duplicate already had it).
+- [x] **[AI-Review][Low] AC#C5 text stale** — still lists `fullName` in the submit payload; Part F changed it to given/family. (Documented here; AC#C5 superseded by AC#F2.)
+
 ## Dev Notes
+
+### Forms-engine fidelity & minor age-gate (verified against production 2026-06-10)
+
+Surfaced while scoping the minor age-gate (floor 15) + guardian consent. Verified by direct read-only prod query over Tailscale (`oslsr-postgres`, DB `oslsr_db`); pinned form = `oslsr_master_v3` v`2026012601`.
+
+**Verified facts (NOT the earlier hypothesis — corrected):**
+1. **No labour-data bug.** `employment_status` is present in **76/76** prod submissions — the Labour Force section IS collected. (An earlier hypothesis that it was hidden was WRONG.)
+2. **`calculate` fields are stripped + never evaluated.** `age` (= `int((today()-${dob}) div 365.25)`) is in `METADATA_TYPES` (`xlsform-to-native-converter.ts:29`) → dropped at migration; **no runtime calculation evaluator exists** in the forms engine. Prod confirms: `age` key in **0/76** submissions; pinned `form_schema` does not mention `age`.
+3. **Group-level `relevant` is dropped in migration.** Only question-level `showWhen` migrates; `begin_group … relevant=…` is lost. Prod `form_schema` has `showWhen` (question-level) but NO `sectionShowWhen` and no `>= 15` threshold. So `grp_labor`'s `${age} >= 15` gate AND `grp_identity`'s `${consent_basic}='yes'` gate **never reached the pinned form** — which is why labour data is collected for everyone (no gate), and why identity questions show regardless of the basic-consent answer (a live consent-handling gap).
+4. **No age gating exists in production today** — under-15s register fully.
+
+**Decision (Awwal 2026-06-10): Option A — fix the engine once and for all (not a structured quick-fix), SPLIT into two launch-gating stories (author via the canonical `*create-story` workflow when 9-18 completes):**
+
+**Story 9-54 — forms-engine fidelity** (enables 9-55; also closes the live consent-gate):
+- Runtime evaluator for `calculate` fields (safe subset: `today()`, `${field}`, arithmetic, `int()/div`) so `age` (and future derived fields) compute at render + submit time.
+- Migrate group-level `relevant` → `sectionShowWhen` in the converter (fixes the dropped labour age-gate AND the dropped identity consent-gate).
+- Publish-time schema validator (hook into the 9-17 pin/validate step): reject/warn when a `relevant`/`showWhen` references a field absent from the rendered schema (e.g. `age`) or when group-relevance would be silently dropped. Optional: a migration diff report (pinned form vs authored xlsform).
+
+**Story 9-55 — minor age-gate + guardian consent** (depends-on 9-54): floor 15, ILO Art. 6 apprenticeship carve-out, NDPA guardian-consent (`guardian_name`/`relationship`/`phone`/`consent` + apprenticeship attestation) surfaced via a conditional questionnaire group (`relevant=${age} < 15`) — uniform across wizard/enumerator/clerk/supervisor — PLUS a server-side shared rule keyed on `dob` (the durable lock, independent of the form pipeline) enforced synchronously at `submitWizard` + `submitForm` (before queueing — NOT in the async `submission-processing.service`).
+
+Both are **launch gates** (roadmap Phase 1 → 🚦). 9-18 interim: the dev's unspecified `≥16` Step-1 block was neutralised (sane date bounds only). The proper gate is 9-55.
 
 ### Step structure change — Awwal's verbatim proposal
 
@@ -614,6 +649,21 @@ Operator (Awwal) authorised direct VPS execution over Tailscale (`ssh root@oslsr
 **Deleted**
 - `apps/web/src/features/registration/lib/nin-question-names.ts` (AC#B2 consolidation)
 
+### Part A + Part F write-path — 2026-06-10
+
+**Modified**
+- `apps/web/src/features/registration/pages/Step1BasicInfo.tsx` — full rewrite: NIN-first field + `ninStatus` machine + `useNinCheck` duplicate-block + `NinHelpHint` + `PendingNinToggle` (Part A AC#A1-A5); given/family name split replacing `fullName` (Part F AC#F1); live Continue gate + validation summary (AC#A3)
+- `apps/web/src/features/registration/api/wizard.api.ts` — `WizardDraftData` adds `givenName`/`familyName` (+`fullName` deprecated); `SubmitWizardRequest` `fullName`→`givenName`+`familyName`
+- `apps/web/src/features/registration/hooks/useWizardDraft.ts` — `migrateLegacyName()` splits legacy `fullName` drafts → given/family on hydrate (AC#F1/5.2)
+- `apps/web/src/features/registration/components/WizardNavigation.tsx` — optional `continueDescribedBy` (AC#A3 aria-describedby on the gated button)
+- `apps/web/src/features/registration/pages/WizardPage.tsx` — `handleSubmit` validates + sends `givenName`/`familyName` (not `fullName`)
+- `apps/api/src/db/schema/wizard-drafts.ts` — `givenName`/`familyName` on `WizardDraftData` (+`fullName` deprecated)
+- `apps/api/src/controllers/registration.controller.ts` — `submitWizardSchema` `fullName`→`givenName`+`familyName` (AC#F2); handler writes `first_name=givenName`/`last_name=familyName` (drops the first-token parse); draft formData schema gains given/family
+- `apps/web/src/features/registration/pages/__tests__/Step1BasicInfo.test.tsx` — rewritten: 10 tests (NIN gate / valid / invalid / duplicate / pending / name split / mergeFields / advance) (AC#D1 + F6)
+- `apps/api/src/routes/__tests__/registration.routes.test.ts` — wizard `validBody` + missing-field test use `givenName`/`familyName`
+
+**DEFERRED to "Part F tail" follow-up chunk** (existing-data + downstream, lower-risk, backfill is operator-gated): 5.4 `_backfill-name-canonicalization.ts` (with the .xlsx dropdown + heuristic pre-fill), 5.5 operator CSV review, 5.6 blast-script `firstNameFrom` removal (AC#F3), 5.7 MagicLink email templates, 5.8 ID-card visual diff. Decoupled cleanly because `fullName` stays a **deprecated-optional** field (blast scripts still read legacy rows; scripts aren't tsc-gated anyway).
+
 ### Part B Implementation Notes (2026-06-10, Amelia/dev-story, Opus 4.8)
 
 Pattern C wizard field dedup foundation (Task 3 / AC#B1–B8). Quality gates: web `tsc` ✓, api `tsc` ✓, eslint ✓ (all changed files), full web suite **2543 pass / 0 fail / 2 todo (+30 new tests, 0 regressions)**.
@@ -635,3 +685,6 @@ Pattern C wizard field dedup foundation (Task 3 / AC#B1–B8). Quality gates: we
 | 2026-06-10 | Story flipped ready-for-dev → in-progress. Task 0 pre-flight cleared via Tailscale: Cohort B 268-draft expiry extended +30d (earliest now 2026-07-13); enumerator path scale-tested 10/10 clean. Task 1 confirmed already resolved (Option B, auth-choice retires — 2026-05-31). |
 | 2026-06-10 | Part B (Task 3 / AC#B1–B8) implemented: `WIZARD_PROVIDED_FIELD_NAMES` map + `FormRenderer.hideQuestionNames` + Step 4 auto-fill/banner + collision test; `nin-question-names.ts` deleted, 6 import sites migrated. +30 tests, 0 regressions. Awaiting operator code-review + atomic commit. |
 | 2026-06-10 | Adversarial code-review (Task 8.1) on Part B tree: 6 findings (1 High, 2 Med, 3 Low) logged under "Review Follow-ups (AI)" and all auto-fixed in-session. High = stale NIN not purged on pending toggle; Meds = triple-coupled identitySig + all-hidden form renders hidden question; Lows = leading-hidden flash, dob test, story doc numbering. +3 regression tests; tsc/eslint clean; 116 prior tests still green. Story stays `in-progress` (Parts A/C/D/E/F outstanding). |
+| 2026-06-10 | Part A (Task 2 / AC#A1-A5) + Part F write-path (Task 5.1-5.3 / AC#F1-F2): NIN moves to Step 1 (Modulus-11 + live duplicate-block + pending toggle + gated Continue); Step 1 splits Full Name → Given/Family (surname-first safe); backend `submitWizard` stores explicit given/family columns (no more first-token parse). `useNinCheck` gate confirmed pre-existing (`/forms/check-nin` rate-limited 20/min/IP, unauthenticated). +13 web tests (Step1 10) + api routes updated. Quality: web+api tsc ✓, web+api lint ✓, full web 2549/0-fail, full api 2400/0-fail. Part F backfill/email/ID-card (5.4-5.8) deferred to a follow-up chunk. Awaiting operator code-review + atomic commit. |
+| 2026-06-10 | Adversarial code-review on Part A + Part-F-write-path tree: 8 findings (1 Critical, 1 High, 2 Med, 4 Low). **Critical**: `WizardPage.test.tsx` missing `afterEach(cleanup)` → 427a80d URL-race guard failed 4/5 in a clean run (pre-existing in `dd94702`; Part B review's green was a fluke) — fixed. **High**: Part F broke Pattern C name-dedup (fullName no longer written) — `computePrefill` now composes from given+family w/ legacy fallback. **Med**: ASCII-only NAME_PATTERN rejected Yoruba diacritics → Unicode `\p{L}\p{M}`; mononyms blocked → **per Awwal, family name now OPTIONAL + nudge** (backend NULL last_name restored). **Low**: aria-describedby/role=alert on NIN messages (fixed); in-flight-dup-gate (won't-fix, rationale recorded); AC#C5 doc-stale (noted). **Age gate HELD pending Awwal discussion** (ILO 15 vs apprenticeship carve-out). +5 regression tests; web 106/0 + api 33/0; tsc/eslint clean. |
+| 2026-06-10 | Age-gate resolved + pipelined. Prod verification over Tailscale (pinned `oslsr_master_v3` v2026012601) DISPROVED the "labour section invisible" hypothesis (`employment_status` 76/76) and CONFIRMED two real migration-fidelity defects: `calculate`/`age` never computed (age key 0/76) + group-level `relevant` dropped (no `sectionShowWhen`) → the authored `${age}>=15` labour gate and `${consent_basic}='yes'` identity gate never reached the pinned form (latter = a live consent-handling gap). Decision (Awwal): Option A — fix the engine properly, **split** into launch-gating **9-54** (forms-engine fidelity: runtime calc eval + group-relevance migration + publish-time validator) → **9-55** (minor age-gate floor 15 + ILO apprenticeship carve-out + NDPA guardian consent, depends-on 9-54). Both registered `backlog` in sprint-status + added to `roadmap-to-launch.md` Phase 1 + 🚦 gate. 9-18 interim: neutralised the dev's unspecified `≥16` Step-1 block (sane date bounds only; +2 tests). Dedup-gap (gender/lga/consent absent from `WIZARD_PROVIDED_FIELD_NAMES`) logged as a 9-18 follow-up. |

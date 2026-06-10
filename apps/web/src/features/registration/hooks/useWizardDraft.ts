@@ -41,6 +41,27 @@ export interface UseWizardDraftResult {
 
 const SAVE_DEBOUNCE_MS = 2000;
 
+/**
+ * Story 9-18 Part F (Task 5.2) — best-effort migration of pre-9-18 drafts that
+ * carry the legacy single `fullName`. If given/family aren't already present,
+ * split `fullName` on the first whitespace (first token = given, rest = family).
+ * Non-fatal: a single-token legacy name yields givenName only. The original
+ * `fullName` is left intact (deprecated) so nothing downstream breaks.
+ */
+function migrateLegacyName(formData: WizardDraftData): WizardDraftData {
+  if (!formData.fullName || formData.givenName || formData.familyName) {
+    return formData;
+  }
+  const trimmed = formData.fullName.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return formData;
+  const firstSpace = trimmed.indexOf(' ');
+  const givenName = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+  const familyName = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1);
+  // eslint-disable-next-line no-console
+  console.warn('[useWizardDraft] migrated legacy fullName draft → givenName/familyName');
+  return { ...formData, givenName, familyName };
+}
+
 export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDraftResult {
   const { token } = options;
 
@@ -75,7 +96,7 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
       .then((draft) => {
         if (cancelled) return;
         if (draft) {
-          setFormData(draft.formData ?? {});
+          setFormData(migrateLegacyName(draft.formData ?? {}));
           // currentStep is 1-indexed on the server; we store 0-indexed locally.
           setCurrentStepIndex(Math.max(0, draft.currentStep - 1));
           lastSavedRef.current = {

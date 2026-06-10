@@ -105,6 +105,32 @@ describe('Step4Questionnaire — Pattern C dedup (Story 9-18 AC#B4/B5)', () => {
     expect(screen.queryByText('Full name')).not.toBeInTheDocument();
   });
 
+  it('composes a "full_name" question from given + family name (AI-Review H1)', async () => {
+    // Part F stopped writing formData.fullName; a "Full Name"/"name" question
+    // must still be deduped by composing given + family.
+    mockedFetch.mockResolvedValue(makeForm([q('full_name', 'Full name'), q('gender', 'Gender')]));
+    const merge = renderStep4({ givenName: 'Kayode', familyName: 'Olowu', questionnaireResponses: {} });
+
+    const banner = await screen.findByTestId('step4-prefilled-banner');
+    expect(banner).toHaveTextContent('Name');
+
+    await waitFor(() => {
+      const patch = prefillCall(merge);
+      expect(patch?.questionnaireResponses).toMatchObject({ full_name: 'Kayode Olowu' });
+      expect(patch?.prefilledQuestionNames).toContain('full_name');
+    });
+    expect(screen.queryByText('Full name')).not.toBeInTheDocument();
+  });
+
+  it('composes "full_name" from a mononym given name alone (AI-Review H1 + M3)', async () => {
+    mockedFetch.mockResolvedValue(makeForm([q('name', 'Name'), q('gender', 'Gender')]));
+    const merge = renderStep4({ givenName: 'Sadeke', questionnaireResponses: {} });
+    await waitFor(() => {
+      const patch = prefillCall(merge);
+      expect(patch?.questionnaireResponses).toMatchObject({ name: 'Sadeke' });
+    });
+  });
+
   it('auto-fills a legacy "national_id" question from the wizard NIN', async () => {
     mockedFetch.mockResolvedValue(makeForm([q('national_id', 'National ID'), q('gender', 'Gender')]));
     const merge = renderStep4({ nin: '12345678901', questionnaireResponses: {} });

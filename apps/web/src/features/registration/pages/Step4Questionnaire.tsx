@@ -111,7 +111,15 @@ function computePrefill(form: FlattenedForm | null, formData: WizardDraftData): 
       continue;
     }
 
-    const value = fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]];
+    // AI-Review H1: Part F removed `formData.fullName`, so a questionnaire
+    // "Full Name"/"name" question (which maps to the `fullName` key) must be
+    // composed from the given + family fields — otherwise the most common dedup
+    // case silently regressed (the user got re-asked their name in Step 4).
+    const value =
+      key === 'fullName'
+        ? [formData.givenName, formData.familyName].map((v) => (v ?? '').trim()).filter(Boolean).join(' ') ||
+          (formData.fullName ?? '').trim() // legacy/unmigrated draft fallback
+        : fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]];
     if (value === undefined || value === null || value === '') continue;
 
     hideNames.add(q.name);

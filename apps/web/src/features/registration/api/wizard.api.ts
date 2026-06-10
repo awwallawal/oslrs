@@ -13,7 +13,18 @@ export type { FlattenedForm };
 
 /** Shape mirrors `WizardDraftData` in `apps/api/src/db/schema/wizard-drafts.ts`. */
 export interface WizardDraftData {
+  /**
+   * Story 9-18 Part F (AC#F1): Step 1 now collects given + family name as two
+   * explicit fields (Yoruba/Nigerian surname-first safe). `fullName` is RETAINED
+   * here as a deprecated legacy field so (a) in-flight pre-9-18 drafts still
+   * type-check on load (migrated to given/family by `useWizardDraft`) and (b)
+   * the re-engagement/cohort blast scripts can still read it from old rows.
+   * Step 1 no longer WRITES it.
+   * @deprecated use `givenName` + `familyName`
+   */
   fullName?: string;
+  givenName?: string;
+  familyName?: string;
   dateOfBirth?: string;
   gender?: string;
   phone?: string;
@@ -142,7 +153,9 @@ export async function requestMagicLink(args: RequestMagicLinkArgs): Promise<void
 // ─── Final wizard submit ────────────────────────────────────────────────────
 
 export interface SubmitWizardRequest {
-  fullName: string;
+  givenName: string;
+  /** Optional — mononym registrants submit a given name only (AI-Review M3). */
+  familyName?: string;
   dateOfBirth?: string;
   gender?: string;
   phone: string;

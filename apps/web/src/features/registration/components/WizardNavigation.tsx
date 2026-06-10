@@ -14,6 +14,9 @@ export interface WizardNavigationProps {
   continueLabel?: string;
   isContinueDisabled?: boolean;
   isSubmitting?: boolean;
+  /** Story 9-18 AC#A3 — id of a visible validation summary describing why
+   *  Continue is disabled (wired to the button's aria-describedby). */
+  continueDescribedBy?: string;
   className?: string;
 }
 
@@ -24,6 +27,7 @@ export function WizardNavigation({
   continueLabel = 'Continue',
   isContinueDisabled,
   isSubmitting,
+  continueDescribedBy,
   className,
 }: WizardNavigationProps) {
   return (
@@ -52,6 +56,7 @@ export function WizardNavigation({
         type="button"
         onClick={onContinue}
         disabled={isContinueDisabled || isSubmitting}
+        aria-describedby={isContinueDisabled ? continueDescribedBy : undefined}
         className={cn(
           'inline-flex min-h-[56px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 sm:min-h-[48px] sm:flex-1',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',

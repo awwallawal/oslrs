@@ -32,7 +32,12 @@ import { uuidv7 } from 'uuidv7';
  */
 export interface WizardDraftData {
   // Step 1
+  // Story 9-18 Part F: given + family name are the canonical Step-1 name fields.
+  // `fullName` retained as deprecated legacy (pre-9-18 drafts + blast scripts).
+  /** @deprecated use givenName + familyName */
   fullName?: string;
+  givenName?: string;
+  familyName?: string;
   dateOfBirth?: string;
   gender?: string;
   // Step 2
