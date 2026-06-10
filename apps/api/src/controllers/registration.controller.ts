@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
+import { modulus11Check } from '@oslsr/utils/src/validation';
 import { db } from '../db/index.js';
 import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
 import { uuidv7 } from 'uuidv7';
@@ -93,6 +94,10 @@ const submitWizardSchema = z.object({
   nin: z
     .string()
     .regex(/^\d{11}$/, 'NIN must be 11 digits')
+    // AI-Review L1: enforce the Modulus-11 checksum server-side too — parity with
+    // the enumerator/clerk path (form.controller.ts) and the Step-1 client gate,
+    // so a checksum-invalid 11-digit NIN (e.g. from a resumed draft) can't slip in.
+    .refine(modulus11Check, 'NIN failed the Modulus 11 checksum')
     .optional(),
   pendingNin: z.boolean().optional(),
   deferReasonNin: z.string().max(500).optional(),
