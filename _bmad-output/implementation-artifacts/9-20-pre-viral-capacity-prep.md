@@ -72,7 +72,7 @@ So that **the viral push converts to actual completed registrations instead of b
 
 - [ ] **Task 1 (Part A) — Resend Pro upgrade** (AC: #A1, #A2, #A3) — **SOLE REMAINING ITEM · OPERATOR/BILLING** · gates `review → done` · tracked in `docs/pending-operator-actions.md` (launch-gate)
   - [ ] 1.1: Log into resend.com → Settings → Billing → upgrade to Pro
-  - [ ] 1.2: Send a test magic-link via `pnpm pin-public-form --list` UI flow OR via the wizard end-to-end
+  - [ ] 1.2: Send a test magic-link via the wizard end-to-end
   - [ ] 1.3: Verify delivery in resend.com logs + measure latency (target <5s)
   - [ ] 1.4: Update `MEMORY.md` + project_security_posture entry
 

@@ -2,7 +2,7 @@
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -54,7 +54,7 @@ describe('SettingsLandingPage', () => {
     expect(screen.getByTestId('settings-loading')).toBeInTheDocument();
   });
 
-  it('renders all 3 v1 cards on success', async () => {
+  it('renders the v1 control + link cards on success', async () => {
     mockApiClient.mockResolvedValueOnce({ settings: [sampleSetting] });
     renderPage();
 
@@ -136,5 +136,102 @@ describe('SettingsLandingPage', () => {
     const card = await screen.findByTestId('setting-card-mfa');
     const link = card.closest('a');
     expect(link).toHaveAttribute('href', '/dashboard/super-admin/security/mfa');
+  });
+
+  // ── Story 9-17: Public Wizard Form read-only mirror card ────────────────
+  const wizardSetting = {
+    key: 'wizard.public_form_id',
+    value: 'form-uuid-123',
+    description: 'UUID of the public-wizard form.',
+    updatedBy: '00000000-0000-0000-0000-000000000002',
+    updatedAt: '2026-06-01T00:00:00.000Z',
+    createdAt: '2026-05-11T00:00:00.000Z',
+  };
+
+  const pinnedForm = {
+    id: 'form-uuid-123',
+    formId: 'reg-form',
+    title: 'Skills Registration',
+    version: '3.0',
+    status: 'published',
+    uploadedAt: '2026-05-20T00:00:00.000Z',
+  };
+
+  /** Resolve the settings list + (when a form is pinned) the form detail call. */
+  function mockSettingsAndForm(settings: unknown[], form?: unknown) {
+    mockApiClient.mockImplementation((path: unknown) => {
+      if (typeof path === 'string' && path.startsWith('/questionnaires/')) {
+        return Promise.resolve({ data: form });
+      }
+      return Promise.resolve({ settings });
+    });
+  }
+
+  it('renders the Public Wizard Form mirror card', async () => {
+    mockSettingsAndForm([sampleSetting]);
+    renderPage();
+    expect(
+      await screen.findByTestId('settings-public-wizard-form-card'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the pinned form title + version when a form is pinned', async () => {
+    mockSettingsAndForm([sampleSetting, wizardSetting], pinnedForm);
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    await waitFor(() => {
+      expect(card).toHaveTextContent('Skills Registration');
+    });
+    expect(card).toHaveTextContent('v3.0');
+  });
+
+  it('shows "None" when no form is pinned', async () => {
+    mockSettingsAndForm([sampleSetting]);
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    expect(card).toHaveTextContent(/None — no form is active for the public wizard/);
+  });
+
+  it('Public Wizard Form card links to the Questionnaire Management page', async () => {
+    mockSettingsAndForm([sampleSetting]);
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    const link = within(card).getByRole('link', { name: /Manage in Questionnaires/i });
+    expect(link).toHaveAttribute('href', '/dashboard/super-admin/questionnaires');
+  });
+
+  it('mirror card is read-only — no Pin / Unpin affordances', async () => {
+    mockSettingsAndForm([sampleSetting, wizardSetting], pinnedForm);
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    expect(within(card).queryByTestId('qm-pin-button')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('qm-unpin-button')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /pin/i })).not.toBeInTheDocument();
+  });
+
+  // Story 9-17 code-review (2026-06-10) L1: cover the two PublicWizardFormCard
+  // branches the original AC#A8 tests missed — unresolved-id fallback + loading.
+  it('falls back to the raw pinned id when the form no longer resolves', async () => {
+    // Pinned id is set, but the form fetch resolves with no form (archived/deleted).
+    mockSettingsAndForm([sampleSetting, wizardSetting]); // no form arg → { data: undefined }
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    await waitFor(() => {
+      expect(card).toHaveTextContent('form-uuid-123');
+    });
+  });
+
+  it('shows a loading hint while the pinned form is being fetched', async () => {
+    mockApiClient.mockImplementation((path: unknown) => {
+      if (typeof path === 'string' && path.startsWith('/questionnaires/')) {
+        return new Promise(() => {}); // form fetch never resolves
+      }
+      return Promise.resolve({ settings: [sampleSetting, wizardSetting] });
+    });
+    renderPage();
+    const card = await screen.findByTestId('settings-public-wizard-form-card');
+    await waitFor(() => {
+      expect(card).toHaveTextContent(/Loading pinned form/);
+    });
   });
 });

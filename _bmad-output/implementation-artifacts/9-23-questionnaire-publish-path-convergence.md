@@ -40,6 +40,7 @@ So that **the metadata field is reliable enough to drive UI sort order, the dash
 4. **AC#4 — Migrate the existing prod form record**: one-shot script `apps/api/scripts/_backfill-native-published-at.ts` finds any `questionnaire_forms` row with `status='published' AND native_published_at IS NULL` and stamps it with the `updated_at` value (best-available proxy for publish-time). Author with Story 9-22's operator-audit helper so the backfill is audit-logged via `OPERATOR_QUESTIONNAIRE_BACKFILL`.
 
 5. **AC#5 — `pnpm pin-public-form --list` output cleaner**: the `(no native_published_at)` parenthetical disappears for healthy forms. The dev script's display logic shows `native_published_at` as a formatted timestamp.
+   > **[SUPERSEDED 2026-06-10 by Story 9-17 AC#A7 — SM to confirm drop]** `dev-pin-public-form.ts` (and its `--list` command) was deleted when 9-17 shipped the Pin-for-Public-Wizard UI; this cosmetic output AC is now moot. The Q.M. page pin badge (9-17 AC#A1) is the operator-visible pin-state surface. The `native_published_at` convergence core (AC#1/#3/#4/#6) is unaffected — AC#4's backfill still wants a consistent timestamp for Q.M. list sort order.
 
 6. **AC#6 — Q.M. list page sorts by `native_published_at DESC`**: currently sorts by `created_at` or `updated_at`. Switching to `native_published_at` requires the field to be reliable — which AC#1 + AC#4 deliver.
 

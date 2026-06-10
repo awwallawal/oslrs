@@ -3,10 +3,11 @@
  *
  * Route: `/dashboard/super-admin/settings`
  *
- * v1 contents (intentionally minimal — 3 entries):
- *   1. SMS OTP Toggle  — control card flipping `auth.sms_otp_enabled`
- *   2. Fraud Thresholds → — link card to existing fraud-thresholds page
- *   3. MFA Settings →    — link card to Story 9-13 MFA management page
+ * Contents:
+ *   1. SMS OTP Toggle       — control card flipping `auth.sms_otp_enabled`
+ *   2. Public Wizard Form   — read-only mirror of `wizard.public_form_id` (Story 9-17)
+ *   3. Fraud Thresholds →   — link card to existing fraud-thresholds page
+ *   4. MFA Settings →       — link card to Story 9-13 MFA management page
  *
  * Reserved space below the cards for future feature flags.
  */
@@ -14,9 +15,11 @@ import { MessageCircle, SlidersHorizontal, Shield } from 'lucide-react';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { SettingCard } from '../components/SettingCard';
 import { SmsOtpToggle } from '../components/SmsOtpToggle';
+import { PublicWizardFormCard } from '../components/PublicWizardFormCard';
 import { useSettings, type SettingRow } from '../api/settings.api';
 
 const SMS_OTP_KEY = 'auth.sms_otp_enabled';
+const WIZARD_PIN_KEY = 'wizard.public_form_id';
 
 function findSetting(rows: SettingRow[] | undefined, key: string): SettingRow | undefined {
   return rows?.find((r) => r.key === key);
@@ -85,6 +88,14 @@ export default function SettingsLandingPage() {
                 }
                 testId="setting-card-sms-otp"
               />
+            );
+          })()}
+
+          {(() => {
+            const wizardPin = findSetting(data.settings, WIZARD_PIN_KEY);
+            const pinnedId = typeof wizardPin?.value === 'string' ? wizardPin.value : null;
+            return (
+              <PublicWizardFormCard pinnedId={pinnedId} pinnedAt={wizardPin?.updatedAt} />
             );
           })()}
 

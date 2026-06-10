@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { FileSpreadsheet, Trash2, Archive, ChevronDown, Download, History, Edit, Send, XCircle, AlertTriangle, Eye } from 'lucide-react';
 import { useQuestionnaires, useUpdateStatus, useDeleteQuestionnaire } from '../hooks/useQuestionnaires';
 import { getDownloadUrl } from '../api/questionnaire.api';
@@ -15,8 +17,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
+import { useGetSetting, useUpdateSetting } from '../../settings/api/settings.api';
 import { VALID_STATUS_TRANSITIONS } from '@oslsr/types';
 import type { QuestionnaireFormStatus } from '@oslsr/types';
+
+/** system_settings key the public-registration wizard reads on Step 4. */
+const WIZARD_PIN_KEY = 'wizard.public_form_id';
 
 const STATUS_BADGES: Record<QuestionnaireFormStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-neutral-100 text-neutral-700' },
@@ -48,6 +54,13 @@ interface StatusDialogState {
   targetStatus: QuestionnaireFormStatus | null;
 }
 
+interface PinDialogState {
+  open: boolean;
+  mode: 'pin' | 'unpin';
+  formId: string | null;
+  formTitle: string;
+}
+
 export function QuestionnaireList() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -65,10 +78,28 @@ export function QuestionnaireList() {
     formTitle: '',
     targetStatus: null,
   });
+  const [pinDialog, setPinDialog] = useState<PinDialogState>({
+    open: false,
+    mode: 'pin',
+    formId: null,
+    formTitle: '',
+  });
 
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuestionnaires({ page, pageSize: 10, status: statusFilter });
   const updateStatus = useUpdateStatus();
   const deleteMutation = useDeleteQuestionnaire();
+
+  // Story 9-17: which published form is pinned as the public-wizard form.
+  // Server-truth comes from the `wizard.public_form_id` setting; we mirror it
+  // into local state for optimistic pin/unpin (SmsOtpToggle pattern).
+  const { data: pinSetting } = useGetSetting(WIZARD_PIN_KEY);
+  const updatePin = useUpdateSetting();
+  const serverPinnedId = (pinSetting?.value as string | null | undefined) ?? null;
+  const [pinnedFormId, setPinnedFormId] = useState<string | null>(serverPinnedId);
+  useEffect(() => {
+    setPinnedFormId(serverPinnedId);
+  }, [serverPinnedId]);
 
   const closeDeleteDialog = () => {
     setDeleteDialog({ open: false, formId: null, formTitle: '', formVersion: '' });
@@ -92,12 +123,47 @@ export function QuestionnaireList() {
     closeStatusDialog();
   };
 
+  const closePinDialog = () => {
+    setPinDialog({ open: false, mode: 'pin', formId: null, formTitle: '' });
+  };
+
+  const handleConfirmPin = () => {
+    const { mode, formId, formTitle } = pinDialog;
+    closePinDialog();
+    const previous = pinnedFormId;
+    const nextValue = mode === 'pin' ? formId : null;
+    setPinnedFormId(nextValue); // optimistic
+    updatePin.mutate(
+      { key: WIZARD_PIN_KEY, value: nextValue },
+      {
+        onSuccess: () => {
+          // Refresh the published-forms list (badge position) and the setting
+          // query (so the Settings landing read-only mirror picks it up too).
+          queryClient.invalidateQueries({ queryKey: ['questionnaires'] });
+          queryClient.invalidateQueries({ queryKey: ['settings', WIZARD_PIN_KEY] });
+          toast.success(mode === 'pin' ? `Pinned ${formTitle}` : `Un-pinned ${formTitle}`);
+        },
+        onError: () => {
+          setPinnedFormId(previous); // rollback
+          // Anti-enumeration: never surface the backend error code.
+          toast.error("Couldn't pin the form. Please try again.");
+        },
+      },
+    );
+  };
+
   if (isLoading) {
     return <SkeletonTable rows={5} columns={6} />;
   }
 
   const forms = data?.data ?? [];
   const meta = data?.meta;
+
+  // Title of the currently-pinned form for the pin-confirmation dialog copy.
+  // Falls back gracefully when the pinned form isn't on the current page.
+  const currentPinnedTitle = pinnedFormId
+    ? (forms.find((f) => f.id === pinnedFormId)?.title ?? 'the current form')
+    : 'none';
 
   return (
     <div className="space-y-4">
@@ -153,15 +219,60 @@ export function QuestionnaireList() {
                     <td className="py-3 px-4 text-sm text-neutral-600 font-mono">{form.formId}</td>
                     <td className="py-3 px-4 text-sm text-neutral-600">{form.version}</td>
                     <td className="py-3 px-4">
-                      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
-                        {badge.label}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                        {form.status === 'published' && pinnedFormId === form.id && (
+                          <span
+                            data-testid="qm-pinned-badge"
+                            aria-label="Currently active as the public-registration form"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-success-600 text-success-100"
+                          >
+                            🌐 Active for public wizard
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-neutral-500">
                       {new Date(form.uploadedAt).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Story 9-17: public-wizard pin / unpin (published forms only) */}
+                        {form.status === 'published' && (
+                          pinnedFormId === form.id ? (
+                            <button
+                              data-testid="qm-unpin-button"
+                              onClick={() => setPinDialog({
+                                open: true,
+                                mode: 'unpin',
+                                formId: form.id,
+                                formTitle: form.title,
+                              })}
+                              disabled={updatePin.isPending}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                              title="Un-pin from public wizard"
+                            >
+                              📌 Pinned · Unpin
+                            </button>
+                          ) : (
+                            <button
+                              data-testid="qm-pin-button"
+                              onClick={() => setPinDialog({
+                                open: true,
+                                mode: 'pin',
+                                formId: form.id,
+                                formTitle: form.title,
+                              })}
+                              disabled={updatePin.isPending}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-600 border border-primary-300 rounded hover:bg-primary-50 disabled:opacity-50"
+                              title="Pin for public wizard"
+                            >
+                              Pin for Public Wizard
+                            </button>
+                          )
+                        )}
                         {form.isNative && form.status === 'draft' && (
                           <button
                             onClick={() => navigate(`/dashboard/super-admin/questionnaires/builder/${form.id}`)}
@@ -310,6 +421,38 @@ export function QuestionnaireList() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmStatusChange}>
               Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Story 9-17: Public-wizard Pin / Unpin Confirmation Dialog */}
+      <AlertDialog open={pinDialog.open} onOpenChange={(open) => !open && closePinDialog()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pinDialog.mode === 'pin' ? 'Pin for public wizard?' : 'Un-pin this form?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pinDialog.mode === 'pin' ? (
+                <>
+                  Replace <strong>{currentPinnedTitle}</strong> with{' '}
+                  <strong>{pinDialog.formTitle}</strong>? Existing in-flight registrations will
+                  continue against the previous form for up to 5 minutes due to client-side
+                  caching, then the new form takes effect.
+                </>
+              ) : (
+                <>Public users won&apos;t see any survey questions until you pin a form. Continue?</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmPin}
+              className={pinDialog.mode === 'unpin' ? 'bg-red-600 hover:bg-red-700' : ''}
+            >
+              {pinDialog.mode === 'pin' ? 'Confirm' : 'Un-pin'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

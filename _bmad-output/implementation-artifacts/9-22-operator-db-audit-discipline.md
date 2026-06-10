@@ -57,6 +57,7 @@ So that **operator-initiated changes are forensically visible alongside controll
 4. **AC#4 — Retrofit the 2026-05-13 MFA-disable action**: author a one-shot script `apps/api/scripts/_backfill-mfa-disable-audit.ts` that inserts a backfilled `OPERATOR_MFA_DISABLE` audit row for the 2026-05-13 incident — captures the historical event in the chain so the ledger is complete. Backfill row's `details` field references `feedback_route_registration_test_discipline.md` + commit `c28e8cb` as the incident context.
 
 5. **AC#5 — Refactor `dev-pin-public-form.ts` to use the helper**: the existing operator script at `apps/api/scripts/dev-pin-public-form.ts` currently writes to `system_settings` directly without audit. Refactor it to call `operatorUpdate()` so pin/unpin actions emit `OPERATOR_SETTINGS_FLIP` audit rows. Demonstrates the helper's idiomatic use.
+   > **[SUPERSEDED 2026-06-10 by Story 9-17 AC#A7 — SM to confirm re-scope]** `dev-pin-public-form.ts` was deleted when 9-17 shipped the Pin-for-Public-Wizard UI on the Questionnaire Management page. Pin/unpin now flows through the audit-logged `PATCH /admin/settings/wizard.public_form_id` route (`SettingsService` → `SETTINGS_FLIPPED`), so an operator-script audit demo for *pinning* is moot. Re-point this demonstration to another surviving operator DB-write script, or drop AC#5 entirely (AC#4's `_backfill-mfa-disable-audit.ts` already exercises `operatorUpdate()`). The helper module + enums + backfill + tests (AC#1–4, #6–8) are unaffected.
 
 6. **AC#6 — Documentation in script header convention**: every script in `apps/api/scripts/` that writes to the DB MUST have a header comment block declaring:
    - The expected operator (super_admin only; or specific named operator)
@@ -87,7 +88,7 @@ So that **operator-initiated changes are forensically visible alongside controll
   - [ ] 3.1: Author `_backfill-mfa-disable-audit.ts` (one-shot, deletable after run)
   - [ ] 3.2: Run on prod via SSH
   - [ ] 3.3: Verify chain integrity post-backfill via `pnpm --filter @oslsr/api tsx scripts/verify-audit-chain.ts` (or similar existing chain-validator)
-- [ ] **Task 4 — Refactor `dev-pin-public-form.ts`** (AC: #5)
+- [ ] **Task 4 — Refactor `dev-pin-public-form.ts`** (AC: #5) — **[SUPERSEDED 2026-06-10: script deleted by Story 9-17 AC#A7; see AC#5 note — re-point demo or drop]**
 - [ ] **Task 5 — Tests** (AC: #7)
 - [ ] **Task 6 — Pre-merge BMAD code review on uncommitted tree** (per `feedback_review_before_commit.md`)
 
@@ -125,6 +126,6 @@ AC#4 inserts a backfilled row for the 2026-05-13 incident. Some auditors would o
 - `apps/api/scripts/lib/operator-audit.ts` (new)
 - `apps/api/src/services/audit.service.ts` (modified — new `OPERATOR_*` enums)
 - `apps/api/scripts/_backfill-mfa-disable-audit.ts` (new, one-shot)
-- `apps/api/scripts/dev-pin-public-form.ts` (modified — uses helper)
+- ~~`apps/api/scripts/dev-pin-public-form.ts` (modified — uses helper)~~ **[SUPERSEDED 2026-06-10: deleted by Story 9-17 AC#A7 — re-point AC#5 demo to a surviving operator script or drop]**
 - `apps/api/src/scripts/__tests__/operator-audit.test.ts` (new)
 - `MEMORY.md` (audit-action count badge updated)

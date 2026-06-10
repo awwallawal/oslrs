@@ -52,7 +52,7 @@ So that **the 2026-05-19 debugging session cannot recur — newcomers don't burn
 
 ### Part B — `pnpm doctor` health-check script
 
-5. **AC#B1 — New script**: `apps/api/scripts/doctor.ts` registered as `"doctor": "tsx scripts/doctor.ts"` in `apps/api/package.json` (alongside existing `dashboard`, `pin-public-form`).
+5. **AC#B1 — New script**: `apps/api/scripts/doctor.ts` registered as `"doctor": "tsx scripts/doctor.ts"` in `apps/api/package.json` (alongside existing `dashboard`).
 
 6. **AC#B2 — Six checks**: each rendered as a colored bullet with PASS/FAIL/WARN status:
    - Schema drift (runs `drizzle-kit check` programmatically; FAIL = pending migrations)
