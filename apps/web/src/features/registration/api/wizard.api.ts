@@ -30,6 +30,14 @@ export interface WizardDraftData {
   /** Version-locking (Step 4 Task 5.4.5). */
   questionnaireFormId?: string;
   questionnaireFormVersionId?: string;
+  /**
+   * Story 9-18 Part B (AC#B1/B4) — names of questionnaire questions that Step 4
+   * auto-filled from wizard identity data and hid from the FormRenderer flow.
+   * Persisted as a string[] (JSONB-friendly); converted to/from
+   * `ReadonlySet<string>` at the React boundary. Survives refresh so the Step 4
+   * "pre-filled" banner (AC#B5) can re-render.
+   */
+  prefilledQuestionNames?: string[];
   /** Free-form merge slot. */
   extras?: Record<string, unknown>;
 }

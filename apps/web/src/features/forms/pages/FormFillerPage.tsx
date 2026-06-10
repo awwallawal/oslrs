@@ -19,7 +19,7 @@ import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { syncManager } from '../../../services/sync-manager';
 import { NinHelpHint } from '../../registration/components/NinHelpHint';
-import { NIN_QUESTION_NAMES } from '../../registration/lib/nin-question-names';
+import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
 
 interface FormFillerPageProps {
   mode?: 'fill' | 'preview';

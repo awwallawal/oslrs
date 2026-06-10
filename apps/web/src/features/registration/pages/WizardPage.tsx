@@ -9,7 +9,7 @@ import {
   requestMagicLink,
   type WizardDraftData,
 } from '../api/wizard.api';
-import { NIN_QUESTION_NAMES } from '../lib/nin-question-names';
+import { NIN_QUESTION_NAMES } from '../lib/wizard-provided-field-names';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
@@ -141,24 +141,6 @@ export default function WizardPage() {
     goToStep(draft.currentStepIndex - 1);
   }, [draft.currentStepIndex, goToStep, navigate]);
 
-  /**
-   * Wizard-level handler: invoked when the user clicks the inline "I don't
-   * have my NIN now" link on the NIN question inside Step 4. Per Step 5
-   * Dev Notes — flip pendingNinToggle=true + clear the questionnaire NIN
-   * response. The FormRenderer's skip-logic engine then advances internally
-   * (the user keeps moving through the remaining Step 4 questions).
-   */
-  const handlePendingNinTriggered = useCallback(() => {
-    const responses = { ...(draft.formData.questionnaireResponses ?? {}) };
-    for (const key of NIN_QUESTION_NAMES) {
-      delete responses[key];
-    }
-    draft.mergeFields({
-      pendingNinToggle: true,
-      questionnaireResponses: responses,
-    });
-  }, [draft]);
-
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -273,7 +255,6 @@ export default function WizardPage() {
         mergeFields: draft.mergeFields,
         onContinue: handleContinue,
         onBack: handleBack,
-        onPendingNinTriggered: handlePendingNinTriggered,
         onSubmit: handleSubmit,
         isSubmitting,
         submitError,
@@ -288,7 +269,6 @@ function renderStep(props: {
   mergeFields: (patch: Partial<WizardDraftData>) => void;
   onContinue: () => void;
   onBack: () => void;
-  onPendingNinTriggered: () => void;
   onSubmit: () => Promise<void> | void;
   isSubmitting: boolean;
   submitError: string | null;
@@ -328,7 +308,6 @@ function renderStep(props: {
           mergeFields={props.mergeFields}
           onContinue={props.onContinue}
           onBack={props.onBack}
-          onPendingNinTriggered={props.onPendingNinTriggered}
         />
       );
     case 4:

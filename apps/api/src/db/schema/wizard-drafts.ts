@@ -54,6 +54,9 @@ export interface WizardDraftData {
   formHasNinQuestion?: boolean;
   questionnaireFormId?: string;
   questionnaireFormVersionId?: string;
+  // Story 9-18 Part B (AC#B1/B4): questionnaire question names Step 4 auto-filled
+  // from wizard identity data + hid from the renderer. Persisted as string[].
+  prefilledQuestionNames?: string[];
   // Free-form for forward-compat
   extras?: Record<string, unknown>;
 }
