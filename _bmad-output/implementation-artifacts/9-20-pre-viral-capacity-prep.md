@@ -1,11 +1,13 @@
 # Story 9.20: Pre-viral capacity prep — Resend Pro + Cloudflare on oyotradeministry + Web Analytics
 
-Status: in-progress
+Status: review
 
 <!-- 2026-06-10: see "Scope Corrections" + "Dev Agent Record" at the foot of this
-file. CF analytics tooling + ops-dashboard Edge-traffic section shipped (commit
-1b33fc3, deployed). Original Part B is SUPERSEDED by F-024; AC#C2/dual-beacon
-obsolete. Net remaining = Part A (Resend Pro, operator) + Part D (checklist + memory). -->
+file. Dev/doc work COMPLETE: CF analytics tooling + ops-dashboard Edge-traffic
+section shipped (1b33fc3, deployed); Part C done (9-30 + session); Part D checklist
+written (docs/runbooks/pre-viral-push-checklist.md). Part B SUPERSEDED by F-024.
+FLIP TO done IS GATED ON THE SOLE REMAINING ITEM: Part A operator Resend Pro
+upgrade (tracked in docs/pending-operator-actions.md, launch-gate). -->
 
 
 <!--
@@ -68,13 +70,13 @@ So that **the viral push converts to actual completed registrations instead of b
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 (Part A) — Resend Pro upgrade** (AC: #A1, #A2, #A3)
+- [ ] **Task 1 (Part A) — Resend Pro upgrade** (AC: #A1, #A2, #A3) — **SOLE REMAINING ITEM · OPERATOR/BILLING** · gates `review → done` · tracked in `docs/pending-operator-actions.md` (launch-gate)
   - [ ] 1.1: Log into resend.com → Settings → Billing → upgrade to Pro
   - [ ] 1.2: Send a test magic-link via `pnpm pin-public-form --list` UI flow OR via the wizard end-to-end
   - [ ] 1.3: Verify delivery in resend.com logs + measure latency (target <5s)
   - [ ] 1.4: Update `MEMORY.md` + project_security_posture entry
 
-- [ ] **Task 2 (Part B) — Cloudflare migration of `oyotradeministry.com.ng`** (AC: #B1-B5)
+- [~] **Task 2 (Part B) — Cloudflare migration of `oyotradeministry.com.ng`** (AC: #B1-B5) — **SUPERSEDED by F-024** (domain retired to a 302 redirect, not migrated to CF; see Scope Corrections)
   - [ ] 2.1: Cloudflare dashboard → Add Site → `oyotradeministry.com.ng` → Cloudflare scans existing DNS via WhoGoHost
   - [ ] 2.2: Review scanned records; ensure A records present + proxy (orange cloud) ON for `@` and `www`
   - [ ] 2.3: WhoGoHost dashboard → change nameservers from WhoGoHost to Cloudflare (provided in step 2.1)
@@ -83,7 +85,7 @@ So that **the viral push converts to actual completed registrations instead of b
   - [ ] 2.6: Curl test from operator laptop confirms `Server: cloudflare` header
   - [ ] 2.7: Smoke test: open https://oyotradeministry.com.ng/ in browser, confirm site loads + login still works
 
-- [ ] **Task 3 (Part C) — Cloudflare Web Analytics on both domains** (AC: #C1, #C2, #C3, #C4)
+- [x] **Task 3 (Part C) — Cloudflare Web Analytics** (AC: #C1, #C3-single, #C4) — DONE via Story 9-30 (beacon + CSP) + this session's live pull (24h data verified). AC#C2/dual-beacon OBSOLETE (single served domain).
   - [ ] 3.1: Cloudflare dashboard → Analytics & Logs → Web Analytics → Add site `oyoskills.com` → copy beacon snippet
   - [ ] 3.2: Cloudflare dashboard → Add site `oyotradeministry.com.ng` → copy beacon snippet
   - [ ] 3.3: Edit `apps/web/index.html` `<head>` — add both `<script>` tags (defer + data-cf-beacon attributes)
@@ -92,9 +94,9 @@ So that **the viral push converts to actual completed registrations instead of b
   - [ ] 3.6: Run `pnpm --filter @oslsr/web vitest run` + tsc + lint
   - [ ] 3.7: Commit + push. Verify Cloudflare dashboard shows traffic within 24h.
 
-- [ ] **Task 4 (Part D) — Pre-viral checklist + memory** (AC: #D1, #D2)
-  - [ ] 4.1: Author `docs/runbooks/pre-viral-push-checklist.md` with the checklist from Story 9-16-onward planning + Story 9-19 dashboard recipe
-  - [ ] 4.2: Add `project_cloudflare_dual_domain.md` memory + update `project_security_posture.md`
+- [x] **Task 4 (Part D) — Pre-viral checklist + memory** (AC: #D1, #D2)
+  - [x] 4.1: Authored `docs/runbooks/pre-viral-push-checklist.md` (go/no-go gate + CF posture decisions + live-monitoring + spike-response + rollback). Includes Story 9-19 dashboard recipe + the cf-analytics command.
+  - [x] 4.2: Memory captured via `reference-cloudflare-analytics-tooling` + `project-origin-lock-port80-residual` (RESOLVED). `project_cloudflare_dual_domain.md` is OBSOLETE (single-domain reality post-F-024) — not created, noted in checklist §5.
 
 ## Dev Notes
 
@@ -153,8 +155,8 @@ Effort: ~half-day operator work (Resend + Cloudflare setup) + ~half-day code wor
 **Originally expected (Part C beacon work — now mostly obsolete/done-elsewhere, see Scope Corrections):**
 - `apps/web/index.html` — beacon already present (line 160) via Story 9-30
 - `apps/api/src/app.ts` / nginx `oslsr.conf` — CSP allow-list already shipped via Story 9-30
-- `docs/runbooks/pre-viral-push-checklist.md` (new — STILL PENDING, Part D)
-- `MEMORY.md` (memory entry additions — STILL PENDING, Part D)
+- `docs/runbooks/pre-viral-push-checklist.md` (new — ✅ shipped 2026-06-10, Part D)
+- Memory: `reference-cloudflare-analytics-tooling` + `project-origin-lock-port80-residual` + MEMORY.md index (✅ Part D; `project_cloudflare_dual_domain.md` obsolete, not created)
 
 ## Scope Corrections (discovered 2026-06-10 session)
 
@@ -222,9 +224,16 @@ were beacon-only) by adding server-side Zone Analytics + an ops-dashboard view.
 - Token hygiene: roll `broken-sun-b07f` → 2-permission read-only (Account
   Analytics:Read + Zone Analytics:Read).
 
+### Session 2026-06-10 (cont.) — Part D close-out + status → review
+
+- **Part D shipped:** `docs/runbooks/pre-viral-push-checklist.md` authored — go/no-go gate + Cloudflare posture decisions (Bot Fight Mode = deliberately OFF + rationale; targeted-WAF-rule-if-needed; IP rotation optional) + live-monitoring (cf-analytics + 9-19 dashboard + 9-52 tripwire) + spike-response runbook + rollback (DO snapshot, firewall, WAF-rule). Memory captured via `reference-cloudflare-analytics-tooling` + `project-origin-lock-port80-residual`; `project_cloudflare_dual_domain.md` deemed obsolete (single-domain post-F-024).
+- **Status → review.** Dev/doc work complete (Parts C + D done; Part B superseded). **The ONLY remaining item is Part A — operator Resend Pro upgrade** (billing; tracked in `docs/pending-operator-actions.md` as a launch-gate). Flip `review → done` after that upgrade is confirmed.
+- **Origin-lock completion** (related, this session): port 80 also closed → origin fully CF-only; reconciled in `pending-operator-actions.md` + F-024 runbook §7.
+
 ## Change Log
 
 | Date | Change |
 |---|---|
 | 2026-05-19 | Story authored (Bob/SM) — Resend Pro + CF dual-domain + Web Analytics. |
 | 2026-06-10 | CF analytics lib + CLI + ops-dashboard Edge-traffic section shipped (`1b33fc3`, deployed; verified live on VPS). Token baked local+VPS. Scope corrections recorded: Part B superseded by F-024; AC#C2/dual-beacon obsolete; AC#C1/C3-single/C4 done (9-30 + this session). |
+| 2026-06-10 | Part D shipped (pre-viral-push-checklist.md) + memory captured. Status `in-progress → review`. Sole remaining item: Part A operator Resend Pro upgrade (launch-gate). |
