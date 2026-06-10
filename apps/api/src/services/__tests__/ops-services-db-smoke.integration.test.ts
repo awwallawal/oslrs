@@ -72,15 +72,15 @@ describe('ops services — real-DB smoke (query ↔ schema parity)', () => {
     const assignmentId = uuidv7();
     const submissionId = uuidv7();
     const TAG = '_ops_smoke_prod_';
-    const createdRoleIds: string[] = [];
 
+    // Roles are shared reference data. Create idempotently (conflict-safe so
+    // parallel real-DB test files don't race on the unique `name`) and NEVER
+    // delete in cleanup — deleting a role another parallel test's user still
+    // references would violate the users.role_id FK.
     async function ensureRole(name: string): Promise<string> {
-      const existing = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, name)).limit(1);
-      if (existing.length) return existing[0].id;
-      const id = uuidv7();
-      await db.insert(roles).values({ id, name, description: `${TAG}role` });
-      createdRoleIds.push(id);
-      return id;
+      await db.insert(roles).values({ id: uuidv7(), name, description: `${TAG}role` }).onConflictDoNothing();
+      const [row] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, name)).limit(1);
+      return row.id;
     }
 
     beforeAll(async () => {
@@ -110,7 +110,7 @@ describe('ops services — real-DB smoke (query ↔ schema parity)', () => {
       await db.delete(teamAssignments).where(eq(teamAssignments.id, assignmentId));
       await db.delete(users).where(inArray(users.id, [supervisorId, enumeratorId]));
       await db.delete(lgas).where(eq(lgas.id, lgaId));
-      if (createdRoleIds.length) await db.delete(roles).where(inArray(roles.id, createdRoleIds));
+      // Intentionally do NOT delete roles (shared reference data — see ensureRole).
     });
 
     it('getAllStaffProductivity includes the seeded staff (live-count + snapshot branches execute)', async () => {
@@ -154,20 +154,14 @@ describe('ops services — real-DB smoke (query ↔ schema parity)', () => {
     const recordId = uuidv7();
     const disputeId = uuidv7();
     const TAG = '_ops_smoke_remun_';
-    let createdRoleId: string | null = null;
 
     beforeAll(async () => {
       // A user to own the chain (recordedBy / createdBy / userId / openedBy).
       // users.role_id is a real FK; users.lga_id is nullable so no lga needed.
-      const existing = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'enumerator')).limit(1);
-      let roleId: string;
-      if (existing.length) {
-        roleId = existing[0].id;
-      } else {
-        roleId = uuidv7();
-        await db.insert(roles).values({ id: roleId, name: 'enumerator', description: `${TAG}role` });
-        createdRoleId = roleId;
-      }
+      // Role created idempotently + never deleted (shared reference data; deleting
+      // one a parallel test references would break the users.role_id FK).
+      await db.insert(roles).values({ id: uuidv7(), name: 'enumerator', description: `${TAG}role` }).onConflictDoNothing();
+      const [{ id: roleId }] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'enumerator')).limit(1);
       await db.insert(users).values({
         id: staffId,
         email: `${TAG}${staffId}@example.com`,
@@ -204,7 +198,7 @@ describe('ops services — real-DB smoke (query ↔ schema parity)', () => {
       await db.delete(paymentRecords).where(eq(paymentRecords.id, recordId));
       await db.delete(paymentBatches).where(eq(paymentBatches.id, batchId));
       await db.delete(users).where(eq(users.id, staffId));
-      if (createdRoleId) await db.delete(roles).where(inArray(roles.id, [createdRoleId]));
+      // Intentionally do NOT delete the role (shared reference data).
     });
 
     it('getBatchDetail returns the seeded batch (paymentBatches ↔ users join)', async () => {

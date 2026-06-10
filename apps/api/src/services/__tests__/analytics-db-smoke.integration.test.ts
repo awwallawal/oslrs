@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { sql, eq, inArray } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { users } from '../../db/schema/users.js';
@@ -40,7 +40,6 @@ const enumeratorId = uuidv7();
 const lgaId = uuidv7();
 const respondentId = uuidv7();
 const submissionId = uuidv7();
-let createdRoleId: string | null = null; // only set when WE inserted the role (don't delete a shared one)
 
 describe('analytics services — real-DB smoke (raw-SQL ↔ schema parity)', () => {
   beforeAll(async () => {
@@ -49,16 +48,11 @@ describe('analytics services — real-DB smoke (raw-SQL ↔ schema parity)', () 
 
     // The service's LGA-fallback team query filters `roles.name IN ('enumerator',…)`,
     // so the seeded user MUST carry the real 'enumerator' role for that path to
-    // resolve. Reuse the row if it already exists (seeded env); otherwise create it.
-    const existing = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'enumerator')).limit(1);
-    let enumeratorRoleId: string;
-    if (existing.length) {
-      enumeratorRoleId = existing[0].id;
-    } else {
-      enumeratorRoleId = uuidv7();
-      await db.insert(roles).values({ id: enumeratorRoleId, name: 'enumerator', description: `${TAG}role` });
-      createdRoleId = enumeratorRoleId;
-    }
+    // resolve. Create idempotently (conflict-safe so parallel real-DB test files
+    // don't race on the unique name) and NEVER delete it in cleanup — deleting a
+    // role another parallel test's user references would break the role_id FK.
+    await db.insert(roles).values({ id: uuidv7(), name: 'enumerator', description: `${TAG}role` }).onConflictDoNothing();
+    const [{ id: enumeratorRoleId }] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, 'enumerator')).limit(1);
 
     // Enumerator WITH an lga_id and NO team_assignment → exercises exactly the
     // LGA-fallback `JOIN roles` path that 500'd on 2026-06-09.
@@ -100,7 +94,7 @@ describe('analytics services — real-DB smoke (raw-SQL ↔ schema parity)', () 
     await db.delete(respondents).where(eq(respondents.id, respondentId));
     await db.delete(users).where(eq(users.id, enumeratorId));
     await db.delete(lgas).where(eq(lgas.id, lgaId));
-    if (createdRoleId) await db.delete(roles).where(inArray(roles.id, [createdRoleId]));
+    // Intentionally do NOT delete the role (shared reference data — see beforeAll).
   });
 
   it('PersonalStatsService.getPersonalStats runs every sub-query (incl. LGA-fallback roles join + dob cast)', async () => {
