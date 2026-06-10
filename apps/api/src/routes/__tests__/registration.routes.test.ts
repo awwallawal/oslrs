@@ -522,7 +522,8 @@ describe('GET /registration/draft', () => {
 describe('POST /registration/wizard', () => {
   function validBody(overrides: Record<string, unknown> = {}) {
     return {
-      fullName: 'Awwal Lawal',
+      givenName: 'Awwal',
+      familyName: 'Lawal',
       dateOfBirth: '1990-01-01',
       gender: 'male',
       phone: '+2348012345678',
@@ -543,9 +544,9 @@ describe('POST /registration/wizard', () => {
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });
 
-  it('returns 400 INVALID_INPUT on missing required field (fullName)', async () => {
+  it('returns 400 INVALID_INPUT on missing required field (givenName)', async () => {
     const body = validBody();
-    delete (body as Record<string, unknown>).fullName;
+    delete (body as Record<string, unknown>).givenName;
     const res = await request(buildApp()).post('/registration/wizard').send(body);
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');

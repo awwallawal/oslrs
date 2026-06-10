@@ -31,6 +31,7 @@ These are `review` or operator-gated — they need a decision or a validation, n
 **Critical chain:**
 1. **9-17** form-pin UI on Q.M. (~1–1.5d) — small; start in parallel with 9-18 kickoff
 2. **9-18** wizard NIN-first + section-as-step (**~7–11d — the bottleneck**). Success metric: **Step-4 stall <30%** on the 9-19 dashboard within 7d of deploy.
+   - **9-54 → 9-55** (NEW 2026-06-10 — emerged from the 9-18 Part-A/F review + prod verification; **launch-gating**; both after 9-18's questionnaire surface): **9-54** forms-engine fidelity — runtime `calculate`/`age` eval + group-relevance migration + publish-time validator; *also closes a live dropped-`consent_basic` identity gate*. **→ 9-55** minor age-gate (floor 15 + ILO Art.6 apprenticeship carve-out + NDPA guardian consent), depends-on 9-54. ~2–3d each. Author via `*create-story` when 9-18 ships.
 3. **9-38** account-provisioning **keystone** (~3–5d) — after 9-18 (hooks `submitWizard`); ships the `respondents.user_id` link + `GET /me/registration-status` read-model
 4. **9-39** entry-IA ∥ **9-40** dashboard rewrite (~2–4d / ~4–6d) — **parallel**, both after 9-38
 
@@ -55,6 +56,7 @@ Fire the blasts only when **all** are green:
 - wizard **Step-4 stall <30%** (9-18, measured on the 9-19 dashboard)
 - **coherent public journey shipped** (9-38 + 9-39 + 9-40)
 - **capacity** ready (9-20) · **analytics live** (9-30) · **blast infra** live (Resend Pro + Termii)
+- **form fidelity + minor safeguarding** (9-54 → 9-55): runtime `calculate`/`age` eval + group-relevance migration + publish-time validator (closes the dropped `consent_basic` identity gate) + floor-15 age-gate with ILO apprenticeship carve-out & NDPA guardian consent. _Emerged from the 9-18 review; verified against prod 2026-06-10._
 - **zero open R2 security findings** (`sec-r2-20260603`): **BOTH Highs now closed** — F-011 ✅ (`4fee9b9`) + **F-024 ✅ 2026-06-09** (origin-locked: de-point + 443→CF firewall + CF Origin Cert + AOP mTLS; known-IP accepted-residual). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45. **Scorecard: both Highs done; remaining gate = dev stories 9-48 + 9-41 + 9-43 + 9-44 + 9-45.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
 
 ---
@@ -89,6 +91,7 @@ Fire the blasts only when **all** are green:
 - 9-38 → after 9-18 (`submitWizard` hook). 9-39, 9-40 → after 9-38 (read-model). 9-32 → after 9-38/9-39.
 - 9-23 → after 9-22; **independent of 9-18** (publish *timestamp* metadata, not form discovery). Pairs with 9-17's Q.M. surface.
 - 9-27 → deploy-gated on 9-18 + Resend Pro. 9-20 → before social push. 9-30 → before field + Cohort A analytics.
+- 9-54 → after 9-17 (pin/validate) + 9-18 (questionnaire surface). 9-55 → after 9-54. Both **launch-gating**.
 - Epic 10 → 10-5 (DSA) before the rest.
 
 _See: [[field-readiness-sequence-2026-05-31]], [[journey-before-mechanism]], `sprint-change-proposal-2026-06-06-public-user-journey-harmonization.md`._

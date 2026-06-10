@@ -152,7 +152,7 @@ export default function WizardPage() {
       fd.pendingNinToggle === true || (!ninFromQuestionnaire && !fd.nin);
     const nin = pending ? undefined : ninFromQuestionnaire ?? fd.nin;
 
-    if (!fd.fullName || !fd.email || !fd.phone || !fd.lgaId) {
+    if (!fd.givenName || !fd.email || !fd.phone || !fd.lgaId) {
       setSubmitError('Some required fields are missing. Please go back and complete them.');
       setIsSubmitting(false);
       return;
@@ -165,7 +165,8 @@ export default function WizardPage() {
 
     try {
       const result = await submitWizard({
-        fullName: fd.fullName,
+        givenName: fd.givenName,
+        familyName: fd.familyName?.trim() || undefined,
         dateOfBirth: fd.dateOfBirth,
         gender: fd.gender,
         phone: fd.phone,

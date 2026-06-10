@@ -22,12 +22,17 @@
  */
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 expect.extend(matchers);
+// AI-Review C1: this file lacked the explicit unmount every other RTL test file
+// in the repo has, so tests 2..N collided on leftover DOM ("Found multiple
+// elements by [data-testid=step1-stub]") and the load-bearing 427a80d URL-race
+// guard failed 4/5 in a clean run.
+afterEach(cleanup);
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────
 

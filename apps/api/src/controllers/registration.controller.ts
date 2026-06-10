@@ -47,7 +47,11 @@ const saveDraftSchema = z.object({
   currentStep: z.number().int().min(1).max(5).optional(),
   formData: z
     .object({
+      // Story 9-18 Part F: given/family are canonical; fullName kept optional
+      // for legacy pre-9-18 drafts (migrated client-side on resume).
       fullName: z.string().max(200).optional(),
+      givenName: z.string().max(80).optional(),
+      familyName: z.string().max(80).optional(),
       dateOfBirth: z.string().max(64).optional(),
       gender: z.string().max(32).optional(),
       phone: z.string().max(32).optional(),
@@ -74,7 +78,11 @@ const saveDraftSchema = z.object({
 // path); questionnaire responses optional (Step 4 may be empty when no
 // public form is configured).
 const submitWizardSchema = z.object({
-  fullName: z.string().min(2).max(200),
+  // Story 9-18 Part F (AC#F2): explicit given/family name — no first-token parse.
+  // familyName is OPTIONAL (mononym-inclusive, AI-Review M3); when present it
+  // must be ≥2 chars. A mononym registrant stores first_name only / last_name NULL.
+  givenName: z.string().min(2).max(80),
+  familyName: z.string().min(2).max(80).optional(),
   dateOfBirth: z.string().min(4).max(64).optional(),
   gender: z.string().max(32).optional(),
   phone: z.string().min(10).max(32),
@@ -497,16 +505,16 @@ export class RegistrationController {
         }
       }
 
-      // Code review H4 (2026-05-11) — parse fullName carefully. For
-      // single-token names (e.g. "Adebayo") store firstName only and leave
-      // lastName NULL — DO NOT duplicate the first token into both columns,
-      // which silently corrupts the race-resolution merge keyed on
-      // `lower(first_name)+lower(last_name)+phone`. Multi-token names use
-      // first-chunk as firstName and the rest joined as lastName.
-      const trimmed = data.fullName.trim().replace(/\s+/g, ' ');
-      const firstSpace = trimmed.indexOf(' ');
-      const firstName = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
-      const lastName = firstSpace === -1 ? null : trimmed.slice(firstSpace + 1);
+      // Story 9-18 Part F (AC#F2) — explicit given/family columns; no parsing.
+      // Step 1 collects them separately (Yoruba/Nigerian surname-first safe), so
+      // `first_name` canonically means the given/personal name and `last_name`
+      // the family/surname. The race-resolution merge keyed on
+      // `lower(first_name)+lower(last_name)+phone` is unchanged.
+      const firstName = data.givenName.trim().replace(/\s+/g, ' ');
+      // AI-Review M3 (mononym-inclusive): family name optional — store NULL when
+      // absent so the race-resolution merge keyed on lower(first)+lower(last)+
+      // phone keeps the pre-9-18 single-token behaviour (2026-05-11 H4 fix).
+      const lastName = data.familyName?.trim().replace(/\s+/g, ' ') || null;
 
       const status = pendingNin ? 'pending_nin_capture' : 'active';
       const metadata: Record<string, unknown> = {};
