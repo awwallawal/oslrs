@@ -552,11 +552,21 @@ describe('POST /registration/wizard', () => {
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });
 
+  it('returns 400 on a checksum-invalid 11-digit NIN (Modulus-11, AI-Review L1)', async () => {
+    // 12345678901 is 11 digits but fails the Modulus-11 check digit — the server
+    // now rejects it (parity with the clerk path + the Step-1 client gate).
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678901' }));
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
+  });
+
   it('returns 409 NIN_DUPLICATE when supplied NIN already exists (no timestamp/source leak, MR-7)', async () => {
     mockRespondentsFindFirst.mockResolvedValueOnce({ id: 'resp-other' });
     const res = await request(buildApp())
       .post('/registration/wizard')
-      .send(validBody({ nin: '12345678901' }));
+      .send(validBody({ nin: '12345678919' }));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('NIN_DUPLICATE');
     expect(res.body).not.toHaveProperty('firstRegisteredAt');
@@ -597,7 +607,7 @@ describe('POST /registration/wizard', () => {
     });
     const res = await request(buildApp())
       .post('/registration/wizard')
-      .send(validBody({ nin: '12345678901' }));
+      .send(validBody({ nin: '12345678919' }));
     expect(res.status).toBe(201);
     expect(res.body.data).toMatchObject({
       respondentId: 'resp-1',
@@ -671,7 +681,7 @@ describe('POST /registration/wizard', () => {
     });
     const res = await request(buildApp())
       .post('/registration/wizard')
-      .send(validBody({ nin: '12345678901' }));
+      .send(validBody({ nin: '12345678919' }));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('NIN_DUPLICATE');
   });
@@ -717,7 +727,7 @@ describe('POST /registration/wizard', () => {
     const res = await request(buildApp())
       .post('/registration/wizard')
       .send(validBody({
-        nin: '12345678901',
+        nin: '12345678919',
         questionnaireResponses: { employment_status: 'employed', skills_possessed: ['plumbing'] },
       }));
 
@@ -744,7 +754,7 @@ describe('POST /registration/wizard', () => {
       date_of_birth: '1990-01-01',
       phone_number: '+2348012345678',
       lga_id: 'lga-egbeda',
-      nin: '12345678901',
+      nin: '12345678919',
       consent_marketplace: true,
       consent_enriched: false,
       // 3 wizard-collected fields formerly dropped pre-9-26
@@ -804,7 +814,7 @@ describe('POST /registration/wizard', () => {
 
     const res = await request(buildApp())
       .post('/registration/wizard')
-      .send(validBody({ nin: '12345678901' }));
+      .send(validBody({ nin: '12345678919' }));
 
     expect(respondentInsertAttempted).toBe(true); // respondent insert ran...
     expect(res.status).not.toBe(201);              // ...but no success returned

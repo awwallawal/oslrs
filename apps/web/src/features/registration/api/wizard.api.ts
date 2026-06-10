@@ -53,6 +53,18 @@ export interface WizardDraftData {
   extras?: Record<string, unknown>;
 }
 
+/**
+ * Story 9-18 — single source of truth for "is this a pending-NIN registration?".
+ * Mirrors the backend `submitWizard` derivation (`pendingNin || !nin`). Used by
+ * BOTH the Step-5 Save label/badge and `WizardPage.handleSubmit` so they can
+ * never drift (AI-Review M1). A registrant with no NIN — e.g. a resumed pre-9-18
+ * draft that never reached the old Step-5 NIN input — is pending even if the
+ * toggle was never explicitly pressed.
+ */
+export function derivePendingNin(fd: Pick<WizardDraftData, 'pendingNinToggle' | 'nin'>): boolean {
+  return fd.pendingNinToggle === true || !fd.nin;
+}
+
 export interface SaveDraftRequest {
   email: string;
   currentStep?: number;

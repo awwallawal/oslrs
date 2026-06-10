@@ -103,8 +103,8 @@ vi.mock('../Step4Questionnaire', () => ({
     </div>
   ),
 }));
-vi.mock('../Step5NinAndAuth', () => ({
-  Step5NinAndAuth: () => <div data-testid="step5-stub">Step 5</div>,
+vi.mock('../Step5ReviewAndSave', () => ({
+  Step5ReviewAndSave: () => <div data-testid="step5-stub">Step 5</div>,
 }));
 
 // Layout / shared components — also stubbed so we don't pull in real

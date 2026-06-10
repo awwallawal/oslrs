@@ -393,14 +393,14 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [x] 3.9: Per AC#B7: in `Step4Questionnaire.tsx`, pass `onPendingNinClick={undefined}` to FormRenderer. (No FormRenderer source change; the existing `{isCurrentNin && onPendingNinClick && ...}` gate at line 281 handles the empty prop transparently.) Clerk contexts continue to pass the callback.
   - [x] 3.10: Per AC#B8: delete `handlePendingNinTriggered` from `WizardPage.tsx` ([Source: apps/web/src/features/registration/pages/WizardPage.tsx:150-159]). Remove the `onPendingNinTriggered` prop from `Step4Props` interface.
 
-- [ ] **Task 4: Step 5 becomes Review-and-Save summary (AC: #C1, #C2, #C4, #C5)**
-  - [ ] 4.1: Create `apps/web/src/features/registration/pages/Step5ReviewAndSave.tsx` per AC#C1. Renders the summary card + Save button + Edit links.
-  - [ ] 4.2: Wire the LGA-name resolution via the existing public LGA query (`useQuery(['public-lgas'], fetchPublicLgas)` — already in use by Step 2; reuse).
-  - [ ] 4.3: Wire each Edit link to call `props.onGoToStep(targetStepIndex)`. The wizard's `goToStep` handler at [Source: apps/web/src/features/registration/pages/WizardPage.tsx:131-141] is passed through.
-  - [ ] 4.4: Wire Save button → `onSubmit` callback (the wizard's `handleSubmit` at [Source: apps/web/src/features/registration/pages/WizardPage.tsx:161]). Set `authChoice: 'magic-link'` as a constant in the submit payload (the `WizardPage.tsx` submit handler is updated, not Step5ReviewAndSave).
-  - [ ] 4.5: Delete `Step5NinAndAuth.tsx`, `Step5NinCaptured.tsx`, `Step5PendingNin.tsx`, `Step5NinInput.tsx`, and `Step5NinAndAuth.test.tsx`. Update `WizardPage.tsx` to import + render `Step5ReviewAndSave` instead of `Step5NinAndAuth`.
-  - [ ] 4.6: Update `RegistrationCompletePage.tsx` with the magic-link confirmation copy per AC#C4. Extend `CompletionData` interface with `email`.
-  - [ ] 4.7: Verify the submit payload shape per AC#C5 (no backend code change; just confirm wizard frontend always sends `authChoice: 'magic-link'`).
+- [x] **Task 4: Step 5 becomes Review-and-Save summary (AC: #C1, #C2, #C4, #C5)** ✅ Part C done 2026-06-10
+  - [x] 4.1: Create `apps/web/src/features/registration/pages/Step5ReviewAndSave.tsx` per AC#C1. Renders the summary card + Save button + Edit links.
+  - [x] 4.2: Wire the LGA-name resolution via the existing public LGA query (reused `useQuery(['wizard','lgas','public'], fetchPublicLgas)` from Step 2 — shared cache).
+  - [x] 4.3: Wire each Edit link to call `props.onGoToStep(targetStepIndex)`. The wizard's `goToStep` handler is passed through `renderStep`.
+  - [x] 4.4: Wire Save button → `onSubmit` callback. `WizardPage.handleSubmit` sends `authChoice: 'magic-link'` (default).
+  - [x] 4.5: Delete `Step5NinAndAuth.tsx`, `Step5NinCaptured.tsx`, `Step5PendingNin.tsx`, `Step5NinInput.tsx`, and `Step5NinAndAuth.test.tsx`. `WizardPage.tsx` renders `Step5ReviewAndSave`; also removed the now-dead `readQuestionnaireNin` + its `NIN_QUESTION_NAMES`/`modulus11Check` imports (single Modulus-11 enforcement = Step 1 only; Task 8.2 invariant verified).
+  - [x] 4.6: AC#C4 magic-link confirmation copy — the inline `CompletionScreen` (WizardPage) already carried `email` + `pendingNin` + magic-link copy; enriched the active line ("view, edit, or withdraw"). `RegistrationCompletePage.tsx` standalone copy already present (no `CompletionData` interface existed — story conflated it with the inline screen).
+  - [x] 4.7: Verify the submit payload shape per AC#C5 — wizard always sends `authChoice: 'magic-link'`; no AuthChoiceFieldset rendered.
 
 - [ ] **Task 5: Given-name / Family-name split + backfill (Part F — AC: #F1, #F2, #F3, #F4, #F5)** — write-path (5.1-5.3) done 2026-06-10; backfill + downstream (5.4-5.8) DEFERRED to "Part F tail" follow-up chunk
   - [x] 5.1: Update `Step1BasicInfo.tsx` per AC#F1 — replace single `fullName` input with two inputs: `givenName` + `familyName`. Keep the field ordering: NIN (from Part A) → Given name → Family name → DOB → Gender. Both required, min length 2.
@@ -412,13 +412,13 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [ ] 5.7: Update `MagicLinkService` email-template renderers per AC#F3 — use canonical given name token in interpolations.
   - [ ] 5.8: Visual-diff verification — render an ID card pre-vs-post-backfill for one Yoruba-named row (e.g. OLOWU KAYODE → KAYODE OLOWU). Capture screenshot in Dev Agent Record.
 
-- [ ] **Task 6: Tests (AC: #D1, #D2, #D3, #D4, #D5, #D6, #F6)**
-  - [ ] 6.1: Extend `Step1BasicInfo.test.tsx` with the 8 cases in AC#D1.
-  - [ ] 6.2: Create `Step5ReviewAndSave.test.tsx` with the 8 cases in AC#D2.
-  - [ ] 6.3: Confirm `Step5NinAndAuth.test.tsx` is DELETED (was 9 tests). Document the count in Dev Agent Record.
-  - [ ] 6.4: Extend `Step4Questionnaire.test.tsx` with the 3 NIN dedup cases in AC#D4.
-  - [ ] 6.5: Update `e2e/wizard-registration.spec.ts` + `e2e/nin-validation.spec.ts` per AC#D5.
-  - [ ] 6.6: Run the full registration-feature test suite + Playwright. Confirm no regressions per AC#D6. Document test-count delta in Dev Agent Record.
+- [ ] **Task 6: Tests (AC: #D1, #D2, #D3, #D4, #D5, #D6, #F6)** — unit/integration done across Parts B/A+F/C; e2e (6.5) DEFERRED to story-end
+  - [x] 6.1: Extend `Step1BasicInfo.test.tsx` (Part A+F — 10 cases: NIN gate/valid/invalid/duplicate/pending + name split + advance).
+  - [x] 6.2: Create `Step5ReviewAndSave.test.tsx` (Part C — 9 cases: summary fields / NIN format / pending badge / Save labels / Edit links / onSubmit / no-auth-choice / mononym).
+  - [x] 6.3: Confirm `Step5NinAndAuth.test.tsx` is DELETED (Part C, AC#D3). Net registration-test delta tracked in Change Log.
+  - [x] 6.4: Extend `Step4Questionnaire.test.tsx` with NIN dedup cases (Part B — AC#D4).
+  - [ ] 6.5: Update `e2e/wizard-registration.spec.ts` + `e2e/nin-validation.spec.ts` per AC#D5. **DEFERRED to story-end** (e2e specs validated once all parts land + before review→done).
+  - [ ] 6.6: Run the full registration-feature test suite + Playwright. Confirm no regressions per AC#D6. (Vitest suites green each chunk; Playwright at story-end.)
 
 - [ ] **Task 7: Documentation + sprint-status update**
   - [ ] 7.1: Update `_bmad-output/implementation-artifacts/sprint-status.yaml` flip 9-18 from `ready-for-dev` → `in-progress` at dev start, → `review` at dev end.
@@ -453,6 +453,14 @@ Findings from the review pass on the uncommitted Part A (Task 2 / AC#A1-A5) + Pa
 - [x] **[AI-Review][Low→WON'T-FIX] Continue could slip past during the in-flight duplicate check** [Step1BasicInfo.tsx]. Considered gating on `!isChecking`, but that adds friction to EVERY valid-NIN registration on slow networks to prevent a sub-second race the backend submit already rejects authoritatively. Deliberately not changed; rationale recorded in code.
 - [x] **[AI-Review][Low] NIN status messages not wired to the input's `aria-describedby`; invalid line lacked `role="alert"`** [Step1BasicInfo.tsx]. **Fix:** `aria-describedby` now points at the live status message id; invalid line gets `role="alert"` (duplicate already had it).
 - [x] **[AI-Review][Low] AC#C5 text stale** — still lists `fullName` in the submit payload; Part F changed it to given/family. (Documented here; AC#C5 superseded by AC#F2.)
+
+### Review Follow-ups (AI) — Part C code-review (2026-06-10, Opus 4.8)
+
+Part C (Step 5 → Review-and-Save / Task 4 / AC#C1-C5) reviewed clean — no false `[x]`, real tests (9 cases), complete sub-page deletions, Modulus-11 single-point invariant (Task 8.2) verified, AC#C4 correctly handled via the inline `CompletionScreen`. 3 findings, all auto-fixed; web 54/0 + api 34/0, tsc/eslint clean.
+
+- [x] **[AI-Review][Med] Divergent `pending` derivation** — `Step5ReviewAndSave` used `pendingNinToggle === true` for the badge/label while `WizardPage.handleSubmit` used `pendingNinToggle === true || !fd.nin`. A resumed pre-9-18 draft (no NIN, no toggle — reachable across the 268 Cohort B drafts) would show "Save Registration"/"NIN: —" yet submit as pending. **Fix:** extracted `derivePendingNin(fd)` in `wizard.api.ts` (mirrors the backend `pendingNin || !nin`); both Step 5 and the submit now use it. Regression test added.
+- [x] **[AI-Review][Low] No server-side Modulus-11 on `submitWizard`** — `submitWizardSchema.nin` validated format (`/^\d{11}$/`) + uniqueness but NOT the checksum, while the clerk/enumerator path (`form.controller.ts:173`) does. **Fix:** added `.refine(modulus11Check, …)` for parity (defense-in-depth; the Step-1 client gate already enforces it for fresh flows). 5 wizard test bodies retargeted to a checksum-valid NIN (`12345678919`); +1 rejection test (`12345678901` → 400).
+- [x] **[AI-Review][Low] LGA showed the raw id slug while the public-LGA query loaded** — `lga-egbeda` flashed before resolving to "Egbeda". **Fix:** `Step5ReviewAndSave` shows "Loading…" during `lgaQuery.isLoading`.
 
 ## Dev Notes
 
@@ -664,6 +672,22 @@ Operator (Awwal) authorised direct VPS execution over Tailscale (`ssh root@oslsr
 
 **DEFERRED to "Part F tail" follow-up chunk** (existing-data + downstream, lower-risk, backfill is operator-gated): 5.4 `_backfill-name-canonicalization.ts` (with the .xlsx dropdown + heuristic pre-fill), 5.5 operator CSV review, 5.6 blast-script `firstNameFrom` removal (AC#F3), 5.7 MagicLink email templates, 5.8 ID-card visual diff. Decoupled cleanly because `fullName` stays a **deprecated-optional** field (blast scripts still read legacy rows; scripts aren't tsc-gated anyway).
 
+### Part C (Step 5 → Review-and-Save) — 2026-06-10
+
+**Added**
+- `apps/web/src/features/registration/pages/Step5ReviewAndSave.tsx` — summary card (name / DOB / gender / NIN-or-pending-badge / phone / email / LGA-name / consent chips) + per-row Edit links (`onGoToStep`) + Save button (label flips on pending) (AC#C1)
+- `apps/web/src/features/registration/pages/__tests__/Step5ReviewAndSave.test.tsx` — AC#D2, 9 tests
+
+**Modified**
+- `apps/web/src/features/registration/pages/WizardPage.tsx` — render `Step5ReviewAndSave` (case 4); `STEPS[4]` label `NIN`→`Review`; `handleSubmit` reads NIN from `fd.nin` only; **deleted `readQuestionnaireNin`** + its `NIN_QUESTION_NAMES`/`modulus11Check` imports; thread `onGoToStep`; enriched CompletionScreen active copy (AC#C4)
+- `apps/web/src/features/registration/components/WizardNavigation.tsx` — optional `continueTestId` (AC#C1 `wizard-save-button`)
+- `apps/web/src/features/registration/pages/__tests__/WizardPage.test.tsx` — Step-5 mock repointed to `Step5ReviewAndSave`
+
+**Deleted (AC#C2 — the A/B/C dispatcher)**
+- `Step5NinAndAuth.tsx`, `Step5NinCaptured.tsx` (held `AuthChoiceFieldset` — retired per AC#C3), `Step5PendingNin.tsx`, `Step5NinInput.tsx`, `__tests__/Step5NinAndAuth.test.tsx`
+
+**Verified:** Modulus-11 enforced in exactly ONE place (`Step1BasicInfo.tsx`) — Task 8.2 invariant.
+
 ### Part B Implementation Notes (2026-06-10, Amelia/dev-story, Opus 4.8)
 
 Pattern C wizard field dedup foundation (Task 3 / AC#B1–B8). Quality gates: web `tsc` ✓, api `tsc` ✓, eslint ✓ (all changed files), full web suite **2543 pass / 0 fail / 2 todo (+30 new tests, 0 regressions)**.
@@ -686,5 +710,7 @@ Pattern C wizard field dedup foundation (Task 3 / AC#B1–B8). Quality gates: we
 | 2026-06-10 | Part B (Task 3 / AC#B1–B8) implemented: `WIZARD_PROVIDED_FIELD_NAMES` map + `FormRenderer.hideQuestionNames` + Step 4 auto-fill/banner + collision test; `nin-question-names.ts` deleted, 6 import sites migrated. +30 tests, 0 regressions. Awaiting operator code-review + atomic commit. |
 | 2026-06-10 | Adversarial code-review (Task 8.1) on Part B tree: 6 findings (1 High, 2 Med, 3 Low) logged under "Review Follow-ups (AI)" and all auto-fixed in-session. High = stale NIN not purged on pending toggle; Meds = triple-coupled identitySig + all-hidden form renders hidden question; Lows = leading-hidden flash, dob test, story doc numbering. +3 regression tests; tsc/eslint clean; 116 prior tests still green. Story stays `in-progress` (Parts A/C/D/E/F outstanding). |
 | 2026-06-10 | Part A (Task 2 / AC#A1-A5) + Part F write-path (Task 5.1-5.3 / AC#F1-F2): NIN moves to Step 1 (Modulus-11 + live duplicate-block + pending toggle + gated Continue); Step 1 splits Full Name → Given/Family (surname-first safe); backend `submitWizard` stores explicit given/family columns (no more first-token parse). `useNinCheck` gate confirmed pre-existing (`/forms/check-nin` rate-limited 20/min/IP, unauthenticated). +13 web tests (Step1 10) + api routes updated. Quality: web+api tsc ✓, web+api lint ✓, full web 2549/0-fail, full api 2400/0-fail. Part F backfill/email/ID-card (5.4-5.8) deferred to a follow-up chunk. Awaiting operator code-review + atomic commit. |
+| 2026-06-10 | Part C (Task 4 / AC#C1-C5): Step 5 becomes `Step5ReviewAndSave` (summary + Edit links + Save) — the A/B/C dispatcher (5 files incl. `AuthChoiceFieldset`) deleted; auth-choice retired (AC#C3). `WizardPage` simplified (NIN from `fd.nin`; `readQuestionnaireNin` removed → Modulus-11 now single-point at Step 1, Task 8.2 ✓); STEPS[4] → "Review"; CompletionScreen active copy enriched (AC#C4). +9 Step5 tests, -Step5NinAndAuth tests; `WizardNavigation` gains `continueTestId`. Quality: web tsc ✓, lint ✓, full web 2555/0-fail. Wizard is now end-to-end coherent (NIN@Step1 → Review@Step5). Awaiting operator code-review + atomic commit. |
 | 2026-06-10 | Adversarial code-review on Part A + Part-F-write-path tree: 8 findings (1 Critical, 1 High, 2 Med, 4 Low). **Critical**: `WizardPage.test.tsx` missing `afterEach(cleanup)` → 427a80d URL-race guard failed 4/5 in a clean run (pre-existing in `dd94702`; Part B review's green was a fluke) — fixed. **High**: Part F broke Pattern C name-dedup (fullName no longer written) — `computePrefill` now composes from given+family w/ legacy fallback. **Med**: ASCII-only NAME_PATTERN rejected Yoruba diacritics → Unicode `\p{L}\p{M}`; mononyms blocked → **per Awwal, family name now OPTIONAL + nudge** (backend NULL last_name restored). **Low**: aria-describedby/role=alert on NIN messages (fixed); in-flight-dup-gate (won't-fix, rationale recorded); AC#C5 doc-stale (noted). **Age gate HELD pending Awwal discussion** (ILO 15 vs apprenticeship carve-out). +5 regression tests; web 106/0 + api 33/0; tsc/eslint clean. |
 | 2026-06-10 | Age-gate resolved + pipelined. Prod verification over Tailscale (pinned `oslsr_master_v3` v2026012601) DISPROVED the "labour section invisible" hypothesis (`employment_status` 76/76) and CONFIRMED two real migration-fidelity defects: `calculate`/`age` never computed (age key 0/76) + group-level `relevant` dropped (no `sectionShowWhen`) → the authored `${age}>=15` labour gate and `${consent_basic}='yes'` identity gate never reached the pinned form (latter = a live consent-handling gap). Decision (Awwal): Option A — fix the engine properly, **split** into launch-gating **9-54** (forms-engine fidelity: runtime calc eval + group-relevance migration + publish-time validator) → **9-55** (minor age-gate floor 15 + ILO apprenticeship carve-out + NDPA guardian consent, depends-on 9-54). Both registered `backlog` in sprint-status + added to `roadmap-to-launch.md` Phase 1 + 🚦 gate. 9-18 interim: neutralised the dev's unspecified `≥16` Step-1 block (sane date bounds only; +2 tests). Dedup-gap (gender/lga/consent absent from `WIZARD_PROVIDED_FIELD_NAMES`) logged as a 9-18 follow-up. |
+| 2026-06-10 | Adversarial code-review on Part C tree: 3 findings (1 Med, 2 Low), all auto-fixed. **Med**: divergent `pending` derivation (Step-5 badge/label vs submit) — reachable via resumed Cohort B drafts → extracted shared `derivePendingNin(fd)` in `wizard.api.ts` (mirrors backend), used by both. **Low**: no server-side Modulus-11 on `submitWizard` (clerk path had it) → added `.refine(modulus11Check)` for parity (5 test bodies retargeted to a valid NIN + 1 rejection test). **Low**: LGA raw-slug flash → "Loading…" state. Part C otherwise clean (Task 8.2 Modulus-11-single-point verified, AC#C4 via inline CompletionScreen). +2 tests; web 54/0 + api 34/0; tsc/eslint clean. |

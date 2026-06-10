@@ -17,6 +17,9 @@ export interface WizardNavigationProps {
   /** Story 9-18 AC#A3 — id of a visible validation summary describing why
    *  Continue is disabled (wired to the button's aria-describedby). */
   continueDescribedBy?: string;
+  /** Override the continue button's data-testid (default `wizard-nav-continue`).
+   *  Story 9-18 AC#C1 uses `wizard-save-button` on the Step-5 Save action. */
+  continueTestId?: string;
   className?: string;
 }
 
@@ -28,6 +31,7 @@ export function WizardNavigation({
   isContinueDisabled,
   isSubmitting,
   continueDescribedBy,
+  continueTestId = 'wizard-nav-continue',
   className,
 }: WizardNavigationProps) {
   return (
@@ -62,7 +66,7 @@ export function WizardNavigation({
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           (isContinueDisabled || isSubmitting) && 'cursor-not-allowed opacity-50',
         )}
-        data-testid="wizard-nav-continue"
+        data-testid={continueTestId}
       >
         {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
         {continueLabel}

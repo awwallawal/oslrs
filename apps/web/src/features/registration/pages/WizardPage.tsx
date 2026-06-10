@@ -7,15 +7,14 @@ import { ApiError } from '../../../lib/api-client';
 import {
   submitWizard,
   requestMagicLink,
+  derivePendingNin,
   type WizardDraftData,
 } from '../api/wizard.api';
-import { NIN_QUESTION_NAMES } from '../lib/wizard-provided-field-names';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
 import { Step4Questionnaire } from './Step4Questionnaire';
-import { Step5NinAndAuth } from './Step5NinAndAuth';
+import { Step5ReviewAndSave } from './Step5ReviewAndSave';
 
 /**
  * Story 9-12 Task 4.3 + Task 5 — public registration wizard.
@@ -35,7 +34,7 @@ const STEPS = [
   { id: 'contact', label: 'Contact' },
   { id: 'consent', label: 'Consent' },
   { id: 'survey', label: 'Survey' },
-  { id: 'nin', label: 'NIN' },
+  { id: 'review', label: 'Review' },
 ] as const;
 
 export default function WizardPage() {
@@ -147,10 +146,12 @@ export default function WizardPage() {
     setSubmitError(null);
 
     const fd = draft.formData;
-    const ninFromQuestionnaire = readQuestionnaireNin(fd.questionnaireResponses);
-    const pending =
-      fd.pendingNinToggle === true || (!ninFromQuestionnaire && !fd.nin);
-    const nin = pending ? undefined : ninFromQuestionnaire ?? fd.nin;
+    // Story 9-18 Part C: NIN is captured canonically at Step 1 — read it directly
+    // (the Step-5 dispatcher + questionnaire-NIN extraction are retired). Pending
+    // is derived via the shared helper so the Step-5 label/badge can't drift from
+    // this submit decision (AI-Review M1).
+    const pending = derivePendingNin(fd);
+    const nin = pending ? undefined : fd.nin;
 
     if (!fd.givenName || !fd.email || !fd.phone || !fd.lgaId) {
       setSubmitError('Some required fields are missing. Please go back and complete them.');
@@ -256,6 +257,7 @@ export default function WizardPage() {
         mergeFields: draft.mergeFields,
         onContinue: handleContinue,
         onBack: handleBack,
+        onGoToStep: goToStep,
         onSubmit: handleSubmit,
         isSubmitting,
         submitError,
@@ -270,6 +272,7 @@ function renderStep(props: {
   mergeFields: (patch: Partial<WizardDraftData>) => void;
   onContinue: () => void;
   onBack: () => void;
+  onGoToStep: (stepIndex: number) => void;
   onSubmit: () => Promise<void> | void;
   isSubmitting: boolean;
   submitError: string | null;
@@ -313,9 +316,9 @@ function renderStep(props: {
       );
     case 4:
       return (
-        <Step5NinAndAuth
+        <Step5ReviewAndSave
           formData={props.formData}
-          mergeFields={props.mergeFields}
+          onGoToStep={props.onGoToStep}
           onSubmit={() => {
             props.onSubmit();
           }}
@@ -355,8 +358,9 @@ function CompletionScreen({
           </>
         ) : (
           <>
-            Thank you for joining the Oyo State Skills Registry. We've emailed{' '}
-            <span className="font-mono">{email}</span> with a one-click sign-in link.
+            Thank you for joining the Oyo State Skills Registry. We've emailed a one-click link to{' '}
+            <span className="font-mono">{email}</span> so you can view, edit, or withdraw your
+            registration anytime.
           </>
         )}
       </p>
@@ -372,20 +376,4 @@ function parseStep(raw: string | null): number | null {
   const n = Number(raw);
   if (!Number.isFinite(n)) return null;
   return Math.max(0, Math.min(Math.floor(n), STEPS.length - 1));
-}
-
-function readQuestionnaireNin(
-  responses: Record<string, unknown> | undefined,
-): string | undefined {
-  if (!responses) return undefined;
-  for (const key of NIN_QUESTION_NAMES) {
-    const value = responses[key];
-    // Modulus-11 check mirrors the server-side validation so the wizard's
-    // pending-flag derivation at submit time doesn't accept junk 11-digit
-    // strings and incorrectly mark the registration as non-pending.
-    if (typeof value === 'string' && /^\d{11}$/.test(value) && modulus11Check(value)) {
-      return value;
-    }
-  }
-  return undefined;
 }
