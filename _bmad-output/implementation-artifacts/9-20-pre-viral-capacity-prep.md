@@ -1,6 +1,12 @@
 # Story 9.20: Pre-viral capacity prep — Resend Pro + Cloudflare on oyotradeministry + Web Analytics
 
-Status: ready-for-dev
+Status: in-progress
+
+<!-- 2026-06-10: see "Scope Corrections" + "Dev Agent Record" at the foot of this
+file. CF analytics tooling + ops-dashboard Edge-traffic section shipped (commit
+1b33fc3, deployed). Original Part B is SUPERSEDED by F-024; AC#C2/dual-beacon
+obsolete. Net remaining = Part A (Resend Pro, operator) + Part D (checklist + memory). -->
+
 
 <!--
 Authored 2026-05-19 by Bob (SM) via canonical *create-story --yolo template.
@@ -137,10 +143,88 @@ Effort: ~half-day operator work (Resend + Cloudflare setup) + ~half-day code wor
 
 ## File List
 
-(Populated by dev agent. Expected:)
-- `apps/web/index.html` (modified)
-- `apps/api/src/middleware/security.ts` (modified)
-- `apps/api/src/__tests__/csp-parity.test.ts` (modified)
-- `nginx/oslsr.conf` on VPS (modified — out-of-repo)
-- `docs/runbooks/pre-viral-push-checklist.md` (new)
-- `MEMORY.md` (memory entry additions)
+**Shipped 2026-06-10 (commit `1b33fc3`, deployed):**
+- `apps/api/src/lib/cloudflare-analytics.ts` (new — shared CF fetch + aggregation)
+- `apps/api/src/lib/__tests__/cloudflare-analytics.test.ts` (new — 9 unit tests)
+- `apps/api/scripts/cf-analytics.ts` (new — operator deep-dive CLI)
+- `apps/api/scripts/dashboard.ts` (modified — Edge-traffic section)
+- `.env` (local) + VPS `/root/oslrs/.env` (CLOUDFLARE_API_TOKEN — gitignored / out-of-repo)
+
+**Originally expected (Part C beacon work — now mostly obsolete/done-elsewhere, see Scope Corrections):**
+- `apps/web/index.html` — beacon already present (line 160) via Story 9-30
+- `apps/api/src/app.ts` / nginx `oslsr.conf` — CSP allow-list already shipped via Story 9-30
+- `docs/runbooks/pre-viral-push-checklist.md` (new — STILL PENDING, Part D)
+- `MEMORY.md` (memory entry additions — STILL PENDING, Part D)
+
+## Scope Corrections (discovered 2026-06-10 session)
+
+> These ACs were authored 2026-05-19, BEFORE Story 9-9's F-024 origin-lock
+> (2026-06-07/09) retired `oyotradeministry.com.ng`. Recording the drift so the
+> story closes honestly rather than ticking obsolete boxes.
+
+- **Part B (AC#B1–B5) — SUPERSEDED by F-024, NOT "done".** 9-20 Part B planned to
+  ADD a Cloudflare proxy to `oyotradeministry.com.ng`. F-024 did the OPPOSITE:
+  de-pointed it to a 302 redirect → `oyoskills.com`
+  (`docs/f-024-origin-lock-runbook.md` §1). There is no oyotradeministry CF zone,
+  by design. The dual-domain premise is void; `oyoskills.com` is the single
+  proxied zone.
+- **Part C (AC#C2 + the dual-beacon half of AC#C3) — OBSOLETE.** A second
+  per-domain beacon is moot: oyotradeministry serves no pages. The single RUM
+  beacon (`apps/web/index.html:160`) already reports from both hosts (same SPA
+  bundle); the CLI/dashboard filter by host. CSP allow-listing for the beacon was
+  already shipped by **Story 9-30** (`script-src` + `connect-src`
+  `static.cloudflareinsights.com`). → AC#C1 (oyoskills beacon) **DONE via 9-30**;
+  AC#C2 **obsolete**; AC#C3 single-beacon **DONE**; AC#C4 24h-verify satisfied by
+  this session's live pull.
+- **Net remaining 9-20 scope:** Part A (Resend Pro — operator/billing) + Part D
+  (pre-viral checklist + memory) + the bot-mitigation lever (below).
+
+## Dev Agent Record
+
+### Session 2026-06-10 — Cloudflare analytics tooling + dashboard integration
+
+Built repeatable CF analytics tooling to close 9-20's "analytics-blind funnel"
+risk with a real command (not a vibe). Exceeds the original Part C ACs (which
+were beacon-only) by adding server-side Zone Analytics + an ops-dashboard view.
+
+- `cloudflare-analytics.ts` lib (shared fetch + pure, unit-tested aggregation):
+  Zone via `httpRequests1dGroups` (the FREE-plan dataset; the sampled
+  `httpRequestsAdaptiveGroups` is Pro+ → "does not have access to the path"),
+  RUM via account-scoped `rumPageloadEventsAdaptiveGroups`. Graceful: null with
+  no token; per-dataset failures degrade independently.
+- `cf-analytics.ts` CLI deep-dive + `dashboard.ts` "Edge traffic" section
+  (CLI-only — does NOT touch the live API ops endpoint or Telegram digest).
+  Verified live on VPS after deploy.
+- Token `broken-sun-b07f` baked into local `.env` + VPS `.env`; account +
+  oyoskills-zone IDs default in the lib (non-secret).
+
+**Live data findings (14–30d window):**
+- ~half of request volume is bots/scanners (NL/FR/GB/KR high *requests*,
+  near-zero *page-views*; RUM page-views are overwhelmingly NG). Cloudflare WAF
+  blocked ~228–295 threats. 404/403/401 probing dominates the error mix.
+- Cache hit ratio 13–17.5% — **NOT a config gap** (nginx already sets
+  `expires 1y; Cache-Control "public, immutable"` on static assets,
+  `oslsr.conf:88-89`). The low ratio is inherently-uncacheable API/HTML + bot
+  404s. **The real lever to cut droplet load is bot mitigation (CF Bot Fight
+  Mode, free) — NOT more caching.**
+- Real organic human traffic is tiny (~1–2 visits/day = the "organic drought").
+  Infra is ready for a spike; the spike hasn't fired (no marketing push yet) —
+  exactly 9-20's thesis.
+- RUM shows occasional direct hits to origin IP `159.89.146.93` → F-024 §4 (IP
+  rotation) is not yet closed.
+
+**Open operator items (unchanged 9-20 scope):**
+- Part A: upgrade Resend Free→Pro ($20/mo) + delivery test + memory note.
+- Part D: author `docs/runbooks/pre-viral-push-checklist.md` (incl. the
+  `pnpm tsx apps/api/scripts/cf-analytics.ts` command + Bot Fight Mode step) +
+  memory entries.
+- Bot mitigation: enable Cloudflare **Bot Fight Mode** (free) on the oyoskills zone.
+- Token hygiene: roll `broken-sun-b07f` → 2-permission read-only (Account
+  Analytics:Read + Zone Analytics:Read).
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-05-19 | Story authored (Bob/SM) — Resend Pro + CF dual-domain + Web Analytics. |
+| 2026-06-10 | CF analytics lib + CLI + ops-dashboard Edge-traffic section shipped (`1b33fc3`, deployed; verified live on VPS). Token baked local+VPS. Scope corrections recorded: Part B superseded by F-024; AC#C2/dual-beacon obsolete; AC#C1/C3-single/C4 done (9-30 + this session). |
