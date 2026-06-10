@@ -25,7 +25,7 @@ import { useToast } from '../../../hooks/useToast';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { getCachedDynamicFormSchema } from '../utils/formSchema';
 import { NinHelpHint } from '../../registration/components/NinHelpHint';
-import { NIN_QUESTION_NAMES } from '../../registration/lib/nin-question-names';
+import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
 
 interface Section {
   id: string;

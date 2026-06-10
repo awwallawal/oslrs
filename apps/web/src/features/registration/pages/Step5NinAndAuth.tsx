@@ -1,7 +1,7 @@
 import { Step5NinCaptured } from './Step5NinCaptured';
 import { Step5PendingNin } from './Step5PendingNin';
 import { Step5NinInput } from './Step5NinInput';
-import { NIN_QUESTION_NAMES } from '../lib/nin-question-names';
+import { NIN_QUESTION_NAMES } from '../lib/wizard-provided-field-names';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import type { WizardDraftData } from '../api/wizard.api';
 

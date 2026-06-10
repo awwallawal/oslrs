@@ -10,7 +10,7 @@ import {
   getPrevVisibleIndex,
 } from '../utils/skipLogic';
 import { getCachedDynamicFormSchema, validateQuestionValue } from '../utils/formSchema';
-import { NIN_QUESTION_NAMES } from '../../registration/lib/nin-question-names';
+import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
 import type { FlattenedForm } from '../api/form.api';
 
 /**
@@ -53,6 +53,16 @@ export interface FormRendererProps {
   disabled?: boolean;
   /** Hide the page-internal navigation buttons — wizard provides its own. */
   hideNavigation?: boolean;
+  /**
+   * Story 9-18 AC#B3 — Pattern C wizard field dedup. Question names in this set
+   * are filtered out of the user-visible flow (iteration + skip-logic +
+   * progress count) because the wizard already collected the answer and
+   * auto-filled it into `initialResponses`. The questions remain in the schema
+   * (form-version locking unchanged) and their pre-filled values still flow
+   * through to `onComplete`/`onAnswer`. Optional — non-wizard consumers omit it
+   * and behave unchanged.
+   */
+  hideQuestionNames?: ReadonlySet<string>;
   /** Optional ref-callback exposing programmatic navigation. */
   onNavReady?: (api: { goNext: () => Promise<boolean>; goBack: () => void }) => void;
 }
@@ -66,19 +76,37 @@ export function FormRenderer({
   onPendingNinClick,
   disabled = false,
   hideNavigation = false,
+  hideQuestionNames,
   onNavReady,
 }: FormRendererProps) {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  // AI-Review L4: start on the first non-hidden question so a leading
+  // wizard-prefilled question never paints for a frame before the snap effect
+  // (below) moves off it. Scoped to wizard consumers — when hideQuestionNames is
+  // absent the behaviour is identical to the old `useState(initialIndex)`.
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    if (!hideQuestionNames?.size) return initialIndex;
+    const first = getNextVisibleIndex(
+      formSchema.questions,
+      initialIndex - 1,
+      initialResponses ?? {},
+      formSchema.sectionShowWhen,
+      hideQuestionNames,
+    );
+    return first === -1 ? initialIndex : first;
+  });
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
 
   const ninCheck = useNinCheck();
 
   const resolver = useCallback(
     (values: Record<string, unknown>, context: unknown, options: ResolverOptions<Record<string, unknown>>) => {
-      const visible = getVisibleQuestions(formSchema.questions, values, formSchema.sectionShowWhen);
+      // Story 9-18 AC#B3: hidden (wizard-prefilled) questions are excluded from
+      // validation too — their values are already valid and the user can't reach
+      // them to fix anything, so they must never gate navigation.
+      const visible = getVisibleQuestions(formSchema.questions, values, formSchema.sectionShowWhen, hideQuestionNames);
       return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
     },
-    [formSchema],
+    [formSchema, hideQuestionNames],
   );
 
   const {
@@ -110,13 +138,28 @@ export function FormRenderer({
   }, [initialResponses, reset]);
 
   const visibleQuestions = useMemo(
-    () => getVisibleQuestions(formSchema.questions, formData, formSchema.sectionShowWhen),
-    [formSchema, formData],
+    () => getVisibleQuestions(formSchema.questions, formData, formSchema.sectionShowWhen, hideQuestionNames),
+    [formSchema, formData, hideQuestionNames],
   );
+
+  // Story 9-18 AC#B3: never rest on a hidden (wizard-prefilled) question. The
+  // hide set can populate AFTER mount (Step 4 computes it post-render), so snap
+  // forward — or back if none forward — whenever the current index lands on one.
+  useEffect(() => {
+    const cur = formSchema.questions[currentIndex];
+    if (!cur || !hideQuestionNames?.has(cur.name)) return;
+    const fwd = getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+    if (fwd !== -1) {
+      setCurrentIndex(fwd);
+      return;
+    }
+    const back = getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+    if (back !== -1) setCurrentIndex(back);
+  }, [currentIndex, formSchema, formData, hideQuestionNames]);
 
   const currentQuestion = formSchema.questions[currentIndex] ?? null;
   const isCurrentNin = currentQuestion
-    ? (NIN_QUESTION_NAMES as readonly string[]).includes(currentQuestion.name)
+    ? NIN_QUESTION_NAMES.includes(currentQuestion.name)
     : false;
 
   const visibleIndex = useMemo(() => {
@@ -177,7 +220,7 @@ export function FormRenderer({
 
     const nextIdx = disabled
       ? (currentIndex + 1 < formSchema.questions.length ? currentIndex + 1 : -1)
-      : getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen);
+      : getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
 
     if (nextIdx === -1) {
       onComplete?.(formData);
@@ -198,6 +241,7 @@ export function FormRenderer({
     formSchema,
     disabled,
     ninDuplicateError,
+    hideQuestionNames,
     trigger,
     setError,
     clearErrors,
@@ -207,7 +251,7 @@ export function FormRenderer({
   const goBack = useCallback(() => {
     const prevIdx = disabled
       ? (currentIndex > 0 ? currentIndex - 1 : -1)
-      : getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen);
+      : getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
     if (prevIdx === -1) return;
 
     setSlideDirection('right');
@@ -216,7 +260,7 @@ export function FormRenderer({
       if (currentQuestion) clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, currentQuestion, formData, formSchema, disabled, clearErrors]);
+  }, [currentIndex, currentQuestion, formData, formSchema, disabled, hideQuestionNames, clearErrors]);
 
   // Expose imperative API once on mount (and on goNext/goBack identity change).
   useEffect(() => {
@@ -225,10 +269,15 @@ export function FormRenderer({
 
   const hasNextQuestion = useMemo(() => {
     if (disabled) return currentIndex + 1 < formSchema.questions.length;
-    return getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen) !== -1;
-  }, [formSchema, currentIndex, formData, disabled]);
+    return getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames) !== -1;
+  }, [formSchema, currentIndex, formData, disabled, hideQuestionNames]);
 
-  if (!currentQuestion) {
+  // AI-Review M3: also guard the degenerate case where EVERY question is hidden
+  // (e.g. a form composed entirely of wizard-provided fields). The snap effect
+  // can't find a forward/back visible index, so `currentQuestion` would otherwise
+  // remain a hidden, pre-filled question and paint it. The wizard still completes
+  // via the imperative goNext API (which returns -1 → onComplete).
+  if (!currentQuestion || visibleQuestions.length === 0) {
     return (
       <div className="text-center text-neutral-600" data-testid="form-renderer-empty">
         No questions available.

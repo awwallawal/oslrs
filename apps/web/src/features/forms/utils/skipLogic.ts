@@ -95,16 +95,24 @@ export function evaluateShowWhen(
 /**
  * Returns visible questions filtered by showWhen conditions and section visibility.
  * A question is visible if:
- * 1. No showWhen → always visible
- * 2. showWhen evaluates to true
- * 3. Parent section is visible (sectionShowWhen passes or doesn't exist)
+ * 1. Its name is NOT in `hideQuestionNames` (Story 9-18 AC#B3 — Pattern C dedup;
+ *    wizard-prefilled questions are skipped from the user-visible flow)
+ * 2. No showWhen → always visible
+ * 3. showWhen evaluates to true
+ * 4. Parent section is visible (sectionShowWhen passes or doesn't exist)
  */
 export function getVisibleQuestions(
   questions: FlattenedQuestion[],
   formData: Record<string, unknown>,
-  sectionShowWhen?: Record<string, Condition | ConditionGroup>
+  sectionShowWhen?: Record<string, Condition | ConditionGroup>,
+  hideQuestionNames?: ReadonlySet<string>
 ): FlattenedQuestion[] {
   return questions.filter((q) => {
+    // Story 9-18 AC#B3: hidden (wizard-prefilled) questions are never visible.
+    if (hideQuestionNames?.has(q.name)) {
+      return false;
+    }
+
     // Check section-level visibility
     if (sectionShowWhen && sectionShowWhen[q.sectionId]) {
       if (!evaluateShowWhen(sectionShowWhen[q.sectionId], formData)) {
@@ -129,10 +137,16 @@ export function getNextVisibleIndex(
   questions: FlattenedQuestion[],
   currentIndex: number,
   formData: Record<string, unknown>,
-  sectionShowWhen?: Record<string, Condition | ConditionGroup>
+  sectionShowWhen?: Record<string, Condition | ConditionGroup>,
+  hideQuestionNames?: ReadonlySet<string>
 ): number {
   for (let i = currentIndex + 1; i < questions.length; i++) {
     const q = questions[i];
+
+    // Story 9-18 AC#B3: skip wizard-prefilled (hidden) questions.
+    if (hideQuestionNames?.has(q.name)) {
+      continue;
+    }
 
     // Check section visibility
     if (sectionShowWhen && sectionShowWhen[q.sectionId]) {
@@ -159,10 +173,16 @@ export function getPrevVisibleIndex(
   questions: FlattenedQuestion[],
   currentIndex: number,
   formData: Record<string, unknown>,
-  sectionShowWhen?: Record<string, Condition | ConditionGroup>
+  sectionShowWhen?: Record<string, Condition | ConditionGroup>,
+  hideQuestionNames?: ReadonlySet<string>
 ): number {
   for (let i = currentIndex - 1; i >= 0; i--) {
     const q = questions[i];
+
+    // Story 9-18 AC#B3: skip wizard-prefilled (hidden) questions.
+    if (hideQuestionNames?.has(q.name)) {
+      continue;
+    }
 
     // Check section visibility
     if (sectionShowWhen && sectionShowWhen[q.sectionId]) {
