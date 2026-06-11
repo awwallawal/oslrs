@@ -116,10 +116,13 @@ describe('Step1BasicInfo (9-18 Part A + F)', () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
-  it('allows a mononym (given name only) and shows a family-name nudge (AI-Review M3)', () => {
+  it('allows a mononym (given name only) — family name still functionally optional', () => {
+    // The "— optional" label + nudge were removed (we don't advertise optionality
+    // to respondents — surname is meant for internal use), but the field stays
+    // functionally optional so mononym users aren't blocked.
     renderStep(validState({ familyName: '' }));
     expect(screen.getByTestId('wizard-nav-continue')).not.toBeDisabled();
-    expect(screen.getByTestId('wizard-family-name-nudge')).toBeInTheDocument();
+    expect(screen.queryByTestId('wizard-family-name-nudge')).not.toBeInTheDocument();
     // No blocking "required" error for the empty surname.
     expect(screen.queryByText('Family name is required.')).not.toBeInTheDocument();
   });

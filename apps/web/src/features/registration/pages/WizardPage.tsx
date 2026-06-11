@@ -476,8 +476,7 @@ function CompletionScreen({
         {pendingNin ? (
           <>
             We've saved your registration for <span className="font-mono">{email}</span>. Watch your
-            email for a one-click link to add your NIN whenever you're ready. We'll also remind
-            you in 2 days, 7 days, and 14 days.
+            email for a one-click link to add your NIN whenever you're ready.
           </>
         ) : (
           <>

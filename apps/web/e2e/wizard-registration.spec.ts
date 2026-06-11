@@ -249,7 +249,7 @@ test.describe('Public Registration Wizard (full-stack flows)', () => {
 
     await expect(page.getByTestId('wizard-complete')).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('wizard-complete')).toContainText(
-      /remind you in 2 days, 7 days, and 14 days/i,
+      /one-click link to add your NIN whenever you're ready/i,
     );
   });
 
