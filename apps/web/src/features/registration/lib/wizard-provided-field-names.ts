@@ -20,6 +20,18 @@
  *
  * Aliases are stored lowercase; matching is the caller's responsibility and is
  * case-insensitive via `findWizardFieldForQuestionName`.
+ *
+ * ⚠️ VALUE-VOCABULARY CONSTRAINT (9-18 Part-E review, finding H1) — DO NOT add a
+ * wizard field here unless its value vocabulary is IDENTICAL to the matched
+ * questionnaire question's. Dedup auto-fills the wizard value straight into the
+ * questionnaire answer, so it is only safe for free-text / date fields (the keys
+ * below). CHOICE fields are NOT safe to add naively: e.g. the wizard's `gender`
+ * is `prefer_not_to_say` while the form's `gender_list` uses `other`; consent is
+ * a boolean here but `yes_no` in the form; `lgaId` ≠ the form's `lga_list` keys.
+ * Adding them as-is would inject INVALID choice values. Deduping `gender` /
+ * `lga` / consent requires a wizard-value → questionnaire-choice MAPPING layer,
+ * tracked in **Story 9-54** (forms-engine fidelity). The collision-detector test
+ * pins the safe key set, so a naive addition fails CI with a pointer here.
  */
 export const WIZARD_PROVIDED_FIELD_NAMES = {
   fullName: ['full_name', 'fullname', 'name'],

@@ -63,8 +63,51 @@ export interface FormRendererProps {
    * and behave unchanged.
    */
   hideQuestionNames?: ReadonlySet<string>;
+  /**
+   * Story 9-18 Part E (AC#E2) — render ONLY the section at this ordinal index
+   * (sections ordered by first appearance in `questions`). Questions outside the
+   * section are scoped out of the user-visible flow; their answers still flow
+   * through to `onComplete`, and cross-section `showWhen` still resolves against
+   * the cumulative `initialResponses`. Omit (undefined) for all-sections mode
+   * (clerk-data-entry / form-filler) — behaviour unchanged.
+   */
+  sectionIndex?: number;
   /** Optional ref-callback exposing programmatic navigation. */
   onNavReady?: (api: { goNext: () => Promise<boolean>; goBack: () => void }) => void;
+}
+
+/** Ordered distinct section ids (by first appearance). */
+function orderedSectionIds(questions: FlattenedForm['questions']): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const q of questions) {
+    if (!seen.has(q.sectionId)) {
+      seen.add(q.sectionId);
+      ordered.push(q.sectionId);
+    }
+  }
+  return ordered;
+}
+
+/**
+ * Story 9-18 Part E (AC#E2) — section scoping is implemented as a hide-set union:
+ * every question outside the target section is added to `hideQuestionNames`, so
+ * the existing skip-logic / iteration / snap / empty-state paths handle
+ * section-at-a-time rendering with no special-casing. Returns `hideQuestionNames`
+ * unchanged when `sectionIndex` is undefined (all-sections mode).
+ */
+function buildEffectiveHidden(
+  questions: FlattenedForm['questions'],
+  hideQuestionNames: ReadonlySet<string> | undefined,
+  sectionIndex: number | undefined,
+): ReadonlySet<string> | undefined {
+  if (sectionIndex == null) return hideQuestionNames;
+  const targetSectionId = orderedSectionIds(questions)[sectionIndex];
+  const set = new Set(hideQuestionNames ?? []);
+  for (const q of questions) {
+    if (q.sectionId !== targetSectionId) set.add(q.name);
+  }
+  return set;
 }
 
 export function FormRenderer({
@@ -77,20 +120,22 @@ export function FormRenderer({
   disabled = false,
   hideNavigation = false,
   hideQuestionNames,
+  sectionIndex,
   onNavReady,
 }: FormRendererProps) {
   // AI-Review L4: start on the first non-hidden question so a leading
-  // wizard-prefilled question never paints for a frame before the snap effect
-  // (below) moves off it. Scoped to wizard consumers — when hideQuestionNames is
-  // absent the behaviour is identical to the old `useState(initialIndex)`.
+  // wizard-prefilled (or out-of-section, AC#E2) question never paints for a frame
+  // before the snap effect (below) moves off it. When nothing is hidden the
+  // behaviour is identical to the old `useState(initialIndex)`.
   const [currentIndex, setCurrentIndex] = useState(() => {
-    if (!hideQuestionNames?.size) return initialIndex;
+    const eff = buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex);
+    if (!eff?.size) return initialIndex;
     const first = getNextVisibleIndex(
       formSchema.questions,
       initialIndex - 1,
       initialResponses ?? {},
       formSchema.sectionShowWhen,
-      hideQuestionNames,
+      eff,
     );
     return first === -1 ? initialIndex : first;
   });
@@ -98,15 +143,23 @@ export function FormRenderer({
 
   const ninCheck = useNinCheck();
 
+  // Story 9-18 AC#B3 + AC#E2 — the set of question names scoped OUT of the
+  // user-visible flow: wizard-prefilled fields ∪ (when sectionIndex is set) every
+  // question outside the active section.
+  const effectiveHidden = useMemo(
+    () => buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex),
+    [formSchema, hideQuestionNames, sectionIndex],
+  );
+
   const resolver = useCallback(
     (values: Record<string, unknown>, context: unknown, options: ResolverOptions<Record<string, unknown>>) => {
       // Story 9-18 AC#B3: hidden (wizard-prefilled) questions are excluded from
       // validation too — their values are already valid and the user can't reach
       // them to fix anything, so they must never gate navigation.
-      const visible = getVisibleQuestions(formSchema.questions, values, formSchema.sectionShowWhen, hideQuestionNames);
+      const visible = getVisibleQuestions(formSchema.questions, values, formSchema.sectionShowWhen, effectiveHidden);
       return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
     },
-    [formSchema, hideQuestionNames],
+    [formSchema, effectiveHidden],
   );
 
   const {
@@ -138,8 +191,8 @@ export function FormRenderer({
   }, [initialResponses, reset]);
 
   const visibleQuestions = useMemo(
-    () => getVisibleQuestions(formSchema.questions, formData, formSchema.sectionShowWhen, hideQuestionNames),
-    [formSchema, formData, hideQuestionNames],
+    () => getVisibleQuestions(formSchema.questions, formData, formSchema.sectionShowWhen, effectiveHidden),
+    [formSchema, formData, effectiveHidden],
   );
 
   // Story 9-18 AC#B3: never rest on a hidden (wizard-prefilled) question. The
@@ -147,15 +200,15 @@ export function FormRenderer({
   // forward — or back if none forward — whenever the current index lands on one.
   useEffect(() => {
     const cur = formSchema.questions[currentIndex];
-    if (!cur || !hideQuestionNames?.has(cur.name)) return;
-    const fwd = getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+    if (!cur || !effectiveHidden?.has(cur.name)) return;
+    const fwd = getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
     if (fwd !== -1) {
       setCurrentIndex(fwd);
       return;
     }
-    const back = getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+    const back = getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
     if (back !== -1) setCurrentIndex(back);
-  }, [currentIndex, formSchema, formData, hideQuestionNames]);
+  }, [currentIndex, formSchema, formData, effectiveHidden]);
 
   const currentQuestion = formSchema.questions[currentIndex] ?? null;
   const isCurrentNin = currentQuestion
@@ -220,7 +273,7 @@ export function FormRenderer({
 
     const nextIdx = disabled
       ? (currentIndex + 1 < formSchema.questions.length ? currentIndex + 1 : -1)
-      : getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+      : getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
 
     if (nextIdx === -1) {
       onComplete?.(formData);
@@ -241,7 +294,7 @@ export function FormRenderer({
     formSchema,
     disabled,
     ninDuplicateError,
-    hideQuestionNames,
+    effectiveHidden,
     trigger,
     setError,
     clearErrors,
@@ -251,7 +304,7 @@ export function FormRenderer({
   const goBack = useCallback(() => {
     const prevIdx = disabled
       ? (currentIndex > 0 ? currentIndex - 1 : -1)
-      : getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames);
+      : getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
     if (prevIdx === -1) return;
 
     setSlideDirection('right');
@@ -260,7 +313,7 @@ export function FormRenderer({
       if (currentQuestion) clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, currentQuestion, formData, formSchema, disabled, hideQuestionNames, clearErrors]);
+  }, [currentIndex, currentQuestion, formData, formSchema, disabled, effectiveHidden, clearErrors]);
 
   // Expose imperative API once on mount (and on goNext/goBack identity change).
   useEffect(() => {
@@ -269,8 +322,8 @@ export function FormRenderer({
 
   const hasNextQuestion = useMemo(() => {
     if (disabled) return currentIndex + 1 < formSchema.questions.length;
-    return getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, hideQuestionNames) !== -1;
-  }, [formSchema, currentIndex, formData, disabled, hideQuestionNames]);
+    return getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden) !== -1;
+  }, [formSchema, currentIndex, formData, disabled, effectiveHidden]);
 
   // AI-Review M3: also guard the degenerate case where EVERY question is hidden
   // (e.g. a form composed entirely of wizard-provided fields). The snap effect

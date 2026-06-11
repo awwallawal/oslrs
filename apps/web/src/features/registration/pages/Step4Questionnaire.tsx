@@ -43,6 +43,26 @@ export interface Step4Props {
   mergeFields: (patch: Partial<WizardDraftData>) => void;
   onContinue: () => void;
   onBack?: () => void;
+  /**
+   * Story 9-18 Part E (AC#E1/E2/E6) — render ONLY this section (ordinal index)
+   * via `FormRenderer.sectionIndex`. Omit for the legacy single-step all-sections
+   * render. `sectionTitle` is shown in the step header (E6).
+   */
+  sectionIndex?: number;
+  sectionTitle?: string;
+}
+
+/** Ordered distinct section ids (by first appearance) — mirrors FormRenderer. */
+function orderedSectionIds(form: FlattenedForm | null): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const q of form?.questions ?? []) {
+    if (!seen.has(q.sectionId)) {
+      seen.add(q.sectionId);
+      ordered.push(q.sectionId);
+    }
+  }
+  return ordered;
 }
 
 /** wizard field key -> the `WizardDraftData` field that holds its value. */
@@ -153,6 +173,8 @@ export function Step4Questionnaire({
   mergeFields,
   onContinue,
   onBack,
+  sectionIndex,
+  sectionTitle,
 }: Step4Props) {
   const formQuery = useQuery({
     queryKey: ['wizard', 'public-active-form'],
@@ -182,6 +204,22 @@ export function Step4Questionnaire({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- identitySig captures the only inputs computePrefill reads
     [form, identitySig],
   );
+
+  // AC#B5 + AC#E6 — in section mode the banner names only the fields pre-filled
+  // IN THIS section (otherwise a section that doesn't contain Name/Phone/etc.
+  // would wrongly advertise them). All-sections mode uses the form-wide set.
+  const bannerKeys = useMemo(() => {
+    if (sectionIndex == null) return prefill.prefilledKeys;
+    const sectionId = orderedSectionIds(form)[sectionIndex];
+    const keys = new Set<WizardProvidedFieldKey>();
+    for (const q of form?.questions ?? []) {
+      if (q.sectionId !== sectionId) continue;
+      if (prefill.prefillValues[q.name] === undefined) continue;
+      const k = findWizardFieldForQuestionName(q.name);
+      if (k) keys.add(k);
+    }
+    return keys;
+  }, [sectionIndex, form, prefill]);
 
   // Schema introspection + auto-fill (Task 4.6 + Story 9-18 AC#B4). Idempotent:
   // writes only when the merged responses, the hidden-name list, or the form
@@ -284,20 +322,20 @@ export function Step4Questionnaire({
   return (
     <div className="space-y-6" data-testid="step4-questionnaire">
       <header>
-        <h2 className="text-xl font-semibold text-neutral-900">{form.title}</h2>
+        <h2 className="text-xl font-semibold text-neutral-900">{sectionTitle ?? form.title}</h2>
         <p className="mt-1 text-sm text-neutral-600">
           One question at a time. We auto-save as you go, so you can come back later if you need to.
         </p>
       </header>
 
-      {prefill.prefilledKeys.size > 0 && (
+      {bannerKeys.size > 0 && (
         <aside
           role="status"
           aria-live="polite"
           data-testid="step4-prefilled-banner"
           className="rounded-md border-l-4 border-info-600 bg-info-50 p-3 text-sm text-info-800"
         >
-          {buildBannerCopy(prefill.prefilledKeys)}
+          {buildBannerCopy(bannerKeys)}
         </aside>
       )}
 
@@ -310,6 +348,7 @@ export function Step4Questionnaire({
         // (NIN is captured at Step 1 and never re-asked here).
         onPendingNinClick={undefined}
         hideQuestionNames={prefill.hideNames}
+        sectionIndex={sectionIndex}
         hideNavigation
         onNavReady={(api) => {
           navApi.current = api;
