@@ -1,75 +1,99 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * NIN Modulus 11 Validation E2E Test
+ * NIN Modulus 11 Validation E2E.
  *
- * Replaces manual Task 0.7 from Story 3.4:
- * "Open the enumerator form filler, enter an invalid NIN,
- * confirm validation error appears before submission."
- *
- * Preconditions:
- * - Full stack running (API + DB + Redis + Web)
- * - Dev seed data applied (enumerator@dev.local / enum123)
- * - At least 1 published form with a NIN question exists
- *
- * @see Story 3.4 Task 0.7
+ * Two surfaces:
+ *   1. Public wizard Step 1 (Story 9-18 Part A / AC#D5) — client-side Modulus-11
+ *      feedback + the pending-NIN toggle. Active (only needs /register to
+ *      render, which the full-stack webServer provides; the form-404 settles the
+ *      wizard to Step 1).
+ *   2. Enumerator form-filler (Story 3.4 Task 0.7) — server-seeded form with a
+ *      NIN question. Still skipped pending a published-form dev seed.
  */
 
-test.describe('NIN Modulus 11 Validation', () => {
-  // SKIPPED 2026-05-09: this test requires a published native form with a NIN
-  // question to exist after `db:seed:dev`. The current seed orchestrator
-  // (apps/api/src/db/seeds/index.ts) only seeds users + roles + LGAs +
-  // fraud-thresholds + team assignments — no native_form_definitions row. The
-  // EnumeratorSurveysPage therefore renders an empty state instead of the
-  // `surveys-grid` testid, and the test fails at line 36 with
-  // "element(s) not found" inside the 15s timeout.
-  //
-  // Re-enable by adding a minimal published native form with a NIN question
-  // to the dev-seed orchestrator (likely a new `published-survey.seed.ts`
-  // module) and removing the `.skip` below. Tracked as a follow-up against
-  // Story prep-7 (E2E test expansion) + the dev-seed completeness gap.
+test.describe('Wizard Step 1 — NIN validation (Story 9-18 AC#D5)', () => {
+  const VALID_NIN = '61961438053'; // passes Modulus 11
+  const INVALID_NIN = '12345678910'; // 11 digits, wrong check digit
+
+  test('rejects a checksum-invalid NIN with the Modulus-11 message + disabled Continue', async ({
+    page,
+  }) => {
+    await page.goto('/register');
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+
+    await page.getByTestId('wizard-step1-nin-input').fill(INVALID_NIN);
+    const invalid = page.getByTestId('wizard-step1-nin-invalid');
+    await expect(invalid).toBeVisible();
+    await expect(invalid).toContainText(/modulus 11/i);
+    await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
+  });
+
+  test('accepts a checksum-valid NIN (green format indicator)', async ({ page }) => {
+    await page.goto('/register');
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+
+    await page.getByTestId('wizard-step1-nin-input').fill(VALID_NIN);
+    await expect(page.getByTestId('wizard-step1-nin-valid')).toBeVisible();
+    await expect(page.getByTestId('wizard-step1-nin-invalid')).toHaveCount(0);
+  });
+
+  test('pending-NIN toggle disables the NIN input + shows the consequence card', async ({
+    page,
+  }) => {
+    await page.goto('/register');
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+
+    // The "I don't have my NIN now" inline link is equivalent to the toggle.
+    await page.getByTestId('nin-help-hint-pending-link').click();
+    await expect(page.getByTestId('wizard-step1-nin-input')).toBeDisabled();
+    await expect(page.getByTestId('pending-nin-consequence')).toBeVisible();
+  });
+
+  /**
+   * SKIPPED — the live duplicate-NIN block (AC#A2) needs a respondent already
+   * registered with VALID_NIN so the unauthenticated `useNinCheck` →
+   * POST /forms/check-nin returns a duplicate. Seed that respondent in the dev
+   * orchestrator, then drop the `.skip`.
+   */
+  test.skip('blocks a duplicate NIN via the live check (needs a seeded collision)', async ({
+    page,
+  }) => {
+    await page.goto('/register');
+    await page.getByTestId('wizard-step1-nin-input').fill(VALID_NIN);
+    await expect(page.getByTestId('wizard-step1-nin-duplicate')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
+  });
+});
+
+test.describe('Enumerator form-filler — NIN validation (Story 3.4 Task 0.7)', () => {
+  // SKIPPED: requires a published native form with a NIN question after
+  // db:seed:dev (the seed orchestrator doesn't yet create one). Re-enable by
+  // adding a published-survey seed module + removing the `.skip`.
   test.skip('should reject invalid NIN with modulus11 error and accept valid NIN', async ({ page }) => {
-    // --- Step 1: Login as enumerator (inline — auth-setup is skipped) ---
     await page.goto('/staff/login');
     await page.getByLabel('Email Address').fill('enumerator@dev.local');
     await page.getByLabel('Password', { exact: true }).fill('enum123');
-
-    // HCaptcha auto-bypassed via VITE_E2E=true (component calls onVerify on mount)
     await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled();
-    // Race-safe click→navigate (see helpers/login.ts comment on Promise.all pattern).
     await Promise.all([
       page.waitForURL('**/dashboard/**'),
       page.getByRole('button', { name: /sign in/i }).click(),
     ]);
 
-    // --- Step 2: Navigate to surveys page ---
     await Promise.all([
       page.waitForURL('**/survey'),
       page.getByRole('link', { name: /survey/i }).click(),
     ]);
 
-    // Wait for surveys to load (not loading, not error, not empty)
     const surveysGrid = page.getByTestId('surveys-grid');
     await expect(surveysGrid).toBeVisible({ timeout: 15000 });
-
-    // --- Step 3: Click the first available survey ---
     const firstSurveyButton = surveysGrid.getByRole('button').first();
-    await Promise.all([
-      page.waitForURL('**/survey/**'),
-      firstSurveyButton.click(),
-    ]);
+    await Promise.all([page.waitForURL('**/survey/**'), firstSurveyButton.click()]);
 
-    // --- Step 4: Navigate to the NIN question ---
-    // The form filler shows one question per screen. The NIN question may not be first
-    // (consent_marketplace is typically first). Navigate forward until we find the NIN input.
     const ninInput = page.getByTestId('input-nin');
     const continueBtn = page.getByTestId('continue-btn');
-
-    // Navigate through questions until NIN field is visible (max 20 questions)
     for (let i = 0; i < 20; i++) {
       if (await ninInput.isVisible().catch(() => false)) break;
-
-      // Fill required fields to advance (consent questions need 'yes')
       const currentTextbox = page.getByRole('textbox').first();
       if (await currentTextbox.isVisible().catch(() => false)) {
         await currentTextbox.fill('test');
@@ -79,46 +103,26 @@ test.describe('NIN Modulus 11 Validation', () => {
           await currentSelect.selectOption({ index: 0 }).catch(() => {});
         }
       }
-
-      // Check for select_one radio buttons (consent questions)
       const yesOption = page.getByRole('radio', { name: /yes/i });
       if (await yesOption.isVisible().catch(() => false)) {
         await yesOption.click();
       }
-
       await continueBtn.click();
-      // Brief wait for slide animation
       await page.waitForTimeout(200);
     }
 
-    // Assert we found the NIN field
     await expect(ninInput).toBeVisible({ timeout: 5000 });
 
-    // --- Step 5: Enter an INVALID NIN and verify error ---
-    // 12345678902 is 11 digits but fails modulus11 checksum
     await ninInput.fill('12345678902');
     await continueBtn.click();
-
-    // Validation error should appear as role="alert"
     const errorAlert = page.getByRole('alert');
     await expect(errorAlert).toBeVisible({ timeout: 5000 });
     await expect(errorAlert).toContainText(/NIN|invalid/i);
-
-    // Continue button should be disabled while error is shown
     await expect(continueBtn).toBeDisabled();
 
-    // --- Step 6: Clear and enter a VALID NIN, verify error clears ---
-    // 61961438053 passes modulus11 check
     await ninInput.fill('61961438053');
-
-    // Error should disappear (onChange clears validationError)
     await expect(errorAlert).not.toBeVisible({ timeout: 5000 });
-
-    // Continue button should be re-enabled
     await expect(continueBtn).toBeEnabled();
-
-    // --- Step 7: Verify the green checkmark appears for valid input ---
-    const validIndicator = page.getByLabel('Valid');
-    await expect(validIndicator).toBeVisible();
+    await expect(page.getByLabel('Valid')).toBeVisible();
   });
 });
