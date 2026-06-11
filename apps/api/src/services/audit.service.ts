@@ -105,6 +105,10 @@ export const AUDIT_ACTIONS = {
   // the silent-forensic-gap class the 2026-05-13 incident exposed.
   OPERATOR_BACKFILL_DATA_LOSS_MARKER: 'operator.backfill_data_loss_marker',
   OPERATOR_RECOVERY_EMAIL_SENT: 'operator.recovery_email_sent',
+  // Story 9-18 Part F (AC#F5) — per-row forensic trail for the operator-gated
+  // name-canonicalization backfill (swaps first_name/last_name on existing
+  // surname-first respondent rows after the given/family split).
+  OPERATOR_RESPONDENT_NAME_CANONICALIZED: 'operator.respondent_name_canonicalized',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

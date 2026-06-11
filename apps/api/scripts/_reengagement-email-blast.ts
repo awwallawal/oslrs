@@ -394,8 +394,10 @@ async function main() {
     console.log(`\n[DRY-RUN] Cohort: ${cohort.length} recipient(s)\n`);
     for (const row of cohort) {
       const fd = (row.formData ?? {}) as Record<string, unknown>;
-      const fullName = typeof fd.fullName === 'string' ? fd.fullName : '';
-      const firstName = firstNameFrom(fullName);
+      // Story 9-18 Part F (AC#F3): prefer the canonical given name from post-9-18
+      // drafts; fall back to the legacy fullName first-token parse for pre-9-18 drafts.
+      const givenName = typeof fd.givenName === 'string' ? fd.givenName.trim() : '';
+      const firstName = givenName || firstNameFrom(typeof fd.fullName === 'string' ? fd.fullName : '');
       const templateTag = row.currentStep >= HIGH_PROGRESS_STEP_THRESHOLD ? '90%-done' : 'saved';
       console.log(
         `  ${maskEmail(row.email).padEnd(40)} ${firstName.padEnd(20)} step=${row.currentStep} tpl=${templateTag.padEnd(8)} draft=${row.id} created=${row.createdAt.toISOString()}`,
