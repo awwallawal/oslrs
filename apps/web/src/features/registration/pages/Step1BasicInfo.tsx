@@ -156,10 +156,6 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
         : undefined;
   const ninDescribedBy = ['wizard-step1-nin-help', ninMsgId].filter(Boolean).join(' ');
 
-  // AI-Review M3: nudge (not an error) when there's a given name but no surname.
-  const familyEmpty = !(formData.familyName ?? '').trim();
-  const showFamilyNudge = familyEmpty && (formData.givenName ?? '').trim().length > 0;
-
   function handleContinue() {
     setTouched({ nin: true, givenName: true, familyName: true, dateOfBirth: true, gender: true });
     if (allValid) onContinue();
@@ -273,7 +269,7 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
               aria-invalid={!!(touched.givenName && fieldErrors.givenName)}
               aria-describedby={fieldErrors.givenName ? 'wizard-given-name-error' : undefined}
               className="w-full rounded-lg border border-neutral-300 px-4 py-3 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              placeholder="e.g. Kayode"
+              placeholder="e.g. Adeyinka"
               data-testid="wizard-step1-given-name"
             />
             {touched.givenName && fieldErrors.givenName && (
@@ -285,7 +281,7 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
 
           <div className="space-y-1.5">
             <label htmlFor="wizard-family-name" className="block text-sm font-medium text-neutral-700">
-              Family name (surname) <span className="font-normal text-neutral-400">— optional</span>
+              Family name (surname)
             </label>
             <input
               id="wizard-family-name"
@@ -298,17 +294,12 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
               aria-invalid={!!(touched.familyName && fieldErrors.familyName)}
               aria-describedby={fieldErrors.familyName ? 'wizard-family-name-error' : undefined}
               className="w-full rounded-lg border border-neutral-300 px-4 py-3 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              placeholder="e.g. Olowu"
+              placeholder="e.g. Adewale"
               data-testid="wizard-step1-family-name"
             />
             {touched.familyName && fieldErrors.familyName && (
               <p id="wizard-family-name-error" className="text-sm text-error-600">
                 {fieldErrors.familyName}
-              </p>
-            )}
-            {showFamilyNudge && !fieldErrors.familyName && (
-              <p className="text-xs text-neutral-500" data-testid="wizard-family-name-nudge">
-                No surname? That&apos;s fine. If you do have a family name, adding it helps us tell registrants apart.
               </p>
             )}
           </div>

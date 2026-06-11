@@ -10,9 +10,9 @@ import { cn } from '../../../lib/utils';
  *     (so flipping the toggle back OFF restores the typed digits).
  *   - Submit button label flips "Submit Registration" → "Save as Pending".
  *   - A consequence-preview card (Info-50 bg / Info-600 left border) appears
- *     beneath the toggle: "Your registration will be saved as pending. We'll
- *     email you to complete it. We'll also remind you in 2 days, 7 days, and
- *     14 days."
+ *     beneath the toggle: "Your registration will be saved. We'll email you a
+ *     one-click link to add your NIN whenever you're ready." (We intentionally
+ *     do NOT disclose the internal reminder cadence to the respondent.)
  *
  * Implemented as a styled `<button role="switch">` per WAI-ARIA Switch
  * pattern. Keyboard: Space/Enter toggles. Screen reader: announces "switch,
@@ -33,7 +33,7 @@ export interface PendingNinToggleProps {
 }
 
 const CONSEQUENCE_COPY =
-  "Your registration will be saved as pending. We'll email you to complete it. We'll also remind you in 2 days, 7 days, and 14 days.";
+  "Your registration will be saved. We'll email you a one-click link to add your NIN whenever you're ready.";
 
 export function PendingNinToggle({
   pressed,

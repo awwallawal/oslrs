@@ -42,8 +42,9 @@ describe('PendingNinToggle', () => {
     expect(screen.queryByTestId('pending-nin-consequence')).toBeNull();
     rerender(<PendingNinToggle pressed onChange={() => {}} />);
     expect(screen.getByTestId('pending-nin-consequence')).toBeInTheDocument();
+    // Copy intentionally omits the internal reminder cadence (operator-only).
     expect(screen.getByTestId('pending-nin-consequence')).toHaveTextContent(
-      /2 days, 7 days, and 14 days/,
+      /one-click link to add your NIN whenever you're ready/,
     );
   });
 
