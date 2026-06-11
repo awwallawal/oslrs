@@ -55,10 +55,11 @@
       "path-to-regexp@<1.0.0": "0.1.13",
       "picomatch": ">=4.0.4",
       "vite": ">=7.3.2",
-      "drizzle-orm": ">=0.45.2"
+      "drizzle-orm": ">=0.45.2",
+      "tmp": ">=0.2.6"
     },
     "comments": {
-      "overrides": "SEC-1+SEC2-2: fast-xml-parser >=5.5.6 for AWS SDK CVEs (GHSA-8gc5-j5rx-235r incomplete fix bypass). fast-xml-builder >=1.1.7 for attribute-quote bypass (GHSA-5wm8-gmm8-39j9, advisory published 2026-05; pulled transitively via @aws-sdk/client-s3 → @aws-sdk/xml-builder → fast-xml-parser → fast-xml-builder@1.1.4). socket.io-parser >=4.2.6 for unbounded binary attachments (GHSA-677m). path-to-regexp >=0.1.13 for ReDoS via express (GHSA-37ch). picomatch >=2.3.2/>=4.0.4 for ReDoS via extglob (GHSA-c2c7). minimatch for ReDoS via google-auth-library. rollup for path traversal (dev-only). vite >=7.3.2 for server.fs.deny bypass (GHSA-v2wj) + WebSocket file read (GHSA-p9ff). drizzle-orm >=0.45.2 for SQL injection via improperly escaped identifiers (GHSA-gpj5).",
+      "overrides": "SEC-1+SEC2-2: fast-xml-parser >=5.5.6 for AWS SDK CVEs (GHSA-8gc5-j5rx-235r incomplete fix bypass). fast-xml-builder >=1.1.7 for attribute-quote bypass (GHSA-5wm8-gmm8-39j9, advisory published 2026-05; pulled transitively via @aws-sdk/client-s3 → @aws-sdk/xml-builder → fast-xml-parser → fast-xml-builder@1.1.4). socket.io-parser >=4.2.6 for unbounded binary attachments (GHSA-677m). path-to-regexp >=0.1.13 for ReDoS via express (GHSA-37ch). picomatch >=2.3.2/>=4.0.4 for ReDoS via extglob (GHSA-c2c7). minimatch for ReDoS via google-auth-library. rollup for path traversal (dev-only). vite >=7.3.2 for server.fs.deny bypass (GHSA-v2wj) + WebSocket file read (GHSA-p9ff). drizzle-orm >=0.45.2 for SQL injection via improperly escaped identifiers (GHSA-gpj5). tmp >=0.2.6 for path-traversal via unsanitized prefix/postfix (GHSA-ph9p-34f9-6g65, HIGH); pulled transitively by Story 9-18's exceljs@4.4.0 → tmp@0.2.5 (operator-script-only dep, but kept in dependencies so the VPS backfill runs under --prod install, so the override patches it for the prod audit).",
       "accepted-risks": "qs (LOW arrayLimit bypass, via express->body-parser — no fix without Express 5 major version change). xlsx (devDep only — one-time migration, CVE-2023-30533 prototype pollution). serialize-javascript (dev-only via workbox-build). esbuild (dev-only via tsx/vite). ajv (dev-only via eslint). phin (dev-only via potrace/jimp)."
     }
   },
