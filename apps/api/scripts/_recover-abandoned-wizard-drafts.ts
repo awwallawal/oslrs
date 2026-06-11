@@ -330,8 +330,10 @@ async function main() {
     console.log(`\n[DRY-RUN] Cohort: ${cohort.length} recipient(s)\n`);
     for (const row of cohort) {
       const fd = (row.formData ?? {}) as Record<string, unknown>;
-      const fullName = typeof fd.fullName === 'string' ? fd.fullName : '';
-      const firstName = firstNameFrom(fullName);
+      // Story 9-18 Part F (AC#F3): prefer post-9-18 givenName; fall back to the
+      // legacy fullName first-token parse for pre-9-18 drafts.
+      const givenName = typeof fd.givenName === 'string' ? fd.givenName.trim() : '';
+      const firstName = givenName || firstNameFrom(typeof fd.fullName === 'string' ? fd.fullName : '');
       console.log(
         `  ${maskEmail(row.email).padEnd(40)} ${firstName.padEnd(20)} draft=${row.id} created=${row.createdAt.toISOString()}`,
       );
@@ -352,8 +354,10 @@ async function main() {
   for (let i = 0; i < cohort.length; i++) {
     const row = cohort[i];
     const fd = (row.formData ?? {}) as Record<string, unknown>;
-    const fullName = typeof fd.fullName === 'string' ? fd.fullName : '';
-    const firstName = firstNameFrom(fullName);
+    // Story 9-18 Part F (AC#F3): prefer post-9-18 givenName; fall back to the
+    // legacy fullName first-token parse for pre-9-18 drafts.
+    const givenName = typeof fd.givenName === 'string' ? fd.givenName.trim() : '';
+    const firstName = givenName || firstNameFrom(typeof fd.fullName === 'string' ? fd.fullName : '');
 
     try {
       const issued = await MagicLinkService.issueToken({

@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 45 total action types across all categories', () => {
+    it('should have 46 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -183,8 +183,10 @@ describe('AuditService', () => {
       // Story 9-26 Parts B + J (unified ingestion backfill + recovery) added 2:
       //   OPERATOR_BACKFILL_DATA_LOSS_MARKER ('operator.backfill_data_loss_marker'),
       //   OPERATOR_RECOVERY_EMAIL_SENT ('operator.recovery_email_sent') → 45.
+      // Story 9-18 Part F (name canonicalization backfill) added 1:
+      //   OPERATOR_RESPONDENT_NAME_CANONICALIZED → 46.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(45);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(46);
     });
   });
 
