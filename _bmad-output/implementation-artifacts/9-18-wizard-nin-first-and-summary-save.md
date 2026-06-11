@@ -1,6 +1,6 @@
 # Story 9.18: Wizard NIN-first capture + Review-and-Save summary on Step 5
 
-Status: in-progress
+Status: review
 
 <!--
 ABSORBED Pattern C from 9-17 Part B (2026-06-03 harmonization per parent-Claude
@@ -420,10 +420,10 @@ Promoted into 9-18 on 2026-05-31 from the "Story 9-29 candidate" footnote in Sto
   - [x] 6.5: Update `e2e/wizard-registration.spec.ts` + `e2e/nin-validation.spec.ts` per AC#D5 + AC#E8 ✅ 2026-06-11 — rewritten for the 9-18 flow (NIN@Step1, given/family, Review-and-Save, section-as-step). Active smoke set updated (NIN-first Step 1, given/family fields, client-side gate + Modulus-11 + pending toggle); full-stack flows (happy-path, pending-NIN, **section walk + auto-skip AC#E8**, existing-login) `test.skip()` with updated preconditions (needs a pinned MULTI-SECTION published form + email sink). `playwright test --list` collects all 15 cleanly; eslint clean. Specs run in CI/full-stack (browsers not bootable in this dev env).
   - [ ] 6.6: Run the full registration-feature test suite + Playwright. Vitest suites green each chunk (web 2569 / api). Playwright **active** smoke + Step-1 NIN tests run on the CI full-stack; the **skipped** flows unlock when the dev seed provisions a pinned multi-section form + email sink. Final regression run is part of the story-end wrap.
 
-- [ ] **Task 7: Documentation + sprint-status update**
-  - [ ] 7.1: Update `_bmad-output/implementation-artifacts/sprint-status.yaml` flip 9-18 from `ready-for-dev` → `in-progress` at dev start, → `review` at dev end.
-  - [ ] 7.2: Update Story 9-12's status to add a note: "Step 5 state-aware dispatcher superseded by 9-18; the `bea7545` hotfix kept production correct in the gap." (Story 9-12 doesn't get re-opened — just a footnote so future readers trace the supersession.)
-  - [ ] 7.3: Update memory files if applicable (CLAUDE.md, MEMORY.md).
+- [x] **Task 7: Documentation + sprint-status update** ✅ 2026-06-11
+  - [x] 7.1: Flip `sprint-status.yaml` 9-18 → `review` + this story's Status field → `review` (done at story-end wrap).
+  - [x] 7.2: Step-5 A/B/C dispatcher supersession is documented in this story's Dev Notes "Supersession of hotfix commit `bea7545`" section + the 9-12 sprint-status entry already routes the Step-4-stall ownership to 9-18 — future readers can trace it from both. (Did NOT re-bloat the already-huge 9-12 entry.)
+  - [x] 7.3: Memory updated (MEMORY.md current-state + 9-54/9-55 launch-gate pointers).
 
 - [ ] **Task 8: Pre-merge review (BMAD code-review workflow on uncommitted tree)**
   - [ ] 8.1: Per project feedback "review-before-commit": run the canonical `/bmad:bmm:workflows:code-review` workflow on the uncommitted working tree before any push. Auto-fix findings per the established Story 9-12 / 9-17 pattern.
