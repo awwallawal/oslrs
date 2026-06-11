@@ -13,6 +13,12 @@ import {
  */
 describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
   it('has exactly the seven canonical keys', () => {
+    // GUARD (9-18 Part-E review, H1): these 7 are free-text/date fields whose
+    // value vocabulary matches the questionnaire's, so dedup auto-fill is safe.
+    // If this fails because you added a CHOICE field (gender / lga / consent),
+    // STOP — those need a wizard-value → questionnaire-choice mapping layer first
+    // (Story 9-54), or you'll inject invalid choice values. See the module's
+    // VALUE-VOCABULARY CONSTRAINT note.
     expect(Object.keys(WIZARD_PROVIDED_FIELD_NAMES).sort()).toEqual([
       'dob',
       'email',

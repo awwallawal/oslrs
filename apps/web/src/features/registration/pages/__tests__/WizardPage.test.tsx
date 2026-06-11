@@ -26,8 +26,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 expect.extend(matchers);
+
+// Story 9-18 Part E — WizardPage now derives its steps from the pinned form's
+// sections. A 1-section form keeps the step model at 5 (basics/contact/consent/
+// section/review) so these URL-race tests stay index-stable: index 3 = the
+// section step (Step4Questionnaire stub), index 4 = Review.
+const ONE_SECTION_FORM = {
+  formId: 'f1',
+  title: 'Survey',
+  version: '1.0.0',
+  questions: [
+    { id: 'q-occupation', type: 'text', name: 'occupation', label: 'Occupation', required: false, sectionId: 's1', sectionTitle: 'Livelihood' },
+  ],
+  choiceLists: {},
+  sectionShowWhen: {},
+};
 // AI-Review C1: this file lacked the explicit unmount every other RTL test file
 // in the repo has, so tests 2..N collided on leftover DOM ("Found multiple
 // elements by [data-testid=step1-stub]") and the load-bearing 427a80d URL-race
@@ -59,6 +75,8 @@ vi.mock('../../api/wizard.api', () => ({
   fetchWizardDraft: mockFetchWizardDraft,
   fetchPublicLgas: mockFetchPublicLgas,
   fetchPublicActiveForm: mockFetchPublicActiveForm,
+  derivePendingNin: (fd: { pendingNinToggle?: boolean; nin?: string }) =>
+    fd.pendingNinToggle === true || !fd.nin,
 }));
 
 // Step components — minimal stubs. Each exposes a Continue button so we
@@ -137,20 +155,23 @@ function LocationProbe() {
 }
 
 function renderAt(initialEntry: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route
-          path="/register"
-          element={
-            <>
-              <WizardPage />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route
+            path="/register"
+            element={
+              <>
+                <WizardPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -166,6 +187,8 @@ beforeEach(() => {
   // to an empty draft (currentStepIndex=0, isHydrated=true). The hook only
   // calls fetchWizardDraft when a token is supplied via query string.
   mockFetchWizardDraft.mockResolvedValue(null);
+  // Part E: WizardPage fetches the pinned form to build its step list.
+  mockFetchPublicActiveForm.mockResolvedValue(ONE_SECTION_FORM);
 });
 
 describe('WizardPage URL ↔ state sync (regression — 2026-05-12 race fix)', () => {

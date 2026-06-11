@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { WizardLayout } from '../../../layouts/WizardLayout';
 import { useWizardDraft } from '../hooks/useWizardDraft';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -8,8 +9,11 @@ import {
   submitWizard,
   requestMagicLink,
   derivePendingNin,
+  fetchPublicActiveForm,
   type WizardDraftData,
+  type FlattenedForm,
 } from '../api/wizard.api';
+import { getVisibleQuestions } from '../../forms/utils/skipLogic';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
@@ -18,24 +22,58 @@ import { Step5ReviewAndSave } from './Step5ReviewAndSave';
 
 /**
  * Story 9-12 Task 4.3 + Task 5 — public registration wizard.
+ * Story 9-18 Part E (AC#E1/E3) — dynamic, section-as-step structure.
  *
- * Single page that renders 5 steps inside the WizardLayout chrome. Each step
- * is responsible for its own validation + Continue/Back navigation; the
- * wizard page owns step index, URL routing (`/register?step=N`), draft
- * persistence, and the final submit.
+ * The wizard is N steps: three fixed head steps (Basics / Contact / Consent),
+ * one step per questionnaire SECTION of the pinned public form (each rendered
+ * by `Step4Questionnaire` with a `sectionIndex`), and a final Review step. When
+ * no public form is configured the section steps simply don't exist (the survey
+ * is skipped). Each step owns its validation + Continue/Back; the wizard page
+ * owns the step list, URL routing (`/register?step=N`), draft persistence, the
+ * empty-section auto-skip (AC#E5), and the final submit.
  *
- * Cross-device resume: when a `?token=<wizard_resume>` query param is
- * present, `useWizardDraft` hydrates from the server-side draft and the
- * wizard jumps to the saved step.
+ * Cross-device resume: when a `?token=<wizard_resume>` query param is present,
+ * `useWizardDraft` hydrates from the server-side draft and the wizard jumps to
+ * the saved step.
  */
 
-const STEPS = [
+const HEAD_STEPS = [
   { id: 'basics', label: 'Basics' },
   { id: 'contact', label: 'Contact' },
   { id: 'consent', label: 'Consent' },
-  { id: 'survey', label: 'Survey' },
-  { id: 'review', label: 'Review' },
 ] as const;
+
+interface WizardStepDef {
+  id: string;
+  label: string;
+  /** Present only for section steps — the ordinal passed to FormRenderer. */
+  sectionIndex?: number;
+  sectionId?: string;
+  sectionTitle?: string;
+}
+
+/** Build the dynamic step list from the pinned form's sections (AC#E1/E3). */
+function buildSteps(form: FlattenedForm | null): WizardStepDef[] {
+  const sections: { id: string; title: string }[] = [];
+  const seen = new Set<string>();
+  for (const q of form?.questions ?? []) {
+    if (!seen.has(q.sectionId)) {
+      seen.add(q.sectionId);
+      sections.push({ id: q.sectionId, title: q.sectionTitle });
+    }
+  }
+  return [
+    ...HEAD_STEPS.map((s) => ({ id: s.id, label: s.label })),
+    ...sections.map((s, i) => ({
+      id: `section-${s.id}`,
+      label: s.title,
+      sectionIndex: i,
+      sectionId: s.id,
+      sectionTitle: s.title,
+    })),
+    { id: 'review', label: 'Review' },
+  ];
+}
 
 export default function WizardPage() {
   useDocumentTitle('Register | Oyo State Skills Registry');
@@ -43,9 +81,32 @@ export default function WizardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const resumeToken = searchParams.get('token') ?? undefined;
-  const stepFromUrl = parseStep(searchParams.get('step'));
 
   const draft = useWizardDraft({ token: resumeToken });
+
+  // Story 9-18 Part E — fetch the pinned form here (shared query key with the
+  // section steps, so TanStack fetches it once) to derive the dynamic step list.
+  const formQuery = useQuery({
+    queryKey: ['wizard', 'public-active-form'],
+    queryFn: fetchPublicActiveForm,
+    staleTime: 5 * 60 * 1000,
+  });
+  const form = formQuery.data ?? null;
+  // Settled = the form query RESOLVED to a value: a form, or null on 404
+  // ("no form configured" → survey legitimately skipped). A non-404 fetch ERROR
+  // is deliberately NOT settled — it's surfaced as an explicit retry state below
+  // (AI-Review M1), so a transient network failure never silently produces a
+  // survey-less wizard. Gating on a stable step list also avoids the 4→N flash.
+  const formSettled = formQuery.isSuccess;
+  const steps = useMemo(() => buildSteps(form), [form]);
+
+  const stepFromUrl = useMemo(() => {
+    const raw = searchParams.get('step');
+    if (raw === null) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(Math.floor(n), steps.length - 1));
+  }, [searchParams, steps.length]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -75,12 +136,15 @@ export default function WizardPage() {
   // set currentStepIndex from a server-side draft before this effect first
   // runs. Skipping the URL→state sync on that single render (only when a
   // resume token is in scope) lets the saved server step survive.
+  //
+  // Story 9-18 Part E — both effects also gate on `formSettled` so they act
+  // against the final (stable) step list, never the transient pre-load one.
   const hasReconciledInitialUrl = useRef(false);
   const lastSyncSource = useRef<'url' | 'state' | null>(null);
 
   // URL → state (back/forward + explicit `?step=N` deep-links).
   useEffect(() => {
-    if (!draft.isHydrated) return;
+    if (!draft.isHydrated || !formSettled) return;
     if (!hasReconciledInitialUrl.current) {
       hasReconciledInitialUrl.current = true;
       if (resumeToken) return;
@@ -91,16 +155,16 @@ export default function WizardPage() {
     // our `setCurrentStepIndex` lands knows to step aside on the next tick.
     lastSyncSource.current = 'url';
     // Clamp to a step the user has actually reached.
-    draft.setCurrentStepIndex(Math.min(stepFromUrl, STEPS.length - 1));
+    draft.setCurrentStepIndex(Math.min(stepFromUrl, steps.length - 1));
     // Deliberately omit `draft` from deps — it's a fresh object every render
     // (useWizardDraft return). Reading `draft.currentStepIndex` + `.setCurrentStepIndex`
     // via closure is the correct sync semantic.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.isHydrated, stepFromUrl]);
+  }, [draft.isHydrated, formSettled, stepFromUrl]);
 
   // State → URL (Continue / Back button clicks).
   useEffect(() => {
-    if (!draft.isHydrated) return;
+    if (!draft.isHydrated || !formSettled) return;
     // If the previous tick was a URL→state sync, the URL is already the
     // intended truth — don't overwrite it with our just-updated state.
     // Reset the flag so subsequent ticks are handled normally.
@@ -118,27 +182,53 @@ export default function WizardPage() {
     // closure; their identities change on every URL update but we only
     // want this effect firing when the SOURCE-OF-TRUTH state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.currentStepIndex, draft.isHydrated]);
+  }, [draft.currentStepIndex, draft.isHydrated, formSettled]);
 
   const goToStep = useCallback(
     (idx: number) => {
-      const clamped = Math.max(0, Math.min(idx, STEPS.length - 1));
+      const clamped = Math.max(0, Math.min(idx, steps.length - 1));
       draft.setCurrentStepIndex(clamped);
     },
-    [draft],
+    [draft, steps.length],
+  );
+
+  // Story 9-18 AC#E5 — a section step whose questions are ALL hidden by
+  // `showWhen` (given the current answers) is auto-skipped during Continue/Back.
+  // Head + Review steps have no `sectionId` and are never skippable.
+  const isStepSkippable = useCallback(
+    (idx: number): boolean => {
+      const step = steps[idx];
+      if (!step?.sectionId || !form) return false;
+      const sectionQuestions = form.questions.filter((q) => q.sectionId === step.sectionId);
+      const responses = draft.formData.questionnaireResponses ?? {};
+      return getVisibleQuestions(sectionQuestions, responses, form.sectionShowWhen).length === 0;
+    },
+    [steps, form, draft.formData.questionnaireResponses],
   );
 
   const handleContinue = useCallback(() => {
-    goToStep(draft.currentStepIndex + 1);
-  }, [draft.currentStepIndex, goToStep]);
+    let next = draft.currentStepIndex + 1;
+    // Never skip the final Review step (steps.length - 1).
+    while (next < steps.length - 1 && isStepSkippable(next)) next += 1;
+    goToStep(next);
+  }, [draft.currentStepIndex, steps.length, isStepSkippable, goToStep]);
 
   const handleBack = useCallback(() => {
     if (draft.currentStepIndex === 0) {
       navigate('/');
       return;
     }
-    goToStep(draft.currentStepIndex - 1);
-  }, [draft.currentStepIndex, goToStep, navigate]);
+    let prev = draft.currentStepIndex - 1;
+    while (prev > 0 && isStepSkippable(prev)) prev -= 1;
+    goToStep(prev);
+  }, [draft.currentStepIndex, isStepSkippable, goToStep, navigate]);
+
+  // Step list for the indicator, annotated with which section steps are
+  // currently auto-skipped (AC#E5 — greyed in the breadcrumb variant).
+  const indicatorSteps = useMemo(
+    () => steps.map((s, i) => ({ id: s.id, label: s.label, skipped: isStepSkippable(i) })),
+    [steps, isStepSkippable],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -210,10 +300,35 @@ export default function WizardPage() {
     }
   }, [draft.formData, isSubmitting]);
 
-  // Loading skeleton while hydrating from a magic-link token.
-  if (!draft.isHydrated) {
+  // AI-Review M1 — the pinned survey failed to load (a non-404 fetch error).
+  // Surface it with a retry instead of silently dropping every section step and
+  // letting the user submit with an empty questionnaire. A 404 ("no form
+  // configured") is NOT an error — it resolves to null and the survey is skipped.
+  if (formQuery.isError) {
     return (
-      <WizardLayout steps={[...STEPS]} currentStepIndex={0}>
+      <WizardLayout steps={steps} currentStepIndex={0}>
+        <div role="alert" className="space-y-3 text-center" data-testid="wizard-form-error">
+          <p className="text-sm text-neutral-700">
+            We couldn&apos;t load the registration survey. Please check your connection and try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => formQuery.refetch()}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            data-testid="wizard-form-error-retry"
+          >
+            Retry
+          </button>
+        </div>
+      </WizardLayout>
+    );
+  }
+
+  // Loading skeleton while hydrating from a magic-link token OR loading the form
+  // (so the step list is stable before first paint).
+  if (!draft.isHydrated || !formSettled) {
+    return (
+      <WizardLayout steps={steps} currentStepIndex={0}>
         <div className="space-y-4" data-testid="wizard-hydrating">
           <div className="h-6 w-1/2 animate-pulse rounded bg-neutral-100" />
           <div className="h-24 animate-pulse rounded bg-neutral-100" />
@@ -224,7 +339,7 @@ export default function WizardPage() {
 
   if (completionData) {
     return (
-      <WizardLayout steps={[...STEPS]} currentStepIndex={STEPS.length - 1}>
+      <WizardLayout steps={steps} currentStepIndex={steps.length - 1}>
         <CompletionScreen
           email={draft.formData.email ?? ''}
           respondentId={completionData.respondentId}
@@ -236,7 +351,7 @@ export default function WizardPage() {
 
   return (
     <WizardLayout
-      steps={[...STEPS]}
+      steps={indicatorSteps}
       currentStepIndex={draft.currentStepIndex}
       onStepClick={(idx) => goToStep(idx)}
       footerSlot={
@@ -252,6 +367,7 @@ export default function WizardPage() {
       }
     >
       {renderStep({
+        steps,
         index: draft.currentStepIndex,
         formData: draft.formData,
         mergeFields: draft.mergeFields,
@@ -267,6 +383,7 @@ export default function WizardPage() {
 }
 
 function renderStep(props: {
+  steps: WizardStepDef[];
   index: number;
   formData: WizardDraftData;
   mergeFields: (patch: Partial<WizardDraftData>) => void;
@@ -277,8 +394,11 @@ function renderStep(props: {
   isSubmitting: boolean;
   submitError: string | null;
 }) {
-  switch (props.index) {
-    case 0:
+  const step = props.steps[props.index];
+  if (!step) return null;
+
+  switch (step.id) {
+    case 'basics':
       return (
         <Step1BasicInfo
           formData={props.formData}
@@ -287,7 +407,7 @@ function renderStep(props: {
           onBack={props.onBack}
         />
       );
-    case 1:
+    case 'contact':
       return (
         <Step2ContactLga
           formData={props.formData}
@@ -296,7 +416,7 @@ function renderStep(props: {
           onBack={props.onBack}
         />
       );
-    case 2:
+    case 'consent':
       return (
         <Step3Consent
           formData={props.formData}
@@ -305,16 +425,7 @@ function renderStep(props: {
           onBack={props.onBack}
         />
       );
-    case 3:
-      return (
-        <Step4Questionnaire
-          formData={props.formData}
-          mergeFields={props.mergeFields}
-          onContinue={props.onContinue}
-          onBack={props.onBack}
-        />
-      );
-    case 4:
+    case 'review':
       return (
         <Step5ReviewAndSave
           formData={props.formData}
@@ -328,7 +439,19 @@ function renderStep(props: {
         />
       );
     default:
-      return null;
+      // Section step (AC#E1) — `key` forces a fresh FormRenderer positioned at
+      // this section's first question on every section transition.
+      return (
+        <Step4Questionnaire
+          key={step.id}
+          formData={props.formData}
+          mergeFields={props.mergeFields}
+          onContinue={props.onContinue}
+          onBack={props.onBack}
+          sectionIndex={step.sectionIndex}
+          sectionTitle={step.sectionTitle}
+        />
+      );
   }
 }
 
@@ -369,11 +492,4 @@ function CompletionScreen({
       </p>
     </div>
   );
-}
-
-function parseStep(raw: string | null): number | null {
-  if (raw === null) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, Math.min(Math.floor(n), STEPS.length - 1));
 }

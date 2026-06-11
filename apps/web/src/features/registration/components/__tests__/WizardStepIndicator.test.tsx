@@ -18,13 +18,11 @@ const STEPS: WizardStep[] = [
 ];
 
 describe('WizardStepIndicator', () => {
-  it('renders both desktop and mobile views in the DOM', () => {
+  it('renders the breadcrumb + compact line for a small step count', () => {
     render(<WizardStepIndicator steps={STEPS} currentStepIndex={2} />);
-    expect(screen.getByTestId('wizard-step-indicator')).toBeInTheDocument();
-    expect(screen.getByTestId('wizard-step-indicator-mobile')).toHaveTextContent(
-      /Step 3 of 5/,
-    );
-    expect(screen.getByTestId('wizard-step-indicator-mobile')).toHaveTextContent('Consent');
+    expect(screen.getByTestId('wizard-step-indicator')).toHaveAttribute('data-variant', 'breadcrumb');
+    expect(screen.getByText(/Step 3 of 5/)).toBeInTheDocument();
+    expect(screen.getByTestId('wizard-step-current-label')).toHaveTextContent('Consent');
   });
 
   it('marks the current step with aria-current="step"', () => {
@@ -58,12 +56,44 @@ describe('WizardStepIndicator', () => {
   it('clamps an out-of-range currentStepIndex to the nearest valid bound', () => {
     render(<WizardStepIndicator steps={STEPS} currentStepIndex={99} />);
     // index 99 → safeIndex = STEPS.length - 1 = 4 (label "NIN").
-    expect(screen.getByTestId('wizard-step-indicator-mobile')).toHaveTextContent('NIN');
+    expect(screen.getByTestId('wizard-step-current-label')).toHaveTextContent('NIN');
     expect(screen.getByTestId('wizard-step-4')).toHaveAttribute('aria-current', 'step');
   });
 
   it('exposes a navigation landmark labelled "Registration progress"', () => {
     render(<WizardStepIndicator steps={STEPS} currentStepIndex={0} />);
     expect(screen.getByLabelText('Registration progress')).toBeInTheDocument();
+  });
+
+  // Story 9-18 Part E (AC#E1) — the breadcrumb can't fit a many-step wizard.
+  it('switches to the compact variant for a many-step wizard (>6)', () => {
+    const many: WizardStep[] = Array.from({ length: 11 }, (_, i) => ({
+      id: String(i),
+      label: `Step ${i}`,
+    }));
+    render(<WizardStepIndicator steps={many} currentStepIndex={5} />);
+    expect(screen.getByTestId('wizard-step-indicator')).toHaveAttribute('data-variant', 'compact');
+    expect(screen.getByText(/Step 6 of 11/)).toBeInTheDocument();
+    // No per-step breadcrumb circles in compact mode.
+    expect(screen.queryByTestId('wizard-step-button-0')).not.toBeInTheDocument();
+  });
+
+  // Story 9-18 Part E (AC#E5) — auto-skipped section steps render greyed + inert.
+  it('greys out and disables a skipped step in the breadcrumb', () => {
+    const onStepClick = vi.fn();
+    const withSkipped: WizardStep[] = [
+      { id: '1', label: 'Basics' },
+      { id: '2', label: 'Contact' },
+      { id: '3', label: 'Skipped', skipped: true },
+      { id: '4', label: 'Review' },
+    ];
+    render(
+      <WizardStepIndicator steps={withSkipped} currentStepIndex={3} onStepClick={onStepClick} />,
+    );
+    expect(screen.getByTestId('wizard-step-2')).toHaveAttribute('data-skipped', 'true');
+    const skippedBtn = screen.getByTestId('wizard-step-button-2');
+    expect(skippedBtn).toBeDisabled();
+    fireEvent.click(skippedBtn);
+    expect(onStepClick).not.toHaveBeenCalled();
   });
 });
