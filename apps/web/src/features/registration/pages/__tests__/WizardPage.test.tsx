@@ -265,14 +265,26 @@ describe('WizardPage URL ↔ state sync (regression — 2026-05-12 race fix)', (
     await waitFor(() => expect(urlSearch()).toBe('?step=3'));
   });
 
-  it('respects a `?step=2` deep-link on initial mount (URL → state)', async () => {
+  // Story 9-54 AC6.1 (GAP 4) — a COLD deep-link beyond the furthest step the
+  // user has legitimately reached is clamped back to it (here: 0, fresh mount),
+  // never honoured. Previously `?step=2` jumped straight to Consent; the same
+  // vector with `?step=<last>` let a user skip the questionnaire to Review.
+  it('clamps a cold `?step=2` deep-link to the furthest-reached step (0) and corrects the URL', async () => {
     renderAt('/register?step=2');
-    // After hydration, the URL→state sync should land us on Step 3
-    // (index 2 = Step 3 "Consent"). The one-shot ref guard runs on the
-    // FIRST hydrated render so the deep-link survives.
     await waitFor(() => {
-      expect(screen.getByTestId('step3-stub')).toBeInTheDocument();
+      expect(screen.getByTestId('step1-stub')).toBeInTheDocument();
     });
-    expect(screen.queryByTestId('step1-stub')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('step3-stub')).not.toBeInTheDocument();
+    // The over-reaching URL is rewritten so it can't be re-shared / re-trigger.
+    await waitFor(() => expect(urlSearch()).toBe('?step=0'));
+  });
+
+  it('clamps a cold `?step=<last>` deep-link so Review cannot be reached past the questionnaire (AC6.1)', async () => {
+    renderAt('/register?step=4'); // index 4 = Review in the 5-step model
+    await waitFor(() => {
+      expect(screen.getByTestId('step1-stub')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('step5-stub')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('step4-stub')).not.toBeInTheDocument();
   });
 });

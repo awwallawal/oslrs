@@ -120,3 +120,53 @@ describe('Step5ReviewAndSave (Story 9-18 Part C AC#C1/D2)', () => {
     expect(screen.getByTestId('step5-name')).toHaveTextContent('Kayode');
   });
 });
+
+describe('Step5ReviewAndSave incomplete-questionnaire guard (Story 9-54 AC6.2)', () => {
+  beforeEach(() => {
+    mockedLgas.mockReset();
+    mockedLgas.mockResolvedValue([{ id: 'lga-egbeda', name: 'Egbeda', code: 'EGB' }]);
+  });
+
+  function renderGuarded(incomplete: boolean, missingStepIndex: number | null) {
+    const onGoToStep = vi.fn();
+    const onSubmit = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <Step5ReviewAndSave
+          formData={fullState()}
+          onGoToStep={onGoToStep}
+          onSubmit={onSubmit}
+          onBack={vi.fn()}
+          incompleteQuestionnaire={incomplete}
+          missingStepIndex={missingStepIndex}
+        />
+      </QueryClientProvider>,
+    );
+    return { onGoToStep, onSubmit };
+  }
+
+  it('disables Save and shows the notice when the questionnaire is incomplete', () => {
+    const { onSubmit } = renderGuarded(true, 3);
+    expect(screen.getByTestId('step5-incomplete-notice')).toBeInTheDocument();
+    const save = screen.getByTestId('wizard-save-button');
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('jumps back to the offending step via the notice link', () => {
+    const { onGoToStep } = renderGuarded(true, 3);
+    fireEvent.click(screen.getByTestId('step5-incomplete-goto'));
+    expect(onGoToStep).toHaveBeenCalledWith(3);
+  });
+
+  it('enables Save and hides the notice when complete', () => {
+    const { onSubmit } = renderGuarded(false, null);
+    expect(screen.queryByTestId('step5-incomplete-notice')).not.toBeInTheDocument();
+    const save = screen.getByTestId('wizard-save-button');
+    expect(save).not.toBeDisabled();
+    fireEvent.click(save);
+    expect(onSubmit).toHaveBeenCalled();
+  });
+});

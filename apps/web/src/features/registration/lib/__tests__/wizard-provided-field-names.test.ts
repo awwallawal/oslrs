@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   WIZARD_PROVIDED_FIELD_NAMES,
   findWizardFieldForQuestionName,
+  mapWizardValueToChoice,
+  WIZARD_CHOICE_FIELD_KEYS,
   NIN_QUESTION_NAMES,
 } from '../wizard-provided-field-names';
 
@@ -12,21 +14,33 @@ import {
  * and the legacy `nin-question-names.ts` module is gone.
  */
 describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
-  it('has exactly the seven canonical keys', () => {
-    // GUARD (9-18 Part-E review, H1): these 7 are free-text/date fields whose
-    // value vocabulary matches the questionnaire's, so dedup auto-fill is safe.
-    // If this fails because you added a CHOICE field (gender / lga / consent),
-    // STOP — those need a wizard-value → questionnaire-choice mapping layer first
-    // (Story 9-54), or you'll inject invalid choice values. See the module's
-    // VALUE-VOCABULARY CONSTRAINT note.
+  it('has exactly the eleven canonical keys', () => {
+    // Story 9-54 AC4 — the four CHOICE fields (gender / lgaId / the two consents)
+    // were added once the wizard-value → questionnaire-choice mapping layer
+    // ({@link mapWizardValueToChoice}) made them safe. A new CHOICE key MUST be in
+    // WIZARD_CHOICE_FIELD_KEYS and handled by the mapper, or it will inject an
+    // invalid choice value — see the module's VALUE-VOCABULARY CONSTRAINT note.
     expect(Object.keys(WIZARD_PROVIDED_FIELD_NAMES).sort()).toEqual([
+      'consentEnriched',
+      'consentMarketplace',
       'dob',
       'email',
       'familyName',
       'fullName',
+      'gender',
       'givenName',
+      'lgaId',
       'nin',
       'phone',
+    ]);
+  });
+
+  it('every choice key is registered in WIZARD_CHOICE_FIELD_KEYS', () => {
+    expect([...WIZARD_CHOICE_FIELD_KEYS].sort()).toEqual([
+      'consentEnriched',
+      'consentMarketplace',
+      'gender',
+      'lgaId',
     ]);
   });
 
@@ -53,6 +67,12 @@ describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
   it('matches the canonical map snapshot (guards unintended edits)', () => {
     expect(WIZARD_PROVIDED_FIELD_NAMES).toMatchInlineSnapshot(`
       {
+        "consentEnriched": [
+          "consent_enriched",
+        ],
+        "consentMarketplace": [
+          "consent_marketplace",
+        ],
         "dob": [
           "date_of_birth",
           "dob",
@@ -73,10 +93,20 @@ describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
           "fullname",
           "name",
         ],
+        "gender": [
+          "gender",
+          "sex",
+        ],
         "givenName": [
           "given_name",
           "first_name",
           "firstname",
+        ],
+        "lgaId": [
+          "lga",
+          "lga_id",
+          "lga_of_residence",
+          "local_government",
         ],
         "nin": [
           "nin",
@@ -90,6 +120,47 @@ describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
         ],
       }
     `);
+  });
+
+  describe('mapWizardValueToChoice (Story 9-54 AC4 value-mapping)', () => {
+    const genderChoices = [
+      { value: 'male' },
+      { value: 'female' },
+      { value: 'other' },
+    ];
+    const yesNo = [{ value: 'yes' }, { value: 'no' }];
+    const lgaChoices = [{ value: 'saki_west' }, { value: 'ibadan_north' }];
+
+    it('maps gender prefer_not_to_say → other (vocabulary mismatch)', () => {
+      expect(mapWizardValueToChoice('gender', 'prefer_not_to_say', genderChoices)).toBe('other');
+    });
+
+    it('passes through gender values that already match the choice list', () => {
+      expect(mapWizardValueToChoice('gender', 'female', genderChoices)).toBe('female');
+    });
+
+    it('maps boolean consent → yes / no', () => {
+      expect(mapWizardValueToChoice('consentMarketplace', true, yesNo)).toBe('yes');
+      expect(mapWizardValueToChoice('consentEnriched', false, yesNo)).toBe('no');
+    });
+
+    it('dedups an LGA only when the wizard value is a valid choice key', () => {
+      expect(mapWizardValueToChoice('lgaId', 'saki_west', lgaChoices)).toBe('saki_west');
+      // A UUID / unknown key cannot be safely mapped → undefined (show the question)
+      expect(
+        mapWizardValueToChoice('lgaId', '019ccc89-bcba-7b7a-8157-763897caa988', lgaChoices),
+      ).toBeUndefined();
+    });
+
+    it('returns undefined for an unmappable gender value (never injects invalid)', () => {
+      expect(mapWizardValueToChoice('gender', 'prefer_not_to_say', [{ value: 'male' }])).toBeUndefined();
+    });
+
+    it('returns undefined for empty value or empty choice list', () => {
+      expect(mapWizardValueToChoice('gender', '', genderChoices)).toBeUndefined();
+      expect(mapWizardValueToChoice('gender', 'male', [])).toBeUndefined();
+      expect(mapWizardValueToChoice('gender', undefined, genderChoices)).toBeUndefined();
+    });
   });
 
   describe('findWizardFieldForQuestionName (case-insensitive, all 7 keys)', () => {
@@ -110,6 +181,12 @@ describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
       ['DOB', 'dob'],
       ['nin', 'nin'],
       ['National_ID', 'nin'],
+      ['gender', 'gender'],
+      ['SEX', 'gender'],
+      ['lga', 'lgaId'],
+      ['lga_id', 'lgaId'],
+      ['consent_marketplace', 'consentMarketplace'],
+      ['consent_enriched', 'consentEnriched'],
     ])('maps question name "%s" -> wizard key "%s"', (question, expected) => {
       expect(findWizardFieldForQuestionName(question)).toBe(expected);
     });

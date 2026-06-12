@@ -264,6 +264,32 @@ describe('FormController', () => {
       submittedAt: '2026-02-13T10:00:00.000Z',
     };
 
+    // Story 9-54 AC5 — submitForm now loads + flattens the form to run the
+    // synchronous required-answer gate before queueing. Default to a permissive
+    // (no-required-question) flattened form so the pre-existing happy-path cases
+    // are unaffected; gate-specific cases override below.
+    const permissiveFlattened = {
+      formId: validBody.formId,
+      title: 'Test Form',
+      version: '1.0.0',
+      questions: [] as never[],
+      choiceLists: {},
+      sectionShowWhen: {},
+      calculations: [] as never[],
+    };
+    beforeEach(() => {
+      vi.mocked(NativeFormService.getFormSchema).mockResolvedValue({
+        id: validBody.formId,
+        title: 'Test Form',
+        version: '1.0.0',
+        status: 'published',
+        sections: [],
+        choiceLists: {},
+        createdAt: '2026-02-13T10:00:00.000Z',
+      } as never);
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(permissiveFlattened as never);
+    });
+
     it('returns 201 with queued status on valid submission', async () => {
       mockReq.body = validBody;
       mockReq.user = { sub: 'user-123', role: 'enumerator' };
@@ -321,6 +347,47 @@ describe('FormController', () => {
       expect(mockNext).toHaveBeenCalled();
       const passedError = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(passedError.statusCode).toBe(400);
+    });
+
+    it('rejects an incomplete submission with 422 before queueing (Story 9-54 AC5)', async () => {
+      mockReq.body = { ...validBody, responses: { q2: 42 } }; // q1 required + missing
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue({
+        ...permissiveFlattened,
+        questions: [
+          { id: 'q1', type: 'text', name: 'q1', label: 'Q1', required: true, sectionId: 's', sectionTitle: 'S' },
+        ],
+      } as never);
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const err = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.code).toBe('INCOMPLETE_SUBMISSION');
+      expect(err.statusCode).toBe(422);
+      expect(err.details.fields).toContain('q1');
+      expect(queueSubmissionForIngestion).not.toHaveBeenCalled();
+    });
+
+    it('persists server-recomputed calculate fields into rawData (Story 9-54 AC1.3)', async () => {
+      mockReq.body = { ...validBody, responses: { dob: '1984-06-06' } };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue({
+        ...permissiveFlattened,
+        questions: [],
+        calculations: [{ name: 'age', expression: 'int((today() - ${dob}) div 365.25)' }],
+      } as never);
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-age');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawData: expect.objectContaining({ dob: '1984-06-06', age: expect.any(Number) }),
+        }),
+      );
     });
 
     it('accepts and forwards optional GPS coordinates in rawData', async () => {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { NativeFormService } from '../services/native-form.service.js';
+import { validateSubmissionCompleteness } from '../services/form-submission-validation.service.js';
 import { queueSubmissionForIngestion } from '../queues/webhook-ingestion.queue.js';
 import { AppError } from '@oslsr/utils';
 import { modulus11Check } from '@oslsr/utils/src/validation';
@@ -128,7 +129,18 @@ export class FormController {
       const user = (req as Request & { user?: { sub: string; role?: string } }).user;
       const submitterId = user?.sub;
 
-      const rawData: Record<string, unknown> = { ...responses };
+      // Story 9-54 AC5 — enforce required-answer completeness SYNCHRONOUSLY,
+      // BEFORE queueing for async ingestion (post-HTTP-200 is too late). Also
+      // recompute `calculate` fields (AC1.3) authoritatively for persistence.
+      const schema = await NativeFormService.getFormSchema(formId);
+      const flattened = NativeFormService.flattenForRender(schema, formId);
+      const pendingNin = responses['_pendingNin'] === true;
+      const { computed } = validateSubmissionCompleteness(flattened, responses, {
+        pendingNin,
+        today: new Date(),
+      });
+
+      const rawData: Record<string, unknown> = { ...responses, ...computed };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;
       if (gpsLongitude != null) rawData._gpsLongitude = gpsLongitude;
       if (completionTimeSeconds != null) rawData._completionTimeSeconds = completionTimeSeconds;

@@ -32,6 +32,7 @@ const {
   mockDelete,
   mockOnConflictReturning,
   mockTransactionImpl,
+  mockGetPublicActiveForm,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
   mockConsumeTokenTx: vi.fn(),
@@ -48,6 +49,7 @@ const {
   mockDelete: vi.fn(),
   mockOnConflictReturning: vi.fn(),
   mockTransactionImpl: vi.fn(),
+  mockGetPublicActiveForm: vi.fn(),
 }));
 
 // Rate-limit middleware: pass-through.
@@ -93,6 +95,17 @@ vi.mock('../../services/audit.service.js', () => ({
   // mock value — they're checking value contracts, not constant references.)
   AUDIT_TARGETS: {
     RESPONDENT: 'respondent',
+  },
+}));
+
+// Story 9-54 H1/NG1 — the wizard submit gate resolves the canonical pinned form
+// via NativeFormService.getPublicActiveForm() (NOT the client draft). Partial-
+// mock it; the real validateSubmissionCompleteness runs against whatever form
+// this returns. Default (set in beforeEach) rejects → gate skipped, so every
+// pre-existing wizard test keeps its prior behaviour.
+vi.mock('../../services/native-form.service.js', () => ({
+  NativeFormService: {
+    getPublicActiveForm: mockGetPublicActiveForm,
   },
 }));
 
@@ -169,6 +182,10 @@ function buildApp() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Story 9-54 — default: no public form pinned, so the completeness gate is
+  // skipped (mirrors pre-H1 behaviour where the unmocked settings DB threw).
+  // NG1 tests override this with a resolved form to exercise the real gate.
+  mockGetPublicActiveForm.mockRejectedValue(new Error('no public form pinned (test default)'));
   // Default: transactions just invoke the callback with a passthrough tx that
   // returns the same mock chains so the controllers' tx.insert/tx.delete/etc
   // calls behave like the top-level db. Individual tests override.
@@ -618,6 +635,92 @@ describe('POST /registration/wizard', () => {
       expect.anything(),
       expect.objectContaining({ action: 'data.create' }),
     );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Story 9-54 NG1 (code-review follow-up) — the SERVER-side completeness gate
+  // (AC5, hardened by H1) must reject an incomplete wizard submission against
+  // the CANONICAL pinned form, independent of the client-stamped draft. The
+  // pre-existing wizard tests skip this gate (no form pinned), so without these
+  // two locks an H1/AC5 regression would ship silently.
+  // ──────────────────────────────────────────────────────────────────────
+
+  /** A pinned public form with a single required, non-NIN question. */
+  function pinnedFormWithRequiredOccupation() {
+    return {
+      formId: 'pinned-form-1',
+      title: 'Public Survey',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q-occ',
+          type: 'text',
+          name: 'occupation',
+          label: 'Occupation',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'S1',
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+      calculations: [],
+    };
+  }
+
+  it('NG1 — rejects an INCOMPLETE wizard submission (422 INCOMPLETE_SUBMISSION) against the canonical pinned form', async () => {
+    // H1: the form is resolved server-side via getPublicActiveForm, NOT the
+    // draft — so this fires even though no draft is set up for this request.
+    mockGetPublicActiveForm.mockResolvedValueOnce(pinnedFormWithRequiredOccupation());
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      // No questionnaireResponses → required `occupation` is missing. The gate
+      // runs BEFORE any respondent/submission insert, so no tx mock is needed.
+      .send(validBody({ pendingNin: true }));
+
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('INCOMPLETE_SUBMISSION');
+  });
+
+  it('NG1 — a COMPLETE wizard submission passes the gate and persists the answer (201)', async () => {
+    mockGetPublicActiveForm.mockResolvedValueOnce(pinnedFormWithRequiredOccupation());
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    let capturedRaw: Record<string, unknown> | undefined;
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-ng1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = {
+        values: (v: Record<string, unknown>) => {
+          capturedRaw = v.rawData as Record<string, unknown>;
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-06-12T07:00:00Z'),
+              formData: { questionnaireFormId: 'pinned-form-1' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919', questionnaireResponses: { occupation: 'tailor' } }));
+
+    expect(res.status).toBe(201);
+    expect(capturedRaw?.occupation).toBe('tailor');
   });
 
   it('returns 201 with pending_nin_capture status when pendingNin=true + issues magic-link', async () => {

@@ -21,6 +21,14 @@ export interface Step5ReviewAndSaveProps {
   onBack?: () => void;
   isSubmitting?: boolean;
   submitError?: string | null;
+  /**
+   * Story 9-54 AC6.2 — when the questionnaire is missing a required+relevant
+   * answer, Submit is disabled and a notice points back to the offending step.
+   * The server AC5 gate remains the authority; this is defence-in-depth.
+   */
+  incompleteQuestionnaire?: boolean;
+  /** Step index to return to in order to complete the questionnaire (if known). */
+  missingStepIndex?: number | null;
 }
 
 // Edit-link target steps (0-indexed) per field group (AC#C1).
@@ -65,6 +73,8 @@ export function Step5ReviewAndSave({
   onBack,
   isSubmitting,
   submitError,
+  incompleteQuestionnaire = false,
+  missingStepIndex = null,
 }: Step5ReviewAndSaveProps) {
   const lgaQuery = useQuery({
     queryKey: ['wizard', 'lgas', 'public'],
@@ -163,6 +173,26 @@ export function Step5ReviewAndSave({
         </SummaryRow>
       </dl>
 
+      {incompleteQuestionnaire && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border-l-4 border-warning-500 bg-warning-50 p-3 text-sm text-warning-800"
+          data-testid="step5-incomplete-notice"
+        >
+          <p>Some required survey questions still need an answer before you can save.</p>
+          {missingStepIndex != null && (
+            <button
+              type="button"
+              onClick={() => onGoToStep(missingStepIndex)}
+              className="mt-1 font-medium text-warning-900 underline hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-warning-500"
+              data-testid="step5-incomplete-goto"
+            >
+              Go back and finish the survey
+            </button>
+          )}
+        </div>
+      )}
+
       {submitError && (
         <p role="alert" className="mt-4 text-sm text-error-600" data-testid="step5-submit-error">
           {submitError}
@@ -175,6 +205,7 @@ export function Step5ReviewAndSave({
         continueLabel={pending ? 'Save as Pending' : 'Save Registration'}
         continueTestId="wizard-save-button"
         isSubmitting={isSubmitting}
+        isContinueDisabled={incompleteQuestionnaire}
       />
     </div>
   );

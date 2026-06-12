@@ -21,17 +21,19 @@
  * Aliases are stored lowercase; matching is the caller's responsibility and is
  * case-insensitive via `findWizardFieldForQuestionName`.
  *
- * ⚠️ VALUE-VOCABULARY CONSTRAINT (9-18 Part-E review, finding H1) — DO NOT add a
- * wizard field here unless its value vocabulary is IDENTICAL to the matched
- * questionnaire question's. Dedup auto-fills the wizard value straight into the
- * questionnaire answer, so it is only safe for free-text / date fields (the keys
- * below). CHOICE fields are NOT safe to add naively: e.g. the wizard's `gender`
- * is `prefer_not_to_say` while the form's `gender_list` uses `other`; consent is
- * a boolean here but `yes_no` in the form; `lgaId` ≠ the form's `lga_list` keys.
- * Adding them as-is would inject INVALID choice values. Deduping `gender` /
- * `lga` / consent requires a wizard-value → questionnaire-choice MAPPING layer,
- * tracked in **Story 9-54** (forms-engine fidelity). The collision-detector test
- * pins the safe key set, so a naive addition fails CI with a pointer here.
+ * ⚠️ VALUE-VOCABULARY CONSTRAINT (9-18 Part-E review, finding H1) — a wizard
+ * field's value vocabulary may DIFFER from the matched questionnaire question's.
+ * Free-text / date fields (fullName/givenName/familyName/phone/email/dob/nin)
+ * share the vocabulary, so their wizard value auto-fills the answer directly.
+ * CHOICE fields (gender / lgaId / the two consents) DO NOT: the wizard's `gender`
+ * uses `prefer_not_to_say` vs the form's `gender_list` `other`; consent is a
+ * boolean here but `yes_no` in the form; `lgaId` may not match the form's
+ * `lga_list` keys. Story 9-54 (AC4) adds the wizard-value → questionnaire-choice
+ * MAPPING layer below ({@link mapWizardValueToChoice} + {@link WIZARD_CHOICE_FIELD_KEYS}):
+ * a choice field is only deduped AFTER its wizard value maps to a value that
+ * actually exists in the target question's choice list; otherwise the question
+ * is shown (never an invalid choice injected). The collision-detector test pins
+ * the canonical key set + the choice-field membership.
  */
 export const WIZARD_PROVIDED_FIELD_NAMES = {
   fullName: ['full_name', 'fullname', 'name'],
@@ -41,6 +43,11 @@ export const WIZARD_PROVIDED_FIELD_NAMES = {
   email: ['email', 'email_address'],
   dob: ['date_of_birth', 'dob', 'birth_date'],
   nin: ['nin', 'national_id'],
+  // Story 9-54 AC4 — CHOICE fields. Safe to dedup ONLY via mapWizardValueToChoice.
+  gender: ['gender', 'sex'],
+  lgaId: ['lga', 'lga_id', 'lga_of_residence', 'local_government'],
+  consentMarketplace: ['consent_marketplace'],
+  consentEnriched: ['consent_enriched'],
 } as const;
 
 /**
@@ -93,3 +100,66 @@ export const NIN_QUESTION_NAMES: readonly string[] = WIZARD_PROVIDED_FIELD_NAMES
 
 /** Legacy union type preserved for any type-safe enumeration call sites. */
 export type NinQuestionName = (typeof WIZARD_PROVIDED_FIELD_NAMES.nin)[number];
+
+/**
+ * Story 9-54 AC4 — wizard keys whose value vocabulary differs from the
+ * questionnaire's choice lists. These MUST be deduped through
+ * {@link mapWizardValueToChoice}, never auto-filled raw.
+ */
+export const WIZARD_CHOICE_FIELD_KEYS: ReadonlySet<WizardProvidedFieldKey> = new Set([
+  'gender',
+  'lgaId',
+  'consentMarketplace',
+  'consentEnriched',
+]);
+
+/** Minimal choice shape ({@link Choice} from @oslsr/types) the mapper needs. */
+interface ChoiceLike {
+  value: string;
+}
+
+/**
+ * Explicit wizard→form value remaps where the vocabularies are known to differ.
+ * Only the genuinely-divergent values are listed; everything else is identity
+ * and validated by the choice-list membership check below.
+ */
+const GENDER_VALUE_MAP: Record<string, string> = {
+  prefer_not_to_say: 'other',
+};
+
+/**
+ * Story 9-54 AC4 — map a wizard-collected value to a value that EXISTS in the
+ * target question's choice list, or return `undefined` when no safe mapping is
+ * possible. A caller that gets `undefined` must NOT dedup the question (show it)
+ * rather than write an invalid choice value.
+ *
+ * @param key         the wizard field key (must be a choice key)
+ * @param wizardValue the raw value the wizard collected (boolean / string)
+ * @param choices     the target question's resolved choice list
+ */
+export function mapWizardValueToChoice(
+  key: WizardProvidedFieldKey,
+  wizardValue: unknown,
+  choices: readonly ChoiceLike[] | undefined,
+): string | undefined {
+  if (wizardValue === undefined || wizardValue === null || wizardValue === '') return undefined;
+  if (!choices || choices.length === 0) return undefined;
+
+  let candidate: string;
+  if (key === 'consentMarketplace' || key === 'consentEnriched') {
+    // boolean → yes_no vocabulary
+    if (wizardValue === true || wizardValue === 'yes') candidate = 'yes';
+    else if (wizardValue === false || wizardValue === 'no') candidate = 'no';
+    else candidate = String(wizardValue);
+  } else if (key === 'gender') {
+    const raw = String(wizardValue);
+    candidate = GENDER_VALUE_MAP[raw] ?? raw;
+  } else {
+    // lgaId (and any future choice key): identity candidate, reconciled purely
+    // by the choice-list membership guard — if the wizard's value is already a
+    // valid choice key it dedups, otherwise the question is shown.
+    candidate = String(wizardValue);
+  }
+
+  return choices.some((c) => c.value === candidate) ? candidate : undefined;
+}

@@ -5,6 +5,8 @@ import { FormRenderer } from '../../forms/components/FormRenderer';
 import { fetchPublicActiveForm, type WizardDraftData, type FlattenedForm } from '../api/wizard.api';
 import {
   findWizardFieldForQuestionName,
+  mapWizardValueToChoice,
+  WIZARD_CHOICE_FIELD_KEYS,
   type WizardProvidedFieldKey,
 } from '../lib/wizard-provided-field-names';
 
@@ -74,6 +76,11 @@ const WIZARD_KEY_TO_FORMDATA_FIELD: Record<WizardProvidedFieldKey, string> = {
   email: 'email',
   dob: 'dateOfBirth',
   nin: 'nin',
+  // Story 9-54 AC4 — choice fields (mapped via mapWizardValueToChoice).
+  gender: 'gender',
+  lgaId: 'lgaId',
+  consentMarketplace: 'consentMarketplace',
+  consentEnriched: 'consentEnriched',
 };
 
 /** Human-readable banner label per wizard field key (AC#B5). */
@@ -85,6 +92,10 @@ const BANNER_LABELS: Record<WizardProvidedFieldKey, string> = {
   email: 'Email',
   dob: 'Date of Birth',
   nin: 'NIN',
+  gender: 'Gender',
+  lgaId: 'LGA',
+  consentMarketplace: 'Marketplace consent',
+  consentEnriched: 'Data-use consent',
 };
 
 /** Stable banner display order; Name collapses to a single entry. */
@@ -96,6 +107,10 @@ const BANNER_ORDER: WizardProvidedFieldKey[] = [
   'email',
   'dob',
   'nin',
+  'gender',
+  'lgaId',
+  'consentMarketplace',
+  'consentEnriched',
 ];
 
 interface PrefillResult {
@@ -131,15 +146,24 @@ function computePrefill(form: FlattenedForm | null, formData: WizardDraftData): 
       continue;
     }
 
-    // AI-Review H1: Part F removed `formData.fullName`, so a questionnaire
-    // "Full Name"/"name" question (which maps to the `fullName` key) must be
-    // composed from the given + family fields — otherwise the most common dedup
-    // case silently regressed (the user got re-asked their name in Step 4).
-    const value =
-      key === 'fullName'
-        ? [formData.givenName, formData.familyName].map((v) => (v ?? '').trim()).filter(Boolean).join(' ') ||
-          (formData.fullName ?? '').trim() // legacy/unmigrated draft fallback
-        : fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]];
+    // Story 9-54 AC4 — CHOICE fields go through the value-mapping layer and are
+    // only deduped when the wizard value maps to a value that EXISTS in this
+    // question's choice list; an unmappable value falls through to NOT deduping
+    // (the question is shown) rather than injecting an invalid choice.
+    let value: unknown;
+    if (WIZARD_CHOICE_FIELD_KEYS.has(key)) {
+      value = mapWizardValueToChoice(key, fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]], q.choices);
+    } else if (key === 'fullName') {
+      // AI-Review H1: Part F removed `formData.fullName`, so a questionnaire
+      // "Full Name"/"name" question (which maps to the `fullName` key) must be
+      // composed from the given + family fields — otherwise the most common dedup
+      // case silently regressed (the user got re-asked their name in Step 4).
+      value =
+        [formData.givenName, formData.familyName].map((v) => (v ?? '').trim()).filter(Boolean).join(' ') ||
+        (formData.fullName ?? '').trim(); // legacy/unmigrated draft fallback
+    } else {
+      value = fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]];
+    }
     if (value === undefined || value === null || value === '') continue;
 
     hideNames.add(q.name);

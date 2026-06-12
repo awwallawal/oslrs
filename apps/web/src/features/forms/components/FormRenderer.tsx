@@ -11,6 +11,7 @@ import {
 } from '../utils/skipLogic';
 import { getCachedDynamicFormSchema, validateQuestionValue } from '../utils/formSchema';
 import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
+import { withCalculatedFields } from '@oslsr/utils/src/xlsform-calculate';
 import type { FlattenedForm } from '../api/form.api';
 
 /**
@@ -130,10 +131,13 @@ export function FormRenderer({
   const [currentIndex, setCurrentIndex] = useState(() => {
     const eff = buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex);
     if (!eff?.size) return initialIndex;
+    // Story 9-54 AC1 — evaluate computed fields into the seed answer map so a
+    // section gated on a calculated field (e.g. ${age}) resolves at mount.
+    const seedEval = withCalculatedFields(initialResponses ?? {}, formSchema.calculations, new Date());
     const first = getNextVisibleIndex(
       formSchema.questions,
       initialIndex - 1,
-      initialResponses ?? {},
+      seedEval,
       formSchema.sectionShowWhen,
       eff,
     );
@@ -190,9 +194,18 @@ export function FormRenderer({
     setFormData({ ...(initialResponses ?? {}) });
   }, [initialResponses, reset]);
 
+  // Story 9-54 AC1 — answer map augmented with computed (calculate) fields.
+  // Skip-logic evaluates against THIS so section/question showWhen referencing
+  // a computed field (e.g. ${age} >= 15) resolves; raw `formData` still holds
+  // the actual user answers for validation, onChange, and submission.
+  const evalData = useMemo(
+    () => withCalculatedFields(formData, formSchema.calculations, new Date()),
+    [formData, formSchema.calculations],
+  );
+
   const visibleQuestions = useMemo(
-    () => getVisibleQuestions(formSchema.questions, formData, formSchema.sectionShowWhen, effectiveHidden),
-    [formSchema, formData, effectiveHidden],
+    () => getVisibleQuestions(formSchema.questions, evalData, formSchema.sectionShowWhen, effectiveHidden),
+    [formSchema, evalData, effectiveHidden],
   );
 
   // Story 9-18 AC#B3: never rest on a hidden (wizard-prefilled) question. The
@@ -201,14 +214,14 @@ export function FormRenderer({
   useEffect(() => {
     const cur = formSchema.questions[currentIndex];
     if (!cur || !effectiveHidden?.has(cur.name)) return;
-    const fwd = getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
+    const fwd = getNextVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
     if (fwd !== -1) {
       setCurrentIndex(fwd);
       return;
     }
-    const back = getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
+    const back = getPrevVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
     if (back !== -1) setCurrentIndex(back);
-  }, [currentIndex, formSchema, formData, effectiveHidden]);
+  }, [currentIndex, formSchema, evalData, effectiveHidden]);
 
   const currentQuestion = formSchema.questions[currentIndex] ?? null;
   const isCurrentNin = currentQuestion
@@ -273,7 +286,7 @@ export function FormRenderer({
 
     const nextIdx = disabled
       ? (currentIndex + 1 < formSchema.questions.length ? currentIndex + 1 : -1)
-      : getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
+      : getNextVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
 
     if (nextIdx === -1) {
       onComplete?.(formData);
@@ -291,6 +304,7 @@ export function FormRenderer({
     currentQuestion,
     currentIndex,
     formData,
+    evalData,
     formSchema,
     disabled,
     ninDuplicateError,
@@ -304,7 +318,7 @@ export function FormRenderer({
   const goBack = useCallback(() => {
     const prevIdx = disabled
       ? (currentIndex > 0 ? currentIndex - 1 : -1)
-      : getPrevVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden);
+      : getPrevVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
     if (prevIdx === -1) return;
 
     setSlideDirection('right');
@@ -313,7 +327,7 @@ export function FormRenderer({
       if (currentQuestion) clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, currentQuestion, formData, formSchema, disabled, effectiveHidden, clearErrors]);
+  }, [currentIndex, currentQuestion, evalData, formSchema, disabled, effectiveHidden, clearErrors]);
 
   // Expose imperative API once on mount (and on goNext/goBack identity change).
   useEffect(() => {
@@ -322,8 +336,8 @@ export function FormRenderer({
 
   const hasNextQuestion = useMemo(() => {
     if (disabled) return currentIndex + 1 < formSchema.questions.length;
-    return getNextVisibleIndex(formSchema.questions, currentIndex, formData, formSchema.sectionShowWhen, effectiveHidden) !== -1;
-  }, [formSchema, currentIndex, formData, disabled, effectiveHidden]);
+    return getNextVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden) !== -1;
+  }, [formSchema, currentIndex, evalData, disabled, effectiveHidden]);
 
   // AI-Review M3: also guard the degenerate case where EVERY question is hidden
   // (e.g. a form composed entirely of wizard-provided fields). The snap effect

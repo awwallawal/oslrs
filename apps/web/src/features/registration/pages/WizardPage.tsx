@@ -14,6 +14,9 @@ import {
   type FlattenedForm,
 } from '../api/wizard.api';
 import { getVisibleQuestions } from '../../forms/utils/skipLogic';
+import { findMissingRequiredAnswers } from '@oslsr/utils/src/form-completeness';
+import { withCalculatedFields } from '@oslsr/utils/src/xlsform-calculate';
+import { NIN_QUESTION_NAMES } from '../lib/wizard-provided-field-names';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
@@ -115,6 +118,18 @@ export default function WizardPage() {
     pendingNin: boolean;
   } | null>(null);
 
+  // Story 9-54 AC6.1 — the furthest step the user has LEGITIMATELY reached (via
+  // Continue / resumed draft). A deep-link or resume `?step=N` beyond this is
+  // clamped back to it so the questionnaire can't be skipped to land on Review.
+  // It only ever rises (back-navigation never lowers it), and it can only rise
+  // when `currentStepIndex` advances — which the URL→state effect prevents from
+  // exceeding it, so a crafted URL can't inflate it.
+  const [maxReachedStepIndex, setMaxReachedStepIndex] = useState(0);
+  useEffect(() => {
+    if (!draft.isHydrated) return;
+    setMaxReachedStepIndex((m) => (draft.currentStepIndex > m ? draft.currentStepIndex : m));
+  }, [draft.isHydrated, draft.currentStepIndex]);
+
   // Sync URL ↔ wizard state.
   //
   // FIX 2026-05-12 — the two effects below previously raced each other into an
@@ -150,17 +165,29 @@ export default function WizardPage() {
       if (resumeToken) return;
     }
     if (stepFromUrl == null) return;
-    if (stepFromUrl === draft.currentStepIndex) return;
+    // Story 9-54 AC6.1 — clamp to the furthest step the user has legitimately
+    // reached, NOT steps.length-1. A deep-link / resume beyond it lands on it.
+    const target = Math.min(stepFromUrl, maxReachedStepIndex);
+    if (target === draft.currentStepIndex) {
+      // Already on the right step. If the URL over-reached, rewrite it so the
+      // stale (skip-ahead) value can't be re-shared or re-trigger a jump.
+      if (stepFromUrl !== target) {
+        lastSyncSource.current = 'state';
+        const next = new URLSearchParams(searchParams);
+        next.set('step', String(target));
+        setSearchParams(next, { replace: true });
+      }
+      return;
+    }
     // Mark this sync as URL→state so the state→URL effect that fires after
     // our `setCurrentStepIndex` lands knows to step aside on the next tick.
     lastSyncSource.current = 'url';
-    // Clamp to a step the user has actually reached.
-    draft.setCurrentStepIndex(Math.min(stepFromUrl, steps.length - 1));
+    draft.setCurrentStepIndex(target);
     // Deliberately omit `draft` from deps — it's a fresh object every render
     // (useWizardDraft return). Reading `draft.currentStepIndex` + `.setCurrentStepIndex`
     // via closure is the correct sync semantic.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.isHydrated, formSettled, stepFromUrl]);
+  }, [draft.isHydrated, formSettled, stepFromUrl, maxReachedStepIndex]);
 
   // State → URL (Continue / Back button clicks).
   useEffect(() => {
@@ -230,6 +257,51 @@ export default function WizardPage() {
     [steps, isStepSkippable],
   );
 
+  // Story 9-54 AC6.2 — Step-5 completeness guard. Reuses the SAME shared rule
+  // the server enforces (AC5) so Submit is disabled until every required +
+  // relevant questionnaire answer is present; the server gate stays authoritative.
+  const reviewCompleteness = useMemo(() => {
+    if (!form) {
+      return { complete: true, missing: [] as string[], missingStepIndex: null as number | null };
+    }
+    const pending = derivePendingNin(draft.formData);
+    const exclude = new Set<string>();
+    if (pending) {
+      for (const q of form.questions) {
+        if (NIN_QUESTION_NAMES.includes(q.name)) exclude.add(q.name);
+      }
+    }
+    // Resolve computed (calculate) fields ONCE, then gate on the merged map —
+    // the rule itself is calc-free (Story 9-54 L2 fix).
+    const evalData = withCalculatedFields(
+      draft.formData.questionnaireResponses ?? {},
+      form.calculations,
+      new Date(),
+    );
+    const { complete, missing } = findMissingRequiredAnswers(
+      {
+        questions: form.questions.map((q) => ({
+          name: q.name,
+          required: q.required,
+          sectionId: q.sectionId,
+          showWhen: q.showWhen,
+        })),
+        sectionShowWhen: form.sectionShowWhen,
+        excludeNames: exclude,
+      },
+      evalData,
+    );
+    let missingStepIndex: number | null = null;
+    if (missing.length > 0) {
+      const q = form.questions.find((qq) => qq.name === missing[0]);
+      if (q) {
+        const idx = steps.findIndex((s) => s.sectionId === q.sectionId);
+        missingStepIndex = idx >= 0 ? idx : null;
+      }
+    }
+    return { complete, missing, missingStepIndex };
+  }, [form, draft.formData, steps]);
+
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -250,6 +322,13 @@ export default function WizardPage() {
     }
     if (typeof fd.consentMarketplace !== 'boolean') {
       setSubmitError('Please complete the consent step before submitting.');
+      setIsSubmitting(false);
+      return;
+    }
+    // Story 9-54 AC6.2 — defence-in-depth: block submit if the questionnaire is
+    // incomplete (the server AC5 gate is the authority, but fail fast in the UI).
+    if (!reviewCompleteness.complete) {
+      setSubmitError('Please answer all required survey questions before saving.');
       setIsSubmitting(false);
       return;
     }
@@ -298,7 +377,7 @@ export default function WizardPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft.formData, isSubmitting]);
+  }, [draft.formData, isSubmitting, reviewCompleteness]);
 
   // AI-Review M1 — the pinned survey failed to load (a non-404 fetch error).
   // Surface it with a retry instead of silently dropping every section step and
@@ -377,6 +456,7 @@ export default function WizardPage() {
         onSubmit: handleSubmit,
         isSubmitting,
         submitError,
+        reviewCompleteness,
       })}
     </WizardLayout>
   );
@@ -393,6 +473,7 @@ function renderStep(props: {
   onSubmit: () => Promise<void> | void;
   isSubmitting: boolean;
   submitError: string | null;
+  reviewCompleteness: { complete: boolean; missing: string[]; missingStepIndex: number | null };
 }) {
   const step = props.steps[props.index];
   if (!step) return null;
@@ -436,6 +517,8 @@ function renderStep(props: {
           onBack={props.onBack}
           isSubmitting={props.isSubmitting}
           submitError={props.submitError}
+          incompleteQuestionnaire={!props.reviewCompleteness.complete}
+          missingStepIndex={props.reviewCompleteness.missingStepIndex}
         />
       );
     default:

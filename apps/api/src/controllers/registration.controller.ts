@@ -7,6 +7,8 @@ import { db } from '../db/index.js';
 import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
 import { uuidv7 } from 'uuidv7';
 import { MagicLinkService } from '../services/magic-link.service.js';
+import { NativeFormService } from '../services/native-form.service.js';
+import { validateSubmissionCompleteness } from '../services/form-submission-validation.service.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import pino from 'pino';
 
@@ -490,6 +492,40 @@ export class RegistrationController {
       const normalisedEmail = data.email.toLowerCase().trim();
       const pendingNin = data.pendingNin === true || !data.nin;
       const ninValue = pendingNin ? null : data.nin ?? null;
+      const responses = (data.questionnaireResponses ?? {}) as Record<string, unknown>;
+
+      // Story 9-54 AC5 — enforce required-answer completeness SYNCHRONOUSLY,
+      // before persisting the respondent + submission. A magic-link resume that
+      // jumps past the questionnaire (GAP 4) lands here with an incomplete
+      // `responses` and is rejected. Also recomputes `calculate` fields (e.g.
+      // age) authoritatively (AC1.3) for persistence.
+      //
+      // Review fix H1 (2026-06-12): resolve the CANONICAL pinned form server-side
+      // via the same `wizard.public_form_id` setting the renderer uses
+      // (getPublicActiveForm), NOT the client-stamped `draft.questionnaireFormId`.
+      // The draft field is written by the browser during autosave, so trusting
+      // it let the "authoritative" backstop be skipped by submitting without a
+      // draft / with a forged or absent form id. The gate is now independent of
+      // client state. When no form is pinned/published, Step 4 was empty
+      // (PUBLIC_FORM_NOT_CONFIGURED) — no questionnaire gate applies.
+      let computedFields: Record<string, number> = {};
+      try {
+        const flattened = await NativeFormService.getPublicActiveForm();
+        const { computed } = validateSubmissionCompleteness(flattened, responses, {
+          pendingNin,
+          today: new Date(),
+        });
+        computedFields = computed;
+      } catch (err) {
+        // INCOMPLETE_SUBMISSION is the authoritative rejection — re-throw it.
+        if (err instanceof AppError && err.code === 'INCOMPLETE_SUBMISSION') throw err;
+        // PUBLIC_FORM_NOT_CONFIGURED (no form pinned/published) → Step 4 empty.
+        logger.warn({
+          event: 'wizard.completeness_skipped',
+          email: normalisedEmail,
+          reason: err instanceof AppError ? err.code : 'unknown',
+        });
+      }
 
       // FR21 dedupe — NIN-provided path only. Pending rows are not bound by
       // NIN uniqueness (multiple pending rows can coexist; race-resolution
@@ -609,7 +645,11 @@ export class RegistrationController {
             // Questionnaire answers from Step 4 — formerly dropped; now
             // canonical. Spread last so they cannot accidentally overwrite
             // identity fields with the same key.
-            ...(data.questionnaireResponses ?? {}),
+            ...responses,
+            // Story 9-54 AC1.3 — server-recomputed calculate fields (e.g. age)
+            // are authoritative: spread AFTER responses so a client cannot forge
+            // them.
+            ...computedFields,
           } as Record<string, unknown>,
           gpsLatitude: null,
           gpsLongitude: null,

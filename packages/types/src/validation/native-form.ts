@@ -99,6 +99,16 @@ export const choiceListsSchema = z.record(
   ),
 );
 
+/**
+ * Story 9-54 AC1 — non-rendering computed field migrated from an XLSForm
+ * `calculate` row. `name` is the bound field; `expression` is the raw
+ * calculation string evaluated by `evaluateCalculations` (@oslsr/utils).
+ */
+export const calculationSchema = z.object({
+  name: z.string().min(1),
+  expression: z.string().min(1),
+});
+
 export const nativeFormSchema = z
   .object({
     id: z.string().uuid(),
@@ -107,6 +117,7 @@ export const nativeFormSchema = z
     status: z.enum(['draft', 'published', 'closing', 'deprecated', 'archived']),
     sections: z.array(sectionSchema),
     choiceLists: choiceListsSchema,
+    calculations: z.array(calculationSchema).optional(),
     createdAt: z.string().datetime(),
     publishedAt: z.string().datetime().optional(),
   })

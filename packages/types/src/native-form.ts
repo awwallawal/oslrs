@@ -85,6 +85,20 @@ export interface Section {
   questions: Question[];
 }
 
+/**
+ * A non-rendering computed field migrated from an XLSForm `calculate` row
+ * (Story 9-54 AC1). The `expression` is the raw XLSForm calculation string
+ * (e.g. `int((today() - ${dob}) div 365.25)`); it is evaluated at render and
+ * recomputed authoritatively at submit by `evaluateCalculations` (@oslsr/utils).
+ * Calculations are NOT shown to the user and are NOT part of `sections`.
+ */
+export interface Calculation {
+  /** The field name the computed value is bound to (e.g. `age`). */
+  name: string;
+  /** Raw XLSForm calculate expression over the safe subset. */
+  expression: string;
+}
+
 export interface NativeFormSchema {
   id: string;
   title: string;
@@ -92,6 +106,12 @@ export interface NativeFormSchema {
   status: 'draft' | 'published' | 'closing' | 'deprecated' | 'archived';
   sections: Section[];
   choiceLists: Record<string, Choice[]>;
+  /**
+   * Computed (non-rendering) fields, evaluated in array order so a later
+   * calculation may reference an earlier one. Optional for backward
+   * compatibility with pre-9-54 schemas (treated as `[]`).
+   */
+  calculations?: Calculation[];
   createdAt: string;
   publishedAt?: string;
 }

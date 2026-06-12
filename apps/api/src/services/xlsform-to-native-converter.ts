@@ -7,6 +7,7 @@ import type {
   Choice,
   ValidationRule,
   QuestionType,
+  Calculation,
 } from '@oslsr/types';
 import type {
   XlsformSurveyRow,
@@ -25,7 +26,14 @@ function getRelevance(row: XlsformSurveyRow): string | undefined {
   return val && String(val).trim() ? String(val).trim() : undefined;
 }
 
-/** XLSForm types that are metadata / non-user-facing — skip during migration */
+/**
+ * XLSForm types that are metadata / non-user-facing — not rendered as questions.
+ *
+ * Story 9-54 AC1: `calculate` stays here (it is non-rendering) but is NO LONGER
+ * silently dropped — {@link extractCalculations} retains it as a `Calculation`
+ * carrying the raw expression so the runtime evaluator can compute it. The other
+ * entries remain pure drops.
+ */
 const METADATA_TYPES = [
   'start', 'end', 'deviceid', 'calculate',
   'phonenumber', 'username', 'email', 'audit', 'hidden',
@@ -151,14 +159,18 @@ export function convertChoiceLists(choices: XlsformChoiceRow[]): Record<string, 
  * begin_group/end_group pairs become sections.
  * Questions inside groups become section questions.
  * Questions outside groups are placed in an auto-generated "General" section.
- * Metadata types are skipped.
+ * Metadata types are skipped (calculate is retained separately — see
+ * {@link extractCalculations}).
  *
- * Section-level relevance (begin_group `relevant` column) is intentionally
- * NOT converted to showWhen. XLSForm section gating depends on calculated
- * fields and ODK engine features that the native form system does not support.
- * Hiding entire sections causes enumerators to miss questions. Individual
- * question-level showWhen (the `relevant` column on question rows) is still
- * fully supported.
+ * Story 9-54 AC2 (supersedes the prior deliberate-drop note): the `begin_group`
+ * `relevant` column IS now converted to the section's `showWhen`. The native
+ * renderer + wizard already honour `sectionShowWhen` (a gated-off section is
+ * auto-skipped and its questions excluded from required-completeness), and
+ * group gates referencing computed fields (`${age} >= 15`) resolve because the
+ * runtime calculate evaluator (AC1) feeds those fields into the answer map
+ * before skip-logic runs. Dropping group relevance left the live consent gate
+ * (`grp_identity` relevant `${consent_basic}='yes'`) and the age gate
+ * (`grp_labor` relevant `${age}>=15`) silently inert in production.
  */
 export function extractSections(survey: XlsformSurveyRow[]): Section[] {
   const sections: Section[] = [];
@@ -169,10 +181,12 @@ export function extractSections(survey: XlsformSurveyRow[]): Section[] {
     const baseType = row.type.split(' ')[0];
 
     if (baseType === 'begin_group') {
-      // Section-level showWhen deliberately omitted — see JSDoc above
+      // Story 9-54 AC2 — convert group-level `relevant` → section showWhen.
+      const groupRelevance = getRelevance(row);
       currentSection = {
         id: uuidv7(),
         title: row.label || row.name,
+        ...(groupRelevance ? { showWhen: parseXlsformRelevance(groupRelevance) } : {}),
         questions: [],
       };
       continue;
@@ -229,11 +243,32 @@ export function extractSections(survey: XlsformSurveyRow[]): Section[] {
   return sections;
 }
 
+/**
+ * Story 9-54 AC1.2 — extract XLSForm `calculate` rows as retained, non-rendering
+ * {@link Calculation} entries holding the raw expression. Order is preserved so
+ * a later calculation may reference an earlier one at evaluation time. Rows with
+ * an empty/missing `calculation` column are skipped (nothing to compute).
+ */
+export function extractCalculations(survey: XlsformSurveyRow[]): Calculation[] {
+  const calculations: Calculation[] = [];
+  for (const row of survey) {
+    const baseType = row.type.split(' ')[0];
+    if (baseType !== 'calculate') continue;
+    const expression =
+      (row.calculation && String(row.calculation).trim()) ||
+      (typeof row['calculate'] === 'string' ? String(row['calculate']).trim() : '');
+    if (!expression) continue;
+    calculations.push({ name: row.name, expression });
+  }
+  return calculations;
+}
+
 export interface MigrationSummary {
   sectionCount: number;
   questionCount: number;
   choiceListCount: number;
   skipLogicCount: number;
+  calculationCount: number;
 }
 
 /**
@@ -256,6 +291,7 @@ export function getMigrationSummary(schema: NativeFormSchema): MigrationSummary 
     questionCount,
     choiceListCount: Object.keys(schema.choiceLists).length,
     skipLogicCount,
+    calculationCount: schema.calculations?.length ?? 0,
   };
 }
 
@@ -265,6 +301,7 @@ export function getMigrationSummary(schema: NativeFormSchema): MigrationSummary 
 export function convertToNativeForm(parsed: ParsedXlsform): NativeFormSchema {
   const sections = extractSections(parsed.survey);
   const choiceLists = convertChoiceLists(parsed.choices);
+  const calculations = extractCalculations(parsed.survey);
 
   return {
     id: uuidv7(),
@@ -273,6 +310,7 @@ export function convertToNativeForm(parsed: ParsedXlsform): NativeFormSchema {
     status: 'draft',
     sections,
     choiceLists,
+    ...(calculations.length > 0 ? { calculations } : {}),
     createdAt: new Date().toISOString(),
   };
 }

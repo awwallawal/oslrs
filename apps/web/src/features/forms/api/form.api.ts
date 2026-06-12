@@ -5,6 +5,7 @@ import type {
   Condition,
   ConditionGroup,
   ValidationRule,
+  Calculation,
 } from '@oslsr/types';
 
 // ── Response types matching backend FlattenedForm/FlattenedQuestion ──
@@ -30,6 +31,12 @@ export interface FlattenedForm {
   questions: FlattenedQuestion[];
   choiceLists: Record<string, Choice[]>;
   sectionShowWhen: Record<string, Condition | ConditionGroup>;
+  /**
+   * Story 9-54 AC1 — non-rendering computed fields evaluated client-side into
+   * the answer map before skip-logic so `showWhen` on `${age}` etc. resolves.
+   * Optional-defaulted to `[]` by the renderer for pre-9-54 cached payloads.
+   */
+  calculations?: Calculation[];
 }
 
 export interface PublishedFormSummary {

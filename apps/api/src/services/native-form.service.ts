@@ -5,7 +5,8 @@ import { getSetting } from '../lib/settings.js';
 import { eq, desc } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
-import type { NativeFormSchema, Question, Choice } from '@oslsr/types';
+import type { NativeFormSchema, Question, Choice, Calculation } from '@oslsr/types';
+import { validateFormFidelity, type FidelityFinding } from './form-fidelity-validator.js';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 
@@ -32,6 +33,13 @@ export interface FlattenedForm {
   questions: FlattenedQuestion[];
   choiceLists: Record<string, Choice[]>;
   sectionShowWhen: Record<string, Question['showWhen']>;
+  /**
+   * Story 9-54 AC1 — non-rendering computed fields. The client evaluates these
+   * (via `evaluateCalculations`) into the answer map before running skip-logic
+   * so section/question `showWhen` referencing computed fields (e.g. `${age}`)
+   * resolve at render time.
+   */
+  calculations: Calculation[];
 }
 
 /**
@@ -151,6 +159,8 @@ export class NativeFormService {
   static validateForPublish(schema: NativeFormSchema): {
     valid: boolean;
     errors: string[];
+    /** Story 9-54 AC3 — non-blocking fidelity warnings (acknowledge, don't block). */
+    warnings?: string[];
   } {
     const errors: string[] = [];
 
@@ -193,12 +203,17 @@ export class NativeFormService {
       }
     }
 
-    // Validate showWhen conditions reference valid question names within form
+    // Validate showWhen conditions reference valid field names within form.
+    // Story 9-54 AC2.3 — computed (calculate) field names are valid reference
+    // targets too, so a group/question gated on `${age}` is NOT a dangling ref.
     const allQuestionNames = new Set<string>();
     for (const section of schema.sections || []) {
       for (const question of section.questions || []) {
         allQuestionNames.add(question.name);
       }
+    }
+    for (const calc of schema.calculations || []) {
+      allQuestionNames.add(calc.name);
     }
 
     const validateShowWhenFields = (
@@ -244,7 +259,16 @@ export class NativeFormService {
       errors.push('Form version must be valid semver (e.g., "1.0.0")');
     }
 
-    return { valid: errors.length === 0, errors };
+    // Story 9-54 AC3 — forms-engine fidelity: calculate-token safety (blocking)
+    // + wizard-dedup vocabulary mismatch (warning). Errors join the blocking set;
+    // warnings are surfaced for acknowledgement.
+    const fidelity = validateFormFidelity(schema);
+    for (const finding of fidelity.errors) {
+      errors.push(finding.message);
+    }
+    const warnings = fidelity.warnings.map((w: FidelityFinding) => w.message);
+
+    return { valid: errors.length === 0, errors, warnings };
   }
 
   /**
@@ -306,9 +330,17 @@ export class NativeFormService {
       });
     });
 
+    if (validation.warnings && validation.warnings.length > 0) {
+      logger.warn({
+        event: 'forms.validate.warnings',
+        formId,
+        warnings: validation.warnings,
+      });
+    }
+
     logger.info({ event: 'native_form.published', formId, userId });
 
-    return { success: true, publishedAt: now.toISOString() };
+    return { success: true, publishedAt: now.toISOString(), warnings: validation.warnings ?? [] };
   }
 
   /**
@@ -469,6 +501,7 @@ export class NativeFormService {
       questions,
       choiceLists: schema.choiceLists,
       sectionShowWhen,
+      calculations: schema.calculations ?? [],
     };
   }
 }
