@@ -36,10 +36,20 @@ done
 
 if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   echo ""
-  echo "[pre-push] Push targets main (or PREPUSH_FULL=1) → running full suite: pnpm test"
+  echo "[pre-push] Push targets main (or PREPUSH_FULL=1) → running full suite (serial)"
   echo "[pre-push] (bypass for emergencies only: git push --no-verify)"
   echo ""
-  pnpm test
+  # Story 9-54 (2026-06-14): run package suites SEQUENTIALLY (turbo --concurrency=1).
+  # ROOT CAUSE of pre-push flakiness: plain `pnpm test` (= `turbo run test`) ran
+  # api + web + utils + testing CONCURRENTLY on one machine, oversubscribing CPU
+  # and the Postgres connection pool → intermittent timeout/starvation failures in
+  # the real-DB integration tests (auth.activation) and heavy jsdom tests (Header).
+  # Each suite is green in isolation AND in CI (which runs each package as its own
+  # job on a dedicated runner — no mutual contention), so the flake was LOCAL
+  # oversubscription, not the tests. --concurrency=1 gives each suite the whole
+  # machine (the proven-green condition) and keeps this gate deterministic. CI is
+  # unaffected (it never used turbo-all). See 9-54 "Review Follow-ups (AI)".
+  pnpm exec turbo run test --concurrency=1
 else
   echo "[pre-push] Feature-branch/backup push → skipping full suite."
   echo "[pre-push] pre-commit already gated tsc+lint; the PR's CI is the full gate."
