@@ -1,7 +1,19 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 import bcrypt from 'bcrypt';
 
-const SALT_ROUNDS = 12;
+/**
+ * bcrypt work factor. Production-strength is 12. Under the TEST RUNNER ONLY it
+ * is lowered to 4 so bcrypt-heavy suites (MFA backup codes hash 8 per enroll,
+ * plus login / password-reset / staff-activation) don't blow per-test timeouts
+ * on loaded dev machines — historically these flaked locally at cost-12 (~250-
+ * 500ms × 8 hashes + DB > 15s). The downcost has ZERO effect on dev/prod: it is
+ * gated strictly to the same signal the rate-limiters use (`NODE_ENV==='test'`
+ * OR `VITEST`), and the cost is encoded in each hash, so a cost-4 hash created
+ * in a test never reaches — and would verify fine against — production anyway.
+ * bcrypt's minimum is 4; cost-4 is still a valid, salted bcrypt hash.
+ */
+const isTestRunner = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+const SALT_ROUNDS = isTestRunner ? 4 : 12;
 const AES_ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes for GCM mode (NIST recommendation)
 const AUTH_TAG_LENGTH = 16; // 16 bytes for authentication tag

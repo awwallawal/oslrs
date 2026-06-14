@@ -21,6 +21,7 @@ import {
   normaliseNigerianPhone,
   normaliseDate,
 } from '../lib/normalise/index.js';
+import { evaluateMinorGuardianConsent, type GuardianData } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import pino from 'pino';
 
@@ -98,6 +99,13 @@ interface ExtractedRespondentData {
   lgaId?: string;
   consentMarketplace: boolean;
   consentEnriched: boolean;
+  /**
+   * Story 9-55 — captured guardian consent for an under-15 registrant. Derived
+   * from the server-authoritative `age` (stamped into rawData by the submit
+   * controller's calculate recompute) + the guardian answers. `null` for adults
+   * / unknown-age. Persisted to `respondents.metadata.guardian`.
+   */
+  guardian?: GuardianData | null;
 }
 
 /**
@@ -382,6 +390,20 @@ export class SubmissionProcessingService {
     const consentMarketplace = String(extracted['consentMarketplace'] ?? '').toLowerCase() === 'yes';
     const consentEnriched = String(extracted['consentEnriched'] ?? '').toLowerCase() === 'yes';
 
+    // Story 9-55 — extract guardian consent for under-15 registrants. The age
+    // here is the server-recomputed value the submit controller stamped into
+    // rawData (`...computed`), so a client cannot forge it to dodge the gate.
+    // The synchronous submitForm gate already rejected an incomplete minor
+    // submission, so a minor reaching this worker carries a complete guardian.
+    const ageRaw = rawData['age'];
+    const age =
+      typeof ageRaw === 'number'
+        ? ageRaw
+        : ageRaw != null && ageRaw !== '' && !Number.isNaN(Number(ageRaw))
+          ? Number(ageRaw)
+          : null;
+    const guardian = evaluateMinorGuardianConsent(rawData, age).guardian;
+
     return {
       nin: ninValue,
       firstName: extracted['firstName'] != null ? String(extracted['firstName']) : undefined,
@@ -391,6 +413,7 @@ export class SubmissionProcessingService {
       lgaId: extracted['lgaId'] != null ? String(extracted['lgaId']) : undefined,
       consentMarketplace,
       consentEnriched,
+      guardian,
     };
   }
 
@@ -413,6 +436,13 @@ export class SubmissionProcessingService {
     // queries against pending rows using the SAME canonical values the DB stores, so
     // normalisation must run BEFORE the merge attempt — not just before insert.
     const { canonical, metadata } = normaliseRespondentPii(data);
+
+    // Story 9-55 — fold captured guardian consent (under-15 only) into the row
+    // metadata. Merged with the normalisation-warnings metadata so neither
+    // clobbers the other.
+    const metadataWithGuardian = data.guardian
+      ? { ...(metadata ?? {}), guardian: data.guardian }
+      : metadata;
 
     // FR21 dedup branch — only when the incoming submission carries a NIN.
     // The public-wizard / pending-NIN flow (Story 9-12) calls into this method
@@ -456,6 +486,8 @@ export class SubmissionProcessingService {
         lastName: canonical.lastName,
         phoneNumber: canonical.phoneNumber,
         submitterId,
+        source,
+        guardian: data.guardian ?? null,
       });
       if (promoted) {
         return { id: promoted.id, _isNew: false };
@@ -482,7 +514,7 @@ export class SubmissionProcessingService {
         source,
         submitterId: submitterId ?? null,
         status,
-        metadata,
+        metadata: metadataWithGuardian,
       }).returning();
 
       // Story 9-12 Task 3.8 — emit PENDING_NIN_CREATED on every pending-NIN
@@ -520,6 +552,21 @@ export class SubmissionProcessingService {
             source,
             creation_path: 'submission_queue_processor',
           },
+        });
+      }
+
+      // Story 9-55 AC5 — NDPA evidentiary record of the captured guardian
+      // consent for an under-15 registrant (enumerator / clerk path). Unlike the
+      // best-effort sibling creation audits above, this evidentiary record is
+      // AWAITED and its failure is logged loudly (`audit.*_failed`, AC5.3) so a
+      // missing consent record is detectable — without undoing the INSERT that
+      // already succeeded (M2 review fix).
+      if (data.guardian) {
+        await this.writeGuardianConsentAudit({
+          respondentId: created.id,
+          guardian: data.guardian,
+          source,
+          submitterId,
         });
       }
 
@@ -564,14 +611,26 @@ export class SubmissionProcessingService {
     lastName: string | null;
     phoneNumber: string | null;
     submitterId?: string;
+    source?: RespondentSource;
+    guardian?: GuardianData | null;
   }): Promise<{ id: string } | null> {
-    const { nin, firstName, lastName, phoneNumber, submitterId } = args;
+    const { nin, firstName, lastName, phoneNumber, submitterId, source, guardian } = args;
 
     // All three identity fields are required for a safe merge. If any is
     // missing the merge is silently skipped — caller falls through to insert.
     if (!firstName || !lastName || !phoneNumber) {
       return null;
     }
+
+    // Story 9-55 (M1 review fix) — when the promoted submission carries captured
+    // guardian consent (under-15 registrant), fold it into the existing row's
+    // metadata as part of the same atomic UPDATE so the merge path persists the
+    // consent record exactly like the fresh-insert path. JSONB `||` preserves
+    // any sibling metadata keys (e.g. defer_reason_nin) while setting `guardian`.
+    const guardianMetadataSet = guardian
+      ? sql`,
+        "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ guardian })}::jsonb`
+      : sql``;
 
     // Atomic match-and-promote. The UPDATE itself enforces the
     // status/nin-IS-NULL guard so concurrent attempts cannot both succeed.
@@ -580,7 +639,7 @@ export class SubmissionProcessingService {
       SET
         "nin" = ${nin},
         "status" = 'active',
-        "updated_at" = now()
+        "updated_at" = now()${guardianMetadataSet}
       WHERE
         "id" = (
           SELECT "id" FROM "respondents"
@@ -611,6 +670,19 @@ export class SubmissionProcessingService {
       details: { trigger: 'race_resolution_merge' },
     });
 
+    // Story 9-55 (M1 review fix) — write the NDPA consent audit on the merge
+    // path too, so a minor whose NIN-completion promotes an existing pending row
+    // still gets the MINOR_GUARDIAN_CONSENT_CAPTURED evidentiary record.
+    if (guardian) {
+      await this.writeGuardianConsentAudit({
+        respondentId: promotedId,
+        guardian,
+        source,
+        submitterId,
+        trigger: 'race_resolution_merge',
+      });
+    }
+
     logger.info({
       event: 'submission_processing.pending_nin_promoted',
       respondentId: promotedId,
@@ -618,5 +690,45 @@ export class SubmissionProcessingService {
     });
 
     return { id: promotedId };
+  }
+
+  /**
+   * Story 9-55 AC5 / AC5.3 (M2 review fix) — write the NDPA evidentiary record
+   * of a captured under-15 guardian consent for the async (enumerator / clerk)
+   * ingestion path. Unlike the best-effort sibling creation audits, this is
+   * AWAITED and its failure is surfaced loudly via `audit.*_failed` so a missing
+   * consent record is detectable — while still NOT undoing the INSERT/merge that
+   * already succeeded (the established criticality pattern for a post-commit
+   * worker audit; the synchronous wizard path remains fully transactional).
+   */
+  private static async writeGuardianConsentAudit(args: {
+    respondentId: string;
+    guardian: GuardianData;
+    source?: RespondentSource;
+    submitterId?: string;
+    trigger?: string;
+  }): Promise<void> {
+    try {
+      await AuditService.logAction({
+        actorId: args.submitterId ?? null,
+        action: AUDIT_ACTIONS.MINOR_GUARDIAN_CONSENT_CAPTURED,
+        targetResource: AUDIT_TARGETS.RESPONDENT,
+        targetId: args.respondentId,
+        details: {
+          ...(args.source ? { source: args.source } : {}),
+          ...(args.trigger ? { trigger: args.trigger } : {}),
+          guardianName: args.guardian.name,
+          guardianRelationship: args.guardian.relationship,
+          guardianPhone: args.guardian.phone,
+          isSupervisedApprentice: args.guardian.isSupervisedApprentice,
+        },
+      });
+    } catch (err) {
+      logger.error({
+        event: 'audit.minor_guardian_consent_captured_failed',
+        respondentId: args.respondentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }

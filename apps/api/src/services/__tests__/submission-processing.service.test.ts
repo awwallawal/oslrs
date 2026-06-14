@@ -557,6 +557,42 @@ describe('SubmissionProcessingService', () => {
       expect(AuditService.logAction).toHaveBeenCalledTimes(1);
     });
 
+    it('writes MINOR_GUARDIAN_CONSENT_CAPTURED when guardian data is present (Story 9-55)', async () => {
+      const { AuditService } = await import('../audit.service.js');
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          nin: '12345678901',
+          firstName: 'Young',
+          lastName: 'Apprentice',
+          phoneNumber: '+2348012345678',
+          consentMarketplace: false,
+          consentEnriched: false,
+          guardian: {
+            name: 'Adunni Okafor',
+            relationship: 'parent',
+            phone: '08031234567',
+            consent: 'yes',
+            isSupervisedApprentice: 'yes',
+          },
+        },
+        'enumerator',
+        'submitter-user-id',
+      );
+
+      expect(result._isNew).toBe(true);
+      expect(AuditService.logAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'minor.guardian_consent_captured',
+          targetResource: 'respondent',
+          targetId: result.id,
+          details: expect.objectContaining({ guardianRelationship: 'parent', isSupervisedApprentice: 'yes' }),
+        }),
+      );
+    });
+
     it('pending-NIN creation emits only PENDING_NIN_CREATED (never DATA_CREATE)', async () => {
       const { AuditService } = await import('../audit.service.js');
       await SubmissionProcessingService.findOrCreateRespondent(
@@ -687,6 +723,40 @@ describe('SubmissionProcessingService', () => {
       const result = SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
       expect(result.nin).toBeUndefined();
       expect(result.firstName).toBe('Pending');
+    });
+
+    // Story 9-55 — guardian extraction keys on the server-stamped `age` in rawData.
+    it('extracts guardian consent for an under-15 registrant (age stamped in rawData)', () => {
+      const rawData = {
+        nin: '61961438053',
+        first_name: 'Young',
+        age: 11,
+        guardian_name: 'Adunni Okafor',
+        guardian_relationship: 'parent',
+        guardian_phone: '08031234567',
+        guardian_consent: 'yes',
+        is_supervised_apprentice: 'yes',
+      };
+      const result = SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
+      expect(result.guardian).toMatchObject({
+        name: 'Adunni Okafor',
+        relationship: 'parent',
+        phone: '08031234567',
+        consent: 'yes',
+        isSupervisedApprentice: 'yes',
+      });
+    });
+
+    it('does NOT extract guardian data for an adult (age >= 15)', () => {
+      const rawData = {
+        nin: '61961438053',
+        first_name: 'Adult',
+        age: 30,
+        guardian_name: 'Should Be Ignored',
+        guardian_consent: 'yes',
+      };
+      const result = SubmissionProcessingService.extractRespondentData(rawData, makeFormSchema());
+      expect(result.guardian).toBeNull();
     });
 
     it('should throw PermanentProcessingError when form schema has no NIN question (AC 3.4.8)', () => {
@@ -861,6 +931,84 @@ describe('SubmissionProcessingService', () => {
       // in the UPDATE. The returned id is the pending row's id, not a new id.
       expect(result.id).toBe('original-outreach-row');
       expect(result._isNew).toBe(false);
+    });
+
+    // Story 9-55 (M1 review fix) — a minor whose NIN-completion promotes an
+    // existing pending row must STILL persist guardian consent + write the
+    // NDPA evidentiary audit on the merge path (previously dropped).
+    it('writes MINOR_GUARDIAN_CONSENT_CAPTURED on the merge path when guardian present (M1)', async () => {
+      const { AuditService } = await import('../audit.service.js');
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'promoted-minor-row' }] });
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          ...baseData,
+          guardian: {
+            name: 'Adunni Okafor',
+            relationship: 'parent',
+            phone: '08031234567',
+            consent: 'yes',
+            isSupervisedApprentice: 'yes',
+          },
+        },
+        'enumerator',
+        'enumerator-A',
+      );
+
+      expect(result.id).toBe('promoted-minor-row');
+      expect(result._isNew).toBe(false);
+      expect(mockInsertRespondent).not.toHaveBeenCalled();
+      expect(AuditService.logAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'minor.guardian_consent_captured',
+          targetId: 'promoted-minor-row',
+          details: expect.objectContaining({ trigger: 'race_resolution_merge' }),
+        }),
+      );
+    });
+  });
+
+  // Story 9-55 (M2 review fix) — the async-path consent audit is AWAITED and its
+  // failure is swallowed (logged loudly) rather than rolling back the INSERT.
+  describe('findOrCreateRespondent — guardian consent audit resilience (M2)', () => {
+    it('does not throw / does not lose the respondent when the consent audit fails', async () => {
+      const { AuditService } = await import('../audit.service.js');
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockDbExecute.mockResolvedValueOnce({ rows: [] }); // no merge → fresh insert
+      // Reject ONLY the awaited guardian-consent audit; the sibling fire-and-
+      // forget DATA_CREATE audit (called first) stays a no-op so we isolate the
+      // guarded path under test.
+      vi.mocked(AuditService.logAction).mockImplementation((entry: { action?: string }) =>
+        (entry.action === 'minor.guardian_consent_captured'
+          ? Promise.reject(new Error('audit chain down'))
+          : undefined) as never,
+      );
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          nin: '12345678901',
+          firstName: 'Young',
+          lastName: 'Apprentice',
+          phoneNumber: '+2348012345678',
+          consentMarketplace: false,
+          consentEnriched: false,
+          guardian: {
+            name: 'Adunni Okafor',
+            relationship: 'parent',
+            phone: '08031234567',
+            consent: 'yes',
+            isSupervisedApprentice: 'yes',
+          },
+        },
+        'enumerator',
+        'submitter-user-id',
+      );
+
+      // The INSERT succeeded; the audit failure was contained.
+      expect(result._isNew).toBe(true);
     });
   });
 });

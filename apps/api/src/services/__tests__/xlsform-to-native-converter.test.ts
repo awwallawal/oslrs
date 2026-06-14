@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   convertToNativeForm,
   extractSections,
   extractCalculations,
   getMigrationSummary,
 } from '../xlsform-to-native-converter.js';
+import { XlsformParserService } from '../xlsform-parser.service.js';
 import type { ParsedXlsform, XlsformSurveyRow } from '@oslsr/types';
 
 /**
@@ -28,6 +32,11 @@ const masterishSurvey: XlsformSurveyRow[] = [
   { type: 'begin_group', name: 'grp_labor', label: 'Labour', relevance: '${age} >= 15' },
   { type: 'text', name: 'employment_status', label: 'Employment status', required: 'yes' },
   { type: 'end_group', name: 'grp_labor_end' },
+  // Story 9-55 — the under-15 guardian group is the age<15 complement of grp_labor.
+  { type: 'begin_group', name: 'grp_guardian', label: 'Guardian', relevance: '${age} < 15' },
+  { type: 'text', name: 'guardian_name', label: 'Guardian name', required: 'yes' },
+  { type: 'select_one yes_no', name: 'guardian_consent', label: 'Guardian consent', required: 'yes' },
+  { type: 'end_group', name: 'grp_guardian_end' },
 ];
 
 const parsed: ParsedXlsform = {
@@ -76,6 +85,20 @@ describe('extractSections — group-level relevance (AC2.4)', () => {
     });
   });
 
+  it('converts the Story 9-55 grp_guardian age<15 gate to section showWhen (less_than)', () => {
+    const sections = extractSections(masterishSurvey);
+    const guardian = sections.find((s) => s.title === 'Guardian');
+    expect(guardian?.showWhen).toEqual({
+      field: 'age',
+      operator: 'less_than',
+      value: 15,
+    });
+    // Guardian identity + consent questions remain required-in-group.
+    const names = guardian?.questions.map((q) => q.name) ?? [];
+    expect(names).toEqual(expect.arrayContaining(['guardian_name', 'guardian_consent']));
+    expect(guardian?.questions.every((q) => q.required)).toBe(true);
+  });
+
   it('leaves a group without relevance ungated', () => {
     const sections = extractSections([
       { type: 'begin_group', name: 'g', label: 'Plain' },
@@ -93,10 +116,10 @@ describe('convertToNativeForm — full master-ish round-trip', () => {
       { name: 'age', expression: 'int((today() - ${dob}) div 365.25)' },
     ]);
     const titles = schema.sections.map((s) => s.title);
-    expect(titles).toEqual(expect.arrayContaining(['Identity', 'Labour']));
+    expect(titles).toEqual(expect.arrayContaining(['Identity', 'Labour', 'Guardian']));
     expect(getMigrationSummary(schema)).toMatchObject({
       calculationCount: 1,
-      skipLogicCount: 2, // two section gates
+      skipLogicCount: 3, // three section gates: identity, labour, guardian
     });
   });
 
@@ -107,5 +130,45 @@ describe('convertToNativeForm — full master-ish round-trip', () => {
       settings: { form_id: 'f', version: '1', form_title: 'Plain' },
     });
     expect(schema.calculations).toBeUndefined();
+  });
+});
+
+/**
+ * Story 9-55 (M3 review fix) — guard the SHIPPED master binary, not just a
+ * synthetic survey. The form-level guardian gate is only "uniform across
+ * channels" if the actual `test-fixtures/oslsr_master_v3.xlsx` that gets
+ * migrated + re-pinned in prod really carries the age<15 guardian group. A
+ * future master re-export that drops it would otherwise pass every other test
+ * while silently disabling the form-level gate (the server gate still holds).
+ */
+describe('real master binary — Story 9-55 guardian group is present', () => {
+  const MASTER_PATH = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../../test-fixtures/oslsr_master_v3.xlsx',
+  );
+
+  it('migrates the shipped oslsr_master_v3.xlsx grp_guardian to an age<15 section gate', () => {
+    const parsed = XlsformParserService.parseXlsxFile(readFileSync(MASTER_PATH));
+    const schema = convertToNativeForm(parsed);
+
+    // Locate the guardian section by its age<15 gate (robust to the section title).
+    const guardian = schema.sections.find(
+      (s) =>
+        s.showWhen?.field === 'age' &&
+        s.showWhen?.operator === 'less_than' &&
+        s.showWhen?.value === 15,
+    );
+    expect(guardian, 'shipped master form must contain an age<15 guardian group').toBeDefined();
+
+    const names = guardian?.questions.map((q) => q.name) ?? [];
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'guardian_name',
+        'guardian_relationship',
+        'guardian_phone',
+        'guardian_consent',
+        'is_supervised_apprentice',
+      ]),
+    );
   });
 });

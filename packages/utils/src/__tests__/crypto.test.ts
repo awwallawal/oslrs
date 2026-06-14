@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomBytes, createHash } from 'node:crypto';
-import { generateInvitationToken, hashInvitationToken, sha256Hex, encryptToken, decryptToken, requireEncryptionKey } from '../crypto.js';
+import { generateInvitationToken, hashInvitationToken, sha256Hex, encryptToken, decryptToken, requireEncryptionKey, hashPassword, comparePassword } from '../crypto.js';
 
 describe('Crypto Utils', () => {
   it('should generate a 32-character hex token', () => {
@@ -13,6 +13,23 @@ describe('Crypto Utils', () => {
     const token1 = generateInvitationToken();
     const token2 = generateInvitationToken();
     expect(token1).not.toBe(token2);
+  });
+});
+
+describe('hashPassword / comparePassword (test-runner bcrypt cost downcost)', () => {
+  it('produces a valid, verifiable bcrypt hash', async () => {
+    const hash = await hashPassword('correct horse battery staple');
+    expect(hash).toMatch(/^\$2[aby]\$\d{2}\$/); // bcrypt format
+    expect(await comparePassword('correct horse battery staple', hash)).toBe(true);
+    expect(await comparePassword('wrong password', hash)).toBe(false);
+  });
+
+  it('uses the lowered cost factor (4) under the test runner — fixes bcrypt-heavy suite timeouts', async () => {
+    // The work factor is encoded as the two-digit cost in the hash prefix.
+    // Under NODE_ENV=test / VITEST this MUST be 04 (prod stays 12); a regression
+    // that drops the test gating would re-introduce the mfa/full-suite flakiness.
+    const hash = await hashPassword('x');
+    expect(hash.startsWith('$2b$04$')).toBe(true);
   });
 });
 

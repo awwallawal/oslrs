@@ -370,6 +370,47 @@ describe('FormController', () => {
       expect(queueSubmissionForIngestion).not.toHaveBeenCalled();
     });
 
+    it('rejects an under-15 submission with declined guardian consent before queueing (Story 9-55)', async () => {
+      mockReq.body = {
+        ...validBody,
+        responses: {
+          dob: '2015-01-01', // age < 15 vs real clock
+          guardian_name: 'Adunni Okafor',
+          guardian_relationship: 'parent',
+          guardian_phone: '08031234567',
+          guardian_consent: 'no', // present (completeness passes) but declined
+          is_supervised_apprentice: 'yes',
+        },
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      const guardianQ = (name: string) => ({
+        id: `q-${name}`, type: 'text', name, label: name, required: true,
+        sectionId: 'grp_guardian', sectionTitle: 'Guardian',
+      });
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue({
+        ...permissiveFlattened,
+        questions: [
+          { id: 'q-dob', type: 'date', name: 'dob', label: 'DOB', required: true, sectionId: 's1', sectionTitle: 'Identity' },
+          guardianQ('guardian_name'),
+          guardianQ('guardian_relationship'),
+          guardianQ('guardian_phone'),
+          guardianQ('guardian_consent'),
+          guardianQ('is_supervised_apprentice'),
+        ],
+        sectionShowWhen: { grp_guardian: { field: 'age', operator: 'less_than', value: 15 } },
+        calculations: [{ name: 'age', expression: 'int((today() - ${dob}) div 365.25)' }],
+      } as never);
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const err = (mockNext as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.code).toBe('MINOR_GUARDIAN_CONSENT_REQUIRED');
+      expect(err.statusCode).toBe(422);
+      expect(queueSubmissionForIngestion).not.toHaveBeenCalled();
+    });
+
     it('persists server-recomputed calculate fields into rawData (Story 9-54 AC1.3)', async () => {
       mockReq.body = { ...validBody, responses: { dob: '1984-06-06' } };
       mockReq.user = { sub: 'user-123', role: 'enumerator' };

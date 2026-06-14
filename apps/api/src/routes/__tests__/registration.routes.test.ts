@@ -85,6 +85,7 @@ vi.mock('../../services/audit.service.js', () => ({
     PENDING_NIN_DEFERRED: 'pending_nin.deferred_again',
     MAGIC_LINK_ISSUED: 'magic_link.issued',
     OPERATOR_SUPPLEMENTAL_SURVEY_SENT: 'operator.supplemental_survey_sent',
+    MINOR_GUARDIAN_CONSENT_CAPTURED: 'minor.guardian_consent_captured',
   },
   // Story 9-34 — registration.controller.ts now reads AUDIT_TARGETS.RESPONDENT
   // for every audit emission (post-9-33 F1 constant-extraction). Explicit-
@@ -721,6 +722,123 @@ describe('POST /registration/wizard', () => {
 
     expect(res.status).toBe(201);
     expect(capturedRaw?.occupation).toBe('tailor');
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Story 9-55 — the minor age-gate + guardian consent, enforced server-side
+  // at submitWizard against the canonical pinned form. Uses a dob that yields
+  // a stable age < 15 against the real clock.
+  // ──────────────────────────────────────────────────────────────────────
+
+  /** A pinned form with an age calc + an age<15 guardian group. */
+  function pinnedFormWithGuardianGroup() {
+    const guardianQ = (name: string) => ({
+      id: `q-${name}`,
+      type: 'text',
+      name,
+      label: name,
+      required: true,
+      sectionId: 'grp_guardian',
+      sectionTitle: 'Parent / Guardian Consent',
+    });
+    return {
+      formId: 'pinned-form-guardian',
+      title: 'Public Survey',
+      version: '1.0.0',
+      questions: [
+        { id: 'q-dob', type: 'date', name: 'dob', label: 'DOB', required: true, sectionId: 's1', sectionTitle: 'Identity' },
+        guardianQ('guardian_name'),
+        guardianQ('guardian_relationship'),
+        guardianQ('guardian_phone'),
+        guardianQ('guardian_consent'),
+        guardianQ('is_supervised_apprentice'),
+      ],
+      choiceLists: {},
+      sectionShowWhen: { grp_guardian: { field: 'age', operator: 'less_than', value: 15 } },
+      calculations: [{ name: 'age', expression: 'int((today() - ${dob}) div 365.25)' }],
+    };
+  }
+
+  // dob ~11 years ago — stays < 15 for years, robust to the real clock.
+  const MINOR_DOB = '2015-01-01';
+  const completeGuardianResponses = {
+    guardian_name: 'Adunni Okafor',
+    guardian_relationship: 'parent',
+    guardian_phone: '08031234567',
+    is_supervised_apprentice: 'yes',
+  };
+
+  it('9-55 — rejects an under-15 submission whose guardian DECLINED consent (422 MINOR_GUARDIAN_CONSENT_REQUIRED)', async () => {
+    mockGetPublicActiveForm.mockResolvedValueOnce(pinnedFormWithGuardianGroup());
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      // All guardian fields PRESENT (so generic completeness passes) but consent
+      // is "no" — only the minor rule catches this.
+      .send(
+        validBody({
+          pendingNin: true,
+          questionnaireResponses: {
+            dob: MINOR_DOB,
+            ...completeGuardianResponses,
+            guardian_consent: 'no',
+          },
+        }),
+      );
+
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('MINOR_GUARDIAN_CONSENT_REQUIRED');
+  });
+
+  it('9-55 — a complete under-15 submission passes, persists metadata.guardian + writes the consent audit (201)', async () => {
+    mockGetPublicActiveForm.mockResolvedValueOnce(pinnedFormWithGuardianGroup());
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    let capturedMetadata: Record<string, unknown> | undefined;
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: (v: Record<string, unknown>) => {
+          capturedMetadata = v.metadata as Record<string, unknown>;
+          return { returning: () => Promise.resolve([{ id: 'resp-minor', status: 'active' }]) };
+        },
+      };
+      const submissionsInsertChain = { values: () => Promise.resolve(undefined) };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-06-12T07:00:00Z'),
+              formData: { questionnaireFormId: 'pinned-form-guardian' },
+            }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(
+        validBody({
+          nin: '12345678919',
+          questionnaireResponses: { dob: MINOR_DOB, ...completeGuardianResponses, guardian_consent: 'yes' },
+        }),
+      );
+
+    expect(res.status).toBe(201);
+    expect(capturedMetadata?.guardian).toMatchObject({
+      name: 'Adunni Okafor',
+      relationship: 'parent',
+      phone: '08031234567',
+      consent: 'yes',
+      isSupervisedApprentice: 'yes',
+    });
+    expect(mockLogActionTx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'minor.guardian_consent_captured' }),
+    );
   });
 
   it('returns 201 with pending_nin_capture status when pendingNin=true + issues magic-link', async () => {

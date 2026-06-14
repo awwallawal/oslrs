@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCompletenessInput,
   validateSubmissionCompleteness,
+  validateMinorGuardianConsent,
 } from '../form-submission-validation.service.js';
 import type { FlattenedForm } from '../native-form.service.js';
 import { AppError } from '@oslsr/utils';
@@ -81,5 +82,58 @@ describe('validateSubmissionCompleteness', () => {
   it('does not require the NIN question on the pending-NIN path', () => {
     const res = validateSubmissionCompleteness(makeForm(), { occupation: 'tailor' }, { pendingNin: true });
     expect(res.computed).toEqual({});
+  });
+});
+
+describe('validateMinorGuardianConsent (Story 9-55)', () => {
+  const completeGuardian = {
+    guardian_name: 'Adunni Okafor',
+    guardian_relationship: 'parent',
+    guardian_phone: '08031234567',
+    guardian_consent: 'yes',
+    is_supervised_apprentice: 'yes',
+  };
+
+  it('passes (not applicable) for an adult age', () => {
+    const res = validateMinorGuardianConsent({}, 30);
+    expect(res.applicable).toBe(false);
+    expect(res.guardian).toBeNull();
+  });
+
+  it('passes (not applicable) when age is unknown — no guardian PII demanded', () => {
+    expect(() => validateMinorGuardianConsent({}, null)).not.toThrow();
+  });
+
+  it('accepts a complete minor guardian path and returns the guardian to persist', () => {
+    const res = validateMinorGuardianConsent(completeGuardian, 13);
+    expect(res.applicable).toBe(true);
+    expect(res.complete).toBe(true);
+    expect(res.guardian).toMatchObject({ name: 'Adunni Okafor', consent: 'yes', isSupervisedApprentice: 'yes' });
+  });
+
+  it('throws MINOR_GUARDIAN_CONSENT_REQUIRED (422) naming missing guardian fields', () => {
+    try {
+      validateMinorGuardianConsent({ is_supervised_apprentice: 'yes' }, 9);
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).code).toBe('MINOR_GUARDIAN_CONSENT_REQUIRED');
+      expect((err as AppError).statusCode).toBe(422);
+      expect((err as AppError).details?.fields).toEqual(
+        expect.arrayContaining(['guardian_name', 'guardian_relationship', 'guardian_phone', 'guardian_consent']),
+      );
+    }
+  });
+
+  it('rejects a minor whose guardian declined consent (consent !== yes)', () => {
+    expect(() =>
+      validateMinorGuardianConsent({ ...completeGuardian, guardian_consent: 'no' }, 14),
+    ).toThrow(AppError);
+  });
+
+  it('a forged ≥15 age cannot be used — gate keys on the passed (server) age, not raw answers', () => {
+    // Even if the answers carried no guardian data, passing age 8 (the server
+    // recompute) makes the gate fire. A client cannot dodge by omitting age.
+    expect(() => validateMinorGuardianConsent({}, 8)).toThrow(AppError);
   });
 });

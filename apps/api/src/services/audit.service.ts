@@ -109,6 +109,11 @@ export const AUDIT_ACTIONS = {
   // name-canonicalization backfill (swaps first_name/last_name on existing
   // surname-first respondent rows after the given/family split).
   OPERATOR_RESPONDENT_NAME_CANONICALIZED: 'operator.respondent_name_canonicalized',
+  // Story 9-55 — NDPA evidentiary record of a captured parent/guardian consent
+  // for an under-15 (minor) registrant, with the ILO Art.6 apprenticeship
+  // attestation. Written via the hash-chain log within the submit transaction
+  // (wizard path) or fire-and-forget on the async enumerator/clerk path.
+  MINOR_GUARDIAN_CONSENT_CAPTURED: 'minor.guardian_consent_captured',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

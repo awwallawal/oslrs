@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { NativeFormService } from '../services/native-form.service.js';
-import { validateSubmissionCompleteness } from '../services/form-submission-validation.service.js';
+import {
+  validateSubmissionCompleteness,
+  validateMinorGuardianConsent,
+} from '../services/form-submission-validation.service.js';
 import { queueSubmissionForIngestion } from '../queues/webhook-ingestion.queue.js';
 import { AppError } from '@oslsr/utils';
 import { modulus11Check } from '@oslsr/utils/src/validation';
@@ -139,6 +142,16 @@ export class FormController {
         pendingNin,
         today: new Date(),
       });
+
+      // Story 9-55 — minor age-gate, enforced SYNCHRONOUSLY before queueing
+      // (post-HTTP-200 ingestion is too late to reject). Keys on the
+      // server-recomputed `computed.age`. Guardian persistence + audit happen
+      // in the async ingestion worker (submission-processing.service) where the
+      // already-validated guardian answers land via the queued rawData.
+      validateMinorGuardianConsent(
+        responses,
+        typeof computed.age === 'number' ? computed.age : null,
+      );
 
       const rawData: Record<string, unknown> = { ...responses, ...computed };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;

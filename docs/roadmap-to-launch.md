@@ -71,6 +71,7 @@ Fire the blasts only when **all** are green:
 ## Phase 4 — Hygiene / debt (interleave or one cleanup sprint; non-blocking)
 
 - **9-35** backup-promotion `.enc` fix (~30 min; cron-day-1 only)
+- **9-57** WizardPage nav → URL-as-single-source-of-truth (retires the dual-effect URL↔state doom-loop; latent maintainability hazard, working+green today). HIGH blast radius → needs Playwright e2e for resume/autosave. _Emerged 2026-06-14 from the 9-55 session; do AFTER launch or in a cleanup pass._
 - **prep-export-row-cap-and-redirect** export hardening
 - **9-9** infrastructure-security-hardening — close the AC#9 SOC-style baseline when bandwidth (already field-ready; not blocking)
 - **9-36 / 9-37** — **DORMANT.** Leave in backlog; pull in *only* if their documented revisit triggers fire (deliberate per the 9-34 `/code-review-triage` lesson — do **not** gold-plate to "finish everything")

@@ -78,6 +78,26 @@ export interface RespondentMetadata {
    * Story 9-28 Path B). Kept on the row for any later disposition pass.
    */
   recovery_email_eligible?: boolean;
+  /**
+   * Story 9-55 — captured parent/guardian consent for an under-15 (minor)
+   * registrant, with the ILO C138 Art.6 supervised-apprentice attestation.
+   * Present ONLY when the registrant's computed age is < 15 (data minimisation,
+   * AC6.1) — never set for adults. The respondent withdrawal/erasure path clears
+   * the whole `metadata` object, so this PII is covered by existing erasure.
+   *
+   * Shape mirrors `GuardianData` in `@oslsr/utils/minor-guardian` (the canonical
+   * source). Inlined here rather than imported: drizzle-kit runs compiled JS and
+   * the workspace packages have no `dist/`, so schema files must stay
+   * import-free of `@oslsr/types`/`@oslsr/utils` (project memory key pattern).
+   */
+  guardian?: {
+    name: string;
+    relationship: string;
+    phone: string;
+    consent: string;
+    isSupervisedApprentice: string;
+    apprenticeshipDetails?: string;
+  };
 }
 
 export const respondents = pgTable('respondents', {

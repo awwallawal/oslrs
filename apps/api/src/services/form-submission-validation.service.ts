@@ -13,7 +13,10 @@ import { AppError } from '@oslsr/utils';
 import {
   findMissingRequiredAnswers,
   evaluateCalculations,
+  evaluateMinorGuardianConsent,
+  MINOR_AGE_FLOOR,
   type CompletenessInput,
+  type MinorGuardianResult,
 } from '@oslsr/utils';
 import { RESPONDENT_FIELD_MAP } from './submission-processing.service.js';
 import type { FlattenedForm } from './native-form.service.js';
@@ -107,4 +110,44 @@ export function validateSubmissionCompleteness(
   }
 
   return { computed };
+}
+
+/**
+ * Story 9-55 — minor age-gate + guardian-consent server enforcement.
+ *
+ * Runs SYNCHRONOUSLY in the submit controllers (submitWizard / submitForm)
+ * AFTER `validateSubmissionCompleteness` has recomputed the authoritative
+ * `age` — never in the async ingestion worker (post-HTTP-200 is too late to
+ * reject). The `age` MUST be the server-recomputed value so a client cannot
+ * forge a ≥15 age to dodge the gate.
+ *
+ * Capture-don't-exclude: an under-15 registrant is NEVER rejected for being
+ * young — only for an INCOMPLETE/declined guardian path. A complete guardian
+ * consent (with the ILO Art.6 apprenticeship attestation) passes.
+ *
+ * @returns the evaluated result; `result.guardian` is populated (ready to
+ *   persist to respondents.metadata.guardian) when a minor submission is valid.
+ * @throws {AppError} MINOR_GUARDIAN_CONSENT_REQUIRED (422) naming the missing
+ *   or invalid guardian field(s).
+ */
+export function validateMinorGuardianConsent(
+  answers: Record<string, unknown>,
+  age: number | null | undefined,
+): MinorGuardianResult {
+  const result = evaluateMinorGuardianConsent(answers, age);
+
+  if (result.applicable && !result.complete) {
+    logger.warn({
+      event: 'submission.minor_consent_required',
+      missing: result.missing,
+    });
+    throw new AppError(
+      'MINOR_GUARDIAN_CONSENT_REQUIRED',
+      `A registrant under ${MINOR_AGE_FLOOR} requires verifiable parent/guardian consent. Missing or invalid: ${result.missing.join(', ')}`,
+      422,
+      { fields: result.missing },
+    );
+  }
+
+  return result;
 }

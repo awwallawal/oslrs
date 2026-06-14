@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./src/validation": "./src/validation.ts",
     "./src/xlsform-calculate": "./src/xlsform-calculate.ts",
-    "./src/form-completeness": "./src/form-completeness.ts"
+    "./src/form-completeness": "./src/form-completeness.ts",
+    "./src/minor-guardian": "./src/minor-guardian.ts"
   },
   "scripts": {
     "test": "vitest run"

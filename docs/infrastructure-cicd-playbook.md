@@ -1519,6 +1519,23 @@ After that single clear, the committed `755` takes over and every subsequent dep
 
 ---
 
+### Pitfall #37: Local FULL-suite test flakiness (worker crash + per-test timeouts) is environmental contention, NOT broken tests — three root causes, three fixes
+
+**Symptom**: `pnpm --filter @oslsr/api test` (or any whole-suite run) on a loaded dev machine intermittently **worker-crashes** (`exit 0xC0000409` on Windows) and/or reports a handful of `Test timed out` failures — most often in `mfa.service.test.ts`. The SAME suites are green **in isolation** and in **CI** (which runs each package as its own job on a dedicated runner, so it never has mutual contention). Silence ≠ broken tests: it's resource oversubscription.
+
+**Detection**: run the suspect file alone — if it passes (or fails identically alone), the full-run failure is contention, not a logic defect. Check whether the slow tests are bcrypt- or real-DB-bound (they dominate wall-clock).
+
+**Three distinct root causes + fixes (all shipped 2026-06-14, this is the consolidated index):**
+1. **Cross-package suite contention** (Story 9-54 NG2). Plain `pnpm test` = `turbo run test` ran api + web + utils + testing **concurrently on one machine**, oversubscribing CPU + the Postgres pool. **Fix**: `.husky/pre-push` runs `pnpm exec turbo run test --concurrency=1` (each suite gets the whole machine). CI intentionally untouched. Commit `cab7077`.
+2. **bcrypt work-factor with no test downcost** (`docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md`). `SALT_ROUNDS=12` was hardcoded in `packages/utils/src/crypto.ts`; MFA enroll hashes 8 backup codes (~250–500ms each) → `mfa.service.test` blew the 15s timeout (178s, 5 fails). **Fix**: `SALT_ROUNDS = (NODE_ENV==='test' || VITEST) ? 4 : 12` — zero dev/prod effect, cost is encoded per-hash. Result: mfa 178s/5-fail → **1.45s/22-pass (~120×)**; the whole api suite then runs green in parallel with no crash. Surfaced during Story 9-55; fixed as a separate change.
+3. **A delicate test guarding a delicate design** (Story 9-57, queued). `WizardPage.test.tsx` was historically flaky from a DOM-collision (fixed via `afterEach(cleanup)`), but the deeper hazard is the component's dual-source-of-truth URL↔state nav (two opposing effects + eslint-disabled stale-closure deps). The test is stable now (5/5) but any dep-array edit reintroduces the render loop. **Fix (deferred, Phase-4)**: URL-as-single-source-of-truth refactor — Story `9-57-wizard-nav-url-single-source-of-truth.md`.
+
+**Lesson**: before "fixing" a flaky-looking full-suite run, run the file in isolation. If it's green alone, the bug is contention (serialize the runner / downcost bcrypt in test), not the test. A test that flakes only in the full run is an *environment* signal; a test that's stable but guards a fragile design is a *refactor* signal — don't conflate them.
+
+**Reference**: 2026-06-14 — all three surfaced/were-fixed across the Story 9-54 → 9-55 sessions. RTL DOM-collision precedent: Pitfall #32 (selector rot) + #33 (WebSocket-refresh flake).
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1532,6 +1549,7 @@ After that single clear, the committed `755` takes over and every subsequent dep
 *Updated: 2026-05-10 — Pitfalls #32-35 added per BMAD compliance restoration tracker (`docs/bmad-compliance-restoration-2026-05-10.md` R4 + F5a): #32 selector rot under accessibility-name UI changes (commit `235563c`); #33 WebSocket-refresh flake masquerading as flaky test (commit `c375254`); #34 `continue-on-error: true` as silent-failure mask (commit `235563c`); #35 in-process worker CPU spike contaminates API latency rolling buffer (commit `609e06e` Story 9-10 PC1).*
 *Updated: 2026-05-09 — Pitfall #31 added: GH Actions E2E job had been silently failing across 2 commits (fe878af + 096086e) with `chromium_headless_shell-1208 doesn't exist` because the Playwright browser cache key tracked `apps/web/package.json` text instead of `pnpm-lock.yaml` resolved version, AND the `restore-keys` fallback was too permissive (matched broken v1 caches). Compounded by `pnpm dlx playwright install` fetching a latest Playwright that targeted a newer browser revision than the project's pinned `@playwright/test` expects. Fix: cache key includes `pnpm-lock.yaml` + manual `v2-` prefix; restore-keys narrowed to `v2-`-only; dlx swapped for `pnpm --filter @oslsr/web exec` so project-pinned Playwright drives both install and runtime. Visibility lesson: `continue-on-error: true` on a CI job needs a separate visible-red signal or red becomes wallpaper.*
 *Updated: 2026-06-02 — Pitfall #36 added: `pnpm install` sets the exec bit on package `bin` files (`packages/testing/src/cli.ts`), creating a mode-only diff on the VPS that is a latent `git pull` deploy blocker. Fixed durably by committing the `+x` bit (`git update-index --chmod=+x`) rather than the VPS-local `core.fileMode false` hack — the commit is self-documenting and survives a droplet rebuild. Surfaced while pulling prod registration data 2026-06-02.*
+*Updated: 2026-06-14 — Pitfall #37 added (consolidated index): local FULL-suite test flakiness = environmental contention, not broken tests. Three root causes + fixes: (1) cross-package suite contention → pre-push `turbo --concurrency=1` (9-54 NG2, `cab7077`); (2) hardcoded bcrypt `SALT_ROUNDS=12` with no test downcost → `(test||VITEST)?4:12` (mfa 178s/5-fail → 1.45s/22-pass; `docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md`); (3) delicate test guarding the WizardPage dual-source URL↔state nav → URL-as-single-source refactor (Story 9-57, Phase-4). Rule: run a flaky file in isolation first — green-alone = contention, not a logic bug.*
 
 ## Part 12: Encrypted Backup Restore (added 2026-05-09 per Story 9-9 AC#5)
 

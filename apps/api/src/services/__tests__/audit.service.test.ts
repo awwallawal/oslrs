@@ -185,8 +185,10 @@ describe('AuditService', () => {
       //   OPERATOR_RECOVERY_EMAIL_SENT ('operator.recovery_email_sent') → 45.
       // Story 9-18 Part F (name canonicalization backfill) added 1:
       //   OPERATOR_RESPONDENT_NAME_CANONICALIZED → 46.
+      // Story 9-55 (minor age-gate + guardian consent) added 1:
+      //   MINOR_GUARDIAN_CONSENT_CAPTURED ('minor.guardian_consent_captured') → 47.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(46);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(47);
     });
   });
 

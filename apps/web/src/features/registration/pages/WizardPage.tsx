@@ -14,9 +14,7 @@ import {
   type FlattenedForm,
 } from '../api/wizard.api';
 import { getVisibleQuestions } from '../../forms/utils/skipLogic';
-import { findMissingRequiredAnswers } from '@oslsr/utils/src/form-completeness';
-import { withCalculatedFields } from '@oslsr/utils/src/xlsform-calculate';
-import { NIN_QUESTION_NAMES } from '../lib/wizard-provided-field-names';
+import { deriveReviewCompleteness } from '../lib/review-completeness';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
@@ -260,47 +258,10 @@ export default function WizardPage() {
   // Story 9-54 AC6.2 — Step-5 completeness guard. Reuses the SAME shared rule
   // the server enforces (AC5) so Submit is disabled until every required +
   // relevant questionnaire answer is present; the server gate stays authoritative.
-  const reviewCompleteness = useMemo(() => {
-    if (!form) {
-      return { complete: true, missing: [] as string[], missingStepIndex: null as number | null };
-    }
-    const pending = derivePendingNin(draft.formData);
-    const exclude = new Set<string>();
-    if (pending) {
-      for (const q of form.questions) {
-        if (NIN_QUESTION_NAMES.includes(q.name)) exclude.add(q.name);
-      }
-    }
-    // Resolve computed (calculate) fields ONCE, then gate on the merged map —
-    // the rule itself is calc-free (Story 9-54 L2 fix).
-    const evalData = withCalculatedFields(
-      draft.formData.questionnaireResponses ?? {},
-      form.calculations,
-      new Date(),
-    );
-    const { complete, missing } = findMissingRequiredAnswers(
-      {
-        questions: form.questions.map((q) => ({
-          name: q.name,
-          required: q.required,
-          sectionId: q.sectionId,
-          showWhen: q.showWhen,
-        })),
-        sectionShowWhen: form.sectionShowWhen,
-        excludeNames: exclude,
-      },
-      evalData,
-    );
-    let missingStepIndex: number | null = null;
-    if (missing.length > 0) {
-      const q = form.questions.find((qq) => qq.name === missing[0]);
-      if (q) {
-        const idx = steps.findIndex((s) => s.sectionId === q.sectionId);
-        missingStepIndex = idx >= 0 ? idx : null;
-      }
-    }
-    return { complete, missing, missingStepIndex };
-  }, [form, draft.formData, steps]);
+  const reviewCompleteness = useMemo(
+    () => deriveReviewCompleteness(form, draft.formData, steps),
+    [form, draft.formData, steps],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;

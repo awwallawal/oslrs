@@ -8,7 +8,11 @@ import { respondents, submissions, wizardDrafts, type WizardDraftData } from '..
 import { uuidv7 } from 'uuidv7';
 import { MagicLinkService } from '../services/magic-link.service.js';
 import { NativeFormService } from '../services/native-form.service.js';
-import { validateSubmissionCompleteness } from '../services/form-submission-validation.service.js';
+import {
+  validateSubmissionCompleteness,
+  validateMinorGuardianConsent,
+} from '../services/form-submission-validation.service.js';
+import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import pino from 'pino';
 
@@ -527,6 +531,18 @@ export class RegistrationController {
         });
       }
 
+      // Story 9-55 — minor age-gate. Keys on the SERVER-recomputed age
+      // (computedFields.age, authoritative — a client cannot forge it). An
+      // under-15 registrant is NOT rejected for being young; they are required
+      // to carry a complete guardian-consent + ILO Art.6 apprenticeship
+      // attestation. Throws MINOR_GUARDIAN_CONSENT_REQUIRED (422) on an
+      // incomplete/declined guardian path. `minorResult.guardian` (when present)
+      // is persisted to respondents.metadata.guardian + audited below.
+      const minorResult: MinorGuardianResult = validateMinorGuardianConsent(
+        responses,
+        typeof computedFields.age === 'number' ? computedFields.age : null,
+      );
+
       // FR21 dedupe — NIN-provided path only. Pending rows are not bound by
       // NIN uniqueness (multiple pending rows can coexist; race-resolution
       // merge in submission-processing.service handles cross-source collapse).
@@ -561,6 +577,12 @@ export class RegistrationController {
       const metadata: Record<string, unknown> = {};
       if (pendingNin) {
         metadata.defer_reason_nin = data.deferReasonNin ?? 'public_wizard_user_self_deferred';
+      }
+      // Story 9-55 AC4 — guardian PII persisted ONLY for an under-15 registrant
+      // (data minimisation, AC6.1). The gate above guarantees completeness when
+      // `minorResult.guardian` is set.
+      if (minorResult.guardian) {
+        metadata.guardian = minorResult.guardian;
       }
 
       // Code review M6 (2026-05-11) — wrap insert + audit + draft delete in
@@ -679,6 +701,29 @@ export class RegistrationController {
           ipAddress: req.ip || 'unknown',
           userAgent: req.get('user-agent') || 'unknown',
         });
+
+        // Story 9-55 AC5 — NDPA evidentiary record of the captured guardian
+        // consent, written inside the SAME transaction (hash-chain integrity:
+        // an audit-write failure rolls back the respondent). No raw child PII
+        // beyond what the respondent row already holds.
+        if (minorResult.guardian) {
+          await AuditService.logActionTx(tx, {
+            actorId: null,
+            action: AUDIT_ACTIONS.MINOR_GUARDIAN_CONSENT_CAPTURED,
+            targetResource: AUDIT_TARGETS.RESPONDENT,
+            targetId: row.id,
+            details: {
+              trigger: 'public_wizard_submit',
+              guardianName: minorResult.guardian.name,
+              guardianRelationship: minorResult.guardian.relationship,
+              guardianPhone: minorResult.guardian.phone,
+              isSupervisedApprentice: minorResult.guardian.isSupervisedApprentice,
+              submissionUid: newSubmissionUid,
+            },
+            ipAddress: req.ip || 'unknown',
+            userAgent: req.get('user-agent') || 'unknown',
+          });
+        }
 
         // Burn the server-side draft — submission is final. Inside the
         // transaction so a draft-delete failure rolls everything back; cleaner

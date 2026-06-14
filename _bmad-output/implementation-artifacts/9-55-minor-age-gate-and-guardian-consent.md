@@ -1,6 +1,6 @@
 # Story 9.55: Minor Age-Gate (floor 15 + ILO Art.6 apprenticeship carve-out) + Guardian Consent
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-12 by Bob (SM) via canonical *create-story --yolo. LAUNCH-GATING (child-safeguarding + NDPA). DEPENDS-ON 9-54. -->
@@ -66,24 +66,36 @@ Do NOT start this story until 9-54 AC1 + AC2 + AC5 are implemented and green.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Master form: guardian group (AC1, AC2)** *(blocked on 9-54 AC1+AC2)*
-  - [ ] Add `relevant=${age}<15` group with guardian_name/relationship/phone/consent + apprenticeship attestation to the master XLSForm (`test-fixtures/oslsr_master_v3.xlsx`).
-  - [ ] Verify it migrates to `sectionShowWhen` (9-54 AC2) and computes `age` (9-54 AC1); guardian group gates on computed age.
-  - [ ] Child-safeguarding copy review for the carve-out + consent wording.
-- [ ] **Task 2 — Shared minor rule (AC3, AC4 storage decision)**
-  - [ ] Implement the `dob`→`age`<15 guardian-required rule in shared `packages/utils`/`packages/types` (reuse 9-54 calculate eval + AC5 completeness seam).
-  - [ ] Enforce synchronously in `submitWizard` + `submitForm` before queueing; `AppError('MINOR_GUARDIAN_CONSENT_REQUIRED', …, 422)`.
-- [ ] **Task 3 — Persistence (AC4)**
-  - [ ] Add guardian fields to `RESPONDENT_FIELD_MAP`; persist to `respondents.metadata.guardian` (default) — document the choice; ensure no identity-field regression.
-- [ ] **Task 4 — Audit trail (AC5)**
-  - [ ] Add `MINOR_GUARDIAN_CONSENT_CAPTURED` action; write via hash-chain `logTx` inside the submit transaction with canonical singular `targetResource`.
-- [ ] **Task 5 — NDPA/safeguarding (AC6)**
-  - [ ] Data-minimisation guard (capture guardian PII only when age<15); verify withdrawal/erasure clears `metadata.guardian`.
-- [ ] **Task 6 — Client completeness surface (AC3.4)**
-  - [ ] Extend the 9-54 AC6 Step-5 completeness guard to include the minor rule (disable Submit + point to the guardian section when age<15 and guardian fields missing).
-- [ ] **Task 7 — Tests + operator step + parity (AC7)**
-  - [ ] Unit + integration tests (rule, uniformity across channels, audit write, forge-resistance).
-  - [ ] Document re-migrate→re-upload→re-pin; full `pnpm test` green; flip sprint-status 9-55 → review at close.
+- [x] **Task 1 — Master form: guardian group (AC1, AC2)** *(blocked on 9-54 AC1+AC2 — both merged via 2cd6a39)*
+  - [x] Add `relevant=${age}<15` group with guardian_name/relationship/phone/consent + apprenticeship attestation to the master XLSForm (`test-fixtures/oslsr_master_v3.xlsx`).
+  - [x] Verify it migrates to `sectionShowWhen` (9-54 AC2) and computes `age` (9-54 AC1); guardian group gates on computed age. *(verified against the real binary via the actual parser+converter + a permanent converter regression test)*
+  - [x] Child-safeguarding copy review for the carve-out + consent wording. *(non-stigmatising apprentice framing + NDPA consent wording with withdrawal)*
+- [x] **Task 2 — Shared minor rule (AC3, AC4 storage decision)**
+  - [x] Implement the `dob`→`age`<15 guardian-required rule in shared `packages/utils` (`minor-guardian.ts`; pure, consumes the 9-54 computed `age`).
+  - [x] Enforce synchronously in `submitWizard` + `submitForm` before queueing; `AppError('MINOR_GUARDIAN_CONSENT_REQUIRED', …, 422)`.
+- [x] **Task 3 — Persistence (AC4)**
+  - [x] Persist to `respondents.metadata.guardian` (documented; guardian extracted via the shared rule rather than `RESPONDENT_FIELD_MAP` since it is a nested object, not a flat column — see Completion Notes); no identity-field regression.
+- [x] **Task 4 — Audit trail (AC5)**
+  - [x] Add `MINOR_GUARDIAN_CONSENT_CAPTURED` action; write via hash-chain `logActionTx` inside the wizard submit transaction (fire-and-forget on the async path) with canonical singular `targetResource`.
+- [x] **Task 5 — NDPA/safeguarding (AC6)**
+  - [x] Data-minimisation guard (capture guardian PII only when age<15); verified all metadata-update paths preserve `metadata.guardian` and row-level erasure clears it.
+- [x] **Task 6 — Client completeness surface (AC3.4)**
+  - [x] Extend the 9-54 AC6 Step-5 completeness guard to include the minor rule (disable Submit + point to the guardian section when age<15 and guardian fields missing).
+- [x] **Task 7 — Tests + operator step + parity (AC7)**
+  - [x] Unit + integration tests (rule, uniformity across channels, audit write, forge-resistance).
+  - [x] Document re-migrate→re-upload→re-pin (`docs/runbooks/minor-age-gate-guardian-consent-repin-9-55.md`); full suites green; flip sprint-status 9-55 → review at close.
+
+### Review Follow-ups (AI) — code-review 2026-06-14 (Awwal)
+
+Adversarial senior-dev review found 0 Critical, 3 Medium, 3 Low. Per Awwal's
+disposition, all actionable findings were FIXED in the same pass (not just logged).
+
+- [x] **[AI-Review][Med] M1 — race-resolution merge dropped guardian consent + audit.** `tryRaceResolutionMerge` returned before the insert, so an under-15 enumerator/clerk submission whose NIN-completion promotes an existing pending row persisted neither `metadata.guardian` nor the `MINOR_GUARDIAN_CONSENT_CAPTURED` audit. **Fixed:** merge now folds guardian into the row metadata via JSONB `||` in the same atomic UPDATE + writes the consent audit on the promote path. New test `writes MINOR_GUARDIAN_CONSENT_CAPTURED on the merge path`. [submission-processing.service.ts:483-493, 611-672]
+- [x] **[AI-Review][Med] M2 — async consent audit was silent fire-and-forget (AC5.3 gap).** A failed audit on the enumerator/clerk path left a persisted under-15 respondent with NO NDPA consent record, and the failure was swallowed. **Fixed:** extracted `writeGuardianConsentAudit` — the evidentiary audit is now AWAITED and a failure emits `audit.minor_guardian_consent_captured_failed` (error level) per AC5.3's criticality pattern, without rolling back the INSERT. New test `does not throw / does not lose the respondent when the consent audit fails`. (Full transactional wrapping of the worker insert stays reserved to the synchronous wizard path.) [submission-processing.service.ts:556-594]
+- [x] **[AI-Review][Med] M3 — no automated guard that the SHIPPED master binary carries `grp_guardian`.** The converter regression used a synthetic survey; a future master re-export dropping the group would pass every test while silently disabling the form-level gate. **Fixed:** new test parses the real `test-fixtures/oslsr_master_v3.xlsx` via `XlsformParserService.parseXlsxFile` + `convertToNativeForm` and asserts the age<15 guardian section + its fields. [xlsform-to-native-converter.test.ts]
+- [x] **[AI-Review][Low] L2 — bcrypt test-downcost is security-adjacent.** Correctly gated, but the prod-safety invariant was implicit. **Fixed:** documented the deploy-safety guard (never set `NODE_ENV=test`/`VITEST` in prod; `pm2 env` spot-check) in the bcrypt follow-up doc. [docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md]
+- [~] **[AI-Review][Low] L1 — guardian not in `RESPONDENT_FIELD_MAP` (AC4.1 literal deviation).** ACCEPTED as-is — nested `metadata.guardian` object is AC4.2's recommended default, not a flat column; already documented in Completion Notes. No change.
+- [~] **[AI-Review][Low] L3 — rule is evaluated at two sites (wizard inline vs worker re-extract).** ACCEPTED — consistent today (same `rawData`), shared single rule definition; noted as a latent divergence point only. No change.
 
 ## Dev Notes
 
@@ -131,8 +143,70 @@ Do NOT start this story until 9-54 AC1 + AC2 + AC5 are implemented and green.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (dev-story workflow, 2026-06-14)
+
 ### Debug Log References
+
+- `pnpm --filter @oslsr/utils test` — 116 passed (was 104; +12 minor-guardian).
+- `pnpm vitest run` (targeted) — registration.routes 38, form.controller (submitForm) + submission-processing, form-submission-validation.service, xlsform-to-native-converter, audit.service — all green.
+- `tsc --noEmit` — api + utils + web all clean (exit 0).
+- `eslint src` (api) + `eslint src e2e` (web) — clean (exit 0).
+- Master-form migration verified against the REAL binary (`test-fixtures/oslsr_master_v3.xlsx`) via the actual `XlsformParserService.parseXlsxFile` + `convertToNativeForm`: `grp_guardian` → `sectionShowWhen { field: 'age', operator: 'less_than', value: 15 }`; guardian questions required; `apprenticeship_details` gated on `is_supervised_apprentice = 'yes'`.
 
 ### Completion Notes List
 
+- **Dependency reality check:** 9-54 is `review` in sprint-status but its code is MERGED (commit `2cd6a39`) — all required seams (AC1 `xlsform-calculate`, AC2 group-relevance migration, AC5 `form-submission-validation.service` gate in both controllers) exist in the tree. Verified before building. Story was genuinely startable.
+- **AC1 (guardian group):** added `grp_guardian` (`relevant=${age} < 15`) to the master XLSForm (`guardian_name`/`guardian_relationship`/`guardian_phone`/`guardian_consent`/`is_supervised_apprentice` required + optional `apprenticeship_details` gated on the attestation) + a `guardian_rel_list` choice list (parent/legal_guardian/other). It rides the 9-54 engine, so it surfaces uniformly across wizard/enumerator/clerk/supervisor with NO per-channel code. The binary `.xlsx` was edited via SheetJS (same library the parser uses) and round-trip-verified through the real converter.
+- **AC2:** verified `grp_guardian` migrates to a section `showWhen` (`less_than` 15) — both against the real binary AND as a permanent regression in `xlsform-to-native-converter.test.ts`. `less_than` evaluates numerically and returns false for unknown age, so the group auto-hides for adults / unknown-age (data minimisation).
+- **AC3 (server rule, synchronous):** the shared pure rule is `packages/utils/src/minor-guardian.ts` (`evaluateMinorGuardianConsent(answers, age)`). The API wrapper `validateMinorGuardianConsent` (`form-submission-validation.service.ts`) throws `AppError('MINOR_GUARDIAN_CONSENT_REQUIRED', …, 422, {fields})`. Enforced in BOTH `submitWizard` (registration.controller) and `submitForm` (form.controller) AFTER the 9-54 completeness gate, keyed on the SERVER-recomputed `age` (a client cannot forge it). NOT in `submission-processing.service` (post-HTTP-200). The rule adds the value-level checks completeness can't express — affirmative `guardian_consent === 'yes'` + the apprenticeship attestation answered — so it is not redundant with `findMissingRequiredAnswers`.
+- **Capture-don't-exclude (AC2 policy):** an under-15 registrant is NEVER rejected for being young — only for an incomplete/declined guardian path. The interim ≥16 Step-1 block (neutralised in 9-18) is NOT reintroduced.
+- **AC4 (persistence):** guardian data persists to `respondents.metadata.guardian` (JSON; no migration) — wizard path sets it inline in the controller transaction; enumerator/clerk path extracts it in `submission-processing.extractRespondentData` (keyed on the server-stamped `rawData.age`) and merges it in `findOrCreateRespondent`. **Deviation from AC4.1 literal wording:** guardian fields were NOT added to `RESPONDENT_FIELD_MAP` (that map is column-name → flat respondent column; guardian is a nested `metadata.guardian` object, AC4.2's recommended default). Extraction uses the shared rule instead. Documented per the "verify-against-reality, don't follow story framing blindly" principle.
+- **AC5 (audit):** new action `MINOR_GUARDIAN_CONSENT_CAPTURED` (`minor.guardian_consent_captured`, AUDIT_ACTIONS 46→47). Written via hash-chain `logActionTx` inside the wizard submit transaction; fire-and-forget `logAction` on the async enumerator/clerk path (mirrors that path's existing creation-audit pattern). Canonical SINGULAR `AUDIT_TARGETS.RESPONDENT`. Records guardian name/relationship/phone + attestation flag — no raw child PII beyond the respondent row.
+- **AC6 (NDPA/safeguarding):** (6.1) guardian PII captured ONLY when `age < 15` (the rule returns `guardian: null` otherwise; `metadata.guardian` only set when present). (6.2) `guardian_consent` label is NDPA-appropriate (purpose, controller, withdrawal). (6.3) **Withdrawal/erasure verified:** guardian lives in the single `metadata` JSONB — there is no dedicated column to miss. All current metadata-update paths (`registration.controller` defer, `reminder.worker` transition) spread existing metadata, so guardian survives a pending→active/nin_unavailable lifecycle; any future row-level erasure (Story 9-32) clears the whole `metadata`.
+- **AC3.4 / AC6 client guard:** `WizardPage.reviewCompleteness` folds the shared minor rule into the Step-5 completeness guard (disables Submit + points to the missing section). Defence-in-depth; the server gate is authoritative.
+- **Cross-package note:** web imports the shared rule via the deep subpath `@oslsr/utils/src/minor-guardian` (added to the package `exports` map), mirroring the 9-54 `form-completeness`/`xlsform-calculate` pattern (the barrel pulls bcrypt via crypto.js and can't be imported from web).
+- **Prod follow-up (NOT in this PR):** re-migrate → re-upload → re-pin the production form (`wizard.public_form_id`) or the guardian group never renders to under-15 registrants — see `docs/runbooks/minor-age-gate-guardian-consent-repin-9-55.md`. The server gate is live regardless.
+- **Web client-guard coverage (post-review-of-own-work):** the Step-5 completeness computation was EXTRACTED from `WizardPage` into a pure helper `apps/web/src/features/registration/lib/review-completeness.ts` (injectable clock) and unit-tested directly (`review-completeness.test.ts`, 5 cases incl. adult-hidden / under-15-missing / declined-consent / complete-consented). This gives direct, deterministic coverage of the minor folding WITHOUT de-stubbing the fragile WizardPage URL-race test (which deliberately stubs Step5). WizardPage's URL-race tests still pass (6/6) after the refactor.
+- **Code-hygiene cleanups (pre-review):** removed an unused `isMinorAge` import + re-export from `form-submission-validation.service.ts` (dead code).
+- **SEPARATE sibling change (NOT part of 9-55's feature scope) — bcrypt test-flakiness fix:** during dev, the local full API suite worker-crashed and `mfa.service.test.ts` timed out (5 fails / 178s) — a PRE-EXISTING issue on `main` (reproduces in isolation; 9-55 touches neither MFA nor bcrypt). Root cause: `SALT_ROUNDS=12` hardcoded in `packages/utils/src/crypto.ts` with no test downcost. Fixed as a DISTINCT change (gated `NODE_ENV==='test'||VITEST` → cost 4; zero dev/prod effect) per scope discipline — see `docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md`. Result: mfa 178s/5-fail → 1.45s/22-pass (~120×); whole-suite flakiness resolved. Files: `packages/utils/src/crypto.ts` + `packages/utils/src/__tests__/crypto.test.ts`. Listed here for reviewer transparency (same working tree); assess on its own merits.
+
 ### File List
+
+**Created**
+- `packages/utils/src/minor-guardian.ts`
+- `packages/utils/src/__tests__/minor-guardian.test.ts`
+- `apps/web/src/features/registration/lib/review-completeness.ts` (extracted pure Step-5 guard helper)
+- `apps/web/src/features/registration/lib/__tests__/review-completeness.test.ts`
+- `docs/runbooks/minor-age-gate-guardian-consent-repin-9-55.md`
+
+**Created/Modified — SEPARATE test-infra change (bcrypt flakiness; not 9-55 feature scope)**
+- `packages/utils/src/crypto.ts` (test-runner SALT_ROUNDS downcost)
+- `packages/utils/src/__tests__/crypto.test.ts` (cost-gating tests)
+- `docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md`
+
+**Modified**
+- `test-fixtures/oslsr_master_v3.xlsx` (added `grp_guardian` group + `guardian_rel_list` choices)
+- `packages/utils/src/index.ts` (barrel export)
+- `packages/utils/package.json` (exports map: `./src/minor-guardian`)
+- `apps/api/src/services/form-submission-validation.service.ts` (`validateMinorGuardianConsent` + re-export `isMinorAge`)
+- `apps/api/src/services/audit.service.ts` (`MINOR_GUARDIAN_CONSENT_CAPTURED` action)
+- `apps/api/src/services/submission-processing.service.ts` (guardian extraction + metadata persist + audit on the async path)
+- `apps/api/src/db/schema/respondents.ts` (`RespondentMetadata.guardian` inline shape)
+- `apps/api/src/controllers/registration.controller.ts` (submitWizard minor gate + metadata.guardian + transactional audit)
+- `apps/api/src/controllers/form.controller.ts` (submitForm synchronous minor gate)
+- `apps/web/src/features/registration/pages/WizardPage.tsx` (Step-5 guard folds the minor rule)
+- `apps/api/src/services/__tests__/form-submission-validation.service.test.ts` (validateMinorGuardianConsent cases)
+- `apps/api/src/services/__tests__/audit.service.test.ts` (action count 46→47)
+- `apps/api/src/services/__tests__/submission-processing.service.test.ts` (guardian extract + audit)
+- `apps/api/src/services/__tests__/xlsform-to-native-converter.test.ts` (grp_guardian age<15 round-trip)
+- `apps/api/src/controllers/__tests__/form.controller.test.ts` (submitForm minor rejection)
+- `apps/api/src/routes/__tests__/registration.routes.test.ts` (wizard minor reject/pass+persist+audit; audit mock key)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (9-55 → in-progress → review)
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-06-14 | Implemented all 7 ACs: master-form `grp_guardian` (age<15) + `guardian_rel_list`; shared pure minor rule (`@oslsr/utils/minor-guardian`); synchronous server gate `MINOR_GUARDIAN_CONSENT_REQUIRED` (422) in submitWizard + submitForm keyed on server-recomputed age (capture-don't-exclude, ILO Art.6 carve-out); guardian persistence to `respondents.metadata.guardian` (wizard inline + enumerator/clerk via submission-processing); audit `MINOR_GUARDIAN_CONSENT_CAPTURED` (hash-chain tx on wizard, fire-and-forget on async); NDPA data-minimisation + withdrawal-coverage verified; Step-5 client guard folds the rule. Operator re-pin runbook authored. utils 116 / targeted API suites / tsc + lint all green. Status → review. |
+| 2026-06-14 | Pre-review hardening pass (operator request): removed dead `isMinorAge` import/re-export; extracted the Step-5 guard into a pure, unit-tested helper `review-completeness.ts` (5 cases) + verified WizardPage URL-race tests still pass (6/6). Diagnosed + fixed a PRE-EXISTING (not-9-55) bcrypt test-flakiness as a SEPARATE change (`crypto.ts` test-runner SALT_ROUNDS 12→4, gated; `docs/follow-ups/2026-06-14-test-bcrypt-cost-downcost.md`): `mfa.service.test` 178s/5-fail → 1.45s/22-pass (~120×). **Full suites now green in parallel: API 2465 pass/7 skip/0 fail (exit 0, no crash); web 2595 pass/2 todo/0 fail; utils 116 + crypto 32; tsc + lint clean.** sprint-status 9-54 confirmed `done` (synced from the other CLI). |
+| 2026-06-14 | **Adversarial code review (Awwal) → all findings fixed, status review → done.** 0 Critical / 3 Medium / 3 Low; git File List reconciled clean vs reality. Fixed M1 (race-resolution merge now persists `metadata.guardian` via atomic JSONB `||` + writes the consent audit on the promote path), M2 (extracted `writeGuardianConsentAudit` — async-path NDPA audit is now awaited + logs `audit.minor_guardian_consent_captured_failed` per AC5.3 instead of silent fire-and-forget), M3 (new test parses the REAL `oslsr_master_v3.xlsx` and asserts the age<15 guardian group migrates — guards the shipped binary, not just a synthetic survey), L2 (documented the prod-safety invariant for the bcrypt downcost). L1/L3 reviewed + accepted as-is. +3 tests. Touched suites green: submission-processing (47) + xlsform-to-native-converter (10) + form-submission-validation/audit/form.controller/registration.routes (125); api tsc 0 / eslint 0. Operator prod re-pin (AC7.3) remains the only outstanding action (runbook authored; not a code item). |
