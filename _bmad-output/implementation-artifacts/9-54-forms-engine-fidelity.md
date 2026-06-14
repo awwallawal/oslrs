@@ -1,6 +1,6 @@
 # Story 9.54: Forms-Engine Fidelity (calculate/age eval + group-relevance + publish-time validator + wizard-dedup value-mapping + submit-time completeness)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-12 by Bob (SM) via canonical *create-story --yolo. LAUNCH-GATING (roadmap Phase 1 🚦). -->
@@ -100,7 +100,7 @@ Decision: Awwal "Option A — fix once and for all" (2026-06-10). FOLDED scope: 
 
 Adversarial Senior Developer review. Severity tally: **0 Critical · 1 High · 3 Medium · 2 Low**, plus **1 new test-gap** surfaced by the H1 fix. Status legend: `[x]` = fixed & test-verified · `[~]` = verified not-a-bug / accepted (no code change needed) · `[ ]` = open.
 
-- [ ] **No Critical findings.** No `[x]` task was falsely claimed; git File List matched reality; all 6 ACs implemented.
+- **No Critical findings.** No `[x]` task was falsely claimed; git File List matched reality; all 6 ACs implemented.
 - [x] **[AI-Review][High] H1 — submitWizard server gate trusted client state.** Resolved the canonical pinned form server-side via `getPublicActiveForm()` (the `wizard.public_form_id` source the renderer uses) instead of the client-stamped `draft.questionnaireFormId`; gate no longer skippable by submitting with no draft / a forged or absent form id. `apps/api/src/controllers/registration.controller.ts:497-526`. **Fixed** — `registration.routes.test.ts` green (76).
 - [x] **[AI-Review][Med] M1 — non-injectable clock blocked AC1.4 assertion.** Added `CompletenessOptions.today`; controllers pass `new Date()`, the service test now asserts the authoritative `age === 42` at the persist layer. `apps/api/src/services/form-submission-validation.service.ts:24-36,72`. **Fixed** — new test passes.
 - [x] **[AI-Review][Med] M2 — non-finite calculate result persisted/gated.** Evaluator returns `undefined` (incomputable) for `Infinity`/`NaN` (e.g. `div 0`). `packages/utils/src/xlsform-calculate.ts:305-313`. **Fixed** — new test passes.
@@ -224,6 +224,7 @@ claude-opus-4-8[1m] (dev-story workflow, 2026-06-12)
 | 2026-06-12 | Implemented all 6 ACs (calculate evaluator + retention/render/submit; group-relevance migration; publish-time fidelity validator; choice-field wizard-dedup value-mapping; shared server-side required-answer gate in submitWizard+submitForm; wizard nav `maxReachedStepIndex` clamp + Step-5 completeness guard + the missing renderer-gate seam test). Full `pnpm test` green (4/4 packages), tsc + lint clean. Status → review. Prod re-pin (runbook) + Story 9-55 unblocked. |
 | 2026-06-12 | Adversarial code review (Awwal) — 1 High / 3 Medium / 2 Low. Auto-fixed H1 + M1 + M2; M3 verified already-correct (doc'd). See "Senior Developer Review (AI)". Affected tests re-run green (utils 104, API form-submission-validation/form.controller/registration.routes 76); tsc + lint clean. Status stays **review** (uncommitted tree + prod re-pin operator step still pending). |
 | 2026-06-12 | Closed remaining review items pre-commit: **NG1** (new gap surfaced by H1) — added wizard server-gate route locks (reject 422 / pass 201) in `registration.routes.test.ts`; **L2** resolved via **Option B (separation of concerns)** — `findMissingRequiredAnswers` is now calc-free pure gating `(input, evalData)`, `form-completeness` no longer imports `xlsform-calculate`, single eval per submit/render. All 7 review items now fixed/verified. Green: utils 104 / API 78 / web 23; tsc + lint clean (utils + api + web). |
+| 2026-06-14 | **Status → done (Awwal).** Operator step complete: production master form deleted → re-uploaded → re-published → re-pinned AFTER the 9-54 deploy, so the live pinned form went through the updated converter (calculate retention + group-relevance migration active). End-to-end wizard run validated locally (conditional sections gate: basic-consent identity gate + age branch). Code complete + all 8 review findings (H1/M1/M2/M3/L1/L2/NG1/NG2) closed; CI green incl. deploy across the landing chain (`a532b5c`→`cab7077`). Unblocks 9-55 (needs AC1 runtime age + AC2 group-relevance, both live). |
 
 ## Senior Developer Review (AI)
 
