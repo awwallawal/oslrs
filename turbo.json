@@ -12,7 +12,7 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "VITEST_MAX_THREADS"]
     },
     "test:golden": {
       "dependsOn": ["^build"],

@@ -49,6 +49,18 @@ if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   # oversubscription, not the tests. --concurrency=1 gives each suite the whole
   # machine (the proven-green condition) and keeps this gate deterministic. CI is
   # unaffected (it never used turbo-all). See 9-54 "Review Follow-ups (AI)".
+  #
+  # Story 9-55 (2026-06-14): ALSO cap each suite's vitest worker pool. The
+  # --concurrency=1 fix above serializes PACKAGES, but the web package alone
+  # still spawns one worker thread per core; on this laptop — especially with a
+  # second `pnpm test` running or after a sleep/resume — that oversubscribes OS
+  # threads and trips "Failed to start threads worker"/timeout flakes (Pitfall
+  # #37). vitest.base.ts reads VITEST_MAX_THREADS to bound the pool. CI never
+  # sets it (full parallelism on dedicated runners). Override for a faster local
+  # gate on an idle machine: VITEST_MAX_THREADS=4 git push
+  : "${VITEST_MAX_THREADS:=2}"
+  export VITEST_MAX_THREADS
+  echo "[pre-push] vitest worker pool capped at VITEST_MAX_THREADS=$VITEST_MAX_THREADS"
   pnpm exec turbo run test --concurrency=1
 else
   echo "[pre-push] Feature-branch/backup push → skipping full suite."

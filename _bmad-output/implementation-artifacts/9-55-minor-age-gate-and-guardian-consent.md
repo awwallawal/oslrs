@@ -97,6 +97,8 @@ disposition, all actionable findings were FIXED in the same pass (not just logge
 - [~] **[AI-Review][Low] L1 — guardian not in `RESPONDENT_FIELD_MAP` (AC4.1 literal deviation).** ACCEPTED as-is — nested `metadata.guardian` object is AC4.2's recommended default, not a flat column; already documented in Completion Notes. No change.
 - [~] **[AI-Review][Low] L3 — rule is evaluated at two sites (wizard inline vs worker re-extract).** ACCEPTED — consistent today (same `rawData`), shared single rule definition; noted as a latent divergence point only. No change.
 
+**Post-review push hardening (2026-06-14)** — the push of the review commit (`bbf8eb2`) failed the `.husky/pre-push` gate on a 95-min web run that reported 0 assertion errors (all `Failed to start threads worker` / timeouts). Root-caused as intra-package vitest worker oversubscription: `--concurrency=1` (9-54) serializes packages but the web pool still spawns one worker per core, which starves under a concurrent `pnpm test` + laptop sleep/resume. **Fixed (separate `fix(test-infra)` commit, not 9-55 feature scope):** env-driven `VITEST_MAX_THREADS` cap — `vitest.base.ts` → `maxWorkers`; `.husky/pre-push` exports `=2`; `turbo.json test.env` lists the var. Same web suite then ran **238 files / 2595 pass / 0 fail in 6.2 min**, deterministic. Documented as Pitfall #37 root cause #1b. CI untouched (full parallelism on dedicated runners). Does not fix the WizardPage dual-source design hazard — that remains Story 9-57.
+
 ## Dev Notes
 
 ### Architecture & seam map (cite these exact targets)
