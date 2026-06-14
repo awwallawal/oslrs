@@ -752,6 +752,11 @@ export class RegistrationController {
         status: 'ok',
         data: {
           respondentId: respondent.id,
+          // Public-facing reference shown on the success screen (Story 9-54
+          // review). The submissions UID — NOT the internal respondent PK — is
+          // the sanctioned public reference: unique, non-enumerable, and the
+          // cross-table forensic trace key support resolves a respondent by.
+          submissionUid,
           status: respondent.status,
           pendingNin,
           // Frontend uses this to decide next step:

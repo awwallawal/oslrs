@@ -184,6 +184,8 @@ export interface SubmitWizardRequest {
 
 export interface SubmitWizardResponse {
   respondentId: string;
+  /** Public-facing reference (submissions UID) shown on the success screen. */
+  submissionUid: string;
   status: string;
   pendingNin: boolean;
   authChoice: 'magic-link' | 'password' | 'skip';

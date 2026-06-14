@@ -114,7 +114,7 @@ export default function WizardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [completionData, setCompletionData] = useState<{
-    respondentId: string;
+    submissionUid: string;
     pendingNin: boolean;
   } | null>(null);
 
@@ -361,7 +361,7 @@ export default function WizardPage() {
         }
       }
 
-      setCompletionData({ respondentId: result.respondentId, pendingNin: pending });
+      setCompletionData({ submissionUid: result.submissionUid, pendingNin: pending });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'NIN_DUPLICATE') {
@@ -421,7 +421,7 @@ export default function WizardPage() {
       <WizardLayout steps={steps} currentStepIndex={steps.length - 1}>
         <CompletionScreen
           email={draft.formData.email ?? ''}
-          respondentId={completionData.respondentId}
+          submissionUid={completionData.submissionUid}
           pendingNin={completionData.pendingNin}
         />
       </WizardLayout>
@@ -540,11 +540,11 @@ function renderStep(props: {
 
 function CompletionScreen({
   email,
-  respondentId,
+  submissionUid,
   pendingNin,
 }: {
   email: string;
-  respondentId: string;
+  submissionUid: string;
   pendingNin: boolean;
 }) {
   return (
@@ -570,7 +570,7 @@ function CompletionScreen({
         )}
       </p>
       <p className="text-xs text-neutral-500" data-testid="wizard-complete-id">
-        Reference ID: <span className="font-mono">{respondentId}</span>
+        Reference ID: <span className="font-mono select-all" title="Quote this reference if you contact support">{submissionUid}</span>
       </p>
     </div>
   );
