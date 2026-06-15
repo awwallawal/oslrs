@@ -1,6 +1,6 @@
 # Story 9.57: WizardPage Navigation — URL-as-Single-Source-of-Truth Refactor (retire the dual-effect URL↔state race)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-14 by Bob (SM) via canonical *create-story --yolo. HYGIENE / TECH-DEBT — NOT launch-gating (roadmap Phase 4). John (PM) concurrence: latent maintainability risk on working+green code → Phase-4 hygiene, must NOT delay the launch critical path. Emerged from the Story 9-55 dev-story session (operator asked to investigate the "fragile WizardPage URL-race test"). -->
