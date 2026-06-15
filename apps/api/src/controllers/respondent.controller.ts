@@ -18,6 +18,20 @@ import type { AuthenticatedRequest } from '../types.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Story 9-56 (review H1) — classify a registry search term WITHOUT persisting its
+ * raw value. The search box now accepts email / phone / NIN / Reference ID — all
+ * PII or PII-adjacent. AC6.1 + project-context §5 forbid logging the raw value to
+ * the audit trail, so the audit detail records only the term CLASS + length.
+ */
+function classifySearchTerm(term: string): string {
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(term)) return 'email';
+  if (/^\d{11}$/.test(term)) return 'nin_or_phone'; // 11 digits — NIN or NG phone, ambiguous
+  if (/^\+?[\d\s-]{7,}$/.test(term)) return 'phone';
+  if (UUID_REGEX.test(term) || /^[0-9a-f-]{12,}$/i.test(term)) return 'reference_id';
+  return 'name_or_other';
+}
+
 /** Roles that see PII and trigger audit logging */
 const PII_AUTHORIZED_ROLES = ['super_admin', 'verification_assessor', 'government_official'];
 
@@ -76,13 +90,20 @@ export class RespondentController {
 
       const result = await RespondentService.listRespondents(filters, user.role, user.sub);
 
-      // Audit log for ALL roles (supervisors see operational data that should be tracked)
+      // Audit log for ALL roles (supervisors see operational data that should be tracked).
+      // Redact the raw search term to a class+length — never persist raw PII
+      // (email/phone/NIN/Reference ID) into the audit detail [9-56 review H1].
+      const auditFilters: Record<string, unknown> = { ...parsed.data };
+      if (typeof auditFilters.search === 'string' && auditFilters.search.trim().length > 0) {
+        const term = auditFilters.search.trim();
+        auditFilters.search = `[${classifySearchTerm(term)}:len=${term.length}]`;
+      }
       AuditService.logPiiAccess(
         req as AuthenticatedRequest,
         PII_ACTIONS.VIEW_LIST,
         'respondents',
         null,
-        { filters: parsed.data, resultCount: result.data.length },
+        { filters: auditFilters, resultCount: result.data.length },
       );
 
       res.json(result);

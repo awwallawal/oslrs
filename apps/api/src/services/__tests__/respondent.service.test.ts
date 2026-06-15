@@ -553,6 +553,67 @@ describe('RespondentService', () => {
       expect(dataSql).toContain('::uuid');
     });
 
+    // ── Story 9-56: widened search predicate + registration status ──
+
+    it('two-phase search: Phase-1 resolves ids via indexed predicates, main query filters by id (Story 9-56)', async () => {
+      // Execute call order with a search term: [1] Phase-1 id resolution,
+      // [2] main data query, [3] count query (reuses the same whereClause — the
+      // Phase-1 resolution is NOT re-run for the count) [9-56 review L4].
+      const sqlObjects: any[] = [];
+      mockExecute.mockImplementation((sqlQuery: any) => {
+        sqlObjects.push(sqlQuery);
+        const n = sqlObjects.length;
+        if (n === 1) return Promise.resolve({ rows: [{ id: RESPONDENT_ID }] });
+        if (n === 2) return Promise.resolve({ rows: [mockListRow] });
+        return Promise.resolve({ rows: [{ count: 1 }] });
+      });
+
+      await RespondentService.listRespondents({ search: 'ABC123' }, 'super_admin', USER_ID);
+
+      // Phase 1 (resolution query) carries ALL the widened branches.
+      const resolutionSql = JSON.stringify(sqlObjects[0]);
+      expect(resolutionSql).toContain('submission_uid');
+      expect(resolutionSql).toContain("raw_data->>'email'");
+      expect(resolutionSql).toContain('first_name');
+      expect(resolutionSql).toContain('last_name');
+      expect(resolutionSql).toContain('phone_number');
+      expect(resolutionSql).toContain('nin');
+
+      // Phase 2 (main query) filters by the resolved id list, NOT a cross-table OR.
+      const dataSql = JSON.stringify(sqlObjects[1]);
+      expect(dataSql).toContain('r.id IN');
+    });
+
+    it('search with zero matches short-circuits to an empty result (Story 9-56)', async () => {
+      // Phase-1 resolution returns no ids → main query gets `1 = 0` → no rows.
+      const sqlObjects: any[] = [];
+      mockExecute.mockImplementation((sqlQuery: any) => {
+        sqlObjects.push(sqlQuery);
+        const n = sqlObjects.length;
+        if (n === 1) return Promise.resolve({ rows: [] }); // no id matches
+        if (n === 2) return Promise.resolve({ rows: [] });
+        return Promise.resolve({ rows: [{ count: 0 }] });
+      });
+
+      const result = await RespondentService.listRespondents({ search: 'no-such-term' }, 'super_admin', USER_ID);
+      expect(result.data).toHaveLength(0);
+      expect(JSON.stringify(sqlObjects[1])).toContain('1 = 0');
+    });
+
+    it('maps respondent status → plain-language registrationStatus (Story 9-56 AC3)', async () => {
+      setupExecute([
+        { ...mockListRow, reg_status: 'pending_nin_capture' },
+        { ...mockListRow, id: 'id-2', reg_status: 'active' },
+        { ...mockListRow, id: 'id-3', reg_status: 'nin_unavailable' },
+      ], 3);
+
+      const result = await RespondentService.listRespondents({}, 'super_admin', USER_ID);
+
+      expect(result.data[0].registrationStatus).toBe('Pending NIN');
+      expect(result.data[1].registrationStatus).toBe('Active');
+      expect(result.data[2].registrationStatus).toBe('NIN unavailable');
+    });
+
     it('builds correct nextCursor format', async () => {
       const rows = Array.from({ length: 21 }, (_, i) => ({
         ...mockListRow,

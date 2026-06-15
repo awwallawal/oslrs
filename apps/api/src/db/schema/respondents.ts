@@ -144,6 +144,10 @@ export const respondents = pgTable('respondents', {
   idxRespondentsStatus: index('idx_respondents_status').on(table.status),
   idxRespondentsSource: index('idx_respondents_source').on(table.source),
   idxRespondentsImportBatch: index('idx_respondents_import_batch').on(table.importBatchId),
+  // Story 9-56: GIN trigram indexes on first_name / last_name / phone_number / nin
+  // (idx_respondents_*_trgm) power the scale-safe registry search Phase-1
+  // resolution (ILIKE/LIKE → BitmapOr index scans). Drizzle cannot express GIN
+  // trigram indexes inline, so they live in scripts/migrate-registry-search-indexes-init.ts.
 }));
 
 export type Respondent = typeof respondents.$inferSelect;

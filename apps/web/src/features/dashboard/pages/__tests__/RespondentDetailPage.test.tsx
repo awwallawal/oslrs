@@ -84,6 +84,8 @@ const fullPiiDetail = {
   consentEnriched: false,
   createdAt: '2026-01-15T10:00:00.000Z',
   updatedAt: '2026-01-15T10:00:00.000Z',
+  registrationStatus: 'Active',
+  magicLinkIssuedAt: '2026-01-16T09:00:00.000Z',
   submissions: [
     {
       id: '018e5f2a-1234-7890-abcd-333333333333',
@@ -193,6 +195,30 @@ describe('RespondentDetailPage', () => {
       );
 
       expect(screen.getByTestId('operational-card')).toBeInTheDocument();
+    });
+  });
+
+  describe('Story 9-56: support traceability fields', () => {
+    it('shows plain-language registration status', () => {
+      renderDefault();
+      expect(screen.getByText('Registration Status')).toBeInTheDocument();
+      expect(screen.getByText('Active')).toBeInTheDocument();
+    });
+
+    it('shows that a login/magic-link email was sent (with timestamp)', () => {
+      renderDefault();
+      expect(screen.getByText('Login Link Email')).toBeInTheDocument();
+      expect(screen.getByText(/^Sent /)).toBeInTheDocument();
+    });
+
+    it('shows "Not sent" when no magic-link email was ever issued', () => {
+      mockDetailReturn = {
+        data: { ...fullPiiDetail, magicLinkIssuedAt: null },
+        isLoading: false,
+        isError: false,
+      };
+      renderDefault();
+      expect(screen.getByText('Not sent')).toBeInTheDocument();
     });
   });
 

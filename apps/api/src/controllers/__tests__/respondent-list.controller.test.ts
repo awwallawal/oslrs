@@ -300,6 +300,37 @@ describe('RespondentController.listRespondents', () => {
     );
   });
 
+  it('redacts the raw PII search term in the audit log (Story 9-56 review H1)', async () => {
+    const { mockRes, mockNext } = makeMocks();
+    mockListRespondents.mockResolvedValue(mockListResponse);
+
+    await RespondentController.listRespondents(
+      makeReq({ query: { search: 'jane.doe@example.com' } }),
+      mockRes as Response,
+      mockNext,
+    );
+
+    const detail = mockLogPiiAccess.mock.calls.at(-1)?.[4] as { filters: { search?: string } };
+    // The raw email must NEVER reach the audit detail — only a class + length.
+    expect(JSON.stringify(detail)).not.toContain('jane.doe@example.com');
+    expect(detail.filters.search).toBe('[email:len=20]');
+  });
+
+  it('classifies a phone search term without logging it raw (Story 9-56 review H1)', async () => {
+    const { mockRes, mockNext } = makeMocks();
+    mockListRespondents.mockResolvedValue(mockListResponse);
+
+    await RespondentController.listRespondents(
+      makeReq({ query: { search: '+2348012345678' } }),
+      mockRes as Response,
+      mockNext,
+    );
+
+    const detail = mockLogPiiAccess.mock.calls.at(-1)?.[4] as { filters: { search?: string } };
+    expect(JSON.stringify(detail)).not.toContain('2348012345678');
+    expect(detail.filters.search).toMatch(/^\[(phone|nin_or_phone):len=14\]$/);
+  });
+
   it('returns 400 for invalid search (too short)', async () => {
     const { mockRes, mockNext } = makeMocks();
 

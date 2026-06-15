@@ -103,6 +103,10 @@ export const submissions = pgTable('submissions', {
   // runner also creates it idempotently as defense-in-depth for first-deploy
   // ordering).
   enumeratorSubmittedAtIdx: index('idx_submissions_enumerator_submitted_at').on(table.enumeratorId, table.submittedAt),
+  // Story 9-56: expression index idx_submissions_lower_email on
+  // lower(raw_data->>'email') powers the registry-search email resolution
+  // (exact case-insensitive). Drizzle cannot express expression indexes inline,
+  // so it lives in scripts/migrate-registry-search-indexes-init.ts.
 }));
 
 export type Submission = typeof submissions.$inferSelect;

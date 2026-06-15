@@ -129,6 +129,22 @@ function buildColumns(): ColumnDef<RespondentListItem>[] {
       cell: ({ getValue }) => <VerificationStatusBadge status={getValue() as string} />,
       enableSorting: true,
     },
+    {
+      // Story 9-56 — registration lifecycle status in plain language (support traceability)
+      accessorKey: 'registrationStatus',
+      header: 'Registration',
+      cell: ({ getValue }) => {
+        const v = getValue() as string | undefined;
+        return v ? (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700">
+            {v}
+          </span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        );
+      },
+      enableSorting: false,
+    },
   ];
 }
 
@@ -241,7 +257,7 @@ export function RespondentRegistryTable({
   );
 
   if (isLoading) {
-    const colCount = userRole === 'supervisor' ? 7 : 10;
+    const colCount = userRole === 'supervisor' ? 8 : 11;
     return <SkeletonTable columns={colCount} rows={pageSize} data-testid="registry-table-skeleton" />;
   }
 

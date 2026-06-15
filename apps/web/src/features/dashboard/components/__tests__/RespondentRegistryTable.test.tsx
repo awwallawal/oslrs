@@ -62,6 +62,7 @@ const mockRespondent: RespondentListItem = {
   enumeratorName: 'Enumerator A',
   formName: 'Test Form',
   registeredAt: '2026-02-15T10:00:00Z',
+  registrationStatus: 'Active',
   fraudSeverity: 'low',
   fraudTotalScore: 15,
   verificationStatus: 'pending_review',
@@ -81,6 +82,7 @@ const mockRespondent2: RespondentListItem = {
   enumeratorName: null,
   formName: 'Registration Form',
   registeredAt: '2026-02-16T14:00:00Z',
+  registrationStatus: 'Pending NIN',
   fraudSeverity: null,
   fraudTotalScore: null,
   verificationStatus: 'auto_clean',
@@ -139,6 +141,19 @@ describe('RespondentRegistryTable', () => {
     expect(enumeratorMatches.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('renders the Registration status column with plain-language values (Story 9-56)', () => {
+    render(<RespondentRegistryTable {...defaultProps} />);
+
+    expect(screen.getByText('Registration')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Pending NIN')).toBeInTheDocument();
+  });
+
+  it('shows the Registration column for supervisor too (operational, not PII)', () => {
+    render(<RespondentRegistryTable {...defaultProps} userRole="supervisor" />);
+    expect(screen.getByText('Registration')).toBeInTheDocument();
+  });
+
   it('hides PII columns (firstName, nin, phoneNumber) for supervisor', () => {
     render(<RespondentRegistryTable {...defaultProps} userRole="supervisor" />);
 
@@ -161,7 +176,7 @@ describe('RespondentRegistryTable', () => {
 
     const skeleton = screen.getByTestId('registry-table-skeleton');
     expect(skeleton).toBeInTheDocument();
-    expect(skeleton.textContent).toContain('skeleton-cols:10');
+    expect(skeleton.textContent).toContain('skeleton-cols:11');
   });
 
   it('shows skeleton with 8 columns for supervisor loading', () => {
@@ -169,7 +184,7 @@ describe('RespondentRegistryTable', () => {
 
     const skeleton = screen.getByTestId('registry-table-skeleton');
     expect(skeleton).toBeInTheDocument();
-    expect(skeleton.textContent).toContain('skeleton-cols:7');
+    expect(skeleton.textContent).toContain('skeleton-cols:8');
   });
 
   it('row click calls navigate', () => {

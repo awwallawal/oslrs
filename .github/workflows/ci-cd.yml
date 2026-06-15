@@ -934,6 +934,14 @@ jobs:
             # zero active super_admin rows exist (FK target).
             cd apps/api && pnpm tsx scripts/migrate-system-settings-init.ts && cd ~/oslrs
 
+            # Story 9-56: registry search-at-scale indexes — expression index on
+            # lower(raw_data->>'email') + GIN trigram indexes on respondents
+            # first_name/last_name/phone_number/nin. Drizzle 0.45 cannot express
+            # expression/GIN indexes inline. Powers the two-phase registry search
+            # (resolve ids via indexed predicates → main query filters r.id = ANY).
+            # Idempotent; degrades gracefully if pg_trgm unavailable.
+            cd apps/api && pnpm tsx scripts/migrate-registry-search-indexes-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

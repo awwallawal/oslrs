@@ -306,7 +306,7 @@ export function RegistryFilters({
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search name or NIN (min 3 chars)"
+              placeholder="Search name, NIN, Reference ID, email, or phone (min 3 chars)"
               className={`${selectClass} w-full pl-8 pr-8`}
               data-testid="filter-search"
               minLength={3}

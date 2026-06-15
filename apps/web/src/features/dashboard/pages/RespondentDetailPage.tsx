@@ -264,6 +264,16 @@ export default function RespondentDetailPage() {
               <SourceBadge source={detail.source} />
             </div>
             <InfoRow label="Registration Date" value={new Date(detail.createdAt).toLocaleDateString()} />
+            {/* Story 9-56 — support traceability: registration status + login-link visibility */}
+            <InfoRow label="Registration Status" value={detail.registrationStatus} />
+            <div className="flex justify-between py-2 border-b border-neutral-100" data-testid="magic-link-row">
+              <span className="text-sm text-neutral-500">Login Link Email</span>
+              <span className="text-sm font-medium text-neutral-900">
+                {detail.magicLinkIssuedAt
+                  ? `Sent ${new Date(detail.magicLinkIssuedAt).toLocaleString()}`
+                  : 'Not sent'}
+              </span>
+            </div>
             <InfoRow label="Total Submissions" value={String(detail.submissions.length)} />
           </CardContent>
         </Card>

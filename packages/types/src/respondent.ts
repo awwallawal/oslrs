@@ -27,6 +27,30 @@ export interface FraudSummary {
 
 // --- Story 5.5: Registry Table Types ---
 
+/**
+ * Story 9-56: plain-language registration-status labels, support-facing.
+ *
+ * Maps the respondent lifecycle `status` enum (active | pending_nin_capture |
+ * nin_unavailable | imported_unverified) to the public-journey vocabulary a
+ * support agent can read back to a registrant.
+ *
+ * [Source] Local mapping pending 9-38's status read-model consolidation
+ * (AC3.2 — soft-dep, not blocking). When 9-38 lands a canonical read-model +
+ * vocabulary, fold this into it.
+ */
+export const REGISTRATION_STATUS_LABELS: Record<string, string> = {
+  active: 'Active',
+  pending_nin_capture: 'Pending NIN',
+  nin_unavailable: 'NIN unavailable',
+  imported_unverified: 'Imported (unverified)',
+};
+
+/** Map a raw respondent lifecycle status → support-facing plain-language label. */
+export function toRegistrationStatusLabel(status: string | null | undefined): string {
+  if (!status) return 'Unknown';
+  return REGISTRATION_STATUS_LABELS[status] ?? status;
+}
+
 export interface RespondentListItem {
   id: string;
   // PII — null for supervisor
@@ -43,6 +67,8 @@ export interface RespondentListItem {
   enumeratorName: string | null;
   formName: string | null;
   registeredAt: string; // ISO 8601
+  // Story 9-56: plain-language registration status (support traceability)
+  registrationStatus: string;
   // Enriched from fraud_detections
   fraudSeverity: 'clean' | 'low' | 'medium' | 'high' | 'critical' | null;
   fraudTotalScore: number | null;
@@ -125,6 +151,11 @@ export interface RespondentDetailResponse {
   consentEnriched: boolean;
   createdAt: string;
   updatedAt: string;
+  // Story 9-56: support traceability — plain-language registration status +
+  // whether/when a login/magic-link email was issued.
+  registrationStatus: string;
+  /** ISO 8601 of the most-recent magic-link issuance, or null if none ever issued. */
+  magicLinkIssuedAt: string | null;
   // Enriched data
   submissions: SubmissionSummary[];
   fraudSummary: FraudSummary | null;

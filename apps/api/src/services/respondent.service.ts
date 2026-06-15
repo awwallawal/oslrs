@@ -13,21 +13,26 @@ import { fraudDetections } from '../db/schema/fraud-detections.js';
 import { users } from '../db/schema/users.js';
 import { questionnaireForms } from '../db/schema/questionnaires.js';
 import { lgas } from '../db/schema/lgas.js';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, or, and, isNull, inArray } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { TeamAssignmentService } from './team-assignment.service.js';
-import type {
-  RespondentDetailResponse,
-  SubmissionSummary,
-  SubmissionResponseDetail,
-  FraudSummary,
-  RespondentListItem,
-  RespondentFilterParams,
-  CursorPaginatedResponse,
+import { magicLinkTokens } from '../db/schema/magic-link-tokens.js';
+import {
+  toRegistrationStatusLabel,
+  type RespondentDetailResponse,
+  type SubmissionSummary,
+  type SubmissionResponseDetail,
+  type FraudSummary,
+  type RespondentListItem,
+  type RespondentFilterParams,
+  type CursorPaginatedResponse,
 } from '@oslsr/types';
 import { QuestionnaireService } from './questionnaire.service.js';
 import { buildChoiceMaps } from './export-query.service.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'respondent-service' });
 
 const SEVERITY_ORDER: Record<string, number> = {
   clean: 0,
@@ -65,6 +70,7 @@ export class RespondentService {
         lgaId: respondents.lgaId,
         lgaName: lgas.name,
         source: respondents.source,
+        status: respondents.status,
         consentMarketplace: respondents.consentMarketplace,
         consentEnriched: respondents.consentEnriched,
         createdAt: respondents.createdAt,
@@ -195,6 +201,45 @@ export class RespondentService {
       };
     }
 
+    // Story 9-56 AC4 — derive whether/when a login/magic-link email was issued.
+    // Tokens are keyed by respondent_id (pending_nin_complete) OR email (login /
+    // wizard_resume). Email is NOT a respondents column — recover it from the
+    // most-recent submission's raw_data. Take the latest issuance across all
+    // purposes (answers "where's my login link?"). Read-only — re-issuing a link
+    // is explicitly OUT (AC4.3, candidate follow-up).
+    // Match a token bound to THIS respondent, OR an unbound (respondent_id IS
+    // NULL) login/wizard_resume token for the same email. The `respondent_id IS
+    // NULL` guard prevents mis-attributing a token explicitly bound to a DIFFERENT
+    // respondent that happens to share an email (e.g. a shared guardian address).
+    // The unbound leg is restricted to login-flow purposes so a supplemental_survey
+    // invite (Story 9-28, also keyed by email) is NOT mislabelled as a login link
+    // [9-56 review L1]. Email is recovered from the FIRST submission that carries
+    // one (not just the most-recent — that row may lack it) [9-56 review L2].
+    let respondentEmail: string | null = null;
+    for (const row of submissionRows) {
+      respondentEmail = pickFromRaw(row.rawData, ['email', 'Email']);
+      if (respondentEmail) break;
+    }
+    const matchByRespondent = eq(magicLinkTokens.respondentId, respondentId);
+    const magicLinkWhere = respondentEmail
+      ? or(
+          matchByRespondent,
+          and(
+            isNull(magicLinkTokens.respondentId),
+            sql`lower(${magicLinkTokens.email}) = ${respondentEmail.toLowerCase()}`,
+            inArray(magicLinkTokens.purpose, ['login', 'wizard_resume']),
+          ),
+        )
+      : matchByRespondent;
+    const [magicLinkRow] = await db
+      .select({ createdAt: magicLinkTokens.createdAt })
+      .from(magicLinkTokens)
+      .where(magicLinkWhere)
+      .orderBy(desc(magicLinkTokens.createdAt))
+      .limit(1);
+    const magicLinkIssuedAt =
+      magicLinkRow?.createdAt instanceof Date ? magicLinkRow.createdAt.toISOString() : null;
+
     // 6. Build response — strip PII for supervisor
     const response: RespondentDetailResponse = {
       id: respondent.id,
@@ -210,6 +255,9 @@ export class RespondentService {
       consentEnriched: respondent.consentEnriched,
       createdAt: respondent.createdAt.toISOString(),
       updatedAt: respondent.updatedAt.toISOString(),
+      // Story 9-56 — support traceability
+      registrationStatus: toRegistrationStatusLabel(respondent.status),
+      magicLinkIssuedAt,
       submissions: submissionSummaries,
       fraudSummary,
     };
@@ -348,6 +396,77 @@ export class RespondentService {
   };
 
   /**
+   * Story 9-56 — cap on the number of respondent ids a single search term
+   * resolves to (Phase 1). A support lookup by Reference ID/email/phone resolves
+   * to one; a name resolves to a few. A very broad term (e.g. a common name) is
+   * bounded so the `r.id = ANY(...)` array stays small. The non-search browse
+   * path is uncapped (no Phase 1). When a search exceeds the cap we log it (no
+   * silent truncation) and the agent refines the term.
+   */
+  private static readonly SEARCH_ID_CAP = 1000;
+
+  /**
+   * Story 9-56 — Phase 1 of registry search: resolve the search term to a set of
+   * matching respondent ids using INDEXED predicates only, so the main query
+   * (Phase 2) can filter `r.id = ANY(ids)` instead of an un-indexable cross-table
+   * OR. Two index-backed legs UNIONed:
+   *   - respondents: first_name / last_name / phone (GIN trigram, ILIKE) + nin
+   *     (trigram, LIKE prefix) — `idx_respondents_*_trgm`.
+   *   - submissions: submission_uid (Reference ID, UNIQUE index, exact `=`) +
+   *     lower(raw_data->>'email') (expression index, exact case-insensitive).
+   * Phone matches the canonical `respondents.phone_number` column (every source
+   * populates it); the redundant `raw_data->>'phone_number'` JSON branch is
+   * dropped — it would force a 1M-row submissions seq scan for zero added recall.
+   * All values are bound params (no string concat → no SQLi). Indexes are created
+   * by `scripts/migrate-registry-search-indexes-init.ts`; absent them the same
+   * query still returns correct results (seq-scan fallback, fine at small scale).
+   */
+  private static async resolveSearchRespondentIds(
+    searchTerm: string,
+    supervisorEnumeratorIds?: string[] | null,
+  ): Promise<string[]> {
+    const contains = `%${searchTerm}%`;
+    const prefix = `${searchTerm}%`;
+    const emailExact = searchTerm.toLowerCase();
+    // Supervisor team-scope MUST be applied in Phase 1 (before the SEARCH_ID_CAP
+    // truncation), not only in Phase 2. Otherwise a broad term resolves the
+    // UNSCOPED global set, the cap drops all but an arbitrary N (the UNION has no
+    // ORDER BY), and a supervisor's in-team matches can fall outside that N →
+    // silent under-matching [9-56 review M1]. `alias` is a hardcoded column ref
+    // (never user input), so sql.raw is safe; team ids are bound params.
+    const scope = (alias: string): SQL =>
+      supervisorEnumeratorIds && supervisorEnumeratorIds.length > 0
+        ? sql` AND EXISTS (SELECT 1 FROM submissions se WHERE se.respondent_id = ${sql.raw(alias)} AND se.enumerator_id IN (${sql.join(supervisorEnumeratorIds.map((id) => sql`${id}`), sql`, `)}))`
+        : sql``;
+    const result = await db.execute(sql`
+      SELECT id FROM (
+        SELECT r.id
+        FROM respondents r
+        WHERE (r.first_name ILIKE ${contains}
+           OR r.last_name ILIKE ${contains}
+           OR r.nin LIKE ${prefix}
+           OR r.phone_number ILIKE ${contains})${scope('r.id')}
+        UNION
+        SELECT s.respondent_id AS id
+        FROM submissions s
+        WHERE s.respondent_id IS NOT NULL
+          AND (s.submission_uid = ${searchTerm} OR lower(s.raw_data->>'email') = ${emailExact})${scope('s.respondent_id')}
+      ) m
+      LIMIT ${RespondentService.SEARCH_ID_CAP + 1}
+    `);
+    const ids = (result.rows as { id: string }[]).map((row) => row.id);
+    if (ids.length > RespondentService.SEARCH_ID_CAP) {
+      logger.warn({
+        event: 'respondent.search_truncated',
+        cap: RespondentService.SEARCH_ID_CAP,
+        termLength: searchTerm.length,
+      });
+      return ids.slice(0, RespondentService.SEARCH_ID_CAP);
+    }
+    return ids;
+  }
+
+  /**
    * Build WHERE conditions from filters and role-based scope.
    * Shared by listRespondents and getRespondentCount to avoid duplication.
    * Returns null if supervisor has no team (caller should return empty).
@@ -360,9 +479,11 @@ export class RespondentService {
     const conditions: SQL[] = [];
 
     // Supervisor scope: restrict to team enumerators' respondents
+    let supervisorEnumeratorIds: string[] | null = null;
     if (userRole === 'supervisor') {
       const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(userId);
       if (enumeratorIds.length === 0) return null;
+      supervisorEnumeratorIds = enumeratorIds;
       conditions.push(sql`s.enumerator_id IN (${sql.join(enumeratorIds.map(id => sql`${id}`), sql`, `)})`);
     }
 
@@ -386,9 +507,27 @@ export class RespondentService {
     if (filters.formId) conditions.push(sql`s.questionnaire_form_id = ${filters.formId}`);
     if (filters.enumeratorId) conditions.push(sql`s.enumerator_id = ${filters.enumeratorId}`);
 
-    if (filters.search) {
-      const searchTerm = filters.search;
-      conditions.push(sql`(r.first_name ILIKE ${'%' + searchTerm + '%'} OR r.last_name ILIKE ${'%' + searchTerm + '%'} OR r.nin LIKE ${searchTerm + '%'})`);
+    const searchTerm = filters.search?.trim();
+    if (searchTerm) {
+      // Story 9-56 — two-phase search resolution (scale-safe). A single search
+      // box can match name / NIN / phone (respondents columns) OR Reference ID /
+      // email (submissions columns). A cross-table OR predicate can't use any
+      // index — Postgres seq-scans BOTH tables (measured ~0.6-1.7s at 500K
+      // respondents / 1M submissions). Instead resolve matching respondent ids
+      // FIRST via indexed predicates (Phase 1, see resolveSearchRespondentIds),
+      // then constrain the main query to `r.id = ANY(ids)` (Phase 2 — PK index
+      // scan + nested-loop the submissions join; <1ms at the same scale).
+      // Term is trimmed so a whitespace-only search is a no-op (not a `%  %`
+      // scan); supervisor team ids are passed so Phase 1 is scoped before the
+      // cap [9-56 review L3 + M1].
+      const ids = await RespondentService.resolveSearchRespondentIds(searchTerm, supervisorEnumeratorIds);
+      if (ids.length === 0) {
+        conditions.push(sql`1 = 0`); // no search match → empty result, no scan
+      } else {
+        // Bound-param IN-list (each id cast to uuid) — same idiom as the
+        // supervisor enumerator-scope clause above; the PK index resolves it.
+        conditions.push(sql`r.id IN (${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)})`);
+      }
     }
 
     const whereClause = conditions.length > 0
@@ -466,6 +605,7 @@ export class RespondentService {
           ) as last_name,
           r.nin, r.phone_number,
           r.lga_id, l.name as lga_name, r.source, r.created_at as registered_at,
+          r.status as reg_status,
           s.raw_data->>'gender' as gender,
           s.enumerator_id,
           u.full_name as enumerator_name,
@@ -556,6 +696,8 @@ export class RespondentService {
       registeredAt: row.registered_at
         ? new Date(row.registered_at as string | number | Date).toISOString()
         : new Date().toISOString(),
+      // Story 9-56 — plain-language registration status (support traceability)
+      registrationStatus: toRegistrationStatusLabel(row.reg_status ? String(row.reg_status) : null),
       fraudSeverity: (row.fraud_severity as RespondentListItem['fraudSeverity']) ?? null,
       fraudTotalScore: row.fraud_total_score ? parseFloat(String(row.fraud_total_score)) : null,
       verificationStatus: (row.verification_status as RespondentListItem['verificationStatus']) ?? 'unprocessed',
@@ -567,8 +709,19 @@ export class RespondentService {
       ? `${new Date(lastItem.registered_at as string | number | Date).toISOString()}|${lastItem.id}`
       : null;
 
-    // Get total count (separate lightweight query)
-    const totalItems = await RespondentService.getRespondentCount(filters, userRole, userId);
+    // Get total count (separate lightweight query). Reuse the whereClause already
+    // built above instead of calling getRespondentCount — that would re-run the
+    // Phase-1 search-id resolution a second time per request [9-56 review L4].
+    const countQuery = sql`
+      SELECT COUNT(DISTINCT r.id) as count
+      FROM respondents r
+      LEFT JOIN submissions s ON s.respondent_id = r.id
+      LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
+      ${whereClause}
+    `;
+    const countResult = await db.execute(countQuery);
+    const countRows = countResult.rows as Record<string, unknown>[];
+    const totalItems = Number(countRows[0]?.count ?? 0);
 
     return {
       data: items,
