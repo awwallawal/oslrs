@@ -288,3 +288,76 @@ describe('WizardPage URL ↔ state sync (regression — 2026-05-12 race fix)', (
     expect(screen.queryByTestId('step4-stub')).not.toBeInTheDocument();
   });
 });
+
+describe('WizardPage resume seed (Story 9-57 AC3)', () => {
+  it('seeds the URL from the saved draft step on `?token` resume and lands there', async () => {
+    // Server draft saved at currentStep 4 (1-indexed) → index 3 (the section
+    // step in the 5-step model). maxReached rises to 3 from the saved step, so
+    // the deep-link clamp permits landing on it.
+    mockFetchWizardDraft.mockResolvedValue({
+      formData: { email: 'resume@example.test' },
+      currentStep: 4,
+    });
+
+    renderAt('/register?token=abc123');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step4-stub')).toBeInTheDocument();
+    });
+    // The URL is seeded to the saved step (one-time reconciliation) and the
+    // resume token is preserved.
+    await waitFor(() => {
+      expect(urlSearch()).toContain('step=3');
+    });
+    expect(urlSearch()).toContain('token=abc123');
+    expect(screen.queryByTestId('step1-stub')).not.toBeInTheDocument();
+  });
+
+  it('lets an explicit `?step` win over the saved draft step (AC3.2)', async () => {
+    mockFetchWizardDraft.mockResolvedValue({
+      formData: { email: 'resume@example.test' },
+      currentStep: 4, // saved at index 3
+    });
+
+    // Explicit ?step=1 present alongside the token → it wins (clamped to the
+    // reached range, which the saved step 3 has widened).
+    renderAt('/register?token=abc123&step=1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step2-stub')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('step4-stub')).not.toBeInTheDocument();
+    expect(urlSearch()).toContain('step=1');
+  });
+
+  // AI-Review H1 — the AC3.2 test above only passes because react-query's
+  // `isSuccess` happens to lag a raw draft `.then()` in jsdom, so `maxReached`
+  // commits before the over-reach effect's guard opens. This test forces the
+  // OPPOSITE, realistic ordering: the form query settles BEFORE the draft
+  // hydrates (draft resolved on a delayed macrotask), so on the render where
+  // `isHydrated` flips, `maxReachedStepIndex` state is still 0. Pre-fix, the
+  // over-reach effect read that stale 0 and rewrote the explicit `?step=1` down
+  // to `?step=0` (user landed on step 0). The synchronous `effectiveMaxReached`
+  // (folding in the hydrated draft step) must keep the explicit step intact.
+  it('keeps an explicit `?step` when the form settles before the draft hydrates (AI-Review H1)', async () => {
+    mockFetchWizardDraft.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve({ formData: { email: 'resume@example.test' }, currentStep: 4 }),
+            50,
+          ),
+        ),
+    );
+
+    renderAt('/register?token=abc123&step=1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step2-stub')).toBeInTheDocument();
+    });
+    expect(urlSearch()).toContain('step=1');
+    // The over-reach effect must NOT have clamped the explicit step down to 0.
+    expect(urlSearch()).not.toContain('step=0');
+    expect(screen.queryByTestId('step1-stub')).not.toBeInTheDocument();
+  });
+});

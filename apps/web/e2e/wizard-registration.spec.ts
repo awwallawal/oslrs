@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readWizardResumeFixture } from './helpers/wizard-resume-fixture';
 
 /**
  * Story 9-12 + Story 9-18 — Public Registration Wizard E2E.
@@ -126,6 +127,152 @@ test.describe('Public Registration Wizard (smoke-level)', () => {
       'href',
       '/marketplace',
     );
+  });
+});
+
+test.describe('Public Registration Wizard — URL navigation (Story 9-57)', () => {
+  // The URL (`?step=N`) is the single source of truth for the current step.
+  // The clamp + back/forward flows need only the app rendering (the form fetch
+  // 404s → survey skipped → 4-step head model). The resume + autosave flows
+  // (AC5.2a/b) additionally exercise the real draft autosave + a `wizard_resume`
+  // token minted by the `wizard-resume-setup` project — i.e. they DO write a
+  // draft to the DB. All run against the full stack the e2e CI job provisions.
+  const VALID_NIN = '61961438053'; // passes Modulus 11
+
+  test('deep-link beyond the furthest-reached step clamps to Step 1 + self-corrects the URL (AC4.1)', async ({
+    page,
+  }) => {
+    await page.goto('/register?step=2');
+    // Fresh visitor has reached only step 0 → the over-reaching deep-link lands
+    // on Step 1 and the stale `?step=2` is rewritten down so it can't be reshared.
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=0\b/);
+  });
+
+  test('browser back/forward moves between visited steps (AC4.3 / AC5.2d)', async ({ page }) => {
+    await page.goto('/register');
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=0\b/);
+
+    // Fill Step 1 enough to advance to Step 2 (client-side validation only —
+    // contact/email is Step 2, so no autosave/DB write happens here).
+    await page.getByTestId('wizard-step1-nin-input').fill(VALID_NIN);
+    await expect(page.getByTestId('wizard-step1-nin-valid')).toBeVisible();
+    await page.getByTestId('wizard-step1-given-name').fill('Nav');
+    await page.getByTestId('wizard-step1-family-name').fill('Tester');
+    await page.getByTestId('wizard-dob').fill('1990-01-15');
+    await page.getByRole('radio', { name: 'Prefer not to say' }).click();
+    await page.getByTestId('wizard-nav-continue').click();
+
+    await expect(page.getByTestId('step2-contact-lga')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=1\b/);
+
+    // Browser BACK → Step 1 (push-per-user-nav makes this a real history move).
+    await page.goBack();
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=0\b/);
+
+    // Browser FORWARD → Step 2 again (within the reached range, not clamped).
+    await page.goForward();
+    await expect(page.getByTestId('step2-contact-lga')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=1\b/);
+  });
+
+  // ── AC5.2a / AC5.2b — resume + autosave (AI-Review M1, no longer skipped) ──
+  //
+  // Previously test.skip() for lack of a `wizard_resume` token in CI. They now
+  // RUN: the `wizard-resume-setup` project mints a token per test (the REAL
+  // MagicLinkService.issueToken, via a test-only api script) into a fixture,
+  // and the draft is created by the wizard's OWN autosave during the test. The
+  // survey-skipped 4-step model (basics/contact/consent/review) is sufficient —
+  // landing on Consent (index 2) exercises the full resume-seed + clamp +
+  // write-only-persistence machinery without needing a pinned multi-section
+  // form (the section-step variant is covered by the WizardPage unit tests).
+
+  async function fillStep1ToContact(page: import('@playwright/test').Page) {
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+    await page.getByTestId('wizard-step1-nin-input').fill(VALID_NIN);
+    await expect(page.getByTestId('wizard-step1-nin-valid')).toBeVisible();
+    await page.getByTestId('wizard-step1-given-name').fill('Resume');
+    await page.getByTestId('wizard-step1-family-name').fill('Tester');
+    await page.getByTestId('wizard-dob').fill('1990-01-15');
+    await page.getByRole('radio', { name: 'Prefer not to say' }).click();
+    await page.getByTestId('wizard-nav-continue').click();
+    await expect(page.getByTestId('step2-contact-lga')).toBeVisible();
+  }
+
+  /**
+   * Fill Step 2 (sets email → starts the 2s autosave), advance to Consent
+   * (index 2 → persisted as server `currentStep=3`), and await the autosave PUT
+   * that actually persists that step — so a subsequent token-resume is
+   * guaranteed to find the draft at Consent, not at an earlier step.
+   */
+  async function fillStep2ToConsentAndAwaitSave(
+    page: import('@playwright/test').Page,
+    email: string,
+  ) {
+    await page.getByTestId('wizard-phone').fill('08012345678');
+    await page.getByTestId('wizard-email').fill(email);
+    const lga = page.getByTestId('wizard-lga');
+    await expect(lga).toBeEnabled({ timeout: 15000 });
+    await lga.selectOption({ index: 1 });
+
+    // Arm the wait BEFORE navigating: the consent-step autosave persists
+    // currentStep=3 (1-indexed). Field-level saves on Step 2 carry currentStep=2,
+    // so filter on ===3 to pin the assertion to the Consent-step persistence.
+    const consentStepPersisted = page.waitForResponse(
+      (r) => {
+        if (!r.url().includes('/registration/draft') || r.request().method() !== 'PUT' || !r.ok()) {
+          return false;
+        }
+        try {
+          return JSON.parse(r.request().postData() ?? '{}').currentStep === 3;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 15000 },
+    );
+
+    await page.getByTestId('wizard-nav-continue').click();
+    await expect(page.getByTestId('step3-consent')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=2\b/);
+    await consentStepPersisted;
+  }
+
+  test('cross-device resume lands on the saved step (AC5.2a)', async ({ browser }) => {
+    const { resume } = readWizardResumeFixture();
+
+    // Device 1 — create + autosave a draft, advancing to the Consent step.
+    const device1 = await browser.newContext();
+    const p1 = await device1.newPage();
+    await p1.goto('/register');
+    await fillStep1ToContact(p1);
+    await fillStep2ToConsentAndAwaitSave(p1, resume.email);
+    await device1.close();
+
+    // Device 2 — a BRAND-NEW context (no shared storage/cookies = a different
+    // device) resumes via the magic-link token and must land on the saved step.
+    const device2 = await browser.newContext();
+    const p2 = await device2.newPage();
+    await p2.goto(`/register?token=${resume.token}`);
+    await expect(p2.getByTestId('step3-consent')).toBeVisible();
+    await expect(p2).toHaveURL(/[?&]step=2\b/);
+    await device2.close();
+  });
+
+  test('autosave persists the current step across a reload (AC5.2b)', async ({ page }) => {
+    const { reload } = readWizardResumeFixture();
+
+    await page.goto('/register');
+    await fillStep1ToContact(page);
+    await fillStep2ToConsentAndAwaitSave(page, reload.email);
+
+    // A fresh load via the resume token must rehydrate on the saved Consent step
+    // (proves the autosaved step survives a full document reload, not just SPA nav).
+    await page.goto(`/register?token=${reload.token}`);
+    await expect(page.getByTestId('step3-consent')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]step=2\b/);
   });
 });
 

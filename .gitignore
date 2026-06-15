@@ -49,6 +49,7 @@ reporter*.log
 playwright-report/
 test-results/
 apps/web/e2e/.auth/
+apps/web/e2e/.wizard-resume-tokens.json
 
 # Temp files
 tmpclaude-*

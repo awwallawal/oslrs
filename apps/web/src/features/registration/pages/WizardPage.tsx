@@ -15,6 +15,12 @@ import {
 } from '../api/wizard.api';
 import { getVisibleQuestions } from '../../forms/utils/skipLogic';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
+import {
+  parseStepParam,
+  clampToReached,
+  advanceStep,
+  retreatStep,
+} from '../lib/wizard-navigation';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2ContactLga } from './Step2ContactLga';
 import { Step3Consent } from './Step3Consent';
@@ -84,6 +90,10 @@ export default function WizardPage() {
   const resumeToken = searchParams.get('token') ?? undefined;
 
   const draft = useWizardDraft({ token: resumeToken });
+  // Story 9-57 — the draft's step setter is a STABLE callback (hook change);
+  // destructure it so the write-only persistence effect can depend on a plain
+  // identifier (no `draft`-object dep churn, no eslint-disable).
+  const { setCurrentStepIndex: persistStepToDraft } = draft;
 
   // Story 9-18 Part E — fetch the pinned form here (shared query key with the
   // section steps, so TanStack fetches it once) to derive the dynamic step list.
@@ -101,13 +111,13 @@ export default function WizardPage() {
   const formSettled = formQuery.isSuccess;
   const steps = useMemo(() => buildSteps(form), [form]);
 
-  const stepFromUrl = useMemo(() => {
-    const raw = searchParams.get('step');
-    if (raw === null) return null;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return null;
-    return Math.max(0, Math.min(Math.floor(n), steps.length - 1));
-  }, [searchParams, steps.length]);
+  // Story 9-57 — the URL (`?step=N`) is the SINGLE source of truth for the
+  // current step. `stepFromUrl` is the parsed + range-clamped value (or null
+  // when absent); the rendered step is derived from it below.
+  const stepFromUrl = useMemo(
+    () => parseStepParam(searchParams.get('step'), steps.length),
+    [searchParams, steps.length],
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -117,104 +127,118 @@ export default function WizardPage() {
   } | null>(null);
 
   // Story 9-54 AC6.1 — the furthest step the user has LEGITIMATELY reached (via
-  // Continue / resumed draft). A deep-link or resume `?step=N` beyond this is
-  // clamped back to it so the questionnaire can't be skipped to land on Review.
-  // It only ever rises (back-navigation never lowers it), and it can only rise
-  // when `currentStepIndex` advances — which the URL→state effect prevents from
-  // exceeding it, so a crafted URL can't inflate it.
+  // Continue or a resumed server draft). A deep-link / resume `?step=N` beyond
+  // this is clamped back so the questionnaire can't be skipped to land on
+  // Review. It only ever rises, and it rises ONLY from (a) Continue advancing
+  // by one and (b) the server-saved resume step — never directly from the URL,
+  // so a crafted `?step=99` can't inflate it.
   const [maxReachedStepIndex, setMaxReachedStepIndex] = useState(0);
   useEffect(() => {
     if (!draft.isHydrated) return;
+    // Resume hydration: the server-saved step is a legitimately-reached step.
     setMaxReachedStepIndex((m) => (draft.currentStepIndex > m ? draft.currentStepIndex : m));
   }, [draft.isHydrated, draft.currentStepIndex]);
 
-  // Sync URL ↔ wizard state.
-  //
-  // FIX 2026-05-12 — the two effects below previously raced each other into an
-  // infinite render loop on every Continue click. Root cause: Effect 1's deps
-  // included the unstable `draft` object (re-created every render by the
-  // useWizardDraft hook), so Effect 1 fired on every render and reverted state
-  // back to the stale URL value while Effect 2 tried to push the URL forward.
-  // They fought to a stalemate, re-rendering continuously without reaching
-  // equilibrium.
-  //
-  // The fix narrows Effect 1's deps so it only runs on genuine URL changes
-  // and uses a `lastSyncSource` ref to suppress the OPPOSITE-direction sync
-  // on the immediate next render. Without this ref, a deep-link like
-  // `/register?step=2` would race: Effect 1 schedules `state ← 2`, while
-  // Effect 2 (still seeing closure-captured state=0) schedules `URL ← 0`,
-  // and on the next render the directions flip back, looping forever.
-  //
-  // `hasReconciledInitialUrl` protects token-resume: useWizardDraft may have
-  // set currentStepIndex from a server-side draft before this effect first
-  // runs. Skipping the URL→state sync on that single render (only when a
-  // resume token is in scope) lets the saved server step survive.
-  //
-  // Story 9-18 Part E — both effects also gate on `formSettled` so they act
-  // against the final (stable) step list, never the transient pre-load one.
-  const hasReconciledInitialUrl = useRef(false);
-  const lastSyncSource = useRef<'url' | 'state' | null>(null);
+  // Story 9-57 (AI-Review H1) — the furthest-reached ceiling, computed
+  // SYNCHRONOUSLY. `maxReachedStepIndex` is bumped by the effect above, which
+  // lags draft hydration by one commit; on the hydration render its closure
+  // value is still 0. Folding the hydrated draft step in here means the render
+  // clamp + the over-reach correction never read a stale 0 on a `?token` resume
+  // — which previously clamped an explicit `?step` resume down to step 0 when
+  // the form query happened to settle before the draft hydrated.
+  const effectiveMaxReached = Math.max(
+    maxReachedStepIndex,
+    draft.isHydrated ? draft.currentStepIndex : 0,
+  );
 
-  // URL → state (back/forward + explicit `?step=N` deep-links).
+  // Story 9-57 — the RENDERED current step, derived purely from the URL and
+  // clamped to the furthest-reached step. This is the only navigation source;
+  // there is no reverse effect that writes it back, so the 2026-05-12
+  // URL↔state doom-loop is structurally impossible.
+  const currentStepIndex = clampToReached(stepFromUrl, effectiveMaxReached);
+
+  // Helper — write a step to the URL for USER navigation (Continue / Back /
+  // indicator jumps), preserving other params (e.g. `?token`). This PUSHES a
+  // history entry so browser back/forward moves between visited steps (AC4.3).
+  // System-initiated URL corrections (the one-time seed + the over-reach clamp
+  // below) use `replace` instead, so they never spam the history stack.
+  const navigateToStep = useCallback(
+    (idx: number) => {
+      const clamped = Math.max(0, Math.min(idx, steps.length - 1));
+      const next = new URLSearchParams(searchParams);
+      next.set('step', String(clamped));
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams, steps.length],
+  );
+
+  // Story 9-57 AC3 — one-time URL seed. On first settled render, if the URL has
+  // no `?step`, write one: the saved draft step for a `?token` resume, else 0.
+  // An explicit `?step` always wins (we never overwrite it). Guarded by a ref so
+  // it runs exactly once and can never loop.
+  const hasSeededUrl = useRef(false);
   useEffect(() => {
     if (!draft.isHydrated || !formSettled) return;
-    if (!hasReconciledInitialUrl.current) {
-      hasReconciledInitialUrl.current = true;
-      if (resumeToken) return;
-    }
-    if (stepFromUrl == null) return;
-    // Story 9-54 AC6.1 — clamp to the furthest step the user has legitimately
-    // reached, NOT steps.length-1. A deep-link / resume beyond it lands on it.
-    const target = Math.min(stepFromUrl, maxReachedStepIndex);
-    if (target === draft.currentStepIndex) {
-      // Already on the right step. If the URL over-reached, rewrite it so the
-      // stale (skip-ahead) value can't be re-shared or re-trigger a jump.
-      if (stepFromUrl !== target) {
-        lastSyncSource.current = 'state';
-        const next = new URLSearchParams(searchParams);
-        next.set('step', String(target));
-        setSearchParams(next, { replace: true });
-      }
-      return;
-    }
-    // Mark this sync as URL→state so the state→URL effect that fires after
-    // our `setCurrentStepIndex` lands knows to step aside on the next tick.
-    lastSyncSource.current = 'url';
-    draft.setCurrentStepIndex(target);
-    // Deliberately omit `draft` from deps — it's a fresh object every render
-    // (useWizardDraft return). Reading `draft.currentStepIndex` + `.setCurrentStepIndex`
-    // via closure is the correct sync semantic.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.isHydrated, formSettled, stepFromUrl, maxReachedStepIndex]);
-
-  // State → URL (Continue / Back button clicks).
-  useEffect(() => {
-    if (!draft.isHydrated || !formSettled) return;
-    // If the previous tick was a URL→state sync, the URL is already the
-    // intended truth — don't overwrite it with our just-updated state.
-    // Reset the flag so subsequent ticks are handled normally.
-    if (lastSyncSource.current === 'url') {
-      lastSyncSource.current = null;
-      return;
-    }
-    const desired = String(draft.currentStepIndex);
-    if (searchParams.get('step') === desired) return;
-    lastSyncSource.current = 'state';
+    if (hasSeededUrl.current) return;
+    hasSeededUrl.current = true;
+    if (searchParams.get('step') !== null) return; // explicit ?step wins (AC3.2)
+    const seed = resumeToken
+      ? Math.max(0, Math.min(draft.currentStepIndex, steps.length - 1))
+      : 0;
     const next = new URLSearchParams(searchParams);
-    next.set('step', desired);
+    next.set('step', String(seed));
     setSearchParams(next, { replace: true });
-    // Same rationale — `searchParams` + `setSearchParams` are read via
-    // closure; their identities change on every URL update but we only
-    // want this effect firing when the SOURCE-OF-TRUTH state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.currentStepIndex, draft.isHydrated, formSettled]);
+  }, [
+    draft.isHydrated,
+    draft.currentStepIndex,
+    formSettled,
+    resumeToken,
+    searchParams,
+    setSearchParams,
+    steps.length,
+  ]);
+
+  // Story 9-57 AC4.1 — self-correct an over-reaching URL. When `?step` points
+  // beyond the furthest-reached step, rewrite it down to the clamp so the stale
+  // (skip-ahead) value can't be re-shared or re-trigger a jump. One-directional
+  // (only ever corrects DOWN to a fixed point) — not a two-way binding.
+  useEffect(() => {
+    if (!draft.isHydrated || !formSettled) return;
+    if (stepFromUrl == null) return;
+    if (stepFromUrl <= effectiveMaxReached) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('step', String(effectiveMaxReached));
+    setSearchParams(next, { replace: true });
+  }, [draft.isHydrated, formSettled, stepFromUrl, effectiveMaxReached, searchParams, setSearchParams]);
+
+  // Story 9-57 AC2 — write-only draft persistence. Mirror the URL-derived step
+  // into the draft store so autosave/resume persist the right `currentStep`.
+  // This NEVER feeds back into render/navigation (render reads the URL-derived
+  // `currentStepIndex`, not `draft.currentStepIndex`), so there is no loop.
+  // `draft.setCurrentStepIndex` is a stable callback (Story 9-57 hook change).
+  useEffect(() => {
+    if (!draft.isHydrated || !formSettled) return;
+    // Only mirror once the URL carries an explicit `?step` (post-seed). Before
+    // the seed lands, `currentStepIndex` defaults to 0 — mirroring it then would
+    // clobber a `?token` resume's saved step back to 0 before the seed restores it.
+    if (stepFromUrl == null) return;
+    if (draft.currentStepIndex !== currentStepIndex) {
+      persistStepToDraft(currentStepIndex);
+    }
+  }, [
+    currentStepIndex,
+    stepFromUrl,
+    draft.currentStepIndex,
+    draft.isHydrated,
+    persistStepToDraft,
+    formSettled,
+  ]);
 
   const goToStep = useCallback(
     (idx: number) => {
-      const clamped = Math.max(0, Math.min(idx, steps.length - 1));
-      draft.setCurrentStepIndex(clamped);
+      navigateToStep(idx);
     },
-    [draft, steps.length],
+    [navigateToStep],
   );
 
   // Story 9-18 AC#E5 — a section step whose questions are ALL hidden by
@@ -232,21 +256,23 @@ export default function WizardPage() {
   );
 
   const handleContinue = useCallback(() => {
-    let next = draft.currentStepIndex + 1;
-    // Never skip the final Review step (steps.length - 1).
-    while (next < steps.length - 1 && isStepSkippable(next)) next += 1;
-    goToStep(next);
-  }, [draft.currentStepIndex, steps.length, isStepSkippable, goToStep]);
+    const next = advanceStep(currentStepIndex, steps.length, isStepSkippable);
+    // Story 9-57 — Continue is the only forward path, so bump the furthest-
+    // reached ceiling here (batched with the URL change) — otherwise the derived
+    // step would be clamped straight back. `next` is one step (plus auto-skips)
+    // beyond the already-clamped current step, so a crafted URL can't inflate it.
+    setMaxReachedStepIndex((m) => (next > m ? next : m));
+    navigateToStep(next);
+  }, [currentStepIndex, steps.length, isStepSkippable, navigateToStep]);
 
   const handleBack = useCallback(() => {
-    if (draft.currentStepIndex === 0) {
+    if (currentStepIndex === 0) {
       navigate('/');
       return;
     }
-    let prev = draft.currentStepIndex - 1;
-    while (prev > 0 && isStepSkippable(prev)) prev -= 1;
-    goToStep(prev);
-  }, [draft.currentStepIndex, isStepSkippable, goToStep, navigate]);
+    const prev = retreatStep(currentStepIndex, isStepSkippable);
+    navigateToStep(prev);
+  }, [currentStepIndex, isStepSkippable, navigateToStep, navigate]);
 
   // Step list for the indicator, annotated with which section steps are
   // currently auto-skipped (AC#E5 — greyed in the breadcrumb variant).
@@ -392,7 +418,7 @@ export default function WizardPage() {
   return (
     <WizardLayout
       steps={indicatorSteps}
-      currentStepIndex={draft.currentStepIndex}
+      currentStepIndex={currentStepIndex}
       onStepClick={(idx) => goToStep(idx)}
       footerSlot={
         draft.isSaving ? (
@@ -408,7 +434,7 @@ export default function WizardPage() {
     >
       {renderStep({
         steps,
-        index: draft.currentStepIndex,
+        index: currentStepIndex,
         formData: draft.formData,
         mergeFields: draft.mergeFields,
         onContinue: handleContinue,

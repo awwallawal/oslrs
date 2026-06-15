@@ -74,6 +74,13 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<{ formData: string; step: number } | null>(null);
   const isMountedRef = useRef(true);
+  // Story 9-57 — latest formData mirror so `setCurrentStepIndex` can stay a
+  // STABLE callback (no `formData` dep). The wizard now drives the step from the
+  // URL via a write-only effect; a churning setter identity would force that
+  // effect to re-run every render. Reading the current formData through a ref
+  // keeps the persisted draft accurate without the dependency.
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -175,9 +182,9 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
   const setStepWithSave = useCallback(
     (idx: number) => {
       setCurrentStepIndex(idx);
-      scheduleSave(formData, idx);
+      scheduleSave(formDataRef.current, idx);
     },
-    [formData, scheduleSave],
+    [scheduleSave],
   );
 
   return {

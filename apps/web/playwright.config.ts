@@ -57,12 +57,22 @@ export default defineConfig({
       testMatch: /(?:fraud-threshold|messaging|supervisor-dashboard)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    // Story 9-57 / AI-Review M1 — mints `wizard_resume` tokens (via the
+    // test-only api script) into a fixture the wizard resume/reload tests read.
+    // Runs before the `wizard` project as a dependency. No browser is used; it
+    // shells out to the api package and writes apps/web/e2e/.wizard-resume-tokens.json.
+    {
+      name: 'wizard-resume-setup',
+      testMatch: /wizard-resume\.setup\.ts/,
+    },
     // Story 9-12 — public registration wizard E2E (AC#13). Smoke-level
-    // assertions are active; full-stack flows are test.skip() with detailed
-    // re-enable preconditions (mirrors nin-validation.spec.ts pattern).
+    // assertions + the Story 9-57 URL-navigation flows are active; the
+    // remaining full-stack happy-path/pending-NIN flows are test.skip() with
+    // detailed re-enable preconditions (mirrors nin-validation.spec.ts pattern).
     {
       name: 'wizard',
       testMatch: /wizard-registration\.spec\.ts/,
+      dependencies: ['wizard-resume-setup'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],
