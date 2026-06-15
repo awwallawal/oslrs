@@ -1,6 +1,6 @@
 # Story 9.28: Cohort A (Step-4-dropped) supplemental questionnaire — decision + optional recovery
 
-Status: review (Path B Phase A + Phase B code shipped 2026-05-22 — see Dev Agent Record)
+Status: done (Path B capability shipped 2026-05-22; CLOSED 2026-06-15) — no AC ties done-ness to FIRING the blast; the supplemental-survey capability (script + submit endpoint + landing page) is complete + code-reviewed. Firing the Cohort-A blast is an OPERATOR action gated on Resend Pro + the 9-58 reference-code backfill, tracked in `docs/runbooks/re-engagement-campaign-launch.md`.
 
 <!--
 Authored 2026-05-20 by Bob (SM) via canonical *create-story --yolo template.
