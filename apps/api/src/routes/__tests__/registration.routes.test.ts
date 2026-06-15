@@ -99,6 +99,17 @@ vi.mock('../../services/audit.service.js', () => ({
   },
 }));
 
+// Story 9-58 — submitWizard mints a reference code (uniqueness SELECT via
+// db.execute) before the tx. Mock it to a fixed code so the route tests don't
+// need a db.execute stub + so the success response carries a deterministic code.
+// Plain function (NOT vi.fn) so the beforeEach `vi.resetAllMocks()` can't wipe
+// the return value back to undefined.
+vi.mock('../../services/reference-code.service.js', () => ({
+  ReferenceCodeService: {
+    generateUnique: () => Promise.resolve('OSL-2026-TEST00'),
+  },
+}));
+
 // Story 9-54 H1/NG1 — the wizard submit gate resolves the canonical pinned form
 // via NativeFormService.getPublicActiveForm() (NOT the client draft). Partial-
 // mock it; the real validateSubmissionCompleteness runs against whatever form
@@ -631,6 +642,9 @@ describe('POST /registration/wizard', () => {
       respondentId: 'resp-1',
       status: 'active',
       pendingNin: false,
+      // Story 9-58 (AC5.1 / AC9.2e) — the wizard success response echoes the
+      // human-friendly reference code.
+      referenceCode: 'OSL-2026-TEST00',
     });
     expect(mockLogActionTx).toHaveBeenCalledWith(
       expect.anything(),

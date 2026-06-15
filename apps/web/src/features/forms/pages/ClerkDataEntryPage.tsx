@@ -12,8 +12,10 @@ import { Controller, useForm, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { generateReferenceCode } from '@oslsr/utils';
 import { useFormSchema } from '../hooks/useForms';
 import { syncManager } from '../../../services/sync-manager';
+import { db as offlineDb } from '../../../lib/offline-db';
 import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { getVisibleQuestions } from '../utils/skipLogic';
 import { QuestionRenderer } from '../components/QuestionRenderer';
@@ -79,6 +81,25 @@ export default function ClerkDataEntryPage() {
   const [pendingNinPromptOpen, setPendingNinPromptOpen] = useState(false);
   const pendingNin = formData._pendingNin === true;
 
+  // Story 9-58 — the human-friendly reference code for THIS entry. Minted
+  // client-side when the form is ready (so it's instant + offline-safe), stamped
+  // into the answers (`_referenceCode`) so it persists with the submission, and
+  // shown in a blocking modal at submit so the clerk can write it on the paper
+  // form before moving on.
+  // The minted code is PROVISIONAL/display-only (review M1/M2 — SERVER is
+  // authoritative). The clerk submit is online (awaits completeDraft + sync), so
+  // we reconcile to the API-echoed canonical code (persisted on the queue row by
+  // the sync manager) and flip `referenceConfirmed` once read back. If offline,
+  // the provisional stays labelled.
+  const [referenceCode, setReferenceCode] = useState<string>('');
+  const [referenceConfirmed, setReferenceConfirmed] = useState(false);
+  const [showReferenceModal, setShowReferenceModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copyUnavailable, setCopyUnavailable] = useState(false);
+  // M5 — auto-focus + focus-trap targets for the blocking reference modal.
+  const referenceDoneRef = useRef<HTMLButtonElement>(null);
+  const referenceModalRef = useRef<HTMLDivElement>(null);
+
   // Session tracking (persisted to sessionStorage)
   const [session, setSession] = useState(() => {
     const stored = sessionStorage.getItem('clerk-session');
@@ -103,14 +124,27 @@ export default function ClerkDataEntryPage() {
     enabled: !!formId && !!form,
   });
 
-  // Resume from existing draft if available
+  // Resume from existing draft + ensure a reference code for THIS entry.
+  // Runs once when the form is ready (guarded by allAnswersRef._referenceCode):
+  // reuses a resumed draft's code for continuity, otherwise mints a fresh one.
   useEffect(() => {
-    if (draft.resumeData && Object.keys(draft.resumeData.formData).length > 0) {
-      reset(draft.resumeData.formData as Record<string, unknown>);
-      allAnswersRef.current = { ...draft.resumeData.formData };
-      setFormData({ ...draft.resumeData.formData });
+    if (isLoading || !form || draft.loading) return;
+    if (allAnswersRef.current._referenceCode) return; // already initialized this entry
+    const resumed = (draft.resumeData?.formData ?? {}) as Record<string, unknown>;
+    const existingCode =
+      typeof resumed._referenceCode === 'string' && resumed._referenceCode ? resumed._referenceCode : null;
+    const code = existingCode ?? generateReferenceCode(new Date().getFullYear());
+    if (Object.keys(resumed).length > 0) {
+      const merged = { ...resumed, _referenceCode: code };
+      reset(merged);
+      allAnswersRef.current = { ...merged };
+      setFormData({ ...merged });
+    } else {
+      allAnswersRef.current._referenceCode = code;
+      setFormData({ ...allAnswersRef.current });
     }
-  }, [draft.resumeData, reset]);
+    setReferenceCode(code);
+  }, [isLoading, form, draft.loading, draft.resumeData, reset]);
 
   // Skip logic: get visible questions
   const allQuestions = useMemo(() => form?.questions ?? [], [form?.questions]);
@@ -238,6 +272,27 @@ export default function ClerkDataEntryPage() {
     setFormData({ ...next });
   }, []);
 
+  // Story 9-58 (review M1) — read the SERVER-authoritative reference code the
+  // API echoed (persisted on the submission-queue row by the sync manager) and
+  // reconcile the provisional modal display to it. Polls briefly because
+  // syncNow is fire-and-forget. No-op offline; the provisional stays labelled.
+  const reconcileReferenceCode = useCallback(async (submissionId: string | null) => {
+    if (!submissionId) return;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const item = await offlineDb.submissionQueue.get(submissionId);
+        if (item?.status === 'synced' && item.referenceCode) {
+          setReferenceCode(item.referenceCode);
+          setReferenceConfirmed(true);
+          return;
+        }
+      } catch {
+        // Dexie read failure — keep the provisional; non-critical.
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }, []);
+
   // Submit handler
   const handleSubmit = useCallback(async () => {
     // Block submit if NIN duplicate detected
@@ -264,14 +319,22 @@ export default function ClerkDataEntryPage() {
 
     try {
       await draft.completeDraft();
-      // Trigger upload immediately if online (don't await — fire-and-forget)
-      syncManager.syncNow().catch(() => {});
+      // Trigger upload immediately if online (don't await — fire-and-forget),
+      // then reconcile the provisional reference to the SERVER's canonical code
+      // once the queue row reports 'synced' (review M1).
+      const submissionId = draft.draftId;
+      syncManager
+        .syncNow()
+        .then(() => reconcileReferenceCode(submissionId))
+        .catch(() => {});
     } catch {
       toast.error({ message: 'Failed to save submission. Please try again.' });
       return;
     }
 
-    // Post-submit: session tracking + toast
+    // Post-submit: session tracking, then surface the reference code in a
+    // blocking modal so the clerk can write it on the paper form (Story 9-58).
+    // Navigation to the surveys list happens only after they acknowledge.
     const elapsed = Date.now() - formStartRef.current;
     const cur = sessionRef.current;
     const newSession = {
@@ -281,17 +344,94 @@ export default function ClerkDataEntryPage() {
     setSession(newSession);
     sessionStorage.setItem('clerk-session', JSON.stringify(newSession));
 
-    toast.success({ message: `Form completed in ${Math.round(elapsed / 1000)}s` });
-
     if (newSession.count % 10 === 0) {
       const avg = Math.round(newSession.totalTimeMs / newSession.count / 1000);
-      setTimeout(() => {
-        toast.info({ message: `${newSession.count} forms complete! Average: ${avg}s` });
-      }, 500);
+      toast.info({ message: `${newSession.count} forms complete! Average: ${avg}s` });
     }
 
+    setCopied(false);
+    setCopyUnavailable(false);
+    setShowReferenceModal(true);
+  }, [trigger, visibleQuestions, draft, toast, ninCheck, pendingNin, reconcileReferenceCode]);
+
+  // Story 9-58 — clerk acknowledges the reference (after writing it on the form),
+  // then returns to the surveys list ready for the next entry (the page unmounts,
+  // so the next form remounts with a fresh code).
+  const handleReferenceAcknowledge = useCallback(() => {
+    setShowReferenceModal(false);
     navigate('/dashboard/clerk/surveys');
-  }, [trigger, visibleQuestions, draft, toast, ninCheck, navigate, pendingNin]);
+  }, [navigate]);
+
+  // Story 9-58 (review M5) — a11y for the blocking reference modal: auto-focus
+  // the "Done — next entry" button on open and trap Tab focus within the dialog.
+  // NO Escape / backdrop dismissal is wired (intentional — the clerk must not
+  // lose the code by an accidental dismissal), so a Tab-cycle trap is what keeps
+  // keyboard focus from escaping to the (inert) page behind the modal.
+  useEffect(() => {
+    if (!showReferenceModal) return;
+    referenceDoneRef.current?.focus();
+
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const modal = referenceModalRef.current;
+      if (!modal) return;
+      const focusable = modal.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !modal.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !modal.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trap);
+    return () => document.removeEventListener('keydown', trap);
+  }, [showReferenceModal]);
+
+  // Story 9-58 (review L4) — clipboard API is unavailable in insecure contexts
+  // (plain-HTTP field tablets). Fall back to the legacy select-text +
+  // execCommand('copy') path; if that also fails, surface a visible
+  // "copy unavailable — write it down" hint instead of a silent no-op.
+  const handleCopyReference = useCallback(() => {
+    setCopyUnavailable(false);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(referenceCode).then(
+        () => setCopied(true),
+        () => fallbackCopy(),
+      );
+      return;
+    }
+    fallbackCopy();
+
+    function fallbackCopy() {
+      try {
+        const el = document.createElement('textarea');
+        el.value = referenceCode;
+        el.setAttribute('readonly', '');
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(el);
+        if (ok) {
+          setCopied(true);
+        } else {
+          setCopyUnavailable(true);
+        }
+      } catch {
+        setCopyUnavailable(true);
+      }
+    }
+  }, [referenceCode]);
 
   // Ctrl+S save draft
   const handleSaveDraft = useCallback(async () => {
@@ -571,6 +711,67 @@ export default function ClerkDataEntryPage() {
           Submit Form
         </button>
       </form>
+
+      {/* Story 9-58 — blocking reference modal: clerk writes the code on the
+          paper form, then returns to the surveys list for the next entry. */}
+      {showReferenceModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clerk-reference-title"
+          data-testid="clerk-reference-modal"
+        >
+          <div ref={referenceModalRef} className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="text-center text-4xl" aria-hidden="true">✓</div>
+            <h2 id="clerk-reference-title" className="mt-2 text-center text-lg font-semibold text-neutral-900">
+              Saved
+            </h2>
+            <p className="mt-1 text-center text-sm text-neutral-600">
+              Write this application reference on the paper form before continuing.
+            </p>
+            <div className="mt-4 rounded-lg bg-neutral-50 px-4 py-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-neutral-500">Application reference</p>
+              <p
+                className="font-mono text-2xl font-semibold tracking-wide text-neutral-900 select-all"
+                data-testid="clerk-reference-code"
+              >
+                {referenceCode}
+              </p>
+              {!referenceConfirmed && (
+                <p className="mt-1 text-xs text-amber-600" data-testid="clerk-reference-provisional">
+                  Provisional reference — confirmed once this syncs. The respondent can
+                  always retrieve it via their email/phone at /check-registration.
+                </p>
+              )}
+            </div>
+            {copyUnavailable && (
+              <p className="mt-3 text-center text-xs text-amber-600" data-testid="clerk-reference-copy-unavailable">
+                Copy unavailable on this device — please write the reference down.
+              </p>
+            )}
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={handleCopyReference}
+                className="flex-1 min-h-[44px] rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+                data-testid="clerk-reference-copy"
+              >
+                {copied ? 'Copied ✓' : 'Copy'}
+              </button>
+              <button
+                ref={referenceDoneRef}
+                type="button"
+                onClick={handleReferenceAcknowledge}
+                className="flex-1 min-h-[44px] rounded-lg bg-[#9C1E23] px-4 py-2 text-sm font-semibold text-white hover:bg-[#7A171B]"
+                data-testid="clerk-reference-done"
+              >
+                Done — next entry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

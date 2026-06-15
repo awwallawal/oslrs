@@ -18,6 +18,8 @@ import { SkeletonCard, SkeletonText } from '../../../components/skeletons';
 import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { syncManager } from '../../../services/sync-manager';
+import { db as offlineDb } from '../../../lib/offline-db';
+import { generateReferenceCode } from '@oslsr/utils';
 import { NinHelpHint } from '../../registration/components/NinHelpHint';
 import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
 
@@ -79,6 +81,15 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   // Story 9-12 Task 13 — pending-NIN prompt visibility (open per-NIN-question).
   const [pendingNinPromptOpen, setPendingNinPromptOpen] = useState(false);
 
+  // Story 9-58 (AC5.2) — the human-friendly reference code. The client mints a
+  // PROVISIONAL code for instant/offline display (display-only — review M1/M2);
+  // the SERVER is authoritative. Once the entry syncs we read the canonical
+  // code the API echoed (persisted to the local submission queue by the sync
+  // manager) and reconcile to it. `referenceConfirmed` flips true on that
+  // read-back so the UI can drop the "provisional" label.
+  const [referenceCode, setReferenceCode] = useState<string | null>(null);
+  const [referenceConfirmed, setReferenceConfirmed] = useState(false);
+
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
     formId: formId ?? '',
@@ -102,6 +113,43 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       setDraftLoaded(true);
     }
   }, [draft.resumeData, draft.loading, draftLoaded, reset]);
+
+  // Story 9-58 (AC5.2) — mint the human-friendly reference code client-side once
+  // the form is ready (instant + offline-safe), stamp it into the answers
+  // (`_referenceCode`) so it persists with the submission, and show it on the
+  // completion screen so the enumerator can read it back to the respondent.
+  // Reuses a resumed draft's code for continuity.
+  useEffect(() => {
+    if (!draftLoaded || isPreview || referenceCode) return;
+    const existing =
+      typeof allAnswersRef.current._referenceCode === 'string' ? allAnswersRef.current._referenceCode : '';
+    const code = existing || generateReferenceCode(new Date().getFullYear());
+    allAnswersRef.current._referenceCode = code;
+    setFormData({ ...allAnswersRef.current });
+    setReferenceCode(code);
+  }, [draftLoaded, isPreview, referenceCode]);
+
+  // Story 9-58 (review M1) — after a sync, read the SERVER-authoritative
+  // reference code the API echoed (the sync manager persists it onto the
+  // submission-queue row) and reconcile the provisional display to it. Polls a
+  // few times because syncNow is fire-and-forget. No-op offline (the row never
+  // reaches 'synced'); the provisional stays labelled until a later session.
+  const reconcileReferenceCode = useCallback(async (submissionId: string | null) => {
+    if (!submissionId) return;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const item = await offlineDb.submissionQueue.get(submissionId);
+        if (item?.status === 'synced' && item.referenceCode) {
+          setReferenceCode(item.referenceCode);
+          setReferenceConfirmed(true);
+          return;
+        }
+      } catch {
+        // Dexie read failure — keep the provisional; non-critical.
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }, []);
 
   const visibleQuestions = useMemo(() => {
     if (!form) return [];
@@ -202,8 +250,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       // End of form — complete draft and trigger sync
       if (!isPreview) {
         await draft.completeDraft();
-        // Trigger upload immediately if online (don't await — fire-and-forget)
-        syncManager.syncNow().catch(() => {});
+        // Trigger upload immediately if online (don't await — fire-and-forget),
+        // then reconcile the provisional reference to the server's canonical
+        // code once the queue row reports 'synced' (review M1).
+        syncManager
+          .syncNow()
+          .then(() => reconcileReferenceCode(draft.draftId))
+          .catch(() => {});
       }
       setCompleted(true);
       return;
@@ -215,7 +268,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError, trigger, setError, clearErrors]);
+  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError, trigger, setError, clearErrors, reconcileReferenceCode]);
 
   /**
    * Story 9-12 Task 13 — pending-NIN confirm.
@@ -253,7 +306,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         // NIN was the final visible question — complete + sync.
         try {
           await draft.completeDraft();
-          syncManager.syncNow().catch(() => {});
+          syncManager
+            .syncNow()
+            .then(() => reconcileReferenceCode(draft.draftId))
+            .catch(() => {});
         } catch {
           // completion errors surface through draft hook; swallow here.
         }
@@ -266,7 +322,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         setSlideDirection(null);
       }, 50);
     },
-    [form, currentQuestion, currentIndex, isPreview, ninCheck, clearErrors, draft],
+    [form, currentQuestion, currentIndex, isPreview, ninCheck, clearErrors, draft, reconcileReferenceCode],
   );
 
   const handleBack = useCallback(() => {
@@ -340,6 +396,33 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
               ✓
             </div>
             <h2 className="text-xl font-semibold text-gray-900">Survey saved!</h2>
+            {/* Story 9-58 (AC5.2 + review M1) — application reference for the
+                field officer to read back. The client mints a PROVISIONAL code
+                for instant display; once the entry syncs we reconcile to the
+                SERVER-authoritative code and drop the provisional label. */}
+            <div className="rounded-lg bg-gray-50 px-4 py-3" data-testid="completion-reference">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Application reference</p>
+              {referenceCode ? (
+                <>
+                  <p
+                    className="font-mono text-lg font-semibold text-gray-900 select-all"
+                    data-testid="completion-reference-code"
+                  >
+                    {referenceCode}
+                  </p>
+                  {!referenceConfirmed && (
+                    <p className="mt-1 text-xs text-amber-600" data-testid="completion-reference-provisional">
+                      Provisional reference — confirmed once this syncs. The respondent can
+                      always retrieve it via their email/phone at /check-registration.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500" data-testid="completion-reference-pending">
+                  The reference will appear here once this entry uploads.
+                </p>
+              )}
+            </div>
             {isPublicUser ? (
               <>
                 <p className="text-gray-600" data-testid="civic-message">

@@ -98,6 +98,14 @@ export interface RespondentMetadata {
     isSupervisedApprentice: string;
     apprenticeshipDetails?: string;
   };
+  /**
+   * Story 9-58 (review L1) — ISO timestamp the proactive registration-
+   * confirmation email was dispatched for an enumerator/clerk-entered
+   * respondent who supplied an email. Set after dispatch; the processor only
+   * sends when it is ABSENT, making the idempotency guarantee explicit rather
+   * than emergent from the `_isNew` flag.
+   */
+  confirmation_email_sent_at?: string;
 }
 
 export const respondents = pgTable('respondents', {
@@ -122,6 +130,19 @@ export const respondents = pgTable('respondents', {
 
   // Lifecycle status (Story 11-1)
   status: text('status', { enum: respondentStatusTypes }).notNull().default('active'),
+
+  // Story 9-58 (Deliverable B) — human-friendly per-respondent reference code
+  // (`OSL-<YYYY>-<6 base32, no I/L/O/U>`). Generated at the uniform
+  // respondent-creation chokepoint on EVERY channel (wizard sync path +
+  // `findOrCreateRespondent` async path) so field-registered respondents also
+  // get something quotable. Per-respondent (stable per person, survives
+  // supplemental submissions) — NOT per-submission. Nullable because existing
+  // rows are populated lazily by the one-shot backfill runner
+  // (`scripts/_backfill-reference-code.ts`). Uniqueness is enforced by a UNIQUE
+  // index created in `scripts/migrate-reference-code-init.ts` (Drizzle/db:push
+  // creates the column; the unique index lives in the init-runner alongside the
+  // other special indexes — see the GIN-trigram note below).
+  referenceCode: text('reference_code'),
 
   // Provenance (Story 11-1) — populated for imported rows; null for field-surveyed rows
   externalReferenceId: text('external_reference_id'),

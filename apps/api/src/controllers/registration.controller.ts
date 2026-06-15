@@ -14,6 +14,7 @@ import {
 } from '../services/form-submission-validation.service.js';
 import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
+import { ReferenceCodeService } from '../services/reference-code.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-controller' });
@@ -585,6 +586,13 @@ export class RegistrationController {
         metadata.guardian = minorResult.guardian;
       }
 
+      // Story 9-58 (Deliverable B) — mint the human-friendly reference code
+      // BEFORE the transaction (so a generation failure surfaces cleanly rather
+      // than mid-write) and persist it on the respondent row + echo it on the
+      // success screen. Every wizard registrant — active or pending-NIN — gets
+      // a stable, quotable code.
+      const referenceCode = await ReferenceCodeService.generateUnique();
+
       // Code review M6 (2026-05-11) — wrap insert + audit + draft delete in
       // one transaction so an audit-write failure rolls back the row,
       // preserving the audit chain integrity.
@@ -624,6 +632,7 @@ export class RegistrationController {
             source: 'public',
             submitterId: null,
             status,
+            referenceCode,
             metadata: Object.keys(metadata).length > 0 ? (metadata as never) : null,
           })
           .returning({
@@ -802,6 +811,10 @@ export class RegistrationController {
           // the sanctioned public reference: unique, non-enumerable, and the
           // cross-table forensic trace key support resolves a respondent by.
           submissionUid,
+          // Story 9-58 — human-friendly application reference (OSL-YYYY-XXXXXX),
+          // shown on the success screen + accepted by the public status check
+          // and the 9-56 staff search.
+          referenceCode,
           status: respondent.status,
           pendingNin,
           // Frontend uses this to decide next step:

@@ -6,6 +6,7 @@ import {
   validateMinorGuardianConsent,
 } from '../services/form-submission-validation.service.js';
 import { queueSubmissionForIngestion } from '../queues/webhook-ingestion.queue.js';
+import { ReferenceCodeService } from '../services/reference-code.service.js';
 import { AppError } from '@oslsr/utils';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import { db } from '../db/index.js';
@@ -158,6 +159,21 @@ export class FormController {
       if (gpsLongitude != null) rawData._gpsLongitude = gpsLongitude;
       if (completionTimeSeconds != null) rawData._completionTimeSeconds = completionTimeSeconds;
 
+      // Story 9-58 (AC5.2) — the enumerator/clerk path is async (queued). The
+      // SERVER is authoritative for the persisted reference code (review M2,
+      // operator-approved 2026-06-15): we ALWAYS mint server-side here and
+      // OVERWRITE any client-supplied `_referenceCode`. A client may mint a
+      // provisional code for instant/offline DISPLAY, but it is never trusted
+      // for the persisted value. The server code is threaded into the queued
+      // rawData so the ingestion worker assigns this EXACT code to the NEW
+      // respondent, and echoed below so the client can reconcile its
+      // provisional with the canonical value.
+      // (NIN-completion merges keep the existing pending row's code — a rare
+      // edge where the echoed code differs; the dominant field case is a new
+      // active respondent. Documented in 9-58 Dev Notes.)
+      const referenceCode = await ReferenceCodeService.generateUnique(db);
+      rawData._referenceCode = referenceCode;
+
       const jobId = await queueSubmissionForIngestion({
         source: FormController.getSubmissionSource(user?.role),
         submissionUid: submissionId,
@@ -168,9 +184,11 @@ export class FormController {
       });
 
       if (jobId) {
-        res.status(201).json({ data: { id: jobId, status: 'queued' } });
+        res.status(201).json({ data: { id: jobId, status: 'queued', referenceCode } });
       } else {
-        res.status(200).json({ data: { id: null, status: 'duplicate' } });
+        // Duplicate submissionUid — no NEW respondent created, so don't echo a
+        // (now-unused) code; the original submission already owns one.
+        res.status(200).json({ data: { id: null, status: 'duplicate', referenceCode: null } });
       }
     } catch (err) {
       next(err);

@@ -25,6 +25,7 @@ import viewAsDataRoutes from './view-as-data.routes.js';
 import marketplaceRoutes from './marketplace.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import registrationRoutes from './registration.routes.js';
+import registrationStatusRoutes from './registration-status.routes.js';
 
 const router = Router();
 
@@ -57,6 +58,7 @@ router.use('/view-as/data', viewAsDataRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/registration', registrationRoutes);
+router.use('/registration-status', registrationStatusRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

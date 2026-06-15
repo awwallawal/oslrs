@@ -15,6 +15,12 @@ export interface SubmitSurveyResponse {
   data: {
     id: string | null;
     status: 'queued' | 'duplicate';
+    /**
+     * Story 9-58 (AC5.2) — human-friendly reference code (`OSL-YYYY-XXXXXX`)
+     * for the respondent this submission creates, so the field officer can read
+     * it back. `null` on a duplicate submission (no new respondent).
+     */
+    referenceCode?: string | null;
   };
 }
 

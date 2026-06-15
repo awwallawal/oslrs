@@ -22,6 +22,13 @@ export interface SubmissionQueueItem {
   userId: string; // Owner's user ID (prep-11: shared-device isolation)
   createdAt: string;
   error: string | null; // Last error message
+  /**
+   * Story 9-58 (AC5.2) — human-friendly reference code captured from the
+   * `submitSurvey` response on a successful sync, so the completion screen can
+   * read it back to the field officer. Undefined until synced (and on offline /
+   * duplicate). Not indexed — read by primary key (`get(id)`).
+   */
+  referenceCode?: string | null;
 }
 
 export interface CachedFormSchema {

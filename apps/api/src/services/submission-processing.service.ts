@@ -21,8 +21,10 @@ import {
   normaliseNigerianPhone,
   normaliseDate,
 } from '../lib/normalise/index.js';
-import { evaluateMinorGuardianConsent, type GuardianData } from '@oslsr/utils';
+import { evaluateMinorGuardianConsent, isValidReferenceCode, type GuardianData } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
+import { ReferenceCodeService } from './reference-code.service.js';
+import { EmailService } from './email.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -106,6 +108,16 @@ interface ExtractedRespondentData {
    * / unknown-age. Persisted to `respondents.metadata.guardian`.
    */
   guardian?: GuardianData | null;
+  /**
+   * Story 9-58 — pre-generated human-friendly reference code threaded from the
+   * synchronous `submitForm` controller (enumerator / clerk path) via the
+   * `_referenceCode` rawData key, so the code echoed to the field officer at
+   * submit time matches the code persisted on the created respondent. Absent
+   * for legacy submissions / direct ingestion — `findOrCreateRespondent` then
+   * mints one. NOT applied to the merge path (a promoted pending row keeps its
+   * original code).
+   */
+  referenceCode?: string;
 }
 
 /**
@@ -227,7 +239,7 @@ export class SubmissionProcessingService {
     const submitterRole = await this.determineSubmitterRole(submission.submitterId ?? null);
 
     // Find or create respondent by NIN
-    let respondent: { id: string; _isNew: boolean };
+    let respondent: { id: string; _isNew: boolean; referenceCode?: string; status?: RespondentStatus };
     try {
       respondent = await this.findOrCreateRespondent(
         respondentData,
@@ -259,6 +271,25 @@ export class SubmissionProcessingService {
       processedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(submissions.id, submissionId));
+
+    // Story 9-58 (AC5 enhancement, operator-chosen 2026-06-15) — when an
+    // enumerator/clerk submission captured the respondent's email, proactively
+    // send a registration confirmation carrying their reference code + status +
+    // a pointer to the self-service status check. Fire-and-forget: a comms
+    // failure must NEVER fail the ingestion (data integrity > notification, the
+    // 9-26 unified-ingestion lesson). Only on a NEW respondent (not a merge).
+    if (respondent._isNew && respondent.referenceCode) {
+      const emailRaw = rawData['email'] ?? rawData['email_address'];
+      const email = typeof emailRaw === 'string' && emailRaw.includes('@') ? emailRaw.trim() : null;
+      if (email) {
+        void this.sendReferenceConfirmationEmail({
+          respondentId: respondent.id,
+          email,
+          referenceCode: respondent.referenceCode,
+          status: respondent.status ?? 'active',
+        });
+      }
+    }
 
     logger.info({
       event: 'submission_processing.processed',
@@ -404,6 +435,19 @@ export class SubmissionProcessingService {
           : null;
     const guardian = evaluateMinorGuardianConsent(rawData, age).guardian;
 
+    // Story 9-58 — the synchronous submitForm controller (server-authoritative,
+    // review M2) mints the reference code and threads it here via
+    // `_referenceCode` so the value echoed to the field officer matches the
+    // persisted respondent's code. Review L2: validate the shape with
+    // `isValidReferenceCode` before trusting it; a malformed string (legacy /
+    // direct ingestion / tampering) is ignored and `findOrCreateRespondent`
+    // mints a fresh one.
+    const referenceCodeRaw = rawData['_referenceCode'];
+    const referenceCode =
+      typeof referenceCodeRaw === 'string' && isValidReferenceCode(referenceCodeRaw)
+        ? referenceCodeRaw
+        : undefined;
+
     return {
       nin: ninValue,
       firstName: extracted['firstName'] != null ? String(extracted['firstName']) : undefined,
@@ -414,6 +458,7 @@ export class SubmissionProcessingService {
       consentMarketplace,
       consentEnriched,
       guardian,
+      referenceCode,
     };
   }
 
@@ -431,7 +476,7 @@ export class SubmissionProcessingService {
     data: ExtractedRespondentData,
     source: RespondentSource,
     submitterId?: string
-  ): Promise<{ id: string; _isNew: boolean }> {
+  ): Promise<{ id: string; _isNew: boolean; referenceCode?: string; status?: RespondentStatus }> {
     // Normalise incoming PII once up front. Race-resolution merge (Story 9-12 Task 3.5)
     // queries against pending rows using the SAME canonical values the DB stores, so
     // normalisation must run BEFORE the merge attempt — not just before insert.
@@ -500,7 +545,24 @@ export class SubmissionProcessingService {
     // the Story 9-12 magic-link flow.
     const status: RespondentStatus = data.nin ? 'active' : 'pending_nin_capture';
 
+    // Story 9-58 — every respondent gets a human-friendly reference code at
+    // creation (pending rows too — so a later NIN-completion promotion keeps a
+    // stable code). SERVER IS AUTHORITATIVE (review M2): the controller already
+    // minted a server-side unique code and threaded it via `data.referenceCode`
+    // (validated in `extractRespondentData`, review L2). Reuse it when present;
+    // otherwise mint a fresh server-side code (legacy / direct ingestion). The
+    // UNIQUE index remains the true backstop — see the 23505 retry below.
+    let referenceCode = data.referenceCode ?? (await ReferenceCodeService.generateUnique(db));
+
+    // Story 9-58 (review M3) — bounded retry on a reference_code unique
+    // violation. The insert can trip the `respondents.reference_code` UNIQUE
+    // index independently of NIN (e.g. a pending-NIN insert racing another, or
+    // a re-used threaded code), which previously surfaced as a raw Postgres
+    // error. Re-mint a fresh code and retry a bounded number of times.
+    const MAX_REF_CODE_RETRIES = 5;
+
     // Create new respondent
+    for (let attempt = 0; ; attempt++) {
     try {
       const [created] = await db.insert(respondents).values({
         nin: data.nin ?? null,
@@ -514,6 +576,7 @@ export class SubmissionProcessingService {
         source,
         submitterId: submitterId ?? null,
         status,
+        referenceCode,
         metadata: metadataWithGuardian,
       }).returning();
 
@@ -570,12 +633,28 @@ export class SubmissionProcessingService {
         });
       }
 
-      return { id: created.id, _isNew: true };
+      return { id: created.id, _isNew: true, referenceCode, status };
     } catch (error: unknown) {
-      // Handle race condition: PostgreSQL unique constraint violation (code 23505)
+      // Handle race condition: PostgreSQL unique constraint violation (code 23505).
+      const pgError = error as { code?: string; constraint?: string };
+
+      // Story 9-58 (review M3) — a reference_code unique violation is
+      // independent of NIN (it can trip on a pending-NIN insert too). Re-mint a
+      // fresh server-side code and retry the insert (bounded), instead of
+      // surfacing a raw Postgres error. Detect via the constraint name when
+      // available; otherwise infer it (a 23505 that is NOT the NIN index — i.e.
+      // no NIN supplied — must be the reference_code index).
+      const isRefCodeViolation =
+        pgError.code === '23505' &&
+        (pgError.constraint?.includes('reference_code') ||
+          (!pgError.constraint && !data.nin));
+      if (isRefCodeViolation && attempt < MAX_REF_CODE_RETRIES) {
+        referenceCode = await ReferenceCodeService.generateUnique(db);
+        continue;
+      }
+
       // Reject instead of linking (AC 3.7.7). Only meaningful when NIN was
-      // supplied — pending-NIN inserts cannot trip the partial unique index.
-      const pgError = error as { code?: string };
+      // supplied — pending-NIN inserts cannot trip the partial NIN unique index.
       if (pgError.code === '23505' && data.nin) {
         const retried = await db.query.respondents.findFirst({
           where: eq(respondents.nin, data.nin),
@@ -587,6 +666,7 @@ export class SubmissionProcessingService {
         }
       }
       throw error;
+    }
     }
   }
 
@@ -727,6 +807,95 @@ export class SubmissionProcessingService {
       logger.error({
         event: 'audit.minor_guardian_consent_captured_failed',
         respondentId: args.respondentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Story 9-58 — proactive registration-confirmation email for an
+   * enumerator/clerk-entered respondent who supplied an email. Carries the
+   * human-friendly reference code + plain-language status + a pointer to the
+   * self-service status check. NO magic-link (the respondent didn't initiate
+   * this; they self-serve a secure link via /check-registration if needed) and
+   * an explicit anti-phishing line. Fully best-effort: any failure is logged,
+   * never thrown (ingestion must not depend on email).
+   */
+  private static readonly STATUS_CONFIRMATION_TEXT: Record<string, string> = {
+    active: 'Active — your registration is complete.',
+    pending_nin_capture: 'Pending — we still need your NIN to finish your registration.',
+    nin_unavailable: 'Pending — your details are saved.',
+    imported_unverified: 'On file — your record is awaiting verification.',
+  };
+
+  private static async sendReferenceConfirmationEmail(args: {
+    respondentId: string;
+    email: string;
+    referenceCode: string;
+    status: RespondentStatus | string;
+  }): Promise<void> {
+    try {
+      // Story 9-58 (review L1) — explicit idempotency guard: only send when the
+      // respondent has no `metadata.confirmation_email_sent_at` stamp. Makes the
+      // "send once" guarantee a stored fact rather than emergent from the
+      // `_isNew` flag (which a re-run on a partially-processed submission could
+      // in theory mis-evaluate). Set the stamp AFTER a successful dispatch.
+      const existing = await db.query.respondents.findFirst({
+        where: eq(respondents.id, args.respondentId),
+        columns: { metadata: true },
+      });
+      const existingMetadata = (existing?.metadata ?? null) as RespondentMetadata | null;
+      if (existingMetadata?.confirmation_email_sent_at) {
+        logger.info({
+          event: 'registration_confirmation.email_skipped_already_sent',
+          respondentId: args.respondentId,
+        });
+        return;
+      }
+
+      const brand = '#9C1E23';
+      const statusText =
+        SubmissionProcessingService.STATUS_CONFIRMATION_TEXT[args.status] ??
+        'Your registration is on file.';
+      const checkUrl = `${process.env.SUPPORT_URL || 'https://oyoskills.com'}/check-registration`;
+      const subject = "You've been registered — Oyo State Skills Registry";
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${subject}</title></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: ${brand}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0;">OSLSR</h1>
+    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour &amp; Skills Registry</p>
+  </div>
+  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <p>You've been registered in the Oyo State Skills Registry.</p>
+    <p style="font-weight: bold;">${statusText}</p>
+    <p style="margin:20px 0;padding:12px 16px;background:#f6f6f6;border-radius:6px;font-size:14px;">Your application reference: <strong style="font-family:ui-monospace,monospace;letter-spacing:0.5px;">${args.referenceCode}</strong></p>
+    <p style="color: #666; font-size: 14px;">Quote this reference if you contact support, or check your status anytime at <a href="${checkUrl}" style="color: ${brand};">${checkUrl}</a>.</p>
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+    <p style="color: #999; font-size: 12px;">We will never ask for your password or NIN by email.</p>
+    <p style="color: #999; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} Government of Oyo State. All rights reserved.</p>
+  </div>
+</body></html>`;
+      const text = `You've been registered in the Oyo State Skills Registry.\n\n${statusText}\n\nYour application reference: ${args.referenceCode}\n\nQuote this reference if you contact support, or check your status anytime at ${checkUrl}.\n\nWe will never ask for your password or NIN by email.\n\n— Oyo State Labour & Skills Registry`;
+
+      const result = await EmailService.sendGenericEmail({ to: args.email, subject, html, text });
+      if (!result.success) {
+        logger.warn({ event: 'registration_confirmation.email_failed', error: result.error });
+        return;
+      }
+
+      // Story 9-58 (review L1) — stamp the explicit idempotency marker only after
+      // a confirmed dispatch. JSONB `||` preserves any sibling metadata keys
+      // (guardian, normalisation_warnings, etc.). A failure to record the stamp
+      // is logged but never thrown (ingestion must not depend on email).
+      await db.execute(sql`
+        UPDATE "respondents"
+        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ confirmation_email_sent_at: new Date().toISOString() })}::jsonb
+        WHERE "id" = ${args.respondentId}
+      `);
+    } catch (err) {
+      logger.warn({
+        event: 'registration_confirmation.email_error',
         error: err instanceof Error ? err.message : String(err),
       });
     }

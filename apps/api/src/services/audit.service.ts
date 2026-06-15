@@ -114,6 +114,15 @@ export const AUDIT_ACTIONS = {
   // attestation. Written via the hash-chain log within the submit transaction
   // (wizard path) or fire-and-forget on the async enumerator/clerk path.
   MINOR_GUARDIAN_CONSENT_CAPTURED: 'minor.guardian_consent_captured',
+  // Story 9-58 (Deliverable B) — per-row forensic trail for the operator-gated
+  // reference-code backfill (assigns OSL-YYYY-XXXXXX codes to pre-9-58
+  // respondents that have none).
+  OPERATOR_REFERENCE_CODE_BACKFILLED: 'operator.reference_code_backfilled',
+  // Story 9-58 (Deliverable A) — public registration-status check request.
+  // Records the identifier CLASS (email / phone / reference-code) + whether a
+  // status notification was dispatched — NEVER the raw PII identifier value
+  // (AC8: logs must not become a PII enumeration side-channel).
+  REGISTRATION_STATUS_REQUESTED: 'registration_status.requested',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

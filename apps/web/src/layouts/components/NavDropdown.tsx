@@ -26,6 +26,8 @@ const participateItems = [
   { href: '/participate', label: 'Get Started', description: 'Choose your path - worker or employer' },
   { href: '/participate/workers', label: 'For Workers', description: 'Register your skills and find opportunities' },
   { href: '/participate/employers', label: 'For Employers', description: 'Access the skilled workforce database' },
+  // Story 9-58 — returning registrant entry point, next to registration.
+  { href: '/check-registration', label: 'Already registered? Check your status', description: 'Confirm your registration and get a secure link' },
 ];
 
 /**
@@ -36,6 +38,8 @@ const supportItems = [
   { href: '/support/faq', label: 'FAQ', description: 'Frequently asked questions' },
   { href: '/support/guides', label: 'Guides', description: 'Step-by-step instructions' },
   { href: '/support/verify-worker', label: 'Verify Worker', description: 'Check worker registration status' },
+  // Story 9-58 — primary home for the public registration-status check.
+  { href: '/check-registration', label: 'Check Your Registration', description: "Confirm you're registered and get a secure link" },
 ];
 
 /**

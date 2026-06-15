@@ -27,6 +27,16 @@ vi.mock('../../db/index.js', () => ({
     },
   },
 }));
+// Story 9-58 (review M2) — submitForm is SERVER-AUTHORITATIVE: it ALWAYS mints
+// server-side via generateUnique (uniqueness SELECT via db.execute, not stubbed
+// here) and overwrites any client-supplied code. Mock generateUnique to a fixed
+// code. Plain function (NOT vi.fn) so `vi.resetAllMocks()` in beforeEach can't
+// wipe the return value back to undefined.
+vi.mock('../../services/reference-code.service.js', () => ({
+  ReferenceCodeService: {
+    generateUnique: () => Promise.resolve('OSL-2026-TEST00'),
+  },
+}));
 vi.mock('@oslsr/utils/src/validation', () => ({
   modulus11Check: (nin: string) => {
     // Known valid NINs for testing
@@ -302,17 +312,40 @@ describe('FormController', () => {
         mockNext
       );
 
+      // Story 9-58 (AC5.2) — the queued rawData carries the pre-generated
+      // reference code (`_referenceCode`) so the ingestion worker assigns the
+      // same code, and the response echoes it for the field officer to read back.
       expect(queueSubmissionForIngestion).toHaveBeenCalledWith({
         source: 'enumerator',
         submissionUid: validBody.submissionId,
         questionnaireFormId: validBody.formId,
         submitterId: 'user-123',
         submittedAt: validBody.submittedAt,
-        rawData: validBody.responses,
+        rawData: { ...validBody.responses, _referenceCode: 'OSL-2026-TEST00' },
       });
       expect(statusMock).toHaveBeenCalledWith(201);
       expect(jsonMock).toHaveBeenCalledWith({
-        data: { id: 'job-abc', status: 'queued' },
+        data: { id: 'job-abc', status: 'queued', referenceCode: 'OSL-2026-TEST00' },
+      });
+    });
+
+    it('IGNORES a client-supplied reference code and mints server-side (Story 9-58 review M2)', async () => {
+      // The server is authoritative: a client-supplied `_referenceCode` (which
+      // could be forged/duplicated) must NOT be trusted for persistence. The
+      // queued rawData + echoed response both carry the SERVER code.
+      mockReq.body = { ...validBody, responses: { ...validBody.responses, _referenceCode: 'OSL-2026-9F3K7Q' } };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-xyz');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawData: expect.objectContaining({ _referenceCode: 'OSL-2026-TEST00' }),
+        }),
+      );
+      expect(jsonMock).toHaveBeenCalledWith({
+        data: { id: 'job-xyz', status: 'queued', referenceCode: 'OSL-2026-TEST00' },
       });
     });
 
@@ -330,7 +363,9 @@ describe('FormController', () => {
 
       expect(statusMock).toHaveBeenCalledWith(200);
       expect(jsonMock).toHaveBeenCalledWith({
-        data: { id: null, status: 'duplicate' },
+        // Story 9-58 — duplicate submissions echo referenceCode: null (no new
+        // respondent created).
+        data: { id: null, status: 'duplicate', referenceCode: null },
       });
     });
 

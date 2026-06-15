@@ -184,8 +184,13 @@ export interface SubmitWizardRequest {
 
 export interface SubmitWizardResponse {
   respondentId: string;
-  /** Public-facing reference (submissions UID) shown on the success screen. */
+  /** Internal cross-table forensic trace key (submissions UID). */
   submissionUid: string;
+  /**
+   * Story 9-58 — human-friendly application reference (`OSL-YYYY-XXXXXX`) shown
+   * on the success screen; accepted by the public status check + 9-56 search.
+   */
+  referenceCode: string;
   status: string;
   pendingNin: boolean;
   authChoice: 'magic-link' | 'password' | 'skip';

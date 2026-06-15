@@ -263,7 +263,7 @@ describe('ClerkDataEntryPage', () => {
   });
 
   describe('AC3.6.5: Submit and Navigate Back', () => {
-    it('navigates back to surveys after successful submission', async () => {
+    it('navigates back to surveys after acknowledging the reference modal (Story 9-58)', async () => {
       renderPage();
       fireEvent.change(screen.getByTestId('input-full_name'), {
         target: { value: 'John Doe' },
@@ -275,13 +275,21 @@ describe('ClerkDataEntryPage', () => {
       const form = document.querySelector('[data-clerk-form]')!;
       fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
 
+      // Submit saves + shows the blocking reference modal (no immediate nav).
       await waitFor(() => {
         expect(mockCompleteDraft).toHaveBeenCalled();
+        expect(screen.getByTestId('clerk-reference-modal')).toBeInTheDocument();
+      });
+      expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard/clerk/surveys');
+
+      // Acknowledge → return to surveys list for the next entry.
+      fireEvent.click(screen.getByTestId('clerk-reference-done'));
+      await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
       });
     });
 
-    it('shows success toast with completion time', async () => {
+    it('shows the reference code in a blocking modal after submission (Story 9-58)', async () => {
       renderPage();
       fireEvent.change(screen.getByTestId('input-full_name'), {
         target: { value: 'John Doe' },
@@ -294,12 +302,12 @@ describe('ClerkDataEntryPage', () => {
       fireEvent.keyDown(form, { key: 'Enter', ctrlKey: true });
 
       await waitFor(() => {
-        expect(mockToast.success).toHaveBeenCalledWith(
-          expect.objectContaining({
-            message: expect.stringMatching(/Form completed in \d+s/),
-          }),
-        );
+        expect(screen.getByTestId('clerk-reference-code')).toBeInTheDocument();
       });
+      // A valid OSL-YYYY-XXXXXX code (no ambiguous chars) is shown to write down.
+      expect(screen.getByTestId('clerk-reference-code').textContent).toMatch(
+        /^OSL-\d{4}-[0-9A-HJKMNP-TV-Z]{6}$/,
+      );
     });
   });
 
@@ -595,7 +603,7 @@ describe('ClerkDataEntryPage', () => {
       expect(btn).toHaveTextContent('Submit Form');
     });
 
-    it('validates and navigates back on Submit Form click with valid data', async () => {
+    it('validates, saves, and navigates back after acknowledging the reference modal', async () => {
       renderPage();
       fireEvent.change(screen.getByTestId('input-full_name'), {
         target: { value: 'Jane Doe' },
@@ -608,6 +616,10 @@ describe('ClerkDataEntryPage', () => {
 
       await waitFor(() => {
         expect(mockCompleteDraft).toHaveBeenCalled();
+        expect(screen.getByTestId('clerk-reference-modal')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('clerk-reference-done'));
+      await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard/clerk/surveys');
       });
     });

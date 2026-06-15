@@ -428,6 +428,11 @@ export class RespondentService {
     const contains = `%${searchTerm}%`;
     const prefix = `${searchTerm}%`;
     const emailExact = searchTerm.toLowerCase();
+    // Story 9-58 (AC6.2) — accept the human-friendly reference code as a search
+    // term. Codes are stored uppercase (OSL-YYYY-XXXXXX); compare exact against
+    // the uppercased term so the UNIQUE index (`idx_respondents_reference_code`)
+    // resolves it as an index scan. Bound param (no concat → no SQLi).
+    const referenceCodeExact = searchTerm.toUpperCase();
     // Supervisor team-scope MUST be applied in Phase 1 (before the SEARCH_ID_CAP
     // truncation), not only in Phase 2. Otherwise a broad term resolves the
     // UNSCOPED global set, the cap drops all but an arbitrary N (the UNION has no
@@ -445,6 +450,7 @@ export class RespondentService {
         WHERE (r.first_name ILIKE ${contains}
            OR r.last_name ILIKE ${contains}
            OR r.nin LIKE ${prefix}
+           OR r.reference_code = ${referenceCodeExact}
            OR r.phone_number ILIKE ${contains})${scope('r.id')}
         UNION
         SELECT s.respondent_id AS id

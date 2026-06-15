@@ -187,8 +187,11 @@ describe('AuditService', () => {
       //   OPERATOR_RESPONDENT_NAME_CANONICALIZED → 46.
       // Story 9-55 (minor age-gate + guardian consent) added 1:
       //   MINOR_GUARDIAN_CONSENT_CAPTURED ('minor.guardian_consent_captured') → 47.
+      // Story 9-58 (reference code + public status check) added 2:
+      //   OPERATOR_REFERENCE_CODE_BACKFILLED ('operator.reference_code_backfilled'),
+      //   REGISTRATION_STATUS_REQUESTED ('registration_status.requested') → 49.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(47);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(49);
     });
   });
 

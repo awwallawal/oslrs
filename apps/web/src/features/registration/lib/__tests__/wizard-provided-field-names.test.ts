@@ -176,6 +176,12 @@ describe('WIZARD_PROVIDED_FIELD_NAMES (AC#B6 collision detector)', () => {
       ['lastname', 'familyName'],
       ['phone_number', 'phone'],
       ['Mobile', 'phone'],
+      // Story 9-58 N4 — the optional `email` question added to grp_identity must
+      // be deduped (the wizard already collects email in Step 2), so the bare
+      // `email` question name resolves to the email wizard key (not just the
+      // `email_address` alias).
+      ['email', 'email'],
+      ['Email', 'email'],
       ['email_address', 'email'],
       ['date_of_birth', 'dob'],
       ['DOB', 'dob'],

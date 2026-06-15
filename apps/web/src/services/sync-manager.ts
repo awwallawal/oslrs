@@ -153,7 +153,7 @@ export class SyncManager {
       const gpsLongitude = payload.gpsLongitude as number | undefined;
       const completionTimeSeconds = payload.completionTimeSeconds as number | undefined;
 
-      await Promise.race([
+      const result = await Promise.race([
         submitSurvey({
           submissionId: id,
           formId,
@@ -169,8 +169,14 @@ export class SyncManager {
         ),
       ]);
 
-      // Both 'queued' and 'duplicate' mean success
-      await db.submissionQueue.update(id, { status: 'synced', error: null });
+      // Both 'queued' and 'duplicate' mean success. Story 9-58 — persist the
+      // human-friendly reference code echoed by the API so the completion
+      // screen can read it back to the field officer (online submits).
+      await db.submissionQueue.update(id, {
+        status: 'synced',
+        error: null,
+        referenceCode: result?.data?.referenceCode ?? null,
+      });
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';

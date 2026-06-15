@@ -62,6 +62,26 @@ vi.mock('../audit.service.js', async () => {
   };
 });
 
+// Story 9-58 (review M2) — reference-code generation is SERVER-authoritative:
+// findOrCreateRespondent reuses a valid threaded `data.referenceCode` (already
+// server-minted by the controller) or mints fresh via generateUnique (a
+// uniqueness SELECT via db.execute). Mock generateUnique to a fixed code so
+// these tests' db.execute assertions (which target the race-resolution merge)
+// stay isolated.
+vi.mock('../reference-code.service.js', () => ({
+  ReferenceCodeService: {
+    // Plain function so a beforeEach reset can't wipe it back to undefined.
+    generateUnique: () => Promise.resolve('OSL-2026-TEST00'),
+  },
+}));
+
+// Story 9-58 — processSubmission may fire a confirmation email when the
+// submission carries an address. Spy so we can assert the auto-email path.
+const mockSendGenericEmail = vi.fn();
+vi.mock('../email.service.js', () => ({
+  EmailService: { sendGenericEmail: (...args: unknown[]) => mockSendGenericEmail(...args) },
+}));
+
 vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
 }));
@@ -187,6 +207,73 @@ describe('SubmissionProcessingService', () => {
       expect(mockInsertRespondent).toHaveBeenCalled();
       expect(mockUpdateSubmissionSet).toHaveBeenCalled();
       expect(mockQueueFraudDetection).toHaveBeenCalled();
+    });
+
+    it('sends a registration-confirmation email when an enumerator submission carries an email (Story 9-58)', async () => {
+      const submission = makeSubmission({
+        rawData: { nin: '61961438053', first_name: 'Mailed', last_name: 'Person', email: 'field.respondent@example.com' },
+      });
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockEnumeratorRole();
+      mockSendGenericEmail.mockResolvedValue({ success: true });
+
+      await SubmissionProcessingService.processSubmission('sub-001');
+
+      expect(mockSendGenericEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'field.respondent@example.com' }),
+      );
+      // Carries the human-friendly reference code (no unsolicited magic-link).
+      const arg = mockSendGenericEmail.mock.calls[0][0] as { text: string; html: string };
+      expect(arg.text).toContain('OSL-2026-TEST00');
+      expect(arg.html).not.toMatch(/\/auth\/magic/);
+    });
+
+    it('does NOT send a confirmation email when no address is on file (Story 9-58)', async () => {
+      const submission = makeSubmission({
+        rawData: { nin: '61961438053', first_name: 'No', last_name: 'Email' },
+      });
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+      mockEnumeratorRole();
+
+      await SubmissionProcessingService.processSubmission('sub-001');
+
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
+    });
+
+    // Story 9-58 (review L5) — the proactive confirmation email is sent ONLY for
+    // a NEW respondent. A race-resolution MERGE (promotes an existing pending
+    // row → `_isNew: false`) must NOT re-send, even with an email on file. This
+    // is the idempotency guarantee: an existing respondent who already exists
+    // is never re-emailed by a later NIN-completion submission.
+    it('does NOT send the confirmation email on the merge path (already-existing respondent) (Story 9-58 L5)', async () => {
+      const submission = makeSubmission({
+        rawData: {
+          nin: '61961438053',
+          first_name: 'Adewale',
+          last_name: 'Johnson',
+          phone_number: '08012345678',
+          email: 'already.registered@example.com',
+        },
+      });
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null); // no active NIN collision
+      mockEnumeratorRole();
+      // Race-resolution merge HITS an existing pending row → `_isNew: false`.
+      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'promoted-existing-row' }] });
+
+      const result = await SubmissionProcessingService.processSubmission('sub-001');
+
+      expect(result.action).toBe('processed');
+      expect(result.respondentId).toBe('promoted-existing-row');
+      // No new respondent → no proactive confirmation email.
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
     it('should skip already-processed submission (idempotent)', async () => {
@@ -686,6 +773,21 @@ describe('SubmissionProcessingService', () => {
       expect(result.lgaId).toBe('ibadan_north');
       expect(result.consentMarketplace).toBe(true);
       expect(result.consentEnriched).toBe(false);
+    });
+
+    it('threads the synchronously pre-generated reference code (Story 9-58 AC5.2)', () => {
+      const withCode = SubmissionProcessingService.extractRespondentData(
+        { nin: '61961438053', _referenceCode: 'OSL-2026-7F3K9Q' },
+        makeFormSchema(),
+      );
+      expect(withCode.referenceCode).toBe('OSL-2026-7F3K9Q');
+
+      // Absent / empty → undefined, so findOrCreateRespondent mints a fresh one.
+      const withoutCode = SubmissionProcessingService.extractRespondentData(
+        { nin: '61961438053' },
+        makeFormSchema(),
+      );
+      expect(withoutCode.referenceCode).toBeUndefined();
     });
 
     it('should support camelCase field names', () => {

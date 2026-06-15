@@ -942,6 +942,12 @@ jobs:
             # Idempotent; degrades gracefully if pg_trgm unavailable.
             cd apps/api && pnpm tsx scripts/migrate-registry-search-indexes-init.ts && cd ~/oslrs
 
+            # Story 9-58: reference-code UNIQUE index. Drizzle/db:push creates the
+            # respondents.reference_code column; this runner adds the UNIQUE index
+            # that backs collision-retry generation + the public status check /
+            # 9-56 staff search exact-match lookup. Idempotent (IF NOT EXISTS).
+            cd apps/api && pnpm tsx scripts/migrate-reference-code-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

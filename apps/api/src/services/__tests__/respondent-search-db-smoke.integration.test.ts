@@ -45,6 +45,9 @@ const SHARED_EMAIL = `${TAG}shared@example.com`;
 const PUBLIC_PHONE = `+234900${Date.now().toString().slice(-7)}`;
 const UNIQUE_FIRST_NAME = `${TAG}Ayinde`;
 const UNIQUE_NIN = `99${Date.now().toString().slice(-9)}`;
+// Story 9-58 — human-friendly reference code (digits only ⊂ Crockford set, so a
+// valid OSL-YYYY-XXXXXX shape; last-6-of-ms keeps it unique under the UNIQUE idx).
+const PUBLIC_REFERENCE_CODE = `OSL-2026-${Date.now().toString().slice(-6)}`;
 
 // Supervisor + enumerator + an enumerator-sourced respondent sharing SHARED_EMAIL
 const supervisorId = uuidv7();
@@ -86,6 +89,7 @@ beforeAll(async () => {
     status: 'pending_nin_capture',
     source: 'public',
     submitterId: null,
+    referenceCode: PUBLIC_REFERENCE_CODE,
   });
   await db.insert(submissions).values({
     id: publicSubmissionId,
@@ -170,6 +174,16 @@ describe('RespondentService.listRespondents — real-DB search smoke (Story 9-56
   it('resolves a registrant by phone number', async () => {
     const res = await RespondentService.listRespondents({ search: PUBLIC_PHONE }, 'super_admin', SUPER_ADMIN_ID);
     expect(res.data.map((r) => r.id)).toContain(publicRespondentId);
+  });
+
+  // Story 9-58 AC6.2 / AC9.2g — staff search resolves by the human-friendly
+  // reference code (exact, uppercased against the UNIQUE index).
+  it('resolves a registrant by the human-friendly reference code', async () => {
+    const res = await RespondentService.listRespondents({ search: PUBLIC_REFERENCE_CODE }, 'super_admin', SUPER_ADMIN_ID);
+    expect(res.data.map((r) => r.id)).toContain(publicRespondentId);
+    // Lowercased input still resolves (server uppercases the term).
+    const lower = await RespondentService.listRespondents({ search: PUBLIC_REFERENCE_CODE.toLowerCase() }, 'super_admin', SUPER_ADMIN_ID);
+    expect(lower.data.map((r) => r.id)).toContain(publicRespondentId);
   });
 
   // AC7.4 — unknown Reference ID → clean empty no-match (not an error).

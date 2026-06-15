@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { WizardLayout } from '../../../layouts/WizardLayout';
 import { useWizardDraft } from '../hooks/useWizardDraft';
@@ -123,6 +123,7 @@ export default function WizardPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [completionData, setCompletionData] = useState<{
     submissionUid: string;
+    referenceCode: string;
     pendingNin: boolean;
   } | null>(null);
 
@@ -348,7 +349,11 @@ export default function WizardPage() {
         }
       }
 
-      setCompletionData({ submissionUid: result.submissionUid, pendingNin: pending });
+      setCompletionData({
+        submissionUid: result.submissionUid,
+        referenceCode: result.referenceCode,
+        pendingNin: pending,
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'NIN_DUPLICATE') {
@@ -408,7 +413,7 @@ export default function WizardPage() {
       <WizardLayout steps={steps} currentStepIndex={steps.length - 1}>
         <CompletionScreen
           email={draft.formData.email ?? ''}
-          submissionUid={completionData.submissionUid}
+          referenceCode={completionData.referenceCode}
           pendingNin={completionData.pendingNin}
         />
       </WizardLayout>
@@ -527,11 +532,11 @@ function renderStep(props: {
 
 function CompletionScreen({
   email,
-  submissionUid,
+  referenceCode,
   pendingNin,
 }: {
   email: string;
-  submissionUid: string;
+  referenceCode: string;
   pendingNin: boolean;
 }) {
   return (
@@ -556,8 +561,24 @@ function CompletionScreen({
           </>
         )}
       </p>
-      <p className="text-xs text-neutral-500" data-testid="wizard-complete-id">
-        Reference ID: <span className="font-mono select-all" title="Quote this reference if you contact support">{submissionUid}</span>
+      {/* Story 9-58 — human-friendly application reference (replaces the raw
+          submissions UUID on-screen). Quotable, readable, and accepted by the
+          public status check + support search. */}
+      <div className="rounded-lg bg-neutral-50 px-4 py-3" data-testid="wizard-complete-id">
+        <p className="text-xs uppercase tracking-wide text-neutral-500">Your application reference</p>
+        <p
+          className="font-mono text-lg font-semibold text-neutral-900 select-all"
+          title="Quote this reference if you contact support"
+        >
+          {referenceCode}
+        </p>
+      </div>
+      <p className="text-xs text-neutral-500">
+        Lost this reference later?{' '}
+        <Link to="/check-registration" className="text-primary-600 underline">
+          Check your status here
+        </Link>
+        .
       </p>
     </div>
   );

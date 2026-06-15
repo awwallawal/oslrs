@@ -169,7 +169,7 @@ describe('Footer', () => {
     expect(insightsLinks.length).toBe(3);
 
     expect(supportLinks).toBeInstanceOf(Array);
-    expect(supportLinks.length).toBe(4);
+    expect(supportLinks.length).toBe(5); // +check-registration (Story 9-58)
 
     expect(legalLinks).toBeInstanceOf(Array);
     expect(legalLinks.length).toBe(2);

@@ -75,7 +75,7 @@ describe('NavDropdown', () => {
 
   it('exports participateItems with correct structure', () => {
     expect(participateItems).toBeInstanceOf(Array);
-    expect(participateItems.length).toBe(3);
+    expect(participateItems.length).toBe(4); // +check-registration (Story 9-58)
     participateItems.forEach((item) => {
       expect(item).toHaveProperty('href');
       expect(item).toHaveProperty('label');
@@ -85,7 +85,7 @@ describe('NavDropdown', () => {
 
   it('exports supportItems with correct structure (per Story 1.5-6 AC2)', () => {
     expect(supportItems).toBeInstanceOf(Array);
-    expect(supportItems.length).toBe(4);
+    expect(supportItems.length).toBe(5); // +check-registration (Story 9-58)
     supportItems.forEach((item) => {
       expect(item).toHaveProperty('href');
       expect(item).toHaveProperty('label');

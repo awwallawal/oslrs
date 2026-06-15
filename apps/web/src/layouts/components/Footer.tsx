@@ -37,6 +37,8 @@ const supportLinks = [
   { href: '/support/guides', label: 'Guides' },
   { href: '/support/contact', label: 'Contact' },
   { href: '/support/verify-worker', label: 'Verify Worker' },
+  // Story 9-58 — public registration-status check.
+  { href: '/check-registration', label: 'Check Registration Status' },
 ];
 
 /**

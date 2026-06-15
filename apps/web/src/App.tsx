@@ -75,6 +75,8 @@ const FAQPage = lazy(() => import('./features/support/pages/FAQPage'));
 const GuidesPage = lazy(() => import('./features/support/pages/GuidesPage'));
 const ContactPage = lazy(() => import('./features/support/pages/ContactPage'));
 const VerifyWorkerPage = lazy(() => import('./features/support/pages/VerifyWorkerPage'));
+// Story 9-58 — public registration-status check (privacy-first; under Support).
+const CheckRegistrationPage = lazy(() => import('./features/registration/pages/CheckRegistrationPage'));
 
 // Lazy load Guide detail pages for code splitting - Story 1.5.7
 const GuideRegisterPage = lazy(() => import('./features/support/pages/guides/GuideRegisterPage'));
@@ -498,6 +500,16 @@ function App() {
                 element={
                   <Suspense fallback={<PageLoadingFallback />}>
                     <VerificationPage />
+                  </Suspense>
+                }
+              />
+
+              {/* Story 9-58 — public registration-status check (privacy-safe) */}
+              <Route
+                path="check-registration"
+                element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <CheckRegistrationPage />
                   </Suspense>
                 }
               />
