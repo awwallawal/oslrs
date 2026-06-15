@@ -12,7 +12,9 @@ import { Controller, useForm, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
-import { generateReferenceCode } from '@oslsr/utils';
+// Deep import (NOT the `@oslsr/utils` barrel) so the browser bundle does not pull
+// in server-only `crypto.ts` (bcrypt + node:crypto) — vite can't bundle that.
+import { generateReferenceCode } from '@oslsr/utils/src/reference-code';
 import { useFormSchema } from '../hooks/useForms';
 import { syncManager } from '../../../services/sync-manager';
 import { db as offlineDb } from '../../../lib/offline-db';

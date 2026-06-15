@@ -19,7 +19,9 @@ import { useAuth } from '../../auth';
 import { useNinCheck } from '../hooks/useNinCheck';
 import { syncManager } from '../../../services/sync-manager';
 import { db as offlineDb } from '../../../lib/offline-db';
-import { generateReferenceCode } from '@oslsr/utils';
+// Deep import (NOT the `@oslsr/utils` barrel) so the browser bundle does not pull
+// in server-only `crypto.ts` (bcrypt + node:crypto) — vite can't bundle that.
+import { generateReferenceCode } from '@oslsr/utils/src/reference-code';
 import { NinHelpHint } from '../../registration/components/NinHelpHint';
 import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
 

@@ -58,6 +58,17 @@ if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   # #37). vitest.base.ts reads VITEST_MAX_THREADS to bound the pool. CI never
   # sets it (full parallelism on dedicated runners). Override for a faster local
   # gate on an idle machine: VITEST_MAX_THREADS=4 git push
+  # Story 9-58 (2026-06-15): ALSO run the production BUILD, not just test+tsc.
+  # ROOT CAUSE: pre-commit runs `tsc --noEmit` and pre-push runs `vitest`, but
+  # NEITHER runs `vite build`. A server-only module leaking into the web browser
+  # bundle (e.g. `@oslsr/utils` barrel re-exporting crypto.ts → node:crypto) is
+  # type-clean and test-clean but FAILS the vite browser build — so it sailed
+  # past the local gate and only CI's `lint-and-build` caught it (red main).
+  # `turbo run build` is content-hash CACHED, so this is near-instant when no
+  # buildable source changed; it only rebuilds (and catches the bundle error)
+  # when web/api/utils source actually changes. Build FIRST = fail fast.
+  echo "[pre-push] building all packages (catches vite/browser-bundle errors tsc+vitest miss)..."
+  pnpm exec turbo run build --concurrency=1
   : "${VITEST_MAX_THREADS:=2}"
   export VITEST_MAX_THREADS
   echo "[pre-push] vitest worker pool capped at VITEST_MAX_THREADS=$VITEST_MAX_THREADS"
