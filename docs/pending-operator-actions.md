@@ -15,8 +15,10 @@ _Convention: ✅ done · ⏳ pending · 🔁 recurring. Keep this in lockstep wi
 - **F-024 origin-lock — port 80 also closed:** DO Cloud Firewall `:80` source changed `0.0.0.0/0 + ::/0` → Cloudflare IP ranges (mirrors the :443 rule; safe because CF Origin Cert is in use + `certbot.timer` disabled, so no HTTP-01 dependency). **Verified:** direct `:80` AND `:443` to origin `159.89.146.93` both time out; normal path 200 + `cf-ray`; http→https now 301s at the CF edge. Origin is fully CF-only on 80+443 (SSH 22 key-only stays). **F-024 §4 IP rotation is now OPTIONAL** — the known IP exposes nothing. _(memory project-origin-lock-port80-residual; supersedes the §3 "Option A leave :80 open" note in the F-024 runbook)_
 
 ## ⏳ Pending — LAUNCH-GATE / pre-blast (roadmap Phase 2)
-- **Resend Pro** account/upgrade — required before the email re-engagement blasts (9-27 / 9-28).
-- **Termii** account + sender setup — required before the SMS blast (9-27 Part B).
+> **Firing the blasts is governed by `docs/runbooks/re-engagement-campaign-launch.md`** — the single launch runbook (audience, deduped 306-row send-plan, dependency chain, pre-flight checklist, per-cohort send procedure). Read it before doing any of the below.
+- **Resend Pro** account/upgrade — required before the email re-engagement blasts (9-27 / 9-28). _(runbook §3.1)_
+- **Termii** account + **registered sender ID** — required before the SMS blast (9-27 Part B). ⚠️ **Sender-ID approval is a multi-day lead time — start early.** _(runbook §3.2)_
+- **9-58 reference-code backfill** (prod) — run BEFORE any blast so emails/SMS carry the application number. _(runbook §2; `docs/runbooks/reference-code-backfill.md`)_
 - **9-30 validation:** confirm 24h of zero new `csp_violation` events + first Cloudflare Web Analytics rows, then flip 9-30 → done.
 
 ## ⏳ Pending — ops hygiene (NOT launch-gating)
