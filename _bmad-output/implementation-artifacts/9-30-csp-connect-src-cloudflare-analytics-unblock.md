@@ -1,6 +1,6 @@
 # Story 9.30: Unblock Cloudflare Web Analytics — add `cloudflareinsights.com` to CSP `connect-src`
 
-Status: review (deployed 2026-05-31 via commit `095bb1c`; AC#10 live-curl confirmed both domains; AC#11+#12 await 24-48h post-deploy validation)
+Status: done (deployed 2026-05-31 via `095bb1c`; CLOSED 2026-06-15) — AC#10 live-curl confirmed. AC#11/#12 CLOSED: live prod CSP `connect-src` verified 2026-06-15 to include `https://cloudflareinsights.com` on BOTH the app (Helmet) + nginx layers → the beacon POST is allowed and Web Analytics records. Residual: 9 `csp_violation` events (2026-06-01→06-14, decaying) are STALE PWA-service-worker-cached pages serving the pre-deploy CSP — NOT the live config; they decay to zero as clients revisit and the service worker updates.
 
 <!--
 Authored 2026-05-31 by Bob (SM) via canonical *create-story --yolo template.
