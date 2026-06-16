@@ -69,6 +69,9 @@ test-run-output.txt
 # Scratch files at repo root (baseline-report tooling, dev experiments, etc.)
 _tmp_*
 
+# Redundant 9-58 master-form working copy (email-question rebuild base) — git history is the backup; not for commit.
+test-fixtures/oslsr_master_v3_email.xlsx
+
 # BMAD operator scratch — probe scripts, ad-hoc evidence dumps. NOT for commit.
 _bmad-output/scratch/
 
