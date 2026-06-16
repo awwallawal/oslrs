@@ -6,9 +6,9 @@
 
 ## 0. YOU ARE HERE (TL;DR)
 
-- **`main` @ `195fc5b`, origin in sync (0/0), CI green, 9-58 deployed to prod.** Working tree clean except the corrupted form (§4.1) + the redundant xlsx backups.
+- **`main` @ `f34f6d6`, origin in sync, CI green, 9-58 + 9-59 deployed to prod.** Working tree clean (the redundant `oslsr_master_v3_email.xlsx` is now gitignored). _Note for a cold start: the `6827f8c` pipeline shows **cancelled** on GitHub — it was superseded by the immediately-following `f34f6d6` push (Actions concurrency). Harmless: both are docs-only, so no code went undeployed. Lesson logged: wait for a main pipeline (incl. deploy) to finish before the next push to main._
 - **Immediate next:** the master form is **REBUILT + verified + committed** (clean Excel-valid `oslsr_master_v3.xlsx`, 66 q, email question + N3 label, converter test 10/10). **Only the operator RE-PIN to prod remains** (§4.1) — the last thing blocking the 9-58 email features for field registrants.
-- **Then:** convene **Bob (SM)** + **John (PM)** to align the planning artifacts (epics/PRD/architecture/UX-spec/project-context) and author the two design initiatives (§6) as properly-sequenced stories, so no nuance is lost.
+- **✅ DONE (2026-06-16):** Bob (SM) + John (PM) authored **Epic 12 — Dashboard System Refresh** (brief: `_bmad-output/planning-artifacts/epic-12-dashboard-system-refresh-brief.md`) — Tracks A (analytics honesty) + B (design-system enforcement) + C (role-dashboard completeness), foundation-first; 11 stories `ready-for-dev` (12-1…12-11 + 12-9) + 7 backlog shells (12-12…12-18). **9-59 shipped** (PR #4 merged + deployed; it DEFINES the canonical `data_status` taxonomy the epic consumes — sequencing inverted, see brief §6). **Next dev step:** dev-story the Tier-0 foundation in order **12-1 → 12-2 → 12-3 → 12-4**.
 - **Not gating the field launch:** 9-59, the analytics redesign, and the design-system refresh are all post-launch.
 
 ---
@@ -44,7 +44,9 @@
 
 - **9-55** → done · **9-56** → done · **9-57** → done · **9-58** → done · **9-30** → done · **9-28** → done
 - **9-18** → stays **review** — reconciled (Task 5.5 backfill RUN on prod 2026-06-11, 5.8 moot). **Sole remaining gate: AC#E9** (Step-4 stall <30% over 7 days via the 9-19 dashboard) — **window closes 2026-06-18**, then flip → done if met.
-- **9-59** unified-registry-export → **ready-for-dev** (NEW; post-launch; includes Task 6 = `@oslsr/utils` barrel-split hygiene).
+- **9-59** unified-registry-export → **dev-complete → adversarial code-review (1H/4M fixed) → MERGED (PR #4) → DEPLOYED** (`e6ff75e`); status `review` pending human UAT. Extracted the canonical `data_status` taxonomy + key-normalization into shared, consumer-agnostic modules (`apps/api/src/services/registry-data-status.ts` + `registry-key-normalization.ts`); the `@oslsr/utils` barrel-split (ex-Task 6) was carved out to Epic 12 (12-3).
+- **Epic 12 — Dashboard System Refresh** → **registered + authored** (`99f45d7` brief/registration, `6827f8c` stories). 11 stories `ready-for-dev`: Tier-0 (12-1 DataTable / 12-2 lint+Progress / 12-3 barrel-split / 12-4 registryTotals), Tier-1 (12-5/12-6/12-7/12-8/12-10/12-11), Tier-2 (12-9). 12-12…12-18 (role dashboards) = backlog shells (depend on 12-1; phaseable). ALL consume 9-59's modules (verified not-fork). Post-launch, non-gating. The deferred 9-59 "no-published-form" finding was closed by-design and routed to 12-8 (Option B).
+- **prep-epic-4 / prep-epic-7** → **done** (parity sweep, `99f45d7`): stale grouping markers — all children + downstream epics 4/7 already done.
 
 ## 4. OPEN / REMAINING — THE RESUME CHECKLIST
 
@@ -64,8 +66,8 @@
 - **PII CSVs on the operator Desktop** (§7) — delete after outreach.
 
 ### 4.3 Future stories / dev (post-launch, not gating)
-- **9-59** unified-registry-export (the durable export fix + barrel-split Task 6) — ready-for-dev.
-- **Analytics redesign epic** + **Design-system refresh epic** (§6) — to be authored by SM/PM.
+- **9-59** unified-registry-export — ✅ MERGED + DEPLOYED (`e6ff75e`); status `review` pending human UAT (exercise the new "Full registry (everyone + answers)" export mode on prod).
+- **Epic 12 — Dashboard System Refresh** (Tracks A+B+C — was the "analytics redesign + design-system refresh" pair in §6) — ✅ authored; 11 stories `ready-for-dev`. **Next dev: Tier-0 foundation `12-1 → 12-2 → 12-3 → 12-4`** (everything else consumes them).
 
 ### 4.4 Minor cleanup
 - Replace corrupted `oslsr_master_v3.xlsx` fixture (tied to 4.1). Decide on keeping the two xlsx backups (git history is the real backup; keep `.pre-email.bak` until the rebuild is done).
