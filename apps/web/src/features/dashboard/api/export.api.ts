@@ -16,7 +16,7 @@ export interface ExportFilters {
   severity?: string;
   verificationStatus?: string;
   formId?: string;
-  exportType?: 'summary' | 'full';
+  exportType?: 'summary' | 'full' | 'unified';
 }
 
 /** Published form item for dropdown */

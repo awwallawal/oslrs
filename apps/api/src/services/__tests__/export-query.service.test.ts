@@ -13,7 +13,7 @@ vi.mock('../../db/index.js', () => ({
 
 // Import after mocks
 const { ExportQueryService } = await import('../export-query.service.js');
-const { buildColumnsFromFormSchema, flattenRawDataRow, buildChoiceMaps } = await import('../export-query.service.js');
+const { buildColumnsFromFormSchema, flattenRawDataRow, buildChoiceMaps, UNIFIED_METADATA_COLUMNS } = await import('../export-query.service.js');
 
 // ── Test data ─────────────────────────────────────────────────────────
 
@@ -307,6 +307,144 @@ describe('ExportQueryService', () => {
       const sqlObj = mockExecute.mock.calls[0][0];
       const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
       expect(queryResult.sql).toContain('s.questionnaire_form_id =');
+    });
+  });
+
+  describe('getUnifiedExportData (Story 9-59)', () => {
+    const completedRow = {
+      id: 'r1',
+      reference_code: 'OSL-2026-ABC123',
+      nin: '61961438053',
+      resolved_first_name: 'Adewale',
+      resolved_last_name: 'Johnson',
+      date_of_birth: '1990-05-15',
+      phone_number: '+2348012345678',
+      lga_name: 'Ibadan North',
+      source: 'public',
+      status: 'active',
+      consent_marketplace: true,
+      consent_enriched: false,
+      created_at: new Date('2026-05-01T10:00:00.000Z'),
+      submitted_at: new Date('2026-05-02T10:00:00.000Z'),
+      gps_latitude: 7.3776,
+      gps_longitude: 3.947,
+      raw_data: { employment_status: 'employed', dob: '1990-05-15' },
+      total_submissions: 1,
+      metadata: null,
+      fraud_score: '12.50',
+      fraud_severity: 'low',
+      verification_status: null,
+    };
+
+    it('uses DISTINCT ON + LEFT JOIN so every respondent exports once', async () => {
+      mockExecute.mockResolvedValue({ rows: [completedRow] });
+
+      await ExportQueryService.getUnifiedExportData({});
+
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      expect(queryResult.sql).toContain('DISTINCT ON (r.id)');
+      expect(queryResult.sql).toContain('LEFT JOIN submissions s');
+      expect(queryResult.sql).toContain('FROM respondents r');
+      // Introspection (SELECT r.*) so the query can't break on schema drift.
+      expect(queryResult.sql).toContain('r.*');
+    });
+
+    it('sources answers from the latest NON-EMPTY submission via a LATERAL (review M2)', async () => {
+      mockExecute.mockResolvedValue({ rows: [completedRow] });
+
+      await ExportQueryService.getUnifiedExportData({});
+
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      // A later empty/correction submission must not mask an earlier completed one.
+      expect(queryResult.sql).toContain('LEFT JOIN LATERAL');
+      expect(queryResult.sql).toContain(`<> '{}'::jsonb`);
+      expect(queryResult.sql).toContain('answers.raw_data as raw_data');
+    });
+
+    it('exports GPS coordinates as columns (review H1 — not silently dropped)', () => {
+      const keys = UNIFIED_METADATA_COLUMNS.map((c) => c.key);
+      expect(keys).toContain('gpsLatitude');
+      expect(keys).toContain('gpsLongitude');
+    });
+
+    it('derives data_status="completed" and carries rawData when answers present', async () => {
+      mockExecute.mockResolvedValue({ rows: [completedRow] });
+
+      const result = await ExportQueryService.getUnifiedExportData({});
+
+      expect(result.totalCount).toBe(1);
+      expect(result.data[0]).toMatchObject({
+        referenceCode: 'OSL-2026-ABC123',
+        firstName: 'Adewale',
+        lastName: 'Johnson',
+        dataStatus: 'completed',
+        registeredAt: '2026-05-01',
+        submissionDate: '2026-05-02',
+        gpsLatitude: '7.3776',
+        fraudScore: '12.5',
+        rawData: { employment_status: 'employed', dob: '1990-05-15' },
+      });
+    });
+
+    it('derives data_status="data_lost" from metadata flag with no raw_data', async () => {
+      const lostRow = {
+        ...completedRow,
+        id: 'r2',
+        raw_data: null,
+        submitted_at: null,
+        gps_latitude: null,
+        gps_longitude: null,
+        total_submissions: 0,
+        metadata: { questionnaire_data_lost: true },
+        fraud_score: null,
+        fraud_severity: null,
+      };
+      mockExecute.mockResolvedValue({ rows: [lostRow] });
+
+      const result = await ExportQueryService.getUnifiedExportData({});
+
+      expect(result.data[0].dataStatus).toBe('data_lost');
+      expect(result.data[0].rawData).toEqual({});
+      expect(result.data[0].submissionDate).toBe('');
+      expect(result.data[0].questionnaireDataLost).toBe('Yes');
+      expect(result.data[0].totalSubmissions).toBe('0');
+    });
+
+    it('derives data_status="pending_nin" from lifecycle status', async () => {
+      const pendingRow = { ...completedRow, id: 'r3', raw_data: {}, status: 'pending_nin_capture', metadata: null };
+      mockExecute.mockResolvedValue({ rows: [pendingRow] });
+
+      const result = await ExportQueryService.getUnifiedExportData({});
+
+      expect(result.data[0].dataStatus).toBe('pending_nin');
+    });
+
+    it('explodes operator-useful metadata (guardian presence + defer reason)', async () => {
+      const guardianRow = {
+        ...completedRow,
+        id: 'r4',
+        metadata: { guardian: { name: 'Parent', relationship: 'mother' }, defer_reason_nin: 'no NIN yet' },
+        raw_data: {},
+      };
+      mockExecute.mockResolvedValue({ rows: [guardianRow] });
+
+      const result = await ExportQueryService.getUnifiedExportData({});
+
+      expect(result.data[0].hasGuardian).toBe('Yes');
+      expect(result.data[0].deferReasonNin).toBe('no NIN yet');
+    });
+
+    it('applies respondent-level filters (lgaId)', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+
+      await ExportQueryService.getUnifiedExportData({ lgaId: 'ibadan-north' });
+
+      const sqlObj = mockExecute.mock.calls[0][0];
+      const queryResult = sqlObj.toQuery({ escapeName: (n: string) => `"${n}"`, escapeParam: (_: unknown, idx: number) => `$${idx + 1}` });
+      expect(queryResult.sql).toContain('r.lga_id =');
+      expect(queryResult.params).toContain('ibadan-north');
     });
   });
 });

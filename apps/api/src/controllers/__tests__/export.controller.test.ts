@@ -7,11 +7,17 @@ const mockGetFilteredCount = vi.fn();
 const mockGetRespondentExportData = vi.fn();
 const mockGetSubmissionExportData = vi.fn();
 const mockGetSubmissionFilteredCount = vi.fn();
+const mockGetUnifiedExportData = vi.fn();
 const mockGenerateCsvExport = vi.fn();
 const mockGeneratePdfReport = vi.fn();
 const mockLogPiiAccess = vi.fn();
 const mockGetFormSchemaById = vi.fn();
 const mockListForms = vi.fn();
+const mockLoggerWarn = vi.fn();
+
+vi.mock('pino', () => ({
+  default: () => ({ warn: mockLoggerWarn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+}));
 
 vi.mock('../../services/export-query.service.js', () => ({
   ExportQueryService: {
@@ -19,10 +25,16 @@ vi.mock('../../services/export-query.service.js', () => ({
     getRespondentExportData: (...args: unknown[]) => mockGetRespondentExportData(...args),
     getSubmissionExportData: (...args: unknown[]) => mockGetSubmissionExportData(...args),
     getSubmissionFilteredCount: (...args: unknown[]) => mockGetSubmissionFilteredCount(...args),
+    getUnifiedExportData: (...args: unknown[]) => mockGetUnifiedExportData(...args),
   },
   SUBMISSION_METADATA_COLUMNS: [
     { key: 'nin', header: 'NIN', width: 90 },
     { key: 'surname', header: 'Surname', width: 80 },
+  ],
+  UNIFIED_METADATA_COLUMNS: [
+    { key: 'referenceCode', header: 'Reference Code', width: 90 },
+    { key: 'dataStatus', header: 'Data Status', width: 70 },
+    { key: 'nin', header: 'NIN', width: 90 },
   ],
   buildColumnsFromFormSchema: () => [
     { key: 'employment_status', header: 'Employment Status', width: 80 },
@@ -650,6 +662,273 @@ describe('ExportController', () => {
         expect.objectContaining({ formId: VALID_FORM_ID }),
       );
       expect(mockGetRespondentExportData).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Unified Export Mode (Story 9-59)', () => {
+    const VALID_FORM_ID = '018e5f2a-1234-7890-abcd-444444444444';
+    const mockFormSchema = {
+      id: 'test-form',
+      title: 'Test',
+      version: '1.0.0',
+      status: 'published' as const,
+      createdAt: '2026-01-01',
+      sections: [],
+      choiceLists: {},
+    };
+
+    const mockUnifiedRows = [
+      {
+        referenceCode: 'OSL-2026-ABC123',
+        nin: '12345678901',
+        firstName: 'User',
+        lastName: 'Completed',
+        dateOfBirth: '1990-01-01',
+        phoneNumber: '+2348012345678',
+        lgaName: 'Ibadan',
+        source: 'public',
+        status: 'active',
+        dataStatus: 'completed',
+        consentMarketplace: 'Yes',
+        consentEnriched: 'No',
+        registeredAt: '2026-05-01',
+        submissionDate: '2026-05-02',
+        totalSubmissions: '1',
+        gpsLatitude: '7.38',
+        gpsLongitude: '3.95',
+        fraudScore: '',
+        fraudSeverity: 'clean',
+        verificationStatus: '',
+        hasGuardian: 'No',
+        questionnaireDataLost: 'No',
+        deferReasonNin: '',
+        rawData: { employment_status: 'employed' },
+      },
+      {
+        referenceCode: 'OSL-2026-XYZ789',
+        nin: '',
+        firstName: 'User',
+        lastName: 'DataLost',
+        dateOfBirth: '',
+        phoneNumber: '+2348099999999',
+        lgaName: 'Ibadan',
+        source: 'public',
+        status: 'active',
+        dataStatus: 'data_lost',
+        consentMarketplace: 'No',
+        consentEnriched: 'No',
+        registeredAt: '2026-05-15',
+        submissionDate: '',
+        totalSubmissions: '0',
+        gpsLatitude: '',
+        gpsLongitude: '',
+        fraudScore: '',
+        fraudSeverity: '',
+        verificationStatus: '',
+        hasGuardian: 'No',
+        questionnaireDataLost: 'Yes',
+        deferReasonNin: '',
+        rawData: {},
+      },
+    ];
+
+    beforeEach(() => {
+      mockGetFormSchemaById.mockResolvedValue(mockFormSchema);
+      mockGetFilteredCount.mockResolvedValue(2);
+      mockGetUnifiedExportData.mockResolvedValue({ data: mockUnifiedRows, totalCount: 2 });
+    });
+
+    it('unified CSV export returns the oslsr-unified-export filename', async () => {
+      const { setMock, sendMock, mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ 'Content-Type': 'text/csv; charset=utf-8' }),
+      );
+      expect(setMock.mock.calls[0][0]['Content-Disposition']).toMatch(/oslsr-unified-export-\d{4}-\d{2}-\d{2}\.csv/);
+      expect(sendMock).toHaveBeenCalled();
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('calls getUnifiedExportData + getFilteredCount (respondent count), not the submission queries', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockGetUnifiedExportData).toHaveBeenCalled();
+      expect(mockGetFilteredCount).toHaveBeenCalled();
+      expect(mockGetSubmissionExportData).not.toHaveBeenCalled();
+      expect(mockGetRespondentExportData).not.toHaveBeenCalled();
+    });
+
+    it('unified with PDF format returns 400', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'pdf', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 400, message: 'Unified export only supports CSV format' }),
+      );
+    });
+
+    it('unified without formId returns 400', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 400,
+          message: expect.stringContaining('formId is required for Unified export'),
+        }),
+      );
+    });
+
+    it('unified with non-existent formId returns 404', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetFormSchemaById.mockResolvedValue(null);
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 404, code: 'FORM_NOT_FOUND' }),
+      );
+    });
+
+    it('audit logs against respondents with exportType=unified', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+        expect.anything(),
+        'pii.export_csv',
+        'respondents',
+        null,
+        expect.objectContaining({ exportType: 'unified', formId: VALID_FORM_ID, recordCount: 2 }),
+      );
+    });
+
+    it('passes all respondent rows (incl. answer-less data_lost) to the CSV generator', async () => {
+      const { mockRes, mockNext } = makeMocks();
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      const [rows] = mockGenerateCsvExport.mock.calls[0];
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toMatchObject({ dataStatus: 'completed', referenceCode: 'OSL-2026-ABC123' });
+      expect(rows[1]).toMatchObject({ dataStatus: 'data_lost', referenceCode: 'OSL-2026-XYZ789' });
+      // rawData must NOT leak into the flattened CSV row (it is destructured out)
+      expect(rows[0]).not.toHaveProperty('rawData');
+    });
+
+    it('preview count for unified mode uses getFilteredCount (respondents), not submissions', async () => {
+      const { jsonMock, mockRes, mockNext } = makeMocks();
+      mockGetFilteredCount.mockResolvedValue(139);
+
+      await ExportController.getExportPreviewCount(
+        makeReq({ query: { exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockGetFilteredCount).toHaveBeenCalled();
+      expect(mockGetSubmissionFilteredCount).not.toHaveBeenCalled();
+      expect(jsonMock).toHaveBeenCalledWith({ data: { count: 139 } });
+    });
+
+    it('rejects a unified export above the row ceiling with 400 (review M3)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetFilteredCount.mockResolvedValue(50001);
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 400,
+          message: expect.stringContaining('Unified export is limited to'),
+        }),
+      );
+      expect(mockGetUnifiedExportData).not.toHaveBeenCalled();
+    });
+
+    it('warns (structured) when answers have keys absent from the chosen schema (review M1)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      // Schema (mocked buildColumnsFromFormSchema) only knows `employment_status`.
+      // `legacy_only_field` is not a schema question nor a canonical-group variant
+      // → it will be omitted from the CSV, which must be surfaced via a warning.
+      mockGetUnifiedExportData.mockResolvedValue({
+        data: [
+          { ...mockUnifiedRows[0], rawData: { employment_status: 'employed', legacy_only_field: 'orphan' } },
+        ],
+        totalCount: 1,
+      });
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'export.unified_unmapped_answer_keys',
+          droppedKeys: expect.arrayContaining(['legacy_only_field']),
+          rowsAffected: 1,
+        }),
+        expect.any(String),
+      );
+    });
+
+    it('does NOT warn when all answer keys map to schema columns (review M1)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetUnifiedExportData.mockResolvedValue({
+        data: [{ ...mockUnifiedRows[0], rawData: { employment_status: 'employed' } }],
+        totalCount: 1,
+      });
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv', exportType: 'unified', formId: VALID_FORM_ID } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
     });
   });
 
