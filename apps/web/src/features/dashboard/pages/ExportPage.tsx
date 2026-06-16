@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Download, FileText, FileSpreadsheet, AlertTriangle, Database, List } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, AlertTriangle, Database, List, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
@@ -36,7 +36,7 @@ export default function ExportPage() {
   const toast = useToast();
 
   // Export mode state
-  const [exportType, setExportType] = useState<'summary' | 'full'>('summary');
+  const [exportType, setExportType] = useState<'summary' | 'full' | 'unified'>('summary');
   const [formId, setFormId] = useState<string>('');
 
   // Filter state
@@ -48,14 +48,16 @@ export default function ExportPage() {
   const [verificationStatus, setVerificationStatus] = useState<string>('');
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
 
-  // Force CSV when in full response mode
+  // Full Response and Unified modes both require a form + are CSV-only.
+  const needsForm = exportType === 'full' || exportType === 'unified';
+  const csvOnly = needsForm;
+
+  // Force CSV in the CSV-only modes
   useEffect(() => {
-    if (exportType === 'full' && format !== 'csv') {
+    if (csvOnly && format !== 'csv') {
       setFormat('csv');
     }
-  }, [exportType, format]);
-
-  const isFullMode = exportType === 'full';
+  }, [csvOnly, format]);
 
   // Build filters object (only include non-empty values)
   const filters: ExportFilters = {
@@ -65,7 +67,7 @@ export default function ExportPage() {
     ...(dateTo && { dateTo: new Date(dateTo).toISOString() }),
     ...(severity && { severity }),
     ...(verificationStatus && { verificationStatus }),
-    ...(isFullMode && formId && { formId }),
+    ...(needsForm && formId && { formId }),
     exportType,
   };
 
@@ -84,8 +86,8 @@ export default function ExportPage() {
   const { download, isDownloading } = useExportDownload();
 
   const recordCount = previewCount ?? 0;
-  const isPdfLimited = !isFullMode && format === 'pdf' && recordCount > PDF_MAX_ROWS;
-  const isFormRequired = isFullMode && !formId;
+  const isPdfLimited = !csvOnly && format === 'pdf' && recordCount > PDF_MAX_ROWS;
+  const isFormRequired = needsForm && !formId;
 
   const handleExport = async () => {
     try {
@@ -121,7 +123,7 @@ export default function ExportPage() {
         <CardContent className="py-4">
           <div className="flex items-center gap-4">
             <Label className="text-sm font-medium text-gray-600 shrink-0">Export Mode</Label>
-            <div className="grid grid-cols-2 gap-2 max-w-md" data-testid="mode-toggle">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-2xl" data-testid="mode-toggle">
               <Button
                 variant={exportType === 'summary' ? 'default' : 'outline'}
                 className={exportType === 'summary' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
@@ -140,11 +142,29 @@ export default function ExportPage() {
                 <Database className="w-4 h-4 mr-2" />
                 Full Response
               </Button>
+              <Button
+                variant={exportType === 'unified' ? 'default' : 'outline'}
+                className={exportType === 'unified' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
+                onClick={() => setExportType('unified')}
+                data-testid="mode-unified"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Full registry (everyone + answers)
+              </Button>
             </div>
           </div>
 
-          {/* Form Selector — only in Full Response mode */}
-          {isFullMode && (
+          {/* Unified mode explainer — why the row count includes answer-less rows */}
+          {exportType === 'unified' && (
+            <p className="mt-3 text-xs text-gray-500 max-w-2xl" data-testid="unified-explainer">
+              Exports <strong>every respondent</strong> (one row each) with their questionnaire answers where present,
+              plus a <strong>Data Status</strong> column explaining each row (completed / data&nbsp;lost / pending&nbsp;NIN /
+              no&nbsp;submission). Rows without answers are expected, not an error.
+            </p>
+          )}
+
+          {/* Form Selector — Full Response + Unified modes both need a form */}
+          {needsForm && (
             <div className="mt-4 max-w-md" data-testid="form-selector-container">
               <Label htmlFor="form-selector" className="text-sm font-medium text-gray-600">Select Form</Label>
               {formsLoading ? (
@@ -270,7 +290,7 @@ export default function ExportPage() {
                       data-testid="date-to-filter"
                     />
                     <p className="text-xs text-gray-400" data-testid="date-hint">
-                      {isFullMode ? 'Filters by submission date' : 'Filters by registration date'}
+                      {exportType === 'full' ? 'Filters by submission date' : 'Filters by registration date'}
                     </p>
                   </div>
 
@@ -327,14 +347,16 @@ export default function ExportPage() {
                 ) : (
                   <>
                     <p className="text-3xl font-bold text-gray-800">
-                      {isFullMode && !formId ? '—' : recordCount.toLocaleString()}
+                      {needsForm && !formId ? '—' : recordCount.toLocaleString()}
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
-                      {isFullMode
-                        ? (formId
+                      {needsForm && !formId
+                        ? 'select a form to see count'
+                        : exportType === 'full'
                           ? (hasActiveFilters ? 'submissions match your filters' : 'total submissions')
-                          : 'select a form to see count')
-                        : (hasActiveFilters ? 'records match your filters' : 'total records')}
+                          : exportType === 'unified'
+                            ? (hasActiveFilters ? 'respondents match your filters' : 'total respondents')
+                            : (hasActiveFilters ? 'records match your filters' : 'total records')}
                     </p>
                   </>
                 )}
@@ -353,7 +375,7 @@ export default function ExportPage() {
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
                     CSV
                   </Button>
-                  {!isFullMode && (
+                  {!csvOnly && (
                     <Button
                       variant={format === 'pdf' ? 'default' : 'outline'}
                       className={format === 'pdf' ? 'bg-[#9C1E23] hover:bg-[#7A171B] text-white' : ''}
@@ -365,8 +387,10 @@ export default function ExportPage() {
                     </Button>
                   )}
                 </div>
-                {isFullMode && (
-                  <p className="text-xs text-gray-500">Full Response export supports CSV only</p>
+                {csvOnly && (
+                  <p className="text-xs text-gray-500">
+                    {exportType === 'unified' ? 'Full registry export supports CSV only' : 'Full Response export supports CSV only'}
+                  </p>
                 )}
               </div>
 

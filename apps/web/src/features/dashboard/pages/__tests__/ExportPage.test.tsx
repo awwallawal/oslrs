@@ -358,4 +358,59 @@ describe('ExportPage', () => {
 
     expect(screen.getByTestId('date-hint').textContent).toContain('submission date');
   });
+
+  // ── Unified Export Mode (Story 9-59) ───────────────────────────────
+
+  it('renders the unified ("Full registry") mode button', () => {
+    renderComponent();
+
+    expect(screen.getByTestId('mode-unified')).toBeInTheDocument();
+    expect(screen.getByTestId('mode-unified').textContent).toContain('Full registry');
+  });
+
+  it('shows the form selector + explainer in unified mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-unified'));
+
+    expect(screen.getByTestId('form-selector-container')).toBeInTheDocument();
+    expect(screen.getByTestId('unified-explainer')).toBeInTheDocument();
+    expect(screen.getByTestId('unified-explainer').textContent).toContain('Data Status');
+  });
+
+  it('hides the PDF option (CSV-only) in unified mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-unified'));
+
+    expect(screen.queryByTestId('format-pdf')).not.toBeInTheDocument();
+    expect(screen.getByTestId('format-csv')).toBeInTheDocument();
+  });
+
+  it('uses the registration-date hint in unified mode (not submission date)', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-unified'));
+
+    expect(screen.getByTestId('date-hint').textContent).toContain('registration date');
+  });
+
+  it('shows the placeholder count until a form is chosen in unified mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-unified'));
+
+    const countEl = screen.getByTestId('record-count');
+    expect(countEl.textContent).toContain('—');
+    expect(countEl.textContent).toContain('select a form to see count');
+  });
+
+  it('disables export until a form is chosen in unified mode', () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('mode-unified'));
+
+    expect(screen.getByTestId('export-button')).toBeDisabled();
+    expect(screen.getByTestId('form-required-message')).toBeInTheDocument();
+  });
 });
