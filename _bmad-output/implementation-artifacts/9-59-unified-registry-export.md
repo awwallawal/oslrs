@@ -3,7 +3,7 @@
 Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
-<!-- Authored 2026-06-15 (Awwal). EMERGENT from the 2026-06-15 export-CSV session: the operator needed the FULL respondent data and the existing dashboard export couldn't give it. The one-off CSVs were the stopgap; THIS is the durable fix. ROADMAP post-launch ops/hygiene — NOT a launch gate. -->
+<!-- Drafted 2026-06-15 (emergent from the export-CSV session); VALIDATED + reconciled to canonical by Bob (SM) 2026-06-16 against the create-story checklist + project-context.md. EMERGENT: the operator needed FULL respondent data and the existing export couldn't give it; the one-off CSVs were the stopgap, THIS is the durable fix. ROADMAP post-launch ops/hygiene — NOT a launch gate. BELONGS to the "Dashboard System Refresh" epic (analytics-redesign track): consumes that epic's shared data_status / key-normalization model (see Dependencies) and sequences AFTER the epic foundation. -->
 
 ## Story
 
@@ -20,6 +20,11 @@ The dashboard's `GET /api/v1/exports/respondents` has two modes, and neither giv
 Prod reality (2026-06-15 export): 139 respondents = **76 completed** + **55 data_lost** (pre-2026-05-20 hemorrhage; row exists, answers gone) + **7 no-submission** + **1 pending-NIN**. The Summary export hides the 76's answers; the Full export hides the other 63 entirely. The operator had to be told "use Full Response" and still got an incomplete, code-y, key-inconsistent file. A one-off script produced the correct unified CSV (the **reference implementation** for this story); this makes it a first-class export mode.
 
 This is **post-launch ops/hygiene — NOT a launch gate** (the operational need was met by the one-off CSVs). It is a self-serve quality-of-life feature for support + reporting.
+
+### Dependencies, sequencing & effort (SM, 2026-06-16)
+- **Depends on:** Epic 5 export (5-4 `export-query.service` / 5.5 `ExportButton`) **+ the "Dashboard System Refresh" epic foundation.** AC2 (`data_status`) and AC3 (key-normalization) **MUST consume that epic's shared `registryTotals` / data-completeness model — do NOT define a private one** (else the export and the analytics pages diverge on what "completed/data_lost" means). **Sequence 9-59 AFTER the foundation story lands** (soft-blocked on it).
+- **Reuses (do NOT fork):** `export-query.service.ts` `getSubmissionExportData()` + `flattenRawDataRow()` + `SUBMISSION_METADATA_COLUMNS`; the existing `/api/v1/exports/respondents` endpoint, RBAC, filters, and CSV/PDF plumbing.
+- **Effort:** ~1–2 dev-days.
 
 ## Acceptance Criteria
 
@@ -51,17 +56,28 @@ This is **post-launch ops/hygiene — NOT a launch gate** (the operational need 
 - [ ] Task 4 — Wire the mode into the controller + `ExportPage` toggle (AC: #1, #6.1).
 - [ ] Task 5 — Tests incl. real-DB smoke (AC: #6.2).
 
+> **Carved out (SM, 2026-06-16):** the `@oslsr/utils` barrel-split / lint-enforcement hygiene that briefly lived here as "Task 6" is **NOT part of this export feature** — it's a design-system/build-hygiene concern (split `@oslsr/utils` into a client-safe entry + `@oslsr/utils/server`, or an eslint rule banning web→bare-`@oslsr/utils`-barrel imports; verify with `vite build`). It belongs in the **"Dashboard System Refresh" epic, Track B (design-system foundation)** as its own small story. Removed from 9-59 to keep this story single-purpose. _Tracked separately so it is not lost._
+
 ## Dev Notes
 
-- **Reference implementation:** the 2026-06-15 one-off script (`_tmp-export-full-respondents.ts`, since deleted) produced exactly this unified CSV (all respondents + `data_status` + union of `q_*` answer columns). Recover its logic from the 2026-06-15 session / git stash if needed; the query shape is: `SELECT * FROM respondents` LEFT JOIN `DISTINCT ON (respondent_id) … raw_data ORDER BY submitted_at DESC`, union of `raw_data` keys → columns, `data_status` derived from submission-presence + `metadata.questionnaire_data_lost`.
+### Project-bible compliance (the dev MUST follow these — project-context.md)
+- Errors: throw `AppError` (code/message/status), **never** raw `Error`. Logs: Pino structured `{ event: 'export.unified_…' }`, never `console.log`/string-concat.
+- Loading: the new ExportPage mode toggle uses **skeleton screens, not spinners**; respect the existing **PDF 1000-row cap** (`export.controller.ts:36`).
+- Reuse the export endpoint's existing **RBAC** (`authorize(...)`) + filters; ESM relative imports carry `.js`; backend tests in `__tests__/` (the real-DB smoke is an integration test).
+
+- **Reference implementation:** the 2026-06-15 one-off script (`_tmp-export-full-respondents.ts`) produced exactly this unified CSV (all respondents + `data_status` + union of `q_*` answer columns). NOTE: it was created + **deleted in the working tree — never committed**, so it is NOT in git history; reconstruct from the documented query shape below + the session handoff (`docs/session-2026-06-15-9-58-and-followups.md`). Query shape: `SELECT * FROM respondents` LEFT JOIN `DISTINCT ON (respondent_id) … raw_data ORDER BY submitted_at DESC`, union of `raw_data` keys → columns, `data_status` derived from submission-presence + `metadata.questionnaire_data_lost`.
 - **Reuse, don't fork:** the existing `getSubmissionExportData()` already has `flattenRawDataRow()` (code→label) and `SUBMISSION_METADATA_COLUMNS` — the unified mode should share these, not duplicate them.
 - **Raw-SQL drift:** use `SELECT *` / introspection so the export can't break on schema drift (e.g. the 9-58 `reference_code` column) — mocked-DB tests hide renamed/removed columns; add a real-DB smoke (project Pitfall).
 - **PII:** this exports full contact PII for all respondents — same RBAC + NDPA handling as the existing exports.
 
 ### References
-- [Source: apps/api/src/services/export-query.service.ts] — the two existing modes + `flattenRawDataRow()`.
-- [Source: apps/web/src/features/dashboard/pages/ExportPage.tsx] — the mode toggle UI.
-- [Source: 2026-06-15 export-CSV session] — the prod 139=76+55+7+1 breakdown + the one-off reference impl.
+- [Source: apps/api/src/services/export-query.service.ts:58-154] — `getRespondentExportData()` (Summary: respondent columns, `DISTINCT ON`, no raw_data).
+- [Source: apps/api/src/services/export-query.service.ts:180-242] — `getSubmissionExportData()` (Full: per-submission, includes raw_data).
+- [Source: apps/api/src/services/export-query.service.ts:390-437] — `flattenRawDataRow()` (code→label; REUSE for AC4).
+- [Source: apps/api/src/services/export-query.service.ts:324-338] — `SUBMISSION_METADATA_COLUMNS`.
+- [Source: apps/api/src/controllers/export.controller.ts:36] — PDF 1000-row cap; `EXPORT_COLUMNS`.
+- [Source: apps/web/src/features/dashboard/pages/ExportPage.tsx] — the Summary/Full mode toggle UI to extend.
+- [Source: docs/session-2026-06-15-9-58-and-followups.md §5] — prod 139=76+55+7+1 breakdown + the one-off reference impl.
 
 ## Dev Agent Record
 
