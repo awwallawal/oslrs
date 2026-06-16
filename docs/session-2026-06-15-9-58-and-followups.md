@@ -7,7 +7,7 @@
 ## 0. YOU ARE HERE (TL;DR)
 
 - **`main` @ `195fc5b`, origin in sync (0/0), CI green, 9-58 deployed to prod.** Working tree clean except the corrupted form (§4.1) + the redundant xlsx backups.
-- **Immediate next:** rebuild the corrupted master form `test-fixtures/oslsr_master_v3.xlsx` → verify → operator re-pin to prod (§4.1). This is the only thing blocking the 9-58 email features going live for field registrants.
+- **Immediate next:** the master form is **REBUILT + verified + committed** (clean Excel-valid `oslsr_master_v3.xlsx`, 66 q, email question + N3 label, converter test 10/10). **Only the operator RE-PIN to prod remains** (§4.1) — the last thing blocking the 9-58 email features for field registrants.
 - **Then:** convene **Bob (SM)** + **John (PM)** to align the planning artifacts (epics/PRD/architecture/UX-spec/project-context) and author the two design initiatives (§6) as properly-sequenced stories, so no nuance is lost.
 - **Not gating the field launch:** 9-59, the analytics redesign, and the design-system refresh are all post-launch.
 
@@ -48,10 +48,15 @@
 
 ## 4. OPEN / REMAINING — THE RESUME CHECKLIST
 
-### 4.1 🔴 Corrupted master form (immediate, blocks 9-58 email features)
+### 4.1 ✅ Master form REBUILT (2026-06-16) — only the operator re-pin remains
+**DONE:** the corrupted 15kb fixture was replaced with a clean Excel-valid rebuild (`oslsr_master_v3.xlsx`, 18896 bytes, 66 q, version `2026061501`, email question after `phone_number` with the N3 purpose label, guardian group preserved; converter test 10/10 green; committed). **REMAINING (operator):** upload `oslsr_master_v3.xlsx` to prod + **re-pin** `wizard.public_form_id` per `docs/runbooks/email-question-repin-9-58.md` (can ride the 9-55 re-pin cycle). Until re-pinned, the email auto-confirm + email-search stay dark for field registrants. _(The redundant `oslsr_master_v3_email.xlsx` working copy can be deleted.)_
+
+<details><summary>Original problem (for reference)</summary>
 - `test-fixtures/oslsr_master_v3.xlsx` is **15kb, won't open in Excel** (a library write — SheetJS/exceljs — stripped Excel compatibility; stray empty `xl/worksheets/` entry is the tell). It **does** parse in the app (66 questions, has the `email` question + guardian group, version `2026061501`) — so it's *app-valid but Excel-invalid*.
 - Valid backups (~50–60kb, Excel-openable): `oslsr_master_v3.pre-email.bak.xlsx` (65 q, has guardian, **no email**, v`2026012601`) and `oslsr_master_v3_backup.xlsx` (56 q, original, no guardian). **Use `.pre-email.bak.xlsx` as the rebuild base.**
 - **FIX:** open `oslsr_master_v3.pre-email.bak.xlsx` in Excel → in the `survey` sheet add a row after `phone_number` in `grp_identity`: `type=text`, `name=email`, `required`=blank, `label=`**`Email address (optional) — we'll send your registration confirmation and reference number here`** (this is the deferred **N3 purpose label**) → bump `settings.version` to `2026061501` → Save As `oslsr_master_v3.xlsx` (overwrite the 15kb file). Then **ask Claude to run the converter test** to confirm it parses (66 q, email present), **replace the repo fixture + commit**, then **re-migrate/upload/re-pin** to prod.
+
+</details>
 
 ### 4.2 Operator actions (not code)
 - **9-18 AC#E9 check on 2026-06-18** → flip 9-18 → done if Step-4 stall <30% (9-19 dashboard). *(`/schedule` candidate — offered, not yet set.)*
