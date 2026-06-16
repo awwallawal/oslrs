@@ -226,6 +226,16 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **Source Documents:** `_bmad-output/implementation-artifacts/11-1-multi-source-registry-schema-foundation.md` (working draft), Architecture Decision 1.5 + ADR-018, UX Journey 5
 **Field-Survey Relationship:** Story 11-1 is on the Field Readiness Certificate (FRC §5.3.1 item 2). Stories 11-2/11-3/11-4 are post-field.
 
+### Epic 12: Dashboard System Refresh _(Added 2026-06-16 — PM brief)_
+**Goal:** Make the dashboards tell the truth about the registry and enforce one design system across every surface, then finish the role dashboards to their wireframe intent — on a single consolidated foundation, not on top of the current drift. Completes the Epic 2.5 dashboard shells.
+**User Outcome:** Officials/super-admins get defensible numbers; support/reporting get a complete, legible registry; the team gets consistent, accessible dashboards; each role sees the dashboard its wireframe promised.
+**FRs covered:** FR15 (Back-Office Dashboards), FR22 (Survey Analytics), FR3/FR12 (Role Dashboards) — refinement, not new FRs.
+**Three tracks:** A — analytics honesty (`registryTotals`/`data_status`, label honesty + N, Data-Health view); B — design-system enforcement (`DataTable` + `Progress` primitives, lint gate, `@oslsr/utils` barrel-split, migrations); C — role-dashboard completeness (7 dashboards to wireframe, composing existing charts).
+**Dependencies:** 9-59 (IN-PROGRESS) defines the shared `data_status` taxonomy this epic consumes (sequencing inverted 2026-06-16 — see brief §6).
+**Source Documents:** `_bmad-output/planning-artifacts/epic-12-dashboard-system-refresh-brief.md` (full brief + per-page drift inventory + story shells); `_bmad-output/wireframes/*.excalidraw` (Track-C north-star); `9-59-unified-registry-export.md`.
+**Field-Survey Relationship:** **POST-LAUNCH — non-gating.** No FRC item depends on this epic.
+**Story shells (foundation-first; author via `*create-story`):** Tier 0 — 9-59 (taxonomy, in-progress), 12-1 DataTable primitive, 12-2 lint gate + Progress primitive, 12-3 @oslsr/utils barrel-split, 12-4 registryTotals model. Tier 1 — 12-5 label honesty + N, 12-6 Data-Health view, 12-7 Registry table upgrade, 12-8 Export data-health preview, 12-10 raw-table migration sweep, 12-11 inline-style migration sweep. Tier 2 — 12-9 analysis gaps, 12-12…12-18 role-dashboard completeness (super-admin/official/assessor/supervisor/enumerator/data-entry/public-user).
+
 ---
 
 ## Field Readiness Certificate (FRC)
