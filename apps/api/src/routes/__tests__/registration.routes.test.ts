@@ -33,6 +33,7 @@ const {
   mockOnConflictReturning,
   mockTransactionImpl,
   mockGetPublicActiveForm,
+  mockProvisionPublicUser,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
   mockConsumeTokenTx: vi.fn(),
@@ -50,6 +51,7 @@ const {
   mockOnConflictReturning: vi.fn(),
   mockTransactionImpl: vi.fn(),
   mockGetPublicActiveForm: vi.fn(),
+  mockProvisionPublicUser: vi.fn(),
 }));
 
 // Rate-limit middleware: pass-through.
@@ -118,6 +120,17 @@ vi.mock('../../services/reference-code.service.js', () => ({
 vi.mock('../../services/native-form.service.js', () => ({
   NativeFormService: {
     getPublicActiveForm: mockGetPublicActiveForm,
+  },
+}));
+
+// Story 9-38 — submitWizard provisions a passwordless public_user after the
+// respondent commits. Mock the service so the route tests can assert it is
+// called (account-when-email) + that the wizard survives a provisioning throw
+// (non-fatal, AC#4). The real provisioning + audit is covered by the
+// auth.service integration test.
+vi.mock('../../services/auth.service.js', () => ({
+  AuthService: {
+    provisionPublicUserForWizard: mockProvisionPublicUser,
   },
 }));
 
@@ -198,6 +211,8 @@ beforeEach(() => {
   // skipped (mirrors pre-H1 behaviour where the unmocked settings DB threw).
   // NG1 tests override this with a resolved form to exercise the real gate.
   mockGetPublicActiveForm.mockRejectedValue(new Error('no public form pinned (test default)'));
+  // Story 9-38 — default: provisioning succeeds and links a new account.
+  mockProvisionPublicUser.mockResolvedValue({ userId: 'user-prov-1', created: true });
   // Default: transactions just invoke the callback with a passthrough tx that
   // returns the same mock chains so the controllers' tx.insert/tx.delete/etc
   // calls behave like the top-level db. Individual tests override.
@@ -650,6 +665,64 @@ describe('POST /registration/wizard', () => {
       expect.anything(),
       expect.objectContaining({ action: 'data.create' }),
     );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Story 9-38 — passwordless public_user provisioning after the wizard commit.
+  // ──────────────────────────────────────────────────────────────────────
+
+  /** Build a success transaction (respondents + submissions inserts). */
+  function successWizardTx() {
+    return async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = { values: () => Promise.resolve(undefined) };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({ createdAt: new Date('2026-05-20T07:00:00Z'), formData: {} }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    };
+  }
+
+  it('provisions a passwordless public_user with the registrant email + full name (AC#1/#3)', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(successWizardTx());
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ givenName: 'Awwal', familyName: 'Lawal', email: 'Awwal@Example.com' }));
+    expect(res.status).toBe(201);
+    expect(mockProvisionPublicUser).toHaveBeenCalledTimes(1);
+    expect(mockProvisionPublicUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'awwal@example.com', fullName: 'Awwal Lawal' }),
+    );
+  });
+
+  it('does NOT provision an account when email is absent (400 before provisioning) (AC#8b)', async () => {
+    const body = validBody();
+    delete (body as Record<string, unknown>).email;
+    const res = await request(buildApp()).post('/registration/wizard').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
+    expect(mockProvisionPublicUser).not.toHaveBeenCalled();
+  });
+
+  it('still returns 201 when account provisioning throws (non-fatal, AC#4)', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(successWizardTx());
+    mockProvisionPublicUser.mockRejectedValueOnce(new Error('provision boom'));
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody());
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ respondentId: 'resp-1', status: 'active' });
   });
 
   // ──────────────────────────────────────────────────────────────────────

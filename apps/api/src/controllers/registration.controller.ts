@@ -1,11 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { modulus11Check } from '@oslsr/utils/src/validation';
 import { db } from '../db/index.js';
 import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
 import { uuidv7 } from 'uuidv7';
+import { AuthService } from '../services/auth.service.js';
+import { buildRegistrantFullName } from '../utils/registrant-name.js';
 import { MagicLinkService } from '../services/magic-link.service.js';
 import { NativeFormService } from '../services/native-form.service.js';
 import {
@@ -752,6 +754,85 @@ export class RegistrationController {
         submissionUid,
         pendingNin,
       });
+
+      // Story 9-38 — provision a passwordless `public_user` account so the new
+      // registrant can sign in later via magic-link (Story 9-16) or password
+      // (Story 9-32). Runs AFTER the respondent + submission are durably
+      // committed and is NON-FATAL (AC#4): a provisioning error must never sink
+      // the survey submission (9-26 unified-ingestion data-integrity lesson).
+      // Email-presence-driven (AC#1) — guarded defensively even though the
+      // wizard schema makes email required. Idempotent-no-clobber on an
+      // existing email (AC#2).
+      if (normalisedEmail) {
+        // Non-fatally merge a recovery flag onto the respondent so the
+        // operator-gated backfill (AC#6) can find rows whose account/link did
+        // not complete. JSONB `||` merge never clobbers sibling keys (guardian /
+        // defer_reason_nin / reference bookkeeping); the flag name is a
+        // controlled literal bound as a parameter (injection-safe).
+        const flagRespondentForBackfill = async (
+          flag: 'account_provision_failed' | 'account_link_failed',
+        ) => {
+          try {
+            await db
+              .update(respondents)
+              .set({
+                metadata: sql`COALESCE(${respondents.metadata}, '{}'::jsonb) || ${JSON.stringify({ [flag]: true })}::jsonb`,
+                updatedAt: new Date(),
+              })
+              .where(eq(respondents.id, respondent.id));
+          } catch (metaErr) {
+            logger.warn({
+              event: 'wizard.account_provision_flag_failed',
+              respondentId: respondent.id,
+              flag,
+              err: metaErr,
+            });
+          }
+        };
+
+        let provisionedUserId: string | undefined;
+        try {
+          const { userId } = await AuthService.provisionPublicUserForWizard({
+            email: normalisedEmail,
+            fullName: buildRegistrantFullName(firstName, lastName),
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent') ?? undefined,
+          });
+          provisionedUserId = userId;
+        } catch (provisionErr) {
+          logger.warn({
+            event: 'wizard.account_provision_failed',
+            respondentId: respondent.id,
+            err: provisionErr,
+          });
+        }
+
+        if (provisionedUserId) {
+          // AC#3 — stamp the durable respondent↔account link. The account now
+          // EXISTS; if only THIS write fails, flag it distinctly
+          // (account_link_failed) so an operator isn't misled into thinking
+          // provisioning failed — the account is fine, just unlinked. Either
+          // flag routes the row to the backfill, whose candidate set is
+          // `user_id IS NULL` (so a link-only failure is still recovered).
+          try {
+            await db
+              .update(respondents)
+              .set({ userId: provisionedUserId, updatedAt: new Date() })
+              .where(eq(respondents.id, respondent.id));
+          } catch (linkErr) {
+            logger.warn({
+              event: 'wizard.account_link_failed',
+              respondentId: respondent.id,
+              userId: provisionedUserId,
+              err: linkErr,
+            });
+            await flagRespondentForBackfill('account_link_failed');
+          }
+        } else {
+          // Provisioning itself threw — no account, no link. Flag for backfill.
+          await flagRespondentForBackfill('account_provision_failed');
+        }
+      }
 
       // If pending-NIN path, issue the pending_nin_complete magic-link now so
       // the user has the resume link AND the reminder worker has a token to

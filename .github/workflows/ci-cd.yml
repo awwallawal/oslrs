@@ -948,6 +948,14 @@ jobs:
             # 9-56 staff search exact-match lookup. Idempotent (IF NOT EXISTS).
             cd apps/api && pnpm tsx scripts/migrate-reference-code-init.ts && cd ~/oslrs
 
+            # Story 9-38: respondents.user_id FK (ON DELETE SET NULL) + index.
+            # Drizzle/db:push creates the column + can express the reference, but
+            # the runner converges the FK constraint + lookup index idempotently
+            # regardless of db:push ordering / partial prior deploy. Links a
+            # wizard respondent to the passwordless public_user provisioned at
+            # submit, so magic-link login (9-16) is reachable for new registrants.
+            cd apps/api && pnpm tsx scripts/migrate-respondents-user-id-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

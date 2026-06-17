@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { users } from '../db/schema/index.js';
+import { users, roles } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword, hashInvitationToken } from '@oslsr/utils';
 import type { ActivationWithSelfiePayload, BackOfficeActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
@@ -7,7 +7,7 @@ import { UserRole, isBackOfficeRole } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
-import { AuditService } from './audit.service.js';
+import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import { MfaService } from './mfa.service.js';
 import { MagicLinkService } from './magic-link.service.js';
 import pino from 'pino';
@@ -689,6 +689,122 @@ export class AuthService {
     // 5. Success — create session + tokens. The 'magic_link' trigger is folded
     //    into the single login-success audit entry (see createLoginSession).
     return this.createLoginSession(user, rememberMe, ipAddress, userAgent, 'magic_link');
+  }
+
+  /**
+   * Story 9-38 — provision a PASSWORDLESS `public_user` account from a public
+   * wizard submission.
+   *
+   * THE GAP THIS CLOSES: post-9-12 the wizard creates a `respondents` row only
+   * (never a `users` row), so magic-link login (9-16) AND password login were
+   * unreachable for every new wizard registrant. This mints the account so the
+   * channel becomes reachable, and returns its id so the caller can stamp
+   * `respondents.user_id`.
+   *
+   * Design (locked, see story Dev Notes):
+   *   - Email-presence-driven — NOT gated on an auth-method choice (9-18 retires
+   *     that). Passwordless by default (`passwordHash = NULL`, `authProvider =
+   *     'email'`); users add a password later via Story 9-32.
+   *   - `status = 'active'` — the respondent supplied the email themselves and
+   *     the first magic-link click re-proves ownership; we do NOT create as
+   *     `pending_verification` (that status gates flows this channel doesn't
+   *     use). NDPA-reviewed (Task 1, Iris).
+   *   - Idempotent + no-clobber: `users.email` is UNIQUE; on conflict we LINK to
+   *     the existing row and make NO destructive change (never overwrite
+   *     passwordHash / status / fullName / role). TOCTOU-safe via
+   *     `onConflictDoNothing` + re-read (no read-then-write race window).
+   *
+   * Audit: emits a single `data.create` entry on actual creation only (not on
+   * the link-to-existing path — nothing was created). Fire-and-forget so an
+   * audit hiccup never propagates into the non-fatal wizard-submit caller.
+   *
+   * @returns `{ userId, created }` — `created=false` means an account already
+   *   existed for this email and was linked, not created.
+   */
+  static async provisionPublicUserForWizard(args: {
+    email: string;
+    fullName: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<{ userId: string; created: boolean }> {
+    const normalizedEmail = args.email.toLowerCase().trim();
+    const fullName = args.fullName.trim() || 'Registrant';
+
+    // Resolve the public_user role id. A missing base-role row is a deploy
+    // misconfiguration (DB not seeded) — surface it loudly; the wizard caller
+    // wraps this non-fatally so it still won't sink the survey submission.
+    const publicRole = await db.query.roles.findFirst({
+      where: eq(roles.name, UserRole.PUBLIC_USER),
+      columns: { id: true },
+    });
+    if (!publicRole) {
+      throw new AppError(
+        'PUBLIC_ROLE_NOT_FOUND',
+        "Base role 'public_user' is missing — database not seeded.",
+        500,
+      );
+    }
+
+    // Insert passwordless; on email conflict do nothing (idempotent, no-clobber).
+    const inserted = await db
+      .insert(users)
+      .values({
+        email: normalizedEmail,
+        passwordHash: null, // passwordless — magic-link only (9-16 forward-compat)
+        fullName,
+        roleId: publicRole.id,
+        status: 'active',
+        authProvider: 'email',
+      })
+      .onConflictDoNothing({ target: users.email })
+      .returning({ id: users.id });
+
+    if (inserted.length > 0) {
+      const userId = inserted[0].id;
+      logger.info({
+        event: 'wizard.account_provisioned',
+        userId,
+        email: normalizedEmail,
+      });
+      // Fire-and-forget audit (DATA_CREATE / account). No new audit-action key.
+      // `logAction` is synchronous-return (dispatches the write internally), so
+      // it is called without await/catch — matching every other call site.
+      AuditService.logAction({
+        actorId: null,
+        action: AUDIT_ACTIONS.DATA_CREATE,
+        targetResource: 'users',
+        targetId: userId,
+        details: {
+          trigger: 'public_wizard_account_provision',
+          email: normalizedEmail,
+          role: UserRole.PUBLIC_USER,
+          passwordless: true,
+        },
+        ipAddress: args.ipAddress || 'unknown',
+        userAgent: args.userAgent || 'unknown',
+      });
+      return { userId, created: true };
+    }
+
+    // Conflict → an account already exists for this email. Link to it; no clobber.
+    const existing = await db.query.users.findFirst({
+      where: eq(users.email, normalizedEmail),
+      columns: { id: true },
+    });
+    if (!existing) {
+      // Extremely unlikely (conflict fired but row not found) — surface clearly.
+      throw new AppError(
+        'PUBLIC_USER_PROVISION_RACE',
+        'Account provisioning hit an unresolved email conflict.',
+        500,
+      );
+    }
+    logger.info({
+      event: 'wizard.account_provision_linked_existing',
+      userId: existing.id,
+      email: normalizedEmail,
+    });
+    return { userId: existing.id, created: false };
   }
 
   /**

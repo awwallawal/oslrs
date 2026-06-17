@@ -16,6 +16,7 @@
 import { pgTable, uuid, text, timestamp, boolean, jsonb, index } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 import { importBatches } from './import-batches.js';
+import { users } from './users.js';
 
 export const respondentSourceTypes = [
   'enumerator',
@@ -106,6 +107,23 @@ export interface RespondentMetadata {
    * than emergent from the `_isNew` flag.
    */
   confirmation_email_sent_at?: string;
+  /**
+   * Story 9-38 — set `true` when the post-submit passwordless `public_user`
+   * provisioning threw (non-fatal to the wizard submit, per AC#4). Marks the
+   * row for the operator-gated `_backfill-wizard-public-users.ts` recovery so
+   * the registrant still gets an account + reachable magic-link login. Cleared
+   * implicitly once `respondents.user_id` is set by the backfill.
+   */
+  account_provision_failed?: boolean;
+  /**
+   * Story 9-38 — set `true` when the passwordless `public_user` WAS created but
+   * the subsequent `respondents.user_id` link-write threw (distinct from
+   * `account_provision_failed`, where no account exists). The account is fine,
+   * only unlinked; the same backfill (candidate set `user_id IS NULL`) re-links
+   * it idempotently. Kept separate so an operator triaging the flag isn't
+   * misled about which step failed.
+   */
+  account_link_failed?: boolean;
 }
 
 export const respondents = pgTable('respondents', {
@@ -127,6 +145,15 @@ export const respondents = pgTable('respondents', {
   // Source tracking
   source: text('source', { enum: respondentSourceTypes }).notNull().default('enumerator'),
   submitterId: text('submitter_id'), // First submitter user ID
+
+  // Story 9-38 — durable respondent↔account link. Set when the public wizard
+  // provisions a passwordless `public_user` at submit time (and by the
+  // operator-gated backfill for pre-9-38 respondents). Nullable: enumerator /
+  // clerk / imported rows have no account, and provisioning is non-fatal so a
+  // wizard row can briefly exist unlinked if account creation throws.
+  // `ON DELETE SET NULL` — erasing an account must NOT cascade-delete the
+  // respondent's survey data (9-26 unified-ingestion data-integrity lesson).
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
 
   // Lifecycle status (Story 11-1)
   status: text('status', { enum: respondentStatusTypes }).notNull().default('active'),
@@ -165,6 +192,8 @@ export const respondents = pgTable('respondents', {
   idxRespondentsStatus: index('idx_respondents_status').on(table.status),
   idxRespondentsSource: index('idx_respondents_source').on(table.source),
   idxRespondentsImportBatch: index('idx_respondents_import_batch').on(table.importBatchId),
+  // Story 9-38 — fast respondent-by-account lookup (read-model + 9-32 consumers).
+  idxRespondentsUserId: index('idx_respondents_user_id').on(table.userId),
   // Story 9-56: GIN trigram indexes on first_name / last_name / phone_number / nin
   // (idx_respondents_*_trgm) power the scale-safe registry search Phase-1
   // resolution (ILIKE/LIKE → BitmapOr index scans). Drizzle cannot express GIN

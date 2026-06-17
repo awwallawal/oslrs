@@ -256,6 +256,34 @@ describe('MagicLinkLandingPage (Story 9-12 MR-8)', () => {
       // MFA path must NOT mount a session.
       expect(mockLoginWithMagicLink).not.toHaveBeenCalled();
     });
+
+    it('Story 9-38 (AC#9): on AUTH_INVALID_CREDENTIALS, guides a never-registered visitor to register', async () => {
+      mockPeekMagicLink.mockResolvedValueOnce({
+        tokenId: 'tid-8',
+        purpose: 'login',
+        email: 'newcomer@example.com',
+        userId: 'user-x',
+        respondentId: null,
+        requiresConsume: true,
+      });
+      mockLoginByMagicLink.mockRejectedValueOnce(
+        new ApiError('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS'),
+      );
+
+      renderAt({ token: 'tok-newcomer', purpose: 'login' });
+      await waitFor(() => expect(screen.getByTestId('magic-link-confirm-button')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByTestId('magic-link-confirm-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('magic-link-login-error')).toBeInTheDocument();
+      });
+      // New register-first copy + a /register CTA (was "couldn't find your account").
+      expect(screen.getByText(/Let's get you registered first/i)).toBeInTheDocument();
+      const registerCta = screen.getByTestId('magic-link-login-register-cta');
+      expect(registerCta).toBeInTheDocument();
+      expect(registerCta).toHaveAttribute('href', '/register');
+    });
   });
 
   describe('Peek fails', () => {

@@ -228,9 +228,22 @@ export default function MagicLinkLandingPage() {
           <h1 className="text-xl font-semibold text-neutral-900">{friendly.title}</h1>
           <p className="mt-3 text-sm text-neutral-700">{friendly.body}</p>
           <div className="mt-6 flex flex-col gap-2">
+            {friendly.registerCta ? (
+              <Link
+                to="/register"
+                className="rounded-md bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
+                data-testid="magic-link-login-register-cta"
+              >
+                Register
+              </Link>
+            ) : null}
             <Link
               to="/login"
-              className="rounded-md bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
+              className={
+                friendly.registerCta
+                  ? 'rounded-md border border-neutral-300 px-4 py-2 text-center text-sm font-medium text-neutral-700 hover:bg-neutral-50'
+                  : 'rounded-md bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700'
+              }
             >
               Go to sign-in
             </Link>
@@ -359,14 +372,21 @@ function friendlyErrorCopy(code: string): { title: string; body: string } {
  */
 function loginFriendlyErrorCopy(
   code: string,
-): { title: string; body: string; showSupport: boolean } {
+): { title: string; body: string; showSupport: boolean; registerCta?: boolean } {
   switch (code) {
     case 'AUTH_INVALID_CREDENTIALS':
+      // Story 9-38 (AC#9) — the dominant real case here is someone who NEVER
+      // registered typing their email at /login → "send me a sign-in link"
+      // (the request endpoint emails a link unconditionally for
+      // anti-enumeration). The old "old address" copy mis-served them; guide
+      // them to register instead. Still correct post-9-38: wizard registrants
+      // now have accounts, but a genuinely-unregistered visitor still lands here.
       return {
-        title: 'We couldn\'t find your account',
+        title: "Let's get you registered first",
         body:
-          'We couldn\'t find an account for this email. The link may have been issued to an old address.',
+          "We couldn't find an account for that email. If you haven't registered yet, start here.",
         showSupport: false,
+        registerCta: true,
       };
     case 'AUTH_ACCOUNT_LOCKED':
       return {
