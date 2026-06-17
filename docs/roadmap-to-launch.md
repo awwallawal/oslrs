@@ -1,6 +1,6 @@
 # OSLRS Roadmap to Launch — canonical sequencing
 
-**Owner:** Awwal (Builder) · **Maintained via:** Bob (SM) · **Created:** 2026-06-06
+**Owner:** Awwal (Builder) · **Maintained via:** Bob (SM) · **Created:** 2026-06-06 · **Last refreshed:** 2026-06-17 (see 📍 STATUS below)
 **Purpose:** the single, ordered path from "where we are" to "public survey launched, then hardened, then future epics." Supersedes ad-hoc sequencing in chat. When a story flips `done`, strike it here.
 
 > **The reframe:** "finish everything" is three tiers, not one queue.
@@ -11,15 +11,27 @@
 
 ---
 
+## 📍 STATUS — refreshed 2026-06-17 (Bob/SM)
+
+**`9-38` (wizard public-user account-provisioning) is DONE 2026-06-17 (review-passed).** Critical-path head is now **`9-39` ∥ `9-40`** (public journey — both unblocked by 9-38's `user_id` link + `GET /me/registration-status` read-model) **+ the R2 security gate (9-41/43/44/45)**, parallel. `9-18` AC#E9 measurement closes **2026-06-18** (observe + flip).
+
+**Done since 2026-06-06:** 9-28 · 9-30 · 9-42 · **9-48** · 9-54 · 9-55 · 9-56 · 9-58 · **9-59** (shipped) · prep-epic-4 · prep-epic-7.
+
+**Remaining launch-critical (Tier A), in order:** **9-39 ∥ 9-40** (public journey) — do **9-21** route-registration test *with/before* 9-39's routing rewrite → R2 security gate **9-41 / 9-43 / 9-44 / 9-45** (parallel, different surface) → operator (9-20 Resend Pro · Termii sender-ID · master-form re-pin) → **9-27 / 9-28 blasts**. Observe **9-18 AC#E9** on 2026-06-18.
+
+**NEW — Epic 12 "Dashboard System Refresh"** (authored 2026-06-17, in-progress) = **Tier B (post-launch)**: foundation-first (12-1 DataTable · 12-2 lint-gate · 12-3 `@oslsr/utils` barrel-split · 12-4 registryTotals/data_status model) → analytics truth-layer (12-5…12-9) → migration sweeps (12-10 raw-table, 12-11 inline-style) → 7 per-dashboard completeness (12-12…12-18, vs the role wireframes). **Must NOT pull a dev off the 9-38 / R2 launch path.** See Phase 4.
+
+---
+
 ## Phase 0 — Close the nearly-done (now; mostly operator/validation gates)
 
 These are `review` or operator-gated — they need a decision or a validation, not dev time.
 
 | Story | State | Action to close |
 |---|---|---|
-| 9-30 CSP analytics unblock | review | 24h validation (zero new csp_violation + first Cloudflare rows) → done. *Gates field + Cohort A analytics.* |
+| ✅ 9-30 CSP analytics unblock | **DONE 2026-06-15** | live CSP verified (cloudflareinsights in connect-src, app+nginx); residual violations = stale PWA-SW cache |
 | 9-12 public wizard | review | Operator: revoke Google OAuth creds + the first-respondent UAT (effectively done) → done + FRC#3 flip |
-| 9-28 Cohort A recovery | review | Operator **decision** → resolve |
+| ✅ 9-28 Cohort A recovery | **DONE 2026-06-15** | capability shipped + code-reviewed; firing the blast = operator action (Phase 2) |
 | 9-25 MFA-reminder idempotency | ready | Quick — but **re-confirm it's still needed** (it was to unblock 9-13's flip; 9-13 is already done) |
 
 ---
@@ -32,7 +44,7 @@ These are `review` or operator-gated — they need a decision or a validation, n
 1. **9-17** form-pin UI on Q.M. (~1–1.5d) — small; start in parallel with 9-18 kickoff
 2. **9-18** wizard NIN-first + section-as-step (**~7–11d — the bottleneck**). Success metric: **Step-4 stall <30%** on the 9-19 dashboard within 7d of deploy.
    - **9-54 → 9-55** (NEW 2026-06-10 — emerged from the 9-18 Part-A/F review + prod verification; **launch-gating**; both after 9-18's questionnaire surface): **9-54** forms-engine fidelity — runtime `calculate`/`age` eval + group-relevance migration + publish-time validator + **choice-field wizard dedup value-mapping** (folded from the Part-E review — gender/lga/consent are re-asked because their value vocabularies mismatch the wizard's; needs a mapping layer, not a naive alias add); *also closes a live dropped-`consent_basic` identity gate*. **→ 9-55** minor age-gate (floor 15 + ILO Art.6 apprenticeship carve-out + NDPA guardian consent), depends-on 9-54. ~2–3d each. Author via `*create-story` when 9-18 ships.
-3. **9-38** account-provisioning **keystone** (~3–5d) — after 9-18 (hooks `submitWizard`); ships the `respondents.user_id` link + `GET /me/registration-status` read-model
+3. ✅ **9-38** account-provisioning **keystone** — **DONE 2026-06-17 (review-passed)**; shipped the `respondents.user_id` link + `GET /me/registration-status` read-model. Unblocks 9-39/9-40 + the blasts.
 4. **9-39** entry-IA ∥ **9-40** dashboard rewrite (~2–4d / ~4–6d) — **parallel**, both after 9-38
 
 **Parallel track — run WHILE 9-18 cooks (different surfaces, low overlap):**
@@ -40,7 +52,7 @@ These are `review` or operator-gated — they need a decision or a validation, n
 - **9-22 → 9-23** operator-audit helper → publish-path convergence (9-22 first; 9-23 validated **hygiene, not a 9-18 blocker** — pairs with the Q.M. surface 9-17 touches; bundle with 9-17 if a dev is already there)
 - **9-24** local-db-drift prevention
 - **prep-typecheck-operator-scripts** — static-check the prod-mutating Tailscale scripts
-- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** ~~9-42 (auth/token)~~ ✅ **DONE+deployed 2026-06-08** (`5bbb824`..`164ff6b`; F-011/012/018/019/022/023/004 + OPS-RL-1/OPS-2) · **9-48 (refresh-token lifecycle: hash-at-rest OPS-3 + M1 rotation grace + L3 reset-atomic) — NEW launch-gate, carved from the 9-42 review** · 9-41 (reveal accountability) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. **9-48 MUST land before any blast** (hard hash-only cutover = forced global re-login; ≈0 pre-traffic, painful after). _See SCPs `…-2026-06-06-security-r2-remediation.md` + `…-2026-06-08-refresh-token-lifecycle-hardening.md`._
+- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** ~~9-42 (auth/token)~~ ✅ **DONE+deployed 2026-06-08** (`5bbb824`..`164ff6b`; F-011/012/018/019/022/023/004 + OPS-RL-1/OPS-2) · **9-48 (refresh-token lifecycle: hash-at-rest OPS-3 + M1 rotation grace + L3 reset-atomic) — NEW launch-gate, carved from the 9-42 review** · 9-41 (reveal accountability) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. ✅ **9-48 has LANDED (done+deployed)** — the forced-re-login cutover is behind us. **Remaining R2 dev gate: 9-41 · 9-43 · 9-44 · 9-45** (all ready-for-dev; parallel to 9-38). _See SCPs `…-2026-06-06-security-r2-remediation.md` + `…-2026-06-08-refresh-token-lifecycle-hardening.md`._
 - **Operator (continuous):** Resend Pro + Termii account signups — needed for Phase 2
 
 ---
@@ -70,6 +82,7 @@ Fire the blasts only when **all** are green:
 
 ## Phase 4 — Hygiene / debt (interleave or one cleanup sprint; non-blocking)
 
+- **🆕 Epic 12 — Dashboard System Refresh** (authored 2026-06-17, in-progress; multi-week, post-launch). **Foundation-first:** 12-1 DataTable primitive · 12-2 lint-gate + progress primitive · 12-3 `@oslsr/utils` barrel-split · 12-4 registryTotals/data_status model → **analytics truth-layer** (12-5 label-honesty+N · 12-6 data-health view · 12-7 registry data_status+reference_code · 12-8 export preview · 12-9 analysis-gaps) → **migration sweeps** (12-10 raw-table · 12-11 inline-style) → **7 per-dashboard completeness vs the role wireframes** (12-12…12-18). Consolidates the shadcn-adopted-not-enforced drift + the 76-vs-139 analytics-honesty gap; absorbs the `@oslsr/utils` barrel-split (carved from 9-59) + 9-59's identity-only-export enhancement (12-8). **NOT launch-gating — must not pull a dev off the 9-38 / R2 path.**
 - **9-35** backup-promotion `.enc` fix (~30 min; cron-day-1 only)
 - **9-57** WizardPage nav → URL-as-single-source-of-truth (retires the dual-effect URL↔state doom-loop; latent maintainability hazard, working+green today). HIGH blast radius → needs Playwright e2e for resume/autosave. _Emerged 2026-06-14 from the 9-55 session; do AFTER launch or in a cleanup pass._
 - **prep-export-row-cap-and-redirect** export hardening
