@@ -70,12 +70,13 @@ describe('LoginPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the login page title', async () => {
+  it('renders the public sign-in heading', async () => {
     renderWithProviders(<LoginPage />);
 
-    // Wait for loading to complete
+    // Wait for loading to complete (Story 9-39 — heading lives on the page now,
+    // not inside the collapsed password form).
     await waitFor(() => {
-      expect(screen.getByText('Login')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
     });
   });
 
@@ -95,46 +96,71 @@ describe('LoginPage', () => {
     });
   });
 
-  it('has email input after loading', async () => {
+  it('leads with the magic-link email input (primary action)', async () => {
     renderWithProviders(<LoginPage />);
 
-    // Wait for loading to complete and form to be interactive
+    // Wait for loading to complete; the magic-link email field is visible by
+    // default (Story 9-39 AC#2 — no reveal needed).
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
+      expect(screen.getByTestId('magic-link-email-input')).toBeInTheDocument();
     });
   });
 
-  it('has password input after loading', async () => {
+  // Story 9-39 AC#2/#3 — the password form (and its Remember-Me / Forgot-password
+  // / CAPTCHA) is demoted behind the "I already set a password" disclosure.
+  it('hides the password form by default; reveals it via the disclosure', async () => {
     renderWithProviders(<LoginPage />);
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
+      expect(screen.getByTestId('password-signin-reveal')).toBeInTheDocument();
     });
+    // Collapsed by default.
+    expect(screen.queryByPlaceholderText('Enter your password')).toBeNull();
+    expect(screen.queryByText(/remember me/i)).toBeNull();
+    expect(screen.queryByTestId('hcaptcha-mock')).toBeNull();
+
+    await userEvent.click(screen.getByTestId('password-signin-reveal'));
+
+    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
+    expect(screen.getByText(/remember me/i)).toBeInTheDocument();
+    expect(screen.getByTestId('hcaptcha-mock')).toBeInTheDocument();
   });
 
-  it('has Remember Me text', async () => {
+  // Story 9-39 review M1/L1 — the embedded password form must NOT duplicate the
+  // page-level OSLSR branding/heading. Before the `embedded` prop, opening the
+  // disclosure rendered LoginForm's own <h1>OSLSR</h1> + "Login" heading on top
+  // of the page's, producing two <h1>s and a conflicting heading.
+  it('does not duplicate the OSLSR branding/heading when the password form is revealed', async () => {
     renderWithProviders(<LoginPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/remember me/i)).toBeInTheDocument();
+      expect(screen.getByTestId('password-signin-reveal')).toBeInTheDocument();
     });
+    await userEvent.click(screen.getByTestId('password-signin-reveal'));
+
+    // Password form is shown…
+    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
+    // …but the page still has exactly ONE OSLSR brand mark and ONE "Sign in"
+    // heading — no second <h1> or "Login" heading from the embedded LoginForm.
+    expect(screen.getAllByText('OSLSR')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Login' })).toBeNull();
   });
 
-  it('has forgot password link', async () => {
+  // Story 9-39 AC#3 — "Forgot password" is OUT of the default public view
+  // (passwordless accounts have nothing to reset); it lives in the disclosure.
+  it('keeps "Forgot password" out of the default view, available in the disclosure', async () => {
     renderWithProviders(<LoginPage />);
 
     await waitFor(() => {
-      const forgotPasswordLink = screen.getByRole('link', { name: /forgot password/i });
-      expect(forgotPasswordLink).toHaveAttribute('href', '/forgot-password');
+      expect(screen.getByTestId('password-signin-reveal')).toBeInTheDocument();
     });
-  });
+    expect(screen.queryByRole('link', { name: /forgot password/i })).toBeNull();
 
-  it('renders CAPTCHA widget', async () => {
-    renderWithProviders(<LoginPage />);
+    await userEvent.click(screen.getByTestId('password-signin-reveal'));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('hcaptcha-mock')).toBeInTheDocument();
-    });
+    const forgotPasswordLink = screen.getByRole('link', { name: /forgot password/i });
+    expect(forgotPasswordLink).toHaveAttribute('href', '/forgot-password');
   });
 
   it('has footer with copyright', async () => {
@@ -166,13 +192,15 @@ describe('LoginPage', () => {
     expect(screen.queryByTestId('login-page-existing-user-header')).toBeNull();
   });
 
-  // Story 9-16 — magic-link sign-in entry-point (public-only).
-  it('renders the magic-link sign-in entry-point on public login', async () => {
+  // Story 9-16 + 9-39 AC#2 — magic-link entry-point is the PRIMARY public action.
+  it('renders the magic-link sign-in entry-point as the primary public action', async () => {
     renderWithProviders(<LoginPage />);
     await waitFor(() => {
       expect(screen.getByTestId('magic-link-entry-point')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('magic-link-reveal-button')).toHaveTextContent(/email me a sign-in link/i);
+    // Email field + submit are visible by default — no reveal step (9-39 AC#2).
+    expect(screen.getByTestId('magic-link-email-input')).toBeInTheDocument();
+    expect(screen.getByTestId('magic-link-submit-button')).toHaveTextContent(/email me a sign-in link/i);
   });
 
   it('does NOT render the magic-link entry-point on staff login', async () => {
@@ -183,12 +211,26 @@ describe('LoginPage', () => {
     expect(screen.queryByTestId('magic-link-entry-point')).toBeNull();
   });
 
+  // Story 9-39 — staff login is UNCHANGED: password form + forgot-password inline,
+  // no magic-link, no password disclosure.
+  it('keeps staff login on the inline password form with Forgot password', async () => {
+    renderWithProviders(<LoginPage type="staff" />);
+    await waitFor(() => {
+      expect(screen.getByText('Staff Login')).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
+    expect(screen.queryByTestId('password-signin-reveal')).toBeNull();
+  });
+
   it('submits a login-purpose magic-link request and shows the generic confirmation', async () => {
     mockRequestLoginMagicLink.mockResolvedValueOnce(undefined);
     renderWithProviders(<LoginPage />);
-    await waitFor(() => expect(screen.getByTestId('magic-link-reveal-button')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('magic-link-email-input')).toBeInTheDocument());
 
-    await userEvent.click(screen.getByTestId('magic-link-reveal-button'));
     await userEvent.type(screen.getByTestId('magic-link-email-input'), 'returning@example.com');
     await userEvent.click(screen.getByTestId('magic-link-submit-button'));
 
