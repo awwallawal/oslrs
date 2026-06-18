@@ -26,11 +26,23 @@ let mockRevealMutation: {
   isPending: boolean;
 };
 
+let mockRequestStepUp: {
+  mutate: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+};
+
+let mockVerifyStepUp: {
+  mutate: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+};
+
 // ── Mock modules ────────────────────────────────────────────────────────────
 
 vi.mock('../hooks/useMarketplace', () => ({
   useMarketplaceProfile: () => mockProfileReturn,
   useRevealContact: () => mockRevealMutation,
+  useRequestRevealStepUp: () => mockRequestStepUp,
+  useVerifyRevealStepUp: () => mockVerifyStepUp,
   marketplaceKeys: {
     all: ['marketplace'],
     profile: (id: string) => ['marketplace', 'profile', id],
@@ -63,11 +75,13 @@ vi.mock('../../../lib/api-client', () => ({
   ApiError: class ApiError extends Error {
     status: number;
     code?: string;
-    constructor(message: string, status: number, code?: string) {
+    details?: unknown;
+    constructor(message: string, status: number, code?: string, details?: unknown) {
       super(message);
       this.name = 'ApiError';
       this.status = status;
       this.code = code;
+      this.details = details;
     }
   },
 }));
@@ -86,6 +100,9 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <svg data-testid="loader-icon" />,
   AlertCircle: () => <svg data-testid="alert-circle-icon" />,
   Pencil: () => <svg data-testid="pencil-icon" />,
+  ShieldCheck: () => <svg data-testid="shield-check-icon" />,
+  Send: () => <svg data-testid="send-icon" />,
+  FileText: () => <svg data-testid="file-text-icon" />,
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -148,6 +165,14 @@ beforeEach(() => {
     user: null,
   };
   mockRevealMutation = {
+    mutate: vi.fn(),
+    isPending: false,
+  };
+  mockRequestStepUp = {
+    mutate: vi.fn(),
+    isPending: false,
+  };
+  mockVerifyStepUp = {
     mutate: vi.fn(),
     isPending: false,
   };
@@ -501,6 +526,138 @@ describe('MarketplaceProfilePage', () => {
         expect.objectContaining({ deviceFingerprint: null }),
         expect.any(Object),
       );
+    });
+  });
+
+  // ── Story 9-41 — step-up + purpose gating UX (L3) ─────────────────────────
+
+  describe('reveal step-up gating (AC#4/#5)', () => {
+    beforeEach(() => {
+      mockAuthReturn = { isAuthenticated: true, user: { id: '1', role: 'public_user' } };
+    });
+
+    function triggerReveal() {
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+    }
+
+    it('shows the OTP step-up panel on 403 REVEAL_STEP_UP_REQUIRED (otp)', () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('step up', 403, 'REVEAL_STEP_UP_REQUIRED', { requiredLevel: 'otp' }));
+      });
+      renderProfilePage();
+      triggerReveal();
+
+      expect(screen.getByTestId('reveal-step-up')).toBeInTheDocument();
+      expect(screen.getByTestId('step-up-send-otp')).toBeInTheDocument();
+      // The raw error card is NOT shown for a gated (recoverable) response.
+      expect(screen.queryByTestId('reveal-error')).not.toBeInTheDocument();
+    });
+
+    it('completes the OTP flow: send code -> enter code -> verify -> re-CAPTCHA', () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('step up', 403, 'REVEAL_STEP_UP_REQUIRED', { requiredLevel: 'otp' }));
+      });
+      mockRequestStepUp.mutate = vi.fn().mockImplementation((_a, options) => options.onSuccess({ sent: true, expiresInSeconds: 300 }));
+      mockVerifyStepUp.mutate = vi.fn().mockImplementation((_a, options) => options.onSuccess({ verified: true, level: 'otp' }));
+
+      renderProfilePage();
+      triggerReveal();
+
+      fireEvent.click(screen.getByTestId('step-up-send-otp'));
+      expect(mockRequestStepUp.mutate).toHaveBeenCalled();
+
+      const input = screen.getByTestId('step-up-code-input');
+      fireEvent.change(input, { target: { value: '123456' } });
+      fireEvent.click(screen.getByTestId('step-up-verify'));
+
+      expect(mockVerifyStepUp.mutate).toHaveBeenCalledWith(
+        { method: 'otp', code: '123456' },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+      // After verifying, the flow returns to CAPTCHA for the reveal retry.
+      expect(screen.getByTestId('captcha-widget')).toBeInTheDocument();
+    });
+
+    it('shows the MFA code input directly (no send-OTP) when requiredLevel is mfa', () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('step up', 403, 'REVEAL_STEP_UP_REQUIRED', { requiredLevel: 'mfa' }));
+      });
+      renderProfilePage();
+      triggerReveal();
+
+      expect(screen.getByTestId('reveal-step-up')).toBeInTheDocument();
+      expect(screen.queryByTestId('step-up-send-otp')).not.toBeInTheDocument();
+      expect(screen.getByTestId('step-up-code-input')).toBeInTheDocument();
+    });
+
+    it('surfaces a verify error inside the step-up panel without leaving it', () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('step up', 403, 'REVEAL_STEP_UP_REQUIRED', { requiredLevel: 'mfa' }));
+      });
+      mockVerifyStepUp.mutate = vi.fn().mockImplementation((_a, options) => options.onError(new ApiError('Invalid code', 400, 'MFA_INVALID')));
+
+      renderProfilePage();
+      triggerReveal();
+
+      fireEvent.change(screen.getByTestId('step-up-code-input'), { target: { value: '000000' } });
+      fireEvent.click(screen.getByTestId('step-up-verify'));
+
+      expect(screen.getByTestId('step-up-error')).toHaveTextContent('Invalid code');
+      expect(screen.getByTestId('reveal-step-up')).toBeInTheDocument();
+    });
+
+    it('shows the per-profile cap message on 403 REVEAL_PROFILE_CAP_REACHED', () => {
+      mockRevealMutation.mutate = vi.fn().mockImplementation((_args, options) => {
+        options.onError(new ApiError('cap', 403, 'REVEAL_PROFILE_CAP_REACHED'));
+      });
+      renderProfilePage();
+      triggerReveal();
+
+      expect(screen.getByTestId('reveal-error')).toBeInTheDocument();
+      expect(screen.getByText('This contact has been revealed to too many people recently. Please try again later.')).toBeInTheDocument();
+    });
+  });
+
+  describe('reveal purpose-binding gating (AC#6)', () => {
+    beforeEach(() => {
+      mockAuthReturn = { isAuthenticated: true, user: { id: '1', role: 'public_user' } };
+    });
+
+    it('shows the purpose panel on 422 REVEAL_PURPOSE_REQUIRED and re-reveals with purpose + ToS', () => {
+      mockRevealMutation.mutate = vi.fn()
+        // 1st reveal → purpose required
+        .mockImplementationOnce((_args, options) => {
+          options.onError(new ApiError('purpose', 422, 'REVEAL_PURPOSE_REQUIRED'));
+        })
+        // 2nd reveal (after purpose + fresh captcha) → success
+        .mockImplementationOnce((_args, options) => {
+          options.onSuccess({ firstName: 'A', lastName: 'B', phoneNumber: '+234' });
+        });
+
+      renderProfilePage();
+      fireEvent.click(screen.getByTestId('reveal-contact-authenticated'));
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      // Purpose panel appears; Continue is disabled until purpose + ToS provided.
+      expect(screen.getByTestId('reveal-purpose')).toBeInTheDocument();
+      expect(screen.getByTestId('purpose-continue')).toBeDisabled();
+
+      fireEvent.change(screen.getByTestId('purpose-input'), { target: { value: 'Hiring an electrician' } });
+      fireEvent.click(screen.getByTestId('purpose-tos'));
+      expect(screen.getByTestId('purpose-continue')).not.toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('purpose-continue'));
+      // Back to CAPTCHA for the retry.
+      expect(screen.getByTestId('captcha-widget')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('captcha-solve'));
+
+      // The retry carries purpose + ToS accountability.
+      const secondCall = mockRevealMutation.mutate.mock.calls[1][0];
+      expect(secondCall.accountability).toEqual({ purpose: 'Hiring an electrician', tosAccepted: true });
+      // ...and the contact is revealed.
+      expect(screen.getByTestId('contact-revealed')).toBeInTheDocument();
     });
   });
 });

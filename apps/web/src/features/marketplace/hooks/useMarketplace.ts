@@ -1,5 +1,14 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { searchMarketplace, fetchMarketplaceProfile, revealMarketplaceContact, validateEditToken, submitProfileEdit } from '../api/marketplace.api';
+import {
+  searchMarketplace,
+  fetchMarketplaceProfile,
+  revealMarketplaceContact,
+  requestRevealStepUp,
+  verifyRevealStepUp,
+  validateEditToken,
+  submitProfileEdit,
+  type RevealAccountabilityInput,
+} from '../api/marketplace.api';
 import type { MarketplaceSearchParams, ProfileEditPayload } from '@oslsr/types';
 
 export const marketplaceKeys = {
@@ -31,14 +40,34 @@ export function useMarketplaceProfile(id: string) {
 export function useRevealContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ profileId, captchaToken, deviceFingerprint }: { profileId: string; captchaToken: string; deviceFingerprint?: string | null }) =>
-      revealMarketplaceContact(profileId, captchaToken, deviceFingerprint),
+    mutationFn: ({ profileId, captchaToken, deviceFingerprint, accountability }: {
+      profileId: string;
+      captchaToken: string;
+      deviceFingerprint?: string | null;
+      accountability?: RevealAccountabilityInput;
+    }) =>
+      revealMarketplaceContact(profileId, captchaToken, deviceFingerprint, accountability),
     onSuccess: (data, variables) => {
       queryClient.setQueryData(
         marketplaceKeys.revealedContact(variables.profileId),
         data,
       );
     },
+  });
+}
+
+/** Story 9-41 AC#5 — send an OTP to the viewer's phone for reveal step-up. */
+export function useRequestRevealStepUp() {
+  return useMutation({
+    mutationFn: () => requestRevealStepUp(),
+  });
+}
+
+/** Story 9-41 AC#5 — verify an OTP/MFA code to satisfy the reveal step-up rung. */
+export function useVerifyRevealStepUp() {
+  return useMutation({
+    mutationFn: ({ method, code }: { method: 'otp' | 'mfa'; code: string }) =>
+      verifyRevealStepUp(method, code),
   });
 }
 

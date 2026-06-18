@@ -145,13 +145,16 @@ export class MarketplaceController {
         return;
       }
 
-      // AC#4/#5 — degrade to step-up rather than hard-block.
+      // AC#4/#5 — degrade to step-up rather than hard-block. `requiredLevel` is
+      // mirrored into `details` so the web ApiError (which only surfaces
+      // message/status/code/details) can drive the right step-up rung UI.
       if (result.status === 'step_up_required') {
         res.status(403).json({
           status: 'error',
           code: 'REVEAL_STEP_UP_REQUIRED',
           message: 'Additional verification is required before revealing more contacts.',
           requiredLevel: result.requiredLevel,
+          details: { requiredLevel: result.requiredLevel },
         });
         return;
       }

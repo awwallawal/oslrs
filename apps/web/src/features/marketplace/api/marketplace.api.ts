@@ -22,19 +22,62 @@ export async function fetchMarketplaceProfile(id: string): Promise<MarketplacePr
   return response.data;
 }
 
+/** Story 9-41 AC#5/#6 — optional accountability inputs sent on a reveal retry. */
+export interface RevealAccountabilityInput {
+  /** AC#6 — stated purpose (only required above the per-viewer volume threshold). */
+  purpose?: string;
+  /** AC#6 — acceptable-use terms accepted. */
+  tosAccepted?: boolean;
+}
+
 export async function revealMarketplaceContact(
   profileId: string,
   captchaToken: string,
   deviceFingerprint?: string | null,
+  accountability?: RevealAccountabilityInput,
 ): Promise<ContactRevealResponse> {
   const headers: Record<string, string> = {};
   if (deviceFingerprint) {
     headers['x-device-fingerprint'] = deviceFingerprint;
   }
+  const body: Record<string, unknown> = { captchaToken };
+  // Only attach purpose/ToS when the viewer has supplied them (above-threshold
+  // retry). Below the threshold these stay absent and the reveal is frictionless.
+  if (accountability?.purpose) body.purpose = accountability.purpose;
+  if (accountability?.tosAccepted) body.tosAccepted = true;
+
   const response = await apiClient(`/marketplace/profiles/${profileId}/reveal`, {
     method: 'POST',
-    body: JSON.stringify({ captchaToken }),
+    body: JSON.stringify(body),
     headers,
+  });
+  return response.data;
+}
+
+/**
+ * Story 9-41 AC#5 — request a one-time code to the authenticated viewer's
+ * registered phone (OTP step-up rung). Reuses the existing SMS-OTP service.
+ */
+export async function requestRevealStepUp(): Promise<{ sent: boolean; expiresInSeconds: number }> {
+  const response = await apiClient('/marketplace/reveal/step-up/request', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  return response.data;
+}
+
+/**
+ * Story 9-41 AC#5 — verify an OTP/MFA code to satisfy the step-up rung. On
+ * success the server records a short-lived marker; the caller then retries the
+ * reveal (which now passes the rung gate).
+ */
+export async function verifyRevealStepUp(
+  method: 'otp' | 'mfa',
+  code: string,
+): Promise<{ verified: boolean; level: 'otp' | 'mfa' }> {
+  const response = await apiClient('/marketplace/reveal/step-up', {
+    method: 'POST',
+    body: JSON.stringify({ method, code }),
   });
   return response.data;
 }

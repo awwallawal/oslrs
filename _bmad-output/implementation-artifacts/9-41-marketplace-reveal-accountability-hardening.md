@@ -98,7 +98,7 @@ Adversarial code review 2026-06-18 (security-R2 track, fresh context). 2 High / 
 - [x] [AI-Review][Medium] **M3 — step-up routes had no reveal-layer rate limit (only `authenticate`).** Fixed: added `revealStepUpRateLimit` (15/5min/IP) on both step-up routes + contract test. [marketplace-rate-limit.ts, marketplace.routes.ts, marketplace.controller.test.ts]
 - [x] [AI-Review][Low] **L1 — "rolling window" wording vs fixed-TTL window.** Documented: the global counter is a fixed window (TTL set once), consistent with the per-user limiter; with M1 fixed it recovers cleanly at window roll. [reveal-rate-limit.ts comments]
 - [x] [AI-Review][Low] **L2 — OTP-friction (20) and purpose (20) thresholds coincide**, so a viewer at exactly 20 does OTP then purpose in two round-trips. Acceptable; calibration is product-owned + env-tunable. [reveal-guard.config.ts]
-- [ ] [AI-Review][Low] **L3 — Frontend slice (deferred, story-scoped-out) is a LAUNCH-GATE dependency.** Until the marketplace client handles `403 REVEAL_STEP_UP_REQUIRED` (drive OTP/MFA step-up) and `422 REVEAL_PURPOSE_REQUIRED` (purpose+ToS prompt), a legitimate heavy viewer sees a raw error. Track as the reveal-UX follow-up before the Cohort blasts fire. [apps/web marketplace reveal flow]
+- [x] [AI-Review][Low] **L3 — Frontend reveal-UX (was the LAUNCH-GATE follow-up) — RESOLVED 2026-06-18.** `MarketplaceProfilePage` now drives the full gating state machine: `403 REVEAL_STEP_UP_REQUIRED` → OTP (send→enter→verify) or MFA (enter→verify) step-up panel keyed on `requiredLevel`, then retries the reveal behind a fresh CAPTCHA; `422 REVEAL_PURPOSE_REQUIRED` → purpose + ToS panel (latched + reused), then retries with `{purpose, tosAccepted}`; `403 REVEAL_PROFILE_CAP_REACHED` → friendly cap message. New API/hooks (`requestRevealStepUp`/`verifyRevealStepUp`); controller mirrors `requiredLevel` into `details` so the web `ApiError` can drive the rung. +7 web tests (35/35 green). No remaining launch-gate UI debt. [apps/web/src/features/marketplace/*, marketplace.controller.ts]
 
 ## Dev Notes
 
@@ -147,6 +147,7 @@ claude-opus-4-8[1m] (Amelia / dev agent) — security-r2 track, worktree `../osl
 - **F-007 status:** with this story shipped, F-007 the finding is CLOSED. The messaging-relay north-star remains OUT of scope (dormant `marketplace-contact-broker-relay`, Phase 3).
 - **Net-new tests:** +12 (config) +11 (anomaly-alert) +9 (step-up) +~16 new reveal cases (marketplace.service) +4 new (reveal-rate-limit) +5 new (controller).
 - **Adversarial code-review pass (2026-06-18):** H1+H2 (High) + M1/M2/M3 (Medium) fixed in-pass; L1/L2 documented; L3 (frontend reveal-UX) logged as the remaining launch-gate follow-up. Net-new review tests: +4 config (ceiling/reachableCeiling), +6 service (H1 cap + degrade-not-block + M1 rollback), +2 controller (M3 contract). tsc 0, eslint 0, 152/152 touched-suite tests green. Status review → done.
+- **L3 reveal-UX resolved (2026-06-18, same day):** front-end gating state machine added to `MarketplaceProfilePage` (OTP/MFA step-up + purpose/ToS panels, fresh-CAPTCHA retry) + `requestRevealStepUp`/`verifyRevealStepUp` API+hooks + controller `details.requiredLevel`. +7 web tests (MarketplaceProfilePage 28 → 35). web tsc 0, web eslint 0. **Zero remaining launch-gate UI debt — F-007 fully closed, frontend included.**
 
 ### File List
 
@@ -174,3 +175,8 @@ claude-opus-4-8[1m] (Amelia / dev agent) — security-r2 track, worktree `../osl
 - `apps/api/src/middleware/reveal-rate-limit.ts` (review M1 — `rollbackRevealCounters`)
 - `apps/api/src/middleware/marketplace-rate-limit.ts` (review M3 — `revealStepUpRateLimit`)
 - `apps/api/src/workers/index.ts` (review H2 — `startRevealAnomalyScheduler`)
+- `apps/api/src/controllers/marketplace.controller.ts` (L3 — mirror `requiredLevel` into `details` for the web client)
+- `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx` (L3 — step-up + purpose gating UX)
+- `apps/web/src/features/marketplace/api/marketplace.api.ts` (L3 — reveal accountability body + step-up endpoints)
+- `apps/web/src/features/marketplace/hooks/useMarketplace.ts` (L3 — `useRequestRevealStepUp` / `useVerifyRevealStepUp`)
+- `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx` (L3 — +7 step-up/purpose flow tests)
