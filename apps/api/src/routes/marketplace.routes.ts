@@ -6,6 +6,7 @@ import {
   marketplaceProfileRateLimit,
   editTokenRequestRateLimit,
   editTokenUseRateLimit,
+  revealStepUpRateLimit,
 } from '../middleware/marketplace-rate-limit.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
@@ -30,6 +31,12 @@ router.post('/profiles/:id/reveal',
   verifyCaptcha,
   MarketplaceController.revealContact,
 );
+
+// Story 9-41 AC#5 — step-up satisfaction (authenticated viewer; reuses the
+// existing SMS-OTP / MFA verification — no role gate, no net-new auth primitive).
+// revealStepUpRateLimit (review M3) adds per-IP throttling on top of authenticate.
+router.post('/reveal/step-up/request', revealStepUpRateLimit, authenticate, MarketplaceController.requestRevealStepUp);
+router.post('/reveal/step-up', revealStepUpRateLimit, authenticate, MarketplaceController.verifyRevealStepUp);
 
 // Edit token routes — public, no auth (token IS the auth) (Story 7-5)
 // POST request-edit-token: CAPTCHA + IP rate limit required

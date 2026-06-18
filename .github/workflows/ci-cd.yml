@@ -956,6 +956,13 @@ jobs:
             # submit, so magic-link login (9-16) is reachable for new registrants.
             cd apps/api && pnpm tsx scripts/migrate-respondents-user-id-init.ts && cd ~/oslrs
 
+            # Story 9-41 AC#6: contact_reveals.purpose + tos_accepted_at columns.
+            # Drizzle/db:push adds the columns; this runner converges them
+            # idempotently (ADD COLUMN IF NOT EXISTS) so the purpose-binding audit
+            # enrichment is present regardless of db:push ordering / partial prior
+            # deploy. Both columns are NULLABLE (below-threshold reveals stay NULL).
+            cd apps/api && pnpm tsx scripts/migrate-reveal-purpose-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

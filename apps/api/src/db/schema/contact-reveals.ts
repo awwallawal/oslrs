@@ -22,6 +22,12 @@ export const contactReveals = pgTable('contact_reveals', {
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   deviceFingerprint: text('device_fingerprint'),
+  // Story 9-41 AC#6 — purpose-binding above a per-viewer volume threshold.
+  // Below the threshold these stay NULL (frictionless); above it, the reveal
+  // requires a stated purpose + ToS acceptance, making the audit row actionable
+  // (identity + device + stated purpose + ToS acceptance).
+  purpose: text('purpose'),
+  tosAcceptedAt: timestamp('tos_accepted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   // Btree index for rate limit query: COUNT WHERE viewer_id = $1 AND created_at > NOW() - 24h

@@ -2,12 +2,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { mockDbExecute, mockDbSelect, mockDbInsert, mockTxExecute, mockTxInsert } = vi.hoisted(() => ({
+const {
+  mockDbExecute,
+  mockDbSelect,
+  mockDbInsert,
+  mockTxExecute,
+  mockTxInsert,
+  mockCheckRevealRateLimit,
+  mockRollbackRevealCounters,
+  mockAlertRevealAnomaly,
+} = vi.hoisted(() => ({
   mockDbExecute: vi.fn(),
   mockDbSelect: vi.fn(),
   mockDbInsert: vi.fn(),
   mockTxExecute: vi.fn(),
   mockTxInsert: vi.fn(),
+  mockCheckRevealRateLimit: vi.fn(),
+  mockRollbackRevealCounters: vi.fn(),
+  mockAlertRevealAnomaly: vi.fn(),
+}));
+
+// Story 9-41 — control the Redis fast-path (per-user/device limit + breaker state)
+// and capture anomaly-alert dispatches without touching Telegram.
+vi.mock('../../middleware/reveal-rate-limit.js', () => ({
+  checkRevealRateLimit: (...args: any[]) => mockCheckRevealRateLimit(...args),
+  rollbackRevealCounters: (...args: any[]) => mockRollbackRevealCounters(...args),
+}));
+
+vi.mock('../reveal-anomaly-alert.service.js', () => ({
+  RevealAnomalyAlertService: {
+    alertRevealAnomaly: (...args: any[]) => mockAlertRevealAnomaly(...args),
+  },
 }));
 
 // Chainable query builder helpers — Drizzle builders are thenable
@@ -92,6 +117,10 @@ function setupDbMock(dataRows: Record<string, unknown>[], totalItems: number) {
 describe('MarketplaceService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Default: Redis fast-path allows, breaker not tripped, alerts no-op.
+    mockCheckRevealRateLimit.mockResolvedValue({ allowed: true, remaining: 50, breakerTripped: false });
+    mockRollbackRevealCounters.mockResolvedValue(undefined);
+    mockAlertRevealAnomaly.mockResolvedValue(false);
   });
 
   describe('searchProfiles', () => {
@@ -431,6 +460,12 @@ describe('MarketplaceService', () => {
       respondent?: { firstName: string | null; lastName: string | null; phoneNumber: string | null } | null;
       revealCount?: number;
       oldestCreatedAt?: Date;
+      // AC#2 — per-profile distinct-viewer state (defaults are non-breaching)
+      profileDistinctViewers?: number;
+      profileOwnReveals?: number;
+      // H1 — the viewer's step-up affordances. Default: MFA-enrolled + phone, so
+      // the reachable-rung ceiling is 'mfa' (preserves pre-fix rung expectations).
+      viewer?: { phone: string | null; mfaEnabled: boolean };
     }) {
       // Query 1: fetch marketplace profile (outside transaction)
       const profileChain = chainableSelect(opts.profile ? [opts.profile] : []);
@@ -442,16 +477,32 @@ describe('MarketplaceService', () => {
         mockDbSelect.mockReturnValueOnce(respondentChain);
       }
 
+      // Query 3: fetch viewer affordances (H1 reachable-rung ceiling) — only
+      // reached when the respondent exists (we return not_found before it otherwise).
+      if (opts.profile?.consentEnriched && opts.respondent) {
+        const viewer = opts.viewer ?? { phone: '+2348012345678', mfaEnabled: true };
+        mockDbSelect.mockReturnValueOnce(chainableSelect([viewer]));
+      }
+
       // Inside transaction (only if respondent found):
       if (opts.profile?.consentEnriched && opts.respondent) {
-        // tx.execute #1: rate limit count (raw SQL with FOR UPDATE)
-        mockTxExecute.mockResolvedValueOnce({ rows: [{ count: opts.revealCount ?? 0 }] });
+        const revealCount = opts.revealCount ?? 0;
+        // tx.execute #1: per-user 24h count (raw SQL with FOR UPDATE)
+        mockTxExecute.mockResolvedValueOnce({ rows: [{ count: revealCount }] });
 
-        // tx.execute #2: oldest reveal for retryAfter (only if rate limited)
-        if ((opts.revealCount ?? 0) >= 50) {
+        if (revealCount >= 50) {
+          // tx.execute #2: oldest reveal for retryAfter (rate-limited path stops here)
           mockTxExecute.mockResolvedValueOnce({
             rows: [{
               created_at: (opts.oldestCreatedAt ?? new Date(Date.now() - 23 * 60 * 60 * 1000)).toISOString(),
+            }],
+          });
+        } else {
+          // tx.execute #2: AC#2 per-profile distinct-viewer cap query
+          mockTxExecute.mockResolvedValueOnce({
+            rows: [{
+              distinct_viewers: opts.profileDistinctViewers ?? 0,
+              own_reveals: opts.profileOwnReveals ?? 0,
             }],
           });
         }
@@ -544,6 +595,264 @@ describe('MarketplaceService', () => {
       await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
 
       expect(mockTxInsert).not.toHaveBeenCalled();
+    });
+
+    // ── AC#2 — per-profile distinct-viewer cap ──────────────────────────
+
+    it('AC#2 — blocks a NEW viewer once a profile hits the distinct-viewer cap (default 5) + alerts', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+        profileDistinctViewers: 5,
+        profileOwnReveals: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('profile_cap_reached');
+      expect(mockTxInsert).not.toHaveBeenCalled();
+      expect(mockAlertRevealAnomaly).toHaveBeenCalledTimes(1);
+      expect(mockAlertRevealAnomaly.mock.calls[0][0]).toContain('reveal.profile_cap');
+    });
+
+    it('AC#2 — does NOT block a viewer who already revealed this profile in-window', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+        profileDistinctViewers: 10,
+        profileOwnReveals: 2, // this viewer already in the set
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('success');
+      expect(mockTxInsert).toHaveBeenCalled();
+    });
+
+    it('AC#2 — allows a new viewer at exactly cap-1 distinct viewers', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+        profileDistinctViewers: 4, // cap is 5
+        profileOwnReveals: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('success');
+    });
+
+    // ── AC#5 — progressive friction by per-viewer volume ────────────────
+
+    it('AC#5 — requires OTP step-up at the OTP friction band (default 20)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 20,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('step_up_required');
+      if (result.status === 'step_up_required') expect(result.requiredLevel).toBe('otp');
+      expect(mockTxInsert).not.toHaveBeenCalled();
+      // No breaker → no human-review alert for ordinary friction.
+      expect(mockAlertRevealAnomaly).not.toHaveBeenCalled();
+    });
+
+    it('AC#5 — requires MFA step-up at the MFA friction band (default 40)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 40,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('step_up_required');
+      if (result.status === 'step_up_required') expect(result.requiredLevel).toBe('mfa');
+    });
+
+    it('AC#5 — proceeds when the provided step-up rung satisfies the requirement', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 20,
+      });
+
+      const result = await MarketplaceService.revealContact(
+        profileId, viewerId, '127.0.0.1', 'test-ua', null,
+        { stepUpLevel: 'otp', purpose: 'Hiring an electrician', tosAccepted: true },
+      );
+
+      expect(result.status).toBe('success');
+    });
+
+    // ── AC#4 — global circuit-breaker (degrade, not hard-block) ─────────
+
+    it('AC#4 — breaker forces step-up even for a low-volume viewer (fan-out defence)', async () => {
+      mockCheckRevealRateLimit.mockResolvedValue({ allowed: true, remaining: 50, breakerTripped: true });
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0, // throwaway account, near-zero personal volume
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('step_up_required');
+      if (result.status === 'step_up_required') expect(result.requiredLevel).toBe('mfa');
+      // Breaker breach escalates to a human.
+      expect(mockAlertRevealAnomaly).toHaveBeenCalledTimes(1);
+      expect(mockAlertRevealAnomaly.mock.calls[0][0]).toBe('reveal.global_breaker');
+    });
+
+    it('AC#4 — breaker degrades (step-up) rather than returning a hard rate_limited/deny', async () => {
+      mockCheckRevealRateLimit.mockResolvedValue({ allowed: true, remaining: 50, breakerTripped: true });
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).not.toBe('rate_limited');
+      expect(result.status).toBe('step_up_required');
+    });
+
+    it('AC#4 — breaker is satisfied once the viewer presents MFA proof', async () => {
+      mockCheckRevealRateLimit.mockResolvedValue({ allowed: true, remaining: 50, breakerTripped: true });
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(
+        profileId, viewerId, '127.0.0.1', 'test-ua', null,
+        { stepUpLevel: 'mfa' },
+      );
+
+      expect(result.status).toBe('success');
+    });
+
+    // ── H1 — reachable-rung ceiling (breaker/friction must DEGRADE, never
+    //         demand an unsatisfiable rung for non-MFA viewers) ────────────
+
+    it('H1 — a public viewer (no MFA) is capped at OTP at the MFA friction band, not handed an impossible MFA demand', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 40, // MFA band by volume
+        viewer: { phone: '+2348011112222', mfaEnabled: false }, // not enrolled, has phone
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('step_up_required');
+      if (result.status === 'step_up_required') expect(result.requiredLevel).toBe('otp');
+    });
+
+    it('H1 — when the breaker trips, a phone-less non-MFA viewer DEGRADES (reveal proceeds, capped at captcha) rather than hard-blocking + still alerts a human', async () => {
+      mockCheckRevealRateLimit.mockResolvedValue({ allowed: true, remaining: 50, breakerTripped: true });
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+        viewer: { phone: null, mfaEnabled: false }, // no reachable step-up rung
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      // Degrade, never hard-block: the reveal succeeds (captcha already met)...
+      expect(result.status).toBe('success');
+      // ...but the breaker breach STILL escalates to a human.
+      expect(mockAlertRevealAnomaly).toHaveBeenCalledWith('reveal.global_breaker', expect.any(String));
+    });
+
+    // ── M1 — blocked reveals roll back the optimistic Redis counters ─────
+
+    it('M1 — a guard-blocked reveal (step-up) rolls back the Redis counters', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 20, // OTP band, no proof provided → step_up_required
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua', 'fp_1');
+
+      expect(result.status).toBe('step_up_required');
+      expect(mockRollbackRevealCounters).toHaveBeenCalledWith(viewerId, 'fp_1');
+    });
+
+    it('M1 — a successful reveal does NOT roll back the counters', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 0,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua', 'fp_1');
+
+      expect(result.status).toBe('success');
+      expect(mockRollbackRevealCounters).not.toHaveBeenCalled();
+    });
+
+    // ── AC#6 — purpose-binding above the volume threshold ───────────────
+
+    it('AC#6 — requires a purpose declaration above the volume threshold (default 20)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 20,
+      });
+
+      // step-up satisfied so we reach the purpose gate; purpose omitted
+      const result = await MarketplaceService.revealContact(
+        profileId, viewerId, '127.0.0.1', 'test-ua', null,
+        { stepUpLevel: 'otp' },
+      );
+
+      expect(result.status).toBe('purpose_required');
+      expect(mockTxInsert).not.toHaveBeenCalled();
+    });
+
+    it('AC#6 — persists purpose + ToS acceptance on the row above the threshold', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 25,
+      });
+
+      const result = await MarketplaceService.revealContact(
+        profileId, viewerId, '127.0.0.1', 'test-ua', null,
+        { stepUpLevel: 'mfa', purpose: 'Recruiting a welder', tosAccepted: true },
+      );
+
+      expect(result.status).toBe('success');
+      expect(mockTxInsert).toHaveBeenCalledTimes(1);
+      const inserted = mockTxInsert.mock.calls[0][0];
+      expect(inserted.purpose).toBe('Recruiting a welder');
+      expect(inserted.tosAcceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('AC#6 — below the threshold the reveal is frictionless (purpose stays NULL)', async () => {
+      setupRevealMocks({
+        profile: { respondentId, consentEnriched: true },
+        respondent: { firstName: 'A', lastName: 'B', phoneNumber: '+2348012345678' },
+        revealCount: 1,
+      });
+
+      const result = await MarketplaceService.revealContact(profileId, viewerId, '127.0.0.1', 'test-ua');
+
+      expect(result.status).toBe('success');
+      const inserted = mockTxInsert.mock.calls[0][0];
+      expect(inserted.purpose).toBeNull();
+      expect(inserted.tosAcceptedAt).toBeNull();
     });
   });
 });

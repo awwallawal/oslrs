@@ -23,6 +23,7 @@ import { scheduleDailyReminders, closeReminderQueue } from '../queues/reminder.q
 import { scheduleOpsDigest, closeOpsDigestQueue } from '../queues/ops-digest.queue.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { AlertService } from '../services/alert.service.js';
+import { RevealAnomalyAlertService } from '../services/reveal-anomaly-alert.service.js';
 import { closeAllConnections } from '../lib/redis.js';
 import pino from 'pino';
 
@@ -83,9 +84,15 @@ export async function initializeWorkers(): Promise<void> {
 
   // Start monitoring alert scheduler (every 30 seconds)
   startMonitoringScheduler();
+
+  // Story 9-41 AC#1 — start the marketplace reveal-anomaly sweep (suspicious
+  // devices + viewer velocity → Telegram). Without this the AC#1 PRIMARY signal
+  // (the "nobody watches the dashboard at 2am" pull analytics) never pages.
+  startRevealAnomalyScheduler();
 }
 
 let monitoringInterval: ReturnType<typeof setInterval> | null = null;
+let revealAnomalyInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Starts periodic health check evaluation for alerting.
@@ -115,6 +122,34 @@ function startMonitoringScheduler(): void {
 }
 
 /**
+ * Story 9-41 AC#1 — periodic marketplace reveal-anomaly sweep.
+ * Calls RevealAnomalyAlertService.runChecks(), which pulls the existing reveal
+ * analytics (suspicious devices / viewer velocity) and pages Telegram on a
+ * per-metric cooldown. runChecks() short-circuits before any DB work when
+ * alerting is disabled (dev/test), so this is cheap when idle.
+ */
+function startRevealAnomalyScheduler(): void {
+  if (revealAnomalyInterval) return; // Prevent duplicate schedulers
+
+  const INTERVAL_MS = 10 * 60_000; // 10 minutes — anomaly shapes evolve slowly; the inline cap/breaker alerts cover the fast path.
+  revealAnomalyInterval = setInterval(async () => {
+    try {
+      await RevealAnomalyAlertService.runChecks();
+    } catch (err) {
+      logger.error({
+        event: 'reveal_anomaly.scheduler_error',
+        error: (err as Error).message,
+      });
+    }
+  }, INTERVAL_MS);
+
+  // Don't prevent Node.js from exiting due to this interval
+  revealAnomalyInterval.unref();
+
+  logger.info({ event: 'reveal_anomaly.scheduler_started', intervalMs: INTERVAL_MS });
+}
+
+/**
  * Gracefully close all workers
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -124,6 +159,12 @@ export async function closeAllWorkers(): Promise<void> {
   if (monitoringInterval) {
     clearInterval(monitoringInterval);
     monitoringInterval = null;
+  }
+
+  // Stop reveal-anomaly scheduler (Story 9-41 AC#1)
+  if (revealAnomalyInterval) {
+    clearInterval(revealAnomalyInterval);
+    revealAnomalyInterval = null;
   }
 
   await Promise.all([

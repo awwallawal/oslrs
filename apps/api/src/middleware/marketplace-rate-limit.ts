@@ -33,6 +33,13 @@ export const EDIT_TOKEN_USE_RATE_LIMIT_MESSAGE = {
   message: 'Too many requests. Please try again later.',
 } as const;
 
+/** Exported for contract testing (rate limiter skips in test mode) */
+export const REVEAL_STEP_UP_RATE_LIMIT_MESSAGE = {
+  status: 'error',
+  code: 'RATE_LIMIT_EXCEEDED',
+  message: 'Too many verification attempts. Please try again later.',
+} as const;
+
 /**
  * Rate limiter for marketplace profile view: 100 requests per minute per IP.
  * Architecture spec: profile views are cheaper than search, higher limit.
@@ -105,6 +112,37 @@ export const editTokenUseRateLimit = rateLimit({
   handler: (req, res, _next, options) => {
     logger.warn({
       event: 'marketplace.edit_token_use_rate_limit_exceeded',
+      ip: req.ip,
+      path: req.path,
+    });
+    res.status(429).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: isTestMode() ? false : { xForwardedForHeader: false },
+  skip: shouldSkipRateLimit,
+});
+
+/**
+ * Rate limiter for reveal step-up request/verify: 15 requests per 5 min per IP.
+ * Story 9-41 review fix (M3): the AC#5 step-up endpoints were mounted with
+ * `authenticate` only — no reveal-layer throttle on OTP-request / OTP+TOTP
+ * verification. The OTP service has its own per-phone cooldown, but this adds
+ * per-IP defense-in-depth against code-guessing / OTP-trigger churn, matching
+ * every other marketplace route's posture.
+ */
+export const revealStepUpRateLimit = rateLimit({
+  store: isTestMode() ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+    prefix: 'rl:marketplace:reveal-step-up:',
+  }),
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 15, // 15 attempts per 5 minutes per IP
+  message: REVEAL_STEP_UP_RATE_LIMIT_MESSAGE,
+  handler: (req, res, _next, options) => {
+    logger.warn({
+      event: 'marketplace.reveal_step_up_rate_limit_exceeded',
       ip: req.ip,
       path: req.path,
     });
