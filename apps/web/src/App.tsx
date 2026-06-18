@@ -244,6 +244,41 @@ function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ScrollToTop />
         <AuthProvider>
+          <AppRoutes />
+
+          {/* Global Re-Authentication Modal */}
+          <ReAuthModal />
+        </AuthProvider>
+      </BrowserRouter>
+      </QueryClientProvider>
+
+      {/* Toast notifications - positioned top-right with Oyo State theme */}
+      <Toaster
+        position="top-right"
+        visibleToasts={TOAST_CONFIG.MAX_VISIBLE}
+        closeButton
+        richColors
+        toastOptions={{
+          className: 'font-ui',
+          style: {
+            fontFamily: 'var(--font-ui)',
+          },
+        }}
+      />
+    </ErrorBoundary>
+  );
+}
+
+/**
+ * AppRoutes — the real route tree, extracted from App() so the route-resolution
+ * integration test (Story 9-21) can mount the *same* tree inside a MemoryRouter
+ * and assert every navigate-target resolves to a real component. App() wraps
+ * this in BrowserRouter + AuthProvider for production; the test supplies its own
+ * MemoryRouter + AuthContext. Keeping this in App.tsx (not a separate module)
+ * means the lazy page defs above stay the single source of truth.
+ */
+export function AppRoutes() {
+  return (
           <Routes>
             {/* ============================================
              * PUBLIC ROUTES - Wrapped in PublicLayout
@@ -1388,27 +1423,6 @@ function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<Suspense fallback={<PageLoadingFallback />}><PublicNotFoundPage /></Suspense>} />
           </Routes>
-
-          {/* Global Re-Authentication Modal */}
-          <ReAuthModal />
-        </AuthProvider>
-      </BrowserRouter>
-      </QueryClientProvider>
-
-      {/* Toast notifications - positioned top-right with Oyo State theme */}
-      <Toaster
-        position="top-right"
-        visibleToasts={TOAST_CONFIG.MAX_VISIBLE}
-        closeButton
-        richColors
-        toastOptions={{
-          className: 'font-ui',
-          style: {
-            fontFamily: 'var(--font-ui)',
-          },
-        }}
-      />
-    </ErrorBoundary>
   );
 }
 
