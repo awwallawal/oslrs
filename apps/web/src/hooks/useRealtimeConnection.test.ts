@@ -1,6 +1,7 @@
 /**
  * Realtime Connection Hook Tests
  * Story prep-6: Tests for Socket.io client connection hook
+ * Story 9-60: + bounded reconnection, reconnect_failed → polling handoff, focus re-arm
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,10 +20,15 @@ const mockOff = vi.fn();
 const mockConnect = vi.fn();
 const mockDisconnect = vi.fn();
 const mockClose = vi.fn();
+// Story 9-60: reconnection events (`reconnect_failed`) are emitted on the
+// Manager (`socket.io`), not the socket. Mock it so the hook can attach.
+const mockManagerOn = vi.fn();
+const mockManagerOff = vi.fn();
 
 const mockSocket = {
   on: mockOn,
   off: mockOff,
+  io: { on: mockManagerOn, off: mockManagerOff },
   connect: mockConnect,
   disconnect: mockDisconnect,
   close: mockClose,
@@ -62,6 +68,8 @@ describe('useRealtimeConnection', () => {
     mockSocket.connected = false;
     mockOn.mockImplementation(() => mockSocket);
     mockOff.mockImplementation(() => mockSocket);
+    mockManagerOn.mockImplementation(() => mockSocket.io);
+    mockManagerOff.mockImplementation(() => mockSocket.io);
   });
 
   afterEach(() => {
@@ -175,6 +183,94 @@ describe('useRealtimeConnection', () => {
 
     expect(result.current.isConnected).toBe(false);
     expect(result.current.connectionState).toBe('disconnected');
+  });
+
+  it('Story 9-60: creates the socket with a finite reconnectionAttempts (no infinite retry storm)', () => {
+    setupSessionToken();
+    renderHook(() => useRealtimeConnection());
+
+    const opts = mockIo.mock.calls[0][1] as { reconnectionAttempts: number };
+    expect(opts.reconnectionAttempts).toBeGreaterThan(0);
+    expect(Number.isFinite(opts.reconnectionAttempts)).toBe(true);
+  });
+
+  it('Story 9-60: on reconnect_failed it degrades to the slowest polling cadence and closes the socket', () => {
+    setupSessionToken();
+    const managerHandlers: Record<string, () => void> = {};
+    mockManagerOn.mockImplementation((event: string, handler: () => void) => {
+      managerHandlers[event] = handler;
+      return mockSocket.io;
+    });
+
+    const { result } = renderHook(() => useRealtimeConnection());
+
+    // M3: the hook subscribes to the Manager event by the exact v4 name.
+    expect(mockManagerOn).toHaveBeenCalledWith('reconnect_failed', expect.any(Function));
+
+    // Exhausting the bounded reconnection attempts fires the Manager event.
+    act(() => {
+      managerHandlers['reconnect_failed']?.();
+    });
+
+    expect(result.current.isDegraded).toBe(true);
+    expect(result.current.connectionState).toBe('degraded');
+    // M2: deterministic slowest cadence, independent of prior connect_error count.
+    expect(result.current.pollingInterval).toBe(60_000);
+    expect(mockClose).toHaveBeenCalled(); // no lingering retry timers
+  });
+
+  it('Story 9-60 (H1): re-arms a fresh socket on tab focus after degrading (no permanent dead socket)', () => {
+    setupSessionToken();
+    const managerHandlers: Record<string, () => void> = {};
+    mockManagerOn.mockImplementation((event: string, handler: () => void) => {
+      managerHandlers[event] = handler;
+      return mockSocket.io;
+    });
+
+    renderHook(() => useRealtimeConnection());
+    expect(mockIo).toHaveBeenCalledTimes(1);
+
+    // Exhaust the bounded reconnection attempts → degraded.
+    act(() => {
+      managerHandlers['reconnect_failed']?.();
+    });
+
+    // User returns to the tab → a fresh socket is created instead of staying dead.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(mockIo).toHaveBeenCalledTimes(2);
+  });
+
+  it('Story 9-60 (H1): does NOT re-arm on focus while healthily connected', () => {
+    setupSessionToken();
+    const handlers: Record<string, () => void> = {};
+    mockOn.mockImplementation((event: string, handler: () => void) => {
+      handlers[event] = handler;
+      return mockSocket;
+    });
+
+    renderHook(() => useRealtimeConnection());
+    act(() => {
+      mockSocket.connected = true;
+      handlers['connect']?.();
+    });
+    expect(mockIo).toHaveBeenCalledTimes(1);
+
+    // Focus while connected must not tear down / recreate the live socket.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(mockIo).toHaveBeenCalledTimes(1);
+  });
+
+  it('Story 9-60: detaches the Manager reconnect_failed listener on unmount', () => {
+    setupSessionToken();
+    const { unmount } = renderHook(() => useRealtimeConnection());
+
+    unmount();
+
+    expect(mockManagerOff).toHaveBeenCalledWith('reconnect_failed', expect.any(Function));
   });
 
   it('should set degraded mode on connect_error event', () => {

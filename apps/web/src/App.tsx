@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { TOAST_CONFIG } from './hooks/useToast';
 import { PageSkeleton } from './components/skeletons';
 import { AuthProvider, PublicOnlyRoute, ProtectedRoute, ReAuthModal } from './features/auth';
@@ -244,6 +245,7 @@ function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ScrollToTop />
         <AuthProvider>
+          <RouteErrorBoundary>
           <Routes>
             {/* ============================================
              * PUBLIC ROUTES - Wrapped in PublicLayout
@@ -1388,6 +1390,7 @@ function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<Suspense fallback={<PageLoadingFallback />}><PublicNotFoundPage /></Suspense>} />
           </Routes>
+          </RouteErrorBoundary>
 
           {/* Global Re-Authentication Modal */}
           <ReAuthModal />
