@@ -12,8 +12,10 @@ import { AppError } from '@oslsr/utils';
 import { ExportQueryService, SUBMISSION_METADATA_COLUMNS, UNIFIED_METADATA_COLUMNS, buildColumnsFromFormSchema, flattenRawDataRow, buildChoiceMaps } from '../services/export-query.service.js';
 import { normalizeRawDataKeys, canonicalGroupFor } from '../services/registry-key-normalization.js';
 import { ExportService } from '../services/export.service.js';
-import { AuditService, PII_ACTIONS } from '../services/audit.service.js';
+import { AuditService, PII_ACTIONS, type PiiAction } from '../services/audit.service.js';
 import { QuestionnaireService } from '../services/questionnaire.service.js';
+import { sendTelegramMessage } from '../services/alerting/telegram-channel.js';
+import { db } from '../db/index.js';
 import type { AuthenticatedRequest } from '../types.js';
 import type { ExportColumn } from '../services/export.service.js';
 
@@ -82,6 +84,52 @@ const EXPORT_COLUMNS: ExportColumn[] = [
 ];
 
 export class ExportController {
+  /**
+   * Story 9-43 AC#3 (F-013) — write the PII-access audit row FAIL-CLOSED before
+   * any export bytes leave the server. Uses the transactional `logPiiAccessTx`
+   * and AWAITS it; if the audit write fails the export is aborted (throws) and
+   * NO data is sent. A best-effort human alert fires on `audit.pii_log_failed`
+   * (never masks the abort). Silent audit loss on a PII export is the worst
+   * failure mode here, so it must be fail-closed.
+   */
+  private static async auditExportOrFail(
+    req: AuthenticatedRequest,
+    action: PiiAction,
+    targetResource: string,
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await db.transaction(async (tx) => {
+        await AuditService.logPiiAccessTx(
+          tx,
+          req.user.sub,
+          action,
+          targetResource,
+          null,
+          details,
+          req.ip || req.socket?.remoteAddress || 'unknown',
+          req.headers['user-agent'] || 'unknown',
+          req.user.role,
+        );
+      });
+    } catch (err) {
+      logger.error(
+        { event: 'audit.pii_log_failed', action, targetResource, error: (err as Error).message },
+        'Export aborted: PII-access audit write failed (fail-closed)',
+      );
+      // Best-effort operator page — swallow its own failure so it can never
+      // mask the abort below.
+      void sendTelegramMessage(
+        `🚨 EXPORT AUDIT FAILURE — ${action} on ${targetResource} ABORTED (audit write failed). Investigate immediately.`,
+      ).catch(() => { /* alerting is best-effort */ });
+      throw new AppError(
+        'AUDIT_WRITE_FAILED',
+        'Export aborted: the access audit log could not be written, so no data was returned.',
+        500,
+      );
+    }
+  }
+
   /**
    * Story 9-43 AC#2 (F-009) — set CSV response headers and STREAM the rows to
    * the response instead of buffering the whole table. Caller enforces the row
@@ -164,12 +212,11 @@ export class ExportController {
           );
         }
 
-        // Audit log BEFORE generating export
-        AuditService.logPiiAccess(
+        // F-013 — fail-closed PII-access audit BEFORE any bytes leave the server.
+        await ExportController.auditExportOrFail(
           req as AuthenticatedRequest,
           PII_ACTIONS.EXPORT_CSV,
           'submissions',
-          null,
           { filters: fullFilters, recordCount: count, format, exportType, formId },
         );
 
@@ -237,12 +284,11 @@ export class ExportController {
           );
         }
 
-        // Audit log BEFORE generating export.
-        AuditService.logPiiAccess(
+        // F-013 — fail-closed PII-access audit BEFORE any bytes leave the server.
+        await ExportController.auditExportOrFail(
           req as AuthenticatedRequest,
           PII_ACTIONS.EXPORT_CSV,
           'respondents',
-          null,
           { filters, recordCount: count, format, exportType, formId },
         );
 
@@ -334,13 +380,12 @@ export class ExportController {
         );
       }
 
-      // Audit log BEFORE generating export (capture intent)
+      // F-013 — fail-closed PII-access audit BEFORE any bytes leave the server.
       const auditAction = format === 'csv' ? PII_ACTIONS.EXPORT_CSV : PII_ACTIONS.EXPORT_PDF;
-      AuditService.logPiiAccess(
+      await ExportController.auditExportOrFail(
         req as AuthenticatedRequest,
         auditAction,
         'respondents',
-        null,
         { filters, recordCount: count, format, exportType },
       );
 
