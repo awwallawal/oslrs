@@ -18,6 +18,34 @@ import pino from 'pino';
 
 const logger = pino({ name: 'export-service' });
 
+/**
+ * Story 9-43 AC#1 (F-008) — CSV/Excel formula-injection neutralization.
+ *
+ * Spreadsheet apps (Excel, LibreOffice, Sheets) evaluate any cell whose first
+ * character is `= + - @` (or a leading tab / carriage return that the parser
+ * strips before evaluating) as a FORMULA. An exported value like
+ * `=HYPERLINK("http://evil")` or `=cmd|'/c calc'!A1` becomes live on open.
+ *
+ * Defense (OWASP): prefix a single quote so the cell is forced to literal text.
+ * This is a SECURITY control applied to EVERY exported cell — distinct from the
+ * Story 9-26 `format:'text'` `\t` prefix, which is display-only formatting.
+ */
+export function sanitizeCell(value: string): string {
+  if (value === '') return value;
+  const first = value[0];
+  if (
+    first === '=' ||
+    first === '+' ||
+    first === '-' ||
+    first === '@' ||
+    first === '\t' ||
+    first === '\r'
+  ) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 // Logo loaded at module level — resolve from both src/ and dist/ for Docker compatibility
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -195,19 +223,7 @@ export class ExportService {
   ): Promise<Buffer> {
     const BOM = '\uFEFF';
 
-    // Build records array for csv-stringify.
-    // Story 9-26 Part I — columns marked `format: 'text'` get a `\t` prefix
-    // so Excel respects the text-mode interpretation. Empty values stay empty
-    // (no spurious prefix in blank cells).
-    const records = data.map((row) =>
-      columns.map((col) => {
-        const value = String(row[col.key] ?? '');
-        if (col.format === 'text' && value !== '') {
-          return `\t${value}`;
-        }
-        return value;
-      }),
-    );
+    const records = data.map((row) => columns.map((col) => ExportService.formatCell(row, col)));
 
     const csvContent = stringify(records, {
       header: true,
@@ -216,6 +232,21 @@ export class ExportService {
     });
 
     return Buffer.from(BOM + csvContent, 'utf-8');
+  }
+
+  /**
+   * Build a single CSV cell value: security sanitization (AC#1) first, then the
+   * Story 9-26 display coercion for `format:'text'` columns. If sanitizeCell
+   * already prefixed `'` (a dangerous-leading-char value), that ALSO forces
+   * Excel text mode, so we skip the redundant `\t` to avoid a double prefix.
+   */
+  private static formatCell(row: Record<string, unknown>, col: ExportColumn): string {
+    const raw = String(row[col.key] ?? '');
+    const sanitized = sanitizeCell(raw);
+    if (col.format === 'text' && sanitized !== '' && sanitized === raw) {
+      return `\t${sanitized}`;
+    }
+    return sanitized;
   }
 
   // ===== Private Helpers =====
