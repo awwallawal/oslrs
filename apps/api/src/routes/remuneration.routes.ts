@@ -12,6 +12,7 @@ import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
 import { UserRole } from '@oslsr/types';
 import { RemunerationController } from '../controllers/remuneration.controller.js';
+import { requireMagicBytes } from '../lib/file-safety.js';
 
 const router = Router();
 
@@ -39,6 +40,8 @@ router.post(
   '/',
   superAdminOnly,
   receiptUpload.single('receipt'),
+  // F-017 — content (magic-byte) validation; client mime/extension is not trusted.
+  requireMagicBytes(['png', 'jpeg', 'pdf']),
   RemunerationController.createBatch,
 );
 
@@ -107,6 +110,8 @@ router.patch(
   '/disputes/:disputeId/resolve',
   superAdminOnly,
   evidenceUpload.single('evidence'),
+  // F-017 — content (magic-byte) validation; client mime/extension is not trusted.
+  requireMagicBytes(['png', 'jpeg', 'pdf']),
   RemunerationController.resolveDispute,
 );
 
