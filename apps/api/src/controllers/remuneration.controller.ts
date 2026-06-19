@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { AppError } from '@oslsr/utils';
 import { RemunerationService } from '../services/remuneration.service.js';
 import { AuditService, PII_ACTIONS } from '../services/audit.service.js';
+import { contentTypeForFilename, buildContentDisposition } from '../lib/file-safety.js';
 import type { AuthenticatedRequest } from '../types.js';
 
 /** Zod schema for creating a payment batch */
@@ -284,8 +285,10 @@ export class RemunerationController {
 
       const file = await RemunerationService.getFileStream(fileId);
 
-      res.setHeader('Content-Type', file.mimeType);
-      res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+      // F-016 — derive Content-Type from a server-side allowlist (NOT the stored
+      // client MIME) and sanitize the filename in Content-Disposition.
+      res.setHeader('Content-Type', contentTypeForFilename(file.filename));
+      res.setHeader('Content-Disposition', buildContentDisposition(file.filename));
       if (file.sizeBytes) {
         res.setHeader('Content-Length', file.sizeBytes.toString());
       }

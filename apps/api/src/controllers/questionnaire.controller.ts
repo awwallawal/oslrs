@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { QuestionnaireService } from '../services/questionnaire.service.js';
 import { NativeFormService } from '../services/native-form.service.js';
 import { AppError } from '@oslsr/utils';
+import { contentTypeForFilename, buildContentDisposition } from '../lib/file-safety.js';
 import {
   updateStatusSchema,
   listQuestionnairesQuerySchema,
@@ -182,8 +183,10 @@ export class QuestionnaireController {
 
       const file = await QuestionnaireService.downloadForm(id);
 
-      res.setHeader('Content-Type', file.mimeType);
-      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      // F-016 — server-side Content-Type allowlist + sanitized filename (never
+      // reflect the stored client MIME / raw filename into response headers).
+      res.setHeader('Content-Type', contentTypeForFilename(file.fileName));
+      res.setHeader('Content-Disposition', buildContentDisposition(file.fileName));
       res.send(file.buffer);
     } catch (err) {
       next(err);

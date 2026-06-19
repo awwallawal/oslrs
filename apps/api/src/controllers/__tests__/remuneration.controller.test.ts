@@ -454,9 +454,37 @@ describe('RemunerationController', () => {
       await RemunerationController.downloadFile(req, mockRes as Response, mockNext);
 
       expect(setHeaderMock).toHaveBeenCalledWith('Content-Type', 'application/pdf');
-      expect(setHeaderMock).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="receipt.pdf"');
+      // F-016 — sanitized + RFC 5987 Content-Disposition (no raw filename reflection).
+      expect(setHeaderMock).toHaveBeenCalledWith(
+        'Content-Disposition',
+        "attachment; filename=\"receipt.pdf\"; filename*=UTF-8''receipt.pdf",
+      );
       expect(setHeaderMock).toHaveBeenCalledWith('Content-Length', '2048');
       expect(mockPipe).toHaveBeenCalledWith(mockRes);
+    });
+
+    it('F-016 — derives Content-Type from the allowlist (ignores stored client MIME) + sanitizes a hostile filename', async () => {
+      const mockPipe = vi.fn();
+      // Stored client MIME is a lie; filename carries a header-injection attempt.
+      mockGetFileStream.mockResolvedValue({
+        stream: { pipe: mockPipe },
+        filename: 'evil";\r\n.pdf',
+        mimeType: 'text/html',
+        sizeBytes: 10,
+      });
+
+      const req = makeReq({ params: { fileId: 'file-2' } });
+      const { setHeaderMock, mockRes } = makeRes();
+
+      await RemunerationController.downloadFile(req, mockRes as Response, mockNext);
+
+      // Type derived from the .pdf extension, NOT the stored text/html.
+      expect(setHeaderMock).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      const cdCall = setHeaderMock.mock.calls.find((c) => c[0] === 'Content-Disposition');
+      expect(cdCall).toBeDefined();
+      const cd = cdCall![1] as string;
+      expect(cd).not.toMatch(/[\r\n]/);
+      expect(cd).not.toContain('evil"');
     });
 
     it('should return 401 for unauthenticated request', async () => {
