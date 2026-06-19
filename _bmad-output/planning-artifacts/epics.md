@@ -2405,9 +2405,10 @@ So that every feature in the analytics specification is either live, threshold-g
 | 9-35 | Backup Monthly-Promotion .enc Suffix Fix | ready-for-dev | Backup hygiene |
 | 9-36 | Complete Audit-Pattern Enforcement | backlog (dormant) | Audit hygiene |
 | 9-37 | Audit Infra Hardening (Flush-Race & UI) | backlog (dormant) | Audit hygiene |
-| 9-38 | Wizard Public-User Account Provisioning | ready-for-dev | SCP-2026-06-06 journey-harmonization |
-| 9-39 | Public Entry-IA Sign-In Door & Magic-Link | ready-for-dev | SCP-2026-06-06 journey-harmonization |
-| 9-40 | Public Dashboard Registration-Status Home | ready-for-dev | SCP-2026-06-06 journey-harmonization |
+| 9-38 | Wizard Public-User Account Provisioning | done | SCP-2026-06-06 journey-harmonization |
+| 9-39 | Public Entry-IA Sign-In Door & Magic-Link | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`) |
+| 9-40 | Public Dashboard Registration-Status Home | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`) |
+| 9-60 | Authenticated Registration Edit & Session Resume | ready-for-dev | SCP-2026-06-06 journey-harmonization (post-launch enabler; closes 9-40 M1/M2; sequence before 9-32) |
 | **9-41** | **Marketplace Reveal Accountability Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
 | **9-42** | **Auth, Token & Session Hardening** (+ OPS-RL-1 IPv6 bypass) | done | **SCP-2026-06-06 security-r2** |
 | **9-43** | **Export & Reporting Data-Safety Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
