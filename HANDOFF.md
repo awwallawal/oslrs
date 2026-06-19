@@ -1,9 +1,12 @@
 # Merge Handoff — `track/journey-9-39-40-21`
 
 **Prepared:** 2026-06-19 · **Branch:** `track/journey-9-39-40-21` · **Base:** `main` @ `702ad85`
-**State:** working tree clean · 5 commits ahead · **not pushed** · 29 files, +1857/−616
+**State:** working tree clean · 7 commits ahead · **not pushed**
 
-This branch completes the **Public-User Journey Harmonization** stack (SCP `sprint-change-proposal-2026-06-06-public-user-journey-harmonization.md`). All three stories are reviewed (paired Senior-Dev code-review, review-before-commit discipline) and committed; one repo-wide test-infra fix rides along.
+> ## ⛔ HOLD — DO NOT MERGE YET
+> Story **9-60** ("Authenticated registration edit + true session resume") was authored on this worktree (2026-06-19, `e561c74`, status `ready-for-dev`) and is **queued for development here** to close the 9-40 M1/M2 deviations before this branch merges. **Worktree-close criteria:** 9-60 developed → paired code-review passed → committed. This HANDOFF will be **finalized** (and this HOLD lifted) once 9-60 lands. Do not merge while 9-60 is `ready-for-dev`/in-progress.
+
+This branch completes the **Public-User Journey Harmonization** stack (SCP `sprint-change-proposal-2026-06-06-public-user-journey-harmonization.md`). Stories 9-21/9-39/9-40 are reviewed (paired Senior-Dev code-review, review-before-commit discipline) and committed; a repo-wide test-infra fix rides along; **9-60 is authored and pending dev+review on this worktree**.
 
 ---
 
@@ -16,6 +19,9 @@ This branch completes the **Public-User Journey Harmonization** stack (SCP `spri
 | `bb0ad95` | test(9-21) | **Repo-wide test-infra:** default the vitest worker-pool cap OFF-CI (`vitest.base.ts`). See ⚠️ below. |
 | `c1913bf` | docs(9-21) | Traceability: records the `/register` flake root-cause + the `bb0ad95` fix in the 9-21 story. |
 | `f3070df` | feat(9-40) | Public dashboard registration-status home — 4-state machine off the 9-38 read-model; magic-link re-entry; inline audited marketplace-consent edit (`PUT /me/registration`); retires the parallel survey path. |
+| `97248ad` | docs | This handoff brief. |
+| `e561c74` | docs(9-60) | Authored 9-60 (SM Bob + PM John) + reconciled `sprint-status`/`epics.md`; cross-linked from 9-40. Closes 9-40 M1/M2 **when built**. |
+| _pending_ | feat(9-60) | **Dev + paired review in flight on this worktree — see ⛔ HOLD above.** |
 
 Each `feat` commit is atomic (story code + tests + story doc + its `sprint-status.yaml` line). Stories 9-21/9-39/9-40 are all flipped `done` in `sprint-status.yaml`.
 
