@@ -40,6 +40,16 @@ const logger = pino({ name: 'export-controller' });
 const PDF_MAX_ROWS = 1000;
 
 /**
+ * Story 9-43 AC#2 (F-009) — hard ceiling for CSV exports. Previously only PDF
+ * was capped; CSV buffered the entire table in memory unbounded. Above this the
+ * request fails with an explicit 413 instead of risking OOM. The CSV body is
+ * also STREAMED row-by-row (ExportService.streamCsvExport) rather than built as
+ * one Buffer, so memory stays bounded by this cap. Generous vs current scale;
+ * raise only alongside DB-cursor streaming.
+ */
+const CSV_MAX_ROWS = 100000;
+
+/**
  * Upper bound for the Unified export (Story 9-59 review M3). Unlike Summary, the
  * unified mode is CSV-only (so the PDF cap never applies) yet streams every
  * respondent WITH their full `raw_data` JSONB and flattens per row — unbounded
@@ -72,6 +82,26 @@ const EXPORT_COLUMNS: ExportColumn[] = [
 ];
 
 export class ExportController {
+  /**
+   * Story 9-43 AC#2 (F-009) — set CSV response headers and STREAM the rows to
+   * the response instead of buffering the whole table. Caller enforces the row
+   * cap beforehand.
+   */
+  private static async streamCsv(
+    res: Response,
+    filename: string,
+    data: Record<string, unknown>[],
+    columns: ExportColumn[],
+  ): Promise<void> {
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+      'Pragma': 'no-cache',
+    });
+    await ExportService.streamCsvExport(res, data, columns);
+  }
+
   /**
    * GET /api/v1/exports/respondents
    * Download filtered respondent export as CSV or PDF.
@@ -125,6 +155,15 @@ export class ExportController {
         const fullFilters = { ...filters, formId };
         const count = await ExportQueryService.getSubmissionFilteredCount(fullFilters);
 
+        // F-009 — hard CSV ceiling (explicit 413 instead of unbounded buffer).
+        if (count > CSV_MAX_ROWS) {
+          throw new AppError(
+            'CSV_ROW_LIMIT',
+            `CSV export is limited to ${CSV_MAX_ROWS.toLocaleString()} records. Apply filters to narrow the result.`,
+            413,
+          );
+        }
+
         // Audit log BEFORE generating export
         AuditService.logPiiAccess(
           req as AuthenticatedRequest,
@@ -150,18 +189,12 @@ export class ExportController {
           return { ...metadata, ...flatFields };
         });
 
-        const csvBuffer = await ExportService.generateCsvExport(
+        await ExportController.streamCsv(
+          res,
+          `oslsr-full-export-${dateStr}.csv`,
           flatRows as unknown as Record<string, unknown>[],
           allColumns,
         );
-
-        res.set({
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="oslsr-full-export-${dateStr}.csv"`,
-          'Cache-Control': 'no-store',
-          'Pragma': 'no-cache',
-        });
-        res.send(csvBuffer);
         return;
       }
 
@@ -192,11 +225,15 @@ export class ExportController {
 
         // Review M3 — explicit, filterable ceiling instead of an unbounded
         // in-memory build (the mode loads full raw_data per respondent).
+        // 9-43 review L2 — 413 (Payload Too Large), harmonized with the CSV cap
+        // (both are "the CSV result is too big → narrow filters"). The PDF cap
+        // stays 400 by design: it's a format-choice rejection ("use CSV"), not a
+        // payload-size one.
         if (count > UNIFIED_MAX_ROWS) {
           throw new AppError(
             'UNIFIED_ROW_LIMIT',
             `Unified export is limited to ${UNIFIED_MAX_ROWS.toLocaleString()} respondents. Apply filters to narrow the result.`,
-            400,
+            413,
           );
         }
 
@@ -267,18 +304,12 @@ export class ExportController {
           );
         }
 
-        const csvBuffer = await ExportService.generateCsvExport(
+        await ExportController.streamCsv(
+          res,
+          `oslsr-unified-export-${dateStr}.csv`,
           flatRows as unknown as Record<string, unknown>[],
           allColumns,
         );
-
-        res.set({
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="oslsr-unified-export-${dateStr}.csv"`,
-          'Cache-Control': 'no-store',
-          'Pragma': 'no-cache',
-        });
-        res.send(csvBuffer);
         return;
       }
 
@@ -291,6 +322,15 @@ export class ExportController {
           'PDF_ROW_LIMIT',
           'PDF exports are limited to 1,000 records. Apply filters to narrow results or use CSV format for larger exports.',
           400,
+        );
+      }
+
+      // F-009 — hard CSV ceiling (explicit 413 instead of unbounded buffer).
+      if (format === 'csv' && count > CSV_MAX_ROWS) {
+        throw new AppError(
+          'CSV_ROW_LIMIT',
+          `CSV export is limited to ${CSV_MAX_ROWS.toLocaleString()} records. Apply filters to narrow the result.`,
+          413,
         );
       }
 
@@ -308,18 +348,12 @@ export class ExportController {
       const { data } = await ExportQueryService.getRespondentExportData(filters);
 
       if (format === 'csv') {
-        const csvBuffer = await ExportService.generateCsvExport(
+        await ExportController.streamCsv(
+          res,
+          `oslsr-export-${dateStr}.csv`,
           data as unknown as Record<string, unknown>[],
           EXPORT_COLUMNS,
         );
-
-        res.set({
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="oslsr-export-${dateStr}.csv"`,
-          'Cache-Control': 'no-store',
-          'Pragma': 'no-cache',
-        });
-        res.send(csvBuffer);
       } else {
         const pdfBuffer = await ExportService.generatePdfReport(
           data as unknown as Record<string, unknown>[],
@@ -337,6 +371,18 @@ export class ExportController {
         res.send(pdfBuffer);
       }
     } catch (err) {
+      // Review L3 — if a CSV stream failed AFTER headers/body bytes were already
+      // flushed, the response is committed; `next(err)` would throw
+      // ERR_HTTP_HEADERS_SENT. Destroy the socket so the client sees a truncated
+      // download (a clear failure) rather than a hung handler.
+      if (res.headersSent) {
+        logger.error(
+          { event: 'export.stream_failed_after_headers', error: (err as Error).message },
+          'Export stream failed after the response was committed; destroying the connection',
+        );
+        res.destroy();
+        return;
+      }
       next(err);
     }
   }

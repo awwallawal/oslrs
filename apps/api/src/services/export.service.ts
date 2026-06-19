@@ -10,9 +10,11 @@
 
 import PDFDocument from 'pdfkit';
 import { stringify } from 'csv-stringify/sync';
+import { stringify as stringifyStream } from 'csv-stringify';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import type { Writable } from 'node:stream';
 import { AppError } from '@oslsr/utils';
 import pino from 'pino';
 
@@ -232,6 +234,75 @@ export class ExportService {
     });
 
     return Buffer.from(BOM + csvContent, 'utf-8');
+  }
+
+  /**
+   * Story 9-43 AC#2 (F-009) — stream a CSV export to a Writable (the HTTP
+   * response) instead of materializing the whole table as a single in-memory
+   * Buffer. The caller MUST set response headers and enforce the row cap BEFORE
+   * invoking this. Resolves once all rows have been flushed to the sink.
+   *
+   * Memory is bounded by (a) the caller's hard row cap and (b) writing row-by-row
+   * through the csv-stringify stream rather than building one giant string+Buffer.
+   * Every cell still passes through `sanitizeCell` (AC#1) via `formatCell`.
+   *
+   * Review M1 — the write loop is BACKPRESSURE-AWARE: it honors `write()`'s
+   * return value and pauses until `drain` when the downstream sink is slow,
+   * instead of dumping every row into the stringifier's buffer at once. This
+   * keeps the in-flight window small even against a slow client, so memory is
+   * bounded by the streaming window — not just the row cap.
+   */
+  static streamCsvExport(
+    out: Writable,
+    data: Record<string, unknown>[],
+    columns: ExportColumn[],
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const done = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (err) reject(err);
+        else resolve();
+      };
+
+      // UTF-8 BOM first (Excel cross-platform), then pipe the stringifier.
+      out.write('﻿');
+
+      const stringifier = stringifyStream({
+        header: true,
+        columns: columns.map((col) => col.header),
+        bom: false,
+      });
+
+      stringifier.on('error', (err) => {
+        logger.error({ event: 'export.csv_stream_error', error: err.message }, 'CSV stream error');
+        done(new AppError('CSV_GENERATION_ERROR', 'Failed to generate CSV export', 500));
+      });
+      out.on('error', (err) => done(err as Error));
+      // Resolve when the readable (stringifier) has been fully consumed by the
+      // pipe; pipe ends `out` by default.
+      stringifier.on('end', () => done());
+
+      stringifier.pipe(out);
+
+      // Drain-aware write loop (M1): write rows until the stringifier signals
+      // backpressure (write() === false), then resume on 'drain'. A slow sink
+      // therefore can never make us buffer the whole capped set in memory.
+      let i = 0;
+      const pump = () => {
+        while (i < data.length) {
+          const row = columns.map((col) => ExportService.formatCell(data[i], col));
+          i++;
+          if (!stringifier.write(row)) {
+            stringifier.once('drain', pump);
+            return;
+          }
+        }
+        stringifier.end();
+      };
+      pump();
+    });
   }
 
   /**

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ExportService, sanitizeCell } from '../export.service.js';
 import { sampleColumns, generateRows } from './export.test-helpers.js';
+import { Writable } from 'node:stream';
 
 // Hoisted mocks for PDFKit
 const mocks = vi.hoisted(() => {
@@ -325,6 +326,68 @@ describe('ExportService', () => {
       // No raw formula survives at a cell boundary.
       expect(text).not.toMatch(/(^|,)=evil\(\)/);
       expect(text).not.toMatch(/(^|,)@evil/);
+    });
+  });
+
+  // ── Story 9-43 AC#2 (F-009) — streaming CSV ───────────────────────────
+
+  describe('streamCsvExport', () => {
+    function collect(): { sink: Writable; chunks: () => string } {
+      const buffers: Buffer[] = [];
+      const sink = new Writable({
+        write(chunk, _enc, cb) {
+          buffers.push(Buffer.from(chunk));
+          cb();
+        },
+      });
+      return { sink, chunks: () => Buffer.concat(buffers).toString('utf-8') };
+    }
+
+    it('streams a BOM, header, and every row to the sink', async () => {
+      const { sink, chunks } = collect();
+      const data = generateRows(3);
+
+      await ExportService.streamCsvExport(sink, data, sampleColumns);
+
+      const text = chunks();
+      expect(text.charCodeAt(0)).toBe(0xfeff); // BOM
+      expect(text).toContain('Full Name');
+      expect(text).toContain('Respondent Person 1');
+      expect(text).toContain('Respondent Person 3');
+    });
+
+    it('applies the same formula sanitization while streaming', async () => {
+      const { sink, chunks } = collect();
+      const data = [{ name: '=evil()', nin: '1', phone: '2', lga: 'L' }];
+
+      await ExportService.streamCsvExport(sink, data, sampleColumns);
+
+      expect(chunks()).not.toMatch(/(^|,)=evil\(\)/);
+    });
+
+    // Review M1 — a slow sink (deferred write callbacks + tiny highWaterMark)
+    // forces backpressure (write() === false). The drain-aware pump must still
+    // deliver EVERY row and resolve, proving it honors backpressure rather than
+    // dumping the whole set into the stringifier buffer at once.
+    it('honors backpressure on a slow sink and still streams every row', async () => {
+      const buffers: Buffer[] = [];
+      const slowSink = new Writable({
+        highWaterMark: 16, // tiny → backpressure kicks in quickly
+        write(chunk, _enc, cb) {
+          buffers.push(Buffer.from(chunk));
+          // Defer the callback → the writable stays "full" → write() returns false.
+          setImmediate(cb);
+        },
+      });
+      const data = generateRows(200);
+
+      await ExportService.streamCsvExport(slowSink, data, sampleColumns);
+
+      const text = Buffer.concat(buffers).toString('utf-8');
+      expect(text).toContain('Respondent Person 1');
+      expect(text).toContain('Respondent Person 200');
+      // Header + 200 rows (+ trailing newline) all delivered.
+      expect(text.trim().split('\n').length).toBe(201);
     });
   });
 });
