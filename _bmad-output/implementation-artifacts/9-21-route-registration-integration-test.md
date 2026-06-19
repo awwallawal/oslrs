@@ -99,6 +99,12 @@ Adversarial code review 2026-06-18 (paired code-review CLI, Senior-Dev workflow)
 - [x] [AI-Review][Low] **L2 — Test omits production's `<ErrorBoundary>` + `<ViewAsProvider>` wrappers.** Acceptable (we *want* crashing pages to fail loudly; ViewAsProvider is supplied by its own subtree). Fix: documented as a deliberate choice in `renderApp`. [route-resolution.integration.test.tsx]
 - [x] [AI-Review][Low] **L3 — RETRACTED (not an issue).** Initially flagged `expect.extend(matchers)` as redundant. Verified the inherited `setupFiles` (repo-root `test/setup.ts`) does NOT import `@testing-library/jest-dom`, so the local matcher extension is REQUIRED. Left as-is. The `@vitest-environment jsdom` pragma is redundant-but-harmless (config forces jsdom) and kept as explicit documentation.
 
+### Post-review follow-up — `/register` flake root-caused & fixed (2026-06-19, commit `bb0ad95`)
+
+**Supersedes the M3 conclusion above.** M3 assumed the `/register` (WizardPage) flake was *cold-chunk import time* and added a 5s `waitFor`. That was insufficient: the **uncapped full web suite still failed 6 cases at exactly 5023ms** (`/register`, `/register/complete`, `/register/supplemental`). Investigation (incl. an attempted lazy-chunk warm in `beforeAll`, which did NOT help and was reverted) proved the real root cause is **CPU/RAM oversubscription** — a plain local `pnpm vitest run` spawns ~1 worker/core and starves heavy jsdom renders past the timeout. Same suite **capped at 2 workers = green** (`/register` 895ms).
+
+**Fix (commit `bb0ad95`, file `vitest.base.ts`):** default the worker-pool cap OFF-CI — `maxWorkers = VITEST_MAX_THREADS ?? (process.env.CI ? undefined : 2)`. A plain local run now self-caps (mirrors the pre-push gate's proven `VITEST_MAX_THREADS=2`); CI stays full-parallel (gated on `process.env.CI`); `VITEST_MAX_THREADS=4 pnpm test` overrides for speed. **Proof:** off-CI default full web suite = **242 files / 2678 passed / 0 failures**, `/register` 895ms. The 5s `waitFor` (M3) is retained as headroom for cold isolation runs. Memory: `feedback_local_full_suite_flakiness` / Pitfall #37. **Residual:** CI runs this test uncapped (clean 1:1 runner, expected-fine); lever if it ever bites = cap CI or raise the timeout.
+
 ## Dev Notes
 
 ### Why this matters now (real-data justification)
