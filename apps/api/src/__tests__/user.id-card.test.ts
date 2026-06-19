@@ -147,6 +147,38 @@ describe('User ID Card & Verification', () => {
       expect(res.body.data.nin).toBeUndefined();
     });
 
+    // Story 9-43 AC#4 (F-020) — minimized payload + photo proxy.
+    it('returns only the minimized field set (no internal id)', async () => {
+      const res = await request.get(`/api/v1/users/verify/${userId}`);
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.data).sort()).toEqual(
+        ['fullName', 'status', 'role', 'lga', 'verifiedAt', 'photoUrl'].sort(),
+      );
+      // Internal UUID dropped (already in the request URL).
+      expect(res.body.data.id).toBeUndefined();
+    });
+
+    it('proxies the photo through the API — no raw signed Spaces URL in the body', async () => {
+      const res = await request.get(`/api/v1/users/verify/${userId}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.photoUrl).toBe(`/api/v1/users/verify/${userId}/photo`);
+      // The previously-leaked signed Spaces URL must NOT appear anywhere.
+      expect(JSON.stringify(res.body.data)).not.toContain('signed-url');
+      expect(JSON.stringify(res.body.data)).not.toContain('https://');
+    });
+
+    it('GET /verify/:id/photo streams the photo bytes', async () => {
+      mocks.getPhotoBuffer.mockResolvedValue(Buffer.from('fake-photo'));
+
+      const res = await request.get(`/api/v1/users/verify/${userId}/photo`);
+
+      expect(res.status).toBe(200);
+      expect(res.header['content-type']).toContain('image/jpeg');
+      expect(mocks.getPhotoBuffer).toHaveBeenCalledWith('staff-photos/id-card/test.jpg');
+    });
+
     it('should return 404 for invalid user', async () => {
         const res = await request.get(`/api/v1/users/verify/00000000-0000-0000-0000-000000000000`);
         expect(res.status).toBe(404);

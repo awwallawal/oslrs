@@ -50,8 +50,34 @@ describe('VerificationPage', () => {
             expect(screen.getByText(/verified active/i)).toBeInTheDocument();
         });
         
+        // F-020 (review M2) — the image is the API photo-proxy built from
+        // API_URL + id, NOT the raw URL from the response body (which is now just
+        // a presence flag). This resolves against the API in dev and prod alike.
         const img = screen.getByRole('img', { name: /test staff/i });
-        expect(img).toHaveAttribute('src', 'https://photo.com/test.jpg');
+        expect(img.getAttribute('src')).toMatch(/\/users\/verify\/123\/photo$/);
+        expect(img.getAttribute('src')).not.toBe('https://photo.com/test.jpg');
+    });
+
+    it('renders no image (placeholder) when photoUrl is null', async () => {
+        (globalThis.fetch as any).mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                data: {
+                    fullName: 'No Photo Staff', role: 'Clerk', lga: 'LGA', status: 'active',
+                    photoUrl: null, verifiedAt: '2024-01-01T00:00:00Z',
+                },
+            }),
+        });
+
+        renderWithRouter(
+            <Routes>
+                <Route path="/verify-staff/:id" element={<VerificationPage />} />
+            </Routes>,
+            { route: '/verify-staff/456' },
+        );
+
+        await waitFor(() => expect(screen.getByText('No Photo Staff')).toBeInTheDocument());
+        expect(screen.queryByRole('img', { name: /no photo staff/i })).not.toBeInTheDocument();
     });
 
     it('should handle invalid staff', async () => {

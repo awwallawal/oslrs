@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
 interface StaffVerificationData {
-  id: string;
   fullName: string;
   status: string;
   role: string;
   lga: string;
+  /** Story 9-43 F-020 — presence flag; the actual image is the API photo-proxy. */
   photoUrl: string | null;
   verifiedAt: string;
 }
@@ -20,7 +22,6 @@ const VerificationPage: React.FC = () => {
   useEffect(() => {
     const fetchVerification = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
         const response = await fetch(`${API_URL}/users/verify/${id}`);
 
         if (!response.ok) {
@@ -83,10 +84,13 @@ const VerificationPage: React.FC = () => {
                   <div className="flex flex-col items-center">
                       <div className="relative">
                           {data.photoUrl ? (
-                              <img 
-                                  className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg" 
-                                  src={data.photoUrl} 
-                                  alt={data.fullName} 
+                              <img
+                                  className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg"
+                                  // F-020 (review M2) — build the proxy URL from API_URL so it
+                                  // resolves against the API in BOTH dev (absolute) and prod
+                                  // (same-origin relative), not the web origin.
+                                  src={`${API_URL}/users/verify/${id}/photo`}
+                                  alt={data.fullName}
                               />
                           ) : (
                               <div className="h-32 w-32 rounded-full bg-gray-200 flex items-center justify-center border-4 border-white shadow-lg">
