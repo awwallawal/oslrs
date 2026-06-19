@@ -123,6 +123,10 @@ export const AUDIT_ACTIONS = {
   // status notification was dispatched — NEVER the raw PII identifier value
   // (AC8: logs must not become a PII enumeration side-channel).
   REGISTRATION_STATUS_REQUESTED: 'registration_status.requested',
+  // Story 9-40 — a public user edited their own registration from the
+  // dashboard (currently the marketplace-consent flag). Self-service edit via
+  // the authenticated `PUT /me/registration`; actor IS the subject.
+  RESPONDENT_SELF_UPDATED: 'respondent.self_updated',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

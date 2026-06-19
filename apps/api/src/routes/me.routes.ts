@@ -19,4 +19,12 @@ router.get(
   MeController.getRegistrationStatus,
 );
 
+// Story 9-40 (AC#4) — self-service edit of the caller's own registration
+// (currently the marketplace-consent flag). Authenticated; subject = JWT.
+router.put(
+  '/registration',
+  authenticate,
+  MeController.updateRegistration,
+);
+
 export default router;

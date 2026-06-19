@@ -114,3 +114,77 @@ describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
     expect(res.respondent).toBeUndefined();
   });
 });
+
+describe('MeService.updateMarketplaceConsent (Story 9-40 AC#4)', () => {
+  const stamp = Date.now();
+  const linkedEmail = `me-edit-${stamp}@example.com`;
+  const orphanEmail = `me-edit-orphan-${stamp}@example.com`;
+  let linkedUserId = '';
+  let orphanUserId = '';
+  let respondentId = '';
+
+  beforeAll(async () => {
+    await db.insert(roles).values([{ name: 'public_user', description: 'Public User' }]).onConflictDoNothing();
+    const publicRole = await db.query.roles.findFirst({ where: eq(roles.name, 'public_user') });
+
+    const [linked] = await db
+      .insert(users)
+      .values({ email: linkedEmail, fullName: 'Me Edit', roleId: publicRole!.id, status: 'active' })
+      .returning({ id: users.id });
+    linkedUserId = linked.id;
+
+    const [orphan] = await db
+      .insert(users)
+      .values({ email: orphanEmail, fullName: 'Me Orphan', roleId: publicRole!.id, status: 'active' })
+      .returning({ id: users.id });
+    orphanUserId = orphan.id;
+
+    const [r] = await db
+      .insert(respondents)
+      .values({
+        nin: '12345678927',
+        firstName: 'Edit',
+        lastName: 'Me',
+        phoneNumber: '+2348010000009',
+        lgaId: 'lga-egbeda',
+        source: 'public',
+        status: 'active',
+        consentMarketplace: false,
+        referenceCode: `OSL-2026-EDT${stamp.toString().slice(-3)}`,
+        userId: linkedUserId,
+      })
+      .returning({ id: respondents.id });
+    respondentId = r.id;
+  }, 30000);
+
+  afterAll(async () => {
+    if (respondentId) await db.delete(respondents).where(eq(respondents.id, respondentId));
+    await db.delete(users).where(inArray(users.email, [linkedEmail, orphanEmail]));
+  }, 30000);
+
+  it('flips marketplace consent and returns the refreshed summary', async () => {
+    const res = await MeService.updateMarketplaceConsent({
+      userId: linkedUserId,
+      consentMarketplace: true,
+    });
+    expect(res.id).toBe(respondentId);
+    expect(res.consentMarketplace).toBe(true);
+
+    // Read-model reflects the change.
+    const status = await MeService.getRegistrationStatus({ userId: linkedUserId, email: linkedEmail });
+    expect(status.respondent?.consentMarketplace).toBe(true);
+
+    // And it toggles back.
+    const back = await MeService.updateMarketplaceConsent({
+      userId: linkedUserId,
+      consentMarketplace: false,
+    });
+    expect(back.consentMarketplace).toBe(false);
+  });
+
+  it('throws NO_REGISTRATION (404) when the caller has no linked respondent', async () => {
+    await expect(
+      MeService.updateMarketplaceConsent({ userId: orphanUserId, consentMarketplace: true }),
+    ).rejects.toMatchObject({ code: 'NO_REGISTRATION', statusCode: 404 });
+  });
+});

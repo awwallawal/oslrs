@@ -19,8 +19,10 @@
  *   3. Else `none`.
  */
 import { eq } from 'drizzle-orm';
+import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { respondents, wizardDrafts } from '../db/schema/index.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 
 export type RegistrationState = 'none' | 'draft' | 'pending_nin' | 'complete';
 
@@ -113,5 +115,80 @@ export class MeService {
 
     // 3. Nothing yet.
     return { state: 'none' };
+  }
+
+  /**
+   * Story 9-40 (AC#4) — self-service edit of the caller's OWN registration.
+   *
+   * Currently scoped to the marketplace-consent flag — the safe, low-blast-
+   * radius field surfaced on the dashboard. Identity / NIN / survey-answer
+   * editing would re-run the validated wizard write path in an authenticated
+   * edit mode (documented as the heavier enhancement in the 9-40 story); this
+   * endpoint deliberately does NOT touch those fields. Audited: actor IS the
+   * subject. Returns the refreshed respondent summary so the dashboard can
+   * update without a second round-trip.
+   */
+  static async updateMarketplaceConsent(args: {
+    userId: string;
+    consentMarketplace: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<RegistrationStatusRespondentSummary> {
+    const { userId, consentMarketplace } = args;
+
+    const existing = await db.query.respondents.findFirst({
+      where: eq(respondents.userId, userId),
+      columns: { id: true, consentMarketplace: true },
+    });
+    if (!existing) {
+      throw new AppError(
+        'NO_REGISTRATION',
+        'No registration is linked to your account yet.',
+        404,
+      );
+    }
+
+    const [updated] = await db
+      .update(respondents)
+      .set({ consentMarketplace })
+      .where(eq(respondents.id, existing.id))
+      .returning({
+        id: respondents.id,
+        status: respondents.status,
+        nin: respondents.nin,
+        lgaId: respondents.lgaId,
+        consentMarketplace: respondents.consentMarketplace,
+        referenceCode: respondents.referenceCode,
+      });
+
+    // Forensic trail (fire-and-forget; never blocks the response).
+    AuditService.logAction({
+      actorId: userId,
+      action: AUDIT_ACTIONS.RESPONDENT_SELF_UPDATED,
+      targetResource: AUDIT_TARGETS.RESPONDENT,
+      targetId: updated.id,
+      details: {
+        field: 'consentMarketplace',
+        from: existing.consentMarketplace,
+        to: consentMarketplace,
+      },
+      ipAddress: args.ipAddress,
+      userAgent: args.userAgent,
+    });
+
+    const ninStatus: NinStatus = updated.nin
+      ? 'provided'
+      : updated.status === 'pending_nin_capture'
+        ? 'pending'
+        : 'none';
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      lgaId: updated.lgaId ?? null,
+      ninStatus,
+      consentMarketplace: updated.consentMarketplace,
+      referenceCode: updated.referenceCode ?? null,
+    };
   }
 }

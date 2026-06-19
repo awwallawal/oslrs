@@ -7,9 +7,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { mockAuthenticate, mockGetRegistrationStatus } = vi.hoisted(() => ({
+const { mockAuthenticate, mockGetRegistrationStatus, mockUpdateMarketplaceConsent } = vi.hoisted(() => ({
   mockAuthenticate: vi.fn(),
   mockGetRegistrationStatus: vi.fn(),
+  mockUpdateMarketplaceConsent: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -18,7 +19,10 @@ vi.mock('../../middleware/auth.js', () => ({
 }));
 
 vi.mock('../../services/me.service.js', () => ({
-  MeService: { getRegistrationStatus: mockGetRegistrationStatus },
+  MeService: {
+    getRegistrationStatus: mockGetRegistrationStatus,
+    updateMarketplaceConsent: mockUpdateMarketplaceConsent,
+  },
 }));
 
 const { default: router } = await import('../me.routes.js');
@@ -71,5 +75,56 @@ describe('GET /me/registration-status', () => {
     expect(res.status).toBe(401);
     expect(res.body.code).toBe('AUTH_REQUIRED');
     expect(mockGetRegistrationStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /me/registration (Story 9-40 AC#4)', () => {
+  function authAs(user: Record<string, unknown>) {
+    mockAuthenticate.mockImplementation((req: express.Request, _res: unknown, next: () => void) => {
+      (req as unknown as { user: unknown }).user = user;
+      next();
+    });
+  }
+
+  it('updates marketplace consent and returns the refreshed summary', async () => {
+    authAs({ sub: 'user-1', email: 'me@example.com', role: 'public_user' });
+    mockUpdateMarketplaceConsent.mockResolvedValueOnce({
+      id: 'resp-1',
+      status: 'active',
+      lgaId: 'lga-egbeda',
+      ninStatus: 'provided',
+      consentMarketplace: true,
+      referenceCode: 'OSL-2026-AAA111',
+    });
+
+    const res = await request(buildApp())
+      .put('/me/registration')
+      .send({ consentMarketplace: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.consentMarketplace).toBe(true);
+    expect(mockUpdateMarketplaceConsent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', consentMarketplace: true }),
+    );
+  });
+
+  it('returns 400 when consentMarketplace is missing or not a boolean', async () => {
+    authAs({ sub: 'user-1', email: 'me@example.com', role: 'public_user' });
+    const res = await request(buildApp()).put('/me/registration').send({ consentMarketplace: 'yes' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(mockUpdateMarketplaceConsent).not.toHaveBeenCalled();
+  });
+
+  it('propagates NO_REGISTRATION (404) from the service', async () => {
+    authAs({ sub: 'user-1', email: 'me@example.com', role: 'public_user' });
+    mockUpdateMarketplaceConsent.mockRejectedValueOnce({
+      code: 'NO_REGISTRATION',
+      statusCode: 404,
+      message: 'No registration is linked to your account yet.',
+    });
+    const res = await request(buildApp()).put('/me/registration').send({ consentMarketplace: true });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NO_REGISTRATION');
   });
 });

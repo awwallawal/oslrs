@@ -30,4 +30,39 @@ export class MeController {
       next(error);
     }
   }
+
+  /**
+   * Story 9-40 (AC#4) — `PUT /api/v1/me/registration`. Self-service edit of the
+   * caller's own registration. Currently accepts only `consentMarketplace`
+   * (boolean). The user is resolved from the JWT; no arbitrary identifier is
+   * accepted. Returns the refreshed respondent summary.
+   */
+  static async updateRegistration(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = req.user;
+      if (!user?.sub) {
+        throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+      }
+
+      const { consentMarketplace } = req.body ?? {};
+      if (typeof consentMarketplace !== 'boolean') {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          'consentMarketplace (boolean) is required',
+          400,
+        );
+      }
+
+      const data = await MeService.updateMarketplaceConsent({
+        userId: user.sub,
+        consentMarketplace,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+      });
+
+      return res.status(200).json({ status: 'ok', data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
