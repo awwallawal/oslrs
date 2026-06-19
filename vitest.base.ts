@@ -47,11 +47,27 @@ console.log('[Vitest Base] Reporter will write to:', workspaceRoot);
 // package's own pool. Bounding the simultaneous worker count keeps the honest
 // gate deterministic. Unset → vitest's default (CI's dedicated runners want full
 // parallelism and never set this var). Set by .husky/pre-push.
-const maxWorkers = process.env.VITEST_MAX_THREADS
+const explicitCap = process.env.VITEST_MAX_THREADS
   ? Math.max(1, Number(process.env.VITEST_MAX_THREADS))
   : undefined;
+// Off-CI default cap (2026-06-19): a plain local `pnpm vitest run` otherwise
+// spawns ~one worker per core and oversubscribes CPU/RAM on a busy laptop,
+// CPU-STARVING heavy jsdom renders past their waitFor timeout. That — not cold
+// chunk imports — is the root cause of the route-resolution `/register` flake:
+// under uncapped oversubscription even a warm WizardPage render exceeds 5s, but
+// the SAME suite capped at 2 workers is green (Pitfall #37 / 9-21 review).
+// The pre-push gate already exports VITEST_MAX_THREADS=2; mirroring that as the
+// off-CI DEFAULT makes every ad-hoc local run deterministic too. CI's dedicated
+// runners run the suite alone and want full parallelism, so leave them uncapped
+// (process.env.CI). Explicit VITEST_MAX_THREADS always wins (e.g. for a fast
+// run on an idle machine: `VITEST_MAX_THREADS=4 pnpm test`).
+const maxWorkers = explicitCap ?? (process.env.CI ? undefined : 2);
 if (maxWorkers) {
-  console.log('[Vitest Base] VITEST_MAX_THREADS set → capping pool at', maxWorkers, 'workers');
+  console.log(
+    '[Vitest Base] capping worker pool at',
+    maxWorkers,
+    explicitCap ? 'workers (VITEST_MAX_THREADS)' : 'workers (off-CI default; set VITEST_MAX_THREADS to override)',
+  );
 }
 
 // Debug: Write a marker file to prove config is loaded
