@@ -22,19 +22,18 @@ import { eq } from 'drizzle-orm';
 import { MfaService } from '../services/mfa.service.js';
 import { AuthService } from '../services/auth.service.js';
 import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
+import {
+  REFRESH_TOKEN_COOKIE_NAME,
+  COOKIE_OPTIONS,
+  refreshCookieMaxAge,
+} from '../lib/cookie-config.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'mfa-controller' });
 
-// Cookie configuration — must match auth.controller.ts so the cookie can be
-// read/cleared by either controller.
-const REFRESH_TOKEN_COOKIE_NAME = 'refreshToken';
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
-  path: '/api/v1/auth',
-};
+// Story 9-13 F10 (carryover, Story 9-45 Task 6b) — refresh-cookie config is now
+// the single source of truth in lib/cookie-config.js, shared with
+// auth.controller.ts so the two login channels can't drift on cookie scope.
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -244,13 +243,9 @@ export class MfaController {
         userAgent,
       );
 
-      const refreshCookieMaxAge = payload.rememberMe
-        ? 30 * 24 * 60 * 60 * 1000
-        : 7 * 24 * 60 * 60 * 1000;
-
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
         ...COOKIE_OPTIONS,
-        maxAge: refreshCookieMaxAge,
+        maxAge: refreshCookieMaxAge(payload.rememberMe),
       });
 
       AuditService.logAction({
@@ -325,13 +320,9 @@ export class MfaController {
         userAgent,
       );
 
-      const refreshCookieMaxAge = payload.rememberMe
-        ? 30 * 24 * 60 * 60 * 1000
-        : 7 * 24 * 60 * 60 * 1000;
-
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, session.refreshToken, {
         ...COOKIE_OPTIONS,
-        maxAge: refreshCookieMaxAge,
+        maxAge: refreshCookieMaxAge(payload.rememberMe),
       });
 
       AuditService.logAction({
