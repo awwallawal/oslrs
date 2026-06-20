@@ -23,6 +23,10 @@ Stories 9-21 / 9-39 / 9-40 / 9-60 are all paired-reviewed (Senior-Dev, review-be
 | `e561c74` | docs(9-60) | Authored 9-60 (SM Bob + PM John) + reconciled `sprint-status`/`epics.md`. |
 | `e5b9e4f` | docs(handoff) | HOLD gate while 9-60 was in flight (now lifted). |
 | `f29a4ab` | feat(9-60) | Authenticated registration edit + session resume — `/registration/manage` + `GET/PUT /me/registration[/wizard]` + session NIN-complete; shared validator extraction; **closes 9-40 M1/M2**. |
+| `284f27e` | docs(handoff) | Finalized this brief — HOLD lifted, operator gate set as the pre-merge check. |
+| `773c1d5` | fix(9-60) | NIN-dedupe TOCTOU backstop → clean 409 in both authed write paths (parity with the public submit). Post-review hardening. |
+
+> **Authoritative list = `git log 702ad85..HEAD`** (11 commits). This table is a convenience and necessarily cannot list the single commit that last updates this file itself.
 
 Each `feat` commit is atomic (code + tests + story doc + its `sprint-status.yaml` line). 9-21/9-39/9-40/9-60 are all `done` in `sprint-status.yaml` + `epics.md`.
 
@@ -47,6 +51,7 @@ Each `feat` commit is atomic (code + tests + story doc + its `sprint-status.yaml
 - **Full web suite:** 242 files / **2680 passed + 2 todo / 0 failures** (off-CI cap; with all four stories + all review fixes in tree).
 - **Targeted:** 9-60 web 19/19 + API `me.routes` 10/10 · 9-40 web 24/24 · 9-39 170/170 · 9-21 file 55/55.
 - **lint:** 0 (api + web). **tsc:** 0 (api + web). **Pre-commit hook** (lint + tsc api+web) passed on every commit.
+- **Post-review TOCTOU hardening (`773c1d5`):** API `tsc`/`lint` 0 + `me.routes` 10/10. Backend-only, so the full web suite was NOT re-run (web unchanged since the 242/2680 run above); the rare race itself is not unit-reproducible (see the 9-60 story M2 note) and is exercised by the CI real-DB suite.
 - **NOT run locally:** all real-DB integration tests (Must-read #1/#2) — CI + the operator gate cover these.
 
 ---
