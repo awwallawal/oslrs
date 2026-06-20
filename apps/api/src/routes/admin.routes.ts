@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getRedisClient } from '../lib/redis.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireFreshReAuth } from '../middleware/sensitive-action.js';
 import { UserRole } from '@oslsr/types';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { getEmailConfigFromEnv } from '../providers/index.js';
@@ -179,6 +180,7 @@ router.post(
   '/email-queue/drain',
   authenticate,
   authorize(UserRole.SUPER_ADMIN),
+  requireFreshReAuth, // F-014 — destructive admin action requires step-up re-auth
   async (_req: Request, res: Response) => {
     try {
       const { drainEmailQueue } = await import('../queues/email.queue.js');

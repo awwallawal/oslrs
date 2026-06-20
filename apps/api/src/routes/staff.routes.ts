@@ -3,6 +3,7 @@ import multer from 'multer';
 import { StaffController } from '../controllers/staff.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireFreshReAuth } from '../middleware/sensitive-action.js';
 import { UserRole } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 
@@ -32,14 +33,16 @@ router.post('/import', upload.single('file'), StaffController.importCsv as Reque
 router.get('/import/:jobId', StaffController.getImportStatus);
 router.post('/:userId/resend-invitation', StaffController.resendInvitation as RequestHandler);
 
-// Story 2.5-3, AC5, AC6: Update role with session invalidation
-router.patch('/:userId/role', StaffController.updateRole as RequestHandler);
+// Story 2.5-3, AC5, AC6: Update role with session invalidation.
+// F-014 — privileged mutation: UNCONDITIONAL step-up re-auth (role change).
+router.patch('/:userId/role', requireFreshReAuth, StaffController.updateRole as RequestHandler);
 
-// Story 2.5-3, AC4, AC6: Deactivate user with session invalidation
-router.post('/:userId/deactivate', StaffController.deactivate as RequestHandler);
+// Story 2.5-3, AC4, AC6: Deactivate user with session invalidation.
+// F-014 — privileged mutation: step-up re-auth.
+router.post('/:userId/deactivate', requireFreshReAuth, StaffController.deactivate as RequestHandler);
 
-// Reactivate a deactivated or suspended user
-router.post('/:userId/reactivate', StaffController.reactivate as RequestHandler);
+// Reactivate a deactivated or suspended user. F-014 — step-up re-auth.
+router.post('/:userId/reactivate', requireFreshReAuth, StaffController.reactivate as RequestHandler);
 
 // Story 2.5-3, AC7: Download ID card for staff member
 router.get('/:userId/id-card', StaffController.downloadIdCard);
