@@ -24,7 +24,7 @@ import pino from 'pino';
 import { AppError } from '@oslsr/utils';
 import type { MinorGuardianResult } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { respondents, wizardDrafts, submissions, type WizardDraftData } from '../db/schema/index.js';
+import { respondents, wizardDrafts, submissions, lgas, type WizardDraftData } from '../db/schema/index.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { NativeFormService } from './native-form.service.js';
 import {
@@ -56,6 +56,8 @@ export interface RegistrationStatusRespondentSummary {
   id: string;
   status: string;
   lgaId: string | null;
+  /** Human LGA name resolved from `lgas.code` (Story 9-61); null if unmatched. */
+  lgaName: string | null;
   ninStatus: NinStatus;
   consentMarketplace: boolean;
   referenceCode: string | null;
@@ -167,10 +169,24 @@ export class MeService {
           ? 'pending'
           : 'none';
 
+      // Story 9-61 — resolve the human LGA name from the slug (`lgas.code`) so
+      // the dashboard shows "Egbeda", not "egbeda". Falls back to null when the
+      // slug has no match (e.g. legacy/synthetic data); the client then shows the
+      // raw slug rather than an em dash.
+      const lgaName = respondent.lgaId
+        ? (
+            await db.query.lgas.findFirst({
+              where: eq(lgas.code, respondent.lgaId),
+              columns: { name: true },
+            })
+          )?.name ?? null
+        : null;
+
       const summary: RegistrationStatusRespondentSummary = {
         id: respondent.id,
         status: respondent.status,
         lgaId: respondent.lgaId ?? null,
+        lgaName,
         ninStatus,
         consentMarketplace: respondent.consentMarketplace,
         referenceCode: respondent.referenceCode ?? null,
@@ -260,10 +276,20 @@ export class MeService {
         ? 'pending'
         : 'none';
 
+    const lgaName = updated.lgaId
+      ? (
+          await db.query.lgas.findFirst({
+            where: eq(lgas.code, updated.lgaId),
+            columns: { name: true },
+          })
+        )?.name ?? null
+      : null;
+
     return {
       id: updated.id,
       status: updated.status,
       lgaId: updated.lgaId ?? null,
+      lgaName,
       ninStatus,
       consentMarketplace: updated.consentMarketplace,
       referenceCode: updated.referenceCode ?? null,

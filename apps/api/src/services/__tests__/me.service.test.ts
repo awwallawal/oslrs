@@ -9,7 +9,7 @@ import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { uuidv7 } from 'uuidv7';
 import { MeService } from '../me.service.js';
 import { db } from '../../db/index.js';
-import { users, roles, respondents, wizardDrafts, submissions, auditLogs } from '../../db/schema/index.js';
+import { users, roles, respondents, wizardDrafts, submissions, auditLogs, lgas } from '../../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
 
 describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
@@ -26,6 +26,8 @@ describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
   beforeAll(async () => {
     await db.insert(roles).values([{ name: 'public_user', description: 'Public User' }]).onConflictDoNothing();
     const publicRole = await db.query.roles.findFirst({ where: eq(roles.name, 'public_user') });
+    // Story 9-61 — slug→name source the read-model resolves lgaName from.
+    await db.insert(lgas).values({ code: 'egbeda', name: 'Egbeda' }).onConflictDoNothing();
 
     for (const key of Object.keys(emails) as Array<keyof typeof emails>) {
       const [u] = await db
@@ -43,7 +45,7 @@ describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
         firstName: 'Comp',
         lastName: 'Lete',
         phoneNumber: '+2348010000001',
-        lgaId: 'lga-egbeda',
+        lgaId: 'egbeda',
         source: 'public',
         status: 'active',
         consentMarketplace: true,
@@ -90,6 +92,8 @@ describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
     expect(res.respondent).toMatchObject({
       id: respondentIds[0],
       status: 'active',
+      lgaId: 'egbeda',
+      lgaName: 'Egbeda',
       ninStatus: 'provided',
       consentMarketplace: true,
     });
@@ -161,11 +165,19 @@ describe('MeService.updateMarketplaceConsent (Story 9-40 AC#4)', () => {
 
   afterAll(async () => {
     const userIds = [linkedUserId, orphanUserId].filter(Boolean);
-    // updateMarketplaceConsent audits the change (actor = the user); clear those
-    // audit_logs before deleting the users they reference (FK).
-    if (userIds.length) await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
     if (respondentId) await db.delete(respondents).where(eq(respondents.id, respondentId));
-    if (userIds.length) await db.delete(users).where(inArray(users.id, userIds));
+    // updateMarketplaceConsent's audit is FIRE-AND-FORGET, so the audit row can
+    // land just after the call returns. Clear audit_logs then delete the users;
+    // retry on the FK race in case a late audit write arrives between the two.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (userIds.length) await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
+      try {
+        if (userIds.length) await db.delete(users).where(inArray(users.id, userIds));
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
   }, 30000);
 
   it('flips marketplace consent and returns the refreshed summary', async () => {
@@ -293,18 +305,20 @@ describe('MeService 9-61 — editable read + session edit + complete-nin (real D
   afterAll(async () => {
     const userIds = [userA, userB, userPending].filter(Boolean);
     const ids = [respA, respB, respPending].filter(Boolean);
-    // 9-61's edit / complete-nin write paths emit audit_logs (actor = the test
-    // user). Delete those before the users they reference, or the
-    // audit_logs_actor_id_users_id_fk constraint blocks the user delete.
-    if (userIds.length) {
-      await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
-    }
     if (ids.length) {
       await db.delete(submissions).where(inArray(submissions.respondentId, ids));
       await db.delete(respondents).where(inArray(respondents.id, ids));
     }
-    if (userIds.length) {
-      await db.delete(users).where(inArray(users.id, userIds));
+    // 9-61 edit / complete-nin emit audit_logs (some fire-and-forget). Clear them
+    // then delete the users; retry on the FK race if a late audit write lands.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (userIds.length) await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
+      try {
+        if (userIds.length) await db.delete(users).where(inArray(users.id, userIds));
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
   }, 30000);
 

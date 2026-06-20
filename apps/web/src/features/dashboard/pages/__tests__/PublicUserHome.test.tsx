@@ -117,6 +117,7 @@ describe('PublicUserHome (Story 9-40)', () => {
             id: 'r1',
             status: 'pending_nin_capture',
             lgaId: 'ibadan-north',
+            lgaName: 'Ibadan North',
             ninStatus: 'pending',
             consentMarketplace: false,
             referenceCode: 'OSL-2026-ABC123',
@@ -139,6 +140,7 @@ describe('PublicUserHome (Story 9-40)', () => {
             id: 'r1',
             status: 'active',
             lgaId: 'ibadan-north',
+            lgaName: 'Ibadan North',
             ninStatus: 'provided',
             consentMarketplace: false,
             referenceCode: 'OSL-2026-XYZ789',
@@ -152,7 +154,8 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('registration-summary')).toBeInTheDocument();
       expect(screen.getByTestId('summary-reference')).toHaveTextContent('OSL-2026-XYZ789');
       expect(screen.getByTestId('summary-nin-status')).toHaveTextContent('Provided');
-      expect(screen.getByTestId('summary-lga')).toHaveTextContent('ibadan-north');
+      // Story 9-61 — server-resolved human LGA name renders (not the raw slug).
+      expect(screen.getByTestId('summary-lga')).toHaveTextContent('Ibadan North');
       expect(screen.getByTestId('marketplace-status')).toHaveTextContent(/not opted in/i);
       // Story 9-61 — in-session edit entry point (replaces 9-40's /check-registration link).
       expect(screen.getByTestId('edit-registration')).toHaveAttribute('href', '/registration/manage');
@@ -168,6 +171,7 @@ describe('PublicUserHome (Story 9-40)', () => {
             id: 'r1',
             status: 'active',
             lgaId: 'ibadan-north',
+            lgaName: 'Ibadan North',
             ninStatus: 'provided',
             consentMarketplace,
             referenceCode: 'OSL-1',

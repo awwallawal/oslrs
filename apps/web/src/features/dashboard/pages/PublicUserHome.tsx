@@ -144,7 +144,7 @@ function RegistrationSummaryCard({
               <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> LGA
             </dt>
             <dd className="font-medium text-neutral-900" data-testid="summary-lga">
-              {respondent.lgaId ?? '—'}
+              {respondent.lgaName ?? respondent.lgaId ?? '—'}
             </dd>
           </div>
           <div>

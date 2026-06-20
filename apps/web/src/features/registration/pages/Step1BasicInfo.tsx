@@ -5,6 +5,7 @@ import { WizardNavigation } from '../components/WizardNavigation';
 import { NinHelpHint } from '../components/NinHelpHint';
 import { PendingNinToggle } from '../components/PendingNinToggle';
 import { useNinCheck } from '../../forms/hooks/useNinCheck';
+import { supportEmail } from '../../../config/site';
 import type { WizardDraftData } from '../api/wizard.api';
 
 /**
@@ -28,6 +29,15 @@ export interface StepProps {
   mergeFields: (patch: Partial<WizardDraftData>) => void;
   onContinue: () => void;
   onBack?: () => void;
+  /**
+   * Story 9-61 — authenticated edit mode. When true AND the respondent already
+   * has an established NIN (`ownNin`), the NIN is locked read-only: a person's
+   * NIN doesn't change, and re-running the public duplicate check against their
+   * OWN registered NIN would (correctly) flag it as a duplicate and dead-end the
+   * editor. Lock + skip the check; the pending-NIN-add path stays editable.
+   */
+  editMode?: boolean;
+  ownNin?: string;
 }
 
 // AI-Review M2: Unicode-aware so Yoruba/Nigerian diacritics (Ọláwálé, Ṣadé,
@@ -80,12 +90,16 @@ function computeFieldErrors(formData: WizardDraftData): FieldErrors {
   return next;
 }
 
-export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: StepProps) {
+export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack, editMode, ownNin }: StepProps) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const { checkNin, reset: resetNinCheck, isChecking, isDuplicate, duplicateInfo } = useNinCheck();
 
   const nin = formData.nin ?? '';
   const pending = formData.pendingNinToggle === true;
+  // Story 9-61 — lock the NIN when editing an existing registration that already
+  // has one (see StepProps). Pending respondents (no ownNin) keep an editable,
+  // duplicate-checked field so they can supply a NIN.
+  const ninLocked = editMode === true && !!ownNin;
 
   // AC#A1 — NIN status machine mirrors the retired Step5NinInput.
   const ninStatus: 'incomplete' | 'valid' | 'invalid' =
@@ -100,24 +114,24 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
   // debounces (~500ms) and only calls the (rate-limited, unauthenticated)
   // /forms/check-nin endpoint for checksum-valid 11-digit input.
   useEffect(() => {
-    if (pending) {
+    if (pending || ninLocked) {
       resetNinCheck();
       return;
     }
     if (ninStatus === 'valid') checkNin(nin);
     else resetNinCheck();
-  }, [nin, ninStatus, pending, checkNin, resetNinCheck]);
+  }, [nin, ninStatus, pending, ninLocked, checkNin, resetNinCheck]);
 
   // AC#A2 — duplicate-block message (mirrors FormRenderer's derivation).
   const ninDuplicateError = useMemo(() => {
-    if (pending || !isDuplicate || !duplicateInfo) return undefined;
+    if (pending || ninLocked || !isDuplicate || !duplicateInfo) return undefined;
     const { reason, registeredAt } = duplicateInfo;
     if (reason === 'staff') {
-      return 'This NIN belongs to a registered staff member. Please contact support if this is a mistake.';
+      return `This NIN belongs to a registered staff member. Please contact support at ${supportEmail} if this is a mistake.`;
     }
     const date = registeredAt ? new Date(registeredAt).toLocaleDateString() : 'an earlier date';
-    return `This NIN is already registered (since ${date}). If you think this is a mistake, please contact support.`;
-  }, [pending, isDuplicate, duplicateInfo]);
+    return `This NIN is already registered (since ${date}). If you think this is a mistake, please contact support at ${supportEmail}.`;
+  }, [pending, ninLocked, isDuplicate, duplicateInfo]);
 
   const fieldErrors = useMemo(() => computeFieldErrors(formData), [formData]);
 
@@ -128,7 +142,7 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
   // networks — to prevent a sub-second race that the backend submit already
   // rejects authoritatively. The duplicate block still disables Continue the
   // moment isDuplicate resolves.
-  const ninGateOk = pending || (ninStatus === 'valid' && !isDuplicate);
+  const ninGateOk = pending || ninLocked || (ninStatus === 'valid' && !isDuplicate);
   const allValid = ninGateOk && Object.keys(fieldErrors).length === 0;
 
   // Reasons surfaced in the validation summary when Continue is disabled.
@@ -193,10 +207,11 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
             onChange={(e) => mergeFields({ nin: e.target.value.replace(/\D/g, '').slice(0, 11) })}
             onBlur={() => setTouched((t) => ({ ...t, nin: true }))}
             disabled={pending}
+            readOnly={ninLocked}
             aria-describedby={ninDescribedBy}
             aria-invalid={!pending && (ninStatus === 'invalid' || !!ninDuplicateError)}
             placeholder="11-digit NIN"
-            className={`w-full rounded-lg border px-4 py-3 font-mono transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:bg-neutral-100 disabled:opacity-60 ${
+            className={`w-full rounded-lg border px-4 py-3 font-mono transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:bg-neutral-100 disabled:opacity-60 read-only:bg-neutral-100 read-only:text-neutral-600 ${
               !pending && (ninStatus === 'invalid' || ninDuplicateError)
                 ? 'border-error-600 focus:border-error-600'
                 : !pending && ninStatus === 'valid' && !isChecking
@@ -205,18 +220,24 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
             }`}
             data-testid="wizard-step1-nin-input"
           />
-          {!pending && isChecking && (
+          {ninLocked && (
+            <p className="flex items-center gap-1 text-sm text-neutral-500" data-testid="wizard-step1-nin-locked">
+              <CheckCircle2 className="h-4 w-4 text-success-600" />
+              Your NIN is on file and can&apos;t be changed here. Edit your other details below.
+            </p>
+          )}
+          {!pending && !ninLocked && isChecking && (
             <p id="wizard-step1-nin-checking" className="text-sm text-neutral-500" data-testid="wizard-step1-nin-checking">
               Checking NIN availability…
             </p>
           )}
-          {!pending && ninStatus === 'valid' && !isChecking && !ninDuplicateError && (
+          {!pending && !ninLocked && ninStatus === 'valid' && !isChecking && !ninDuplicateError && (
             <p className="flex items-center gap-1 text-sm text-success-600" data-testid="wizard-step1-nin-valid">
               <CheckCircle2 className="h-4 w-4" />
               NIN format looks good. We do a final check when you submit.
             </p>
           )}
-          {!pending && ninStatus === 'invalid' && (
+          {!pending && !ninLocked && ninStatus === 'invalid' && (
             <p
               id="wizard-step1-nin-invalid"
               role="alert"
@@ -238,19 +259,23 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack }: St
               {ninDuplicateError}
             </p>
           )}
-          <NinHelpHint
-            id="wizard-step1-nin-help"
-            variant="inline"
-            onPendingNinClick={() => mergeFields({ pendingNinToggle: true })}
-            hidePendingLink={pending}
-          />
+          {!ninLocked && (
+            <NinHelpHint
+              id="wizard-step1-nin-help"
+              variant="inline"
+              onPendingNinClick={() => mergeFields({ pendingNinToggle: true })}
+              hidePendingLink={pending}
+            />
+          )}
         </div>
 
         {/* Pending-NIN toggle (reveals the consequence-preview card when pressed). */}
-        <PendingNinToggle
-          pressed={pending}
-          onChange={(pressed) => mergeFields({ pendingNinToggle: pressed })}
-        />
+        {!ninLocked && (
+          <PendingNinToggle
+            pressed={pending}
+            onChange={(pressed) => mergeFields({ pendingNinToggle: pressed })}
+          />
+        )}
 
         {/* Given + Family name (AC#F1 — surname-first safe). */}
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

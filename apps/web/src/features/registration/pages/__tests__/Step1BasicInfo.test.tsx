@@ -34,7 +34,10 @@ function validState(overrides: Partial<WizardDraftData> = {}): WizardDraftData {
   };
 }
 
-function renderStep(formData: WizardDraftData = {}) {
+function renderStep(
+  formData: WizardDraftData = {},
+  extra: Partial<{ editMode: boolean; ownNin: string }> = {},
+) {
   const mergeFields = vi.fn();
   const onContinue = vi.fn();
   const onBack = vi.fn();
@@ -44,6 +47,8 @@ function renderStep(formData: WizardDraftData = {}) {
       mergeFields={mergeFields}
       onContinue={onContinue}
       onBack={onBack}
+      editMode={extra.editMode}
+      ownNin={extra.ownNin}
     />,
   );
   return { mergeFields, onContinue, onBack };
@@ -100,6 +105,25 @@ describe('Step1BasicInfo (9-18 Part A + F)', () => {
     // Debounced (~500ms) check → duplicate block appears.
     expect(await screen.findByTestId('wizard-step1-nin-duplicate', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByTestId('wizard-nav-continue')).toBeDisabled();
+  });
+
+  it('Story 9-61 — in edit mode with an established NIN, locks the NIN read-only, skips the duplicate check, and does NOT block Continue', () => {
+    // The user's own NIN is "already registered" — but editing must not dead-end.
+    mockedCheckNin.mockResolvedValue({
+      available: false,
+      reason: 'respondent',
+      registeredAt: '2026-05-01T00:00:00Z',
+    });
+    renderStep(validState(), { editMode: true, ownNin: VALID_NIN });
+
+    expect(screen.getByTestId('wizard-step1-nin-input')).toHaveAttribute('readonly');
+    expect(screen.getByTestId('wizard-step1-nin-locked')).toBeInTheDocument();
+    // No duplicate block; the pending-NIN escape is hidden; Continue is enabled.
+    expect(screen.queryByTestId('wizard-step1-nin-duplicate')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nin-help-hint-pending-link')).not.toBeInTheDocument();
+    expect(screen.getByTestId('wizard-nav-continue')).not.toBeDisabled();
+    // The duplicate-check endpoint is never hit in locked mode.
+    expect(mockedCheckNin).not.toHaveBeenCalled();
   });
 
   it('calls mergeFields with givenName / familyName on change', () => {

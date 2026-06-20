@@ -132,6 +132,9 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Story 9-61 — the respondent's established NIN (captured from the edit seed);
+  // drives Step 1's read-only NIN lock in authenticated edit mode.
+  const [ownNin, setOwnNin] = useState<string | undefined>(undefined);
   const [completionData, setCompletionData] = useState<{
     submissionUid: string;
     referenceCode: string;
@@ -176,6 +179,7 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
           consentEnriched: wd.consentEnriched,
           questionnaireResponses: wd.questionnaireResponses,
         });
+        setOwnNin(wd.nin ?? undefined);
       })
       .catch(() => {
         // Non-fatal — the user can still fill the wizard; submit surfaces errors.
@@ -519,6 +523,8 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
         isSubmitting,
         submitError,
         reviewCompleteness,
+        editMode: authenticated,
+        ownNin,
       })}
     </WizardLayout>
   );
@@ -536,6 +542,8 @@ function renderStep(props: {
   isSubmitting: boolean;
   submitError: string | null;
   reviewCompleteness: { complete: boolean; missing: string[]; missingStepIndex: number | null };
+  editMode: boolean;
+  ownNin?: string;
 }) {
   const step = props.steps[props.index];
   if (!step) return null;
@@ -548,6 +556,8 @@ function renderStep(props: {
           mergeFields={props.mergeFields}
           onContinue={props.onContinue}
           onBack={props.onBack}
+          editMode={props.editMode}
+          ownNin={props.ownNin}
         />
       );
     case 'contact':

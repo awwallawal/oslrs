@@ -16,6 +16,8 @@ export interface RegistrationStatusRespondentSummary {
   id: string;
   status: string;
   lgaId: string | null;
+  /** Human LGA name resolved server-side from `lgas.code` (Story 9-61). */
+  lgaName: string | null;
   ninStatus: NinStatus;
   consentMarketplace: boolean;
   referenceCode: string | null;
