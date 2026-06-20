@@ -46,14 +46,29 @@ export function WizardLayout({
       }}
     >
       <div className="min-h-screen bg-neutral-50 flex flex-col">
-        {/* Back to Homepage link */}
-        <div className="p-4 sm:p-6">
+        {/* Top bar: Back to Homepage + wrong-door recovery (Story 9-39 AC#4) */}
+        <div className="flex items-center justify-between gap-3 p-4 sm:p-6">
           <Link
             to="/"
             className="inline-flex items-center gap-2 text-neutral-600 hover:text-primary-600 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md px-2 py-1 -ml-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Homepage
+          </Link>
+
+          {/* Returning users who took the wrong door (Register instead of Sign in)
+              get a discoverable way back WITHOUT restarting. A static link to the
+              magic-link sign-in — never an email lookup — so it leaks nothing
+              about who is registered (anti-enumeration, AC#4). Authenticated
+              visitors never see this: PublicOnlyRoute redirects them off
+              /register to /dashboard before the wizard mounts. */}
+          <Link
+            to="/login"
+            data-testid="wizard-already-registered"
+            className="text-sm font-medium text-neutral-600 hover:text-primary-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-md px-2 py-1"
+          >
+            Already registered?{' '}
+            <span className="text-primary-700 underline">Sign in</span>
           </Link>
         </div>
 

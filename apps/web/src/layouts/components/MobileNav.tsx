@@ -243,9 +243,9 @@ function MobileNav() {
             </div>
           </div>
 
-          {/* CTA at bottom - Auth-aware per Story 1.5-8 AC5 */}
+          {/* CTA at bottom - Auth-aware per Story 1.5-8 AC5 + 9-39 AC1 (Sign in door) */}
           <div className="p-4 border-t border-neutral-200">
-            <SmartCta className="block w-full py-3 text-center" />
+            <SmartCta stacked className="w-full" />
           </div>
         </nav>
       </SheetContent>

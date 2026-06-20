@@ -10,13 +10,15 @@ interface LoginPageProps {
 }
 
 /**
- * Story 9-16 — public-only "Send me a sign-in link" entry-point. Reveals an
- * email field, POSTs a `login`-purpose magic-link request, and ALWAYS shows a
- * generic confirmation regardless of whether the email matched an account
- * (anti-enumeration — mirrors the forgot-password discipline).
+ * Story 9-16 + 9-39 (AC#2) — public sign-in is magic-link-FIRST.
+ *
+ * The email field is the primary, always-visible action ("Enter your email and
+ * we'll send you a one-time sign-in link"). It POSTs a `login`-purpose magic-link
+ * request and ALWAYS shows a generic confirmation regardless of whether the email
+ * matched an account (anti-enumeration — mirrors forgot-password discipline).
+ * Email+password is demoted to the secondary `PasswordSignInDisclosure` below.
  */
 function MagicLinkSignInEntry() {
-  const [expanded, setExpanded] = useState(false);
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -51,68 +53,87 @@ function MagicLinkSignInEntry() {
   }
 
   return (
-    <section className="space-y-3" data-testid="magic-link-entry-point">
-      {/* Visual divider so the magic-link option reads as a clear alternative
-          to the password form above (Story 9-16 — prominence fix 2026-06-05). */}
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="h-px flex-1 bg-neutral-200" />
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">or</span>
-        <span className="h-px flex-1 bg-neutral-200" />
-      </div>
-
-      {!expanded ? (
+    <section
+      className="space-y-3 rounded-lg border border-primary-200 bg-primary-50/40 p-4"
+      data-testid="magic-link-entry-point"
+    >
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <label htmlFor="magic-link-email" className="block text-sm font-medium text-neutral-700">
+          Email address
+        </label>
+        <input
+          id="magic-link-email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          data-testid="magic-link-email-input"
+          placeholder="you@example.com"
+          className="w-full rounded-lg border border-neutral-300 px-4 py-2 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        />
         <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          data-testid="magic-link-reveal-button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary-300 bg-white px-4 py-2.5 text-sm font-semibold text-primary-700 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          type="submit"
+          disabled={isSending}
+          data-testid="magic-link-submit-button"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-400"
         >
           <Mail className="h-4 w-4" aria-hidden="true" />
-          Email me a sign-in link (no password)
+          {isSending ? 'Sending…' : 'Email me a sign-in link'}
         </button>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/40 p-4">
-          <label htmlFor="magic-link-email" className="block text-sm font-medium text-neutral-700">
-            Email address
-          </label>
-          <input
-            id="magic-link-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            data-testid="magic-link-email-input"
-            placeholder="you@example.com"
-            className="w-full rounded-lg border border-neutral-300 px-4 py-2 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-          />
-          <button
-            type="submit"
-            disabled={isSending}
-            data-testid="magic-link-submit-button"
-            className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-400"
-          >
-            {isSending ? 'Sending…' : 'Email me a sign-in link'}
-          </button>
-          <p className="text-xs text-neutral-500">
-            We'll email you a one-time link — no password needed.
-          </p>
-        </form>
-      )}
+        <p className="text-xs text-neutral-500">
+          We'll email you a one-time link — no password needed.
+        </p>
+      </form>
     </section>
   );
 }
 
 /**
- * Login page component
+ * Story 9-39 (AC#2/#3) — secondary "I already set a password" disclosure.
  *
- * Displays the login form with proper branding and layout.
- * Handles redirect after successful login.
+ * Collapsed by default so the public sign-in surface leads with the magic-link.
+ * Only public accounts who opted into a password (Story 9-32) need this, so the
+ * password form — and the "Forgot password?" link it carries — stays OUT of the
+ * default view (passwordless accounts have no password to reset). Staff are
+ * unaffected: `StaffLoginPage` renders `LoginForm type="staff"` directly.
+ */
+function PasswordSignInDisclosure({ from }: { from: string }) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <section data-testid="password-signin-disclosure" className="text-center">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          data-testid="password-signin-reveal"
+          className="text-sm font-medium text-neutral-600 hover:text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded"
+        >
+          I already set a password
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section data-testid="password-signin-disclosure">
+      <div data-testid="password-signin-form" className="rounded-lg border border-neutral-200 bg-white p-4">
+        {/* embedded: the page already supplies OSLSR branding + the /register
+            cutover banner, so suppress LoginForm's own header + footer to avoid
+            duplicate <h1>/heading/CTA (Story 9-39 review M1). */}
+        <LoginForm type="public" redirectTo={from} embedded />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Login page component.
  *
- * Story 9-12 Task 8 — public login mode now carries the migration cutover
- * banner above the form. New respondents are routed to the 5-step wizard at
- * `/register`; existing public_users keep using their password here. Staff
- * login is unchanged (no banner).
+ * Public mode (Story 9-39): magic-link-primary sign-in + a secondary password
+ * disclosure, above a cutover banner pointing new visitors at the `/register`
+ * wizard. Staff mode is unchanged — password + MFA via `LoginForm type="staff"`.
  */
 export default function LoginPage({ type = 'public' }: LoginPageProps) {
   useDocumentTitle(type === 'staff' ? 'Staff Login' : 'Login');
@@ -127,9 +148,9 @@ export default function LoginPage({ type = 'public' }: LoginPageProps) {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-4">
-          {type === 'public' && (
+          {type === 'public' ? (
             <>
-              {/* AC#11 cutover banner — primary CTA to the new wizard */}
+              {/* Cutover banner — primary CTA to the new wizard for NEW visitors */}
               <aside
                 className="rounded-lg border border-info-200 bg-info-50 p-4 text-sm text-info-800"
                 aria-label="New respondent? Try the registration wizard"
@@ -153,20 +174,31 @@ export default function LoginPage({ type = 'public' }: LoginPageProps) {
                 </div>
               </aside>
 
-              {/* Existing-user header — visually distinct from the cutover banner */}
+              {/* Branding + sign-in heading (lives on the page so it survives the
+                  collapsed password disclosure) */}
+              <div className="text-center">
+                <h1 className="text-h1 text-primary-700 font-brand mb-1">OSLSR</h1>
+                <h2 className="text-xl font-semibold text-neutral-900">Sign in</h2>
+                <p className="text-neutral-600">Access your OSLSR account</p>
+              </div>
+
+              {/* Existing-user lead-in to the magic-link primary action */}
               <p
                 className="text-center text-sm text-neutral-600"
                 data-testid="login-page-existing-user-header"
               >
-                Already registered? Sign in below.
+                Already registered? Enter your email below for a one-time sign-in link.
               </p>
+
+              {/* Primary: magic-link sign-in (Story 9-16 + 9-39 AC#2) */}
+              <MagicLinkSignInEntry />
+
+              {/* Secondary: password disclosure (Story 9-39 AC#2/#3) */}
+              <PasswordSignInDisclosure from={from} />
             </>
+          ) : (
+            <LoginForm type="staff" redirectTo={from} />
           )}
-
-          <LoginForm type={type} redirectTo={from} />
-
-          {/* Story 9-16 — public-only magic-link sign-in entry-point. */}
-          {type === 'public' && <MagicLinkSignInEntry />}
         </div>
       </main>
 

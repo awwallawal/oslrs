@@ -59,6 +59,8 @@ const {
   mockFetchWizardDraft,
   mockFetchPublicLgas,
   mockFetchPublicActiveForm,
+  mockFetchEditableRegistration,
+  mockEditRegistration,
 } = vi.hoisted(() => ({
   mockSubmitWizard: vi.fn(),
   mockRequestMagicLink: vi.fn(),
@@ -66,6 +68,8 @@ const {
   mockFetchWizardDraft: vi.fn(),
   mockFetchPublicLgas: vi.fn(),
   mockFetchPublicActiveForm: vi.fn(),
+  mockFetchEditableRegistration: vi.fn(),
+  mockEditRegistration: vi.fn(),
 }));
 
 vi.mock('../../api/wizard.api', () => ({
@@ -75,6 +79,8 @@ vi.mock('../../api/wizard.api', () => ({
   fetchWizardDraft: mockFetchWizardDraft,
   fetchPublicLgas: mockFetchPublicLgas,
   fetchPublicActiveForm: mockFetchPublicActiveForm,
+  fetchEditableRegistration: mockFetchEditableRegistration,
+  editRegistration: mockEditRegistration,
   derivePendingNin: (fd: { pendingNinToggle?: boolean; nin?: string }) =>
     fd.pendingNinToggle === true || !fd.nin,
 }));
@@ -359,5 +365,54 @@ describe('WizardPage resume seed (Story 9-57 AC3)', () => {
     // The over-reach effect must NOT have clamped the explicit step down to 0.
     expect(urlSearch()).not.toContain('step=0');
     expect(screen.queryByTestId('step1-stub')).not.toBeInTheDocument();
+  });
+});
+
+function renderAuthenticatedAt(initialEntry: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route
+            path="/registration/manage"
+            element={
+              <>
+                <WizardPage authenticated />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe('WizardPage authenticated edit mode (Story 9-61)', () => {
+  it('seeds the form from GET /me/registration on mount and skips the public submit path', async () => {
+    mockFetchEditableRegistration.mockResolvedValue({
+      mode: 'edit',
+      respondentId: 'r1',
+      wizardData: {
+        givenName: 'Ada',
+        phone: '+2348012345678',
+        email: 'me@example.com',
+        lgaId: 'lga-egbeda',
+        consentMarketplace: true,
+      },
+    });
+
+    renderAuthenticatedAt('/registration/manage');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step1-stub')).toBeInTheDocument();
+    });
+    // AC#1 — the authenticated read-model drives the prefill.
+    await waitFor(() => {
+      expect(mockFetchEditableRegistration).toHaveBeenCalled();
+    });
+    // The public submit endpoint is never used in authenticated mode.
+    expect(mockSubmitWizard).not.toHaveBeenCalled();
   });
 });

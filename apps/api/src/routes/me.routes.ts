@@ -19,4 +19,18 @@ router.get(
   MeController.getRegistrationStatus,
 );
 
+// Story 9-40 (AC#4) — self-service edit of the caller's own registration
+// (currently the marketplace-consent flag). Authenticated; subject = JWT.
+router.put(
+  '/registration',
+  authenticate,
+  MeController.updateRegistration,
+);
+
+// Story 9-61 — in-session registration edit + resume + pending-NIN completion.
+// All authenticated; the caller is resolved from the JWT (anti-enumeration).
+router.get('/registration', authenticate, MeController.getEditableRegistration);
+router.put('/registration/wizard', authenticate, MeController.editRegistrationWizard);
+router.post('/registration/complete-nin', authenticate, MeController.completeNin);
+
 export default router;

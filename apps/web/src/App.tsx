@@ -246,6 +246,42 @@ function App() {
         <ScrollToTop />
         <AuthProvider>
           <RouteErrorBoundary>
+          <AppRoutes />
+          </RouteErrorBoundary>
+
+          {/* Global Re-Authentication Modal */}
+          <ReAuthModal />
+        </AuthProvider>
+      </BrowserRouter>
+      </QueryClientProvider>
+
+      {/* Toast notifications - positioned top-right with Oyo State theme */}
+      <Toaster
+        position="top-right"
+        visibleToasts={TOAST_CONFIG.MAX_VISIBLE}
+        closeButton
+        richColors
+        toastOptions={{
+          className: 'font-ui',
+          style: {
+            fontFamily: 'var(--font-ui)',
+          },
+        }}
+      />
+    </ErrorBoundary>
+  );
+}
+
+/**
+ * AppRoutes — the real route tree, extracted from App() so the route-resolution
+ * integration test (Story 9-21) can mount the *same* tree inside a MemoryRouter
+ * and assert every navigate-target resolves to a real component. App() wraps
+ * this in BrowserRouter + AuthProvider for production; the test supplies its own
+ * MemoryRouter + AuthContext. Keeping this in App.tsx (not a separate module)
+ * means the lazy page defs above stay the single source of truth.
+ */
+export function AppRoutes() {
+  return (
           <Routes>
             {/* ============================================
              * PUBLIC ROUTES - Wrapped in PublicLayout
@@ -599,6 +635,22 @@ function App() {
                     <WizardPage />
                   </Suspense>
                 </PublicOnlyRoute>
+              }
+            />
+
+            {/* Story 9-61 — authenticated in-session registration edit / resume /
+                NIN completion. Mounted OUTSIDE DashboardLayout (the wizard owns its
+                full-bleed WizardLayout chrome) and gated to public_user. Kept off
+                `/register` so Story 9-39's wrong-door recovery (PublicOnlyRoute
+                redirect off `/register`) is untouched. */}
+            <Route
+              path="registration/manage"
+              element={
+                <ProtectedRoute allowedRoles={['public_user']} redirectTo="/login">
+                  <Suspense fallback={<AuthLoadingFallback />}>
+                    <WizardPage authenticated />
+                  </Suspense>
+                </ProtectedRoute>
               }
             />
 
@@ -1390,28 +1442,6 @@ function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<Suspense fallback={<PageLoadingFallback />}><PublicNotFoundPage /></Suspense>} />
           </Routes>
-          </RouteErrorBoundary>
-
-          {/* Global Re-Authentication Modal */}
-          <ReAuthModal />
-        </AuthProvider>
-      </BrowserRouter>
-      </QueryClientProvider>
-
-      {/* Toast notifications - positioned top-right with Oyo State theme */}
-      <Toaster
-        position="top-right"
-        visibleToasts={TOAST_CONFIG.MAX_VISIBLE}
-        closeButton
-        richColors
-        toastOptions={{
-          className: 'font-ui',
-          style: {
-            fontFamily: 'var(--font-ui)',
-          },
-        }}
-      />
-    </ErrorBoundary>
   );
 }
 

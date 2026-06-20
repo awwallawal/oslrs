@@ -157,8 +157,10 @@ describe('DashboardLayout', () => {
         expectedItems: ['Home', 'Statistics', 'Trends'],
       },
       {
+        // Story 9-40 (AC#6) — "Survey Status" de-listed (parallel pre-wizard
+        // survey path retired); wizard is the single registration path.
         role: 'public_user',
-        expectedItems: ['Home', 'Survey Status', 'Marketplace'],
+        expectedItems: ['Home', 'Marketplace', 'Support'],
       },
     ];
 

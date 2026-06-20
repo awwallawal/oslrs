@@ -16,7 +16,6 @@ import {
   FileText,
   Save,
   RefreshCw,
-  ClipboardList,
   Briefcase,
   HelpCircle,
   ListOrdered,
@@ -100,9 +99,13 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'Payments', href: '/dashboard/enumerator/payments', icon: Wallet },
   ],
 
+  // Story 9-40 (AC#6) — the standalone "Survey Status" → PublicSurveysPage entry
+  // was the pre-wizard parallel survey-fill path. De-listed from navigation so
+  // the wizard is the single registration path; no discoverable "start a second
+  // survey" entry remains. (The route still resolves for FormFillerPage's
+  // post-submit redirect; full route deletion is documented in the 9-40 story.)
   public_user: [
     { label: 'Home', href: '/dashboard/public', icon: Home },
-    { label: 'Survey Status', href: '/dashboard/public/surveys', icon: ClipboardList },
     { label: 'Marketplace', href: '/dashboard/public/marketplace', icon: Briefcase },
     { label: 'Support', href: '/dashboard/public/support', icon: HelpCircle },
   ],

@@ -25,6 +25,14 @@ import {
 interface UseWizardDraftOptions {
   /** Magic-link wizard_resume token from query string (cross-device hydration). */
   token?: string;
+  /**
+   * Story 9-61 — suppress the debounced server draft autosave. Set when the
+   * wizard runs in authenticated edit mode (the user is editing an existing
+   * respondent via `PUT /me/registration/wizard`, not building an email-keyed
+   * draft), so seeding the form from the read-model never spawns a stray
+   * wizard_draft row. Public (default) flow is unaffected.
+   */
+  disableAutosave?: boolean;
 }
 
 export interface UseWizardDraftResult {
@@ -63,7 +71,7 @@ function migrateLegacyName(formData: WizardDraftData): WizardDraftData {
 }
 
 export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDraftResult {
-  const { token } = options;
+  const { token, disableAutosave = false } = options;
 
   const [formData, setFormData] = useState<WizardDraftData>({});
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -123,6 +131,7 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
 
   const scheduleSave = useCallback(
     (latestFormData: WizardDraftData, latestStepIndex: number) => {
+      if (disableAutosave) return; // Story 9-61 — authenticated edit mode.
       const email = latestFormData.email?.trim();
       if (!email) return; // Wait until Step 2 sets it.
 
@@ -154,7 +163,7 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
         }
       }, SAVE_DEBOUNCE_MS);
     },
-    [],
+    [disableAutosave],
   );
 
   const setField = useCallback<UseWizardDraftResult['setField']>(

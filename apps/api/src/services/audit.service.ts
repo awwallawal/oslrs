@@ -123,6 +123,18 @@ export const AUDIT_ACTIONS = {
   // status notification was dispatched — NEVER the raw PII identifier value
   // (AC8: logs must not become a PII enumeration side-channel).
   REGISTRATION_STATUS_REQUESTED: 'registration_status.requested',
+  // Story 9-40 — a public user edited their own registration from the
+  // dashboard (currently the marketplace-consent flag). Self-service edit via
+  // the authenticated `PUT /me/registration`; actor IS the subject.
+  RESPONDENT_SELF_UPDATED: 'respondent.self_updated',
+  // Story 9-61 — a public user edited their full registration in-session
+  // (identity / LGA / consent / questionnaire answers) via the authenticated
+  // `PUT /me/registration/wizard`, OR completed their pending NIN in-session via
+  // `POST /me/registration/complete-nin`. Distinct from RESPONDENT_SELF_UPDATED
+  // (the lightweight 9-40 consent toggle) so the broader-edit trail is queryable
+  // on its own. Actor IS the subject.
+  RESPONDENT_SELF_EDITED: 'respondent.self_edited',
+  RESPONDENT_SELF_NIN_COMPLETED: 'respondent.self_nin_completed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

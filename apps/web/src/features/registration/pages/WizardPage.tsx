@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { WizardLayout } from '../../../layouts/WizardLayout';
 import { useWizardDraft } from '../hooks/useWizardDraft';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { useToast } from '../../../hooks/useToast';
 import { ApiError } from '../../../lib/api-client';
 import {
   submitWizard,
   requestMagicLink,
   derivePendingNin,
   fetchPublicActiveForm,
+  fetchEditableRegistration,
+  editRegistration,
   type WizardDraftData,
   type FlattenedForm,
 } from '../api/wizard.api';
@@ -82,14 +85,22 @@ function buildSteps(form: FlattenedForm | null): WizardStepDef[] {
   ];
 }
 
-export default function WizardPage() {
-  useDocumentTitle('Register | Oyo State Skills Registry');
+export default function WizardPage({ authenticated = false }: { authenticated?: boolean } = {}) {
+  useDocumentTitle(
+    authenticated
+      ? 'Manage your registration | Oyo State Skills Registry'
+      : 'Register | Oyo State Skills Registry',
+  );
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const resumeToken = searchParams.get('token') ?? undefined;
 
-  const draft = useWizardDraft({ token: resumeToken });
+  // Story 9-61 — authenticated edit mode disables the email-keyed draft autosave
+  // (the user edits an existing respondent via PUT /me/registration/wizard).
+  const draft = useWizardDraft({ token: resumeToken, disableAutosave: authenticated });
   // Story 9-57 — the draft's step setter is a STABLE callback (hook change);
   // destructure it so the write-only persistence effect can depend on a plain
   // identifier (no `draft`-object dep churn, no eslint-disable).
@@ -139,6 +150,45 @@ export default function WizardPage() {
     // Resume hydration: the server-saved step is a legitimately-reached step.
     setMaxReachedStepIndex((m) => (draft.currentStepIndex > m ? draft.currentStepIndex : m));
   }, [draft.isHydrated, draft.currentStepIndex]);
+
+  // Story 9-61 (AC#1/#5) — authenticated edit/resume mode. Seed the form ONCE
+  // from the session read-model (`GET /me/registration`). Gated on
+  // `authenticated`, so the public registration flow is untouched.
+  const hasSeededAuth = useRef(false);
+  useEffect(() => {
+    if (!authenticated || hasSeededAuth.current) return;
+    hasSeededAuth.current = true;
+    fetchEditableRegistration()
+      .then((res) => {
+        const wd = res.wizardData;
+        if (!wd) return;
+        draft.mergeFields({
+          givenName: wd.givenName,
+          familyName: wd.familyName,
+          dateOfBirth: wd.dateOfBirth,
+          gender: wd.gender,
+          phone: wd.phone,
+          email: wd.email,
+          lgaId: wd.lgaId,
+          nin: wd.nin,
+          pendingNinToggle: wd.pendingNin,
+          consentMarketplace: wd.consentMarketplace,
+          consentEnriched: wd.consentEnriched,
+          questionnaireResponses: wd.questionnaireResponses,
+        });
+      })
+      .catch(() => {
+        // Non-fatal — the user can still fill the wizard; submit surfaces errors.
+      });
+  }, [authenticated, draft]);
+
+  // Edit mode opens with the full registration already present, so every step is
+  // legitimately reachable (no skip-ahead-to-Review risk — the data exists).
+  useEffect(() => {
+    if (authenticated && formSettled && steps.length > 0) {
+      setMaxReachedStepIndex(steps.length - 1);
+    }
+  }, [authenticated, formSettled, steps.length]);
 
   // Story 9-57 (AI-Review H1) — the furthest-reached ceiling, computed
   // SYNCHRONOUSLY. `maxReachedStepIndex` is bumped by the effect above, which
@@ -268,12 +318,13 @@ export default function WizardPage() {
 
   const handleBack = useCallback(() => {
     if (currentStepIndex === 0) {
-      navigate('/');
+      // Story 9-61 — in authenticated edit mode, "back" returns to the dashboard.
+      navigate(authenticated ? '/dashboard/public' : '/');
       return;
     }
     const prev = retreatStep(currentStepIndex, isStepSkippable);
     navigateToStep(prev);
-  }, [currentStepIndex, isStepSkippable, navigateToStep, navigate]);
+  }, [currentStepIndex, isStepSkippable, navigateToStep, navigate, authenticated]);
 
   // Step list for the indicator, annotated with which section steps are
   // currently auto-skipped (AC#E5 — greyed in the breadcrumb variant).
@@ -321,22 +372,41 @@ export default function WizardPage() {
       return;
     }
 
+    const payload = {
+      givenName: fd.givenName,
+      familyName: fd.familyName?.trim() || undefined,
+      dateOfBirth: fd.dateOfBirth,
+      gender: fd.gender,
+      phone: fd.phone,
+      email: fd.email,
+      lgaId: fd.lgaId,
+      consentMarketplace: fd.consentMarketplace,
+      consentEnriched: fd.consentEnriched ?? false,
+      nin,
+      pendingNin: pending,
+      questionnaireResponses: fd.questionnaireResponses,
+      authChoice: fd.authChoice ?? ('magic-link' as const),
+    };
+
     try {
-      const result = await submitWizard({
-        givenName: fd.givenName,
-        familyName: fd.familyName?.trim() || undefined,
-        dateOfBirth: fd.dateOfBirth,
-        gender: fd.gender,
-        phone: fd.phone,
-        email: fd.email,
-        lgaId: fd.lgaId,
-        consentMarketplace: fd.consentMarketplace,
-        consentEnriched: fd.consentEnriched ?? false,
-        nin,
-        pendingNin: pending,
-        questionnaireResponses: fd.questionnaireResponses,
-        authChoice: fd.authChoice ?? 'magic-link',
-      });
+      // Story 9-61 — authenticated edit goes through the in-session validated
+      // path (PUT /me/registration/wizard) and returns to the dashboard, instead
+      // of the public submit + success screen.
+      if (authenticated) {
+        await editRegistration(payload);
+        // Story 9-61 review M1 — bust the cached `me` read-models so the dashboard
+        // reflects the edit immediately (the queryClient default staleTime is 5min,
+        // so without this the user lands back on stale pre-edit state — e.g. a
+        // just-completed NIN still showing "add your NIN").
+        await queryClient.invalidateQueries({ queryKey: ['me'] });
+        // 9-61 review L1 — explicit success feedback (the edit redirects to the
+        // dashboard instead of the public success screen, so confirm it landed).
+        toast.success({ message: 'Your registration has been updated.' });
+        navigate('/dashboard/public');
+        return;
+      }
+
+      const result = await submitWizard(payload);
 
       // Best-effort: kick off the login magic-link for active respondents.
       // Pending-NIN respondents already get the pending_nin_complete link from
@@ -369,7 +439,7 @@ export default function WizardPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft.formData, isSubmitting, reviewCompleteness]);
+  }, [draft.formData, isSubmitting, reviewCompleteness, authenticated, navigate, queryClient, toast]);
 
   // AI-Review M1 — the pinned survey failed to load (a non-404 fetch error).
   // Surface it with a retry instead of silently dropping every section step and

@@ -7,6 +7,14 @@ import { useLogin } from '../hooks/useLogin';
 interface LoginFormProps {
   type: 'staff' | 'public';
   redirectTo?: string;
+  /**
+   * Render without the OSLSR header block and the "Create account" footer.
+   * Used when the form is nested inside a page that already supplies branding —
+   * e.g. the Story 9-39 public sign-in page's "I already set a password"
+   * disclosure, which otherwise duplicates the page-level <h1>OSLSR</h1> +
+   * heading + subtitle. Default false preserves the standalone staff form.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -20,7 +28,7 @@ interface LoginFormProps {
  * primary public-auth channel via the wizard at `/register`; existing
  * accounts continue with email + password here.
  */
-export function LoginForm({ type, redirectTo }: LoginFormProps) {
+export function LoginForm({ type, redirectTo, embedded = false }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [captchaReset, setCaptchaReset] = useState(false);
 
@@ -67,12 +75,14 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
 
   return (
     <div className="w-full max-w-md">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-h1 text-primary-700 font-brand mb-2">OSLSR</h1>
-        <h2 className="text-xl font-semibold text-neutral-900 mb-1">{title}</h2>
-        <p className="text-neutral-600">{subtitle}</p>
-      </div>
+      {/* Header (suppressed when embedded — the host page supplies branding) */}
+      {!embedded && (
+        <div className="text-center mb-8">
+          <h1 className="text-h1 text-primary-700 font-brand mb-2">OSLSR</h1>
+          <h2 className="text-xl font-semibold text-neutral-900 mb-1">{title}</h2>
+          <p className="text-neutral-600">{subtitle}</p>
+        </div>
+      )}
 
       {/* Error Alert */}
       {apiError && (
@@ -231,8 +241,9 @@ export function LoginForm({ type, redirectTo }: LoginFormProps) {
         </p>
       </form>
 
-      {/* Registration link (public login only) */}
-      {!isStaff && (
+      {/* Registration link (public login only; suppressed when embedded — the
+          host page already carries the cutover banner pointing to /register) */}
+      {!isStaff && !embedded && (
         <p className="mt-6 text-center text-sm text-neutral-600">
           Don't have an account?{' '}
           <Link
