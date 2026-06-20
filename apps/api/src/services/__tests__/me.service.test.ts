@@ -9,7 +9,7 @@ import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { uuidv7 } from 'uuidv7';
 import { MeService } from '../me.service.js';
 import { db } from '../../db/index.js';
-import { users, roles, respondents, wizardDrafts, submissions } from '../../db/schema/index.js';
+import { users, roles, respondents, wizardDrafts, submissions, auditLogs } from '../../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
 
 describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
@@ -160,8 +160,12 @@ describe('MeService.updateMarketplaceConsent (Story 9-40 AC#4)', () => {
   }, 30000);
 
   afterAll(async () => {
+    const userIds = [linkedUserId, orphanUserId].filter(Boolean);
+    // updateMarketplaceConsent audits the change (actor = the user); clear those
+    // audit_logs before deleting the users they reference (FK).
+    if (userIds.length) await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
     if (respondentId) await db.delete(respondents).where(eq(respondents.id, respondentId));
-    await db.delete(users).where(inArray(users.email, [linkedEmail, orphanEmail]));
+    if (userIds.length) await db.delete(users).where(inArray(users.id, userIds));
   }, 30000);
 
   it('flips marketplace consent and returns the refreshed summary', async () => {
@@ -287,12 +291,21 @@ describe('MeService 9-61 — editable read + session edit + complete-nin (real D
   }, 30000);
 
   afterAll(async () => {
+    const userIds = [userA, userB, userPending].filter(Boolean);
     const ids = [respA, respB, respPending].filter(Boolean);
+    // 9-61's edit / complete-nin write paths emit audit_logs (actor = the test
+    // user). Delete those before the users they reference, or the
+    // audit_logs_actor_id_users_id_fk constraint blocks the user delete.
+    if (userIds.length) {
+      await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
+    }
     if (ids.length) {
       await db.delete(submissions).where(inArray(submissions.respondentId, ids));
       await db.delete(respondents).where(inArray(respondents.id, ids));
     }
-    await db.delete(users).where(inArray(users.email, [emailA, emailB, emailPending]));
+    if (userIds.length) {
+      await db.delete(users).where(inArray(users.id, userIds));
+    }
   }, 30000);
 
   it('getEditableRegistration maps an active respondent + recovers Step-4 answers (AC#1)', async () => {
