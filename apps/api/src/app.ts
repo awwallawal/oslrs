@@ -20,14 +20,27 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // Environment validation - fail fast on misconfiguration
-const validateEnvironment = () => {
+//
+// Story 9-45 AC#1 (F-005) — FAIL CLOSED on an undefined environment. Previously
+// an unset NODE_ENV silently defaulted to 'development', which (combined with the
+// VPS running `npx tsx` without NODE_ENV set) meant prod-grade hardening
+// (Secure cookies, enforcing CSP) could be silently OFF in production. Now an
+// unset NODE_ENV refuses to boot — except under the test runner (Vitest), where
+// it is normalized to 'test'. Dev conveniences therefore key off an EXPLICIT
+// NODE_ENV value, never a "when-unsure" default.
+export const validateEnvironment = () => {
   const nodeEnv = process.env.NODE_ENV;
 
-  // Warn if NODE_ENV is not set
   if (!nodeEnv) {
-    console.error('[SECURITY] NODE_ENV is not set. Defaulting to "development".');
-    console.error('[SECURITY] In production, always set NODE_ENV=production');
-    process.env.NODE_ENV = 'development';
+    if (process.env.VITEST === 'true') {
+      // Test runner without an explicit NODE_ENV — normalize, never exit.
+      process.env.NODE_ENV = 'test';
+    } else {
+      console.error('[SECURITY] NODE_ENV is not set — refusing to boot (fail-closed).');
+      console.error('[SECURITY] Set NODE_ENV=production in production, or =development for local.');
+      process.exit(1);
+      return; // unreachable in prod; lets unit tests that stub process.exit stop here
+    }
   }
 
   // Validate production requirements
@@ -36,6 +49,7 @@ const validateEnvironment = () => {
       'JWT_SECRET',
       'REFRESH_TOKEN_SECRET',
       'DATABASE_URL',
+      'REDIS_URL',
       'HCAPTCHA_SECRET_KEY',
       'CORS_ORIGIN',
     ];
