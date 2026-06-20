@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tsx scripts/check-bundle-artifacts.ts",
     "test": "vitest run",
     "test:golden": "vitest run --test-name-pattern='GoldenPath'",
     "test:security": "vitest run --test-name-pattern='Security'",

@@ -8,7 +8,9 @@
  */
 import type { LoginResponse } from '@oslsr/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// F-003 — dev-only localhost fallback (tree-shaken from the prod bundle).
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
 
 export class MfaApiError extends Error {
   code: string;

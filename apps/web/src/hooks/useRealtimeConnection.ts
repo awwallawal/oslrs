@@ -13,7 +13,11 @@ function getSocketUrl(): string {
   // Relative URL (Phase 2 dual-domain: /api/v1) or unset — use current page origin so the
   // socket connects back to whichever host the user is loaded from.
   if (!apiUrl || apiUrl.startsWith('/')) {
-    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    // In the browser this always returns window.location.origin; the non-window
+    // branch is unreachable in this SPA. F-003 — keep the localhost literal
+    // dev-only so it is tree-shaken from the prod bundle.
+    if (typeof window !== 'undefined') return window.location.origin;
+    return import.meta.env.DEV ? 'http://localhost:3000' : '';
   }
   // Absolute URL (e.g. local dev pointing at remote API)
   try {

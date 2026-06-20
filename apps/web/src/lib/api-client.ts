@@ -1,6 +1,11 @@
 import { getAccessToken, awaitAccessToken } from './auth-token-holder';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// Story 9-45 AC#6 (F-003): the localhost dev fallback is gated behind
+// `import.meta.env.DEV` so Vite constant-folds it OUT of the production bundle
+// (no `localhost:3000` literal ships). Prod uses the baked `VITE_API_URL`
+// (relative `/api/v1`) or, defensively, the same-origin relative path.
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
 
 /**
  * Custom API error with additional context
