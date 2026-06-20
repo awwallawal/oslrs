@@ -63,7 +63,7 @@ Each `feat` commit is atomic (code + tests + story doc + its `sprint-status.yaml
 
 - **✅ 9-40 M1/M2 — CLOSED by 9-60** (in-session `/registration/manage` replaces the magic-link re-entry; full session-authed wizard edit replaces consent-only).
 - **9-40 L1/L2 (polish, open):** completed-summary shows raw `status`/`lgaId` slug; draft card "Step X" not "Step X of N". Non-blocking; noted in the 9-40 story.
-- **9-60 acknowledged:** NIN-dedupe TOCTOU is consistent with the public submit (partial unique index prevents corruption); a 23505→409 mapping across both paths is a cross-cutting follow-up.
+- **✅ 9-60 NIN-dedupe TOCTOU — FIXED** (post-review hardening): both authenticated write paths now map a `respondents_nin_unique_when_present` race to a clean 409, at parity with the public submit (the public path already did; 9-60 didn't). Partial unique index still prevents corruption; this corrects the rare-race error shape.
 - **Downstream:** Story **9-32** (NDPA self-service rights) consumes 9-60's `/me/registration` mechanism — sequence after this merges.
 
 ---

@@ -34,6 +34,19 @@ import {
 
 const logger = pino({ name: 'me.service' });
 
+/**
+ * The partial unique index `respondents_nin_unique_when_present` is the true
+ * backstop for NIN uniqueness (the read-then-write pre-checks only narrow the
+ * window). Detect a concurrent-NIN race that slipped past the pre-check so the
+ * authenticated edit/complete-nin paths return the same clean 409 the public
+ * wizard submit does (registration.controller) instead of a raw 500. Matched on
+ * the constraint name in the driver error message — identical to the public
+ * handler + its test (registration.routes.test). (Story 9-60 review.)
+ */
+function isNinUniqueRace(error: unknown): boolean {
+  return error instanceof Error && /respondents_nin_unique_when_present/.test(error.message);
+}
+
 export type RegistrationState = 'none' | 'draft' | 'pending_nin' | 'complete';
 
 /** NIN sub-status surfaced in the respondent summary. */
@@ -435,6 +448,7 @@ export class MeService {
     if (pendingNin) metadata.defer_reason_nin = 'public_dashboard_user_self_deferred';
     if (minorResult.guardian) metadata.guardian = minorResult.guardian;
 
+    try {
     await db.transaction(async (tx) => {
       await tx
         .update(respondents)
@@ -502,6 +516,19 @@ export class MeService {
         userAgent: args.userAgent,
       });
     });
+    } catch (error) {
+      // TOCTOU backstop — a concurrent NIN registration tripped the partial
+      // unique index after the pre-check. Surface the same 409 as the public
+      // submit (registration.controller), not a raw 500.
+      if (isNinUniqueRace(error)) {
+        throw new AppError(
+          'NIN_DUPLICATE',
+          'This NIN was registered while you were saving. If you believe this is an error, please contact support.',
+          409,
+        );
+      }
+      throw error;
+    }
 
     return MeService.getRegistrationStatus({ userId: args.userId, email: normalisedEmail });
   }
@@ -543,6 +570,7 @@ export class MeService {
       );
     }
 
+    try {
     await db.transaction(async (tx) => {
       // Status-filtered UPDATE so a concurrent promotion can't double-apply.
       const rows = await tx
@@ -563,6 +591,18 @@ export class MeService {
         userAgent: args.userAgent,
       });
     });
+    } catch (error) {
+      // TOCTOU backstop — same as the edit path: map a concurrent-NIN partial
+      // unique-index violation to a clean 409 rather than a raw 500.
+      if (isNinUniqueRace(error)) {
+        throw new AppError(
+          'NIN_DUPLICATE',
+          'This NIN was registered while you were completing it. If you believe this is an error, please contact support.',
+          409,
+        );
+      }
+      throw error;
+    }
 
     return MeService.getRegistrationStatus({ userId: args.userId, email: args.email });
   }
