@@ -206,7 +206,7 @@ export async function submitWizard(
   return res.data as SubmitWizardResponse;
 }
 
-// ─── Story 9-60 — authenticated in-session edit / resume / NIN completion ────
+// ─── Story 9-61 — authenticated in-session edit / resume / NIN completion ────
 // The logged-in counterparts of the public draft/submit/complete-nin flows.
 // JWT-resolved (`/me/...`); no token, no email param.
 

@@ -27,7 +27,7 @@ router.put(
   MeController.updateRegistration,
 );
 
-// Story 9-60 — in-session registration edit + resume + pending-NIN completion.
+// Story 9-61 — in-session registration edit + resume + pending-NIN completion.
 // All authenticated; the caller is resolved from the JWT (anti-enumeration).
 router.get('/registration', authenticate, MeController.getEditableRegistration);
 router.put('/registration/wizard', authenticate, MeController.editRegistrationWizard);

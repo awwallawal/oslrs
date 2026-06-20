@@ -6,7 +6,7 @@ import { modulus11Check } from '@oslsr/utils/src/validation';
  *
  * Single source of truth for BOTH the public wizard submit
  * (`RegistrationController.submitWizard`) and the authenticated in-session edit
- * (`MeController.editRegistrationWizard`, Story 9-60 AC#5 — no parallel
+ * (`MeController.editRegistrationWizard`, Story 9-61 AC#5 — no parallel
  * validation surface). Lives in a db-free module so importing it never pulls in
  * the database layer (the controllers do, the schema must not).
  *

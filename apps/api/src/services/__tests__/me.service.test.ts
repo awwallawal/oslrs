@@ -191,7 +191,7 @@ describe('MeService.updateMarketplaceConsent (Story 9-40 AC#4)', () => {
   });
 });
 
-describe('MeService 9-60 — editable read + session edit + complete-nin (real DB)', () => {
+describe('MeService 9-61 — editable read + session edit + complete-nin (real DB)', () => {
   const stamp = Date.now();
   const emailA = `me60-a-${stamp}@example.com`;
   const emailB = `me60-b-${stamp}@example.com`;

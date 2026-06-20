@@ -41,7 +41,7 @@ const logger = pino({ name: 'me.service' });
  * authenticated edit/complete-nin paths return the same clean 409 the public
  * wizard submit does (registration.controller) instead of a raw 500. Matched on
  * the constraint name in the driver error message — identical to the public
- * handler + its test (registration.routes.test). (Story 9-60 review.)
+ * handler + its test (registration.routes.test). (Story 9-61 review.)
  */
 function isNinUniqueRace(error: unknown): boolean {
   return error instanceof Error && /respondents_nin_unique_when_present/.test(error.message);
@@ -80,7 +80,7 @@ export interface RegistrationStatusReadModel {
 }
 
 /**
- * Story 9-60 — wizard-shaped registration data. Mirrors the `submitWizardSchema`
+ * Story 9-61 — wizard-shaped registration data. Mirrors the `submitWizardSchema`
  * input (registration.controller). Used as BOTH the prefill the authenticated
  * wizard hydrates from (AC#1) and the edit payload it submits (AC#2), so the
  * dashboard edit reuses the exact wizard fields + validators (no parallel
@@ -117,7 +117,7 @@ export interface EditableRegistration {
  * Identity / consent / server-computed keys written into `submissions.raw_data`
  * by the wizard submit (registration.controller) — everything ELSE in raw_data
  * is a questionnaire answer. The respondent→wizard mapper strips these to
- * recover the Step-4 answers for edit-prefill (Story 9-60 AC#1).
+ * recover the Step-4 answers for edit-prefill (Story 9-61 AC#1).
  */
 const RAW_DATA_NON_ANSWER_KEYS = new Set([
   'first_name',
@@ -271,7 +271,7 @@ export class MeService {
   }
 
   /**
-   * Story 9-60 (AC#1) — session-authed read of the caller's editable
+   * Story 9-61 (AC#1) — session-authed read of the caller's editable
    * registration, mapped into wizard-shaped data the dashboard wizard hydrates
    * from. Resolution order mirrors `getRegistrationStatus`:
    *   1. Linked respondent (`respondents.user_id`) → `edit` (active) or
@@ -364,7 +364,7 @@ export class MeService {
   }
 
   /**
-   * Story 9-60 (AC#2/#5/#6) — session-authed EDIT of the caller's registration
+   * Story 9-61 (AC#2/#5/#6) — session-authed EDIT of the caller's registration
    * through the wizard's validated path, keyed off `user_id` (NOT a fresh
    * NIN-dedupe insert). Reuses the same validators the public submit uses
    * (`validateSubmissionCompleteness` + `validateMinorGuardianConsent`) — no
@@ -413,7 +413,7 @@ export class MeService {
       // PUBLIC_FORM_NOT_CONFIGURED (no form pinned) → Step 4 empty; proceed.
       // Anything else is swallowed-but-LOGGED, mirroring the public wizard submit
       // (registration.controller `wizard.completeness_skipped`) so a silently
-      // skipped validation is observable rather than invisible. (9-60 review L2.)
+      // skipped validation is observable rather than invisible. (9-61 review L2.)
       logger.warn({
         event: 'me.registration_edit.completeness_skipped',
         reason: err instanceof AppError ? err.code : 'unknown',
@@ -505,7 +505,7 @@ export class MeService {
         targetResource: AUDIT_TARGETS.RESPONDENT,
         targetId: r.id,
         details: {
-          // 9-60 review L3 — PII minimisation: actorId + targetId already
+          // 9-61 review L3 — PII minimisation: actorId + targetId already
           // identify the subject + record; don't duplicate the raw email here.
           trigger: 'authenticated_dashboard_edit',
           lgaId: data.lgaId,
@@ -534,7 +534,7 @@ export class MeService {
   }
 
   /**
-   * Story 9-60 (AC#3) — session-authed pending-NIN completion. The logged-in
+   * Story 9-61 (AC#3) — session-authed pending-NIN completion. The logged-in
    * `pending_nin_capture` caller supplies their NIN; we promote the row to
    * active in-session, replacing the magic-link TOKEN gate (which stays intact
    * for unauthenticated email-link returns via `CompleteNinPage`). NIN-dedupe is

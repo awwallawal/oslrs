@@ -13,7 +13,7 @@ import { modulus11Check } from '@oslsr/utils/src/validation';
 import { MeService, type WizardShapedData } from '../services/me.service.js';
 import { submitWizardSchema } from '../validation/registration.schema.js';
 
-// Story 9-60 (AC#3) — session-authed NIN completion input. Same NIN rules as the
+// Story 9-61 (AC#3) — session-authed NIN completion input. Same NIN rules as the
 // wizard submit (11 digits + Modulus-11) — the token is dropped (the JWT is the
 // credential), nothing else is accepted.
 const meCompleteNinSchema = z.object({
@@ -80,7 +80,7 @@ export class MeController {
   }
 
   /**
-   * Story 9-60 (AC#1) — `GET /api/v1/me/registration`. Returns the caller's
+   * Story 9-61 (AC#1) — `GET /api/v1/me/registration`. Returns the caller's
    * editable registration (draft / pending_nin / edit / none) mapped into
    * wizard-shaped data the dashboard wizard hydrates from. JWT-resolved.
    */
@@ -101,7 +101,7 @@ export class MeController {
   }
 
   /**
-   * Story 9-60 (AC#2) — `PUT /api/v1/me/registration/wizard`. Full in-session
+   * Story 9-61 (AC#2) — `PUT /api/v1/me/registration/wizard`. Full in-session
    * edit of the caller's registration through the wizard's validated path
    * (validated with the SAME `submitWizardSchema` — AC#5), keyed off the JWT.
    */
@@ -144,7 +144,7 @@ export class MeController {
   }
 
   /**
-   * Story 9-60 (AC#3) — `POST /api/v1/me/registration/complete-nin`. The
+   * Story 9-61 (AC#3) — `POST /api/v1/me/registration/complete-nin`. The
    * logged-in pending-NIN caller completes their NIN in-session (replaces the
    * magic-link token gate for authenticated callers). JWT-resolved.
    */

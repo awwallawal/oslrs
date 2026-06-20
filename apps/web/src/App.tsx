@@ -635,7 +635,7 @@ export function AppRoutes() {
               }
             />
 
-            {/* Story 9-60 — authenticated in-session registration edit / resume /
+            {/* Story 9-61 — authenticated in-session registration edit / resume /
                 NIN completion. Mounted OUTSIDE DashboardLayout (the wizard owns its
                 full-bleed WizardLayout chrome) and gated to public_user. Kept off
                 `/register` so Story 9-39's wrong-door recovery (PublicOnlyRoute

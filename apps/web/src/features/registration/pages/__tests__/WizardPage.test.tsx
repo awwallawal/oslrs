@@ -389,7 +389,7 @@ function renderAuthenticatedAt(initialEntry: string) {
   );
 }
 
-describe('WizardPage authenticated edit mode (Story 9-60)', () => {
+describe('WizardPage authenticated edit mode (Story 9-61)', () => {
   it('seeds the form from GET /me/registration on mount and skips the public submit path', async () => {
     mockFetchEditableRegistration.mockResolvedValue({
       mode: 'edit',

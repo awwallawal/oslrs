@@ -152,7 +152,7 @@ function authAsUser(user: Record<string, unknown>) {
 
 const PUBLIC_USER = { sub: 'user-1', email: 'me@example.com', role: 'public_user' };
 
-describe('GET /me/registration (Story 9-60 AC#1)', () => {
+describe('GET /me/registration (Story 9-61 AC#1)', () => {
   it('returns the caller editable registration', async () => {
     authAsUser(PUBLIC_USER);
     mockGetEditableRegistration.mockResolvedValueOnce({
@@ -167,7 +167,7 @@ describe('GET /me/registration (Story 9-60 AC#1)', () => {
   });
 });
 
-describe('PUT /me/registration/wizard (Story 9-60 AC#2)', () => {
+describe('PUT /me/registration/wizard (Story 9-61 AC#2)', () => {
   const validEdit = {
     givenName: 'Ada',
     phone: '+2348012345678',
@@ -196,7 +196,7 @@ describe('PUT /me/registration/wizard (Story 9-60 AC#2)', () => {
   });
 });
 
-describe('POST /me/registration/complete-nin (Story 9-60 AC#3)', () => {
+describe('POST /me/registration/complete-nin (Story 9-61 AC#3)', () => {
   it('completes the NIN in-session for an authenticated caller', async () => {
     authAsUser(PUBLIC_USER);
     const nin = generateValidNin();

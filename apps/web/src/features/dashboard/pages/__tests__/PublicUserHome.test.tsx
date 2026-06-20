@@ -97,7 +97,7 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.queryByRole('button', { name: 'Start Survey' })).toBeNull();
     });
 
-    it('state=draft → links to the in-session wizard /registration/manage (AC#3/9-60)', () => {
+    it('state=draft → links to the in-session wizard /registration/manage (AC#3/9-61)', () => {
       mockStatus = {
         data: { state: 'draft', draftStep: 3 },
         isLoading: false,
@@ -109,7 +109,7 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('resume-draft')).toHaveAttribute('href', '/registration/manage');
     });
 
-    it('state=pending_nin → shows reference + links to /registration/manage (AC#3/9-60)', () => {
+    it('state=pending_nin → shows reference + links to /registration/manage (AC#3/9-61)', () => {
       mockStatus = {
         data: {
           state: 'pending_nin',
@@ -154,7 +154,7 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('summary-nin-status')).toHaveTextContent('Provided');
       expect(screen.getByTestId('summary-lga')).toHaveTextContent('ibadan-north');
       expect(screen.getByTestId('marketplace-status')).toHaveTextContent(/not opted in/i);
-      // Story 9-60 — in-session edit entry point (replaces 9-40's /check-registration link).
+      // Story 9-61 — in-session edit entry point (replaces 9-40's /check-registration link).
       expect(screen.getByTestId('edit-registration')).toHaveAttribute('href', '/registration/manage');
     });
   });

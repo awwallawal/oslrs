@@ -98,7 +98,7 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
 
   const resumeToken = searchParams.get('token') ?? undefined;
 
-  // Story 9-60 — authenticated edit mode disables the email-keyed draft autosave
+  // Story 9-61 — authenticated edit mode disables the email-keyed draft autosave
   // (the user edits an existing respondent via PUT /me/registration/wizard).
   const draft = useWizardDraft({ token: resumeToken, disableAutosave: authenticated });
   // Story 9-57 — the draft's step setter is a STABLE callback (hook change);
@@ -151,7 +151,7 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
     setMaxReachedStepIndex((m) => (draft.currentStepIndex > m ? draft.currentStepIndex : m));
   }, [draft.isHydrated, draft.currentStepIndex]);
 
-  // Story 9-60 (AC#1/#5) — authenticated edit/resume mode. Seed the form ONCE
+  // Story 9-61 (AC#1/#5) — authenticated edit/resume mode. Seed the form ONCE
   // from the session read-model (`GET /me/registration`). Gated on
   // `authenticated`, so the public registration flow is untouched.
   const hasSeededAuth = useRef(false);
@@ -318,7 +318,7 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
 
   const handleBack = useCallback(() => {
     if (currentStepIndex === 0) {
-      // Story 9-60 — in authenticated edit mode, "back" returns to the dashboard.
+      // Story 9-61 — in authenticated edit mode, "back" returns to the dashboard.
       navigate(authenticated ? '/dashboard/public' : '/');
       return;
     }
@@ -389,17 +389,17 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
     };
 
     try {
-      // Story 9-60 — authenticated edit goes through the in-session validated
+      // Story 9-61 — authenticated edit goes through the in-session validated
       // path (PUT /me/registration/wizard) and returns to the dashboard, instead
       // of the public submit + success screen.
       if (authenticated) {
         await editRegistration(payload);
-        // Story 9-60 review M1 — bust the cached `me` read-models so the dashboard
+        // Story 9-61 review M1 — bust the cached `me` read-models so the dashboard
         // reflects the edit immediately (the queryClient default staleTime is 5min,
         // so without this the user lands back on stale pre-edit state — e.g. a
         // just-completed NIN still showing "add your NIN").
         await queryClient.invalidateQueries({ queryKey: ['me'] });
-        // 9-60 review L1 — explicit success feedback (the edit redirects to the
+        // 9-61 review L1 — explicit success feedback (the edit redirects to the
         // dashboard instead of the public success screen, so confirm it landed).
         toast.success({ message: 'Your registration has been updated.' });
         navigate('/dashboard/public');

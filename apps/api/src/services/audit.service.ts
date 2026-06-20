@@ -127,7 +127,7 @@ export const AUDIT_ACTIONS = {
   // dashboard (currently the marketplace-consent flag). Self-service edit via
   // the authenticated `PUT /me/registration`; actor IS the subject.
   RESPONDENT_SELF_UPDATED: 'respondent.self_updated',
-  // Story 9-60 — a public user edited their full registration in-session
+  // Story 9-61 — a public user edited their full registration in-session
   // (identity / LGA / consent / questionnaire answers) via the authenticated
   // `PUT /me/registration/wizard`, OR completed their pending NIN in-session via
   // `POST /me/registration/complete-nin`. Distinct from RESPONDENT_SELF_UPDATED

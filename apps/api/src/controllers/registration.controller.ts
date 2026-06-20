@@ -84,8 +84,8 @@ const saveDraftSchema = z.object({
 
 // Story 9-12 Task 5 — final wizard submission schema now lives in a db-free
 // validation module (`validation/registration.schema.ts`) so the authenticated
-// in-session edit (Story 9-60 `MeController.editRegistrationWizard`) reuses the
-// SAME schema without importing the controller's db layer (9-60 AC#5).
+// in-session edit (Story 9-61 `MeController.editRegistrationWizard`) reuses the
+// SAME schema without importing the controller's db layer (9-61 AC#5).
 // `submitWizardSchema` is imported at the top of this file.
 
 // Story 9-28 Path B — supplemental-survey submission. Token redemption

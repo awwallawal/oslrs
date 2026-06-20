@@ -26,7 +26,7 @@ interface UseWizardDraftOptions {
   /** Magic-link wizard_resume token from query string (cross-device hydration). */
   token?: string;
   /**
-   * Story 9-60 — suppress the debounced server draft autosave. Set when the
+   * Story 9-61 — suppress the debounced server draft autosave. Set when the
    * wizard runs in authenticated edit mode (the user is editing an existing
    * respondent via `PUT /me/registration/wizard`, not building an email-keyed
    * draft), so seeding the form from the read-model never spawns a stray
@@ -131,7 +131,7 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
 
   const scheduleSave = useCallback(
     (latestFormData: WizardDraftData, latestStepIndex: number) => {
-      if (disableAutosave) return; // Story 9-60 — authenticated edit mode.
+      if (disableAutosave) return; // Story 9-61 — authenticated edit mode.
       const email = latestFormData.email?.trim();
       if (!email) return; // Wait until Step 2 sets it.
 

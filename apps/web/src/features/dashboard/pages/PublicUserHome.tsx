@@ -7,11 +7,11 @@
  * always sees their REAL state and a working next action, instead of the old
  * hardcoded "2 of 5 steps" + "Start Survey" card that predated the wizard.
  *
- * Re-entry (Story 9-60): resume / pending-NIN / edit all go IN-SESSION to the
+ * Re-entry (Story 9-61): resume / pending-NIN / edit all go IN-SESSION to the
  * authenticated wizard at `/registration/manage` — no magic-link email round-trip
  * (this closes 9-40 review M1). The completed-state marketplace consent is also
  * editable inline via the audited `PUT /me/registration` (9-40 AC#4); full
- * survey-answer/identity editing is the wizard at `/registration/manage` (9-60,
+ * survey-answer/identity editing is the wizard at `/registration/manage` (9-61,
  * closes 9-40 M2).
  */
 
@@ -34,7 +34,7 @@ import { useRegistrationStatus } from '../hooks/useRegistrationStatus';
 import { useUpdateMarketplaceConsent } from '../hooks/useUpdateMarketplaceConsent';
 import type { RegistrationStatusRespondentSummary } from '../api/me.api';
 
-/** Where authenticated resume / pending-NIN / edit all land (Story 9-60). */
+/** Where authenticated resume / pending-NIN / edit all land (Story 9-61). */
 const MANAGE_PATH = '/registration/manage';
 
 function PageHeader() {
@@ -48,7 +48,7 @@ function PageHeader() {
 
 /**
  * A primary CTA that opens the authenticated wizard at `/registration/manage`
- * (Story 9-60) — in-session resume / pending-NIN / edit, no email round-trip.
+ * (Story 9-61) — in-session resume / pending-NIN / edit, no email round-trip.
  */
 function ManageButton({ label, testId }: { label: string; testId: string }) {
   return (

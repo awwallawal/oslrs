@@ -2408,7 +2408,7 @@ So that every feature in the analytics specification is either live, threshold-g
 | 9-38 | Wizard Public-User Account Provisioning | done | SCP-2026-06-06 journey-harmonization |
 | 9-39 | Public Entry-IA Sign-In Door & Magic-Link | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`) |
 | 9-40 | Public Dashboard Registration-Status Home | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`) |
-| 9-60 | Authenticated Registration Edit & Session Resume | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`; closes 9-40 M1/M2; ⚠️ operator app-run gate before merge) |
+| 9-61 | Authenticated Registration Edit & Session Resume | done | SCP-2026-06-06 journey-harmonization (review-passed `track/journey-9-39-40-21`; closes 9-40 M1/M2; ⚠️ operator app-run gate before merge) |
 | **9-41** | **Marketplace Reveal Accountability Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
 | **9-42** | **Auth, Token & Session Hardening** (+ OPS-RL-1 IPv6 bypass) | done | **SCP-2026-06-06 security-r2** |
 | **9-43** | **Export & Reporting Data-Safety Hardening** | ready-for-dev | **SCP-2026-06-06 security-r2** |
