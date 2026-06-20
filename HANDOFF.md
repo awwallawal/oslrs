@@ -1,12 +1,12 @@
 # Merge Handoff — `track/journey-9-39-40-21`
 
-**Prepared:** 2026-06-19 · **Branch:** `track/journey-9-39-40-21` · **Base:** `main` @ `702ad85`
-**State:** working tree clean · 7 commits ahead · **not pushed**
+**Finalized:** 2026-06-20 · **Branch:** `track/journey-9-39-40-21` · **Base:** `main` @ `702ad85`
+**State:** working tree clean · **not pushed** · worktree CLOSED (all stories reviewed + committed)
 
-> ## ⛔ HOLD — DO NOT MERGE YET
-> Story **9-60** ("Authenticated registration edit + true session resume") was authored on this worktree (2026-06-19, `e561c74`, status `ready-for-dev`) and is **queued for development here** to close the 9-40 M1/M2 deviations before this branch merges. **Worktree-close criteria:** 9-60 developed → paired code-review passed → committed. This HANDOFF will be **finalized** (and this HOLD lifted) once 9-60 lands. Do not merge while 9-60 is `ready-for-dev`/in-progress.
+> ## ✅ READY TO MERGE — after ONE operator gate
+> The **Public-User Journey Harmonization** stack (9-21 / 9-39 / 9-40 / 9-60) is complete and reviewed. **Before merging to main + pushing live, an operator MUST complete the 9-60 manual app-run gate (Must-read #1).** It is the only thing standing between this branch and a clean live push — everything else is green.
 
-This branch completes the **Public-User Journey Harmonization** stack (SCP `sprint-change-proposal-2026-06-06-public-user-journey-harmonization.md`). Stories 9-21/9-39/9-40 are reviewed (paired Senior-Dev code-review, review-before-commit discipline) and committed; a repo-wide test-infra fix rides along; **9-60 is authored and pending dev+review on this worktree**.
+Stories 9-21 / 9-39 / 9-40 / 9-60 are all paired-reviewed (Senior-Dev, review-before-commit) and `done`; a repo-wide test-infra fix rides along. 9-60 closes 9-40's deferred M1/M2 (magic-link re-entry → in-session `/registration/manage`).
 
 ---
 
@@ -14,49 +14,57 @@ This branch completes the **Public-User Journey Harmonization** stack (SCP `spri
 
 | Commit | Type | Summary |
 |--------|------|---------|
-| `3dbed58` | feat(9-21) | Route-registration integration test — mounts the real `App.tsx` route tree, asserts every nav target resolves (not 404) + a `navigate`/`Link`/`redirectTo` drift audit. Guards the 2026-05-13 operator-MFA outage class. |
-| `8673e3a` | feat(9-39) | Public entry IA — logged-out "Sign in" door (SmartCta, desktop+mobile) + magic-link-primary public sign-in + wizard wrong-door recovery link. |
-| `bb0ad95` | test(9-21) | **Repo-wide test-infra:** default the vitest worker-pool cap OFF-CI (`vitest.base.ts`). See ⚠️ below. |
-| `c1913bf` | docs(9-21) | Traceability: records the `/register` flake root-cause + the `bb0ad95` fix in the 9-21 story. |
-| `f3070df` | feat(9-40) | Public dashboard registration-status home — 4-state machine off the 9-38 read-model; magic-link re-entry; inline audited marketplace-consent edit (`PUT /me/registration`); retires the parallel survey path. |
-| `97248ad` | docs | This handoff brief. |
-| `e561c74` | docs(9-60) | Authored 9-60 (SM Bob + PM John) + reconciled `sprint-status`/`epics.md`; cross-linked from 9-40. Closes 9-40 M1/M2 **when built**. |
-| _pending_ | feat(9-60) | **Dev + paired review in flight on this worktree — see ⛔ HOLD above.** |
+| `3dbed58` | feat(9-21) | Route-registration integration test — mounts the real `App.tsx` route tree, asserts every nav target resolves (not 404) + a `navigate`/`Link`/`redirectTo` drift audit. |
+| `8673e3a` | feat(9-39) | Public entry IA — logged-out "Sign in" door (SmartCta desktop+mobile) + magic-link-primary sign-in + wizard wrong-door recovery link. |
+| `bb0ad95` | test(9-21) | **Repo-wide test-infra:** default the vitest worker-pool cap OFF-CI (`vitest.base.ts`). See Must-read #3. |
+| `c1913bf` | docs(9-21) | Traceability: `/register` flake root-cause + the `bb0ad95` fix. |
+| `f3070df` | feat(9-40) | Public dashboard registration-status home — 4-state machine off the 9-38 read-model; inline audited consent edit; retires the parallel survey path. |
+| `97248ad` | docs | Handoff brief (initial). |
+| `e561c74` | docs(9-60) | Authored 9-60 (SM Bob + PM John) + reconciled `sprint-status`/`epics.md`. |
+| `e5b9e4f` | docs(handoff) | HOLD gate while 9-60 was in flight (now lifted). |
+| `f29a4ab` | feat(9-60) | Authenticated registration edit + session resume — `/registration/manage` + `GET/PUT /me/registration[/wizard]` + session NIN-complete; shared validator extraction; **closes 9-40 M1/M2**. |
 
-Each `feat` commit is atomic (story code + tests + story doc + its `sprint-status.yaml` line). Stories 9-21/9-39/9-40 are all flipped `done` in `sprint-status.yaml`.
+Each `feat` commit is atomic (code + tests + story doc + its `sprint-status.yaml` line). 9-21/9-39/9-40/9-60 are all `done` in `sprint-status.yaml` + `epics.md`.
 
 ---
 
 ## ⚠️ Must-read before merge/push
 
-1. **`bb0ad95` changes test behavior repo-wide (local only).** `vitest.base.ts` now defaults `maxWorkers = VITEST_MAX_THREADS ?? (process.env.CI ? undefined : 2)`. Effect: a plain local `pnpm vitest run` self-caps at 2 workers (deterministic, no more oversubscription flakes); **CI is unaffected** (gated on `process.env.CI` → stays full-parallel); `VITEST_MAX_THREADS=4 pnpm test` overrides for speed. Call this out in the PR body so the local slowdown isn't a surprise. Rationale: `feedback_local_full_suite_flakiness` / Pitfall #37.
+1. **🚦 OPERATOR MANUAL APP-RUN GATE (9-60) — REQUIRED, blocks the live push.** The 9-60 DB write paths (`updateRegistrationFromWizard`, `completeNinAuthenticated`, respondent→wizard mapper) are verified by CI-only real-DB tests + tsc/lint/mocked routes — **never exercised against a running app** (sandbox had no `DATABASE_URL`). Before merge an operator MUST: (a) run the API integration suite on a real DB (9-60 `me.service.test` block); (b) manually exercise `/registration/manage` end-to-end — edit an active registration, complete a pending NIN, confirm the **audit rows + a fresh `submissions` row**, and confirm **Story 9-39's wrong-door recovery still redirects off `/register`**. _Source: 9-60 story Dev Agent Record + Review Follow-ups._
 
-2. **CI is the first place the real-DB integration tests run.** `apps/api/src/services/__tests__/me.service.test.ts` (9-40's `updateMarketplaceConsent` test) and the 9-38 me.service tests need `DATABASE_URL` and **cannot run locally** — they were NOT exercised here. **Confirm the full CI suite is green (incl. these) before pushing to the live site.** The controller/route are covered by the mocked `me.routes.test` (5/5 local green) and the service uses typed Drizzle (schema drift is tsc-caught).
+2. **CI is the first place ALL real-DB integration tests run.** `me.service.test` (9-40 consent + 9-60 edit/NIN) + the 9-38 tests need `DATABASE_URL` and cannot run locally. **Do not push live on red CI.**
 
-3. **Known CI residual (low risk):** the 9-21 `route-resolution.integration.test.tsx` `/register` case is timing-sensitive under thread oversubscription. Local + pre-push are now capped (green). CI runs it uncapped on a clean 1:1 runner (expected-fine). If it ever flakes in CI, the lever is to cap CI too or raise the test's `waitFor`. Documented in the 9-21 story.
+3. **`bb0ad95` changes test behavior repo-wide (local only).** `vitest.base.ts` now defaults `maxWorkers = VITEST_MAX_THREADS ?? (process.env.CI ? undefined : 2)` — a plain local `pnpm vitest run` self-caps (deterministic); **CI unaffected** (gated on `process.env.CI`); `VITEST_MAX_THREADS=4` overrides. Call out in the PR body. Rationale: Pitfall #37.
+
+4. **Merge order vs the security-r2 track.** Both tracks edit `sprint-status.yaml` + `epics.md`. **Merge journey FIRST**, then rebase security-r2 — conflicts then confine to status lines (security-r2 doesn't touch the `me` surface or `vitest.base.ts`). Bonus: security-r2 inherits the off-CI cap on rebase.
+
+5. **Known CI residual (low risk):** the 9-21 `/register` route-resolution case is timing-sensitive under thread oversubscription; capped everywhere local/pre-push (green); CI runs it uncapped on a clean 1:1 runner (expected-fine). Lever if it ever bites: cap CI or raise the test `waitFor`.
 
 ---
 
 ## Validation performed (local)
 
-- **Full web suite:** 242 files / **2678+ passed / 0 failures** (run with the off-CI cap, with all three stories in tree).
-- **Targeted:** 9-40 web 24/24 · 9-39 affected 170/170 · 9-21 file 55/55 · API `me.routes.test` 5/5.
+- **Full web suite:** 242 files / **2680 passed + 2 todo / 0 failures** (off-CI cap; with all four stories + all review fixes in tree).
+- **Targeted:** 9-60 web 19/19 + API `me.routes` 10/10 · 9-40 web 24/24 · 9-39 170/170 · 9-21 file 55/55.
 - **lint:** 0 (api + web). **tsc:** 0 (api + web). **Pre-commit hook** (lint + tsc api+web) passed on every commit.
-- Not run locally: full API suite's real-DB integration tests (see must-read #2).
+- **NOT run locally:** all real-DB integration tests (Must-read #1/#2) — CI + the operator gate cover these.
 
 ---
 
 ## Suggested merge procedure
 
-1. Rebase/merge `track/journey-9-39-40-21` onto latest `main` (resolve any `sprint-status.yaml` conflicts by keeping each story's `done` line; another track — security-r2 — may also edit nearby lines).
-2. Push to `main`. The **push-to-main pre-push gate** runs `turbo run build` + the full capped suite — let it complete (don't cancel; see `feedback_space_pushes_to_main`).
+0. **Complete the operator manual app-run gate (Must-read #1).** Do not proceed until green.
+1. Rebase/merge `track/journey-9-39-40-21` onto latest `main` (keep each story's `done` line on `sprint-status.yaml`/`epics.md` conflicts).
+2. Push to `main`. The push-to-main pre-push gate runs `turbo run build` + the full capped suite — let it complete (don't cancel; `feedback_space_pushes_to_main`).
 3. Confirm GitHub CI green (full suite incl. real-DB tests + `lint-and-build` + prod deploy).
-4. Post-deploy smoke: logged-out header shows **Sign in + Register**; `/login` is magic-link-primary; a `public_user` dashboard shows the real registration state (not the "2 of 5" mock); marketplace toggle persists.
+4. Post-deploy smoke: logged-out header shows **Sign in + Register**; `/login` magic-link-primary; `public_user` dashboard shows real registration state; **`/registration/manage` edits an active registration + completes a pending NIN end-to-end**; marketplace toggle persists.
 
-## Open / deferred (by-design, endorsed for launch — not blockers)
+## Closed / deferred
 
-- **9-40 M1/M2:** dashboard re-entry uses the shipped **magic-link channel** (not a session-authed wizard), and "edit" is the **marketplace-consent toggle** (not full identity/NIN/survey-answer editing). Both verified against reality (the wizard/NIN flows are pre-account/token-authed) and reviewer-endorsed for launch. The full session-authed wizard edit-mode is precisely designed in the 9-40 Dev Agent Record as the post-launch on-ramp.
-- **9-40 L1/L2:** completed-summary shows raw `status`/`lgaId` slug (no LGA-name join); draft card shows "Step X" not "Step X of N". Polish, noted in the story.
+- **✅ 9-40 M1/M2 — CLOSED by 9-60** (in-session `/registration/manage` replaces the magic-link re-entry; full session-authed wizard edit replaces consent-only).
+- **9-40 L1/L2 (polish, open):** completed-summary shows raw `status`/`lgaId` slug; draft card "Step X" not "Step X of N". Non-blocking; noted in the 9-40 story.
+- **9-60 acknowledged:** NIN-dedupe TOCTOU is consistent with the public submit (partial unique index prevents corruption); a 23505→409 mapping across both paths is a cross-cutting follow-up.
+- **Downstream:** Story **9-32** (NDPA self-service rights) consumes 9-60's `/me/registration` mechanism — sequence after this merges.
 
 ---
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
