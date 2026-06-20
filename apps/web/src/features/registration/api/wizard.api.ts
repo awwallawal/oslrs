@@ -206,6 +206,54 @@ export async function submitWizard(
   return res.data as SubmitWizardResponse;
 }
 
+// ─── Story 9-60 — authenticated in-session edit / resume / NIN completion ────
+// The logged-in counterparts of the public draft/submit/complete-nin flows.
+// JWT-resolved (`/me/...`); no token, no email param.
+
+export interface EditableWizardData {
+  givenName: string;
+  familyName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  phone: string;
+  email: string;
+  lgaId: string;
+  nin?: string;
+  pendingNin?: boolean;
+  consentMarketplace: boolean;
+  consentEnriched?: boolean;
+  questionnaireResponses?: Record<string, unknown>;
+}
+
+export interface EditableRegistration {
+  mode: 'none' | 'draft' | 'pending_nin' | 'edit';
+  draftStep?: number;
+  respondentId?: string;
+  wizardData?: EditableWizardData;
+}
+
+/** AC#1 — the caller's editable registration, wizard-shaped for prefill. */
+export async function fetchEditableRegistration(): Promise<EditableRegistration> {
+  const res = await apiClient('/me/registration', { method: 'GET' });
+  return res.data as EditableRegistration;
+}
+
+/** AC#2 — full in-session edit of the caller's registration (validated path). */
+export async function editRegistration(payload: SubmitWizardRequest): Promise<void> {
+  await apiClient('/me/registration/wizard', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** AC#3 — in-session pending-NIN completion (no magic-link round-trip). */
+export async function completeNinSession(nin: string): Promise<void> {
+  await apiClient('/me/registration/complete-nin', {
+    method: 'POST',
+    body: JSON.stringify({ nin }),
+  });
+}
+
 // ─── Pending-NIN return-to-complete (Task 7 / AC#9) ─────────────────────────
 
 export interface CompleteNinResponse {

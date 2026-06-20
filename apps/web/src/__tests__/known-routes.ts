@@ -138,6 +138,9 @@ const DASHBOARD_ROUTES: KnownRoute[] = [
   { route: '/dashboard/official/export', role: 'government_official' },
   { route: '/dashboard/public', role: 'public_user' },
   { route: '/dashboard/public/surveys', role: 'public_user' },
+  // Story 9-60 — authenticated in-session registration wizard (edit / resume /
+  // pending-NIN). Top-level ProtectedRoute (public_user), outside DashboardLayout.
+  { route: '/registration/manage', role: 'public_user' },
 ];
 
 export const KNOWN_ROUTES: KnownRoute[] = [

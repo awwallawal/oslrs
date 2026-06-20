@@ -9,7 +9,7 @@
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 expect.extend(matchers);
@@ -17,8 +17,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import type { RegistrationStatusReadModel } from '../../api/me.api';
 
-const { mockRequestMagicLink, mockMutate } = vi.hoisted(() => ({
-  mockRequestMagicLink: vi.fn(),
+const { mockMutate } = vi.hoisted(() => ({
   mockMutate: vi.fn(),
 }));
 
@@ -37,14 +36,6 @@ vi.mock('../../hooks/useRegistrationStatus', () => ({
 
 vi.mock('../../hooks/useUpdateMarketplaceConsent', () => ({
   useUpdateMarketplaceConsent: () => ({ mutate: mockMutate, isPending: mockMutationPending }),
-}));
-
-vi.mock('../../../registration/api/wizard.api', () => ({
-  requestMagicLink: (...args: unknown[]) => mockRequestMagicLink(...args),
-}));
-
-vi.mock('../../../auth/context/AuthContext', () => ({
-  useAuth: () => ({ user: { email: 'returning@example.com' } }),
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
@@ -106,8 +97,7 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.queryByRole('button', { name: 'Start Survey' })).toBeNull();
     });
 
-    it('state=draft → emails a wizard_resume link (AC#3)', async () => {
-      mockRequestMagicLink.mockResolvedValueOnce(undefined);
+    it('state=draft → links to the in-session wizard /registration/manage (AC#3/9-60)', () => {
       mockStatus = {
         data: { state: 'draft', draftStep: 3 },
         isLoading: false,
@@ -116,17 +106,10 @@ describe('PublicUserHome (Story 9-40)', () => {
       };
       renderComponent();
       expect(screen.getByTestId('reg-state-draft')).toHaveTextContent(/step 3/i);
-
-      await userEvent.click(screen.getByTestId('resume-draft'));
-      await waitFor(() => expect(screen.getByTestId('resume-draft-sent')).toBeInTheDocument());
-      expect(mockRequestMagicLink).toHaveBeenCalledWith({
-        email: 'returning@example.com',
-        purpose: 'wizard_resume',
-      });
+      expect(screen.getByTestId('resume-draft')).toHaveAttribute('href', '/registration/manage');
     });
 
-    it('state=pending_nin → shows reference + emails a pending_nin link (AC#3)', async () => {
-      mockRequestMagicLink.mockResolvedValueOnce(undefined);
+    it('state=pending_nin → shows reference + links to /registration/manage (AC#3/9-60)', () => {
       mockStatus = {
         data: {
           state: 'pending_nin',
@@ -145,12 +128,7 @@ describe('PublicUserHome (Story 9-40)', () => {
       };
       renderComponent();
       expect(screen.getByTestId('reg-state-pending-nin')).toHaveTextContent('OSL-2026-ABC123');
-
-      await userEvent.click(screen.getByTestId('resume-pending-nin'));
-      expect(mockRequestMagicLink).toHaveBeenCalledWith({
-        email: 'returning@example.com',
-        purpose: 'pending_nin_complete',
-      });
+      expect(screen.getByTestId('resume-pending-nin')).toHaveAttribute('href', '/registration/manage');
     });
 
     it('state=complete → read-only summary + marketplace (AC#4/#5)', () => {
@@ -176,6 +154,8 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('summary-nin-status')).toHaveTextContent('Provided');
       expect(screen.getByTestId('summary-lga')).toHaveTextContent('ibadan-north');
       expect(screen.getByTestId('marketplace-status')).toHaveTextContent(/not opted in/i);
+      // Story 9-60 — in-session edit entry point (replaces 9-40's /check-registration link).
+      expect(screen.getByTestId('edit-registration')).toHaveAttribute('href', '/registration/manage');
     });
   });
 

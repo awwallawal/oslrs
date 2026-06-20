@@ -635,6 +635,22 @@ export function AppRoutes() {
               }
             />
 
+            {/* Story 9-60 — authenticated in-session registration edit / resume /
+                NIN completion. Mounted OUTSIDE DashboardLayout (the wizard owns its
+                full-bleed WizardLayout chrome) and gated to public_user. Kept off
+                `/register` so Story 9-39's wrong-door recovery (PublicOnlyRoute
+                redirect off `/register`) is untouched. */}
+            <Route
+              path="registration/manage"
+              element={
+                <ProtectedRoute allowedRoles={['public_user']} redirectTo="/login">
+                  <Suspense fallback={<AuthLoadingFallback />}>
+                    <WizardPage authenticated />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Story 9-12 Task 7 — pending-NIN return-to-complete (magic-link redemption) */}
             <Route
               path="register/complete-nin"

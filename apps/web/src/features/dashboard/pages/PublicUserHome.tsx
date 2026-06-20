@@ -7,15 +7,14 @@
  * always sees their REAL state and a working next action, instead of the old
  * hardcoded "2 of 5 steps" + "Start Survey" card that predated the wizard.
  *
- * Re-entry (AC#3/#4): resume + pending-NIN reuse the shipped magic-link channel
- * (a one-time secure link to the user's own email — anti-enumeration safe, no
- * new authenticated wizard surface). The completed-state marketplace consent is
- * editable inline via the audited `PUT /me/registration` (AC#4 inline-edit, dev
- * judgment). Full survey-answer editing through an authenticated wizard edit
- * mode is the documented heavier enhancement (see the story Dev Agent Record).
+ * Re-entry (Story 9-60): resume / pending-NIN / edit all go IN-SESSION to the
+ * authenticated wizard at `/registration/manage` — no magic-link email round-trip
+ * (this closes 9-40 review M1). The completed-state marketplace consent is also
+ * editable inline via the audited `PUT /me/registration` (9-40 AC#4); full
+ * survey-answer/identity editing is the wizard at `/registration/manage` (9-60,
+ * closes 9-40 M2).
  */
 
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   UserPlus,
@@ -24,18 +23,19 @@ import {
   CheckCircle2,
   Briefcase,
   MapPin,
-  Mail,
+  Pencil,
   AlertTriangle,
   Loader2,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { SkeletonCard } from '../../../components/skeletons';
-import { useAuth } from '../../auth/context/AuthContext';
-import { requestMagicLink } from '../../registration/api/wizard.api';
 import { useRegistrationStatus } from '../hooks/useRegistrationStatus';
 import { useUpdateMarketplaceConsent } from '../hooks/useUpdateMarketplaceConsent';
 import type { RegistrationStatusRespondentSummary } from '../api/me.api';
+
+/** Where authenticated resume / pending-NIN / edit all land (Story 9-60). */
+const MANAGE_PATH = '/registration/manage';
 
 function PageHeader() {
   return (
@@ -47,56 +47,19 @@ function PageHeader() {
 }
 
 /**
- * A button that emails the signed-in user a one-time secure link (magic-link)
- * to continue or complete their registration. Reuses the shipped 9-12 flow;
- * always shows a generic confirmation (anti-enumeration).
+ * A primary CTA that opens the authenticated wizard at `/registration/manage`
+ * (Story 9-60) — in-session resume / pending-NIN / edit, no email round-trip.
  */
-function EmailLinkButton({
-  email,
-  purpose,
-  label,
-  testId,
-}: {
-  email: string;
-  purpose: 'wizard_resume' | 'pending_nin_complete';
-  label: string;
-  testId: string;
-}) {
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  const handleClick = async () => {
-    if (sending) return;
-    setSending(true);
-    try {
-      await requestMagicLink({ email, purpose });
-    } catch {
-      // Swallow — confirmation is intentionally generic.
-    } finally {
-      setSending(false);
-      setSent(true);
-    }
-  };
-
-  if (sent) {
-    return (
-      <p className="text-sm text-neutral-700" data-testid={`${testId}-sent`} role="status">
-        We've emailed a secure link to <span className="font-medium">{email}</span>. Check your
-        inbox to continue.
-      </p>
-    );
-  }
-
+function ManageButton({ label, testId }: { label: string; testId: string }) {
   return (
     <Button
-      onClick={handleClick}
-      disabled={sending}
+      asChild
       size="lg"
       className="w-full min-h-[44px] bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg"
-      data-testid={testId}
     >
-      {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-      {label}
+      <Link to={MANAGE_PATH} data-testid={testId}>
+        {label}
+      </Link>
     </Button>
   );
 }
@@ -191,13 +154,11 @@ function RegistrationSummaryCard({
             </dd>
           </div>
         </dl>
-        <p className="text-xs text-neutral-500">
-          Need to change your details?{' '}
-          <Link to="/check-registration" className="text-primary-600 underline">
-            Manage your registration
+        <Button asChild variant="outline" className="w-full sm:w-auto" >
+          <Link to={MANAGE_PATH} data-testid="edit-registration">
+            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Edit my registration
           </Link>
-          .
-        </p>
+        </Button>
       </CardContent>
     </Card>
   );
@@ -230,8 +191,6 @@ function StateCard({
 }
 
 export default function PublicUserHome() {
-  const { user } = useAuth();
-  const email = user?.email ?? '';
   const { data, isLoading, isError, refetch } = useRegistrationStatus();
 
   return (
@@ -291,15 +250,9 @@ export default function PublicUserHome() {
               }`}
             >
               <p className="text-sm text-neutral-600 mb-3">
-                You have a registration in progress. We'll email you a secure link to pick up
-                exactly where you left off — no password needed.
+                You have a registration in progress. Pick up exactly where you left off.
               </p>
-              <EmailLinkButton
-                email={email}
-                purpose="wizard_resume"
-                label="Email me a link to continue"
-                testId="resume-draft"
-              />
+              <ManageButton label="Continue registration" testId="resume-draft" />
             </StateCard>
           )}
 
@@ -319,15 +272,9 @@ export default function PublicUserHome() {
                     <span className="font-mono font-medium">{data.respondent.referenceCode}</span>)
                   </>
                 ) : null}
-                . Add your National Identification Number to complete it. We'll email you a secure
-                one-click link.
+                . Add your National Identification Number to complete it.
               </p>
-              <EmailLinkButton
-                email={email}
-                purpose="pending_nin_complete"
-                label="Email me a link to add my NIN"
-                testId="resume-pending-nin"
-              />
+              <ManageButton label="Add my NIN" testId="resume-pending-nin" />
             </StateCard>
           )}
 

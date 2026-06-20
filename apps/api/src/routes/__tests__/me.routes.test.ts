@@ -6,11 +6,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
 
-const { mockAuthenticate, mockGetRegistrationStatus, mockUpdateMarketplaceConsent } = vi.hoisted(() => ({
+const {
+  mockAuthenticate,
+  mockGetRegistrationStatus,
+  mockUpdateMarketplaceConsent,
+  mockGetEditableRegistration,
+  mockUpdateRegistrationFromWizard,
+  mockCompleteNinAuthenticated,
+} = vi.hoisted(() => ({
   mockAuthenticate: vi.fn(),
   mockGetRegistrationStatus: vi.fn(),
   mockUpdateMarketplaceConsent: vi.fn(),
+  mockGetEditableRegistration: vi.fn(),
+  mockUpdateRegistrationFromWizard: vi.fn(),
+  mockCompleteNinAuthenticated: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -22,6 +33,9 @@ vi.mock('../../services/me.service.js', () => ({
   MeService: {
     getRegistrationStatus: mockGetRegistrationStatus,
     updateMarketplaceConsent: mockUpdateMarketplaceConsent,
+    getEditableRegistration: mockGetEditableRegistration,
+    updateRegistrationFromWizard: mockUpdateRegistrationFromWizard,
+    completeNinAuthenticated: mockCompleteNinAuthenticated,
   },
 }));
 
@@ -126,5 +140,79 @@ describe('PUT /me/registration (Story 9-40 AC#4)', () => {
     const res = await request(buildApp()).put('/me/registration').send({ consentMarketplace: true });
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('NO_REGISTRATION');
+  });
+});
+
+function authAsUser(user: Record<string, unknown>) {
+  mockAuthenticate.mockImplementation((req: express.Request, _res: unknown, next: () => void) => {
+    (req as unknown as { user: unknown }).user = user;
+    next();
+  });
+}
+
+const PUBLIC_USER = { sub: 'user-1', email: 'me@example.com', role: 'public_user' };
+
+describe('GET /me/registration (Story 9-60 AC#1)', () => {
+  it('returns the caller editable registration', async () => {
+    authAsUser(PUBLIC_USER);
+    mockGetEditableRegistration.mockResolvedValueOnce({
+      mode: 'edit',
+      respondentId: 'resp-1',
+      wizardData: { givenName: 'Ada', phone: '+2348012345678', email: 'me@example.com', lgaId: 'lga-egbeda', consentMarketplace: true },
+    });
+    const res = await request(buildApp()).get('/me/registration');
+    expect(res.status).toBe(200);
+    expect(res.body.data.mode).toBe('edit');
+    expect(mockGetEditableRegistration).toHaveBeenCalledWith({ userId: 'user-1', email: 'me@example.com' });
+  });
+});
+
+describe('PUT /me/registration/wizard (Story 9-60 AC#2)', () => {
+  const validEdit = {
+    givenName: 'Ada',
+    phone: '+2348012345678',
+    email: 'me@example.com',
+    lgaId: 'lga-egbeda',
+    consentMarketplace: true,
+    pendingNin: true, // omit NIN → no checksum needed for this route-shape test
+  };
+
+  it('validates with the shared wizard schema and edits the caller registration', async () => {
+    authAsUser(PUBLIC_USER);
+    mockUpdateRegistrationFromWizard.mockResolvedValueOnce({ state: 'pending_nin' });
+    const res = await request(buildApp()).put('/me/registration/wizard').send(validEdit);
+    expect(res.status).toBe(200);
+    expect(mockUpdateRegistrationFromWizard).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', data: expect.objectContaining({ givenName: 'Ada' }) }),
+    );
+  });
+
+  it('rejects an invalid payload with 400 (shared schema)', async () => {
+    authAsUser(PUBLIC_USER);
+    const res = await request(buildApp()).put('/me/registration/wizard').send({ givenName: 'A' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('WIZARD_EDIT_INVALID_INPUT');
+    expect(mockUpdateRegistrationFromWizard).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /me/registration/complete-nin (Story 9-60 AC#3)', () => {
+  it('completes the NIN in-session for an authenticated caller', async () => {
+    authAsUser(PUBLIC_USER);
+    const nin = generateValidNin();
+    mockCompleteNinAuthenticated.mockResolvedValueOnce({ state: 'complete' });
+    const res = await request(buildApp()).post('/me/registration/complete-nin').send({ nin });
+    expect(res.status).toBe(200);
+    expect(mockCompleteNinAuthenticated).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', email: 'me@example.com', nin }),
+    );
+  });
+
+  it('rejects a checksum-invalid NIN with 400', async () => {
+    authAsUser(PUBLIC_USER);
+    const res = await request(buildApp()).post('/me/registration/complete-nin').send({ nin: '12345678901' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('COMPLETE_NIN_INVALID_INPUT');
+    expect(mockCompleteNinAuthenticated).not.toHaveBeenCalled();
   });
 });

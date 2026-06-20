@@ -5,9 +5,11 @@
  * `respondents.user_id` link + wizard-draft-by-email fallback.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { generateValidNin } from '@oslsr/testing/helpers/nin';
+import { uuidv7 } from 'uuidv7';
 import { MeService } from '../me.service.js';
 import { db } from '../../db/index.js';
-import { users, roles, respondents, wizardDrafts } from '../../db/schema/index.js';
+import { users, roles, respondents, wizardDrafts, submissions } from '../../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
 
 describe('MeService.getRegistrationStatus (Story 9-38 AC#10)', () => {
@@ -186,5 +188,176 @@ describe('MeService.updateMarketplaceConsent (Story 9-40 AC#4)', () => {
     await expect(
       MeService.updateMarketplaceConsent({ userId: orphanUserId, consentMarketplace: true }),
     ).rejects.toMatchObject({ code: 'NO_REGISTRATION', statusCode: 404 });
+  });
+});
+
+describe('MeService 9-60 — editable read + session edit + complete-nin (real DB)', () => {
+  const stamp = Date.now();
+  const emailA = `me60-a-${stamp}@example.com`;
+  const emailB = `me60-b-${stamp}@example.com`;
+  const emailPending = `me60-pending-${stamp}@example.com`;
+  let userA = '';
+  let userB = '';
+  let userPending = '';
+  let respA = '';
+  let respB = '';
+  let respPending = '';
+  const ninA = generateValidNin();
+  let ninB = generateValidNin();
+  while (ninB === ninA) ninB = generateValidNin();
+
+  beforeAll(async () => {
+    await db.insert(roles).values([{ name: 'public_user', description: 'Public User' }]).onConflictDoNothing();
+    const publicRole = await db.query.roles.findFirst({ where: eq(roles.name, 'public_user') });
+
+    const mkUser = async (email: string) => {
+      const [u] = await db
+        .insert(users)
+        .values({ email, fullName: 'Me 60', roleId: publicRole!.id, status: 'active' })
+        .returning({ id: users.id });
+      return u.id;
+    };
+    userA = await mkUser(emailA);
+    userB = await mkUser(emailB);
+    userPending = await mkUser(emailPending);
+
+    const [ra] = await db
+      .insert(respondents)
+      .values({
+        nin: ninA,
+        firstName: 'Ada',
+        lastName: 'Obi',
+        phoneNumber: '+2348010000031',
+        lgaId: 'lga-egbeda',
+        source: 'public',
+        status: 'active',
+        consentMarketplace: true,
+        referenceCode: `OSL-2026-A60${stamp.toString().slice(-3)}`,
+        userId: userA,
+      })
+      .returning({ id: respondents.id });
+    respA = ra.id;
+
+    // A submission carrying identity + a Step-4 answer (for the mapper recovery).
+    await db.insert(submissions).values({
+      submissionUid: uuidv7(),
+      questionnaireFormId: 'test-form',
+      respondentId: respA,
+      rawData: {
+        first_name: 'Ada',
+        last_name: 'Obi',
+        phone_number: '+2348010000031',
+        lga_id: 'lga-egbeda',
+        nin: ninA,
+        email: emailA,
+        gender: 'female',
+        q_occupation: 'tailor',
+      },
+      submittedAt: new Date(),
+      source: 'public',
+      processed: true,
+    });
+
+    const [rb] = await db
+      .insert(respondents)
+      .values({
+        nin: ninB,
+        firstName: 'Bayo',
+        phoneNumber: '+2348010000032',
+        lgaId: 'lga-egbeda',
+        source: 'public',
+        status: 'active',
+        userId: userB,
+      })
+      .returning({ id: respondents.id });
+    respB = rb.id;
+
+    const [rp] = await db
+      .insert(respondents)
+      .values({
+        firstName: 'Pend',
+        phoneNumber: '+2348010000033',
+        lgaId: 'lga-egbeda',
+        source: 'public',
+        status: 'pending_nin_capture',
+        userId: userPending,
+      })
+      .returning({ id: respondents.id });
+    respPending = rp.id;
+  }, 30000);
+
+  afterAll(async () => {
+    const ids = [respA, respB, respPending].filter(Boolean);
+    if (ids.length) {
+      await db.delete(submissions).where(inArray(submissions.respondentId, ids));
+      await db.delete(respondents).where(inArray(respondents.id, ids));
+    }
+    await db.delete(users).where(inArray(users.email, [emailA, emailB, emailPending]));
+  }, 30000);
+
+  it('getEditableRegistration maps an active respondent + recovers Step-4 answers (AC#1)', async () => {
+    const res = await MeService.getEditableRegistration({ userId: userA, email: emailA });
+    expect(res.mode).toBe('edit');
+    expect(res.respondentId).toBe(respA);
+    expect(res.wizardData?.givenName).toBe('Ada');
+    expect(res.wizardData?.nin).toBe(ninA);
+    expect(res.wizardData?.gender).toBe('female');
+    // Identity keys stripped; only the Step-4 answer remains.
+    expect(res.wizardData?.questionnaireResponses).toMatchObject({ q_occupation: 'tailor' });
+    expect(res.wizardData?.questionnaireResponses).not.toHaveProperty('first_name');
+  });
+
+  it('updateRegistrationFromWizard allows the caller OWN NIN (self-match) + persists edits (AC#2)', async () => {
+    const res = await MeService.updateRegistrationFromWizard({
+      userId: userA,
+      data: {
+        givenName: 'Adaeze',
+        phone: '+2348010000031',
+        email: emailA,
+        lgaId: 'lga-egbeda',
+        nin: ninA, // own NIN — must NOT trip dedupe
+        consentMarketplace: false,
+      },
+    });
+    expect(res.state).toBe('complete');
+    const after = await db.query.respondents.findFirst({
+      where: eq(respondents.id, respA),
+      columns: { firstName: true, consentMarketplace: true },
+    });
+    expect(after?.firstName).toBe('Adaeze');
+    expect(after?.consentMarketplace).toBe(false);
+  });
+
+  it('updateRegistrationFromWizard rejects ANOTHER respondent NIN (NIN_DUPLICATE, AC#2)', async () => {
+    await expect(
+      MeService.updateRegistrationFromWizard({
+        userId: userA,
+        data: {
+          givenName: 'Ada',
+          phone: '+2348010000031',
+          email: emailA,
+          lgaId: 'lga-egbeda',
+          nin: ninB, // userB's NIN
+          consentMarketplace: false,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'NIN_DUPLICATE', statusCode: 409 });
+  });
+
+  it('completeNinAuthenticated promotes a pending respondent to active (AC#3)', async () => {
+    let newNin = generateValidNin();
+    while (newNin === ninA || newNin === ninB) newNin = generateValidNin();
+    const res = await MeService.completeNinAuthenticated({
+      userId: userPending,
+      email: emailPending,
+      nin: newNin,
+    });
+    expect(res.state).toBe('complete');
+    const after = await db.query.respondents.findFirst({
+      where: eq(respondents.id, respPending),
+      columns: { status: true, nin: true },
+    });
+    expect(after?.status).toBe('active');
+    expect(after?.nin).toBe(newNin);
   });
 });
