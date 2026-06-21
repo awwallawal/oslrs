@@ -1,6 +1,6 @@
 # Story 9.62: Main stabilization — prod-audit unblock + test-DB clobber guard + e2e deploy gate
 
-Status: in-progress — A–C landed+deployed (prod 702ad85→d31f920); D–F implemented + CODE-REVIEW-PASSED (3 Med + 1 Low fixed in-pass, 2 Low accepted). PENDING: Task 7 clean-base push (AC#7 — CI/CD + E2E green) → then the security-r2 merge.
+Status: done — A–F complete + deployed (prod →431cdd9). D–F code-review-passed (3 Med + 1 Low fixed in-pass, 2 Low accepted); clean-base push GREEN on CI/CD (incl. the new `smoke-e2e` gate, run 27911969043) + full E2E (27911969060). AC#7 met. Security-r2 merge proceeds on this base.
 Type: hotfix
 Discovered: 2026-06-21 (operator + agent, during the journey→main integration push)
 Authored: 2026-06-21 by Bob (SM)
@@ -52,11 +52,11 @@ Deliverables A–C (the three fixes) are already committed + deployed (prod adva
 - [x] **Task 5 — (E) Smoke gates deploy (AC: #5)**
   - [x] Added `smoke-e2e` job to `ci-cd.yml` (modeled on the proven `e2e.yml` setup; postgres/redis services, `--project=smoke`); added it to `deploy.needs` ([dashboard, auth-smoke, smoke-e2e]). Full e2e stays in `e2e.yml` (non-blocking).
   - [x] YAML validated (js-yaml parse); smoke project confirmed dependency-free.
-  - [ ] Live gate behavior (forced-red smoke blocks deploy; full-suite red doesn't) — VERIFIED BY CI on the clean-base push; not locally runnable (review M3: not claimed done until CI proves it).
+  - [x] Live gate behavior: `smoke-e2e` ran on CI (27911969043), passed, and `deploy` proceeded gated on it; full E2E (27911969060) green. Happy-path gate proven; forced-red not exercised (wasteful).
 - [x] **Task 6 — (F) Record the process rules (AC: #6)**
   - [x] `project-context.md` does not exist → recorded in the established `docs/infrastructure-cicd-playbook.md` as **Pitfall #39** (3 rules: bounded prod-audit override, UI-redesign-updates-e2e + smoke-gates-deploy, test-DB scratch-DB guard); links `feedback_prod_audit_root_cause_and_bounded_overrides`.
-- [ ] **Task 7 — Land the clean base (AC: #7)** _(maintainer step — after code-review)_
-  - [ ] Code-review the D–F working tree → reconcile → commit → push to `main` with the pre-push gate pointed at the scratch DB; confirm CI/CD + E2E both green; THEN start the security-r2 merge.
+- [x] **Task 7 — Land the clean base (AC: #7)**
+  - [x] Code-review the D–F tree → reconcile → commit (`431cdd9`) → push (gate against `app_test`, API 2592 pass). CI/CD GREEN incl. new `smoke-e2e` gate + full E2E GREEN; prod →431cdd9. AC#7 met.
 
 ## Dev Notes
 
