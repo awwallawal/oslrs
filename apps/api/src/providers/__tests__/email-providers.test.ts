@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { EmailConfig, EmailContent } from '@oslsr/types';
 import { MockEmailProvider } from '../mock-email.provider.js';
+import { sha256Hex } from '@oslsr/utils';
 import {
   getEmailProvider,
   getEmailConfigFromEnv,
@@ -203,6 +204,71 @@ describe('Email Providers', () => {
       const provider2 = getEmailProvider(config);
 
       expect(provider1).toBe(provider2);
+    });
+  });
+
+  describe('AC0 — credential isolation in non-prod (Story 9-63)', () => {
+    const ENV_KEYS = [
+      'NODE_ENV',
+      'VITEST',
+      'RESEND_API_KEY',
+      'ALLOW_REAL_EMAIL_IN_DEV',
+      'RESEND_BLOCKED_KEY_FINGERPRINTS',
+    ] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      resetMockEmailProvider();
+      saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+      // Simulate a non-prod runtime (dev) — NOT the vitest 'test' short-circuit,
+      // so execution reaches the AC0 guard.
+      process.env.NODE_ENV = 'development';
+      delete process.env.VITEST;
+      delete process.env.ALLOW_REAL_EMAIL_IN_DEV;
+      delete process.env.RESEND_BLOCKED_KEY_FINGERPRINTS;
+    });
+
+    afterEach(() => {
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k] as string;
+      }
+    });
+
+    const resendConfig = (resendApiKey: string): EmailConfig => ({
+      provider: 'resend',
+      enabled: true,
+      fromAddress: 'noreply@oyoskills.com',
+      fromName: 'OSLSR',
+      tier: 'free',
+      resendApiKey,
+      monthlyOverageBudgetCents: 3000,
+      resendMaxPerUser: 3,
+    });
+
+    it('default-refuse: dev + EMAIL_PROVIDER=resend + NO opt-in → mock', () => {
+      process.env.RESEND_API_KEY = 're_throwaway_dev_key';
+      expect(getEmailProvider(resendConfig('re_throwaway_dev_key')).name).toBe('mock');
+    });
+
+    it('suspenders: a blocked-fingerprint key is refused EVEN WITH opt-in → mock', () => {
+      const blockedKey = 're_leaked_prod_like_key';
+      process.env.RESEND_API_KEY = blockedKey;
+      process.env.RESEND_BLOCKED_KEY_FINGERPRINTS = sha256Hex(blockedKey);
+      process.env.ALLOW_REAL_EMAIL_IN_DEV = '1';
+      expect(getEmailProvider(resendConfig(blockedKey)).name).toBe('mock');
+    });
+
+    it('escape hatch: dev + opt-in + throwaway (non-blocked) key → real resend', () => {
+      process.env.RESEND_API_KEY = 're_throwaway_dev_key';
+      process.env.ALLOW_REAL_EMAIL_IN_DEV = '1';
+      expect(getEmailProvider(resendConfig('re_throwaway_dev_key')).name).toBe('resend');
+    });
+
+    it('production unchanged: resend regardless of opt-in/fingerprint', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.RESEND_API_KEY = 're_prod_key';
+      expect(getEmailProvider(resendConfig('re_prod_key')).name).toBe('resend');
     });
   });
 
