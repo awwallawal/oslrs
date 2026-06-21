@@ -23,16 +23,11 @@ never exercised against the running prod app.
 - [ ] Confirm **9-39 wrong-door recovery** still works (a logged-in user hitting `/register` is redirected off it).
 - [ ] L1/L2 spot-check (just shipped): dashboard status reads "Active"/"Pending NIN" (not the raw slug); the draft card shows "Step X **of N**".
 
-## 3. 🟡 F-026 — prod runtime hygiene (the operator half; code half done in 9-45)
-**Verified 2026-06-21 (via tailscale `oslsr-home-app`):** `NODE_ENV=production` is **effective
-at runtime** (enforced CSP confirmed) → F-005 fail-closed boot is satisfied. BUT three hygiene
-gaps remain: it is **not a clean `^NODE_ENV=` line** in `/root/oslrs/.env` (effective via dotenv
-odd-format / pm2 wrapper — fragile across edits); the box still runs **`npx tsx src/index.ts`**
-(not `node dist`); and **2 `.env.bak` files** sit in `/root/oslrs/` (F-006).
-**Do (on the VPS, low priority):**
-- [ ] Make `NODE_ENV=production` a clean committed line in the PM2 env / `.env`; verify it survives `pm2 restart oslsr-api && curl -sI http://127.0.0.1:3000/api/v1/health | grep -i content-security-policy` (enforced CSP = good).
-- [ ] (Optional perf) move from `tsx` to a built `node dist` start command.
-- [ ] **F-006 host cleanup:** delete the 2 `/root/oslrs/.env.bak*` files (host-side secret backups; repo history is already clean). _(Agent can do this on request.)_
+## 3. 🟢 F-026 — prod runtime hygiene (mostly DONE 2026-06-21; one optional item)
+**Done 2026-06-21 (agent, via tailscale `oslsr-home-app`):**
+- [x] **`NODE_ENV=production` normalized** to a clean `^NODE_ENV=production` line in `/root/oslrs/.env` (was ` NODE_ENV=` with a leading space; pm2 does NOT inject it, so `.env` is the single source). Restarted `oslsr-api` → booted clean (health ok, enforced CSP=1, DB up) → F-005 satisfied, no longer wrapper-fragile. Verified via diff (only the leading space changed).
+- [x] **F-006:** deleted the 2 stale `/root/oslrs/.env.bak*` files (Apr-26 pre-migration secret backups; nothing sourced them, deploy doesn't recreate them). 0 remain.
+- [ ] **(Optional perf, low priority):** move from `npx tsx src/index.ts` to a built `node dist` start command. Not security/hygiene — defer freely.
 
 ## 4. ⚪ Non-gating, tracked elsewhere (FYI, not on this checklist's critical path)
 - Re-engagement blasts (Cohort A/B) — `docs/runbooks/re-engagement-campaign-launch.md` (operator-fired; separate from this integration).
