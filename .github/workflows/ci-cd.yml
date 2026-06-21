@@ -446,6 +446,97 @@ jobs:
         run: cat /tmp/api.log || true
 
   # ============================================
+  # Job 3b: Smoke E2E (Playwright) — gates deploy (Story 9-62 E)
+  # ============================================
+  smoke-e2e:
+    needs: lint-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Story 9-62 (E): the fast, stable `smoke` Playwright project (homepage /
+    # login / public-nav) GATES the deploy. The FULL e2e suite stays in e2e.yml
+    # (non-blocking) because the 9-21 /register route-resolution case is
+    # timing-sensitive on a shared runner — gating the whole suite would block
+    # deploys on a known flake. A red smoke now blocks deploy; a red full-suite
+    # still only reports. Closes the gap where the 9-39 stale login smoke shipped
+    # to prod un-noticed (e2e.yml ran parallel to — not as a dependency of — deploy).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # NODE_ENV=development makes captcha.ts skip hCaptcha so headless renders
+      # work (same as e2e.yml). test_db also satisfies the 9-62 (D) test-DB guard.
+      NODE_ENV: development
+      DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci
+      REFRESH_TOKEN_SECRET: test-refresh-token-secret-for-ci
+      PUBLIC_APP_URL: http://localhost:5173
+      VITE_E2E: 'true'
+      E2E: 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build packages
+        run: pnpm build
+      - name: Push database schema
+        run: pnpm --filter @oslsr/api db:push:force
+      - name: Seed database
+        run: pnpm --filter @oslsr/api db:seed:dev
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-v2-${{ hashFiles('apps/web/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-v2-
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @oslsr/web exec playwright install chromium --with-deps
+      - name: Install Playwright system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @oslsr/web exec playwright install-deps chromium
+      - name: Run smoke E2E (gates deploy)
+        run: pnpm --filter @oslsr/web exec playwright test --project=smoke
+        env:
+          CI: true
+      - name: Upload smoke report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: smoke-e2e-report
+          path: apps/web/playwright-report/
+          retention-days: 30
+
+  # ============================================
   # Job 4: Web Tests (no services, but larger)
   # ============================================
   test-web:
@@ -803,7 +894,9 @@ jobs:
   deploy:
     # auth-smoke gates deploy (Story 9-42 close-out): a broken refresh-token
     # rotation / reuse-detection / logout flow blocks the deploy.
-    needs: [dashboard, auth-smoke]
+    # smoke-e2e gates deploy (Story 9-62 E): a broken critical-path smoke
+    # (homepage / login / public-nav) blocks the deploy; full e2e stays non-blocking.
+    needs: [dashboard, auth-smoke, smoke-e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

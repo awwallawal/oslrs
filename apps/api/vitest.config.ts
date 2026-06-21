@@ -6,6 +6,10 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'node',
+      // Story 9-62 (D): test-DB anti-clobber guard. Concatenated with the base
+      // setupFiles (vitest.base.ts) — runs before every API test and refuses to
+      // run against a non-test DATABASE_URL (see apps/api/vitest.setup.ts).
+      setupFiles: ['./vitest.setup.ts'],
       // Increase timeout for database-heavy tests — default 10s is too short under
       // parallel thread-pool load (bcrypt hashing, DB inserts, Redis in beforeAll hooks).
       // IMPORTANT: hookTimeout must match testTimeout. Vitest defaults hookTimeout to
