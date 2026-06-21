@@ -133,6 +133,9 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 30
+          # Story 9-62: report is always produced; ignore-if-missing is harmless
+          # belt-and-suspenders.
+          if-no-files-found: ignore
 
       - name: Upload test results
         if: ${{ !cancelled() }}
@@ -142,3 +145,7 @@ jobs:
           name: e2e-test-results
           path: apps/web/test-results/
           retention-days: 30
+          # `test-results/` only exists when a spec FAILS (traces/screenshots);
+          # on a green run it's empty → upload-artifact warns "No files were found".
+          # That warning is benign noise — suppress it (Story 9-62 follow-up).
+          if-no-files-found: ignore
