@@ -18,6 +18,7 @@ import { UserRole } from '@oslsr/types';
 import { AppError } from '@oslsr/utils';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
+import { requireFreshReAuth } from '../middleware/sensitive-action.js';
 import { settingsListRateLimit, settingsWriteRateLimit } from '../middleware/settings-rate-limit.js';
 import { SettingsService } from '../services/settings.service.js';
 import type { AuthenticatedRequest } from '../types.js';
@@ -109,6 +110,7 @@ router.patch(
   '/:key',
   authenticate,
   authorize(UserRole.SUPER_ADMIN),
+  requireFreshReAuth, // F-014 — settings write requires step-up re-auth
   settingsWriteRateLimit,
   async (req: Request, res: Response, next: NextFunction) => {
     try {

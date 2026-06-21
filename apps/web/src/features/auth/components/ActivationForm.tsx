@@ -30,7 +30,11 @@ export function ActivationForm({ token, onSuccess }: ActivationFormProps) {
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/auth/activate/${token}`, {
+      // F-003 — was a hard-coded localhost URL (would hit localhost in prod!).
+      // Use the env/relative base; dev-only localhost fallback is tree-shaken.
+      const apiUrl =
+        import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
+      const response = await fetch(`${apiUrl}/auth/activate/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

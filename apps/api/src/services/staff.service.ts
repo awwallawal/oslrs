@@ -8,6 +8,7 @@ import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type Crea
 import { AppError, generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
+import { assertCanAssignRole } from '../constants/role-rank.js';
 import { AuditService } from './audit.service.js';
 import {
   normaliseEmail,
@@ -187,6 +188,16 @@ export class StaffService {
     if (!role) {
       throw new AppError('ROLE_NOT_FOUND', 'Role not found', 404);
     }
+
+    // F-021 — server-side rank cap: an actor can NEVER assign a role more
+    // privileged than their own. Enforced here (not just at the route guard) so
+    // the invariant survives any future route-authz change. Fail-closed on any
+    // unrecognized role (actor or target).
+    const actor = await db.query.users.findFirst({
+      where: eq(users.id, actorId),
+      with: { role: true },
+    });
+    assertCanAssignRole(actor?.role?.name, role.name);
 
     // Prevent self-role-change
     if (userId === actorId) {

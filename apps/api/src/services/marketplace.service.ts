@@ -12,10 +12,40 @@ import type {
 import { contactReveals } from '../db/schema/contact-reveals.js';
 import { marketplaceProfiles } from '../db/schema/marketplace.js';
 import { respondents } from '../db/schema/respondents.js';
-import { checkRevealRateLimit } from '../middleware/reveal-rate-limit.js';
+import { users } from '../db/schema/users.js';
+import { checkRevealRateLimit, rollbackRevealCounters } from '../middleware/reveal-rate-limit.js';
+import {
+  getRevealGuardConfig,
+  selectRequiredRung,
+  reachableCeiling,
+  rungSatisfied,
+  type RevealVerificationLevel,
+} from '../config/reveal-guard.config.js';
+import { RevealAnomalyAlertService } from './reveal-anomaly-alert.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-service' });
+
+/** Options carrying the request-time accountability inputs (Story 9-41). */
+export interface RevealContactOptions {
+  /** AC#6 — stated purpose for a high-volume reveal (persisted on the row). */
+  purpose?: string | null;
+  /** AC#6 — whether the viewer accepted the acceptable-use terms. */
+  tosAccepted?: boolean;
+  /** AC#4/#5 — highest step-up rung the viewer currently holds (default captcha). */
+  stepUpLevel?: RevealVerificationLevel;
+}
+
+export type RevealContactResult =
+  | { status: 'success'; data: ContactRevealResponse }
+  | { status: 'not_found' }
+  | { status: 'rate_limited'; retryAfter: number }
+  // AC#2 — this profile has been revealed by too many distinct viewers in-window.
+  | { status: 'profile_cap_reached' }
+  // AC#4/#5 — degrade to step-up rather than hard-block.
+  | { status: 'step_up_required'; requiredLevel: RevealVerificationLevel }
+  // AC#6 — purpose declaration required above the volume threshold.
+  | { status: 'purpose_required' };
 
 export class MarketplaceService {
   /**
@@ -221,8 +251,18 @@ export class MarketplaceService {
   /**
    * Reveal contact details for a marketplace profile.
    * Requires authenticated user + CAPTCHA (enforced at route level).
-   * Checks consent gate, rate limit (50/user/24h), inserts audit row.
-   * Returns PII (firstName, lastName, phoneNumber) on success.
+   *
+   * Story 9-41 (F-007) layers accountability controls on top of the original
+   * consent gate + per-user 50/24h limit, in this request-flow order (all
+   * blocks; the order only decides which signal the client sees first):
+   *   1. per-user 50/24h limit (unchanged)              → rate_limited
+   *   2. per-profile distinct-viewer cap (AC#2)         → profile_cap_reached (+alert)
+   *   3. progressive friction / breaker step-up (AC#5/#4) → step_up_required (+alert if breaker)
+   *   4. purpose-binding above volume (AC#6)            → purpose_required
+   *   5. insert audit row (now incl. purpose + ToS)     → success
+   *
+   * Existing controls are NOT weakened (AC#7): no role gate is added; consent
+   * still fail-closes to not_found; the 50/24h limit is intact.
    */
   static async revealContact(
     profileId: string,
@@ -230,11 +270,8 @@ export class MarketplaceService {
     ipAddress: string,
     userAgent: string,
     deviceFingerprint?: string | null,
-  ): Promise<
-    | { status: 'success'; data: ContactRevealResponse }
-    | { status: 'not_found' }
-    | { status: 'rate_limited'; retryAfter: number }
-  > {
+    opts: RevealContactOptions = {},
+  ): Promise<RevealContactResult> {
     // 1. Fetch marketplace profile
     const [profile] = await db.select({
       respondentId: marketplaceProfiles.respondentId,
@@ -262,14 +299,35 @@ export class MarketplaceService {
       return { status: 'not_found' };
     }
 
-    // Redis fast-path rate limit check (Story 7-6) — avoids DB query if already blocked
+    // F-007 review fix (H1): determine the strongest step-up rung THIS viewer can
+    // actually satisfy. MFA is enrolment-gated (super_admin only, Story 9-13), so
+    // a public viewer can never clear an 'mfa' demand — forcing it would turn the
+    // AC#4 breaker into an unrecoverable hard block. The ceiling caps the demand.
+    const [viewer] = await db.select({
+      phone: users.phone,
+      mfaEnabled: users.mfaEnabled,
+    }).from(users).where(eq(users.id, viewerId)).limit(1);
+    const ceiling = reachableCeiling({
+      mfaEnrolled: viewer?.mfaEnabled === true,
+      hasPhone: !!viewer?.phone,
+    });
+
+    // Redis fast-path rate limit check (Story 7-6) — avoids DB query if already
+    // blocked; also enforces the per-device budget (AC#3) and surfaces the
+    // global breaker state (AC#4).
     const redisCheck = await checkRevealRateLimit(viewerId, deviceFingerprint);
     if (!redisCheck.allowed) {
       return { status: 'rate_limited' as const, retryAfter: redisCheck.retryAfter! };
     }
+    const breakerTripped = redisCheck.breakerTripped === true;
 
-    // 4 + 5: Rate limit check + audit insert in transaction (TOCTOU guard)
-    return await db.transaction(async (tx) => {
+    const cfg = getRevealGuardConfig();
+    const providedLevel: RevealVerificationLevel = opts.stepUpLevel ?? 'captcha';
+
+    // Rate limit check + guard gates + audit insert in one transaction (TOCTOU guard).
+    // The tx returns an internal result with an optional `alert` directive; the
+    // alert is dispatched AFTER the tx so Telegram I/O never holds the row locks.
+    const txResult = await db.transaction(async (tx): Promise<RevealContactResult & { alert?: string }> => {
       // Lock existing reveals for this viewer to serialize concurrent requests
       const countRows = await tx.execute(sql`
         SELECT count(*)::int as count
@@ -280,6 +338,7 @@ export class MarketplaceService {
       `);
       const count = (countRows.rows[0] as { count: number }).count;
 
+      // (1) Per-user 50/24h limit (unchanged)
       if (count >= 50) {
         const oldestRows = await tx.execute(sql`
           SELECT created_at
@@ -294,12 +353,54 @@ export class MarketplaceService {
         return { status: 'rate_limited' as const, retryAfter: Math.max(retryAfter, 1) };
       }
 
+      // (2) Per-profile distinct-viewer cap (AC#2). Blocks only NEW viewers —
+      // a viewer who already revealed this profile in-window may re-reveal.
+      const profileCapRows = await tx.execute(sql`
+        SELECT
+          count(DISTINCT viewer_id)::int AS distinct_viewers,
+          count(*) FILTER (WHERE viewer_id = ${viewerId})::int AS own_reveals
+        FROM contact_reveals
+        WHERE profile_id = ${profileId}
+        AND created_at > NOW() - (${cfg.windowSeconds} * INTERVAL '1 second')
+      `);
+      const { distinct_viewers: distinctViewers, own_reveals: ownReveals } =
+        profileCapRows.rows[0] as { distinct_viewers: number; own_reveals: number };
+
+      if (ownReveals === 0 && distinctViewers >= cfg.perProfileMaxViewers) {
+        return {
+          status: 'profile_cap_reached' as const,
+          alert: `🚨 REVEAL ANOMALY — per-profile cap\n\nProfile ${profileId} hit ${distinctViewers} distinct viewers in-window (cap ${cfg.perProfileMaxViewers}); a NEW viewer was blocked.`,
+        };
+      }
+
+      // (3) Progressive friction (AC#5) + global breaker (AC#4). The breaker
+      // forces the highest rung regardless of this viewer's own volume, CAPPED at
+      // the strongest rung the viewer can actually satisfy (H1 fix) so the breaker
+      // degrades rather than hard-blocks. The human-review alert for a breaker
+      // breach is dispatched AFTER the tx (so it fires even when the cap lets the
+      // reveal proceed) — see the breakerTripped block below.
+      const requiredLevel = selectRequiredRung(count, breakerTripped, cfg, ceiling);
+      if (!rungSatisfied(requiredLevel, providedLevel)) {
+        return { status: 'step_up_required' as const, requiredLevel };
+      }
+
+      // (4) Purpose-binding above the volume threshold (AC#6).
+      const purposeRequired = count >= cfg.purposeThreshold;
+      const purpose = opts.purpose?.trim() || null;
+      const tosAccepted = opts.tosAccepted === true;
+      if (purposeRequired && (!purpose || !tosAccepted)) {
+        return { status: 'purpose_required' as const };
+      }
+
+      // (5) Insert audit row — identity + device + (above threshold) purpose + ToS.
       await tx.insert(contactReveals).values({
         viewerId,
         profileId,
         ipAddress,
         userAgent,
         deviceFingerprint: deviceFingerprint ?? null,
+        purpose: purposeRequired ? purpose : null,
+        tosAcceptedAt: purposeRequired && tosAccepted ? new Date() : null,
       });
 
       return {
@@ -311,5 +412,35 @@ export class MarketplaceService {
         },
       };
     });
+
+    // Dispatch any anomaly alert outside the transaction (Telegram I/O, gated +
+    // cooldown'd + never throws). Strip the internal `alert` field before return.
+    const { alert, ...result } = txResult;
+
+    // M1 fix: a reveal that was blocked by a downstream guard (cap / step-up /
+    // purpose / SQL recount) did NOT insert a row, so roll back the Redis
+    // counters `checkRevealRateLimit` optimistically incremented. Otherwise
+    // blocked retries silently burn the per-user budget and keep the global
+    // breaker tripped forever within the window.
+    if (result.status !== 'success') {
+      await rollbackRevealCounters(viewerId, deviceFingerprint);
+    }
+
+    // AC#2 — per-profile cap breach page (carries the distinct-viewer detail).
+    if (alert && result.status === 'profile_cap_reached') {
+      await RevealAnomalyAlertService.alertRevealAnomaly(`reveal.profile_cap:${profileId}`, alert);
+    }
+
+    // AC#4 — a global-breaker breach ALWAYS escalates to a human, even when the
+    // viewer's reachable-rung cap (H1) let the reveal proceed: degrade the user
+    // experience, but never let the breaker fire silently. Cooldown'd per metric.
+    if (breakerTripped) {
+      await RevealAnomalyAlertService.alertRevealAnomaly(
+        'reveal.global_breaker',
+        `🚨 REVEAL ANOMALY — global breaker tripped\n\nAggregate reveal volume crossed the breaker threshold; reveals now require step-up (capped at each viewer's reachable rung) and need human review.`,
+      );
+    }
+
+    return result;
   }
 }

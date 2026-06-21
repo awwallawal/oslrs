@@ -24,5 +24,7 @@ router.get('/id-card', authenticate, UserController.downloadIDCard);
 router.get('/profile', authenticate, UserController.getProfile);
 router.patch('/profile', authenticate, profileUpdateRateLimit, UserController.updateProfile);
 router.get('/verify/:id', publicVerificationRateLimit, UserController.verifyStaff);
+// Story 9-43 AC#4 (F-020) — proxy the verification photo (no raw signed Spaces URL in the body).
+router.get('/verify/:id/photo', publicVerificationRateLimit, UserController.verifyStaffPhoto);
 
 export { router as userRoutes };

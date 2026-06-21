@@ -122,6 +122,54 @@ export const requireReAuth = async (req: Request, res: Response, next: NextFunct
 };
 
 /**
+ * Story 9-45 AC#3 (F-014) — UNCONDITIONAL step-up re-auth for privileged
+ * mutations (role change, deactivate/reactivate, destructive admin actions).
+ *
+ * Unlike `requireReAuth` (which only triggers for "Remember Me" sessions on a
+ * fixed allowlist), this gate ALWAYS requires a recent re-authentication
+ * regardless of `rememberMe`. Apply it directly to the privileged route so a
+ * stolen-but-valid access token cannot silently promote/deactivate accounts
+ * without the actor re-proving their password within the 5-minute window.
+ *
+ * Reuses the same Redis re-auth marker + `POST /auth/reauth` flow as
+ * `requireReAuth` (no net-new primitive).
+ */
+export const requireFreshReAuth = async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+    }
+
+    const redis = getRedisClient();
+    const reAuthKey = `${REAUTH_KEY_PREFIX}${req.user.sub}`;
+    const reAuthTime = await redis.get(reAuthKey);
+
+    if (reAuthTime) {
+      logger.info({ event: 'privileged_action.reauth_valid', userId: req.user.sub, action: req.path });
+      return next();
+    }
+
+    logger.info({
+      event: 'privileged_action.reauth_required',
+      userId: req.user.sub,
+      action: req.path,
+      method: req.method,
+    });
+
+    throw new AppError(
+      'AUTH_REAUTH_REQUIRED',
+      'Please re-enter your password to continue with this action',
+      403,
+      { action: req.path, reason: 'privileged_action' },
+    );
+  } catch (error) {
+    if (error instanceof AppError) return next(error);
+    logger.error({ event: 'privileged_action.error', error: (error as Error).message });
+    next(error);
+  }
+};
+
+/**
  * Marks a user as recently re-authenticated
  * Called after successful re-auth POST /api/v1/auth/reauth
  */

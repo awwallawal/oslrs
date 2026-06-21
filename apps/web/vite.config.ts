@@ -38,6 +38,9 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },
   build: {
+    // F-003 (Story 9-45) — never ship source maps to production (they expose
+    // original TS source + structure). Explicit, not relying on the Vite default.
+    sourcemap: false,
     rollupOptions: {
       output: {
         // Code splitting for large dependencies

@@ -13,7 +13,11 @@ import type { Request, Response, NextFunction } from 'express';
 
 // QuestionnaireService is stubbed — getFormPreview never touches it, and we want
 // to avoid pulling its transitive DB/queue imports into this focused unit test.
-vi.mock('../../services/questionnaire.service.js', () => ({ QuestionnaireService: {} }));
+// Story 9-44 F-016 — `download` needs `downloadForm`, so expose a spy for it.
+const mockDownloadForm = vi.fn();
+vi.mock('../../services/questionnaire.service.js', () => ({
+  QuestionnaireService: { downloadForm: (...a: unknown[]) => mockDownloadForm(...a) },
+}));
 vi.mock('../../services/native-form.service.js');
 
 import { QuestionnaireController } from '../questionnaire.controller.js';
@@ -83,6 +87,34 @@ describe('QuestionnaireController', () => {
 
       expect(mockNext).toHaveBeenCalledWith(notFound);
       expect(jsonMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // Story 9-44 AC#1 (F-016) — XLSForm download response headers.
+  describe('download', () => {
+    it('derives Content-Type from the allowlist + sanitizes the filename (no client-MIME / raw-name reflection)', async () => {
+      const setHeaderMock = vi.fn();
+      const sendMock = vi.fn();
+      mockReq.params = { id: 'form-1' };
+      const res = { setHeader: setHeaderMock, send: sendMock } as unknown as Response;
+
+      // Stored client MIME is a lie; filename carries a hostile char.
+      mockDownloadForm.mockResolvedValue({
+        buffer: Buffer.from('PK\x03\x04'),
+        fileName: 'my form".xlsx',
+        mimeType: 'text/html',
+      });
+
+      await QuestionnaireController.download(mockReq as Request, res, mockNext);
+
+      expect(setHeaderMock).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      const cd = setHeaderMock.mock.calls.find((c) => c[0] === 'Content-Disposition')![1] as string;
+      expect(cd).not.toContain('my form"'); // raw name not reflected
+      expect(cd).toContain("filename*=UTF-8''");
+      expect(sendMock).toHaveBeenCalled();
     });
   });
 });

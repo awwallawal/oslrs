@@ -9,14 +9,27 @@ const mockGetSubmissionExportData = vi.fn();
 const mockGetSubmissionFilteredCount = vi.fn();
 const mockGetUnifiedExportData = vi.fn();
 const mockGenerateCsvExport = vi.fn();
+const mockStreamCsvExport = vi.fn();
 const mockGeneratePdfReport = vi.fn();
-const mockLogPiiAccess = vi.fn();
+const mockLogPiiAccessTx = vi.fn();
+const mockTransaction = vi.fn();
+const mockSendTelegram = vi.fn();
 const mockGetFormSchemaById = vi.fn();
 const mockListForms = vi.fn();
 const mockLoggerWarn = vi.fn();
+const mockLoggerError = vi.fn();
 
 vi.mock('pino', () => ({
-  default: () => ({ warn: mockLoggerWarn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+  default: () => ({ warn: mockLoggerWarn, info: vi.fn(), error: mockLoggerError, debug: vi.fn() }),
+}));
+
+// Story 9-43 F-013 — fail-closed audit now goes through db.transaction + logPiiAccessTx.
+vi.mock('../../db/index.js', () => ({
+  db: { transaction: (fn: (tx: unknown) => unknown) => mockTransaction(fn) },
+}));
+
+vi.mock('../../services/alerting/telegram-channel.js', () => ({
+  sendTelegramMessage: (...args: unknown[]) => mockSendTelegram(...args),
 }));
 
 vi.mock('../../services/export-query.service.js', () => ({
@@ -55,13 +68,14 @@ vi.mock('../../services/questionnaire.service.js', () => ({
 vi.mock('../../services/export.service.js', () => ({
   ExportService: {
     generateCsvExport: (...args: unknown[]) => mockGenerateCsvExport(...args),
+    streamCsvExport: (...args: unknown[]) => mockStreamCsvExport(...args),
     generatePdfReport: (...args: unknown[]) => mockGeneratePdfReport(...args),
   },
 }));
 
 vi.mock('../../services/audit.service.js', () => ({
   AuditService: {
-    logPiiAccess: (...args: unknown[]) => mockLogPiiAccess(...args),
+    logPiiAccessTx: (...args: unknown[]) => mockLogPiiAccessTx(...args),
   },
   PII_ACTIONS: {
     VIEW_RECORD: 'pii.view_record',
@@ -131,7 +145,12 @@ describe('ExportController', () => {
     mockGetFilteredCount.mockResolvedValue(1);
     mockGetRespondentExportData.mockResolvedValue({ data: mockExportData, totalCount: 1 });
     mockGenerateCsvExport.mockResolvedValue(Buffer.from('csv-data'));
+    mockStreamCsvExport.mockResolvedValue(undefined);
     mockGeneratePdfReport.mockResolvedValue(Buffer.from('pdf-data'));
+    // Default transaction: invoke callback with a fake tx and await it.
+    mockTransaction.mockImplementation((fn: (tx: unknown) => unknown) => fn({}));
+    mockLogPiiAccessTx.mockResolvedValue(undefined);
+    mockSendTelegram.mockResolvedValue(false);
   });
 
   describe('exportRespondents', () => {
@@ -152,7 +171,8 @@ describe('ExportController', () => {
         }),
       );
       expect(setMock.mock.calls[0][0]['Content-Disposition']).toMatch(/^attachment; filename="oslsr-export-\d{4}-\d{2}-\d{2}\.csv"$/);
-      expect(sendMock).toHaveBeenCalledWith(Buffer.from('csv-data'));
+      // F-009 — CSV is now streamed, not buffered+sent.
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -204,8 +224,9 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(mockLogPiiAccess).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(mockLogPiiAccessTx).toHaveBeenCalledWith(
+        expect.anything(), // tx
+        TEST_USER_ID,
         'pii.export_csv',
         'respondents',
         null,
@@ -213,6 +234,9 @@ describe('ExportController', () => {
           format: 'csv',
           recordCount: 1,
         }),
+        expect.anything(), // ip
+        expect.anything(), // user-agent
+        expect.anything(), // role
       );
     });
 
@@ -225,13 +249,58 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+      expect(mockLogPiiAccessTx).toHaveBeenCalledWith(
         expect.anything(),
+        TEST_USER_ID,
         'pii.export_pdf',
         'respondents',
         null,
         expect.objectContaining({ format: 'pdf' }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
       );
+    });
+
+    // ── Story 9-43 F-013 — fail-closed audit ──────────────────────────
+
+    it('aborts the export with no data when the audit write fails (F-013)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockLogPiiAccessTx.mockRejectedValue(new Error('audit db down'));
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AUDIT_WRITE_FAILED', statusCode: 500 }),
+      );
+      // No data fetched, no stream — fail-closed.
+      expect(mockGetRespondentExportData).not.toHaveBeenCalled();
+      expect(mockStreamCsvExport).not.toHaveBeenCalled();
+      // Operator alerted.
+      expect(mockSendTelegram).toHaveBeenCalled();
+    });
+
+    // ── Story 9-43 F-009 — CSV row cap ────────────────────────────────
+
+    it('rejects a CSV export above the row ceiling with 413 (F-009)', async () => {
+      const { mockRes, mockNext } = makeMocks();
+      mockGetFilteredCount.mockResolvedValue(100001);
+
+      await ExportController.exportRespondents(
+        makeReq({ query: { format: 'csv' } }),
+        mockRes as Response,
+        mockNext,
+      );
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'CSV_ROW_LIMIT', statusCode: 413 }),
+      );
+      expect(mockStreamCsvExport).not.toHaveBeenCalled();
+      expect(mockLogPiiAccessTx).not.toHaveBeenCalled();
     });
 
     it('200 for authorized role: government_official', async () => {
@@ -243,7 +312,7 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(sendMock).toHaveBeenCalled();
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -256,7 +325,7 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(sendMock).toHaveBeenCalled();
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -269,7 +338,7 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(sendMock).toHaveBeenCalled();
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -306,10 +375,9 @@ describe('ExportController', () => {
     });
 
     it('empty result set returns empty CSV (not error)', async () => {
-      const { sendMock, mockRes, mockNext } = makeMocks();
+      const { mockRes, mockNext } = makeMocks();
       mockGetFilteredCount.mockResolvedValue(0);
       mockGetRespondentExportData.mockResolvedValue({ data: [], totalCount: 0 });
-      mockGenerateCsvExport.mockResolvedValue(Buffer.from('empty-csv'));
 
       await ExportController.exportRespondents(
         makeReq({ query: { format: 'csv' } }),
@@ -317,7 +385,8 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(sendMock).toHaveBeenCalledWith(Buffer.from('empty-csv'));
+      // Streams an (empty) CSV — header row only — not an error.
+      expect(mockStreamCsvExport).toHaveBeenCalledWith(expect.anything(), [], expect.anything());
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -572,7 +641,7 @@ describe('ExportController', () => {
         }),
       );
       expect(setMock.mock.calls[0][0]['Content-Disposition']).toMatch(/oslsr-full-export/);
-      expect(sendMock).toHaveBeenCalled();
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -637,8 +706,9 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+      expect(mockLogPiiAccessTx).toHaveBeenCalledWith(
         expect.anything(),
+        TEST_USER_ID,
         'pii.export_csv',
         'submissions',
         null,
@@ -646,6 +716,9 @@ describe('ExportController', () => {
           exportType: 'full',
           formId: VALID_FORM_ID,
         }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
       );
     });
 
@@ -751,7 +824,7 @@ describe('ExportController', () => {
         expect.objectContaining({ 'Content-Type': 'text/csv; charset=utf-8' }),
       );
       expect(setMock.mock.calls[0][0]['Content-Disposition']).toMatch(/oslsr-unified-export-\d{4}-\d{2}-\d{2}\.csv/);
-      expect(sendMock).toHaveBeenCalled();
+      expect(mockStreamCsvExport).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 
@@ -825,12 +898,16 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      expect(mockLogPiiAccess).toHaveBeenCalledWith(
+      expect(mockLogPiiAccessTx).toHaveBeenCalledWith(
         expect.anything(),
+        TEST_USER_ID,
         'pii.export_csv',
         'respondents',
         null,
         expect.objectContaining({ exportType: 'unified', formId: VALID_FORM_ID, recordCount: 2 }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
       );
     });
 
@@ -843,7 +920,8 @@ describe('ExportController', () => {
         mockNext,
       );
 
-      const [rows] = mockGenerateCsvExport.mock.calls[0];
+      // streamCsvExport(res, data, columns) — rows are the 2nd argument.
+      const rows = mockStreamCsvExport.mock.calls[0][1];
       expect(rows).toHaveLength(2);
       expect(rows[0]).toMatchObject({ dataStatus: 'completed', referenceCode: 'OSL-2026-ABC123' });
       expect(rows[1]).toMatchObject({ dataStatus: 'data_lost', referenceCode: 'OSL-2026-XYZ789' });
@@ -866,7 +944,7 @@ describe('ExportController', () => {
       expect(jsonMock).toHaveBeenCalledWith({ data: { count: 139 } });
     });
 
-    it('rejects a unified export above the row ceiling with 400 (review M3)', async () => {
+    it('rejects a unified export above the row ceiling with 413 (review M3 + 9-43 L2)', async () => {
       const { mockRes, mockNext } = makeMocks();
       mockGetFilteredCount.mockResolvedValue(50001);
 
@@ -878,7 +956,7 @@ describe('ExportController', () => {
 
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          statusCode: 400,
+          statusCode: 413,
           message: expect.stringContaining('Unified export is limited to'),
         }),
       );

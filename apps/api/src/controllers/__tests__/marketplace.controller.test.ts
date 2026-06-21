@@ -40,6 +40,15 @@ vi.mock('../../services/audit.service.js', () => ({
   },
 }));
 
+// Story 9-41 — the controller now imports db + OTP/MFA services for the step-up
+// satisfaction endpoints. Stub the heavy modules so importing the controller
+// doesn't pull in a real DB pool (db/index throws when DATABASE_URL is unset).
+// RevealStepUpService stays REAL — in test mode getSatisfiedLevel returns the
+// 'captcha' baseline with no Redis, which the reveal-path expectations rely on.
+vi.mock('../../db/index.js', () => ({ db: {}, pool: {} }));
+vi.mock('../../services/sms-otp.service.js', () => ({ SmsOtpService: {} }));
+vi.mock('../../services/mfa.service.js', () => ({ MfaService: {} }));
+
 // ── Import SUT ─────────────────────────────────────────────────────────
 
 import { MarketplaceController } from '../marketplace.controller.js';
@@ -493,7 +502,10 @@ describe('MarketplaceController', () => {
 
       await MarketplaceController.revealContact(req, res, next);
 
-      expect(mockRevealContact).toHaveBeenCalledWith(validId, viewerId, '127.0.0.1', 'test-user-agent', null);
+      expect(mockRevealContact).toHaveBeenCalledWith(
+        validId, viewerId, '127.0.0.1', 'test-user-agent', null,
+        { purpose: null, tosAccepted: false, stepUpLevel: 'captcha' },
+      );
       expect(res.json).toHaveBeenCalledWith({
         data: { firstName: 'Adebayo', lastName: 'Ogunlesi', phoneNumber: '+2348012345678' },
       });
@@ -611,6 +623,82 @@ describe('MarketplaceController', () => {
       await MarketplaceController.revealContact(req, res, next);
 
       expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    // ── Story 9-41 — new accountability statuses ───────────────────────
+
+    it('AC#2 — returns 403 REVEAL_PROFILE_CAP_REACHED + no audit log', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'profile_cap_reached' });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json.mock.calls[0][0].code).toBe('REVEAL_PROFILE_CAP_REACHED');
+      expect(mockLogPiiAccess).not.toHaveBeenCalled();
+    });
+
+    it('AC#5/#4 — returns 403 REVEAL_STEP_UP_REQUIRED with requiredLevel', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'step_up_required', requiredLevel: 'otp' });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      const body = res.json.mock.calls[0][0];
+      expect(body.code).toBe('REVEAL_STEP_UP_REQUIRED');
+      expect(body.requiredLevel).toBe('otp');
+      expect(mockLogPiiAccess).not.toHaveBeenCalled();
+    });
+
+    it('AC#6 — returns 422 REVEAL_PURPOSE_REQUIRED', async () => {
+      mockRevealContact.mockResolvedValue({ status: 'purpose_required' });
+
+      const req = createAuthReq();
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(422);
+      expect(res.json.mock.calls[0][0].code).toBe('REVEAL_PURPOSE_REQUIRED');
+      expect(mockLogPiiAccess).not.toHaveBeenCalled();
+    });
+
+    it('AC#6 — forwards purpose + tosAccepted from the body to the service', async () => {
+      mockRevealContact.mockResolvedValue({
+        status: 'success',
+        data: { firstName: 'A', lastName: 'B', phoneNumber: '+234' },
+      });
+
+      const req = createAuthReq({ body: { purpose: 'Hiring a plumber', tosAccepted: true } });
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(mockRevealContact).toHaveBeenCalledWith(
+        validId, viewerId, '127.0.0.1', 'test-user-agent', null,
+        { purpose: 'Hiring a plumber', tosAccepted: true, stepUpLevel: 'captcha' },
+      );
+    });
+
+    it('returns 400 when the reveal body is malformed (purpose too long)', async () => {
+      const req = createAuthReq({ body: { purpose: 'x'.repeat(281) } });
+      const res = createMockRes();
+      const next = vi.fn();
+
+      await MarketplaceController.revealContact(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(next.mock.calls[0][0].code).toBe('VALIDATION_ERROR');
+      expect(mockRevealContact).not.toHaveBeenCalled();
     });
   });
 
@@ -869,6 +957,7 @@ describe('MarketplaceController', () => {
 
       expect(mockRevealContact).toHaveBeenCalledWith(
         validId, viewerId, '127.0.0.1', 'test-user-agent', 'fp_abc123',
+        { purpose: null, tosAccepted: false, stepUpLevel: 'captcha' },
       );
     });
 
@@ -886,6 +975,7 @@ describe('MarketplaceController', () => {
 
       expect(mockRevealContact).toHaveBeenCalledWith(
         validId, viewerId, '127.0.0.1', 'test-user-agent', null,
+        { purpose: null, tosAccepted: false, stepUpLevel: 'captcha' },
       );
     });
 
@@ -967,6 +1057,21 @@ describe('MarketplaceController', () => {
     it('edit token use rate limiter exports a middleware function', async () => {
       const { editTokenUseRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
       expect(typeof editTokenUseRateLimit).toBe('function');
+    });
+
+    // Story 9-41 review M3 — reveal step-up endpoints carry a per-IP limiter.
+    it('reveal step-up rate limit message matches 429 response spec', async () => {
+      const { REVEAL_STEP_UP_RATE_LIMIT_MESSAGE } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(REVEAL_STEP_UP_RATE_LIMIT_MESSAGE).toEqual({
+        status: 'error',
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many verification attempts. Please try again later.',
+      });
+    });
+
+    it('reveal step-up rate limiter exports a middleware function', async () => {
+      const { revealStepUpRateLimit } = await import('../../middleware/marketplace-rate-limit.js');
+      expect(typeof revealStepUpRateLimit).toBe('function');
     });
   });
 });

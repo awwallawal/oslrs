@@ -21,7 +21,8 @@ const IDCardDownload: React.FC = () => {
                 throw new Error('Authentication required. Please log in.');
             }
             
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+            const API_URL =
+              import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
             
             const response = await fetch(`${API_URL}/users/id-card`, {
                 method: 'GET',

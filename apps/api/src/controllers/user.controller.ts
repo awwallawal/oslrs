@@ -134,17 +134,56 @@ export class UserController {
               throw new AppError('USER_NOT_FOUND', 'Staff member not found', 404);
           }
 
+          // Story 9-43 AC#4 (F-020) — minimize the public verify payload.
+          // Dropped the internal `id` (already in the request URL) and, crucially,
+          // NO LONGER returns a raw signed Spaces URL (which would grant durable,
+          // unauthenticated, rate-limit-bypassing direct object access and leak
+          // bucket structure). The photo is proxied through the API instead.
           res.status(200).json({
               data: {
-                  id: user.id,
                   fullName: user.fullName,
                   status: user.status,
                   role: user.role.name,
-                  lga: user.lga?.name,
-                  photoUrl: user.liveSelfieIdCardUrl ? await photoService.getSignedUrl(user.liveSelfieIdCardUrl) : null,
-                  verifiedAt: user.liveSelfieVerifiedAt
+                  lga: user.lga?.name ?? null,
+                  verifiedAt: user.liveSelfieVerifiedAt,
+                  photoUrl: user.liveSelfieIdCardUrl ? `/api/v1/users/verify/${user.id}/photo` : null,
               }
           });
+      } catch (error) {
+          next(error);
+      }
+  }
+
+  /**
+   * GET /api/v1/users/verify/:id/photo
+   * Story 9-43 AC#4 (F-020) — proxy the staff verification photo through the API
+   * so the public response never exposes a raw signed Spaces URL. Streams the
+   * stored JPEG; no PII beyond the photo itself.
+   */
+  static async verifyStaffPhoto(req: Request, res: Response, next: NextFunction) {
+      try {
+          const { id } = req.params;
+
+          const user = await db.query.users.findFirst({
+              where: eq(users.id, id),
+              columns: { liveSelfieIdCardUrl: true },
+          });
+
+          if (!user || !user.liveSelfieIdCardUrl) {
+              throw new AppError('PHOTO_NOT_FOUND', 'Verification photo not found', 404);
+          }
+
+          const photoBuffer = await photoService.getPhotoBuffer(user.liveSelfieIdCardUrl);
+
+          res.set({
+              'Content-Type': 'image/jpeg',
+              'Content-Length': photoBuffer.length.toString(),
+              // Review L1 — a verification selfie is PII; keep it out of shared
+              // (CDN/proxy) caches even on this public surface. `private` allows
+              // only the end-user's browser to cache it briefly.
+              'Cache-Control': 'private, max-age=300',
+          });
+          res.send(photoBuffer);
       } catch (error) {
           next(error);
       }

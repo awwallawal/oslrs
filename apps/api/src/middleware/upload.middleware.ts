@@ -11,17 +11,39 @@ const ALLOWED_MIME_TYPES = [
 
 const ALLOWED_EXTENSIONS = ['.xlsx', '.xml'];
 
+// Generic / non-committal MIMEs real clients send for .xlsx and .xml uploads.
+// Windows reports .xlsx as application/x-zip-compressed or application/octet-
+// stream, .xml is frequently text/plain, and some clients send an empty MIME.
+// These are NOT trusted as proof of type — they just must not BLOCK a legit
+// upload (the authoritative content check is validateFileContent / magic bytes).
+const GENERIC_UPLOAD_MIME_TYPES = [
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
+  'text/plain',
+  '',
+];
+
 // File filter for XLSForm files
-const xlsformFileFilter = (
+export const xlsformFileFilter = (
   req: Request,
   file: Express.Multer.File,
   cb: FileFilterCallback
 ): void => {
   const extension = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
   const isValidExtension = ALLOWED_EXTENSIONS.includes(extension);
-  const isValidMimeType = ALLOWED_MIME_TYPES.includes(file.mimetype);
+  const isAllowedMime = ALLOWED_MIME_TYPES.includes(file.mimetype);
+  const isGenericMime = GENERIC_UPLOAD_MIME_TYPES.includes(file.mimetype);
 
-  if (isValidExtension || isValidMimeType) {
+  // F-017 (+ 9-44 review M1) — the EXTENSION is required and `validateFileContent`
+  // (magic bytes) downstream is the AUTHORITATIVE content gate. The client MIME is
+  // untrusted, so it's only an advisory pre-gate: we accept a recognized MIME OR a
+  // generic/empty one (Windows sends application/x-zip-compressed / octet-stream
+  // for .xlsx, text/plain for .xml — rejecting those false-blocks legit uploads),
+  // but still reject an actively-wrong MIME (e.g. text/html) on an allowed
+  // extension as a cheap first signal. The previous strict `ext AND allowlisted-
+  // mime` over-trusted the MIME and false-rejected real .xlsx/.xml uploads.
+  if (isValidExtension && (isAllowedMime || isGenericMime)) {
     cb(null, true);
   } else {
     cb(new Error(`Invalid file type. Only ${ALLOWED_EXTENSIONS.join(', ')} files are allowed.`));
