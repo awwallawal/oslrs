@@ -28,6 +28,7 @@ let mockStatus: {
   refetch: () => void;
 };
 let mockMutationPending = false;
+let mockStepCount: number | undefined;
 
 vi.mock('../../hooks/useRegistrationStatus', () => ({
   useRegistrationStatus: () => mockStatus,
@@ -36,6 +37,12 @@ vi.mock('../../hooks/useRegistrationStatus', () => ({
 
 vi.mock('../../hooks/useUpdateMarketplaceConsent', () => ({
   useUpdateMarketplaceConsent: () => ({ mutate: mockMutate, isPending: mockMutationPending }),
+}));
+
+// Story 9-40 L2 — mock the step-count hook (it uses TanStack useQuery, which would
+// need a QueryClientProvider this test doesn't set up). Drives the "of N" rendering.
+vi.mock('../../../registration/hooks/useWizardStepCount', () => ({
+  useWizardStepCount: () => mockStepCount,
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
@@ -61,6 +68,7 @@ const refetch = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   mockMutationPending = false;
+  mockStepCount = undefined;
   mockStatus = { data: { state: 'none' }, isLoading: false, isError: false, refetch };
 });
 
@@ -109,6 +117,18 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('resume-draft')).toHaveAttribute('href', '/registration/manage');
     });
 
+    it('state=draft → shows "Step X of N" when the step count resolves (L2)', () => {
+      mockStepCount = 11; // 3 head + 7 sections + review
+      mockStatus = {
+        data: { state: 'draft', draftStep: 3 },
+        isLoading: false,
+        isError: false,
+        refetch,
+      };
+      renderComponent();
+      expect(screen.getByTestId('reg-state-draft')).toHaveTextContent(/step 3 of 11/i);
+    });
+
     it('state=pending_nin → shows reference + links to /registration/manage (AC#3/9-61)', () => {
       mockStatus = {
         data: {
@@ -154,6 +174,8 @@ describe('PublicUserHome (Story 9-40)', () => {
       expect(screen.getByTestId('registration-summary')).toBeInTheDocument();
       expect(screen.getByTestId('summary-reference')).toHaveTextContent('OSL-2026-XYZ789');
       expect(screen.getByTestId('summary-nin-status')).toHaveTextContent('Provided');
+      // Story 9-40 L1 — friendly status label, not the raw enum.
+      expect(screen.getByTestId('summary-status')).toHaveTextContent('Active');
       // Story 9-61 — server-resolved human LGA name renders (not the raw slug).
       expect(screen.getByTestId('summary-lga')).toHaveTextContent('Ibadan North');
       expect(screen.getByTestId('marketplace-status')).toHaveTextContent(/not opted in/i);

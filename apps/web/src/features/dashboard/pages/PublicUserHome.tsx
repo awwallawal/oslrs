@@ -33,6 +33,7 @@ import { SkeletonCard } from '../../../components/skeletons';
 import { useRegistrationStatus } from '../hooks/useRegistrationStatus';
 import { useUpdateMarketplaceConsent } from '../hooks/useUpdateMarketplaceConsent';
 import type { RegistrationStatusRespondentSummary } from '../api/me.api';
+import { useWizardStepCount } from '../../registration/hooks/useWizardStepCount';
 
 /** Where authenticated resume / pending-NIN / edit all land (Story 9-61). */
 const MANAGE_PATH = '/registration/manage';
@@ -107,6 +108,16 @@ const NIN_STATUS_LABEL: Record<RegistrationStatusRespondentSummary['ninStatus'],
   none: 'Not provided',
 };
 
+// Story 9-40 L1 — friendly labels for the raw respondent.status enum
+// (respondentStatusTypes in apps/api/src/db/schema/respondents.ts). Fall back to
+// the raw value for any future status so it never renders blank.
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Active',
+  pending_nin_capture: 'Pending NIN',
+  nin_unavailable: 'NIN unavailable',
+  imported_unverified: 'Imported (unverified)',
+};
+
 /** Read-only summary of the submitted registration (AC#4 view). */
 function RegistrationSummaryCard({
   respondent,
@@ -150,7 +161,7 @@ function RegistrationSummaryCard({
           <div>
             <dt className="text-neutral-500">Status</dt>
             <dd className="font-medium text-neutral-900" data-testid="summary-status">
-              {respondent.status}
+              {STATUS_LABEL[respondent.status] ?? respondent.status}
             </dd>
           </div>
         </dl>
@@ -192,6 +203,10 @@ function StateCard({
 
 export default function PublicUserHome() {
   const { data, isLoading, isError, refetch } = useRegistrationStatus();
+  // Story 9-40 L2 — "of N" for the draft card. The read-model omits the total by
+  // design, so derive it client-side from the pinned form (only fetched when a
+  // draft exists). undefined → fall back to "Step X" with no "of N".
+  const totalSteps = useWizardStepCount(data?.state === 'draft');
 
   return (
     <div className="p-6" data-testid="public-user-home">
@@ -246,7 +261,11 @@ export default function PublicUserHome() {
               tone="bg-blue-100"
               icon={<ClipboardEdit className="w-5 h-5 text-blue-600" />}
               title={`Continue your registration${
-                typeof data.draftStep === 'number' ? ` — Step ${data.draftStep}` : ''
+                typeof data.draftStep === 'number'
+                  ? ` — Step ${data.draftStep}${
+                      typeof totalSteps === 'number' ? ` of ${totalSteps}` : ''
+                    }`
+                  : ''
               }`}
             >
               <p className="text-sm text-neutral-600 mb-3">

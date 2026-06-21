@@ -74,7 +74,8 @@ export interface RegistrationStatusReadModel {
    * wizard config the dashboard (Story 9-40) renders. The server returns the
    * authoritative `draftStep`; the client supplies the "of N". Documented here
    * so the optional `draftTotalSteps` in AC#10's shape is a deliberate omission,
-   * not an oversight.
+   * not an oversight. (Story 9-40 L2: the dashboard derives "of N" via the
+   * `useWizardStepCount` hook — same pinned-form query the wizard uses.)
    */
   draftTotalSteps?: number;
   /** Present for `pending_nin` + `complete` (a linked respondent exists). */
