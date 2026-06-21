@@ -11,15 +11,20 @@
 
 ---
 
-## 📍 STATUS — refreshed 2026-06-17 (Bob/SM)
+## 📍 STATUS — refreshed 2026-06-22 (verifier, post journey + security-r2 integration)
 
-**`9-38` (wizard public-user account-provisioning) is DONE 2026-06-17 (review-passed).** Critical-path head is now **`9-39` ∥ `9-40`** (public journey — both unblocked by 9-38's `user_id` link + `GET /me/registration-status` read-model) **+ the R2 security gate (9-41/43/44/45)**, parallel. `9-18` AC#E9 measurement closes **2026-06-18** (observe + flip).
+**🎉 The launch-critical DEV path is essentially DONE.** The 2026-06-21/22 integration session deployed the entire remaining Tier-A dev queue to prod (@ `0d626a8`): the **public journey** (`9-39` entry-IA ∥ `9-40` dashboard + `9-21` route test + `9-61` authed-edit), the **full R2 security gate** (`9-41`/`9-43`/`9-44`/`9-45`), the **realtime hotfix** (`9-60`), a **deploy-gate stabilization** story (`9-62` — test-DB anti-clobber guard + `smoke-e2e` deploy gate + multer prod-audit unblock), and **`9-63` AC0** (Resend credential isolation — the quota-incident fix). **R2 launch gate (zero open findings) is MET in code; findings-register closed.**
 
-**Done since 2026-06-06:** 9-28 · 9-30 · 9-42 · **9-48** · 9-54 · 9-55 · 9-56 · 9-58 · **9-59** (shipped) · prep-epic-4 · prep-epic-7.
+**Launch is now OPERATOR + MEASUREMENT-gated, not dev-gated. Remaining Tier-A:**
+1. **`9-18` AC#E9** (review) — *observe* Step-4 stall <30% on the 9-19 dashboard, then flip → done. (Measurement, not dev.)
+2. **`9-20`** pre-viral capacity prep (review) — finalize.
+3. **Operator blast infra** — Resend **Pro** upgrade · Termii sender-ID · master-form re-pin → then fire **`9-27` ∥ `9-28`** blasts (capability shipped; operator-fired).
 
-**Remaining launch-critical (Tier A), in order:** **9-39 ∥ 9-40** (public journey) — do **9-21** route-registration test *with/before* 9-39's routing rewrite → R2 security gate **9-41 / 9-43 / 9-44 / 9-45** (parallel, different surface) → operator (9-20 Resend Pro · Termii sender-ID · master-form re-pin) → **9-27 / 9-28 blasts**. Observe **9-18 AC#E9** on 2026-06-18.
+**Done since 2026-06-06 (cumulative):** 9-21 · 9-28 · 9-30 · 9-38 · 9-39 · 9-40 · 9-41 · 9-42 · 9-43 · 9-44 · 9-45 · 9-48 · 9-54 · 9-55 · 9-56 · 9-58 · 9-60 · 9-61 · 9-62 · 9-63-AC0 · prep-epic-4 · prep-epic-7. (`9-59` deployed, sits `review` → flip.)
 
-**NEW — Epic 12 "Dashboard System Refresh"** (authored 2026-06-17, in-progress) = **Tier B (post-launch)**: foundation-first (12-1 DataTable · 12-2 lint-gate · 12-3 `@oslsr/utils` barrel-split · 12-4 registryTotals/data_status model) → analytics truth-layer (12-5…12-9) → migration sweeps (12-10 raw-table, 12-11 inline-style) → 7 per-dashboard completeness (12-12…12-18, vs the role wireframes). **Must NOT pull a dev off the 9-38 / R2 launch path.** See Phase 4.
+**⚠️ Blast-relevant Tier-B note:** **`9-63` Tasks 2–9** (notification meter → chokepoint → budget → dashboard → digest → abuse alerts → SMS) is post-launch hygiene, BUT it was born from Resend **quota exhaustion** — and the `9-27`/`9-28` **email blasts** are exactly the high-volume sends it meters. **Sequence `9-63` Tasks 2–4 (meter/chokepoint/budget) + Resend Pro alongside the pre-blast operator prep** so the blasts are observable and can't re-exhaust the quota.
+
+**Epic 12 "Dashboard System Refresh"** (12-1…12-18) = **Tier B (post-launch)**, multi-week. Lead with the foundation — esp. **`12-3` `@oslsr/utils` barrel-split** (retires the recurring `node:crypto`→web-bundle footgun that bit 9-58 and had to be reasoned-around in 9-63 AC0). **Must NOT pull a dev off launch close-out.** See Phase 4.
 
 ---
 
@@ -45,14 +50,14 @@ These are `review` or operator-gated — they need a decision or a validation, n
 2. **9-18** wizard NIN-first + section-as-step (**~7–11d — the bottleneck**). Success metric: **Step-4 stall <30%** on the 9-19 dashboard within 7d of deploy.
    - **9-54 → 9-55** (NEW 2026-06-10 — emerged from the 9-18 Part-A/F review + prod verification; **launch-gating**; both after 9-18's questionnaire surface): **9-54** forms-engine fidelity — runtime `calculate`/`age` eval + group-relevance migration + publish-time validator + **choice-field wizard dedup value-mapping** (folded from the Part-E review — gender/lga/consent are re-asked because their value vocabularies mismatch the wizard's; needs a mapping layer, not a naive alias add); *also closes a live dropped-`consent_basic` identity gate*. **→ 9-55** minor age-gate (floor 15 + ILO Art.6 apprenticeship carve-out + NDPA guardian consent), depends-on 9-54. ~2–3d each. Author via `*create-story` when 9-18 ships.
 3. ✅ **9-38** account-provisioning **keystone** — **DONE 2026-06-17 (review-passed)**; shipped the `respondents.user_id` link + `GET /me/registration-status` read-model. Unblocks 9-39/9-40 + the blasts.
-4. **9-39** entry-IA ∥ **9-40** dashboard rewrite (~2–4d / ~4–6d) — **parallel**, both after 9-38
+4. ✅ **9-39** entry-IA ∥ **9-40** dashboard rewrite — **DONE + deployed 2026-06-21** (+ `9-21` route test, `9-61` authed-edit, `9-60` realtime hotfix). Public journey complete.
 
 **Parallel track — run WHILE 9-18 cooks (different surfaces, low overlap):**
 - **9-21** route-registration integration test — do *before* 9-39 changes routing
 - **9-22 → 9-23** operator-audit helper → publish-path convergence (9-22 first; 9-23 validated **hygiene, not a 9-18 blocker** — pairs with the Q.M. surface 9-17 touches; bundle with 9-17 if a dev is already there)
 - **9-24** local-db-drift prevention
 - **prep-typecheck-operator-scripts** — static-check the prod-mutating Tailscale scripts
-- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** ~~9-42 (auth/token)~~ ✅ **DONE+deployed 2026-06-08** (`5bbb824`..`164ff6b`; F-011/012/018/019/022/023/004 + OPS-RL-1/OPS-2) · **9-48 (refresh-token lifecycle: hash-at-rest OPS-3 + M1 rotation grace + L3 reset-atomic) — NEW launch-gate, carved from the 9-42 review** · 9-41 (reveal accountability) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. ✅ **9-48 has LANDED (done+deployed)** — the forced-re-login cutover is behind us. **Remaining R2 dev gate: 9-41 · 9-43 · 9-44 · 9-45** (all ready-for-dev; parallel to 9-38). _See SCPs `…-2026-06-06-security-r2-remediation.md` + `…-2026-06-08-refresh-token-lifecycle-hardening.md`._
+- **Security-hardening track (R2 assessment `sec-r2-20260603`) — gates the blasts, parallel to 9-18:** ~~9-42 (auth/token)~~ ✅ **DONE+deployed 2026-06-08** (`5bbb824`..`164ff6b`; F-011/012/018/019/022/023/004 + OPS-RL-1/OPS-2) · **9-48 (refresh-token lifecycle: hash-at-rest OPS-3 + M1 rotation grace + L3 reset-atomic) — NEW launch-gate, carved from the 9-42 review** · 9-41 (reveal accountability) · 9-43 (export) · 9-44 (upload) · 9-45 (access-control/boot) · 9-9 origin-lock (F-024, operator). All green before the Phase 2 🚦 gate. ✅ **9-48 has LANDED (done+deployed)** — the forced-re-login cutover is behind us. **R2 dev gate `9-41` · `9-43` · `9-44` · `9-45` — ✅ ALL DONE + deployed 2026-06-21** (rebase-merge preserving per-finding history; findings-register closed; F-005 fail-closed boot + F-002 nginx + reveal-purpose migration verified on prod). **Zero open R2 findings in code.** _See SCPs `…-2026-06-06-security-r2-remediation.md` + `…-2026-06-08-refresh-token-lifecycle-hardening.md`._
 - **Operator (continuous):** Resend Pro + Termii account signups — needed for Phase 2
 
 ---
@@ -66,11 +71,11 @@ These are `review` or operator-gated — they need a decision or a validation, n
 ### 🚦 Launch gate (definition of done for the launch)
 Fire the blasts only when **all** are green:
 - wizard **Step-4 stall <30%** (9-18, measured on the 9-19 dashboard)
-- **coherent public journey shipped** (9-38 + 9-39 + 9-40)
+- ✅ **coherent public journey shipped** (9-38 + 9-39 + 9-40 + 9-61) — DONE 2026-06-21
 - **capacity** ready (9-20) · **analytics live** (9-30) · **blast infra** live (Resend Pro + Termii)
 - **form fidelity + minor safeguarding** (9-54 ✅ **done 2026-06-14** → 9-55 next): runtime `calculate`/`age` eval + group-relevance migration + publish-time validator (closes the dropped `consent_basic` identity gate) [✅ shipped + prod re-pinned in 9-54] + floor-15 age-gate with ILO apprenticeship carve-out & NDPA guardian consent [9-55, **ready-for-dev**, depends-on 9-54 — closes the wizard/forms UI loop before 9-56]. _Emerged from the 9-18 review; verified against prod 2026-06-10._
 - **support traceability** (9-56): support can resolve a registrant by the **Reference ID** the success screen now shows them (or by email/phone) and see status / whether the magic-link email was sent — registry search currently matches name/NIN only. _Lightweight operability gate; emerged 2026-06-14 from the 9-54 reference-ID swap (commit `0f03a42`). Parallel-track — does NOT gate the Phase-1 critical path._
-- **zero open R2 security findings** (`sec-r2-20260603`): **BOTH Highs now closed** — F-011 ✅ (`4fee9b9`) + **F-024 ✅ 2026-06-09** (origin-locked: de-point + 443→CF firewall + CF Origin Cert + AOP mTLS; known-IP accepted-residual). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45. **Scorecard: both Highs done; remaining gate = dev stories 9-48 + 9-41 + 9-43 + 9-44 + 9-45.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
+- **zero open R2 security findings** (`sec-r2-20260603`): **BOTH Highs now closed** — F-011 ✅ (`4fee9b9`) + **F-024 ✅ 2026-06-09** (origin-locked: de-point + 443→CF firewall + CF Origin Cert + AOP mTLS; known-IP accepted-residual). Dev gate stories: **9-42 ✅ done** · **9-48** (refresh-token lifecycle, NEW) · 9-41 (F-007 reveal) · 9-43 · 9-44 · 9-45. **Scorecard: ✅ MET in code — both Highs done (F-011/F-024) AND all R2 dev stories done+deployed (9-48 + 9-41 + 9-43 + 9-44 + 9-45, 2026-06-21). findings-register closed.** _Rationale: the blasts point traffic at the origin + reveal endpoint; launch with zero security debt. (9-49 access-token in-memory = POST-LAUNCH, NOT a gate — register note G / ADR-022.)_
 
 ---
 
