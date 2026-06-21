@@ -9,12 +9,24 @@ test.describe('Smoke Tests', () => {
     );
   });
 
-  test('login page renders form fields', async ({ page }) => {
+  test('login page renders magic-link-primary sign-in (Story 9-39)', async ({ page }) => {
     await page.goto('/login');
     await expect(page).toHaveTitle(/Login.*OSLSR/);
+
+    // Story 9-39: public sign-in is magic-link-FIRST. The primary surface is the
+    // email + "email me a sign-in link" magic-link form; email+password is demoted
+    // to a secondary collapsed disclosure, so the Password field is intentionally
+    // NOT visible by default (this is what the old assertion mis-expected).
+    await expect(page.getByTestId('magic-link-entry-point')).toBeVisible();
     await expect(page.getByLabel('Email Address')).toBeVisible();
+    await expect(page.getByTestId('magic-link-submit-button')).toBeVisible();
+
+    // Password sign-in is demoted, not removed — assert it is still reachable
+    // behind the disclosure so a future regression that drops it is caught.
+    await expect(page.getByLabel('Password', { exact: true })).toBeHidden();
+    await page.getByTestId('password-signin-reveal').click();
+    await expect(page.getByTestId('password-signin-form')).toBeVisible();
     await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
   });
 
   test('public navigation works', async ({ page }) => {
