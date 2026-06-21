@@ -42,6 +42,18 @@ vi.mock('../../middleware/settings-rate-limit.js', () => ({
   settingsListRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   settingsWriteRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
+// F-014 (Story 9-45): the PATCH route is now guarded by `requireFreshReAuth`
+// (step-up re-auth on privileged settings writes). Mock it to pass-through — this
+// is a route-handler test; the middleware's own Redis-reauth-marker → 403 / next
+// behavior is covered by middleware/__tests__/require-fresh-reauth.test.ts.
+// Without this the mocked super-admin (no Redis marker) 403s before the handler.
+vi.mock('../../middleware/sensitive-action.js', () => ({
+  requireReAuth: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  requireFreshReAuth: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  setReAuthValid: vi.fn(),
+  clearReAuth: vi.fn(),
+  getReAuthValidity: vi.fn(),
+}));
 vi.mock('../../services/settings.service.js', () => ({
   SettingsService: {
     listSettings: mockListSettings,
