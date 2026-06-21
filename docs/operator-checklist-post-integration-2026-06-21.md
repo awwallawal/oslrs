@@ -7,15 +7,12 @@ they finish the verification loop.
 
 ---
 
-## 1. 🟡 9-60 — post-login white-screen efficacy (M1)
-**Why open:** the realtime/ErrorBoundary hotfix is deployed + unit-verified, but
-the *specific* white-screen-on-login symptom was only ever reproduced locally; the
-route-scoped boundary only self-heals if the throw originates **inside `<Routes>`**.
-**Do:**
-- [ ] Log into prod (`https://oyotradeministry.com.ng`) as a public user AND as staff; confirm the dashboard renders on first paint (no white screen, no hard-refresh needed).
-- [ ] If a white screen still appears: open DevTools → Console, **capture the stack** (tells us if the throw is inside `<Routes>` (fixed) or in `AuthProvider`/boot (needs the outer boundary)).
-- [ ] Leave a dashboard tab open ~10 min; confirm the socket settles to polling (no runaway reconnect / tab freeze).
-- [ ] Then flip 9-60 `review → done` in `sprint-status.yaml`.
+> **Live prod domain is `https://oyoskills.com`** (verified 200/healthy). `oyotradeministry.com.ng` is **dropped/de-pointed** (F-024 retirement) — do NOT use it.
+
+## 1. ✅ 9-60 — post-login white-screen (M1) — CONFIRMED DONE 2026-06-21
+Operator confirmed locally that the freeze/white-screen is resolved. Story + sprint-status
+flipped `review → done`. The socket-storm cap + route-scoped ErrorBoundary are live on prod
+(`oyoskills.com`). No further action.
 
 ## 2. 🟡 9-61 — manual `/registration/manage` end-to-end (HANDOFF Must-read #1)
 **Why open:** the authed-edit write paths are CI-verified (real-DB integration) but
@@ -27,13 +24,15 @@ never exercised against the running prod app.
 - [ ] L1/L2 spot-check (just shipped): dashboard status reads "Active"/"Pending NIN" (not the raw slug); the draft card shows "Step X **of N**".
 
 ## 3. 🟡 F-026 — prod runtime hygiene (the operator half; code half done in 9-45)
-**Why open:** `NODE_ENV=production` is **effective** on prod (verified — enforced CSP)
-and now also in `/root/oslrs/.env`, but prod still runs `npx tsx src/index.ts`, not
-`node dist`. F-005's fail-closed boot is satisfied; this is hygiene/perf.
+**Verified 2026-06-21 (via tailscale `oslsr-home-app`):** `NODE_ENV=production` is **effective
+at runtime** (enforced CSP confirmed) → F-005 fail-closed boot is satisfied. BUT three hygiene
+gaps remain: it is **not a clean `^NODE_ENV=` line** in `/root/oslrs/.env` (effective via dotenv
+odd-format / pm2 wrapper — fragile across edits); the box still runs **`npx tsx src/index.ts`**
+(not `node dist`); and **2 `.env.bak` files** sit in `/root/oslrs/` (F-006).
 **Do (on the VPS, low priority):**
-- [ ] Confirm `NODE_ENV=production` is durably in the PM2 env / `.env` (survives a restart): `pm2 restart oslsr-api && curl -sI http://127.0.0.1:3000/api/v1/health | grep -i content-security-policy` (enforced CSP present = good).
+- [ ] Make `NODE_ENV=production` a clean committed line in the PM2 env / `.env`; verify it survives `pm2 restart oslsr-api && curl -sI http://127.0.0.1:3000/api/v1/health | grep -i content-security-policy` (enforced CSP = good).
 - [ ] (Optional perf) move from `tsx` to a built `node dist` start command.
-- [ ] **F-006 host cleanup:** delete any `/root/oslrs/.env.bak*` files (host-side secret backups; repo history is already clean).
+- [ ] **F-006 host cleanup:** delete the 2 `/root/oslrs/.env.bak*` files (host-side secret backups; repo history is already clean). _(Agent can do this on request.)_
 
 ## 4. ⚪ Non-gating, tracked elsewhere (FYI, not on this checklist's critical path)
 - Re-engagement blasts (Cohort A/B) — `docs/runbooks/re-engagement-campaign-launch.md` (operator-fired; separate from this integration).

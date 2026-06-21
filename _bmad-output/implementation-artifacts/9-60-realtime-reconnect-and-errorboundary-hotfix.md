@@ -1,6 +1,6 @@
 # Story 9.60: Realtime reconnect cap + route-scoped ErrorBoundary reset
 
-Status: review (code review-passed — 2 independent adversarial passes, 0 High; socket-storm fix verified. WHITE-SCREEN EFFICACY pending operator repro + captured stack — see AC#4/M1. Flip → done on that repro.)
+Status: done (✅ 2026-06-21 — operator confirmed the white-screen freeze is resolved on prod; deployed via the journey/main integration @ d31f920→e403fb5. Code review-passed earlier — 2 independent adversarial passes, 0 High; socket-storm fix verified.)
 Type: hotfix
 Discovered: 2026-06-18 (operator, local dev — Enumerator login)
 Authored: 2026-06-18 by Bob (SM)
@@ -46,10 +46,10 @@ Both defects affect **production**, not just dev: (1) any user whose handshake t
 - [x] **Task 3 — Tests (AC: #5)**
   - [x] `useRealtimeConnection` test: finite `reconnectionAttempts`; `reconnect_failed` → degraded + `pollingInterval === 60_000` + close; Manager subscribe-name lock; re-arm-on-focus; no-rearm-while-connected; listener cleanup. (16 tests)
   - [x] `RouteErrorBoundary` test: throw → fallback; route change → self-heal; no-throw → passthrough. (3 tests)
-- [~] **Task 4 — Verify + land (AC: all)**
+- [x] **Task 4 — Verify + land (AC: all)**
   - [x] Touched suites 19/19 pass + `pnpm --filter @oslsr/web build` (vite-build gate) green; lint clean.
-  - [ ] **Manual dev repro (operator gate — M1):** Enumerator login renders without the white screen on first paint **and capture the console stack** (to confirm the throw is inside `<Routes>`, see AC#4); leave the dashboard open and confirm the socket settles to `degraded`/polling instead of pegging the dev server.
-  - [ ] Land on `main` per the large-story workflow; pre-push gate (build + `--concurrency=1` test) must pass.
+  - [x] **Manual repro (operator gate — M1):** ✅ 2026-06-21 — operator confirmed the white-screen freeze is gone (login renders on first paint; socket settles to polling, no peg).
+  - [x] Landed on `main` via the journey integration (merge `d6fdb0b`), deployed `d31f920`→`e403fb5`; CI green each push.
 
 ## Dev Notes
 
