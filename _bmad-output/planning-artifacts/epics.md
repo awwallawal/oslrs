@@ -2423,6 +2423,7 @@ So that every feature in the analytics specification is either live, threshold-g
 | **9-51** | Enumerator "My Stats" analytics 500 hotfix (roles-table join + safeSection guards + real-DB analytics smoke) | done | Hotfix 2026-06-09 (`9eeb88e`) |
 | **9-52** | CF Traffic-Watch Alert (cron + `cloudflare-analytics` lib + 9-15 Telegram; pages on requests-spike-while-pageviews-flat / threats / error-ratio) — monitoring, not a gate | ready-for-dev | Emergent 2026-06-10 (CF analytics session) |
 | **9-53** | oyotradeministry.com.ng Residual Cleanup (dead dual-domain refs post-F-024; reference-only) — hygiene, not a gate | ready-for-dev | Emergent 2026-06-10 (drift sweep) |
+| **9-63** | **Notification Usage Observability & Send-Credential Isolation** (counted email/SMS chokepoint so EmailBudgetService sees 100% of sends; per-category usage dashboard; Telegram daily-usage + abuse alerts; non-prod must NOT use the prod Resend key — fail-closed) — ops/security hygiene, not a gate | in-progress (AC0 + Tasks 2-4 meter/chokepoint/budget done+deployed; AC3-9 pending) | Emergent 2026-06-21 (Resend quota-exhaustion investigation) |
 
 **Numbers not used:** 9-14, 9-29 (surname-split "Part F" — absorbed into 9-18), 9-31 — intentionally skipped during planning.
 
