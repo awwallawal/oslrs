@@ -29,13 +29,19 @@ describe('reference-code (Story 9-58)', () => {
     it('is overwhelmingly unique across many generations', () => {
       const seen = new Set<string>();
       let collisions = 0;
-      for (let i = 0; i < 5000; i++) {
+      const N = 5000;
+      for (let i = 0; i < N; i++) {
         const code = generateReferenceCode(2026);
         if (seen.has(code)) collisions++;
         seen.add(code);
       }
-      // 32^6 keyspace → effectively zero collisions at 5k samples.
-      expect(collisions).toBe(0);
+      // 32^6 keyspace (~1.07e9): the birthday-paradox EXPECTED collision count at
+      // 5k samples is ~0.012, so a single collision is rare-but-possible. Asserting
+      // exactly-zero was flaky (it tripped CI ~1%/run). Assert the actual PROPERTY —
+      // overwhelmingly unique — which tolerates the occasional birthday collision
+      // while still failing hard on a broken (non-random) generator.
+      expect(seen.size).toBeGreaterThan(N * 0.999);
+      expect(collisions).toBeLessThan(N * 0.001);
     });
 
     it('rejects a non-4-digit year', () => {
