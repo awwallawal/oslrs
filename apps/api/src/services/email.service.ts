@@ -13,6 +13,8 @@ import type {
   DisputeResolutionEmailData,
 } from '@oslsr/types';
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
+import { NotificationMeter } from './notification-meter.service.js';
+import type { NotificationCategory } from './notification-category.js';
 
 const logger = pino({ name: 'email-service' });
 
@@ -79,6 +81,36 @@ export class EmailService {
     return this.getConfig().enabled;
   }
 
+  /**
+   * Story 9-63 (Task 3 / AC1) — the single counted email chokepoint.
+   *
+   * EVERY email leaves the building through here: each typed sender and
+   * `sendGenericEmail` calls `dispatch()` instead of `getProvider().send()`
+   * directly, so no send can bypass the NotificationMeter counter. The category
+   * is derived from the subject via the shared classifier (the
+   * `_diagnose-email-usage.ts` reference mapping), unless the caller passes an
+   * explicit `category` (e.g. a blast script that knows its own bucket).
+   *
+   * Counting is fire-and-forget AFTER a successful provider send and fails open
+   * (the meter swallows its own errors), so instrumentation can never change
+   * send behaviour, recipients, or the returned `EmailResult`.
+   */
+  private static async dispatch(
+    data: { to: string; subject: string; html: string; text: string },
+    category?: NotificationCategory,
+  ): Promise<EmailResult> {
+    const result = await this.getProvider().send(data);
+    if (result.success) {
+      // Count only real sends; bounce/complaint reconciliation is a later task.
+      await NotificationMeter.recordEmailSend({
+        subject: data.subject,
+        recipient: data.to,
+        category,
+      });
+    }
+    return result;
+  }
+
   // ==========================================================================
   // Staff Invitation Email (AC2)
   // ==========================================================================
@@ -107,12 +139,12 @@ export class EmailService {
 
     const subject = `You've been invited to join OSLSR - ${data.roleName}`;
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.email,
       subject,
       html: this.getStaffInvitationHtml(data),
       text: this.getStaffInvitationText(data),
-    });
+    }, 'staff-invitation');
   }
 
   /**
@@ -221,12 +253,12 @@ Government of Oyo State
       return { success: false, error: 'Email service is disabled' };
     }
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.email,
       subject: 'Password Reset Request - OSLSR',
       html: this.getPasswordResetHtml(data),
       text: this.getPasswordResetText(data),
-    });
+    }, 'password-reset');
   }
 
   /**
@@ -338,12 +370,12 @@ Government of Oyo State
       return { success: false, error: 'Email service is disabled' };
     }
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.email,
       subject: 'Registration Attempt Detected - OSLSR',
       html: this.getDuplicateRegistrationHtml(data),
       text: this.getDuplicateRegistrationText(data),
-    });
+    }, 'duplicate-registration');
   }
 
   /**
@@ -440,7 +472,7 @@ Government of Oyo State
     const subject = `[OSLRS] Payment Recorded — ${data.trancheName}`;
     const amountFormatted = `₦${(data.amount / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.email,
       subject,
       html: `
@@ -482,7 +514,7 @@ Government of Oyo State
 </body>
 </html>`,
       text: `Payment Recorded — ${data.trancheName}\n\nHello ${data.staffName},\n\nA stipend payment has been recorded for you.\n\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nDate: ${data.date}\nBank Reference: ${data.bankReference}\n\nIf you have questions, contact your supervisor or administrator.`,
-    });
+    }, 'payment-notification');
   }
 
   // ==========================================================================
@@ -507,7 +539,7 @@ Government of Oyo State
     const subject = `[OSLRS] Payment Dispute Raised — ${data.staffName}`;
     const amountFormatted = `₦${(data.amount / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.to,
       subject,
       html: `
@@ -547,7 +579,7 @@ Government of Oyo State
 </body>
 </html>`,
       text: `Payment Dispute Raised — ${data.staffName}\n\nA staff member has raised a dispute regarding a payment record.\n\nStaff: ${data.staffName}\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nIssue: ${data.commentExcerpt}\n\nPlease review this dispute in the OSLRS administration dashboard.`,
-    });
+    }, 'dispute');
   }
 
   // ==========================================================================
@@ -572,7 +604,7 @@ Government of Oyo State
     const amountFormatted = `₦${(data.amount / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
     const borderColor = data.action === 'resolved' ? '#16a34a' : '#2563eb';
 
-    return this.getProvider().send({
+    return this.dispatch({
       to: data.staffEmail,
       subject,
       html: `
@@ -613,7 +645,7 @@ Government of Oyo State
 </body>
 </html>`,
       text: `Payment Dispute ${actionLabel}\n\nDear ${data.staffName},\n\nYour payment dispute has been ${actionLabel.toLowerCase()} by the administrator.\n\nTranche: ${data.trancheName}\nAmount: ${amountFormatted}\nAdmin Response: ${data.adminResponse}\n${data.hasEvidence ? 'Evidence: Supporting documentation has been attached to the record.\n' : ''}\nLog in to the OSLSR dashboard to view the full details.`,
-    });
+    }, 'dispute');
   }
 
   // ==========================================================================
@@ -623,12 +655,22 @@ Government of Oyo State
   /**
    * Sends a generic email (used by AlertService for system health alerts).
    */
-  static async sendGenericEmail(data: {
-    to: string;
-    subject: string;
-    html: string;
-    text: string;
-  }): Promise<EmailResult> {
+  static async sendGenericEmail(
+    data: {
+      to: string;
+      subject: string;
+      html: string;
+      text: string;
+    },
+    /**
+     * Story 9-63 (Task 3 / AC1) — optional explicit category. Direct callers
+     * whose subject doesn't self-classify (e.g. the re-engagement blast script)
+     * pass their bucket here; everyone else relies on the subject classifier in
+     * `dispatch()`. Magic-link, registration-status, backup, health-digest and
+     * notification-digest subjects all classify correctly without this.
+     */
+    category?: NotificationCategory,
+  ): Promise<EmailResult> {
     if (!this.isEnabled()) {
       logger.warn({
         event: 'email.generic.disabled',
@@ -638,7 +680,7 @@ Government of Oyo State
       return { success: false, error: 'Email service is disabled' };
     }
 
-    return this.getProvider().send(data);
+    return this.dispatch(data, category);
   }
 
 }

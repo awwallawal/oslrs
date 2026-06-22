@@ -43,6 +43,23 @@ const REDIS_KEYS = {
 } as const;
 
 /**
+ * Story 9-63 (Task 4 / AC2) — the NotificationMeter per-category counters share
+ * the `email:daily:count:` / `email:monthly:count:` prefixes but carry a
+ * `<category>:<date>` (resp. `<category>:<month>`) suffix, e.g.
+ * `email:daily:count:magiclink-login:2026-06-22`. The budget guard previously
+ * read ONLY the legacy total key (`email:daily:count:<date>`), which is
+ * incremented solely by the email-WORKER path — so every high-volume direct
+ * send (magic-link, reminder, status, backup, blasts) was invisible to the
+ * 80%/95% defer + auto-pause throttle. Summing the meter's per-category keys
+ * gives the budget guard the COMPLETE real volume.
+ *
+ * A `*:bounced` / `*:complained` suffixed key is excluded so negative-delivery
+ * reconciliation never counts against the send budget.
+ */
+const METER_DAILY_PREFIX = 'email:daily:count:';
+const METER_MONTHLY_PREFIX = 'email:monthly:count:';
+
+/**
  * TTL values in seconds
  */
 const TTL = {
@@ -89,6 +106,67 @@ export class EmailBudgetService {
   }
 
   /**
+   * Story 9-63 (Task 4 / AC2) — sum the NotificationMeter per-category counters
+   * for a period so the budget guard reflects TOTAL real volume, not just the
+   * worker-path total. Uses a non-blocking SCAN (never `KEYS`, which blocks the
+   * Redis event loop in production) over `<prefix><category>:<periodSuffix>`,
+   * excluding `:bounced` / `:complained` event keys.
+   *
+   * Fail-OPEN (review nit, 9-63): on any Redis error returns 0 — `getEffective*`
+   * then falls back to the legacy worker total via Math.max and NEVER throws or
+   * blocks a send. Note the direction: this MAY under-report (the legacy floor is
+   * < the true meter sum), so during a Redis outage a few sends could slip past a
+   * defer threshold. Accepted — blocking mail on a transient Redis error is worse,
+   * and any over-send is bounded by the legacy floor + the provider's hard quota.
+   */
+  private async sumMeterCounters(prefix: string, periodSuffix: string): Promise<number> {
+    try {
+      const pattern = `${prefix}*:${periodSuffix}`;
+      let cursor = '0';
+      let total = 0;
+      do {
+        const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = next;
+        const realSendKeys = keys.filter(
+          (k) => !k.includes(':bounced:') && !k.includes(':complained:'),
+        );
+        if (realSendKeys.length > 0) {
+          const values = await this.redis.mget(...realSendKeys);
+          for (const v of values) total += parseInt(v || '0', 10);
+        }
+      } while (cursor !== '0');
+      return total;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Effective daily send count = MAX(legacy worker total, meter category sum).
+   *
+   * MAX (not sum) avoids double-counting the worker path, which increments BOTH
+   * the legacy total key AND a per-category meter key. Every other send hits ONLY
+   * the meter, so the meter sum is the authoritative complete figure; the legacy
+   * total is kept as a floor in case an un-instrumented path still writes it.
+   */
+  private async getEffectiveDailyCount(dateKey: string): Promise<number> {
+    const [legacyStr, meterSum] = await Promise.all([
+      this.redis.get(REDIS_KEYS.dailyCount(dateKey)),
+      this.sumMeterCounters(METER_DAILY_PREFIX, dateKey),
+    ]);
+    return Math.max(parseInt(legacyStr || '0', 10), meterSum);
+  }
+
+  /** Effective monthly send count — same MAX(legacy, meter-sum) reconciliation. */
+  private async getEffectiveMonthlyCount(monthKey: string): Promise<number> {
+    const [legacyStr, meterSum] = await Promise.all([
+      this.redis.get(REDIS_KEYS.monthlyCount(monthKey)),
+      this.sumMeterCounters(METER_MONTHLY_PREFIX, monthKey),
+    ]);
+    return Math.max(parseInt(legacyStr || '0', 10), meterSum);
+  }
+
+  /**
    * Check if an email can be sent based on budget constraints
    *
    * Returns whether sending is allowed and the reason if not.
@@ -98,15 +176,16 @@ export class EmailBudgetService {
     const monthKey = this.getMonthKey();
     const tierConfig = TIER_LIMITS[this.tier];
 
-    // Get current counts
-    const [dailyCountStr, monthlyCountStr, overageCostStr] = await Promise.all([
-      this.redis.get(REDIS_KEYS.dailyCount(dateKey)),
-      this.redis.get(REDIS_KEYS.monthlyCount(monthKey)),
+    // Story 9-63 (Task 4 / AC2) — effective counts reconcile the legacy
+    // worker-only total with the NotificationMeter per-category sum so the
+    // guard sees ALL traffic (magic-link / reminder / status / backup / blasts
+    // previously bypassed this).
+    const [dailyCount, monthlyCount, overageCostStr] = await Promise.all([
+      this.getEffectiveDailyCount(dateKey),
+      this.getEffectiveMonthlyCount(monthKey),
       this.redis.get(REDIS_KEYS.overageCost(monthKey)),
     ]);
 
-    const dailyCount = parseInt(dailyCountStr || '0', 10);
-    const monthlyCount = parseInt(monthlyCountStr || '0', 10);
     const overageCostCents = parseInt(overageCostStr || '0', 10);
 
     const usage = {
@@ -184,6 +263,13 @@ export class EmailBudgetService {
    * Record a sent email (increment counters)
    *
    * Call this after successfully sending an email.
+   *
+   * Story 9-63 (Task 4 / AC2) — the legacy worker-path total key is still
+   * incremented here for backward-compat, but the per-category NotificationMeter
+   * keys (written at the EmailService chokepoint) are now the authoritative
+   * volume source that `checkBudget()`/`getBudgetStatus()` read. The overage
+   * cost below is computed from the EFFECTIVE monthly count (meter-inclusive) so
+   * pro/scale overage billing reflects the high-volume direct sends too.
    */
   async recordSend(): Promise<void> {
     const dateKey = this.getDateKey();
@@ -205,8 +291,7 @@ export class EmailBudgetService {
 
     // Update overage cost if applicable
     if (tierConfig.hasOverage) {
-      const monthlyCountStr = await this.redis.get(REDIS_KEYS.monthlyCount(monthKey));
-      const monthlyCount = parseInt(monthlyCountStr || '0', 10);
+      const monthlyCount = await this.getEffectiveMonthlyCount(monthKey);
 
       if (monthlyCount > tierConfig.monthlyLimit) {
         // Calculate overage: $0.90 per 1000 = 0.09 cents per email
@@ -240,15 +325,13 @@ export class EmailBudgetService {
     const monthKey = this.getMonthKey();
     const tierConfig = TIER_LIMITS[this.tier];
 
-    const [dailyCountStr, monthlyCountStr, overageCostStr, isPaused] = await Promise.all([
-      this.redis.get(REDIS_KEYS.dailyCount(dateKey)),
-      this.redis.get(REDIS_KEYS.monthlyCount(monthKey)),
+    const [dailyCount, monthlyCount, overageCostStr, isPaused] = await Promise.all([
+      this.getEffectiveDailyCount(dateKey),
+      this.getEffectiveMonthlyCount(monthKey),
       this.redis.get(REDIS_KEYS.overageCost(monthKey)),
       this.isQueuePaused(),
     ]);
 
-    const dailyCount = parseInt(dailyCountStr || '0', 10);
-    const monthlyCount = parseInt(monthlyCountStr || '0', 10);
     const overageCostCents = parseInt(overageCostStr || '0', 10);
 
     const dailyLimit = tierConfig.dailyLimit === Infinity ? -1 : tierConfig.dailyLimit;
@@ -354,8 +437,8 @@ export class EmailBudgetService {
     }
 
     const dateKey = this.getDateKey();
-    const countStr = await this.redis.get(REDIS_KEYS.dailyCount(dateKey));
-    const count = parseInt(countStr || '0', 10);
+    // Story 9-63 (Task 4 / AC2) — meter-inclusive effective count.
+    const count = await this.getEffectiveDailyCount(dateKey);
 
     return Math.max(0, tierConfig.dailyLimit - count);
   }
@@ -367,8 +450,8 @@ export class EmailBudgetService {
     const tierConfig = TIER_LIMITS[this.tier];
     const monthKey = this.getMonthKey();
 
-    const countStr = await this.redis.get(REDIS_KEYS.monthlyCount(monthKey));
-    const count = parseInt(countStr || '0', 10);
+    // Story 9-63 (Task 4 / AC2) — meter-inclusive effective count.
+    const count = await this.getEffectiveMonthlyCount(monthKey);
 
     if (!tierConfig.hasOverage) {
       return Math.max(0, tierConfig.monthlyLimit - count);

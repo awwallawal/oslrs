@@ -344,7 +344,7 @@ async function main() {
         subject: emailContent.subject,
         html: emailContent.html,
         text: emailContent.text,
-      });
+      }, 'supplemental-survey'); // Story 9-63 AC1 — explicit category for the meter.
 
       if (result.success) {
         sent++;
