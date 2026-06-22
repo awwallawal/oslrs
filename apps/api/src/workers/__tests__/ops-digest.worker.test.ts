@@ -8,11 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { OpsDashboardSnapshot } from '@oslsr/types';
 
-const { mockGetSnapshot, mockSend, mockGateEnabled, mockLogAction } = vi.hoisted(() => ({
+const { mockGetSnapshot, mockSend, mockGateEnabled, mockLogAction, mockDetect } = vi.hoisted(() => ({
   mockGetSnapshot: vi.fn(),
   mockSend: vi.fn(),
   mockGateEnabled: vi.fn(),
   mockLogAction: vi.fn(),
+  mockDetect: vi.fn(),
 }));
 
 vi.mock('../../services/operations.service.js', () => ({
@@ -39,7 +40,18 @@ vi.mock('../../services/audit.service.js', () => ({
   AUDIT_ACTIONS: { OPS_DIGEST_SENT: 'ops.digest_sent' },
 }));
 
-import { escapeMarkdownV2, formatDigest, runOpsDigest } from '../ops-digest.worker.js';
+vi.mock('../../services/notification-abuse.service.js', () => ({
+  NotificationAbuseService: { detect: mockDetect },
+}));
+
+import {
+  escapeMarkdownV2,
+  formatDigest,
+  formatNotificationUsageLines,
+  formatAbuseLines,
+  runOpsDigest,
+} from '../ops-digest.worker.js';
+import type { NotificationUsage } from '@oslsr/types';
 
 function healthySnapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboardSnapshot {
   return {
@@ -66,7 +78,24 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockSend.mockResolvedValue(true);
   mockGateEnabled.mockReturnValue(true);
+  mockDetect.mockResolvedValue([]);
 });
+
+function usageFixture(overrides?: Partial<NotificationUsage>): NotificationUsage {
+  return {
+    date: '2026-06-22',
+    month: '2026-06',
+    today: {
+      email: { total: 42, byCategory: [{ category: 'magiclink-login', count: 30 }, { category: 'pending-nin-reminder', count: 12 }], bounced: 1, complained: 0 },
+      sms: { total: 3, byCategory: [{ category: 'magiclink-login', count: 3 }], bounced: 0, complained: 0 },
+    },
+    thisMonth: {
+      email: { total: 900, byCategory: [], bounced: 4, complained: 1 },
+      sms: { total: 10, byCategory: [], bounced: 0, complained: 0 },
+    },
+    ...overrides,
+  };
+}
 
 describe('escapeMarkdownV2', () => {
   it('escapes all MarkdownV2 reserved characters', () => {
@@ -122,7 +151,7 @@ describe('runOpsDigest', () => {
       expect.any(String),
       expect.objectContaining({ parseMode: 'MarkdownV2', disableNotification: true }),
     );
-    expect(result).toEqual({ sent: true, silent: true, recommendationCount: 0 });
+    expect(result).toEqual({ sent: true, silent: true, recommendationCount: 0, abuseFindingCount: 0 });
     expect(mockLogAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'ops.digest_sent', actorId: null }),
     );
@@ -154,5 +183,82 @@ describe('runOpsDigest', () => {
         details: expect.objectContaining({ sent: false, gateEnabled: false }),
       }),
     );
+  });
+
+  it('sends AUDIBLE when abuse findings exist even with no recommendations (AC5)', async () => {
+    mockGetSnapshot.mockResolvedValue(healthySnapshot());
+    mockDetect.mockResolvedValue([
+      { key: 'undeliverable-email', text: '3 sends to example.com today' },
+    ]);
+    const result = await runOpsDigest();
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ disableNotification: false }),
+    );
+    expect(result.silent).toBe(false);
+    expect(result.abuseFindingCount).toBe(1);
+    expect(mockLogAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ abuseFindingCount: 1 }),
+      }),
+    );
+  });
+
+  it('still completes when abuse detection throws (fail-open)', async () => {
+    mockGetSnapshot.mockResolvedValue(healthySnapshot());
+    mockDetect.mockRejectedValue(new Error('redis down'));
+    const result = await runOpsDigest();
+    expect(result.sent).toBe(true);
+    expect(result.abuseFindingCount).toBe(0);
+  });
+});
+
+describe('formatNotificationUsageLines (AC4)', () => {
+  it('renders email + sms totals and top categories', () => {
+    const lines = formatNotificationUsageLines(usageFixture()).join('\n');
+    expect(lines).toContain('*Notifications*');
+    expect(lines).toContain('email 42 sent');
+    expect(lines).toContain('sms 3 sent');
+    expect(lines).toContain('magiclink\\-login 30'); // escaped hyphen
+  });
+
+  it('renders section-unavailable when usage is null', () => {
+    expect(formatNotificationUsageLines(null)).toEqual(['⚪ *Notifications*: section unavailable']);
+  });
+
+  it('surfaces bounced/complained totals', () => {
+    const lines = formatNotificationUsageLines(usageFixture()).join('\n');
+    expect(lines).toContain('1 bounced');
+  });
+});
+
+describe('formatAbuseLines (AC5)', () => {
+  it('returns [] with no findings', () => {
+    expect(formatAbuseLines([])).toEqual([]);
+  });
+
+  it('renders a header + a 🚨 line per finding (escaped)', () => {
+    const lines = formatAbuseLines([
+      { key: 'daily-ceiling-email', text: 'Email daily volume 600 >= ceiling 500.' },
+    ]).join('\n');
+    expect(lines).toContain('*Abuse / anomaly alerts*');
+    expect(lines).toContain('🚨');
+    expect(lines).toContain('600 \\>\\= ceiling 500\\.'); // escaped > = .
+  });
+});
+
+describe('formatDigest with usage + abuse (AC4/AC5)', () => {
+  it('includes the notification usage section', () => {
+    const msg = formatDigest(healthySnapshot({ notificationUsage: usageFixture() }));
+    expect(msg).toContain('*Notifications*');
+    expect(msg).toContain('email 42 sent');
+  });
+
+  it('includes abuse findings when supplied', () => {
+    const msg = formatDigest(healthySnapshot({ notificationUsage: usageFixture() }), [
+      { key: 'recipient-hammer-email', text: 'A single email recipient received 25 sends today.' },
+    ]);
+    expect(msg).toContain('*Abuse / anomaly alerts*');
+    expect(msg).toContain('🚨');
   });
 });

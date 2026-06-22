@@ -21,6 +21,7 @@ import {
   type OpsResendStatus,
   type OpsQueueHealth,
   type OpsRecommendation,
+  type NotificationUsage,
 } from '@oslsr/types';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useOperationsDashboard } from '../api/operations.api';
@@ -210,6 +211,62 @@ function QueueCard({ queue }: { queue: OpsQueueHealth | null }) {
   );
 }
 
+function NotificationUsageCard({ usage }: { usage?: NotificationUsage | null }) {
+  const hasNegative =
+    !!usage &&
+    (usage.today.email.bounced > 0 ||
+      usage.today.email.complained > 0 ||
+      usage.today.sms.bounced > 0 ||
+      usage.today.sms.complained > 0);
+  const dot: OpsStatusLevel = hasNegative ? 'yellow' : 'green';
+  const topCats = usage
+    ? usage.today.email.byCategory.slice(0, 5)
+    : [];
+  return (
+    <Card
+      title="Notification usage"
+      testId="ops-card-notification-usage"
+      dot={<StatusDot level={usage ? dot : 'green'} testId="ops-notification-dot" />}
+    >
+      {usage ? (
+        <div>
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+            Today ({usage.date}) — internal meter
+          </p>
+          <Row
+            label="Email"
+            value={`${usage.today.email.total} sent${
+              usage.today.email.bounced || usage.today.email.complained
+                ? ` (${usage.today.email.bounced} bounced, ${usage.today.email.complained} complained)`
+                : ''
+            }`}
+          />
+          <Row label="SMS" value={`${usage.today.sms.total} sent`} />
+          {topCats.length > 0 && (
+            <div className="mt-2">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                Top email categories (today)
+              </p>
+              {topCats.map((catCount) => (
+                <Row key={catCount.category} label={catCount.category} value={catCount.count} />
+              ))}
+            </div>
+          )}
+          <div className="mt-2">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+              This month ({usage.month})
+            </p>
+            <Row label="Email" value={`${usage.thisMonth.email.total} sent`} />
+            <Row label="SMS" value={`${usage.thisMonth.sms.total} sent`} />
+          </div>
+        </div>
+      ) : (
+        <SectionUnavailable testId="ops-notification-unavailable" />
+      )}
+    </Card>
+  );
+}
+
 function RecommendationsCard({ recs }: { recs: OpsRecommendation[] }) {
   return (
     <Card
@@ -294,6 +351,7 @@ export default function OperationsDashboardPage() {
             <AdoptionCard traffic={data.traffic} />
             <EmailCard resend={data.resend} />
             <QueueCard queue={data.queue} />
+            <NotificationUsageCard usage={data.notificationUsage} />
           </div>
           <RecommendationsCard recs={data.recommendations} />
         </>

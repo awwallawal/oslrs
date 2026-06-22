@@ -20,7 +20,12 @@ import { createRedisConnection } from '../lib/redis.js';
 import { OperationsService } from '../services/operations.service.js';
 import { sendTelegramMessage, isAlertSendEnabled } from '../services/alerting/telegram-channel.js';
 import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
-import { RESEND_FREE_TIER_DAILY, type OpsDashboardSnapshot } from '@oslsr/types';
+import { NotificationAbuseService, type AbuseFinding } from '../services/notification-abuse.service.js';
+import {
+  RESEND_FREE_TIER_DAILY,
+  type OpsDashboardSnapshot,
+  type NotificationUsage,
+} from '@oslsr/types';
 import pino from 'pino';
 
 const logger = pino({ name: 'ops-digest-worker' });
@@ -46,10 +51,55 @@ function tierGlyph(value: number, yellowAt: number, redAt: number): string {
 }
 
 /**
- * Build the digest message body (MarkdownV2). Exported for unit tests (AC#D4).
- * Pure — takes a snapshot, returns a string ≤ TELEGRAM_MAX_CHARS.
+ * Story 9-63 (AC4) — format the once-daily notification-usage lines (total +
+ * top categories + bounced/complained) for the digest. Pure; returns escaped
+ * MarkdownV2 lines. Empty array when usage is unavailable (caller renders the
+ * "unavailable" placeholder).
  */
-export function formatDigest(snapshot: OpsDashboardSnapshot): string {
+export function formatNotificationUsageLines(usage: NotificationUsage | null | undefined): string[] {
+  if (!usage) return ['⚪ *Notifications*: section unavailable'];
+  const e = usage.today.email;
+  const s = usage.today.sms;
+  const topCats = e.byCategory
+    .slice(0, 3)
+    .map((cat) => `${cat.category} ${cat.count}`)
+    .join(', ');
+  const negative = e.bounced + e.complained + s.bounced + s.complained;
+  const negGlyph = negative > 0 ? '🟡' : '📨';
+  const lines: string[] = [];
+  lines.push(
+    `${negGlyph} *Notifications* \\(today\\): ${escapeMarkdownV2(
+      `email ${e.total} sent, sms ${s.total} sent, ${e.bounced + s.bounced} bounced, ${e.complained + s.complained} complained`,
+    )}`,
+  );
+  if (topCats) {
+    lines.push(`   ${escapeMarkdownV2(`top: ${topCats}`)}`);
+  }
+  return lines;
+}
+
+/**
+ * Story 9-63 (AC5) — format abuse/anomaly findings for the digest. Each finding
+ * gets a 🚨 marker so it stands apart from the routine recommendations.
+ */
+export function formatAbuseLines(findings: AbuseFinding[]): string[] {
+  if (findings.length === 0) return [];
+  const lines: string[] = ['', '*Abuse / anomaly alerts*'];
+  for (const f of findings) {
+    lines.push(`🚨 ${escapeMarkdownV2(f.text)}`);
+  }
+  return lines;
+}
+
+/**
+ * Build the digest message body (MarkdownV2). Exported for unit tests (AC#D4).
+ * Pure — takes a snapshot (+ optional notification usage & abuse findings),
+ * returns a string ≤ TELEGRAM_MAX_CHARS.
+ */
+export function formatDigest(
+  snapshot: OpsDashboardSnapshot,
+  abuseFindings: AbuseFinding[] = [],
+): string {
   const T = OperationsService.thresholds;
   const lines: string[] = [];
 
@@ -103,6 +153,16 @@ export function formatDigest(snapshot: OpsDashboardSnapshot): string {
     lines.push('⚪ *Queue*: section unavailable');
   }
 
+  // Notification usage (AC4) — internal meter, per-category.
+  for (const l of formatNotificationUsageLines(snapshot.notificationUsage)) {
+    lines.push(l);
+  }
+
+  // Abuse / anomaly alerts (AC5).
+  for (const l of formatAbuseLines(abuseFindings)) {
+    lines.push(l);
+  }
+
   lines.push('');
   lines.push('*Recommendations*');
   if (snapshot.recommendations.length === 0) {
@@ -133,6 +193,7 @@ interface DigestResult {
   sent: boolean;
   silent: boolean;
   recommendationCount: number;
+  abuseFindingCount: number;
 }
 
 /**
@@ -145,9 +206,20 @@ interface DigestResult {
 export async function runOpsDigest(): Promise<DigestResult> {
   const snapshot = await OperationsService.getDashboardSnapshot({ force: true });
   const recommendationCount = snapshot.recommendations.length;
-  // Healthy snapshot → silent push (no buzz). Any recommendation → audible.
-  const silent = recommendationCount === 0;
-  const message = formatDigest(snapshot);
+
+  // Story 9-63 (AC5) — sweep the meter for abuse/anomaly findings. Never throws
+  // into the digest tick (the service is pure-read + fail-open).
+  let abuseFindings: AbuseFinding[] = [];
+  try {
+    abuseFindings = await NotificationAbuseService.detect();
+  } catch (err) {
+    logger.warn({ event: 'ops_digest.abuse_detect_failed', error: (err as Error).message });
+  }
+
+  // Healthy snapshot → silent push (no buzz). Any recommendation OR abuse
+  // finding → audible (abuse is always worth a vibration).
+  const silent = recommendationCount === 0 && abuseFindings.length === 0;
+  const message = formatDigest(snapshot, abuseFindings);
 
   const sent = await sendTelegramMessage(message, {
     parseMode: 'MarkdownV2',
@@ -164,12 +236,19 @@ export async function runOpsDigest(): Promise<DigestResult> {
       sent,
       silent,
       recommendationCount,
+      abuseFindingCount: abuseFindings.length,
       gateEnabled: isAlertSendEnabled(),
     },
   });
 
-  logger.info({ event: 'ops_digest.tick_complete', sent, silent, recommendationCount });
-  return { sent, silent, recommendationCount };
+  logger.info({
+    event: 'ops_digest.tick_complete',
+    sent,
+    silent,
+    recommendationCount,
+    abuseFindingCount: abuseFindings.length,
+  });
+  return { sent, silent, recommendationCount, abuseFindingCount: abuseFindings.length };
 }
 
 let workerInstance: Worker | null = null;

@@ -13,14 +13,12 @@
  * Resend email quota exhaustion from per-metric individual alerts.
  */
 
-import { eq, and } from 'drizzle-orm';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { db } from '../db/index.js';
-import { users, roles } from '../db/schema/index.js';
 import { EmailService } from './email.service.js';
 import { sendCriticalTelegramAlert } from './alerting/telegram-channel.js';
+import { getActiveSuperAdminEmails } from './super-admin-recipients.js';
 import type { SystemHealthResponse } from '@oslsr/types';
 import pino from 'pino';
 
@@ -344,7 +342,7 @@ export class AlertService {
     }
 
     try {
-      const superAdminEmails = await this.getActiveSuperAdminEmails();
+      const superAdminEmails = await getActiveSuperAdminEmails();
       if (superAdminEmails.length === 0) {
         logger.warn({ event: 'alert.no_recipients' });
         pendingDigest.clear();
@@ -393,24 +391,6 @@ export class AlertService {
         event: 'alert.digest_send_failed',
         error: (err as Error).message,
       });
-    }
-  }
-
-  /**
-   * Query active Super Admin email addresses
-   */
-  private static async getActiveSuperAdminEmails(): Promise<string[]> {
-    try {
-      const result = await db
-        .select({ email: users.email })
-        .from(users)
-        .innerJoin(roles, eq(users.roleId, roles.id))
-        .where(and(eq(roles.name, 'super_admin'), eq(users.status, 'active')));
-
-      return result.map((r) => r.email);
-    } catch (err) {
-      logger.error({ event: 'alert.query_admins_failed', error: (err as Error).message });
-      return [];
     }
   }
 

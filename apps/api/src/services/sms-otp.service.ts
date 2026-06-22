@@ -18,6 +18,7 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { AppError } from '@oslsr/utils';
 import { getRedisClient } from '../lib/redis.js';
 import { getSmsProvider } from './sms-provider.adapter.js';
+import { NotificationMeter } from './notification-meter.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'sms-otp-service' });
@@ -88,6 +89,16 @@ export class SmsOtpService {
       const result = await provider.sendOtp(phone, code);
       // Only persist the OTP hash after the provider confirmed dispatch.
       await redis.set(otpKey(phone), hash, 'EX', OTP_TTL_SECONDS);
+
+      // Story 9-63 (Task 8 / AC7): count the SMS send through the same meter the
+      // email chokepoint uses, so SMS volume + per-recipient abuse signals light
+      // up automatically when a real provider (Termii) is bound. Fire-and-forget
+      // AFTER a confirmed dispatch (the NoopSmsProvider throws before reaching
+      // here, so the meter only ever counts a genuine send). Fail-open.
+      await NotificationMeter.recordSmsSend({
+        category: 'magiclink-login',
+        recipient: phone,
+      });
 
       logger.info({
         event: 'sms_otp.requested',

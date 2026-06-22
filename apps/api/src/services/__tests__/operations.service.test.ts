@@ -29,6 +29,14 @@ vi.mock('../../queues/email.queue.js', () => ({
   getEmailFailedSamples: mockFailedSamples,
 }));
 
+// Story 9-63 (AC3) — keep this unit test hermetic: the meter's read helpers
+// touch Redis. Stub them to a deterministic empty-usage shape.
+vi.mock('../notification-meter.service.js', () => ({
+  NotificationMeter: {
+    readUsage: vi.fn().mockResolvedValue({ total: 0, byCategory: [], bounced: 0, complained: 0 }),
+  },
+}));
+
 // `pm2 jlist` etc. are unavailable in the test sandbox — force getSystemHealth
 // down its graceful-degradation path deterministically. Uses async `exec`
 // (callback style) now that getSystemHealth no longer blocks the event loop.
@@ -44,6 +52,7 @@ import {
   getQueueHealth,
   getSystemHealth,
 } from '../operations.service.js';
+import { NotificationMeter } from '../notification-meter.service.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -58,6 +67,14 @@ beforeEach(() => {
     paused: false,
   });
   mockFailedSamples.mockResolvedValue([]);
+  // vitest.base sets mockReset:true → the vi.mock factory's mockResolvedValue is
+  // wiped before each test, so re-establish it here (mirrors the queue mocks above).
+  vi.mocked(NotificationMeter.readUsage).mockResolvedValue({
+    total: 0,
+    byCategory: [],
+    bounced: 0,
+    complained: 0,
+  });
 });
 
 function trafficRows() {
@@ -182,6 +199,19 @@ describe('getDashboardSnapshot — orchestration + 30s cache', () => {
     expect(snap.system).toBeNull(); // exec mocked to error → graceful null
     expect(snap.traffic?.step4StallPct).toBe(63);
     expect(snap.queue).not.toBeNull();
+    // Story 9-63 (AC3) — meter usage section is gathered (empty shape from the stub).
+    expect(snap.notificationUsage).toEqual({
+      date: expect.any(String),
+      month: expect.any(String),
+      today: {
+        email: { total: 0, byCategory: [], bounced: 0, complained: 0 },
+        sms: { total: 0, byCategory: [], bounced: 0, complained: 0 },
+      },
+      thisMonth: {
+        email: { total: 0, byCategory: [], bounced: 0, complained: 0 },
+        sms: { total: 0, byCategory: [], bounced: 0, complained: 0 },
+      },
+    });
     // step-4 stall 63% → a red recommendation is present
     expect(snap.recommendations.some((r) => r.key === 'step4-stall' && r.severity === 'red')).toBe(true);
   });

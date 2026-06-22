@@ -5,6 +5,7 @@ const mockGet = vi.fn();
 const mockSet = vi.fn();
 const mockDel = vi.fn();
 const mockSendOtp = vi.fn();
+const mockRecordSmsSend = vi.fn();
 
 // MR-1 (2026-05-11 session 7) — service now uses atomic `SET ... NX`
 // instead of MULTI/EXEC. The mock matches the simpler shape.
@@ -26,6 +27,13 @@ vi.mock('../sms-provider.adapter.js', async () => {
     }),
   };
 });
+
+// Story 9-63 (Task 8 / AC7) — the SMS chokepoint counts a confirmed send.
+vi.mock('../notification-meter.service.js', () => ({
+  NotificationMeter: {
+    recordSmsSend: (...args: unknown[]) => mockRecordSmsSend(...args),
+  },
+}));
 
 vi.mock('pino', () => ({
   default: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -69,6 +77,11 @@ describe('SmsOtpService', () => {
       const [phoneArg, codeArg] = mockSendOtp.mock.calls[0] as [string, string];
       expect(phoneArg).toBe('+2348012345678');
       expect(codeArg).toMatch(/^\d{6}$/);
+
+      // Story 9-63 (AC7) — the SMS chokepoint counted the confirmed send.
+      expect(mockRecordSmsSend).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'magiclink-login', recipient: '+2348012345678' }),
+      );
     });
 
     it('releases the rate-limit claim on provider failure (MR-1)', async () => {
@@ -79,6 +92,8 @@ describe('SmsOtpService', () => {
 
       await expect(SmsOtpService.requestOtp('+2348012345678')).rejects.toThrow(/provider unavailable/);
       expect(mockDel).toHaveBeenCalledTimes(1);
+      // The meter must NOT count a send that the provider rejected (AC7).
+      expect(mockRecordSmsSend).not.toHaveBeenCalled();
     });
   });
 

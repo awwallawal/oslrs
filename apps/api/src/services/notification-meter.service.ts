@@ -35,6 +35,7 @@ import { getRedisClient } from '../lib/redis.js';
 import {
   type NotificationCategory,
   classifyEmailSubject,
+  isUndeliverableRecipient,
 } from './notification-category.js';
 
 const logger = pino({ name: 'notification-meter' });
@@ -80,6 +81,9 @@ export const METER_KEYS = {
   /** Per-recipient daily frequency — single-target hammering signal (AC5b). */
   recipientDaily: (channel: NotificationChannel, recipientHash: string, date: string) =>
     `${channel}:recipient:count:${recipientHash}:${date}`,
+  /** Daily count of sends ATTEMPTED to an undeliverable/reserved domain (AC5d). */
+  undeliverableDaily: (channel: NotificationChannel, date: string) =>
+    `${channel}:undeliverable:count:${date}`,
 } as const;
 
 /**
@@ -142,6 +146,15 @@ export class NotificationMeter {
         const rKey = METER_KEYS.recipientDaily(channel, hashRecipient(recipient), date);
         pipeline.incr(rKey);
         pipeline.expire(rKey, DAILY_TTL_SECONDS);
+
+        // AC5d — flag a send attempted to an undeliverable/reserved domain (the
+        // 2026-06-21 `example.com` quota-bleed signal). Counted, not blocked: the
+        // send already happened; the abuse sweep alerts on a non-zero count.
+        if (isUndeliverableRecipient(recipient)) {
+          const uKey = METER_KEYS.undeliverableDaily(channel, date);
+          pipeline.incr(uKey);
+          pipeline.expire(uKey, DAILY_TTL_SECONDS);
+        }
       }
 
       await pipeline.exec();
@@ -196,6 +209,142 @@ export class NotificationMeter {
       event: args.event,
     });
   }
+
+  /**
+   * Story 9-63 (Task 5 / AC3) — read a channel's per-category usage for a period
+   * from the meter counters. Uses the same non-blocking SCAN-sum pattern the
+   * budget guard uses (`email-budget.service.ts`), reading the `daily` keys for a
+   * date or the `monthly` keys for a month. Returns positive `total` + per-category
+   * breakdown (sorted desc) with `bounced` / `complained` split out so they never
+   * inflate volume. Fail-OPEN: on a Redis error returns an empty usage shape.
+   */
+  static async readUsage(
+    channel: NotificationChannel,
+    period: 'daily' | 'monthly',
+    periodSuffix: string,
+  ): Promise<ChannelUsage> {
+    const empty: ChannelUsage = { total: 0, byCategory: [], bounced: 0, complained: 0 };
+    const redis = this.resolveRedis();
+    if (!redis) return empty;
+
+    // `email:daily:count:<category>:<date>` — match the period segment + suffix.
+    const pattern = `${channel}:${period}:count:*:${periodSuffix}`;
+    const prefixLen = `${channel}:${period}:count:`.length;
+    const suffixLen = periodSuffix.length + 1; // include the leading ':'
+
+    try {
+      const byCategory = new Map<string, number>();
+      let bounced = 0;
+      let complained = 0;
+      let cursor = '0';
+      do {
+        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = next;
+        if (keys.length === 0) continue;
+        const values = await redis.mget(...keys);
+        for (let i = 0; i < keys.length; i++) {
+          const n = parseInt(values[i] || '0', 10);
+          if (!n) continue;
+          // The category segment is between the fixed prefix and the period suffix.
+          const cat = keys[i].slice(prefixLen, keys[i].length - suffixLen);
+          if (cat.endsWith(':bounced')) {
+            bounced += n;
+          } else if (cat.endsWith(':complained')) {
+            complained += n;
+          } else {
+            byCategory.set(cat, (byCategory.get(cat) ?? 0) + n);
+          }
+        }
+      } while (cursor !== '0');
+
+      const sorted = [...byCategory.entries()]
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
+      const total = sorted.reduce((acc, c) => acc + c.count, 0);
+
+      return { total, byCategory: sorted, bounced, complained };
+    } catch (err) {
+      logger.warn({
+        event: 'notification.meter.read_failed',
+        channel,
+        period,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return empty;
+    }
+  }
+
+  /**
+   * Story 9-63 (Task 6 / AC5b) — the maximum per-recipient send count for a
+   * channel on a date (the single-target-hammer signal). Reads the hashed
+   * `<channel>:recipient:count:<hash>:<date>` keys and returns the largest.
+   * Fail-OPEN → 0.
+   */
+  static async maxRecipientCount(channel: NotificationChannel, date: string): Promise<number> {
+    const redis = this.resolveRedis();
+    if (!redis) return 0;
+    const pattern = `${channel}:recipient:count:*:${date}`;
+    try {
+      let cursor = '0';
+      let max = 0;
+      do {
+        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = next;
+        if (keys.length === 0) continue;
+        const values = await redis.mget(...keys);
+        for (const v of values) {
+          const n = parseInt(v || '0', 10);
+          if (n > max) max = n;
+        }
+      } while (cursor !== '0');
+      return max;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Story 9-63 (Task 6 / AC5d) — count of sends ATTEMPTED to an
+   * undeliverable/reserved domain for a channel on a date. Fail-OPEN → 0.
+   */
+  static async undeliverableCount(channel: NotificationChannel, date: string): Promise<number> {
+    const redis = this.resolveRedis();
+    if (!redis) return 0;
+    try {
+      const v = await redis.get(METER_KEYS.undeliverableDaily(channel, date));
+      return parseInt(v || '0', 10);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Story 9-63 (Task 6 / AC5c) — total positive sends for a single category on a
+   * given date (used to compare today vs a trailing baseline for a spiking
+   * public category). Reads the bare category daily key. Fail-OPEN → 0.
+   */
+  static async categoryDailyCount(
+    channel: NotificationChannel,
+    category: string,
+    date: string,
+  ): Promise<number> {
+    const redis = this.resolveRedis();
+    if (!redis) return 0;
+    try {
+      const v = await redis.get(METER_KEYS.daily(channel, category, date));
+      return parseInt(v || '0', 10);
+    } catch {
+      return 0;
+    }
+  }
+}
+
+/** Per-channel usage read result (mirrors `@oslsr/types` NotificationChannelUsage). */
+export interface ChannelUsage {
+  total: number;
+  byCategory: Array<{ category: string; count: number }>;
+  bounced: number;
+  complained: number;
 }
 
 /**

@@ -137,5 +137,76 @@ describe('NotificationMeter (Story 9-63 Task 2 / AC1, AC7)', () => {
         else delete process.env.NODE_ENV;
       }
     });
+
+    it('flags a send to an undeliverable/reserved domain (AC5d signal)', async () => {
+      await NotificationMeter.recordEmailSend({
+        subject: 'Sign in to your account',
+        recipient: 'backoffice-activate-9@example.com',
+      });
+      const count = await redis.get(METER_KEYS.undeliverableDaily('email', '2026-06-22'));
+      expect(count).toBe('1');
+    });
+
+    it('does NOT flag a deliverable recipient as undeliverable', async () => {
+      await NotificationMeter.recordEmailSend({
+        subject: 'Sign in to your account',
+        recipient: 'real.person@gmail.com',
+      });
+      const count = await redis.get(METER_KEYS.undeliverableDaily('email', '2026-06-22'));
+      expect(count).toBeNull();
+    });
+  });
+
+  describe('read helpers (Story 9-63 Task 5/6 / AC3, AC5)', () => {
+    it('readUsage returns per-category totals + bounce/complaint split', async () => {
+      await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'a@b.com' });
+      await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'c@b.com' });
+      await NotificationMeter.recordEmailSend({
+        subject: 'Add your NIN to complete your registration',
+        recipient: 'd@b.com',
+      });
+      await NotificationMeter.recordEmailSend({
+        subject: 'Sign in to your account',
+        recipient: 'e@b.com',
+        event: 'bounced',
+      });
+
+      const usage = await NotificationMeter.readUsage('email', 'daily', '2026-06-22');
+      expect(usage.total).toBe(3); // 2 magic-link + 1 nin-reminder, bounce excluded
+      expect(usage.bounced).toBe(1);
+      expect(usage.complained).toBe(0);
+      // Sorted desc — magic-link (2) first.
+      expect(usage.byCategory[0]).toEqual({ category: 'magiclink-login', count: 2 });
+      expect(usage.byCategory).toContainEqual({ category: 'pending-nin-reminder', count: 1 });
+    });
+
+    it('readUsage reads the monthly namespace independently', async () => {
+      await NotificationMeter.recordSmsSend({ category: 'magiclink-login', recipient: '+2348012345678' });
+      const usage = await NotificationMeter.readUsage('sms', 'monthly', '2026-06');
+      expect(usage.total).toBe(1);
+      expect(usage.byCategory).toEqual([{ category: 'magiclink-login', count: 1 }]);
+    });
+
+    it('maxRecipientCount returns the largest per-recipient frequency', async () => {
+      for (let i = 0; i < 7; i++) {
+        await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'victim@b.com' });
+      }
+      await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'other@b.com' });
+      const max = await NotificationMeter.maxRecipientCount('email', '2026-06-22');
+      expect(max).toBe(7);
+    });
+
+    it('undeliverableCount sums reserved-domain send attempts', async () => {
+      await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'x@example.com' });
+      await NotificationMeter.recordEmailSend({ subject: 'Sign in to your account', recipient: 'test-1@localhost' });
+      const count = await NotificationMeter.undeliverableCount('email', '2026-06-22');
+      expect(count).toBe(2);
+    });
+
+    it('categoryDailyCount reads a single category bare key', async () => {
+      await redis.set(METER_KEYS.daily('email', 'magiclink-login', '2026-06-22'), '42');
+      const count = await NotificationMeter.categoryDailyCount('email', 'magiclink-login', '2026-06-22');
+      expect(count).toBe(42);
+    });
   });
 });

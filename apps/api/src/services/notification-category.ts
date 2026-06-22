@@ -64,3 +64,43 @@ export const PUBLIC_TRIGGERED_CATEGORIES: ReadonlySet<NotificationCategory> = ne
   'duplicate-registration',
   'registration-status',
 ]);
+
+/**
+ * Story 9-63 (Task 6 / AC5d) — IANA-reserved / structurally-undeliverable
+ * domains + known test-account local-part prefixes. A send ATTEMPTED to any of
+ * these is a reputation hazard (the 2026-06-21 `example.com` quota-bleed). Pure
+ * (no DB) so both the runtime recipient filter (`super-admin-recipients.ts`) and
+ * the NotificationMeter abuse signal share one definition.
+ */
+const UNDELIVERABLE_DOMAINS = [
+  'example.com',
+  'example.org',
+  'example.net',
+  'test',
+  'invalid',
+  'localhost',
+];
+const UNDELIVERABLE_LOCAL_PREFIXES = [
+  'backoffice-activate-',
+  'activate-',
+  'perf-',
+  'nin-test-',
+  'expiry-',
+  'test-',
+  'bulk-',
+  'import-',
+];
+
+/**
+ * True iff the email can never deliver (reserved domain) or is a known
+ * test-fixture account. Phone recipients (SMS) always return false.
+ */
+export function isUndeliverableRecipient(recipient: string): boolean {
+  const lower = (recipient || '').trim().toLowerCase();
+  if (!lower.includes('@')) return false; // phone or opaque id — not an email-domain hazard
+  const domain = lower.split('@')[1] || '';
+  if (!domain) return true;
+  const domainHit = UNDELIVERABLE_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+  const prefixHit = UNDELIVERABLE_LOCAL_PREFIXES.some((p) => lower.startsWith(p));
+  return domainHit || prefixHit;
+}

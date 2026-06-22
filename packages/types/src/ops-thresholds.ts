@@ -168,5 +168,46 @@ export interface OpsDashboardSnapshot {
   traffic: OpsTrafficSnapshot | null;
   resend: OpsResendStatus | null;
   queue: OpsQueueHealth | null;
+  /** Story 9-63 (AC3) — internal per-category email/SMS usage from the meter. */
+  notificationUsage?: NotificationUsage | null;
   recommendations: OpsRecommendation[];
+}
+
+// ─── Story 9-63 (AC3) — internal NotificationMeter usage (the source of truth) ──
+
+/** One category's send count for a period. */
+export interface NotificationCategoryCount {
+  category: string;
+  count: number;
+}
+
+/** Per-channel usage bucketed by category, plus the negative-delivery totals. */
+export interface NotificationChannelUsage {
+  /** Total positive sends across all categories in the period. */
+  total: number;
+  /** Per-category breakdown, sorted descending by count. */
+  byCategory: NotificationCategoryCount[];
+  /** Delivery-webhook reconciliation tallies (excluded from `total`). */
+  bounced: number;
+  complained: number;
+}
+
+/**
+ * Internal notification usage read from the NotificationMeter Redis counters
+ * (NOT the Resend list API — that caps at 100 rows and is a lower bound). This
+ * is the authoritative volume source for the ops dashboard + abuse detection.
+ */
+export interface NotificationUsage {
+  /** YYYY-MM-DD the `today` window covers (UTC). */
+  date: string;
+  /** YYYY-MM the `month` window covers (UTC). */
+  month: string;
+  today: {
+    email: NotificationChannelUsage;
+    sms: NotificationChannelUsage;
+  };
+  thisMonth: {
+    email: NotificationChannelUsage;
+    sms: NotificationChannelUsage;
+  };
 }

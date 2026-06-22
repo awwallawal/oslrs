@@ -33,6 +33,7 @@ import {
   type OpsTrafficSnapshot,
   type OpsResendStatus,
   type OpsQueueHealth,
+  type NotificationUsage,
 } from '@oslsr/types';
 import {
   LAUNCH_DATE,
@@ -40,6 +41,7 @@ import {
   getTraffic,
   getResendStatus,
   getQueueHealth,
+  getNotificationUsage,
   buildRecommendations,
 } from '../src/services/operations.service.js';
 import { pool } from '../src/db/index.js';
@@ -128,12 +130,47 @@ function renderCloudflare(cf: CloudflareDashboardSummary | null): void {
   console.log();
 }
 
+/**
+ * NotificationMeter usage — per-category email/SMS counts from the INTERNAL
+ * counter (Story 9-63 / AC3). The Resend section above is a 100-row lower bound;
+ * this is the authoritative volume the abuse thresholds + budget guard read.
+ */
+function renderNotificationUsage(usage: NotificationUsage | null): void {
+  console.log(c.bold('  Notification usage') + c.gray('  ·  internal meter (email + SMS)'));
+  if (!usage) {
+    console.log(c.dim('    section unavailable'));
+    console.log();
+    return;
+  }
+  const channelLine = (label: string, today: NotificationUsage['today']['email']) => {
+    const cats = today.byCategory
+      .slice(0, 5)
+      .map((cat) => `${cat.category} ${cat.count}`)
+      .join('  ·  ');
+    const neg =
+      today.bounced || today.complained
+        ? c.red(`  (${today.bounced} bounced, ${today.complained} complained)`)
+        : '';
+    console.log(`    ${c.gray('·')} ${label.padEnd(14)} ${c.bold(String(today.total))} sent${neg}`);
+    if (cats) console.log(`         ${c.gray(cats)}`);
+  };
+  console.log(c.gray(`    Today (${usage.date})`));
+  channelLine('Email', usage.today.email);
+  channelLine('SMS', usage.today.sms);
+  console.log(c.gray(`    This month (${usage.month})`));
+  console.log(
+    `    ${c.gray('·')} Email          ${c.bold(String(usage.thisMonth.email.total))} sent  ·  SMS ${c.bold(String(usage.thisMonth.sms.total))} sent`,
+  );
+  console.log();
+}
+
 function render(
   sys: OpsSystemHealth | null,
   traffic: OpsTrafficSnapshot | null,
   resend: OpsResendStatus | null,
   queue: OpsQueueHealth | null,
   cf: CloudflareDashboardSummary | null,
+  notificationUsage: NotificationUsage | null,
 ): void {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const sep = c.gray('─'.repeat(64));
@@ -221,6 +258,9 @@ function render(
   }
   console.log();
 
+  // Notification usage (internal meter) — AC3.
+  renderNotificationUsage(notificationUsage);
+
   // Cloudflare edge traffic (CLI-only; reuses shared lib).
   renderCloudflare(cf);
 
@@ -244,14 +284,15 @@ function render(
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 async function main() {
-  const [sys, traffic, resend, queue, cf] = await Promise.all([
+  const [sys, traffic, resend, queue, cf, notificationUsage] = await Promise.all([
     getSystemHealth(),
     getTraffic(),
     getResendStatus(),
     getQueueHealth(),
     getCloudflareDashboardSummary(7).catch(() => null), // best-effort; never block the dashboard
+    getNotificationUsage(),
   ]);
-  render(sys, traffic, resend, queue, cf);
+  render(sys, traffic, resend, queue, cf, notificationUsage);
   await closeEmailQueue().catch(() => { /* best-effort */ });
   await pool.end().catch(() => { /* best-effort */ });
 }

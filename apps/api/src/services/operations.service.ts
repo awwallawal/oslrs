@@ -31,9 +31,11 @@ import {
   type OpsQueueHealth,
   type OpsRecommendation,
   type OpsDashboardSnapshot,
+  type NotificationUsage,
 } from '@oslsr/types';
 import { pool } from '../db/index.js';
 import { getEmailQueueStats, getEmailFailedSamples } from '../queues/email.queue.js';
+import { NotificationMeter } from './notification-meter.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'operations-service' });
@@ -241,6 +243,41 @@ export async function getResendStatus(): Promise<OpsResendStatus | null> {
   }
 }
 
+// ─── Section 3b: NotificationMeter usage (Story 9-63 / AC3) ─────────────────
+
+/**
+ * Per-category email + SMS usage read from the INTERNAL NotificationMeter Redis
+ * counters (the source of truth — every send flows through the meter chokepoint),
+ * for today + this month. Distinct from `getResendStatus()`, which reads the
+ * Resend list API (capped at 100 rows → a lower bound, useful only for
+ * delivery/bounce reconciliation). Degrades to `null` on failure like every
+ * other section.
+ */
+export async function getNotificationUsage(): Promise<NotificationUsage | null> {
+  try {
+    const now = new Date();
+    const date = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const month = now.toISOString().slice(0, 7); // YYYY-MM
+
+    const [emailToday, smsToday, emailMonth, smsMonth] = await Promise.all([
+      NotificationMeter.readUsage('email', 'daily', date),
+      NotificationMeter.readUsage('sms', 'daily', date),
+      NotificationMeter.readUsage('email', 'monthly', month),
+      NotificationMeter.readUsage('sms', 'monthly', month),
+    ]);
+
+    return {
+      date,
+      month,
+      today: { email: emailToday, sms: smsToday },
+      thisMonth: { email: emailMonth, sms: smsMonth },
+    };
+  } catch (e) {
+    logger.warn({ event: 'operations.notification_usage_unavailable', error: (e as Error).message });
+    return null;
+  }
+}
+
 // ─── Section 4: BullMQ queue health ─────────────────────────────────────────
 
 export async function getQueueHealth(): Promise<OpsQueueHealth | null> {
@@ -383,11 +420,12 @@ export class OperationsService {
       return cached.snapshot;
     }
 
-    const [system, traffic, resend, queue] = await Promise.all([
+    const [system, traffic, resend, queue, notificationUsage] = await Promise.all([
       getSystemHealth(),
       getTraffic(),
       getResendStatus(),
       getQueueHealth(),
+      getNotificationUsage(),
     ]);
 
     const snapshot: OpsDashboardSnapshot = {
@@ -396,6 +434,7 @@ export class OperationsService {
       traffic,
       resend,
       queue,
+      notificationUsage,
       recommendations: buildRecommendations({ system, traffic, resend, queue }),
     };
 

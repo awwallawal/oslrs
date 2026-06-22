@@ -33,9 +33,9 @@ import {
 import pino from 'pino';
 import { db } from '../db/index.js';
 import { users, respondents, auditLogs, submissions } from '../db/schema/index.js';
-import { roles } from '../db/schema/index.js';
-import { sql, eq, and } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { queueBackupNotificationEmail } from '../queues/email.queue.js';
+import { getActiveSuperAdminEmails } from '../services/super-admin-recipients.js';
 import {
   isEncryptionEnabled,
   getEncryptionKey,
@@ -194,21 +194,11 @@ async function listAllObjects(s3: S3Client, bucket: string, prefix: string): Pro
 
 // ============================================================================
 // Super Admin Email Query
+//
+// Story 9-63 (Task 7 / AC6): the local copy was removed — recipient resolution
+// (incl. the reserved/undeliverable-domain filter) now lives in the shared
+// `super-admin-recipients.ts` util imported above.
 // ============================================================================
-
-async function getActiveSuperAdminEmails(): Promise<string[]> {
-  try {
-    const result = await db
-      .select({ email: users.email })
-      .from(users)
-      .innerJoin(roles, eq(users.roleId, roles.id))
-      .where(and(eq(roles.name, 'super_admin'), eq(users.status, 'active')));
-    return result.map((r) => r.email);
-  } catch (err) {
-    logger.error({ event: 'backup.query_admins_failed', error: (err as Error).message });
-    return [];
-  }
-}
 
 // ============================================================================
 // Email Notification Helpers

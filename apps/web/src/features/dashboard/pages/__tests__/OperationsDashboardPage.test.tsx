@@ -46,6 +46,18 @@ function snapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboardSnapsh
     },
     resend: { recentCount: 10, delivered: 9, bounced: 0, complained: 0, todayCount: 5, last5: [] },
     queue: { waiting: 0, active: 0, completed: 10, failed: 0, delayed: 0, failedSamples: [] },
+    notificationUsage: {
+      date: '2026-06-22',
+      month: '2026-06',
+      today: {
+        email: { total: 42, byCategory: [{ category: 'magiclink-login', count: 30 }], bounced: 1, complained: 0 },
+        sms: { total: 3, byCategory: [], bounced: 0, complained: 0 },
+      },
+      thisMonth: {
+        email: { total: 900, byCategory: [], bounced: 0, complained: 0 },
+        sms: { total: 10, byCategory: [], bounced: 0, complained: 0 },
+      },
+    },
     recommendations: [{ severity: 'red', key: 'step4-stall', text: 'Step-4 stall 63% — Story 9-17 is critical-path.' }],
     ...overrides,
   };
@@ -62,14 +74,37 @@ describe('OperationsDashboardPage', () => {
     expect(screen.getByTestId('ops-loading')).toBeInTheDocument();
   });
 
-  it('renders all 5 cards on success', async () => {
+  it('renders all 6 cards on success', async () => {
     mockApiClient.mockResolvedValueOnce({ data: snapshot() });
     renderPage();
     await waitFor(() => expect(screen.getByTestId('ops-card-system')).toBeInTheDocument());
     expect(screen.getByTestId('ops-card-adoption')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-email')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-queue')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-card-notification-usage')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-recommendations')).toBeInTheDocument();
+  });
+
+  it('renders the notification usage card with email + sms totals (AC3)', async () => {
+    mockApiClient.mockResolvedValueOnce({ data: snapshot() });
+    renderPage();
+    const card = await screen.findByTestId('ops-card-notification-usage');
+    expect(card).toHaveTextContent('42 sent');
+    expect(card).toHaveTextContent('magiclink-login');
+    expect(card).toHaveTextContent('1 bounced');
+  });
+
+  it('shows a yellow notification dot when there are bounces/complaints', async () => {
+    mockApiClient.mockResolvedValueOnce({ data: snapshot() });
+    renderPage();
+    const dot = await screen.findByTestId('ops-notification-dot');
+    expect(dot).toHaveAttribute('data-level', 'yellow');
+  });
+
+  it('renders the notification section-unavailable placeholder when usage is null', async () => {
+    mockApiClient.mockResolvedValueOnce({ data: snapshot({ notificationUsage: null }) });
+    renderPage();
+    expect(await screen.findByTestId('ops-notification-unavailable')).toBeInTheDocument();
   });
 
   it('colours the adoption status dot red for a 63% Step-4 stall', async () => {
