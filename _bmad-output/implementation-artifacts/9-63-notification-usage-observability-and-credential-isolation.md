@@ -1,6 +1,6 @@
 # Story 9-63: Notification Usage Observability & Send-Credential Isolation
 
-Status: in-progress — Tasks 1–9 DONE + code-review-passed + fully verified by reviewer (api+web tsc 0; 166 api + 11 web tests pass; eslint 0). AC0 + Tasks 2–4 deployed; Tasks 5–9 (AC3–8) shipping now. (Flip → review/done once the 5–9 deploy lands.)
+Status: done — ✅ all 9 ACs (AC0–AC8 / Tasks 1–9) implemented, code-review-passed, fully verified (api+web tsc 0; 166 api + 11 web tests; eslint 0), and DEPLOYED to prod (`86c33a3`, 2026-06-22). Credential isolation + full notification observability (counted chokepoint, budget integration, usage dashboard, Telegram digest, abuse alerts, recipient hygiene, SMS metering) all live. Operator follow-ups (rotate Resend key + clear example.com suppressions + Resend Pro) are out of story scope — tracked in `docs/runbooks/pre-launch-operator-runbook.md`.
 
 ## Story
 
@@ -151,12 +151,12 @@ Modified:
 - [x] [AI-Review][Med] M1 — "single warn": added a once-per-process `credentialIsolationWarned` flag so the warn doesn't repeat per provider construction (guard still returns mock every time).
 - [x] [AI-Review][Med] M2 — File List completed (.env.example + sprint-status).
 - [x] [AI-Review][Low] L1 — commented that the fingerprint reads the canonical `process.env.RESEND_API_KEY` (config.resendApiKey is derived from it).
-- [ ] [AI-Review][Low] L2 — ACCEPTED: opt-in accepts only `'1'`/`'true'`; any other value fails closed (safe-by-default).
+- [x] [AI-Review][Low] L2 — CLOSED (accepted, no change — safe-by-default): opt-in accepts only `'1'`/`'true'`; any other value fails closed.
 
 ### Review Follow-ups (AI) — Tasks 2–4
 - [x] [Blocker][Test-exec] RESOLVED by the reviewer (the dev subagent's harness blocked vitest/eslint). Ran against scratch `app_test` + Redis /15: **the 16 new tests + email-budget.service + email-backpressure = 4 files / 77 passed**; **eslint 0** on all 8 touched files; **tsc 0**. No regression.
 - [x] [AI-Review][Low] Budget fail-safe comment in `email-budget.service.ts` overstated ("can never UNDER-report"); on a Redis SCAN error it returns 0 → `MAX(legacy,0)`=legacy (worker-only floor) which DOES under-report. Behavior (fail-OPEN — don't block mail on a Redis hiccup) is correct + accepted; comment corrected to say so honestly.
-- [ ] [AI-Review][Low] ACCEPTED: `dispatch()` awaits `recordEmailSend` (the doc says "fire-and-forget"); the await + meter fail-open guarantees the count completes without a behaviour change — wording nit only, left as-is.
+- [x] [AI-Review][Low] CLOSED (accepted, wording nit): `dispatch()` awaits `recordEmailSend` (doc says "fire-and-forget"); the await + meter fail-open guarantee the count completes with no behaviour change — left as-is.
 - [x] [Note] SMS chokepoint (`recordSmsSend`) is shipped but not yet wired at `getSmsProvider()` — RESOLVED in Task 8 (wired at `SmsOtpService.requestOtp` post-`sendOtp`).
 
 #### Tasks 5–9 (AC3, AC4, AC5, AC6, AC7, AC8) — observability surfacing + hygiene (2026-06-22)
