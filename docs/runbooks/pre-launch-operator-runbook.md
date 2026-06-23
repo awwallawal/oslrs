@@ -39,6 +39,10 @@
 
 ### Step 4 — Termii sender-ID (⏳ LONG LEAD — start FIRST)
 - Register the alphanumeric **Termii sender-ID** — approval takes **days**, so kick this off before everything else. Path 2/Termii is the confirmed SMS provider. Bind `TERMII_*` on the VPS `.env`.
+- **VERIFIED 2026-06-23 (probe `apps/api/scripts/_termii-test.ts`, v3 host `https://v3.api.termii.com`):** the account is live (10 NGN bonus, user `oyotrade`) and sender-ID **`oyotrade` is submitted but `pending`**. **A pending sender CANNOT send** — every send 404s `ApplicationSenderId not found` until approval. So the bonus can't smoke-test sending; **KYC + sender-ID approval is a HARD gate**, confirmed empirically.
+  - To accelerate approval: **complete KYC** + **rewrite the sender usecase** (the placeholder "Hello this is a test message from oyo trade" invites rejection — use a concrete transactional usecase, e.g. "OTP + registration-status notifications for the Oyo State skills survey, oyoskills.com, a government skills-mapping program").
+  - After approval, re-run the probe (`status=active`), then a `--send --to <phone>` test, then build the Termii adapter (currently only `NoopSmsProvider` exists — 9-27 Part B).
+  - Email (Resend) launch is **independent** of this — do not let the SMS gate block the email blasts.
 
 ### Step 5 — Master-form re-pin (MANDATORY discipline)
 - If the survey form changed: re-upload **mints a NEW form row** → you MUST **re-pin `wizard.public_form_id`** (publish → re-pin). Old versions are not auto-retired.
