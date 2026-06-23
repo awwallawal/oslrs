@@ -147,9 +147,9 @@
     <!--
       Cloudflare Web Analytics — Story 9-20 Part C
       Privacy-first, cookie-free traffic analytics. NDPA-compliant by design
-      (no PII, no fingerprinting). Token reports BOTH oyoskills.com AND
-      oyotradeministry.com.ng visitors under the same Web Analytics site
-      (Cloudflare dashboard "Top hostnames" splits them). CSP allow-listing
+      (no PII, no fingerprinting). Token reports oyoskills.com visitors — the
+      single served domain (oyotradeministry.com.ng retired to a 302 redirect,
+      F-024/9-53). CSP allow-listing
       done by Story 9-8 Task 7.1 (2026-05-01); nginx CSP mirrored at
       infra/nginx/oslsr.conf. Auto-injection on oyoskills.com's Cloudflare
       zone is unreliable (curl 2026-05-19 13:30 UTC showed no auto-injected

@@ -1,6 +1,6 @@
 # Story 9.53: oyotradeministry.com.ng residual cleanup — retire dead dual-domain references
 
-Status: ready-for-dev
+Status: done — ✅ 2026-06-23. AC#1 nginx CSP `wss://oyotradeministry.com.ng` removed from BOTH connect-src blocks (now byte-identical, `wss://oyoskills.com` only); AC#2 csp-parity `PROD_WS_URLS` updated (test 6/6 green); AC#3 stale comments retired in app.ts + real-ip.ts; AC#5 cf-analytics.ts ministry-zone loop entry + `zoneMinistry`/`CLOUDFLARE_ZONE_TAG_MINISTRY` plumbing dropped; AC#6 index.html beacon comment single-domain. Verified: api tsc 0, gate-lint 0, csp-parity 6/6; grep shows only deliberate "retired/redirect" historical notes remain (AC#7). **AC#4 — OPERATOR follow-up (no code change):** confirm the prod `/root/oslrs/.env` `CORS_ORIGIN` no longer lists `oyotradeministry.com.ng` (the redirect makes no same-origin XHR; harmless if present, but removing it keeps the Helmet connect-src in true parity with nginx). Drop it on the next env touch.
 
 <!--
 Authored 2026-06-10 by Bob (SM) via canonical *create-story (--yolo). EMERGENT

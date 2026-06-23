@@ -20,7 +20,7 @@
  * → oyoskills.com (it is NOT a CF zone, has no zone analytics, serves no
  * pages). All real traffic + the conversion funnel live on oyoskills.com.
  * The single RUM beacon (account-scoped) captures it; zone analytics is the
- * oyoskills zone only. A MINISTRY zone tag is optional and normally empty.
+ * oyoskills zone only (no ministry zone exists — the dead domain has none, 9-53).
  *
  * --- Setup (one-time) -------------------------------------------------------
  * Account ID + the oyoskills Zone ID are already wired as defaults below
@@ -30,7 +30,6 @@
  *   CLOUDFLARE_API_TOKEN=...           # REQUIRED — the only secret
  *   CLOUDFLARE_ACCOUNT_TAG=...         # optional override (default: oyoskills account)
  *   CLOUDFLARE_ZONE_TAG_OYOSKILLS=...  # optional override (default: oyoskills zone)
- *   CLOUDFLARE_ZONE_TAG_MINISTRY=...   # leave UNSET — no CF zone exists (302 redirect)
  *
  * A token already exists (broad read "Cloudflare Agent Token", 2026-05-19)
  * with Account Analytics:Read + zone Analytics:Read — sufficient for this.
@@ -189,8 +188,7 @@ async function main() {
   const token = process.env.CLOUDFLARE_API_TOKEN;
   const accountTag = process.env.CLOUDFLARE_ACCOUNT_TAG || DEFAULT_ACCOUNT_TAG;
   const zoneOyoskills = process.env.CLOUDFLARE_ZONE_TAG_OYOSKILLS || DEFAULT_ZONE_OYOSKILLS;
-  // oyotradeministry.com.ng is a 302 redirect post-F-024, NOT a CF zone — normally unset.
-  const zoneMinistry = process.env.CLOUDFLARE_ZONE_TAG_MINISTRY;
+  // Single CF zone: oyoskills.com. (oyotradeministry.com.ng was retired to a 302 redirect, F-024 — no zone exists.)
 
   if (!token) {
     console.error(c.red('\n❌ CLOUDFLARE_API_TOKEN missing from .env.'));
@@ -233,7 +231,6 @@ async function main() {
   // Zone analytics per domain
   for (const [label, zoneTag] of [
     ['oyoskills.com', zoneOyoskills],
-    ['oyotradeministry.com.ng', zoneMinistry],
   ] as const) {
     if (!zoneTag) {
       if (!json) console.log(c.gray(`\n  (zone tag for ${label} not set — skipping)`));

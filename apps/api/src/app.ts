@@ -121,7 +121,7 @@ export const app = express();
 // prevents X-F-F spoofing from arbitrary upstream — only nginx loopback + known
 // Cloudflare ranges can extend the trust chain.
 //
-// This still works for direct-to-VPS traffic (oyotradeministry.com.ng): chain is
+// This still works for direct-to-VPS traffic (any request bypassing Cloudflare): chain is
 // real-client → nginx → Express, and req.ip resolves to real-client as before.
 app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal', ...CLOUDFLARE_IPS]);
 
@@ -137,7 +137,8 @@ app.use('/api/v1', cspRoutes);
 // CSP configuration — report-only mode for initial deployment (SEC-2)
 const isProduction = process.env.NODE_ENV === 'production';
 
-// CORS_ORIGIN is comma-separated to support dual-domain (Phase 2: oyotradeministry.com.ng + oyoskills.com).
+// CORS_ORIGIN is comma-separated (kept multi-origin-capable; today the only served origin is
+// oyoskills.com — oyotradeministry.com.ng was retired to a 302 redirect, F-024/9-53).
 // Each entry produces a corresponding wss:// origin for CSP connect-src.
 export const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')

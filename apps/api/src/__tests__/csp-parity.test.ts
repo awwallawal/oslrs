@@ -24,7 +24,8 @@ const NGINX_CONF_PATH = resolve(__dirname, '../../../../infra/nginx/oslsr.conf')
 // directly without the localhost fallback — the substitution would be a no-op and the test
 // would still pass (since both sides would already match). Do not rely on this constant in
 // the production-mode code path.
-const PROD_WS_URLS = ['wss://oyotradeministry.com.ng', 'wss://oyoskills.com'];
+// Single served domain post-9-53 (oyotradeministry.com.ng retired to a 302 redirect, F-024).
+const PROD_WS_URLS = ['wss://oyoskills.com'];
 
 type NormalizedPolicy = Record<string, string[]>;
 

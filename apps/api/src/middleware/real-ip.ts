@@ -20,8 +20,8 @@ const isCloudflareEdge = proxyaddr.compile(CLOUDFLARE_IPS);
  * `X-Real-IP` would be the attacker's IP (not a CF edge) and we ignore the
  * header.
  *
- * For traffic that doesn't route through Cloudflare (oyotradeministry.com.ng
- * goes direct-to-VPS), the header isn't present and `req.ip` falls through to
+ * For traffic that doesn't route through Cloudflare (any request reaching the VPS
+ * directly), the header isn't present and `req.ip` falls through to
  * Express's default behavior (trust proxy + X-F-F walking, configured in
  * app.ts to whitelist nginx loopback + CLOUDFLARE_IPS).
  */
