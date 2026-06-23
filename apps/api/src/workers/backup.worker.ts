@@ -367,13 +367,22 @@ export async function cleanupOldDailies(s3: S3Client, bucket: string): Promise<n
   return deleted;
 }
 
-export async function promoteToMonthly(s3: S3Client, bucket: string, dateStr: string): Promise<boolean> {
+export async function promoteToMonthly(
+  s3: S3Client,
+  bucket: string,
+  dateStr: string,
+  encrypt: boolean,
+): Promise<boolean> {
   const day = parseInt(dateStr.split('-')[2], 10);
   if (day !== 1) return false;
 
   const monthStr = dateStr.substring(0, 7); // YYYY-MM
-  const dailyKey = `backups/daily/${dateStr}-app_db.sql.gz`;
-  const monthlyKey = `backups/monthly/${monthStr}-app_db.sql.gz`;
+  // Story 9-35: mirror the upload-side filename suffix (`encrypt ? '${plainFilename}.enc' : plainFilename`).
+  // Encryption-blind keys 404'd the CopyObject source once Story 9-9 backup encryption shipped → the
+  // first-of-month promotion silently failed and emitted a false-positive backup.job_failed CRITICAL.
+  const encExt = encrypt ? '.enc' : '';
+  const dailyKey = `backups/daily/${dateStr}-app_db.sql.gz${encExt}`;
+  const monthlyKey = `backups/monthly/${monthStr}-app_db.sql.gz${encExt}`;
 
   await s3.send(new CopyObjectCommand({
     Bucket: bucket,
@@ -557,7 +566,7 @@ export async function processBackup(_job: Job): Promise<BackupManifest> {
 
     // Step 8: Retention management
     const deletedDailies = await cleanupOldDailies(s3, bucket);
-    const promoted = await promoteToMonthly(s3, bucket, dateStr);
+    const promoted = await promoteToMonthly(s3, bucket, dateStr, encrypt); // Story 9-35: pass encryption flag
     const deletedMonthlies = await cleanupOldMonthlies(s3, bucket);
     logger.info({ event: 'backup.retention', deletedDailies, promoted, deletedMonthlies });
 

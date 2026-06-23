@@ -385,23 +385,44 @@ describe('backup worker', () => {
   });
 
   describe('promoteToMonthly', () => {
-    it('should copy backup to monthly on 1st of month', async () => {
+    it('should copy backup to monthly on 1st of month (unencrypted → bare .sql.gz key)', async () => {
       mockS3Send.mockResolvedValue({}); // CopyObjectCommand
 
       const { S3Client } = await import('@aws-sdk/client-s3');
       const s3 = new S3Client({});
 
-      const promoted = await promoteToMonthly(s3, 'test-bucket', '2026-03-01');
+      const promoted = await promoteToMonthly(s3, 'test-bucket', '2026-03-01', false);
 
       expect(promoted).toBe(true);
       expect(mockS3Send).toHaveBeenCalledTimes(2); // Copy backup + Copy manifest
+      // Story 9-35: unencrypted path keeps the bare .sql.gz suffix on source + target
+      const copyInput = mockS3Send.mock.calls[0][0].input;
+      expect(copyInput.CopySource).toMatch(/2026-03-01-app_db\.sql\.gz$/);
+      expect(copyInput.Key).toMatch(/2026-03-app_db\.sql\.gz$/);
+    });
+
+    it('should use the .sql.gz.enc source + target when encryption is enabled (Story 9-35)', async () => {
+      mockS3Send.mockResolvedValue({}); // CopyObjectCommand
+
+      const { S3Client } = await import('@aws-sdk/client-s3');
+      const s3 = new S3Client({});
+
+      const promoted = await promoteToMonthly(s3, 'test-bucket', '2026-06-01', true);
+
+      expect(promoted).toBe(true);
+      expect(mockS3Send).toHaveBeenCalledTimes(2); // Copy backup + Copy manifest
+      // The real S3 object lives at ...sql.gz.enc once 9-9 encryption is on — the old
+      // encryption-blind key 404'd here, silently failing the first-of-month promotion.
+      const copyInput = mockS3Send.mock.calls[0][0].input;
+      expect(copyInput.CopySource).toMatch(/2026-06-01-app_db\.sql\.gz\.enc$/);
+      expect(copyInput.Key).toMatch(/2026-06-app_db\.sql\.gz\.enc$/);
     });
 
     it('should NOT copy on other days of month', async () => {
       const { S3Client } = await import('@aws-sdk/client-s3');
       const s3 = new S3Client({});
 
-      const promoted = await promoteToMonthly(s3, 'test-bucket', '2026-02-15');
+      const promoted = await promoteToMonthly(s3, 'test-bucket', '2026-02-15', false);
 
       expect(promoted).toBe(false);
       expect(mockS3Send).not.toHaveBeenCalled();

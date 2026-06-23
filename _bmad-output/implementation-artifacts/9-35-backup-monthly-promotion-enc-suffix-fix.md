@@ -1,6 +1,6 @@
 # Story 9.35: Backup `promoteToMonthly()` encryption-suffix fix — first-of-month promotion silently 404s
 
-Status: ready-for-dev
+Status: done — ✅ 2026-06-23. Part A: `promoteToMonthly` gains `encrypt: boolean` (AC#A2); `dailyKey`/`monthlyKey` mirror the upload-side `.enc` suffix (AC#A3/A4, comment cites the upload line); caller in `processBackup` passes the in-scope `encrypt` (AC#A5); manifest copy unchanged (AC#A6 ✓); `cleanupOldMonthlies` regex `(\d{4}-\d{2})` matches `.enc` keys unchanged (AC#A7 ✓ — verified, no code change). Part B: backup.worker tests 15→**16** (AC#B4) — new encrypted `.sql.gz.enc` source+target assertion + existing tests pass `encrypt:false`; api tsc 0, all green. **AC#C1 — MOOT/superseded:** the planned backfill promoted the 2026-06-01 *daily*, but the 7-day daily-retention sweep deleted it ~2026-06-08 (today is 2026-06-23) — no source remains. Net: **2026-06 monthly is a permanent one-time gap**; the fix prevents recurrence from the 2026-07-01 promotion onward. Operator MAY optionally promote a current June daily as a non-1st stand-in if a June monthly snapshot is wanted (cosmetic for the 7-year retention; not required).
 
 <!--
 Authored 2026-06-01 by Bob (SM) via canonical *create-story --yolo workflow.
