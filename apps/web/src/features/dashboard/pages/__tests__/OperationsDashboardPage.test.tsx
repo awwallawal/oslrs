@@ -74,7 +74,7 @@ describe('OperationsDashboardPage', () => {
     expect(screen.getByTestId('ops-loading')).toBeInTheDocument();
   });
 
-  it('renders all 6 cards on success', async () => {
+  it('renders all 7 cards on success', async () => {
     mockApiClient.mockResolvedValueOnce({ data: snapshot() });
     renderPage();
     await waitFor(() => expect(screen.getByTestId('ops-card-system')).toBeInTheDocument());
@@ -82,7 +82,42 @@ describe('OperationsDashboardPage', () => {
     expect(screen.getByTestId('ops-card-email')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-queue')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-notification-usage')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-card-expiries')).toBeInTheDocument();
     expect(screen.getByTestId('ops-card-recommendations')).toBeInTheDocument();
+  });
+
+  // Story 9-50 — Expiries card
+  it('renders the Expiries card grouped by kind with a red dot when an item is critical', async () => {
+    mockApiClient.mockResolvedValueOnce({
+      data: snapshot({
+        expiries: [
+          { name: 'cert:cloudflare-origin', kind: 'cert', expiresAt: '2041-01-01T00:00:00Z', daysUntilExpiry: 5000, status: 'ok', detail: '/etc/ssl/cloudflare/oyoskills-origin.pem' },
+          { name: 'domain:oyoskills.com', kind: 'domain', expiresAt: '2026-06-20T00:00:00Z', daysUntilExpiry: 19, status: 'critical', detail: 'RDAP' },
+        ],
+      }),
+    });
+    renderPage();
+    const card = await screen.findByTestId('ops-card-expiries');
+    expect(card).toHaveTextContent('Certificates');
+    expect(card).toHaveTextContent('Domains');
+    expect(screen.getByTestId('ops-expiries-dot')).toHaveClass('bg-red-500');
+  });
+
+  it('shows an amber error badge + yellow dot for an error-status expiry', async () => {
+    mockApiClient.mockResolvedValueOnce({
+      data: snapshot({
+        expiries: [{ name: 'domain:oyoskills.com', kind: 'domain', expiresAt: null, daysUntilExpiry: null, status: 'error', detail: 'RDAP unavailable' }],
+      }),
+    });
+    renderPage();
+    expect(await screen.findByTestId('ops-expiry-error')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-expiries-dot')).toHaveClass('bg-yellow-500');
+  });
+
+  it('renders the expiries section-unavailable placeholder when there are none', async () => {
+    mockApiClient.mockResolvedValueOnce({ data: snapshot({ expiries: [] }) });
+    renderPage();
+    expect(await screen.findByTestId('ops-expiries-unavailable')).toBeInTheDocument();
   });
 
   it('renders the notification usage card with email + sms totals (AC3)', async () => {

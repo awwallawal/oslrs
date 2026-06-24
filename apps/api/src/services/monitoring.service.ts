@@ -21,6 +21,7 @@ import { getWebhookIngestionQueue } from '../queues/webhook-ingestion.queue.js';
 import { getProductivitySnapshotQueue } from '../queues/productivity-snapshot.queue.js';
 import { getP95Latency } from '../middleware/metrics.js';
 import type { SystemHealthResponse, QueueHealthStats } from '@oslsr/types';
+import { getExpiries } from './expiry-monitor.service.js'; // Story 9-50
 import pino from 'pino';
 
 const logger = pino({ name: 'monitoring-service' });
@@ -61,13 +62,14 @@ export class MonitoringService {
       return cachedResponse;
     }
 
-    const [cpu, memory, disk, database, redis, queues] = await Promise.all([
+    const [cpu, memory, disk, database, redis, queues, expiries] = await Promise.all([
       this.getCpuUsage(),
       this.getMemoryUsage(),
       this.getDiskUsage(),
       this.checkDatabase(),
       this.checkRedis(),
       this.getQueueHealth(),
+      getExpiries(), // Story 9-50 — fail-open, never throws
     ]);
 
     const apiLatency = { p95Ms: getP95Latency() };
@@ -85,6 +87,7 @@ export class MonitoringService {
       redis,
       apiLatency,
       queues,
+      expiries,
     };
 
     cachedResponse = response;

@@ -1663,6 +1663,11 @@ _Expiries fetched via RDAP 2026-06-09 (`curl -sL https://rdap.org/domain/<d>` �
 ### Declared expiries (API tokens / paid services)
 Most API keys do **not** expire (Resend, Termii) — nothing to monitor. Declare **only** items with a real expiry — e.g. a Cloudflare API token created with a TTL, or a paid-service renewal date — in `MONITORED_EXPIRIES` (see Story 9-50). **Don't invent dates** (false alerts).
 
-**Monitoring:** **Story 9-50 (Expiry Monitoring)** surfaces a live countdown for ALL of the above — certs, domains, and declared items — on the Super Admin operations dashboard + fires a CRITICAL alert ahead of each expiry (so this never depends on someone reading this table). Until 9-50 ships, these tables are the manual record. Quick checks: certs `openssl x509 -in <path> -noout -enddate`; domains `curl -sL https://rdap.org/domain/<d> | grep expiration`.
+**Monitoring (LIVE — Story 9-50, 2026-06-23):** the Super Admin operations dashboard **"Expiries" card** shows a live days-until-expiry countdown for ALL of the above (certs · domains · declared), colour-coded **green > 60d / amber 30–60d / red < 30d**, and the alert pipeline fires a Telegram/email **warning at 60d, CRITICAL at 30d** (metric key `expiry:<name>`) — so this never depends on someone reading this table. Config (all optional; sensible defaults):
+- `CERT_MONITOR_PATHS` — comma-separated `.pem` paths (default: the two certs above). **`.pem` ONLY** (never the `.key`).
+- `DOMAIN_MONITOR_LIST` — comma-separated domains queried via RDAP (default `oyoskills.com`). `.com` is reliable; **`.com.ng` RDAP is often absent → declare it via `MONITORED_EXPIRIES` instead**.
+- `MONITORED_EXPIRIES` — JSON array `[{ "name", "kind", "expiresAt" }]` for declared items (a real-TTL API token, a paid-service renewal, and `oyotradeministry.com.ng`). Don't invent dates.
+
+Manual fallback checks: certs `openssl x509 -in <path> -noout -enddate`; domains `curl -sL https://rdap.org/domain/<d> | grep expiration`. UAT smoke: `tsx scripts/uat-trigger-critical-alert.ts --metric=expiry`.
 
 *Updated: 2026-06-09 — Part 13 (Expiry Inventory: certs + domain registrations + declared) added per F-024 origin-lock close-out (Story 9-9 #11); monitored by Story 9-50. See `docs/f-024-origin-lock-runbook.md` + `docs/security/findings-register.md` F-024.*

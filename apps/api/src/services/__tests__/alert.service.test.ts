@@ -236,6 +236,44 @@ describe('AlertService', () => {
       const queueState = states.get('queue_waiting:email-notification');
       expect(queueState!.level).toBe('warning');
     });
+
+    // Story 9-50 — per-monitored-expiry fan-out (key `expiry:<name>`, 60 warning / 30 critical, below).
+    function exp(
+      name: string,
+      kind: 'cert' | 'domain' | 'manual',
+      days: number | null,
+      status: 'ok' | 'warning' | 'critical' | 'error',
+    ) {
+      return {
+        name,
+        kind,
+        expiresAt: days === null ? null : new Date(Date.now() + days * 86400000).toISOString(),
+        daysUntilExpiry: days,
+        status,
+        detail: '',
+      };
+    }
+
+    it('does not alert an expiry > 60 days out', async () => {
+      await AlertService.evaluateAlerts(createHealthData({ expiries: [exp('cert-far', 'cert', 90, 'ok')] }));
+      const s = AlertService.getAlertStates().get('expiry:cert-far');
+      expect(s?.level ?? 'ok').toBe('ok');
+    });
+
+    it('warns an expiry 30–60 days out', async () => {
+      await AlertService.evaluateAlerts(createHealthData({ expiries: [exp('cert-mid', 'cert', 45, 'warning')] }));
+      expect(AlertService.getAlertStates().get('expiry:cert-mid')!.level).toBe('warning');
+    });
+
+    it('criticals an expiry < 30 days out', async () => {
+      await AlertService.evaluateAlerts(createHealthData({ expiries: [exp('domain-soon', 'domain', 25, 'critical')] }));
+      expect(AlertService.getAlertStates().get('expiry:domain-soon')!.level).toBe('critical');
+    });
+
+    it('raises a low-noise warning (not critical) for an error/can-not-determine expiry', async () => {
+      await AlertService.evaluateAlerts(createHealthData({ expiries: [exp('domain-unknown', 'domain', null, 'error')] }));
+      expect(AlertService.getAlertStates().get('expiry:domain-unknown')!.level).toBe('warning');
+    });
   });
 
   // Story 9-9 AC#6 wiring (added 2026-05-01 per retrospective code review F4/F10).

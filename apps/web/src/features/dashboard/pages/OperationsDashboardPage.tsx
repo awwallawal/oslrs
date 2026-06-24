@@ -22,6 +22,7 @@ import {
   type OpsQueueHealth,
   type OpsRecommendation,
   type NotificationUsage,
+  type MonitoredExpiry,
 } from '@oslsr/types';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useOperationsDashboard } from '../api/operations.api';
@@ -296,6 +297,65 @@ function RecommendationsCard({ recs }: { recs: OpsRecommendation[] }) {
   );
 }
 
+// Story 9-50 — Expiry monitoring card. One card, grouped by kind; color matches the
+// alert thresholds (green > 60d / amber 30–60d / red < 30d; error → amber low-noise).
+const EXPIRY_GROUPS: Array<{ kind: MonitoredExpiry['kind']; label: string }> = [
+  { kind: 'cert', label: 'Certificates' },
+  { kind: 'domain', label: 'Domains' },
+  { kind: 'manual', label: 'Tokens & services' },
+];
+
+function expiryColorClass(status: MonitoredExpiry['status']): string {
+  if (status === 'critical') return 'text-red-600';
+  if (status === 'warning') return 'text-amber-600';
+  return 'text-green-700';
+}
+
+function ExpiriesCard({ expiries }: { expiries?: MonitoredExpiry[] | null }) {
+  const items = expiries ?? [];
+  const dot: OpsStatusLevel = items.some((e) => e.status === 'critical')
+    ? 'red'
+    : items.some((e) => e.status === 'warning' || e.status === 'error')
+      ? 'yellow'
+      : 'green';
+  return (
+    <Card title="Expiries" testId="ops-card-expiries" dot={<StatusDot level={dot} testId="ops-expiries-dot" />}>
+      {items.length === 0 ? (
+        <SectionUnavailable testId="ops-expiries-unavailable" />
+      ) : (
+        <div>
+          {EXPIRY_GROUPS.map(({ kind, label }) => {
+            const group = items.filter((e) => e.kind === kind);
+            if (group.length === 0) return null;
+            return (
+              <div key={kind} className="mt-2 first:mt-0">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+                {group.map((e) => (
+                  <Row
+                    key={e.name}
+                    label={e.name.replace(/^[a-z]+:/, '')}
+                    value={
+                      e.status === 'error' ? (
+                        <span data-testid="ops-expiry-error" className="text-amber-600">
+                          ⚠ {e.detail || 'unknown'}
+                        </span>
+                      ) : (
+                        <span className={expiryColorClass(e.status)} data-testid={`ops-expiry-${e.status}`}>
+                          {e.daysUntilExpiry}d · {e.expiresAt?.slice(0, 10)}
+                        </span>
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function OperationsDashboardPage() {
   const { data, isLoading, error, refresh, isRefreshing } = useOperationsDashboard();
 
@@ -352,6 +412,7 @@ export default function OperationsDashboardPage() {
             <EmailCard resend={data.resend} />
             <QueueCard queue={data.queue} />
             <NotificationUsageCard usage={data.notificationUsage} />
+            <ExpiriesCard expiries={data.expiries} />
           </div>
           <RecommendationsCard recs={data.recommendations} />
         </>

@@ -18,6 +18,8 @@
  */
 
 /** Threshold tiers. Each metric has a yellow (warn) and red (critical) edge. */
+import type { MonitoredExpiry } from './monitoring.js'; // Story 9-50
+
 export const OPS_THRESHOLDS = {
   step4StallPctYellow: 30,
   step4StallPctRed: 50,
@@ -170,6 +172,8 @@ export interface OpsDashboardSnapshot {
   queue: OpsQueueHealth | null;
   /** Story 9-63 (AC3) — internal per-category email/SMS usage from the meter. */
   notificationUsage?: NotificationUsage | null;
+  /** Story 9-50 — TLS cert / domain / declared expiry countdowns. */
+  expiries?: MonitoredExpiry[];
   recommendations: OpsRecommendation[];
 }
 

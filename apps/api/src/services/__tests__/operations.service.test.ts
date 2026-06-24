@@ -37,6 +37,15 @@ vi.mock('../notification-meter.service.js', () => ({
   },
 }));
 
+// Story 9-50 — getDashboardSnapshot now calls getExpiries(); stub it deterministically so the unit
+// test never makes a live RDAP network call (the story mandates: tests never use live RDAP). A plain
+// async fn (not vi.fn) survives mockReset:true, and proves the snapshot threads expiries through.
+vi.mock('../expiry-monitor.service.js', () => ({
+  getExpiries: async () => [
+    { name: 'cert:fixture', kind: 'cert', expiresAt: '2099-01-01T00:00:00Z', daysUntilExpiry: 9999, status: 'ok', detail: 'test-fixture' },
+  ],
+}));
+
 // `pm2 jlist` etc. are unavailable in the test sandbox — force getSystemHealth
 // down its graceful-degradation path deterministically. Uses async `exec`
 // (callback style) now that getSystemHealth no longer blocks the event loop.
@@ -214,6 +223,8 @@ describe('getDashboardSnapshot — orchestration + 30s cache', () => {
     });
     // step-4 stall 63% → a red recommendation is present
     expect(snap.recommendations.some((r) => r.key === 'step4-stall' && r.severity === 'red')).toBe(true);
+    // Story 9-50 (M1) — getExpiries result is threaded onto the snapshot
+    expect(snap.expiries?.[0]).toMatchObject({ name: 'cert:fixture', kind: 'cert' });
   });
 
   it('serves the cached snapshot on a second call within the TTL', async () => {

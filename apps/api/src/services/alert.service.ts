@@ -69,10 +69,16 @@ const THRESHOLDS: Record<string, ThresholdConfig> = {
   memory: { warningThreshold: 75, criticalThreshold: 90, direction: 'above' },
   disk_free: { warningThreshold: 20, criticalThreshold: 10, direction: 'below' },
   queue_waiting: { warningThreshold: 50, criticalThreshold: 200, direction: 'above' },
+  expiry: { warningThreshold: 60, criticalThreshold: 30, direction: 'below' }, // Story 9-50 — days-until-expiry
   api_p95_latency: { warningThreshold: 250, criticalThreshold: 500, direction: 'above' },
   db_status: { criticalThreshold: 0, direction: 'above' }, // value 1 = error, threshold 0 -> 1 > 0 triggers
   redis_status: { criticalThreshold: 0, direction: 'above' },
 };
+
+// Story 9-50 (L2) — an `expiry` item whose date can't be determined (status 'error') is mapped to
+// this day-count so it lands in the WARNING band (between critical 30 and warning 60): a low-noise
+// nudge that can-not-determine-expiry is itself worth knowing, without paging it as critical.
+const EXPIRY_ERROR_WARNING_DAYS = 45;
 
 // In-memory per-metric state
 const alertStates = new Map<string, AlertState>();
@@ -134,6 +140,15 @@ export class AlertService {
       metrics.push({ key: `queue_waiting:${queue.name}`, value: queue.waiting });
     }
 
+    // Story 9-50 — per monitored-expiry alert (mirrors queue_waiting:<name> fan-out).
+    // Real items push their day-count (<30 → critical, <60 → warning). An `error` item
+    // (can't-determine-expiry) raises a distinct LOW-NOISE warning: push a value in the
+    // warning band (not critical) so it nudges without paging.
+    for (const item of health.expiries ?? []) {
+      const value = item.status === 'error' ? EXPIRY_ERROR_WARNING_DAYS : (item.daysUntilExpiry ?? EXPIRY_ERROR_WARNING_DAYS);
+      metrics.push({ key: `expiry:${item.name}`, value });
+    }
+
     for (const metric of metrics) {
       this.evaluateMetric(metric.key, metric.value);
     }
@@ -146,8 +161,12 @@ export class AlertService {
    * Evaluate a single metric against its threshold config
    */
   private static evaluateMetric(key: string, value: number): void {
-    // Resolve threshold config (queue metrics share 'queue_waiting' config)
-    const configKey = key.startsWith('queue_waiting:') ? 'queue_waiting' : key;
+    // Resolve threshold config (queue + expiry metrics share their family config)
+    const configKey = key.startsWith('queue_waiting:')
+      ? 'queue_waiting'
+      : key.startsWith('expiry:')
+        ? 'expiry'
+        : key;
     const config = THRESHOLDS[configKey];
     if (!config) return;
 

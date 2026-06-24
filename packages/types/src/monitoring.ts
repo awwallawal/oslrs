@@ -17,6 +17,25 @@ export interface QueueHealthStats {
   paused: boolean;
 }
 
+/**
+ * Story 9-50 — a single time-sensitive piece of infrastructure (TLS cert, domain
+ * registration, or operator-declared expiry) with a server-computed days-until-expiry
+ * countdown. One shape across all source adapters (cert | domain | manual) so the
+ * dashboard card + alert path are kind-agnostic and adding a kind is additive.
+ */
+export interface MonitoredExpiry {
+  name: string;
+  kind: 'cert' | 'domain' | 'manual';
+  /** ISO-8601 expiry instant, or null when an adapter could not determine it. */
+  expiresAt: string | null;
+  /** Whole days from now until expiry (server-computed), or null when unknown. */
+  daysUntilExpiry: number | null;
+  /** ok > 60d · warning 30–60d · critical < 30d · error = adapter could not determine. */
+  status: 'ok' | 'warning' | 'critical' | 'error';
+  /** Human-readable detail (path / domain / source note / error reason). */
+  detail: string;
+}
+
 export interface SystemHealthResponse {
   status: 'ok' | 'degraded' | 'critical';
   timestamp: string;
@@ -48,4 +67,6 @@ export interface SystemHealthResponse {
     p95Ms: number;
   };
   queues: QueueHealthStats[];
+  /** Story 9-50 — time-sensitive infra countdowns (certs / domains / declared). */
+  expiries: MonitoredExpiry[];
 }

@@ -33,6 +33,14 @@ vi.mock('child_process', () => ({
   exec: vi.fn(), // The real exec is wrapped by promisify, we mock via util
 }));
 
+// Story 9-50 — getSystemHealth now calls getExpiries(); stub it so this unit test never makes a
+// live RDAP network call (the story mandates: tests never use live RDAP). Plain async fn survives mockReset.
+vi.mock('../expiry-monitor.service.js', () => ({
+  getExpiries: async () => [
+    { name: 'cert:fixture', kind: 'cert', expiresAt: '2099-01-01T00:00:00Z', daysUntilExpiry: 9999, status: 'ok', detail: 'test-fixture' },
+  ],
+}));
+
 vi.mock('util', async () => {
   const actual = await vi.importActual('util');
   return {
@@ -209,6 +217,8 @@ describe('MonitoringService', () => {
       expect(health.redis).toHaveProperty('status');
       expect(health.apiLatency).toHaveProperty('p95Ms');
       expect(health.queues).toHaveLength(5);
+      // Story 9-50 (M1) — getExpiries result is threaded onto the health payload
+      expect(health.expiries?.[0]).toMatchObject({ name: 'cert:fixture', kind: 'cert' });
     });
 
     it('should include p95 latency from metrics middleware', async () => {

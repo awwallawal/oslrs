@@ -43,14 +43,14 @@
 import { AlertService } from '../apps/api/src/services/alert.service.js';
 import type { SystemHealthResponse } from '@oslsr/types';
 
-type SyntheticMetric = 'cpu' | 'memory' | 'disk_free' | 'api_p95_latency' | 'db_status' | 'redis_status';
+type SyntheticMetric = 'cpu' | 'memory' | 'disk_free' | 'api_p95_latency' | 'db_status' | 'redis_status' | 'expiry';
 
 const args = process.argv.slice(2);
 const metricArg = args.find((a) => a.startsWith('--metric='))?.split('=')[1] ?? 'cpu';
 const TEST_ID = `9-15-uat-${Date.now()}`;
 
 if (!isValidMetric(metricArg)) {
-  console.error(`[${TEST_ID}] FATAL: --metric must be one of: cpu, memory, disk_free, api_p95_latency, db_status, redis_status`);
+  console.error(`[${TEST_ID}] FATAL: --metric must be one of: cpu, memory, disk_free, api_p95_latency, db_status, redis_status, expiry`);
   process.exit(1);
 }
 
@@ -95,7 +95,7 @@ process.exit(0);
 // ============================================================================
 
 function isValidMetric(m: string): m is SyntheticMetric {
-  return ['cpu', 'memory', 'disk_free', 'api_p95_latency', 'db_status', 'redis_status'].includes(m);
+  return ['cpu', 'memory', 'disk_free', 'api_p95_latency', 'db_status', 'redis_status', 'expiry'].includes(m);
 }
 
 function buildSyntheticHealth(m: SyntheticMetric): SystemHealthResponse {
@@ -111,6 +111,7 @@ function buildSyntheticHealth(m: SyntheticMetric): SystemHealthResponse {
     redis: { status: 'ok', latencyMs: 2 },
     apiLatency: { p95Ms: 42 },
     queues: [],
+    expiries: [],
   };
 
   switch (m) {
@@ -132,6 +133,19 @@ function buildSyntheticHealth(m: SyntheticMetric): SystemHealthResponse {
     case 'redis_status':
       base.redis = { status: 'error', latencyMs: 30000 };
       break;
+    case 'expiry':
+      // Story 9-50 — synthetic cert 10 days out → critical (below the 30-day threshold).
+      base.expiries = [
+        {
+          name: 'uat-synthetic-cert',
+          kind: 'cert',
+          expiresAt: new Date(Date.now() + 10 * 86400000).toISOString(),
+          daysUntilExpiry: 10,
+          status: 'critical',
+          detail: '9-15/9-50 UAT synthetic expiry',
+        },
+      ];
+      break;
   }
   return base;
 }
@@ -144,5 +158,6 @@ function extractTestedValue(m: SyntheticMetric, h: SystemHealthResponse): unknow
     case 'api_p95_latency': return { p95Ms: h.apiLatency.p95Ms, criticalThreshold: 500 };
     case 'db_status': return { status: h.database.status, criticalThreshold: 'value=1 (error)' };
     case 'redis_status': return { status: h.redis.status, criticalThreshold: 'value=1 (error)' };
+    case 'expiry': return { item: h.expiries[0]?.name, daysUntilExpiry: h.expiries[0]?.daysUntilExpiry, criticalThreshold: 30 };
   }
 }

@@ -36,6 +36,7 @@ import {
 import { pool } from '../db/index.js';
 import { getEmailQueueStats, getEmailFailedSamples } from '../queues/email.queue.js';
 import { NotificationMeter } from './notification-meter.service.js';
+import { getExpiries } from './expiry-monitor.service.js'; // Story 9-50
 import pino from 'pino';
 
 const logger = pino({ name: 'operations-service' });
@@ -420,12 +421,13 @@ export class OperationsService {
       return cached.snapshot;
     }
 
-    const [system, traffic, resend, queue, notificationUsage] = await Promise.all([
+    const [system, traffic, resend, queue, notificationUsage, expiries] = await Promise.all([
       getSystemHealth(),
       getTraffic(),
       getResendStatus(),
       getQueueHealth(),
       getNotificationUsage(),
+      getExpiries(), // Story 9-50 — fail-open, never throws
     ]);
 
     const snapshot: OpsDashboardSnapshot = {
@@ -435,6 +437,7 @@ export class OperationsService {
       resend,
       queue,
       notificationUsage,
+      expiries,
       recommendations: buildRecommendations({ system, traffic, resend, queue }),
     };
 
