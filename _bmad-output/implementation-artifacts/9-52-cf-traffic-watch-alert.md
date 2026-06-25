@@ -1,6 +1,6 @@
 # Story 9.52: Cloudflare traffic-watch alert — spike/threat paging via Telegram
 
-Status: ready-for-dev
+Status: done
 
 <!--
 Authored 2026-06-10 by Bob (SM) via canonical *create-story (--yolo). EMERGENT
@@ -35,20 +35,28 @@ so that **I get paged via the existing Telegram channel and can react (Bot Fight
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 (AC: #1, #2) — Watch evaluator + thresholds**
-  - [ ] 1.1: Write FAILING tests for `evaluateCfWatch(summary, thresholds)` — one per finding kind (fires + boundary no-fire) + empty-on-healthy.
-  - [ ] 1.2: Add thresholds (CF_WATCH_THRESHOLDS) — requests-spike multiplier + page-view floor + threats/day + error-ratio. Single exported const.
-  - [ ] 1.3: Implement the pure evaluator in `apps/api/src/lib/cloudflare-analytics.ts` (or a sibling `cf-watch.ts`) consuming `CloudflareDashboardSummary` (reuse `summarizeZone`/`summarizeRum` outputs incl. `byDay`).
-- [ ] **Task 2 (AC: #3, #4, #5) — Dispatch wiring**
-  - [ ] 2.1: Map findings → the existing alert dispatch (`alert.service.ts`); reuse `isAlertSendEnabled()` gate + cooldown.
-  - [ ] 2.2: Compose a concise Telegram message per finding (kind, numbers, window, suggested action: "enable Bot Fight Mode / check WAF").
-  - [ ] 2.3: Degradation: no token / fetch error → structured log + exit 0.
-- [ ] **Task 3 (AC: #6) — Schedulable script**
-  - [ ] 3.1: `apps/api/scripts/cf-traffic-watch.ts` — load `.env` (dotenv, mirror cf-analytics.ts), call `getCloudflareDashboardSummary`, evaluate, dispatch. `--dry-run` prints only.
-  - [ ] 3.2: Document crontab line (every 15 min) + ensure it's idempotent/best-effort.
-- [ ] **Task 4 (AC: #7, #8) — Tests, quality, docs**
-  - [ ] 4.1: Run unit tests + full alert/telegram suite; `tsc` + lint (0 warnings).
-  - [ ] 4.2: Add crontab recipe + threshold rationale + false-positive trap to the pre-viral checklist / runbook.
+- [x] **Task 1 (AC: #1, #2) — Watch evaluator + thresholds**
+  - [x] 1.1: Write FAILING tests for `evaluateCfWatch(summary, thresholds)` — one per finding kind (fires + boundary no-fire) + empty-on-healthy.
+  - [x] 1.2: Add thresholds (CF_WATCH_THRESHOLDS) — requests-spike multiplier + page-view floor + threats/day + error-ratio. Single exported const.
+  - [x] 1.3: Implement the pure evaluator in `apps/api/src/lib/cloudflare-analytics.ts` (or a sibling `cf-watch.ts`) consuming `CloudflareDashboardSummary` (reuse `summarizeZone`/`summarizeRum` outputs incl. `byDay`).
+- [x] **Task 2 (AC: #3, #4, #5) — Dispatch wiring**
+  - [x] 2.1: Map findings → the existing alert dispatch (`alert.service.ts`); reuse `isAlertSendEnabled()` gate + cooldown.
+  - [x] 2.2: Compose a concise Telegram message per finding (kind, numbers, window, suggested action: "enable Bot Fight Mode / check WAF").
+  - [x] 2.3: Degradation: no token / fetch error → structured log + exit 0.
+- [x] **Task 3 (AC: #6) — Schedulable script**
+  - [x] 3.1: `apps/api/scripts/cf-traffic-watch.ts` — load `.env` (dotenv, mirror cf-analytics.ts), call `getCloudflareDashboardSummary`, evaluate, dispatch. `--dry-run` prints only.
+  - [x] 3.2: Document crontab line (every 15 min) + ensure it's idempotent/best-effort.
+- [x] **Task 4 (AC: #7, #8) — Tests, quality, docs**
+  - [x] 4.1: Run unit tests + full alert/telegram suite; `tsc` + lint (0 warnings).
+  - [x] 4.2: Add crontab recipe + threshold rationale + false-positive trap to the pre-viral checklist / runbook.
+
+### Review Follow-ups (AI) — code-review 2026-06-25 (all 6 resolved)
+- [x] [AI-Review][Med] **M1** — AC#7 wanted the no-token/degradation path tested, but only the pure evaluator was. Extracted a dependency-injected `runCfTrafficWatch(deps)` into `cf-watch.ts` (degradation + cooldown + dispatch) + 5 unit tests (no-token / fetch-fail / dispatch / cooldown-suppress / dry-run). Script is now thin wiring. [cf-watch.ts, cf-traffic-watch.ts]
+- [x] [AI-Review][Med] **M2** — `threats_spike` fell back to the window-total `zone.threats` vs a per-DAY threshold (unit mismatch → false positive on empty byDay). Now per-day ONLY (skips when byDay empty) + a guard test. [cf-watch.ts]
+- [x] [AI-Review][Low] **L1** — documented that `error_ratio` is window-level (the lib has no per-day status), hence less sensitive than the per-day spike signals. [cf-watch.ts]
+- [x] [AI-Review][Low] **L2** — documented the baseline-mean choice (a spiky prior day inflates it = the safe direction, fewer false pages). [cf-watch.ts]
+- [x] [AI-Review][Low] **L3** — `severity` is no longer dead: `severityFor()` escalates warning→critical at ≥2× the trigger, and `formatCfWatchMessage` shows it. [cf-watch.ts]
+- [x] [AI-Review][Low] **L4** — commented the intentional best-effort `catch → exit 0` (genuine bugs are logged for forensics; degradation is handled inside the orchestration, not via throw). [cf-traffic-watch.ts]
 
 ## Dev Notes
 
@@ -83,9 +91,43 @@ Default = system cron on the VPS calling the tsx script (simplest, no long-lived
 ## Dev Agent Record
 
 ### Agent Model Used
+Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-24.
 
 ### Debug Log References
+- Lint caught a real bug: the `*/15` crontab inside the script's JSDoc closed the block comment (`*/`). Moved the literal crontab out of the JSDoc into the doc; reworded the comment. (tsc missed it — `apps/api/scripts/` isn't in the api tsconfig.)
+- Script dry-run loaded `CLOUDFLARE_API_TOKEN` from `.env` → did a live CF fetch → 0 findings (healthy traffic) → exit 0. Happy path verified end-to-end.
 
 ### Completion Notes List
+- **AC#1/#2** — `apps/api/src/lib/cf-watch.ts`: pure `evaluateCfWatch(summary, thresholds)` → `CfWatchFinding[]` for 3 kinds (`requests_spike_low_pageviews` = requests ≥ N× trailing baseline WHILE page-views < floor; `threats_spike` ≥ N/day; `error_ratio` ≥ N%). Single-source `CF_WATCH_THRESHOLDS` const (no inline magic numbers). Null/empty summary → `[]` (degradation at the pure level).
+- **AC#3** — dispatch via `sendTelegramMessage` (telegram-channel.ts), which self-vetoes through `isAlertSendEnabled()` → NEVER pages from dev/test. No new dispatch channel; does NOT touch alert.service.ts.
+- **AC#4** — per-kind Redis cooldown (`SET cf-watch:cooldown:<kind> NX EX`, default 6h) → one page per condition per window; fail-open.
+- **AC#5** — `cf-traffic-watch.ts`: no `CLOUDFLARE_API_TOKEN` or a fetch error → structured log + exit 0; top-level catch also exits 0 (best-effort cron).
+- **AC#6** — `apps/api/scripts/cf-traffic-watch.ts` (tsx, no long-lived process) + `--dry-run`; crontab documented.
+- **AC#7** — 12 evaluator tests (each kind fires + boundary no-fire + tiny-baseline/sample guards + degradation + format). Existing alert/telegram suites green. api tsc 0; eslint 0 (incl. the script).
+- **AC#8** — `docs/runbooks/pre-viral-push-checklist.md` §2: tripwire flipped to LIVE + crontab recipe + threshold rationale + the false-positive trap (requests-up WHILE page-views-flat).
+- **Verification:** api tsc 0; eslint 0; **full api regression green (197 files / 2807 pass)**. +12 net-new tests. Web unaffected (no web/shared-type changes).
 
 ### File List
+**New:**
+- `apps/api/src/lib/cf-watch.ts`
+- `apps/api/src/lib/__tests__/cf-watch.test.ts`
+- `apps/api/scripts/cf-traffic-watch.ts`
+
+**Modified:**
+- `docs/runbooks/pre-viral-push-checklist.md` (§2 tripwire → LIVE + crontab + rationale + false-positive trap)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (status)
+
+## Senior Developer Review (AI)
+
+**Reviewer:** Amelia (BMAD code-review workflow — adversarial) · **Date:** 2026-06-25 · **Outcome:** ✅ APPROVE (all findings resolved)
+
+- **Scope verified:** git changes == File List (3 new + 3 modified, no false/undocumented claims); all 8 ACs implemented; every `[x]` task real (proven against the files + the green regression).
+- **Findings:** 0 Critical · 0 High · **2 Medium · 4 Low** — ALL fixed (see Review Follow-ups). Standouts: **M1** — AC#7's degradation-path test was missing; fixed by extracting a testable `runCfTrafficWatch(deps)` + 5 tests. **M2** — a real unit-mismatch bug (window-total threats vs a per-day threshold). A docstring bug (`*/15` closing the JSDoc) was caught by lint during dev.
+- **Post-fix verification:** api tsc 0; eslint 0 (incl. the script); **full api regression GREEN (197 files / 2814 pass)**. **+19 cf-watch tests** total. Script dry-run runs end-to-end against a live CF fetch.
+- **Decision:** all ACs implemented + 0 open HIGH/MED → Status **done**.
+
+### Change Log
+| Date | Change | By |
+|------|--------|-----|
+| 2026-06-24 | Implemented all 4 tasks (pure evaluator + thresholds + cron script + docs); +12 tests; full api regression green. Status → review. | Amelia (Dev) |
+| 2026-06-25 | Code-review (adversarial): 2 Med + 4 Low ALL fixed (M1 testable orchestration + degradation tests; M2 per-day threats; severity; comments); +7 tests. Full regression green (197/2814). Status → done. | Amelia (Review) |

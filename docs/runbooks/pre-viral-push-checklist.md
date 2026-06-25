@@ -33,7 +33,13 @@ If any ⏳ → **do not push** until resolved.
 
 - **Edge traffic:** `pnpm tsx apps/api/scripts/cf-analytics.ts --days 1` (or the **Edge traffic** section of `pnpm --filter @oslsr/api dashboard` on the VPS). Watch: requests, cache-hit %, threats, top countries, HTTP status mix.
 - **The signal that matters — real virality vs bot flood:** a **real** spike raises requests **and** RUM page-views together. **Requests up while page-views stay flat = bots/attack**, not virality (bots don't run the JS beacon). Today's baseline: ~half of request volume is already bots (NL/FR/GB high requests, near-zero page-views).
-- **Automated tripwire:** Story **9-52** (cf-traffic-watch alert) will page this via the 9-15 Telegram channel once shipped. Until then, eyeball the command above periodically.
+- **Automated tripwire (LIVE — Story 9-52):** `apps/api/scripts/cf-traffic-watch.ts` evaluates the daily Cloudflare summary and pages the **9-15 Telegram channel** on three signals — `requests_spike_low_pageviews`, `threats_spike` (≥150/day), `error_ratio` (≥30% 4xx+5xx). Per-kind 6h cooldown (one page per window, not per tick); gated by `isAlertSendEnabled` so it NEVER pages from dev/test.
+  - **Schedule it (system cron on the VPS, every 15 min):**
+    ```
+    */15 * * * * cd /root/oslrs && pnpm --filter @oslsr/api exec tsx apps/api/scripts/cf-traffic-watch.ts >> /var/log/cf-watch.log 2>&1
+    ```
+  - **Dry-run anytime:** `pnpm --filter @oslsr/api exec tsx apps/api/scripts/cf-traffic-watch.ts --dry-run` (prints findings, dispatches nothing).
+  - **⚠️ False-positive trap (the whole point of the design):** the `requests_spike` signal deliberately pairs **requests-UP with page-views-FLAT** — a real viral spike ALSO raises requests, so requests-alone is NOT the trigger (bots don't run the RUM beacon). Thresholds live in `apps/api/src/lib/cf-watch.ts` (`CF_WATCH_THRESHOLDS`); env overrides `CF_WATCH_COOLDOWN_MINUTES` / `CF_WATCH_WINDOW_DAYS`. Daily-granularity (free plan) → an early-warning TREND signal, not real-time DDoS (Cloudflare handles that layer).
 - **VPS health:** `pnpm --filter @oslsr/api dashboard` — RAM/CPU/disk/queue + Resend daily-quota. CRITICAL alerts also go to Telegram (9-15).
 
 ---
