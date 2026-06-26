@@ -62,11 +62,27 @@ These are `review` or operator-gated — they need a decision or a validation, n
 
 ---
 
-## Phase 2 — Field-readiness + go live (~1 wk, gated on Phase 1)
+## Phase 2 — Field-readiness + go live (~1 wk, gated on Phase 1) — **executed by 🆕 Epic 13 (Launch Campaign)**
 
-- **9-20** pre-viral capacity prep — *blocks the social push*
+**🆕 Epic 13 — Launch Campaign** (registered 2026-06-25, SCP `sprint-change-proposal-2026-06-25-launch-campaign.md`) operationalises this phase: the **5-channel push** (umbrella-body **association cascade** + **radio** 11 stations + **paid social** ~₦200k + **enumerators** 33 LGAs), instrumented so each channel is attributable. Specs: `docs/launch-campaign/{association-condensed-sheet-spec,attribution-spec}.md`.
+
+- **9-20** pre-viral capacity prep — *blocks the social push* (sibling: **13-3** static fallback + load test)
 - **9-27** re-engagement blasts + **9-28** Cohort A blast — fire **after** 9-18 + the journey harmonization (a blasted user who logs in must meet a coherent front, not "Start Survey")
+- **13-2** association cascade — sheet **frozen** for the Mon 2026-06-29 umbrella meeting (zero-cost, no gate); importer fast-follow on the 11-1/11-2 backbone
+- **13-1** attribution capture (UTM + "how did you hear" single channel list: Radio/TV/Word-of-mouth/Association/Search/FB/IG/X → `raw_data.campaign_source`, no migration) — **must be live before MONDAY** (sheet + website go live Mon regardless of the movable radio date). Pixel embedding parked behind consent/CSP/DPIA (default: UTM+self-report only).
 - Enumerators → field · marketing / social push
+
+### 🚦 Pre-flight gate (gates PAID SPEND — radio + social — NOT the Monday meeting/sheet)
+Radio is **movable 24–48h** (Awwal owns the narrative), so this gate has teeth. Fire paid spend only when **all** are green:
+1. **Prod happy-path** self-serve completion verified (one fresh real end-to-end submission)
+2. **Enumerator path proven on prod** (13-4: 5–10 real submissions — today: *one ever*)
+3. **Attribution capture live + verified** (13-1)
+4. **Capacity load-test green + static fallback deployed** (13-3)
+
+**Campaign coordination (peer review 2026-06-25 — launch-critical):**
+- **🔴 Termii sender-ID/KYC is the #1 long-lead task — start today.** Radio drives a phone-first, NIN-deferring audience whose **SMS reminder is dead until Termii clears** (`dispatchSmsReminder` returns false). Either fix Termii or route phone-first radio listeners to association/enumerator, not self-serve.
+- **🟠 Hold the `9-27`/`9-28` blasts** until the campaign's first-wave funnel data is in — same Resend quota (9-63 metering) + attribution confound otherwise.
+- **🟠 Abort tripwire:** the campaign fires before 9-18's 7-day Step-4-stall gate (correct — you can't measure stall at ~1/day; you need the volume). **Written rule:** if completion-rate craters in the first hours (watch the 9-19 funnel + cf-traffic-watch), **pause the spend** — the movable radio date buys this option.
 
 ### 🚦 Launch gate (definition of done for the launch)
 Fire the blasts only when **all** are green:

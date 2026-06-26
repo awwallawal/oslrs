@@ -18,6 +18,7 @@ completionDate: 2026-01-05
 |------|---------|--------|
 | 2026-01-05 | Initial epic breakdown for Epics 1–8 | Awwal (with Bob facilitation) |
 | 2026-04-25 | **SCP-2026-04-22 — Multi-source registry, API governance, security hardening, field-survey UX readiness, admin audit visibility.** Added Epic 10 (API Governance & Third-Party Data Sharing, 6 stories: 10-1 Consumer Auth / 10-2 Per-Consumer Rate Limiting / 10-3 Consumer Admin UI / 10-4 Developer Portal / 10-5 DSA Template + Onboarding SOP / 10-6 Consumer Audit Dashboard). Added Epic 11 (Multi-Source Registry & Secondary Data Ingestion, 4 stories: 11-1 Schema Foundation / 11-2 Import Service + Parsers / 11-3 Admin Import UI / 11-4 Source Badges + Filter Chips). Refreshed Epic 9 goal statement to span polish + domain migration + security hardening + field-survey UX readiness + admin audit visibility. Added 3 new Epic 9 stories: 9-10 PM2 Restart-Loop Investigation, 9-11 Admin Audit Log Viewer, 9-12 Public Wizard + Pending-NIN + Magic-Link Email. Backfilled previously undocumented Epic 9 stories 9-6 / 9-7 / 9-8 (drift between sprint-status.yaml and epics.md prior to this pass). Documented Story 9-9 expanded scope as a 10-subtask matrix with current as-deployed state (Tailscale + SSH hardening done 2026-04-23; OS patching done 2026-04-25; 8 subtasks remaining). Added standalone `prep-input-sanitisation-layer` prep task (centralised normalisation utilities at every input boundary, schema strengthening DOB TEXT→DATE + phone CHECK, slot before field survey). Cross-referenced the Field Readiness Certificate (SCP §5.3.1) — six-item field-survey go/no-go gate. **Scope locked:** no stories added beyond the 14 enumerated in SCP §5.2; Epics 1–8 preserved unchanged. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-04-22.md` §2.1 + §4.1 for full SCP context. Inputs: PRD V8.2 (post-John A.1) + Architecture revision (post-Winston A.2; Decisions 1.5 / 2.4–2.8 / 3.4 / 5.4–5.6 + ADRs 018/019/020) + UX revision (post-Sally A.3; Journey 2 rewrite + Journeys 5–8 + 6 components + Form Patterns + NDPA Compliance Checklist updates). | John (PM) |
+| 2026-06-25 | **SCP-2026-06-25 — Launch Campaign.** Added **Epic 13 (Launch Campaign, 6 stories: 13-1 Campaign Attribution Capture / 13-2 Association Group Channel & Importer / 13-3 Launch Capacity & Static Fallback / 13-4 Enumerator Prod Smoke & Go-Live Gate / 13-5 Yoruba Comprehension Layer / 13-6 Channel & Coverage Dashboard)** folding the dated five-channel go-to-market push (umbrella-body sheet + 11-station radio + ~₦200k paid social + 33-LGA enumerators, Mon 2026-06-29) into the roadmap with a 4-point pre-flight gate that gates **paid spend** (not the zero-cost Monday meeting/sheet). Pre-spend trio 13-1/13-3/13-4 → ready-for-dev; fast-follow trio 13-2/13-5/13-6 → backlog. Additive; non-disruptive — Epics 1–12 preserved unchanged; 13-2 pulls the association slice of 11-2 forward (ITF-SUPA/other stay Phase 5); 13-6 depends-on Epic 12 12-4/12-6. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md` + `docs/launch-campaign/attribution-spec.md` + `docs/launch-campaign/association-condensed-sheet-spec.md`. | Bob (SM) / John (PM) |
 
 ## Overview
 
@@ -237,6 +238,87 @@ NFR5.2 (Legacy Device Support): Epic 1.5 (Mobile-responsive layouts)
 **Story shells (foundation-first; author via `*create-story`):** Tier 0 — 9-59 (taxonomy, in-progress), 12-1 DataTable primitive, 12-2 lint gate + Progress primitive, 12-3 @oslsr/utils barrel-split, 12-4 registryTotals model. Tier 1 — 12-5 label honesty + N, 12-6 Data-Health view, 12-7 Registry table upgrade, 12-8 Export data-health preview, 12-10 raw-table migration sweep, 12-11 inline-style migration sweep. Tier 2 — 12-9 analysis gaps, 12-12…12-18 role-dashboard completeness (super-admin/official/assessor/supervisor/enumerator/data-entry/public-user).
 
 **Authoring status (2026-06-16 — Bob/SM):** Epic 12 → **in-progress**. The 11 foundation + honesty + enrichment stories (Tier 0: 12-1/12-2/12-3/12-4; Tier 1: 12-5/12-6/12-7/12-8/12-10/12-11; Tier 2: 12-9) are **authored via canonical `*create-story` and flipped `ready-for-dev`** on the board (story files at `_bmad-output/implementation-artifacts/12-*.md`). Each story states POST-LAUNCH/NON-GATING, consumes 9-59's canonical `data_status` / key-normalization modules (does **not** redefine them), and cites the live codebase by `file:line`. **The 7 Tier-2 role-dashboard stories (12-12…12-18) deliberately remain `backlog` shells** — they depend on the 12-1 DataTable primitive and are phaseable post-launch; author them on demand once the foundation lands. Notable per-story decisions: 12-2 lands the inline-style lint rule at `warn` (12-11 flips it to `error` after migrations); 12-8 resolves the deferred 9-59 "no published form" finding as **Option B** (document Summary mode as the answer + preview signposts it). Recommended next: dev-story the four Tier-0 foundation stories first (12-1, 12-2, 12-3, 12-4).
+
+---
+
+### Epic 13: Launch Campaign _(Added 2026-06-25 per SCP-2026-06-25-launch-campaign)_
+**Goal:** Fold the dated five-channel go-to-market push (umbrella-body meeting + condensed sheet · radio jingles across 11 stations · ~₦200k paid social · enumerators across 33 LGAs, launching Mon 2026-06-29) into the roadmap as tracked work that lands BOTH a large administrative count AND representative/policy-grade data — without firing paid spend blind.
+**User Outcome:** Every registration carries the channel that earned it (renew radio on evidence, kill a weak platform, steer enumerators into thin LGAs); association groups round-trip into the registry via the Epic 11 import path; the home box survives a state-wide radio spike with a lead-capturing fallback; the spend decision runs off an explicit pre-flight gate, not optimism.
+**The load-bearing distinction:** what gates **paid spend** vs what is **fast-follow**. The Monday meeting + sheet distribution are **zero-cost and proceed regardless**; only **radio + paid social** wait on the pre-flight gate (radio is movable 24–48h, so the gate has teeth).
+**Pre-flight gate (all green before paid spend):** (1) prod happy-path self-serve completion verified; (2) enumerator path proven on prod — 5–10 real submissions (13-4); (3) attribution capture live + verified (13-1); (4) capacity load-test green + static fallback deployed (13-3).
+**Tiering:** 🚦 Pre-spend (this week) — 13-1, 13-3, 13-4. Monday (zero-cost, no gate) — sheet **frozen** (spec doc) + umbrella meeting + distribution. Fast-follow (post-spend) — 13-2 importer (on the 11-2 backbone), 13-5 Yoruba comprehension layer, 13-6 channel + coverage dashboard.
+**Dependencies:** Epic 11 (11-1 DONE schema spine; 11-2 ready-for-dev — 13-2 pulls its association slice forward); Epic 12 (13-6 depends-on 12-4 honest denominator + 12-6 data-health to avoid the 76-vs-139 mislabel); Story 9-20 (13-3 is the capacity sibling).
+**Source Documents:** `_bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md`; `docs/launch-campaign/attribution-spec.md`; `docs/launch-campaign/association-condensed-sheet-spec.md`; `docs/roadmap-to-launch.md` (Phase 2).
+**Field-Survey Relationship:** Additive; non-gating for the existing R2/9-18 launch gate, but **operationally gates the campaign spend** via the 4-point pre-flight gate above.
+
+#### Story 13.1: Campaign Attribution Capture
+As the Builder/PM running a five-channel launch,
+I want every public registration to carry the acquisition channel it came from — UTM/`?ref` parse on wizard entry → `wizard_drafts.form_data.extras.utm`, plus a mandatory "How did you hear about us?" `select_one` (Radio/TV/Word-of-mouth/Association-cooperative/Search-engine/Facebook/Instagram/Twitter-X/Other) → `extras.acquisition`, both merged into `submissions.raw_data.campaign_source` at submit,
+So that I can split registrations by channel and compute CPA — instead of firing five channels blind into a permanent dark window.
+**Acceptance Criteria:**
+- AC1 UTM/`?ref` parse on entry → `extras.utm` (bounded 4-key allow-list; no migration; survives resume).
+- AC2 Mandatory "How did you hear about us?" question → `extras.acquisition`; self-report is the ONLY capture for Radio/TV/Word-of-mouth (no pixel can catch them); channel/station list is config, not schema.
+- AC3 Merge `extras` → `raw_data.campaign_source` at `submitWizard` (NO migration; spread-with-precedence so it can't overwrite identity/answers).
+- AC4 Channel report query — `GROUP BY raw_data->'campaign_source'->>'channel'` EXTENDING the existing `getOverviewStats.sourceBreakdown` / `getTrends(source)` seam (no new analytics layer).
+- AC5 Attribution lands in `raw_data.campaign_source` before the first jingle (asserted by test + one fresh prod submission). Pixels PARKED (default UTM+self-report; pixels need consent-gate+CSP+DPIA — attribution-spec §5).
+**Tier:** 🚦 pre-spend (target live before Monday 2026-06-29) · **Status:** ready-for-dev.
+
+#### Story 13.2: Association Group Channel & Importer
+As a Super Admin ingesting member lists collected by association heads via the umbrella-body cascade,
+I want a frozen one-row-per-member condensed sheet whose 12 columns map 1:1 to the registry, plus an `imported_association` source on the existing Epic 11 import path (dry-run → confirm → 14-day rollback, phone-dedup, `imported_unverified` status),
+So that sheets round-trip into the canonical registry with zero re-keying, land in the honest Tier-2 stratum, and don't double-count members who already self-registered.
+**Acceptance Criteria:**
+- AC1 The condensed sheet is FROZEN v1 (header block + 12 columns = the import column-mapping); LGA→`lgas.code` + Trade→Appendix-B are the validation contract; Appendix-B/Yoruba/print are PRINT-gating operator inputs, not build-gating.
+- AC2 `imported_association` added to `respondents.source` enum + DB CHECK in lockstep + a per-source config block in `import-sources.ts` (the ONLY schema touch).
+- AC3 Association importer wired on the EXISTING 11-2 backbone (no parallel pipeline); reuses file-hash dedup, phone/email auto-skip, lawful-basis, rollback; rows land `status=imported_unverified` (excluded from fraud/marketplace/verify by the 11-1 status gate).
+- AC4 Phone mandatory (+234 normalise; dedup key); consent=Yes-only entry; NIN optional; Trade validated against Appendix B.
+- AC5 Lawful basis `ndpa_6_1_e` + per-member consent backstop; reconciliation `rows_inserted` vs declared count; source-by-construction attribution (no self-report question on imports).
+**Tier:** sheet=Monday (zero-cost, no gate); importer=fast-follow (cascade is async) · **Status:** backlog.
+
+#### Story 13.3: Launch Capacity & Static Fallback
+As the operator running prod on a home server into a state-wide radio launch,
+I want a prod load test that proves the box survives a radio-driven spike, plus a Cloudflare-cached static fallback landing that captures a 2-field lead (name + phone + LGA) queued for later import if the API/box degrades,
+So that a state-wide jingle doesn't take the registry down silently, and even under degradation a captured lead beats a timeout.
+**Acceptance Criteria:**
+- AC1 Prod load test modelling a state-wide radio spike on `oslsr-home-app`; green against pre-agreed thresholds; headroom read from the EXISTING `getSystemHealth`/`getTraffic` (no new metrics surface); WAF-aware so it doesn't false-alarm cf-traffic-watch (9-52).
+- AC2 Cloudflare-cached static fallback capturing name+phone+LGA only, queued to an origin-independent store, round-trippable via the Epic 11 / 13-2 import path; manual/health-gated cutover (no auto-failover required).
+- AC3 Go/no-go capacity verdict recorded as pre-flight gate item #4; fallback verified by an actual capture-then-queue round-trip.
+**Tier:** 🚦 pre-spend (sibling of Story 9-20; REUSE the DONE monitoring stack — net-new = ONLY the load test + the fallback) · **Status:** ready-for-dev.
+
+#### Story 13.4: Enumerator Prod Smoke & Go-Live Gate
+As the operator about to deploy enumerators across 33 LGAs into a paid launch,
+I want 5–10 real enumerator submissions exercised end-to-end on prod AND the 4-point pre-flight go/no-go checklist codified as a runbook,
+So that the field path is proven on the actual prod box before deployment (today only ONE submission has ever exercised it), and the spend decision runs off an explicit, verifiable gate.
+**Acceptance Criteria:**
+- AC1 5–10 real enumerator submissions completed end-to-end on PROD (assignment via `team_assignments` → `EnumeratorHome` → `submitForm` → `queueSubmissionForIngestion` → respondent row `source=enumerator` + submissions row); smoke rows identifiable + reversible.
+- AC2 The 4-point pre-flight gate codified as a runbook (each item with how-to-verify + green/red box + the all-green-or-hold decision rule); cross-linked from `pre-launch-operator-runbook.md` (no forked process).
+- AC3 "Enumerator path proven on prod" verdict (≥5 verified submissions, with IDs) recorded as gate item #2.
+**Tier:** 🚦 pre-spend (REUSE the fully-wired enumerator path — net-new = the prod smoke + the runbook, NO code change to the field flow) · **Status:** ready-for-dev.
+
+#### Story 13.5: Yoruba Comprehension Layer
+As a Yoruba-first respondent registering on the public wizard,
+I want the wizard labels and the consent declaration shown in Yoruba alongside English,
+So that I understand what I'm consenting to and answering in my own language — lifting answer quality, trust, and willingness — even though I can already complete the English form.
+**Acceptance Criteria:**
+- AC1 A LEAN wizard-scoped EN+YO i18n mechanism (key→{en,yo} resource + small provider; no heavyweight app-wide framework); English default + a discoverable toggle that preserves entered data + step position; strings are content, not logic.
+- AC2 Yoruba wizard chrome (labels/helper/validation for identity/contact/consent + the 13-1 question); dynamic Step-4 form-schema question BODIES declared OUT (form-owner content); missing key → English fallback.
+- AC3 Bilingual consent declaration aligned with the sheet §4 wording; operator-supplied Yoruba copy.
+- AC4 Lean-scope guard (no app-wide i18n, no Pidgin/other languages, no dashboard translation, no serving non-readers — that's the cascade + enumerators) + tests.
+**Tier:** fast-follow — explicitly NOT a pre-spend gate (Yoruba = comprehension/trust uplift, not an access gate) · **Status:** backlog.
+
+#### Story 13.6: Channel & Coverage Dashboard
+As an official/supervisor steering a live launch across 33 LGAs and a five-channel spend,
+I want registrations broken down by acquisition channel (and station) AND an LGA × trade coverage-vs-target view — surfaced on the dashboards I already use,
+So that I can compute CPA per channel and see which LGAs are under-covered for which trades, then steer enumerators into the thin LGAs — making representativeness an active control, not a hope.
+**Acceptance Criteria:**
+- AC1 Channel breakdown of completed registrations from `raw_data->'campaign_source'->>'channel'` (+ optional station), as a `getCampaignBreakdown` mirroring `getOverviewStats.sourceBreakdown` (not a new layer); against 12-4's honest denominator.
+- AC2 `getTrends` extended with a `campaignSource` filter following the existing `s.source = ${params.source}` pattern (parameterised).
+- AC3 LGA × trade coverage-vs-target by EXTENDING `getSkillsInventory.byLga`/`gapAnalysis` (visible gap cells; optional LGA × trade × channel cross); coverage % on the 12-4 denominator + consistent with 12-6.
+- AC4 Surfaced on the EXISTING `OfficialHome` + `SupervisorHome` dashboards (no new dashboard page); supervisor scoped to their LGA network; reuse existing analytics RBAC/scope.
+- AC5 Per-channel completion counts enable CPA = spend ÷ completions + the 48h kill-switch + tests.
+**Tier:** fast-follow / post-launch — DIMENSION-ADD that EXTENDS existing analytics (not a new dashboard); HARD dep on Epic 12 12-4 + 12-6 (avoid the 76-vs-139 mislabel) · **Status:** backlog.
+
+**Authoring status (2026-06-25 — Bob/SM):** Epic 13 authored via canonical `*create-story` per SCP-2026-06-25-launch-campaign. Six story files at `_bmad-output/implementation-artifacts/13-*.md`; `epic-13` keys already tracked in `sprint-status.yaml`. Pre-spend trio (13-1/13-3/13-4) → `ready-for-dev`; fast-follow trio (13-2/13-5/13-6) → `backlog`. Each story REUSES existing infrastructure (attribution = no-migration `extras`→`raw_data`; association = the Epic 11 import spine; capacity = the DONE monitoring stack; enumerator = the fully-wired field path; dashboard = EXTEND existing analytics) and cites the live codebase by `file:line`.
 
 ---
 
