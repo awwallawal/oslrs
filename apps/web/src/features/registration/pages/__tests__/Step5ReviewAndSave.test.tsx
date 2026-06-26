@@ -32,16 +32,16 @@ function fullState(overrides: Partial<WizardDraftData> = {}): WizardDraftData {
   };
 }
 
-function renderStep5(formData: WizardDraftData) {
+function renderStep5(formData: WizardDraftData, mergeFields = vi.fn()) {
   const onGoToStep = vi.fn();
   const onSubmit = vi.fn();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <Step5ReviewAndSave formData={formData} onGoToStep={onGoToStep} onSubmit={onSubmit} onBack={vi.fn()} />
+      <Step5ReviewAndSave formData={formData} mergeFields={mergeFields} onGoToStep={onGoToStep} onSubmit={onSubmit} onBack={vi.fn()} />
     </QueryClientProvider>,
   );
-  return { onGoToStep, onSubmit };
+  return { onGoToStep, onSubmit, mergeFields };
 }
 
 describe('Step5ReviewAndSave (Story 9-18 Part C AC#C1/D2)', () => {
@@ -135,6 +135,7 @@ describe('Step5ReviewAndSave incomplete-questionnaire guard (Story 9-54 AC6.2)',
       <QueryClientProvider client={qc}>
         <Step5ReviewAndSave
           formData={fullState()}
+          mergeFields={vi.fn()}
           onGoToStep={onGoToStep}
           onSubmit={onSubmit}
           onBack={vi.fn()}
@@ -168,5 +169,26 @@ describe('Step5ReviewAndSave incomplete-questionnaire guard (Story 9-54 AC6.2)',
     expect(save).not.toBeDisabled();
     fireEvent.click(save);
     expect(onSubmit).toHaveBeenCalled();
+  });
+});
+
+describe('Step5ReviewAndSave — campaign attribution question (Story 13-1 AC2)', () => {
+  it('renders the optional "How did you hear about us?" select', () => {
+    renderStep5(fullState());
+    expect(screen.getByTestId('attribution-channel-select')).toBeInTheDocument();
+    expect(screen.getByText(/how did you hear about us/i)).toBeInTheDocument();
+  });
+
+  it('writes the chosen channel into extras.acquisition via mergeFields', () => {
+    const { mergeFields } = renderStep5(fullState());
+    fireEvent.change(screen.getByTestId('attribution-channel-select'), { target: { value: 'Radio' } });
+    expect(mergeFields).toHaveBeenCalledWith(
+      expect.objectContaining({ extras: expect.objectContaining({ acquisition: { channel: 'Radio' } }) }),
+    );
+  });
+
+  it('NEVER blocks submit — Save stays enabled regardless of the answer (AC2.2)', () => {
+    renderStep5(fullState());
+    expect(screen.getByTestId('wizard-save-button')).not.toBeDisabled();
   });
 });

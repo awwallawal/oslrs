@@ -18,6 +18,7 @@ import {
 } from '../api/wizard.api';
 import { getVisibleQuestions } from '../../forms/utils/skipLogic';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
+import { parseUtm, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
 import {
   parseStepParam,
   clampToReached,
@@ -157,6 +158,19 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   // Story 9-61 (AC#1/#5) — authenticated edit/resume mode. Seed the form ONCE
   // from the session read-model (`GET /me/registration`). Gated on
   // `authenticated`, so the public registration flow is untouched.
+  // Story 13-1 (AC1/AC6.2) — capture acquisition UTM/?ref ONCE on entry into the draft's
+  // forward-compat extras slot. Held in-memory until the (email-keyed) draft first autosaves,
+  // so a resumed draft keeps its first-seen UTM (AC1.3). Best-effort — never blocks the wizard.
+  const utmCapturedRef = useRef(false);
+  useEffect(() => {
+    if (!ATTRIBUTION_ENABLED || utmCapturedRef.current || !draft.isHydrated) return;
+    utmCapturedRef.current = true;
+    if (draft.formData.extras?.utm) return; // resumed draft already carries UTM — don't clobber
+    const utm = parseUtm(searchParams);
+    if (utm) draft.mergeFields({ extras: { ...(draft.formData.extras ?? {}), utm } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on hydration; mergeFields is stable
+  }, [draft.isHydrated]);
+
   const hasSeededAuth = useRef(false);
   useEffect(() => {
     if (!authenticated || hasSeededAuth.current) return;
@@ -582,6 +596,7 @@ function renderStep(props: {
       return (
         <Step5ReviewAndSave
           formData={props.formData}
+          mergeFields={props.mergeFields}
           onGoToStep={props.onGoToStep}
           onSubmit={() => {
             props.onSubmit();

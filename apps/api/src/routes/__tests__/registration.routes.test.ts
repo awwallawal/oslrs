@@ -667,6 +667,79 @@ describe('POST /registration/wizard', () => {
     );
   });
 
+  it('Story 13-1 (AC5.1) — merges campaign_source into submission raw_data from the draft extras', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    const capturedSubmissionValues = vi.fn();
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = {
+        values: (v: unknown) => {
+          capturedSubmissionValues(v);
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () =>
+              Promise.resolve({
+                createdAt: new Date('2026-05-20T07:00:00Z'),
+                formData: {
+                  questionnaireFormId: 'form-uuid-1',
+                  extras: { acquisition: { channel: 'Radio' }, utm: { source: 'facebook' } },
+                },
+              }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+    const res = await request(buildApp()).post('/registration/wizard').send(validBody({ nin: '12345678919' }));
+    expect(res.status).toBe(201);
+    expect(capturedSubmissionValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawData: expect.objectContaining({
+          campaign_source: { channel: 'Radio', utm: { source: 'facebook' } },
+        }),
+      }),
+    );
+  });
+
+  it('Story 13-1 (AC3.4) — OMITS campaign_source when the draft carries no attribution extras', async () => {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    const capturedSubmissionValues = vi.fn();
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = {
+        values: (v: unknown) => {
+          capturedSubmissionValues(v);
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({ createdAt: new Date('2026-05-20T07:00:00Z'), formData: {} }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+    const res = await request(buildApp()).post('/registration/wizard').send(validBody({ nin: '12345678919' }));
+    expect(res.status).toBe(201); // never blocks the submit (AC2.2/AC3.4)
+    expect(capturedSubmissionValues.mock.calls[0][0]).not.toHaveProperty('rawData.campaign_source');
+  });
+
   // ──────────────────────────────────────────────────────────────────────
   // Story 9-38 — passwordless public_user provisioning after the wizard commit.
   // ──────────────────────────────────────────────────────────────────────

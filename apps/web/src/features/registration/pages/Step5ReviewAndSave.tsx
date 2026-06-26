@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { WizardNavigation } from '../components/WizardNavigation';
 import { fetchPublicLgas, derivePendingNin, type WizardDraftData } from '../api/wizard.api';
+import { ACQUISITION_CHANNELS, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
 
 /**
  * Story 9-18 Part C (AC#C1) — Step 5 is now a Review-and-Save summary.
@@ -15,6 +16,8 @@ import { fetchPublicLgas, derivePendingNin, type WizardDraftData } from '../api/
 
 export interface Step5ReviewAndSaveProps {
   formData: WizardDraftData;
+  /** Story 13-1 — write the optional "How did you hear about us?" answer into the draft extras. */
+  mergeFields: (patch: Partial<WizardDraftData>) => void;
   /** Jump back to a step to edit a field (wizard's goToStep). */
   onGoToStep: (stepIndex: number) => void;
   onSubmit: () => void;
@@ -68,6 +71,7 @@ function ConsentChip({ allowed }: { allowed: boolean }) {
 
 export function Step5ReviewAndSave({
   formData,
+  mergeFields,
   onGoToStep,
   onSubmit,
   onBack,
@@ -197,6 +201,34 @@ export function Step5ReviewAndSave({
         <p role="alert" className="mt-4 text-sm text-error-600" data-testid="step5-submit-error">
           {submitError}
         </p>
+      )}
+
+      {/* Story 13-1 (AC2) — optional acquisition question. Best-effort, NEVER blocks submit. */}
+      {ATTRIBUTION_ENABLED && (
+        <div className="mt-6" data-testid="step5-attribution">
+          <label htmlFor="attribution-channel" className="block text-sm font-medium text-neutral-700">
+            How did you hear about us? <span className="text-neutral-400">(optional)</span>
+          </label>
+          <select
+            id="attribution-channel"
+            data-testid="attribution-channel-select"
+            className="mt-1 block w-full rounded-md border-neutral-300 text-sm"
+            value={(formData.extras?.acquisition as { channel?: string } | undefined)?.channel ?? ''}
+            onChange={(e) => {
+              const channel = e.target.value;
+              mergeFields({
+                extras: { ...(formData.extras ?? {}), acquisition: channel ? { channel } : undefined },
+              });
+            }}
+          >
+            <option value="">Prefer not to say</option>
+            {ACQUISITION_CHANNELS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       <WizardNavigation

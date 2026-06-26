@@ -138,6 +138,27 @@ describe('ReportService', () => {
     });
   });
 
+  describe('getCampaignBreakdown (Story 13-1 AC4)', () => {
+    it('maps grouped rows to {channel, count} with numeric coercion', async () => {
+      mockDbSelect.mockReturnValueOnce(
+        makeChain([
+          { channel: 'Radio', count: '12' },
+          { channel: 'Facebook', count: 5 },
+        ]),
+      );
+      const result = await ReportService.getCampaignBreakdown();
+      expect(result).toEqual([
+        { channel: 'Radio', count: 12 },
+        { channel: 'Facebook', count: 5 },
+      ]);
+    });
+
+    it('returns [] when no submissions carry campaign_source', async () => {
+      mockDbSelect.mockReturnValueOnce(makeChain([]));
+      expect(await ReportService.getCampaignBreakdown()).toEqual([]);
+    });
+  });
+
   describe('getSkillsDistribution', () => {
     it('should return skills grouped with counts', async () => {
       mockDbExecute.mockResolvedValueOnce({

@@ -88,6 +88,20 @@ const saveDraftSchema = z.object({
 // SAME schema without importing the controller's db layer (9-61 AC#5).
 // `submitWizardSchema` is imported at the top of this file.
 
+/**
+ * Story 13-1 (AC3) — build the `campaign_source` attribution key from a wizard draft's
+ * forward-compat `extras` slot. Returns a spreadable partial: `{}` when nothing was captured
+ * (so the key is OMITTED from raw_data — AC3.4 degenerate path), else `{ campaign_source }`.
+ * Best-effort + total: never throws, so attribution can never block a submit (AC2.2/AC6).
+ */
+export function buildCampaignSource(extras: WizardDraftData['extras']): Record<string, unknown> {
+  if (!extras) return {};
+  const acquisition = extras.acquisition as { channel?: string } | undefined;
+  const utm = extras.utm as Record<string, unknown> | undefined;
+  if (!acquisition?.channel && !utm) return {};
+  return { campaign_source: { channel: acquisition?.channel ?? null, utm: utm ?? {} } };
+}
+
 // Story 9-28 Path B — supplemental-survey submission. Token redemption
 // authorizes a Step 4-only data write for an already-registered respondent
 // whose original wizard submit dropped the questionnaire answers (Cohort A).
@@ -657,6 +671,10 @@ export class RegistrationController {
             // are authoritative: spread AFTER responses so a client cannot forge
             // them.
             ...computedFields,
+            // Story 13-1 (AC3) — campaign attribution from the draft's forward-compat
+            // extras slot. Spread LAST so it's authoritative (no answer key can clobber it);
+            // the helper omits the key entirely when nothing was captured (AC3.4 degenerate path).
+            ...buildCampaignSource(draftFormData.extras),
           } as Record<string, unknown>,
           gpsLatitude: null,
           gpsLongitude: null,
@@ -1001,6 +1019,10 @@ export class RegistrationController {
             // submissions from canonical wizard submissions when needed
             // (both share source='public' otherwise).
             campaign: 'cohort_a_supplemental_survey',
+            // Story 13-1 (AC6.1) — this is the SECOND raw_data write-site. It is attributed
+            // BY CONSTRUCTION: the submitter arrived via a re-engagement magic-link (Cohort A),
+            // not a fresh campaign entry, so there is no wizard-draft `extras` to merge — the
+            // `campaign` tag above IS its channel. No campaign_source lift needed here.
             // Step 4 questionnaire answers — flat-spread to match wizard
             // handler's storage shape; analytics queries already key off these.
             ...questionnaireResponses,

@@ -10,6 +10,7 @@
 
 import { db } from '../db/index.js';
 import { respondents } from '../db/schema/respondents.js';
+import { submissions } from '../db/schema/submissions.js'; // Story 13-1 (AC4)
 import { sql, gte } from 'drizzle-orm';
 import type { OverviewStats, SkillDistribution, LgaBreakdown, DailyTrend } from '@oslsr/types';
 
@@ -55,6 +56,25 @@ export class ReportService {
         clerk: Number(row?.clerkCount ?? 0),
       },
     };
+  }
+
+  /**
+   * Story 13-1 (AC4) — channel breakdown of completed registrations, read from the attribution
+   * captured in `submissions.raw_data.campaign_source`. Reuses the report seam (parallels
+   * `getOverviewStats.sourceBreakdown`). The JSON channel accessor is a FIXED expression, never
+   * user-concatenated SQL (AC4.3). The richer LGA×trade×channel view is Story 13-6 (Epic-12-gated).
+   */
+  static async getCampaignBreakdown(): Promise<Array<{ channel: string; count: number }>> {
+    const rows = await db
+      .select({
+        channel: sql<string>`COALESCE(${submissions.rawData} -> 'campaign_source' ->> 'channel', '(unknown)')`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(submissions)
+      .where(sql`${submissions.rawData} -> 'campaign_source' IS NOT NULL`)
+      .groupBy(sql`1`)
+      .orderBy(sql`2 DESC`);
+    return rows.map((r) => ({ channel: r.channel, count: Number(r.count) }));
   }
 
   /**
