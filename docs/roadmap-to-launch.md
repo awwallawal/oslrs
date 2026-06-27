@@ -76,8 +76,10 @@ These are `review` or operator-gated — they need a decision or a validation, n
 Radio is **movable 24–48h** (Awwal owns the narrative), so this gate has teeth. Fire paid spend only when **all** are green:
 1. **Prod happy-path** self-serve completion verified (one fresh real end-to-end submission)
 2. **Enumerator path proven on prod** (13-4: 5–10 real submissions — today: *one ever*)
-3. **Attribution capture live + verified** (13-1)
+3. **Attribution capture live + verified** (13-1) ✅ done + deployed 2026-06-27
 4. **Capacity load-test green + static fallback deployed** (13-3)
+
+> **Deploy reliability (13-7, added 2026-06-27):** a non-deterministic IndexedDB unhandled-rejection in the web test suite can randomly red CI `test-web` and stall a launch-week deploy (it briefly blocked 13-1, passed on re-run). 🚦 **13-7** wires a web-only `fake-indexeddb` polyfill to remove it — keep this green so the daily launch pushes don't trip on a flake.
 
 **Campaign coordination (peer review 2026-06-25 — launch-critical):**
 - **🔴 Termii sender-ID/KYC is the #1 long-lead task — start today.** Radio drives a phone-first, NIN-deferring audience whose **SMS reminder is dead until Termii clears** (`dispatchSmsReminder` returns false). Either fix Termii or route phone-first radio listeners to association/enumerator, not self-serve.

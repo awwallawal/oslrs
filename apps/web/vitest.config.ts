@@ -15,6 +15,9 @@ export default mergeConfig(
     test: {
       include: ['src/**/*.test.tsx', 'src/**/*.test.ts'],
       environment: 'jsdom',
+      // Story 13-7 — web-only IndexedDB polyfill. mergeConfig CONCATENATES setupFiles arrays,
+      // so this APPENDS to baseConfig's test/setup.ts (jest-dom + window mocks preserved).
+      setupFiles: [fileURLToPath(new URL('src/test/fake-indexeddb.setup.ts', import.meta.url))],
     },
   })
 )
