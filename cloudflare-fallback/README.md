@@ -7,7 +7,7 @@ A **standalone Cloudflare Pages site** — deliberately outside the monorepo bui
 | File | Role |
 |------|------|
 | `index.html` | The static callback page — official Oyo State branding (state logo + the app's deep-red `#9C1E23` palette), email-first, mobile-first, 33-LGA dropdown, consent + anti-phishing notice. Cloudflare-cached. |
-| `oyo-state-logo.svg` | The official Oyo State logo, shipped in the deploy so the government-authenticity signal survives origin degradation (not fetched from the home box). |
+| `oyo-state-logo.png` | The official full-colour Oyo State logo (the crest + "OYO STATE · The Pacesetter State", as used across the live app), shipped in the deploy so the government-authenticity signal survives origin degradation (not fetched from the home box). |
 | `functions/api/callback.ts` | Cloudflare Pages Function — validates + writes the lead to Workers KV. Mirrors the **tested** `apps/api/src/lib/fallback-lead.ts` (a parity test guards drift). |
 
 ## Deploy (operator — ~10 min)

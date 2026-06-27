@@ -114,7 +114,7 @@ Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-27.
 - **Verification:** api tsc 0; eslint clean (cloudflare-fallback is outside the package lint/tsc scope — separate wrangler build); **+23 tests** (load-test-eval 9 + fallback-lead 14); full api regression green (200 files / 2844). Added devDep `autocannon` + `@types/autocannon` (api).
 
 ### File List
-**New:** `apps/api/src/lib/load-test-eval.ts` · `apps/api/src/lib/__tests__/load-test-eval.test.ts` · `apps/api/scripts/load-test.ts` · `apps/api/src/lib/fallback-lead.ts` · `apps/api/src/lib/__tests__/fallback-lead.test.ts` · `cloudflare-fallback/index.html` · `cloudflare-fallback/functions/api/callback.ts` · `cloudflare-fallback/oyo-state-logo.svg` · `cloudflare-fallback/README.md` · `docs/runbooks/13-3-launch-capacity-and-fallback.md`
+**New:** `apps/api/src/lib/load-test-eval.ts` · `apps/api/src/lib/__tests__/load-test-eval.test.ts` · `apps/api/scripts/load-test.ts` · `apps/api/src/lib/fallback-lead.ts` · `apps/api/src/lib/__tests__/fallback-lead.test.ts` · `cloudflare-fallback/index.html` · `cloudflare-fallback/functions/api/callback.ts` · `cloudflare-fallback/oyo-state-logo.png` · `cloudflare-fallback/README.md` · `docs/runbooks/13-3-launch-capacity-and-fallback.md`
 **Modified:** `apps/api/package.json` (+autocannon devDeps) · `pnpm-lock.yaml` · `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 ### Review Follow-ups (AI) — code-review 2026-06-27
