@@ -289,16 +289,26 @@ export default function MagicLinkLandingPage() {
   // early-return above handles it), so the switch below has 3 cases.
   const copy = PURPOSE_COPY[purpose];
   const handleContinue = () => {
+    // Story 13-9 (AC1) — forward campaign attribution (utm/?ref) from the magic-link through the
+    // /auth/magic hop to the wizard, so the wizard's 13-1 parseUtm captures it → extras.utm →
+    // raw_data.campaign_source at submit. Without this forward, the hop drops the params and a
+    // blast conversion can't be attributed (the one-way door). Bounded to the 13-1 allow-list.
+    const utm = new URLSearchParams();
+    for (const k of ['utm_campaign', 'utm_source', 'utm_medium', 'ref']) {
+      const v = searchParams.get(k);
+      if (v) utm.set(k, v);
+    }
+    const utmSuffix = utm.toString() ? `&${utm.toString()}` : '';
     let destination: string;
     switch (purpose) {
       case 'wizard_resume':
-        destination = `/register?token=${encodeURIComponent(token)}`;
+        destination = `/register?token=${encodeURIComponent(token)}${utmSuffix}`;
         break;
       case 'supplemental_survey':
-        destination = `/register/supplemental?token=${encodeURIComponent(token)}`;
+        destination = `/register/supplemental?token=${encodeURIComponent(token)}${utmSuffix}`;
         break;
       case 'pending_nin_complete':
-        destination = `/register/complete-nin?token=${encodeURIComponent(token)}`;
+        destination = `/register/complete-nin?token=${encodeURIComponent(token)}${utmSuffix}`;
         break;
       default: {
         // M7 fix — exhaustive switch on the narrowed MagicLinkPurpose union;

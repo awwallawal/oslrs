@@ -336,6 +336,10 @@ async function main() {
         purpose: 'supplemental_survey',
         respondentId: row.respondent_id,
       });
+      // Story 13-9 (AC1) — NO utm tag here: the supplemental path attributes BY CONSTRUCTION
+      // (submitSupplementalSurvey sets campaign:'cohort_a_supplemental_survey', registration.controller.ts:1021;
+      // SupplementalSurveyPage has no 13-1 parseUtm). A utm tag would be inert. Only the reengagement
+      // blast (→ main wizard) needs the utm round-trip.
       const surveyUrl = MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'supplemental_survey');
       const emailContent = buildEmail(firstName, surveyUrl);
 

@@ -137,6 +137,34 @@ describe('MagicLinkLandingPage (Story 9-12 MR-8)', () => {
         expect(screen.getByTestId('redirected-register')).toBeInTheDocument();
       });
     });
+
+    it('Story 13-9 (AC1): forwards utm_campaign/source through to /register on Continue', async () => {
+      mockPeekMagicLink.mockResolvedValueOnce({
+        tokenId: 'tid-utm',
+        purpose: 'wizard_resume',
+        email: 'awwal@example.com',
+        userId: null,
+        respondentId: null,
+        requiresConsume: true,
+      });
+      const RegisterProbe = () => <div data-testid="reg-search">{useLocation().search}</div>;
+      render(
+        <MemoryRouter initialEntries={['/auth/magic?token=tok-utm&purpose=wizard_resume&utm_campaign=reengagement-2026-07&utm_source=email']}>
+          <Routes>
+            <Route path="/auth/magic" element={<MagicLinkLandingPage />} />
+            <Route path="/register" element={<RegisterProbe />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await waitFor(() => expect(screen.getByTestId('magic-link-confirm-button')).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId('magic-link-confirm-button'));
+      await waitFor(() => {
+        const search = screen.getByTestId('reg-search').textContent ?? '';
+        expect(search).toContain('utm_campaign=reengagement-2026-07');
+        expect(search).toContain('utm_source=email');
+        expect(search).toContain('token=tok-utm'); // token preserved alongside utm
+      });
+    });
   });
 
   describe('Peek succeeds (pending_nin_complete)', () => {

@@ -51,6 +51,10 @@ const logger = pino({ name: 'reengagement-email-blast' });
 
 const BRAND = '#9C1E23';
 const SUPPORT_EMAIL = 'support@oyoskills.com';
+// Story 13-9 (AC1) — campaign id stamped on the resume link's utm_campaign so completed
+// registrations attribute to this blast (→ raw_data.campaign_source via 13-1). BUMP per run
+// (e.g. reengagement-2026-07b) so the dashboard compares rounds. Also the 9-63 meter category.
+const CAMPAIGN_ID = 'reengagement-2026-07';
 
 // Free tier ceiling sanity-check — Resend Free is 100/day. If cohort is at or
 // above the confirm threshold, the operator MUST pass --confirm-resend-pro-active.
@@ -427,7 +431,15 @@ async function main() {
         email: row.email,
         purpose: 'wizard_resume',
       });
-      const resumeUrl = MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'wizard_resume');
+      // Story 13-9 (AC1) — tag the resume link so a completed registration attributes to THIS
+      // blast: utm_campaign rides through /auth/magic (forwarded there) → the wizard's 13-1
+      // parseUtm → extras.utm → raw_data.campaign_source. The MagicLinkLandingPage forward is the
+      // matching half. CAMPAIGN_ID = the blast run (bump per run so rounds compare in the dashboard).
+      const resumeUrlObj = new URL(MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'wizard_resume'));
+      resumeUrlObj.searchParams.set('utm_source', 'email');
+      resumeUrlObj.searchParams.set('utm_medium', 'blast');
+      resumeUrlObj.searchParams.set('utm_campaign', CAMPAIGN_ID);
+      const resumeUrl = resumeUrlObj.toString();
       const emailContent = buildEmail(firstName, resumeUrl, row.currentStep);
 
       const result = await EmailService.sendGenericEmail({
