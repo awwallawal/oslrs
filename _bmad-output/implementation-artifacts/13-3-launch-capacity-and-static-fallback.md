@@ -1,6 +1,6 @@
 # Story 13.3: Launch Capacity & Static Fallback — Load-Test the Home Box for a Radio Spike + a Cloudflare-Cached Lead-Capture Fallback
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 🚦 PRE-SPEND gate item #4. REUSE the existing monitoring (DONE) — do NOT rebuild it. NET-NEW = (a) a prod load test + (b) a Cloudflare-cached static fallback that captures a lead if the box degrades. Sibling of Story 9-20. -->
@@ -46,24 +46,24 @@ The observability stack already exists and is NOT in scope to rebuild [Source: _
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Define + run the prod load test (AC1)**
-  - [ ] Define the radio-spike load profile (peak concurrency / RPS, ramp) against the real hot path (wizard entry → draft save → submit); state the peak rationale (AC1.1).
-  - [ ] Run it against prod (`oslsr-home-app`), reading headroom from the EXISTING `getSystemHealth` (pm2 CPU/RAM/restart + disk) [Source: apps/api/src/services/operations.service.ts:78-87] and `getTraffic` [Source: apps/api/src/services/operations.service.ts:132] — do NOT add a new metrics surface (AC1.3).
-  - [ ] Make the test rate-limit/WAF aware so it does not false-alarm `cf-traffic-watch` (9-52) (AC1.4) [Source: _bmad-output/implementation-artifacts/9-52-cf-traffic-watch-alert.md].
-  - [ ] Capture results (numbers + green/red verdict against pre-agreed thresholds) (AC1.2).
+- [~] **Task 1 — Define + run the prod load test (AC1)** _(dev artifacts done; the prod RUN is [Operator])_
+  - [x] Define the radio-spike load profile (peak concurrency / ramp) against the hot path; peak rationale stated → `LOAD_PROFILE` in `apps/api/src/lib/load-test-eval.ts` (AC1.1).
+  - [ ] **[Operator]** Run it against prod (`oslsr-home-app`), reading headroom from the EXISTING `getSystemHealth`/`getTraffic` — the runner refuses non-localhost without `--i-understand-this-hits-prod` (AC1.3). Procedure: runbook Part A.
+  - [x] Make the test rate-limit/WAF aware so it does not false-alarm `cf-traffic-watch` (9-52) → `x-load-test: 13-3` header + UA + the allow-list note (AC1.4).
+  - [ ] **[Operator]** Capture results (numbers + green/red verdict) — needs the prod run; verdict logic built + tested (`evaluateLoadTest`) (AC1.2).
 
-- [ ] **Task 2 — Build + deploy the Cloudflare-cached static fallback (AC2)**
-  - [ ] Build a static landing page capturing name + phone + LGA only (AC2.2); Cloudflare-cache it at the edge so it survives origin degradation (AC2.1).
-  - [ ] Queue the lead to an origin-independent store, round-trippable into the registry via the Epic 11 / 13-2 import path (name/phone/LGA → `imported_*`/`imported_unverified`) (AC2.3); do NOT attempt full registration on the fallback (AC2.4).
-  - [ ] Define the engage-the-fallback trigger (manual cutover or health-gated; automatic failover NOT required) (AC2.4).
-  - [ ] Add the minimal consent/notice line on the fallback page + a DPIA note (Appendix H) for the edge-store PII capture (AC2.5).
+- [x] **Task 2 — Build the Cloudflare-cached static fallback (AC2)** _(artifact built; the Cloudflare DEPLOY is [Operator])_
+  - [x] Static landing page capturing name + phone + LGA only → `cloudflare-fallback/index.html`; Cloudflare-cacheable at the edge (AC2.1/AC2.2 — a CALLBACK, not a half-registration).
+  - [x] Queue the lead to an origin-independent store (CF Pages Function → Workers KV) → `cloudflare-fallback/functions/api/callback.ts`; canonical shape `apps/api/src/lib/fallback-lead.ts`; round-trippable to the 13-2 import path; no full registration (AC2.3/AC2.4).
+  - [x] Engage-the-fallback trigger defined (manual / health-gated cutover, no auto-failover) → README + runbook Part B (AC2.4).
+  - [x] Minimal consent/notice line on the page + DPIA (Appendix H) note for the edge-store PII capture (AC2.5).
 
-- [ ] **Task 3 — Verify the fallback round-trip + record the gate verdict (AC3)**
-  - [ ] Submit a test lead through the static page; confirm it lands in the queue/store and is importable (AC3.2).
-  - [ ] Record the go/no-go capacity verdict (load-test green + fallback deployed+verified) as pre-flight gate item #4 (AC3.1) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:49].
+- [~] **Task 3 — Verify the fallback round-trip + record the gate verdict (AC3)** _([Operator] — needs the deployed page + load-test numbers)_
+  - [ ] **[Operator]** Submit a test lead through the deployed page; confirm it lands in KV and is importable (AC3.2) — runbook Part B step 4. (Lead validation/shape built + tested: `fallback-lead.ts`.)
+  - [ ] **[Operator]** Record the go/no-go capacity verdict (load-test green + fallback deployed+verified) as pre-flight gate item #4 (AC3.1) — runbook Part C table.
 
-- [ ] **Task 4 — Runbook (the capacity + fallback procedure)**
-  - [ ] Document the load-test profile/thresholds/results, the fallback deploy + cutover procedure, and the lead-import step — as a runbook sibling to Story 9-20's capacity prep [Source: _bmad-output/implementation-artifacts/9-20-pre-viral-capacity-prep.md], cross-linked from the pre-launch operator runbook.
+- [x] **Task 4 — Runbook (the capacity + fallback procedure)**
+  - [x] Documented the load-test profile/thresholds/run, the fallback deploy + cutover + drain, the DPIA, and the gate-verdict table → `docs/runbooks/13-3-launch-capacity-and-fallback.md`, cross-linked from the pre-launch operator runbook.
 
 ## Dev Notes
 
@@ -100,6 +100,39 @@ The observability stack already exists and is NOT in scope to rebuild [Source: _
 - [Source: _bmad-output/implementation-artifacts/9-20-pre-viral-capacity-prep.md] — capacity-prep sibling
 - [Source: docs/launch-campaign/association-condensed-sheet-spec.md:29,46-49] — phone-as-dedup-key + import path for the captured lead
 - [Source: _bmad-output/implementation-artifacts/sprint-status.yaml#13-3-launch-capacity-and-static-fallback] — scope note (REUSE monitoring; net-new = load test + fallback)
+
+## Dev Agent Record
+### Agent Model Used
+Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-27.
+
+### Completion Notes List
+**Dev-buildable scope delivered (build + local-verify); the prod load-test RUN, the Cloudflare DEPLOY, and the gate-verdict recording are [Operator] by design (Dev Notes §"Operator-run, Tailscale").**
+- **AC1 (load test)** — pure verdict engine `apps/api/src/lib/load-test-eval.ts` (`LOAD_PROFILE` 50×60s + `LOAD_TEST_THRESHOLDS` p95<1500ms / err<1% / ≥20 req/s; `summariseAutocannon`; `evaluateLoadTest` — guards 0-requests as RED, not a vacuous green) + runner `apps/api/scripts/load-test.ts` (autocannon; `--dry-run`; refuses non-localhost without `--i-understand-this-hits-prod`; `x-load-test: 13-3` header for cf-traffic-watch allow-listing — AC1.4). REUSES `getSystemHealth`/`getTraffic` for headroom (no new metrics surface — AC1.3). Smoked: dry-run prints profile (exit 0); prod-guard refuses.
+- **AC2 (fallback)** — standalone Cloudflare Pages site `cloudflare-fallback/` (outside the monorepo → zero home-box dependency): `index.html` (mobile-first CALLBACK page — name+phone+LGA, 33-LGA dropdown, "we'll text you a link to finish", consent notice) + `functions/api/callback.ts` (CF Pages Function → Workers KV, origin-independent). Canonical tested shape `apps/api/src/lib/fallback-lead.ts` (phone→+234, validation; the 13-2 importer reuses it). Manual/health-gated cutover (no auto-failover). DPIA note (AC2.5).
+- **AC3** — round-trip verify + gate verdict are [Operator] (need the deployed page + load-test numbers); the verdict table is in the runbook Part C.
+- **Task 4** — runbook `docs/runbooks/13-3-launch-capacity-and-fallback.md` (load-test run, fallback deploy/cutover/drain, DPIA, gate table).
+- **Verification:** api tsc 0; eslint clean (cloudflare-fallback is outside the package lint/tsc scope — separate wrangler build); **+23 tests** (load-test-eval 9 + fallback-lead 14); full api regression green (200 files / 2844). Added devDep `autocannon` + `@types/autocannon` (api).
+
+### File List
+**New:** `apps/api/src/lib/load-test-eval.ts` · `apps/api/src/lib/__tests__/load-test-eval.test.ts` · `apps/api/scripts/load-test.ts` · `apps/api/src/lib/fallback-lead.ts` · `apps/api/src/lib/__tests__/fallback-lead.test.ts` · `cloudflare-fallback/index.html` · `cloudflare-fallback/functions/api/callback.ts` · `cloudflare-fallback/README.md` · `docs/runbooks/13-3-launch-capacity-and-fallback.md`
+**Modified:** `apps/api/package.json` (+autocannon devDeps) · `pnpm-lock.yaml` · `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Review Follow-ups (AI) — code-review 2026-06-27
+- [x] [AI-Review][Med] **M1 — the Cloudflare edge function was untested + duplicated validation (drift risk on the launch-critical path).** FIXED: `apps/api/src/lib/__tests__/fallback-edge-function.test.ts` exercises `onRequestPost` (Node has Request/Response; api tests are tsc-excluded so the cross-import is safe) — covers valid→KV, invalid→400, KV-fail→503, AND a PARITY GUARD asserting the edge phone normalisation matches the canonical `fallback-lead.ts` for every input form (drift now fails the build).
+- [x] [AI-Review][Low] **L1 — edge `KV.put` had no try/catch** → FIXED: wrapped, returns a friendly 503 (not an unhandled 500) on the degradation path.
+- [ ] [AI-Review][Low] **L2 [Operator]** — the public edge POST has no app-level rate-limit; mitigate via Cloudflare WAF/rate-limiting at the platform (noted in README/runbook). Accept.
+- [x] [AI-Review][Low] L3 — `summariseAutocannon` uses autocannon's `p97_5` as the p95 proxy (conservative: p97.5 ≥ p95 → stricter gate, not looser). Accept by design.
+
+## Senior Developer Review (AI)
+
+**Reviewer:** Amelia (BMAD code-review workflow — adversarial) · **Date:** 2026-06-27 · **Outcome:** ✅ APPROVE the DEV work (story stays `review` — [Operator] gate steps remain)
+
+- **Scope verified:** git == File List; the operator boundary is **honestly drawn** — the prod load-test RUN, the Cloudflare DEPLOY, and the gate verdict are marked `[Operator]`, not claimed done. AC alignment holds: the fallback is a **CALLBACK** ("we'll text you a link to finish"), not a half-registration (AC2.2); consent line + DPIA note present (AC2.5); no full registration on the fallback.
+- **Findings:** 0 Critical · 0 High · **1 Medium (fixed)** · 3 Low (L1 fixed, L2 operator-accept, L3 accept).
+- **Key fix (M1):** the one piece that must work unattended during an outage — the edge capture — is now tested + drift-guarded against the canonical lib. The load-test verdict engine correctly treats 0 requests as RED (no vacuous green).
+- **Post-fix verification:** api tsc 0; eslint clean; **+27 tests** (load-test-eval 9 · fallback-lead 14 · edge 4); full api regression green (201 files / 2848). `cloudflare-fallback/` is a standalone wrangler artifact (outside the package lint/tsc scope by design).
+- **Review File List (added):** `apps/api/src/lib/__tests__/fallback-edge-function.test.ts`; `cloudflare-fallback/functions/api/callback.ts` (L1 try/catch).
+- **Decision:** dev work APPROVED. **Status stays `review`** — 13-3 closes to `done` only when the operator runs the prod load test + deploys the fallback + records gate item #4 (runbook Parts A/B/C).
 
 ## Change Log
 

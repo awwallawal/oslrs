@@ -75,6 +75,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@oslsr/testing": "workspace:^",
+    "@types/autocannon": "7.12.7",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
@@ -88,6 +89,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/rate-limit-redis": "^3.0.0",
     "@types/supertest": "^6.0.3",
+    "autocannon": "8.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.2",
     "globals": "^17.0.0",

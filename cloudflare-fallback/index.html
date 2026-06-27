@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<!--
+  Story 13-3 (AC2) — Cloudflare-cached STATIC fallback. Deploys to Cloudflare Pages, served from the
+  edge so it stays up even if the home box (oslsr-home-app) is degraded. It captures a CALLBACK
+  (name + phone + LGA) — NOT a registration — and the user is later texted a link to finish the REAL
+  wizard (full attribution + consent intact). No origin dependency: the form POSTs to the colocated
+  Pages Function /api/callback, which writes to Cloudflare KV. See README.md for deploy + cutover.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Oyo State Skills Registry — Quick Sign-Up</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: #f4f7f5; color: #142; }
+  .card { max-width: 460px; margin: 0 auto; padding: 22px 18px 30px; }
+  .brand { font-weight: 700; color: #1a5; font-size: 14px; letter-spacing: .3px; }
+  h1 { font-size: 21px; margin: 6px 0 4px; }
+  p.lead { font-size: 15px; line-height: 1.45; color: #355; margin: 0 0 18px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
+  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #bcd; border-radius: 9px; background: #fff; }
+  button { width: 100%; margin-top: 20px; padding: 14px; font-size: 17px; font-weight: 700; color: #fff; background: #1a5; border: 0; border-radius: 10px; }
+  button:disabled { background: #9c9; }
+  .notice { font-size: 11.5px; color: #567; margin-top: 14px; line-height: 1.4; }
+  .err { color: #c00; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .ok { text-align: center; padding: 28px 10px; }
+  .ok .tick { font-size: 46px; color: #1a5; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">OYO STATE SKILLS REGISTRY</div>
+
+  <form id="f">
+    <h1>Quick sign-up</h1>
+    <p class="lead">Our main site is very busy right now. Leave your details and <b>we'll text you a link to finish your registration</b> as soon as it frees up.</p>
+
+    <label for="fullName">Your name</label>
+    <input id="fullName" name="fullName" autocomplete="name" required maxlength="120" />
+
+    <label for="phone">Phone number</label>
+    <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0803 123 4567" required />
+
+    <label for="lgaCode">Your LGA (where you work/live)</label>
+    <select id="lgaCode" name="lgaCode" required>
+      <option value="" disabled selected>Select your LGA…</option>
+      <option>Afijio</option><option>Akinyele</option><option>Atiba</option><option>Atisbo</option><option>Egbeda</option>
+      <option>Ibadan North</option><option>Ibadan North-East</option><option>Ibadan North-West</option><option>Ibadan South-East</option><option>Ibadan South-West</option>
+      <option>Ibarapa Central</option><option>Ibarapa East</option><option>Ibarapa North</option><option>Ido</option><option>Irepo</option>
+      <option>Iseyin</option><option>Itesiwaju</option><option>Iwajowa</option><option>Kajola</option><option>Lagelu</option>
+      <option>Ogbomosho North</option><option>Ogbomosho South</option><option>Ogo Oluwa</option><option>Olorunsogo</option><option>Oluyole</option>
+      <option>Ona Ara</option><option>Orelope</option><option>Ori Ire</option><option>Oyo East</option><option>Oyo West</option>
+      <option>Saki East</option><option>Saki West</option><option>Surulere</option>
+    </select>
+
+    <button id="submit" type="submit">Request my link</button>
+    <div class="err" id="err"></div>
+    <p class="notice">By submitting, you agree the Oyo State Government may store your name, phone, and LGA for the Skills Registry and contact you by phone/SMS to complete your registration. You can ask to be removed at any time. (NDPA 6(1)(e) public task + this notice.)</p>
+  </form>
+
+  <div class="ok hide" id="done">
+    <div class="tick">✓</div>
+    <h1>Thank you!</h1>
+    <p class="lead">We've got your details. We'll text a link to <b id="echoPhone"></b> so you can finish your registration shortly.</p>
+  </div>
+</div>
+
+<script>
+  const f = document.getElementById('f');
+  const btn = document.getElementById('submit');
+  const err = document.getElementById('err');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const payload = {
+      fullName: f.fullName.value, phone: f.phone.value, lgaCode: f.lgaCode.value,
+    };
+    try {
+      const res = await fetch('/api/callback', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body.errors && body.errors.join(', ')) || 'Something went wrong. Please try again.');
+      }
+      document.getElementById('echoPhone').textContent = f.phone.value;
+      f.classList.add('hide');
+      document.getElementById('done').classList.remove('hide');
+    } catch (ex) {
+      err.textContent = ex.message;
+      btn.disabled = false; btn.textContent = 'Request my link';
+    }
+  });
+</script>
+</body>
+</html>
