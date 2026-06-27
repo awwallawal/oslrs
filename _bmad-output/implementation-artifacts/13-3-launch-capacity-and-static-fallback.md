@@ -46,11 +46,11 @@ The observability stack already exists and is NOT in scope to rebuild [Source: _
 
 ## Tasks / Subtasks
 
-- [~] **Task 1 — Define + run the prod load test (AC1)** _(dev artifacts done; the prod RUN is [Operator])_
+- [x] **Task 1 — Define + run the prod load test (AC1)** ✅ RUN 2026-06-27 (on-box via Tailscale) — GREEN
   - [x] Define the radio-spike load profile (peak concurrency / ramp) against the hot path; peak rationale stated → `LOAD_PROFILE` in `apps/api/src/lib/load-test-eval.ts` (AC1.1).
-  - [ ] **[Operator]** Run it against prod (`oslsr-home-app`), reading headroom from the EXISTING `getSystemHealth`/`getTraffic` — the runner refuses non-localhost without `--i-understand-this-hits-prod` (AC1.3). Procedure: runbook Part A.
-  - [x] Make the test rate-limit/WAF aware so it does not false-alarm `cf-traffic-watch` (9-52) → `x-load-test: 13-3` header + UA + the allow-list note (AC1.4).
-  - [ ] **[Operator]** Capture results (numbers + green/red verdict) — needs the prod run; verdict logic built + tested (`evaluateLoadTest`) (AC1.2).
+  - [x] Ran on the box vs `localhost:3000/api/v1/forms/public-active` (bypasses Cloudflare → no cf-traffic-watch false alarm). 50×60s: p95 346ms / 0% err / 247 req/s / no crash; headroom curve to 100 conn captured (AC1.3). Runbook Part A/C.
+  - [x] Made the test rate-limit/WAF aware → `x-load-test: 13-3` header + UA + allow-list note (AC1.4); on-box localhost run sidestepped the alert entirely.
+  - [x] Results captured (numbers + GREEN verdict) → runbook Part C table (AC1.2).
 
 - [x] **Task 2 — Build the Cloudflare-cached static fallback (AC2)** _(artifact built; the Cloudflare DEPLOY is [Operator])_
   - [x] Static landing page capturing name + phone + LGA only → `cloudflare-fallback/index.html`; Cloudflare-cacheable at the edge (AC2.1/AC2.2 — a CALLBACK, not a half-registration).

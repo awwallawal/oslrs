@@ -51,8 +51,17 @@ Full deploy/cutover/drain/DPIA steps: **`cloudflare-fallback/README.md`**. Summa
 
 | Half | Evidence | Verdict |
 |------|----------|---------|
-| Load test (A) | _p95 ___ms · err ___% · ___ req/s @ ___ conns_ | ⬜ green / ⬜ red |
-| Fallback (B) | _deployed URL + KV round-trip confirmed_ | ⬜ green / ⬜ red |
+| Load test (A) | **2026-06-27, on-box vs `localhost:3000/api/v1/forms/public-active` (1-core box).** 50×60s: p95 **346ms** · **0.00%** err · **247 req/s** · no crash (restarts 185→185) · mem ~1.0/1.97GB. | ✅ **GREEN** |
+| Fallback (B) | _CF Pages deploy + KV round-trip — OPERATOR (needs Cloudflare login)._ | ⬜ pending |
 
-**Gate item #4 = GREEN only when BOTH are green.** Either red holds the paid radio/social spend.
-Record the filled table + date in `docs/runbooks/pre-launch-operator-runbook.md`.
+**Load-test headroom curve (2026-06-27):** the box is throughput-bound at **~245 req/s** (1 core) and degrades by **latency, not failure** — zero errors at every level:
+
+| Concurrency | p95 | throughput | errors | crash |
+|---|---|---|---|---|
+| 20 | 185ms | 231 req/s | 0% | no |
+| **50 (gate model)** | **346ms** | 247 req/s | **0%** | no |
+| 100 | 648ms | 244 req/s | 0% | no |
+
+p95 ≈ doubles per 2× concurrency → the 1500ms ceiling lands near **~200 concurrent**; beyond that it gets slow but does NOT error/crash — which is exactly the **static-fallback cutover** trigger. The box comfortably survives a strong radio spike; the fallback is the insurance for a beyond-capacity surge.
+
+**Gate item #4 = GREEN only when BOTH halves are green.** Half A ✅ (above). Half B (fallback deploy) is pending the operator Cloudflare deploy. Record the final table + date in `docs/runbooks/pre-launch-operator-runbook.md` once B lands.
