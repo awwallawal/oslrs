@@ -144,6 +144,18 @@ describe('AlertService', () => {
       expect(dbState!.level).toBe('critical');
     });
 
+    it('Story 13-8 (AC2): p95=400ms now pages CRITICAL (threshold lowered 500→350 for the launch window)', async () => {
+      const health = createHealthData({ apiLatency: { p95Ms: 400 } });
+      await AlertService.evaluateAlerts(health);
+      expect(AlertService.getAlertStates().get('api_p95_latency')!.level).toBe('critical');
+    });
+
+    it('Story 13-8 (AC2): p95=300ms stays warning (above 250, below the new 350 critical)', async () => {
+      const health = createHealthData({ apiLatency: { p95Ms: 300 } });
+      await AlertService.evaluateAlerts(health);
+      expect(AlertService.getAlertStates().get('api_p95_latency')!.level).toBe('warning');
+    });
+
     it('should resolve after hysteresis period (2 consecutive OK checks)', async () => {
       // First: trigger warning
       const highCpu = createHealthData({
@@ -211,7 +223,7 @@ describe('AlertService', () => {
       expect(latencyState!.level).toBe('warning');
     });
 
-    it('should trigger critical when API p95 latency > 500ms', async () => {
+    it('should trigger critical when API p95 latency is well above the critical threshold (600ms)', async () => {
       const health = createHealthData({
         apiLatency: { p95Ms: 600 },
       });

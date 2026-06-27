@@ -110,3 +110,6 @@ docs/emails-sent-*.csv
 # Cold-start checklist + open commitments + per-session notes live here.
 # If working directory is shared (e.g. another machine), recreate from scratch.
 SESSION_LOG.md
+
+# Story 13-3 — Cloudflare Pages local wrangler state (never commit)
+.wrangler/

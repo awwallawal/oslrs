@@ -31,7 +31,7 @@
  * TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID are present, dispatch is gated
  * to NODE_ENV=production OR explicit ENABLE_TELEGRAM_ALERTS=true. Reason: if a
  * dev's local .env mirrors prod tokens for parity testing, any local metric
- * sample crossing 'critical' threshold (queue >200, cpu/mem >90%, p95 >500ms)
+ * sample crossing 'critical' threshold (queue >200, cpu/mem >90%, p95 >350ms — Story 13-8)
  * would silently page the operator. Default-allow on production matches Express
  * conventions, requires zero deploy-time config change, and is failure-safe in
  * the right direction: a misconfigured prod is still loud; a misconfigured dev

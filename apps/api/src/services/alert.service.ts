@@ -70,7 +70,13 @@ const THRESHOLDS: Record<string, ThresholdConfig> = {
   disk_free: { warningThreshold: 20, criticalThreshold: 10, direction: 'below' },
   queue_waiting: { warningThreshold: 50, criticalThreshold: 200, direction: 'above' },
   expiry: { warningThreshold: 60, criticalThreshold: 30, direction: 'below' }, // Story 9-50 — days-until-expiry
-  api_p95_latency: { warningThreshold: 250, criticalThreshold: 500, direction: 'above' },
+  // Story 13-8 (AC2) — critical lowered 500→350 for the launch window so a GRACEFUL slowdown
+  // (the 1-core box's failure mode — it degrades by latency, not errors) crosses into a Telegram
+  // CRITICAL page, not just the ≤30-min email digest.
+  // ⚠️ Trade-off (review M3): routine backup/email runs can blip the event loop ~700ms → a critical
+  // page. Schedule backups OUTSIDE the jingle window (runbook 13-3-cutover-and-failover.md). This is
+  // a launch-window setting — relax back to 500 post-launch / after the 2-vCPU resize. One-line revert.
+  api_p95_latency: { warningThreshold: 250, criticalThreshold: 350, direction: 'above' },
   db_status: { criticalThreshold: 0, direction: 'above' }, // value 1 = error, threshold 0 -> 1 > 0 triggers
   redis_status: { criticalThreshold: 0, direction: 'above' },
 };

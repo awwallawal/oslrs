@@ -31,8 +31,9 @@ If you're watching and the box is *struggling but not erroring* (slow, climbing 
 
 ## Monitoring during the jingle (so you know to use ③)
 
-- **Telegram is CRITICAL-only** (cpu>90, mem>90, **api_p95>500ms**); warnings go to a ≤30-min **email digest**. So a graceful slowdown may **not page you in real time**.
-- **For the launch window**, either (a) temporarily **lower the `api_p95_latency` critical threshold** (`alert.service.ts` METRIC_THRESHOLDS, e.g. 500→350) so a real slowdown pages Telegram, or (b) rely on ① (automatic) and just watch the **Operations dashboard** (`getSystemHealth` CPU/RAM + `getTraffic`) live.
+- **Telegram is CRITICAL-only** (cpu>90, mem>90, **api_p95>350ms** — lowered from 500 by Story 13-8 so a *graceful slowdown* pages, not just emails); warnings (p95 250–350) go to a ≤30-min **email digest**.
+- **⚠️ False-positive note (Story 13-8):** routine **backup/email** runs can block the event loop ~700ms → a critical p95 page. **Schedule backups OUTSIDE the jingle window**, and correlate any page with the Operations dashboard (real spike vs backup blip). The 350 threshold is a launch-window setting — **relax it back to 500 post-launch** (one-line revert in `alert.service.ts`).
+- Watch the **Operations dashboard** (`getSystemHealth` CPU/RAM + `getTraffic`) live during the jingle as the primary signal.
 - Telegram delivery verified working 2026-06-27 via `scripts/uat-trigger-critical-alert.ts`.
 
 ## ✅ Dry-run rehearsal (do this BEFORE the jingle — this is what makes you "sure")
