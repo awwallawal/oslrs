@@ -1,60 +1,63 @@
 <!DOCTYPE html>
 <!--
-  Story 13-3 (AC2) — Cloudflare-cached STATIC fallback, redesigned email-first (2026-06-27).
+  Story 13-3 (AC2) — Cloudflare-cached STATIC fallback, email-first, OFFICIAL Oyo State branding.
   Served from Cloudflare Pages at the edge → stays up even if the home box (oslsr-home-app) is
   degraded. Captures a CALLBACK (name + EMAIL + LGA, optional phone) — NOT a registration — and the
-  user is later EMAILED a magic link to finish the REAL wizard. Email is the registry's universal,
-  working channel (SMS is KYC-blocked). The form POSTs to the colocated Pages Function /api/callback
-  → Workers KV. The Oyo State coat of arms is shipped in this deploy (oyo-coat-of-arms.svg) so the
-  government authenticity signal also survives origin degradation. See README.md.
+  user is later EMAILED a magic link to finish the REAL wizard. The form POSTs to the colocated
+  Pages Function /api/callback → Workers KV.
+
+  Branding pulled from the live app theme (apps/web/src/index.css): primary = deep red
+  #9C1E23 / #861A1F / #6B1518. The Oyo State logo (oyo-state-logo.svg) is shipped IN this deploy so
+  the government-authenticity signal also survives origin degradation. See README.md.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<meta name="theme-color" content="#0a6b3b" />
+<meta name="theme-color" content="#9C1E23" />
 <title>Oyo State Skills Registry — Official Quick Sign-Up</title>
 <style>
-  :root { --green:#0a6b3b; --green-d:#085530; --gold:#c79a3a; --ink:#13231a; --line:#cdddd2; --bg:#eef4ef; }
+  :root {
+    --p600:#9C1E23; --p700:#861A1F; --p900:#6B1518; --p100:#FDEBED; --p50:#FEF6F6;
+    --warn:#D97706; --warn-bg:#FEF3C7; --ok:#15803D;
+    --ink:#1F2937; --muted:#374151; --soft:#6B7280; --line:#e5e7eb; --bg:#F9FAFB;
+  }
   * { box-sizing: border-box; }
   body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
-  .gov-bar { background: var(--green-d); color: #eafff2; font-size: 11.5px; text-align: center; padding: 5px 10px; letter-spacing: .3px; }
-  .gov-bar b { color: #fff; }
-  header { background: var(--green); color: #fff; padding: 16px; text-align: center; border-bottom: 4px solid var(--gold); }
-  header img { width: 68px; height: 68px; display: block; margin: 0 auto 6px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
-  header .org { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; opacity: .92; }
-  header h1 { font-size: 20px; margin: 2px 0 0; font-weight: 700; }
+  .gov-bar { background: var(--p700); color: #fff; font-size: 11.5px; text-align: center; padding: 5px 10px; letter-spacing: .3px; }
+  header { background: #fff; padding: 16px; text-align: center; border-bottom: 3px solid var(--p600); }
+  header img { width: 210px; max-width: 80%; height: auto; display: block; margin: 0 auto; }
+  header .reg { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--p600); font-weight: 700; margin-top: 8px; }
   .wrap { max-width: 480px; margin: 0 auto; padding: 18px 16px 30px; }
-  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 18px; box-shadow: 0 2px 10px rgba(10,107,59,.06); }
-  .busy { background: #fff7e6; border: 1px solid #f0d79a; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; color: #6b4e12; margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 18px; box-shadow: 0 2px 10px rgba(107,21,24,.06); }
+  .busy { background: var(--warn-bg); border: 1px solid #f0d79a; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; color: #7a5512; margin-bottom: 16px; }
   h2 { font-size: 18px; margin: 2px 0 4px; }
-  p.lead { font-size: 14.5px; line-height: 1.45; color: #2c4a39; margin: 0 0 6px; }
+  p.lead { font-size: 14.5px; line-height: 1.45; color: var(--muted); margin: 0 0 6px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
-  label .opt { font-weight: 400; color: #789; }
-  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #b9cdc1; border-radius: 9px; background: #fff; color: var(--ink); }
-  input:focus, select:focus { outline: 2px solid var(--green); border-color: var(--green); }
-  .hint { font-size: 11.5px; color: #6a8275; margin-top: 3px; }
-  button { width: 100%; margin-top: 22px; padding: 14px; font-size: 17px; font-weight: 700; color: #fff; background: var(--green); border: 0; border-radius: 10px; cursor: pointer; }
-  button:hover { background: var(--green-d); }
-  button:disabled { background: #9bb3a6; }
-  .trust { display: flex; gap: 8px; align-items: flex-start; margin-top: 16px; font-size: 11.5px; color: #2c4a39; line-height: 1.45; }
-  .trust .lock { color: var(--green); font-size: 15px; line-height: 1; }
-  .notice { font-size: 11px; color: #5d7468; margin-top: 12px; line-height: 1.4; }
-  .err { color: #c0341d; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  label .opt { font-weight: 400; color: var(--soft); }
+  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #c9ced6; border-radius: 9px; background: #fff; color: var(--ink); }
+  input:focus, select:focus { outline: 2px solid var(--p600); border-color: var(--p600); }
+  .hint { font-size: 11.5px; color: var(--soft); margin-top: 3px; }
+  button { width: 100%; margin-top: 22px; padding: 14px; font-size: 17px; font-weight: 700; color: #fff; background: var(--p600); border: 0; border-radius: 10px; cursor: pointer; }
+  button:hover { background: var(--p700); }
+  button:disabled { background: #c89a9c; }
+  .trust { display: flex; gap: 8px; align-items: flex-start; margin-top: 16px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+  .trust .lock { color: var(--p600); font-size: 15px; line-height: 1; }
+  .notice { font-size: 11px; color: var(--soft); margin-top: 12px; line-height: 1.4; }
+  .err { color: #b91c1c; font-size: 13px; margin-top: 10px; min-height: 18px; }
   .ok { text-align: center; padding: 24px 8px; }
-  .ok .tick { font-size: 44px; color: var(--green); }
-  .ok b { color: var(--green-d); }
-  footer { text-align: center; font-size: 11px; color: #5d7468; padding: 14px; }
+  .ok .tick { font-size: 44px; color: var(--ok); }
+  .ok b { color: var(--p700); }
+  footer { text-align: center; font-size: 11px; color: var(--soft); padding: 14px; }
   .hide { display: none; }
 </style>
 </head>
 <body>
-  <div class="gov-bar">🔒 <b>Official Oyo State Government service</b> — Skills Registry</div>
+  <div class="gov-bar">🔒 Official Oyo State Government service</div>
   <header>
-    <img src="oyo-coat-of-arms.svg" alt="Oyo State Government coat of arms" width="68" height="68" />
-    <div class="org">Oyo State Government</div>
-    <h1>Skills Registry</h1>
+    <img src="oyo-state-logo.svg" alt="Oyo State Government logo" />
+    <div class="reg">Skills Registry</div>
   </header>
 
   <div class="wrap">
