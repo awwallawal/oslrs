@@ -1,0 +1,17 @@
+# Story 13-3 — Cloudflare Pages config for the static fallback (deploy from inside this folder).
+# Static page + the /api/callback Pages Function; the Function writes captured leads to Workers KV.
+#
+# ONE manual edit needed: create the KV namespace, then paste its id into `id` below.
+#   cd cloudflare-fallback
+#   npx wrangler kv namespace create LEADS_KV     # copy the printed id
+#   # paste it into id = "..." below, then:
+#   npx wrangler pages deploy
+
+name = "oslsr-fallback"
+pages_build_output_dir = "."
+compatibility_date = "2024-09-01"
+
+# The callback Function reads this binding as `env.LEADS_KV`.
+[[kv_namespaces]]
+binding = "LEADS_KV"
+id = "PASTE_KV_NAMESPACE_ID_HERE"
