@@ -1,72 +1,112 @@
 <!DOCTYPE html>
 <!--
-  Story 13-3 (AC2) — Cloudflare-cached STATIC fallback. Deploys to Cloudflare Pages, served from the
-  edge so it stays up even if the home box (oslsr-home-app) is degraded. It captures a CALLBACK
-  (name + phone + LGA) — NOT a registration — and the user is later texted a link to finish the REAL
-  wizard (full attribution + consent intact). No origin dependency: the form POSTs to the colocated
-  Pages Function /api/callback, which writes to Cloudflare KV. See README.md for deploy + cutover.
+  Story 13-3 (AC2) — Cloudflare-cached STATIC fallback, redesigned email-first (2026-06-27).
+  Served from Cloudflare Pages at the edge → stays up even if the home box (oslsr-home-app) is
+  degraded. Captures a CALLBACK (name + EMAIL + LGA, optional phone) — NOT a registration — and the
+  user is later EMAILED a magic link to finish the REAL wizard. Email is the registry's universal,
+  working channel (SMS is KYC-blocked). The form POSTs to the colocated Pages Function /api/callback
+  → Workers KV. The Oyo State coat of arms is shipped in this deploy (oyo-coat-of-arms.svg) so the
+  government authenticity signal also survives origin degradation. See README.md.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>Oyo State Skills Registry — Quick Sign-Up</title>
+<meta name="theme-color" content="#0a6b3b" />
+<title>Oyo State Skills Registry — Official Quick Sign-Up</title>
 <style>
+  :root { --green:#0a6b3b; --green-d:#085530; --gold:#c79a3a; --ink:#13231a; --line:#cdddd2; --bg:#eef4ef; }
   * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: #f4f7f5; color: #142; }
-  .card { max-width: 460px; margin: 0 auto; padding: 22px 18px 30px; }
-  .brand { font-weight: 700; color: #1a5; font-size: 14px; letter-spacing: .3px; }
-  h1 { font-size: 21px; margin: 6px 0 4px; }
-  p.lead { font-size: 15px; line-height: 1.45; color: #355; margin: 0 0 18px; }
+  body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+  .gov-bar { background: var(--green-d); color: #eafff2; font-size: 11.5px; text-align: center; padding: 5px 10px; letter-spacing: .3px; }
+  .gov-bar b { color: #fff; }
+  header { background: var(--green); color: #fff; padding: 16px; text-align: center; border-bottom: 4px solid var(--gold); }
+  header img { width: 68px; height: 68px; display: block; margin: 0 auto 6px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
+  header .org { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; opacity: .92; }
+  header h1 { font-size: 20px; margin: 2px 0 0; font-weight: 700; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 18px 16px 30px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px 18px; box-shadow: 0 2px 10px rgba(10,107,59,.06); }
+  .busy { background: #fff7e6; border: 1px solid #f0d79a; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; color: #6b4e12; margin-bottom: 16px; }
+  h2 { font-size: 18px; margin: 2px 0 4px; }
+  p.lead { font-size: 14.5px; line-height: 1.45; color: #2c4a39; margin: 0 0 6px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
-  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #bcd; border-radius: 9px; background: #fff; }
-  button { width: 100%; margin-top: 20px; padding: 14px; font-size: 17px; font-weight: 700; color: #fff; background: #1a5; border: 0; border-radius: 10px; }
-  button:disabled { background: #9c9; }
-  .notice { font-size: 11.5px; color: #567; margin-top: 14px; line-height: 1.4; }
-  .err { color: #c00; font-size: 13px; margin-top: 10px; min-height: 18px; }
-  .ok { text-align: center; padding: 28px 10px; }
-  .ok .tick { font-size: 46px; color: #1a5; }
+  label .opt { font-weight: 400; color: #789; }
+  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #b9cdc1; border-radius: 9px; background: #fff; color: var(--ink); }
+  input:focus, select:focus { outline: 2px solid var(--green); border-color: var(--green); }
+  .hint { font-size: 11.5px; color: #6a8275; margin-top: 3px; }
+  button { width: 100%; margin-top: 22px; padding: 14px; font-size: 17px; font-weight: 700; color: #fff; background: var(--green); border: 0; border-radius: 10px; cursor: pointer; }
+  button:hover { background: var(--green-d); }
+  button:disabled { background: #9bb3a6; }
+  .trust { display: flex; gap: 8px; align-items: flex-start; margin-top: 16px; font-size: 11.5px; color: #2c4a39; line-height: 1.45; }
+  .trust .lock { color: var(--green); font-size: 15px; line-height: 1; }
+  .notice { font-size: 11px; color: #5d7468; margin-top: 12px; line-height: 1.4; }
+  .err { color: #c0341d; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .ok { text-align: center; padding: 24px 8px; }
+  .ok .tick { font-size: 44px; color: var(--green); }
+  .ok b { color: var(--green-d); }
+  footer { text-align: center; font-size: 11px; color: #5d7468; padding: 14px; }
   .hide { display: none; }
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="brand">OYO STATE SKILLS REGISTRY</div>
+  <div class="gov-bar">🔒 <b>Official Oyo State Government service</b> — Skills Registry</div>
+  <header>
+    <img src="oyo-coat-of-arms.svg" alt="Oyo State Government coat of arms" width="68" height="68" />
+    <div class="org">Oyo State Government</div>
+    <h1>Skills Registry</h1>
+  </header>
 
-  <form id="f">
-    <h1>Quick sign-up</h1>
-    <p class="lead">Our main site is very busy right now. Leave your details and <b>we'll text you a link to finish your registration</b> as soon as it frees up.</p>
+  <div class="wrap">
+    <div class="card">
+      <form id="f" novalidate>
+        <div class="busy">Our registration site is very busy right now. Leave your details below and <b>we'll email you a secure link to finish your registration</b> as soon as it frees up.</div>
 
-    <label for="fullName">Your name</label>
-    <input id="fullName" name="fullName" autocomplete="name" required maxlength="120" />
+        <h2>Quick sign-up</h2>
+        <p class="lead">Takes 20 seconds. No account or password needed.</p>
 
-    <label for="phone">Phone number</label>
-    <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0803 123 4567" required />
+        <label for="fullName">Your full name</label>
+        <input id="fullName" name="fullName" autocomplete="name" required maxlength="120" />
 
-    <label for="lgaCode">Your LGA (where you work/live)</label>
-    <select id="lgaCode" name="lgaCode" required>
-      <option value="" disabled selected>Select your LGA…</option>
-      <option>Afijio</option><option>Akinyele</option><option>Atiba</option><option>Atisbo</option><option>Egbeda</option>
-      <option>Ibadan North</option><option>Ibadan North-East</option><option>Ibadan North-West</option><option>Ibadan South-East</option><option>Ibadan South-West</option>
-      <option>Ibarapa Central</option><option>Ibarapa East</option><option>Ibarapa North</option><option>Ido</option><option>Irepo</option>
-      <option>Iseyin</option><option>Itesiwaju</option><option>Iwajowa</option><option>Kajola</option><option>Lagelu</option>
-      <option>Ogbomosho North</option><option>Ogbomosho South</option><option>Ogo Oluwa</option><option>Olorunsogo</option><option>Oluyole</option>
-      <option>Ona Ara</option><option>Orelope</option><option>Ori Ire</option><option>Oyo East</option><option>Oyo West</option>
-      <option>Saki East</option><option>Saki West</option><option>Surulere</option>
-    </select>
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" inputmode="email" autocomplete="email" required maxlength="254" placeholder="you@example.com" />
+        <div class="hint">We'll email your registration link here.</div>
 
-    <button id="submit" type="submit">Request my link</button>
-    <div class="err" id="err"></div>
-    <p class="notice">By submitting, you agree the Oyo State Government may store your name, phone, and LGA for the Skills Registry and contact you by phone/SMS to complete your registration. You can ask to be removed at any time. (NDPA 6(1)(e) public task + this notice.)</p>
-  </form>
+        <label for="lgaCode">Your LGA <span class="opt">(where you work / live)</span></label>
+        <select id="lgaCode" name="lgaCode" required>
+          <option value="" disabled selected>Select your LGA…</option>
+          <option>Afijio</option><option>Akinyele</option><option>Atiba</option><option>Atisbo</option><option>Egbeda</option>
+          <option>Ibadan North</option><option>Ibadan North-East</option><option>Ibadan North-West</option><option>Ibadan South-East</option><option>Ibadan South-West</option>
+          <option>Ibarapa Central</option><option>Ibarapa East</option><option>Ibarapa North</option><option>Ido</option><option>Irepo</option>
+          <option>Iseyin</option><option>Itesiwaju</option><option>Iwajowa</option><option>Kajola</option><option>Lagelu</option>
+          <option>Ogbomosho North</option><option>Ogbomosho South</option><option>Ogo Oluwa</option><option>Olorunsogo</option><option>Oluyole</option>
+          <option>Ona Ara</option><option>Orelope</option><option>Ori Ire</option><option>Oyo East</option><option>Oyo West</option>
+          <option>Saki East</option><option>Saki West</option><option>Surulere</option>
+        </select>
 
-  <div class="ok hide" id="done">
-    <div class="tick">✓</div>
-    <h1>Thank you!</h1>
-    <p class="lead">We've got your details. We'll text a link to <b id="echoPhone"></b> so you can finish your registration shortly.</p>
+        <label for="phone">Phone number <span class="opt">(optional)</span></label>
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0803 123 4567" />
+        <div class="hint">Helps us reach you if there's a problem with your email.</div>
+
+        <button id="submit" type="submit">Email me my link</button>
+        <div class="err" id="err" role="alert"></div>
+
+        <div class="trust">
+          <span class="lock">🔒</span>
+          <span>We will only ever email your link from an <b>@oyoskills.com</b> address. If a registration link comes from anywhere else, do not click it.</span>
+        </div>
+        <p class="notice">By submitting, you agree the Oyo State Government may store your name, email, and LGA for the Skills Registry and contact you to complete your registration. You can ask to be removed at any time. (Lawful basis: NDPA 6(1)(e) public task + this notice.)</p>
+      </form>
+
+      <div class="ok hide" id="done">
+        <div class="tick">✓</div>
+        <h2>Thank you!</h2>
+        <p class="lead">Check your email — we're sending a secure link to <b id="echoEmail"></b> so you can finish your registration. (It can take a few minutes; check spam too.)</p>
+      </div>
+    </div>
   </div>
-</div>
+
+  <footer>© Oyo State Government · Skills Registry · This is an official government service.</footer>
 
 <script>
   const f = document.getElementById('f');
@@ -76,9 +116,7 @@
     e.preventDefault();
     err.textContent = '';
     btn.disabled = true; btn.textContent = 'Sending…';
-    const payload = {
-      fullName: f.fullName.value, phone: f.phone.value, lgaCode: f.lgaCode.value,
-    };
+    const payload = { fullName: f.fullName.value, email: f.email.value, lgaCode: f.lgaCode.value, phone: f.phone.value };
     try {
       const res = await fetch('/api/callback', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
@@ -87,12 +125,12 @@
         const body = await res.json().catch(() => ({}));
         throw new Error((body.errors && body.errors.join(', ')) || 'Something went wrong. Please try again.');
       }
-      document.getElementById('echoPhone').textContent = f.phone.value;
+      document.getElementById('echoEmail').textContent = f.email.value;
       f.classList.add('hide');
       document.getElementById('done').classList.remove('hide');
     } catch (ex) {
       err.textContent = ex.message;
-      btn.disabled = false; btn.textContent = 'Request my link';
+      btn.disabled = false; btn.textContent = 'Email me my link';
     }
   });
 </script>

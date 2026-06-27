@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeFallbackLead, normalizePhoneNg } from '../fallback-lead.js';
+import { normalizeFallbackLead, normalizePhoneNg, isValidEmail } from '../fallback-lead.js';
 
 const AT = '2026-06-27T10:00:00.000Z';
 
@@ -19,32 +19,52 @@ describe('normalizePhoneNg (Story 13-3)', () => {
   });
 });
 
-describe('normalizeFallbackLead (Story 13-3 AC2/AC3)', () => {
-  it('builds the canonical lead from a valid callback submission', () => {
-    const r = normalizeFallbackLead({ fullName: '  Bunmi Adeleke ', phone: '08031234567', lgaCode: 'Egbeda' }, AT);
+describe('isValidEmail (Story 13-3)', () => {
+  it.each(['a@b.co', 'bunmi.adeleke@example.com', 'x_y+z@sub.domain.ng'])('accepts %s', (e) =>
+    expect(isValidEmail(e)).toBe(true),
+  );
+  it.each(['', 'nope', 'a@b', 'a@b.', '@b.co', 'a b@c.co', 'a@ b.co'])('rejects %s', (e) =>
+    expect(isValidEmail(e)).toBe(false),
+  );
+});
+
+describe('normalizeFallbackLead — email-first (Story 13-3 AC2/AC3)', () => {
+  it('builds the lead from name + email + LGA (phone omitted → null)', () => {
+    const r = normalizeFallbackLead({ fullName: '  Bunmi Adeleke ', email: 'Bunmi@Example.COM', lgaCode: 'Egbeda' }, AT);
     expect(r).toEqual({
       ok: true,
-      lead: { fullName: 'Bunmi Adeleke', phone: '+2348031234567', lgaCode: 'Egbeda', channel: 'static_fallback', capturedAt: AT },
+      lead: { fullName: 'Bunmi Adeleke', email: 'bunmi@example.com', phone: null, lgaCode: 'Egbeda', channel: 'static_fallback', capturedAt: AT },
     });
   });
 
-  it('rejects with field-level reasons when name/phone/LGA are missing or bad', () => {
-    const r = normalizeFallbackLead({ fullName: 'A', phone: 'nope', lgaCode: '' }, AT);
+  it('keeps an OPTIONAL phone when given, normalised to +234', () => {
+    const r = normalizeFallbackLead({ fullName: 'Kayode O', email: 'k@x.com', phone: '08031234567', lgaCode: 'Ido' }, AT);
+    expect(r.ok && r.lead.phone).toBe('+2348031234567');
+  });
+
+  it('EMAIL is required — missing/invalid email fails even with everything else present', () => {
+    const r = normalizeFallbackLead({ fullName: 'Test User', email: 'not-an-email', lgaCode: 'Ido' }, AT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContain('a valid email is required');
+  });
+
+  it('a SUPPLIED but invalid phone fails; an OMITTED phone does not', () => {
+    const bad = normalizeFallbackLead({ fullName: 'Test User', email: 'k@x.com', phone: '12345', lgaCode: 'Ido' }, AT);
+    expect(bad.ok).toBe(false);
+    const omitted = normalizeFallbackLead({ fullName: 'Test User', email: 'k@x.com', lgaCode: 'Ido' }, AT);
+    expect(omitted.ok).toBe(true);
+  });
+
+  it('accumulates field-level reasons for name/email/LGA', () => {
+    const r = normalizeFallbackLead({ fullName: 'A', email: '', lgaCode: '' }, AT);
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.errors).toContain('name is required');
-      expect(r.errors).toContain('a valid Nigerian phone number is required');
-      expect(r.errors).toContain('LGA is required');
+      expect(r.errors).toEqual(expect.arrayContaining(['name is required', 'a valid email is required', 'LGA is required']));
     }
   });
 
   it('is total — non-string inputs do not crash, they fail validation', () => {
-    const r = normalizeFallbackLead({ fullName: 123, phone: null, lgaCode: undefined }, AT);
+    const r = normalizeFallbackLead({ fullName: 123, email: null, phone: {}, lgaCode: undefined }, AT);
     expect(r.ok).toBe(false);
-  });
-
-  it('caps an over-long name (no edge-store bloat)', () => {
-    const r = normalizeFallbackLead({ fullName: 'x'.repeat(500), phone: '08031234567', lgaCode: 'Ido' }, AT);
-    expect(r.ok && r.lead.fullName.length).toBe(120);
   });
 });

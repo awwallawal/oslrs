@@ -20,6 +20,10 @@ interface PagesContext {
   env: Env;
 }
 
+function isValidEmail(raw: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw);
+}
+
 function normalizePhoneNg(raw: string): string | null {
   const digits = raw.replace(/[^\d+]/g, '');
   let local: string | null = null;
@@ -39,34 +43,43 @@ function json(body: unknown, status: number): Response {
 }
 
 export async function onRequestPost(ctx: PagesContext): Promise<Response> {
-  let input: { fullName?: unknown; phone?: unknown; lgaCode?: unknown } = {};
+  let input: { fullName?: unknown; email?: unknown; phone?: unknown; lgaCode?: unknown } = {};
   try {
     input = (await ctx.request.json()) as typeof input;
   } catch {
     return json({ ok: false, errors: ['invalid request'] }, 400);
   }
 
+  // MIRRORS apps/api/src/lib/fallback-lead.ts (email-first; phone optional) — keep in sync; the
+  // api-side parity test guards against drift.
   const errors: string[] = [];
   const fullName = typeof input.fullName === 'string' ? input.fullName.trim().slice(0, 120) : '';
   if (fullName.length < 2) errors.push('name is required');
-  const phone = typeof input.phone === 'string' ? normalizePhoneNg(input.phone.trim()) : null;
-  if (!phone) errors.push('a valid Nigerian phone number is required');
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase().slice(0, 254) : '';
+  if (!email || !isValidEmail(email)) errors.push('a valid email is required');
+  let phone: string | null = null;
+  const phoneRaw = typeof input.phone === 'string' ? input.phone.trim() : '';
+  if (phoneRaw) {
+    phone = normalizePhoneNg(phoneRaw);
+    if (!phone) errors.push('phone number is not a valid Nigerian mobile');
+  }
   const lgaCode = typeof input.lgaCode === 'string' ? input.lgaCode.trim().slice(0, 120) : '';
   if (!lgaCode) errors.push('LGA is required');
   if (errors.length > 0) return json({ ok: false, errors }, 400);
 
   const lead = {
     fullName,
+    email,
     phone,
     lgaCode,
     channel: 'static_fallback' as const,
     capturedAt: new Date().toISOString(),
   };
-  // Key sorts by time + carries the phone (dedup key) for easy KV drain → 13-2 import. 30-day TTL.
-  // The KV write is wrapped: this runs during origin degradation, so a KV hiccup must return a
-  // friendly 503 (the page asks the user to retry), never an unhandled 500.
+  // Key sorts by time + carries the email (the required re-contact key) for easy KV drain → 13-2
+  // import. 30-day TTL. The KV write is wrapped: this runs during origin degradation, so a KV
+  // hiccup must return a friendly 503 (the page asks the user to retry), never an unhandled 500.
   try {
-    await ctx.env.LEADS_KV.put(`lead:${lead.capturedAt}:${lead.phone}`, JSON.stringify(lead), {
+    await ctx.env.LEADS_KV.put(`lead:${lead.capturedAt}:${lead.email}`, JSON.stringify(lead), {
       expirationTtl: 60 * 60 * 24 * 30,
     });
   } catch {
