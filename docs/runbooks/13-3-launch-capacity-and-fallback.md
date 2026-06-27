@@ -52,7 +52,7 @@ Full deploy/cutover/drain/DPIA steps: **`cloudflare-fallback/README.md`**. Summa
 | Half | Evidence | Verdict |
 |------|----------|---------|
 | Load test (A) | **2026-06-27, on-box vs `localhost:3000/api/v1/forms/public-active` (1-core box).** 50×60s: p95 **346ms** · **0.00%** err · **247 req/s** · no crash (restarts 185→185) · mem ~1.0/1.97GB. | ✅ **GREEN** |
-| Fallback (B) | _CF Pages deploy + KV round-trip — OPERATOR (needs Cloudflare login)._ | ⬜ pending |
+| Fallback (B) | **2026-06-27 — deployed to Cloudflare Pages `oslsr-fallback` (prod URL `https://oslsr-fallback.pages.dev`, 200). KV `7e5702d9`. Round-trip CONFIRMED:** submitted leads land as `lead:<iso>:<email>` (verified via `kv key list … --remote`; e.g. `test_awwal@gmail.com`, 30-day TTL). | ✅ **GREEN** |
 
 **Load-test headroom curve (2026-06-27):** the box is throughput-bound at **~245 req/s** (1 core) and degrades by **latency, not failure** — zero errors at every level:
 
@@ -64,4 +64,7 @@ Full deploy/cutover/drain/DPIA steps: **`cloudflare-fallback/README.md`**. Summa
 
 p95 ≈ doubles per 2× concurrency → the 1500ms ceiling lands near **~200 concurrent**; beyond that it gets slow but does NOT error/crash — which is exactly the **static-fallback cutover** trigger. The box comfortably survives a strong radio spike; the fallback is the insurance for a beyond-capacity surge.
 
-**Gate item #4 = GREEN only when BOTH halves are green.** Half A ✅ (above). Half B (fallback deploy) is pending the operator Cloudflare deploy. Record the final table + date in `docs/runbooks/pre-launch-operator-runbook.md` once B lands.
+**Gate item #4 = ✅ GREEN (2026-06-27)** — Half A (capacity) + Half B (fallback) both green. Capacity is proven and a captured lead beats a timeout. Record in `docs/runbooks/pre-launch-operator-runbook.md`.
+
+> ⚠️ **Draining gotcha:** wrangler 4.x `kv key` commands default to a LOCAL store — always pass **`--remote`** to see/drain the real captured leads: `npx wrangler kv key list --namespace-id 7e5702d9a06b43499ab75f0b7da39bf5 --remote`.
+> **Go-live cutover** (separate, launch-day): point `oyoskills.com`/a `signup.` subdomain at the Pages project (DNS or LB origin-health rule). Until then the fallback lives at `oslsr-fallback.pages.dev`. Test leads in KV (`diagtwo@`, `prodcheck@`, `test_awwal@`) can be deleted or left to expire (30-day TTL).

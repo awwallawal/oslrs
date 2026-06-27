@@ -14,4 +14,5 @@ compatibility_date = "2024-09-01"
 # The callback Function reads this binding as `env.LEADS_KV`.
 [[kv_namespaces]]
 binding = "LEADS_KV"
-id = "PASTE_KV_NAMESPACE_ID_HERE"
+id = "7e5702d9a06b43499ab75f0b7da39bf5"
+preview_id = "7e5702d9a06b43499ab75f0b7da39bf5"

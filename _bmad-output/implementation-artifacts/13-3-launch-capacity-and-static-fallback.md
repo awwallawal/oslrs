@@ -1,6 +1,6 @@
 # Story 13.3: Launch Capacity & Static Fallback — Load-Test the Home Box for a Radio Spike + a Cloudflare-Cached Lead-Capture Fallback
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 🚦 PRE-SPEND gate item #4. REUSE the existing monitoring (DONE) — do NOT rebuild it. NET-NEW = (a) a prod load test + (b) a Cloudflare-cached static fallback that captures a lead if the box degrades. Sibling of Story 9-20. -->
@@ -58,9 +58,9 @@ The observability stack already exists and is NOT in scope to rebuild [Source: _
   - [x] Engage-the-fallback trigger defined (manual / health-gated cutover, no auto-failover) → README + runbook Part B (AC2.4).
   - [x] Minimal consent/notice line on the page + DPIA (Appendix H) note for the edge-store PII capture (AC2.5).
 
-- [~] **Task 3 — Verify the fallback round-trip + record the gate verdict (AC3)** _([Operator] — needs the deployed page + load-test numbers)_
-  - [ ] **[Operator]** Submit a test lead through the deployed page; confirm it lands in KV and is importable (AC3.2) — runbook Part B step 4. (Lead validation/shape built + tested: `fallback-lead.ts`.)
-  - [ ] **[Operator]** Record the go/no-go capacity verdict (load-test green + fallback deployed+verified) as pre-flight gate item #4 (AC3.1) — runbook Part C table.
+- [x] **Task 3 — Verify the fallback round-trip + record the gate verdict (AC3)** ✅ 2026-06-27
+  - [x] Submitted leads through the deployed page → confirmed in KV `7e5702d9` as `lead:<iso>:<email>` (e.g. `test_awwal@gmail.com`, via `kv key list --remote`) (AC3.2). Prod URL `https://oslsr-fallback.pages.dev`.
+  - [x] Gate verdict recorded — pre-flight item #4 GREEN (Half A load test + Half B fallback both green) → runbook Part C (AC3.1).
 
 - [x] **Task 4 — Runbook (the capacity + fallback procedure)**
   - [x] Documented the load-test profile/thresholds/run, the fallback deploy + cutover + drain, the DPIA, and the gate-verdict table → `docs/runbooks/13-3-launch-capacity-and-fallback.md`, cross-linked from the pre-launch operator runbook.
