@@ -1,7 +1,7 @@
 # Condensed Association Data Sheet — Specification
 
 **Owner:** John (PM) · UX: Sally · Import-fit: Winston/Amelia · Copy: Paige · Analytics: Mary
-**Created:** 2026-06-25 · **Status:** v1 — FROZEN for the Monday 2026-06-29 umbrella-body meeting
+**Created:** 2026-06-25 · **Status:** v1 — FROZEN for the Monday 2026-06-29 umbrella-body meeting · **Print artifact:** `association-data-sheet-PRINT.html` generated 2026-06-27 (English-complete; 3 operator inputs marked `[AWWAL]` inline)
 **Purpose:** A one-row-per-member sheet that association heads can fill on behalf of their members — fast enough to fill without an enumerator, rich enough to power per-LGA × trade clustering (the "tailors-in-an-LGA → site a textile centre" policy bite), and shaped so it **round-trips into the registry via the Epic 11 import path** with zero re-keying.
 
 > **Why these columns and not 38:** the cascade (umbrella head → association head → members) makes the **association head the enumerator-equivalent** — the accountability that was missing for self-serve groups. So we don't gut the form to a contact list; we keep the *analytically load-bearing* fields (trade × LGA × experience) and drop the conditional/administrative ones (guardian block, business sub-questions, dual consents collapsed to one). Result: **12 member columns.**
@@ -60,11 +60,15 @@ Heads are collecting **third-party** personal data, so consent provenance must b
 - **Why bilingual here** (and what it is *not*): Yoruba on the sheet is for **comprehension and trust**, not access — a Yoruba reader almost certainly reads English too (Yoruba is more spoken than written). Reading the consent/questions in the local dialect confers **more meaning** and signals respect, which lifts answer quality and willingness. The genuinely **low-literacy / non-reading** members are served by the head reading the declaration **aloud** — which is exactly why the cascade (not a self-serve form in any language) is the right channel for that segment.
 - **⚠️ Proxy collection is a new DPIA pattern, not just an import format** (peer review 2026-06-25): an untrained head collecting members' NIN/phone on paper creates a **processor/controller relationship**, **paper-retention + security** duties, and **proxy-consent** provenance. **Appendix H (DPIA) needs a real update** for this pattern — the per-member consent column is necessary but not sufficient. And because the "policy-bite" pitch incentivises **roll-padding with ghost members** (which declared-vs-received reconciliation can't catch — the head controls both numbers), imported rows stay **`imported_unverified`** until a **member-side check** (confirmation SMS once Termii clears, or a sampled call-back audit). See Story 13-2 AC5.4/AC5.5.
 
-## 5. Open inputs needed from Awwal before print
+## 5. Open inputs needed from Awwal before print — THE ONLY REMAINING GATE
 
-1. **Confirm/extend the Appendix B trade list** to reflect the actual guilds in the umbrella body.
-2. **Yoruba translation** of the §4 declaration + the column headers.
-3. **Who prints** and how many copies (one sheet per association × expected associations).
+The print-ready form now exists (`association-data-sheet-PRINT.html` — page 1: the landscape data sheet with header block + 12 columns + worked example + the controlled Trade/LGA reference boxes; page 2: the read-aloud consent declaration + the fill/return one-pager from §6). It is **English-complete**; each item below is a marked `[AWWAL]` placeholder in the HTML. These three are the **only** things between the current artifact and the printer:
+
+1. **Confirm/extend the Appendix B trade list** to reflect the actual guilds in the umbrella body → update the "Trade" reference box on page 1. _(I cannot author this — needs your knowledge of which guilds attend.)_
+2. **Yoruba translation** of the §4 declaration (+ optional Yoruba sub-labels under the headers) → the `[YORUBA]` block on page 2. _(Owner: Awwal/Paige — needs a native speaker; I left the English authoritative + the slot ready.)_
+3. **Print logistics** — copies (one sheet per association × expected associations), **named return contact + phone/WhatsApp**, and the **return deadline** → the `[AWWAL]` slots in the page-2 "How & when to return it" block. The named contact + deadline are load-bearing (§6: the sheet dies without them).
+
+**Everything else is frozen and print-ready as-is.** Nothing here is a code/build task; none of it gates Monday's *meeting* (the sheet can be handed out the moment these three are filled).
 
 ## 6. The Monday human process (the sheet dies without it) — peer review 2026-06-25
 
