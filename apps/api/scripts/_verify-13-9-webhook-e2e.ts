@@ -17,7 +17,7 @@ import { Webhook } from 'svix';
 import { sql, like } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { emailEvents, emailSuppressions } from '../src/db/schema/index.js';
-import { getCampaignFunnel } from '../src/services/report.service.js';
+import { ReportService } from '../src/services/report.service.js';
 import { getSuppressedEmails } from '../src/services/email-events.service.js';
 
 const argv = process.argv.slice(2);
@@ -102,7 +102,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 500));
 
   // ---- assertions on the real data ----
-  const funnel = await getCampaignFunnel(CAMPAIGN);
+  const funnel = await ReportService.getCampaignFunnel(CAMPAIGN);
   check('funnel.sent = 1', funnel.sent === 1, `got ${funnel.sent}`);
   check('funnel.delivered = 1 (idempotent — retry did NOT double it)', funnel.delivered === 1, `got ${funnel.delivered}`);
   check('funnel.clicked = 1', funnel.clicked === 1, `got ${funnel.clicked}`);
