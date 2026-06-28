@@ -39,10 +39,10 @@ The north-star is **completed registrations per channel** (PM brief). Two pieces
 
 ## Tasks / Subtasks
 - [x] **Task 1 — Campaign tagging (AC1)** ✅ — the **reengagement blast** (the 235 stalled drafts → main wizard) tags the resume link (`utm_source`/`utm_medium`/`utm_campaign=reengagement-2026-07` via URLSearchParams) + `MagicLinkLandingPage` forwards utm/`?ref` through the `/auth/magic` hop to `/register` (the missing half — the hop was dropping them); 13-1's `parseUtm` captures → `raw_data.campaign_source`. The **supplemental blast** is left untagged — it attributes **by construction** (`campaign:'cohort_a_supplemental_survey'`, registration.controller.ts:1021; its page has no parseUtm), so a utm tag would be inert (code-review M1). Tests: landing-page utm-forward (web 16/16) + blast tests green (66/66).
-- [ ] **Task 2 — Suppression list (AC2)** — schema + honor-before-send in the blast scripts + feed from bounce/complaint; tests.
-- [ ] **Task 3 — Resend webhook + email_events (AC3/AC4)** — `email_events` schema; signature-verified endpoint (Svix); store delivered/bounced/complained/clicked (NOT opened); wire bounce/complaint → suppression; tests (valid sig, bad sig rejected, event→row).
-- [ ] **Task 4 — Conversion read (AC5)** — `report.service` method joining sent/delivered/clicked/converted by campaignId; test.
-- [ ] **Task 5 — Operator note** — Resend dashboard: enable the webhook (URL + signing secret), confirm open-tracking OFF.
+- [x] **Task 2 — Suppression list (AC2)** ✅ — `email_suppressions` schema + `getSuppressedEmails`; both blast scripts filter suppressed addresses out of the cohort BEFORE sending (logged skip count); fed from bounce/complaint via the webhook. Tests: service DB tests + blast tests green.
+- [x] **Task 3 — Resend webhook + email_events (AC3/AC4)** ✅ — `email_events` schema (no `opened`); `POST /api/v1/webhooks/resend` Svix-signature-verified (real round-trip test), **raw body via express.raw mounted before the global express.json** (app.ts); maps delivered/clicked/bounced/complained/sent → rows, bounce/complaint → suppression; ignores opened (200, not stored). Tests: parse pure (14) + route (4: valid→200+stored, bad-sig→401+nothing, bounce→suppressed, opened→ignored). svix@1.84.1 added to apps/api.
+- [~] **Task 4 — Conversion read (AC5) + send-tag — FINAL PIECE (next pass)** — needs the SEND to tag emails with a Resend `campaign_id` tag (thread through `sendGenericEmail → dispatch → provider.send` — the SHARED email path, deliberately not rushed) so `email_events.campaignId` populates; then the `report.service` funnel read (sent/delivered/clicked from email_events + converted from `raw_data.campaign_source`). Converted-per-campaign already works via AC1; this adds the email-engagement legs + the read.
+- [x] **Task 5 — Operator note** ✅ — documented: Resend dashboard → add webhook `https://oyoskills.com/api/v1/webhooks/resend` + copy the signing secret to `RESEND_WEBHOOK_SECRET` on the box; confirm **Open Tracking OFF** (AC4).
 
 ## Dev Notes
 - **REUSE, don't rebuild:** 13-1 attribution spine (no new attribution), 9-63 meter (sent count + hygiene hook), the existing email/Resend send path. Net-new = the webhook endpoint + `email_events` + suppression.
@@ -64,11 +64,14 @@ Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-27.
 
 ### Completion Notes List
 - **AC1 (DONE) — the critical one-way door.** Verified the precise gap: the blast magic-link goes to `/auth/magic?...` (`buildMagicLinkUrl`, magic-link.service.ts:318) which navigates `wizard_resume → /register?token=…` (MagicLinkLandingPage.tsx:295) **dropping utm**. Fix (surgical, reuses 13-1): both blast scripts tag the link (`_reengagement-email-blast.ts` CAMPAIGN_ID=`reengagement-2026-07`; `_cohort-a-supplemental-survey-blast.ts`=`cohort_a_supplemental_survey`), and `MagicLinkLandingPage.handleContinue` forwards the utm allow-list to the destination. 13-1's WizardPage `parseUtm` captures → `extras.utm` → `raw_data.campaign_source` at submit. Tests: new landing-page forward test (web 16/16), blast tests unchanged (66/66), api+web tsc 0, eslint clean.
-- **AC2 / AC3 / AC5 (NEXT PASS — grounded, not yet built).** Honest scope note: the remainder is a substantial, self-contained chunk best done as a focused continuation rather than rushed — **2 new schemas** (`email_events` + suppression), a **Svix-signature-verified webhook** needing a **raw-body** parser mounted *before* the global `express.json` (app.ts:233 — a real gotcha), bounce→suppression wiring, and a `report.service` conversion read. All grounded (cited above). AC1 is the only **pre-Jul-1 one-way door** and it's shipped; AC2/AC3 enable the suppression+funnel and can follow before launch without re-doing AC1.
-- **AC4 (opens OUT)** — honored by construction in AC1 (no pixel; first-party utm); the webhook (AC3) will explicitly not store `opened`.
+- **AC2 + AC3 (DONE — 2026-06-27 continuation).** `email_events` + `email_suppressions` schemas (migrated on scratch). The webhook `POST /api/v1/webhooks/resend`: Svix verification (svix@1.84.1) over the **raw body** — mounted `express.raw` for `/api/v1/webhooks` BEFORE the global `express.json` in app.ts (the real gotcha, handled + proven by a real-signature route test). Maps delivered/clicked/bounced/complained/sent → `email_events`; bounce/complaint upsert `email_suppressions`; **ignores `opened`** (200, not stored — AC4). Both blast scripts filter suppressed addresses out of the cohort before sending. Tests: parse-pure 6 + DB record/suppress 5 + route 4 (incl. bad-sig→401, opened→ignored). api tsc 0, eslint clean.
+- **AC4 (opens OUT) — DONE.** No pixel (AC1 first-party utm) + the webhook explicitly drops `email.opened`.
+- **AC5 + send-tag (FINAL PIECE — deferred, grounded).** `email_events.campaignId` only populates once the SEND tags emails with a Resend `campaign_id` tag — that threads through `sendGenericEmail → dispatch → provider.send` (the **shared** email path; not rushed at this session length). Then a `report.service` funnel read. Converted-per-campaign already works via AC1's campaign_source.
 
 ### File List
-**Modified:** `apps/web/src/features/auth/pages/MagicLinkLandingPage.tsx` (utm forward) · `apps/web/src/features/auth/pages/__tests__/MagicLinkLandingPage.test.tsx` (forward test) · `apps/api/scripts/_reengagement-email-blast.ts` (tag + CAMPAIGN_ID) · `apps/api/scripts/_cohort-a-supplemental-survey-blast.ts` (tag)
+**AC1:** `apps/web/.../MagicLinkLandingPage.tsx` + its test (utm forward) · `apps/api/scripts/_reengagement-email-blast.ts` (tag + CAMPAIGN_ID)
+**AC2/AC3 (continuation) — New:** `apps/api/src/db/schema/email-events.ts` · `apps/api/src/db/schema/email-suppressions.ts` · `apps/api/src/services/email-events.service.ts` · `apps/api/src/services/__tests__/email-events.service.test.ts` · `apps/api/src/controllers/webhook.controller.ts` · `apps/api/src/routes/webhook.routes.ts` · `apps/api/src/routes/__tests__/webhook.routes.test.ts`
+**AC2/AC3 — Modified:** `apps/api/src/app.ts` (raw-body webhook mount) · `apps/api/src/db/schema/index.ts` (exports) · `apps/api/scripts/_reengagement-email-blast.ts` + `_cohort-a-supplemental-survey-blast.ts` (suppression filter) · `apps/api/package.json` (+svix) · `pnpm-lock.yaml`
 
 ### Review Follow-ups (AI) — code-review 2026-06-27 (AC1 increment)
 - [x] [AI-Review][Med] **M1 — supplemental blast utm tag was INERT** (that path attributes by-construction; `SupplementalSurveyPage` has no parseUtm). FIXED: reverted the supplemental tag; only the reengagement blast (→ main wizard) carries utm. Story claim corrected.
@@ -85,6 +88,23 @@ Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-27.
 - **Findings:** 0 Critical · 0 High · **1 Medium (fixed)** · 2 Low (1 fixed, 1 deferred-into-AC3).
 - **Verification:** api+web tsc 0; eslint clean; blast 66/66; landing-page 16/16; full web regression green (2719).
 - **Decision:** AC1 approved → commit. Story stays **in-progress** (AC2/AC3/AC5 = next focused pass, grounded).
+
+### Review Follow-ups (AI) — code-review 2026-06-27/28 (AC2+AC3 increment)
+- [x] [AI-Review][Med] **M1 — webhook not idempotent** → FIXED: `email_events.webhook_id` (svix-id) UNIQUE + `onConflictDoNothing`; a retried delivery is dropped (distinct real events keep distinct svix-ids). Idempotency test added.
+- [x] [AI-Review][Med] **M2 — `getSuppressedEmails` loaded the whole table** → FIXED: `WHERE email IN (cohort)` (`inArray`), queries only the cohort's addresses.
+- [x] [AI-Review][Low] **L1 — test leaked `RESEND_WEBHOOK_SECRET`** → FIXED: `afterAll` saves/restores it.
+- [Note] The `db:push:force` constraint-drop was a scratch-DB slip (used the wrong push locally); CI uses `db:push:full:force` (ci-cd.yml:309) so it's CI-safe. Lesson: adding a schema → use the FULL push to preserve raw-SQL constraints.
+
+## Senior Developer Review (AI) — AC2+AC3 increment
+
+**Reviewer:** Amelia (BMAD code-review — adversarial) · **Date:** 2026-06-28 · **Outcome:** ✅ APPROVE; AC5+send-tag deferral honest; 13-9 stays `in-progress`
+
+- **The deliverability one-way door is built right:** the Svix webhook verifies over the **raw body** (express.raw scoped to `/api/v1/webhooks` BEFORE the global express.json — proven by a real-signature round-trip test, not mocked), 401s a bad signature, 200s ignored/opened so Resend won't retry. Bounce/complaint → suppression; the blasts skip suppressed addresses.
+- **Found + fixed the webhook 101 gap (M1):** at-least-once delivery means retries — without svix-id dedup the funnel counts would silently inflate. Now idempotent. Plus M2 (scoped query) + L1 (test hygiene).
+- **AC4 honored:** `opened` is neither mapped nor stored (tested).
+- **Findings:** 0 Critical · 0 High · **2 Medium (fixed)** · 1 Low (fixed).
+- **Verification:** api tsc 0; eslint clean; service+webhook 19; full api regression green (2882; the earlier 1-file blip was the repo's known full-load contention flake — clean on re-run + all targeted tests pass).
+- **Decision:** AC2+AC3 approved → commit. AC5 (the funnel read) + the send-tag (campaign-aware events through the shared email path) remain — the final grounded piece.
 
 ## Change Log
 | Date | Change | By |

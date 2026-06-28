@@ -30,6 +30,7 @@ import { db } from '../src/db/index.js';
 import { sql } from 'drizzle-orm';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { EmailService } from '../src/services/email.service.js';
+import { getSuppressedEmails } from '../src/services/email-events.service.js'; // Story 13-9 (AC2)
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 import pino from 'pino';
 
@@ -277,10 +278,18 @@ async function main() {
     process.exit(1);
   }
 
-  const cohort = await selectCohort(args);
+  const rawCohort = await selectCohort(args);
+  // Story 13-9 (AC2) — skip suppressed (bounced/complained) addresses before sending.
+  const suppressedSet = await getSuppressedEmails(rawCohort.map((r) => r.email));
+  const cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
+  const suppressedSkipped = rawCohort.length - cohort.length;
+  if (suppressedSkipped > 0) {
+    logger.info({ event: 'cohort_a_supplemental.suppressed_skipped', skipped: suppressedSkipped });
+  }
   logger.info({
     event: 'cohort_a_supplemental.cohort_selected',
     count: cohort.length,
+    suppressedSkipped,
     dryRun: args.dryRun,
     since: args.since?.toISOString() ?? null,
     lgaId: args.lgaId,

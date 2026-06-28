@@ -9,6 +9,7 @@ import path from 'path';
 import routes from './routes/index.js';
 import cspRoutes from './routes/csp.routes.js';
 import publicInsightsRoutes from './routes/public-insights.routes.js';
+import webhookRoutes from './routes/webhook.routes.js'; // Story 13-9 (AC3)
 import { AppError } from '@oslsr/utils';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { realIpMiddleware } from './middleware/real-ip.js';
@@ -230,6 +231,10 @@ app.use(cors({
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());
+// Story 13-9 (AC3) — the Resend webhook needs the RAW body for Svix signature verification, so it
+// is mounted with express.raw BEFORE the global express.json (which would otherwise consume the
+// body, breaking the signature check). Scoped to /api/v1/webhooks only — all other routes use json.
+app.use('/api/v1/webhooks', express.raw({ type: '*/*', limit: '1mb' }), webhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(metricsMiddleware);
