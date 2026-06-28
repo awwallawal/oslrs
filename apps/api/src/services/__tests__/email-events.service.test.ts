@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { like } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { emailEvents, emailSuppressions } from '../../db/schema/index.js';
 import { parseResendEvent, recordEmailEvent, getSuppressedEmails } from '../email-events.service.js';
 
 const NOW = new Date('2026-06-27T12:00:00.000Z');
+
+// PARALLEL-SAFE ISOLATION: this file owns the `@ee.test` recipient keyspace. Cleanup and
+// reads are scoped to it (LIKE '%@ee.test') so it never clobbers — nor is clobbered by — the
+// other email_events DB tests running concurrently (CI is uncapped; see vitest.base.ts).
+const DOMAIN = '@ee.test';
+const SCOPE = `%${DOMAIN}`;
 
 function event(type: string, over: Record<string, unknown> = {}) {
   return {
@@ -12,7 +18,7 @@ function event(type: string, over: Record<string, unknown> = {}) {
     created_at: '2026-06-27T11:59:00.000Z',
     data: {
       email_id: 'msg-1',
-      to: ['Recipient@Example.com'],
+      to: [`Recipient${DOMAIN}`],
       tags: [{ name: 'campaign_id', value: 'reengagement-2026-07' }],
       ...over,
     },
@@ -28,7 +34,7 @@ describe('parseResendEvent (Story 13-9 AC3/AC4) — PURE', () => {
     ['email.sent', 'sent'],
   ])('maps %s → %s, lowercases recipient, lifts campaign_id from tags', (type, expected) => {
     const r = parseResendEvent(event(type), NOW);
-    expect(r).toMatchObject({ eventType: expected, messageId: 'msg-1', recipient: 'recipient@example.com', campaignId: 'reengagement-2026-07' });
+    expect(r).toMatchObject({ eventType: expected, messageId: 'msg-1', recipient: `recipient${DOMAIN}`, campaignId: 'reengagement-2026-07' });
   });
 
   it('IGNORES email.opened (AC4 — privacy) → null', () => {
@@ -57,40 +63,38 @@ describe('parseResendEvent (Story 13-9 AC3/AC4) — PURE', () => {
 });
 
 describe('recordEmailEvent + getSuppressedEmails (Story 13-9 AC3/AC2) — DB', () => {
-  beforeEach(async () => {
-    await db.execute(sql`DELETE FROM ${emailEvents}`);
-    await db.execute(sql`DELETE FROM ${emailSuppressions}`);
-  });
-  afterAll(async () => {
-    await db.execute(sql`DELETE FROM ${emailEvents}`);
-    await db.execute(sql`DELETE FROM ${emailSuppressions}`);
-  });
+  async function cleanup() {
+    await db.delete(emailEvents).where(like(emailEvents.recipient, SCOPE));
+    await db.delete(emailSuppressions).where(like(emailSuppressions.email, SCOPE));
+  }
+  beforeEach(cleanup);
+  afterAll(cleanup);
 
   it('stores a delivered event; does NOT suppress', async () => {
     await recordEmailEvent(parseResendEvent(event('email.delivered'), NOW)!);
-    const ev = await db.select().from(emailEvents);
+    const ev = await db.select().from(emailEvents).where(like(emailEvents.recipient, SCOPE));
     expect(ev).toHaveLength(1);
-    expect(ev[0]).toMatchObject({ eventType: 'delivered', recipient: 'recipient@example.com', campaignId: 'reengagement-2026-07' });
-    expect(await db.select().from(emailSuppressions)).toHaveLength(0);
+    expect(ev[0]).toMatchObject({ eventType: 'delivered', recipient: `recipient${DOMAIN}`, campaignId: 'reengagement-2026-07' });
+    expect(await db.select().from(emailSuppressions).where(like(emailSuppressions.email, SCOPE))).toHaveLength(0);
   });
 
   it('a BOUNCE stores the event AND suppresses the address (AC2)', async () => {
-    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: ['Bad@Example.com'] }), NOW)!);
-    const sup = await db.select().from(emailSuppressions);
+    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: [`Bad${DOMAIN}`] }), NOW)!);
+    const sup = await db.select().from(emailSuppressions).where(like(emailSuppressions.email, SCOPE));
     expect(sup).toHaveLength(1);
-    expect(sup[0]).toMatchObject({ email: 'bad@example.com', reason: 'bounced' });
+    expect(sup[0]).toMatchObject({ email: `bad${DOMAIN}`, reason: 'bounced' });
   });
 
   it('a complaint suppresses; a repeat bounce for the same email does not duplicate (onConflictDoNothing)', async () => {
-    await recordEmailEvent(parseResendEvent(event('email.complained', { to: ['c@x.com'] }), NOW)!);
-    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: ['c@x.com'], email_id: 'msg-2' }), NOW)!);
-    expect(await db.select().from(emailSuppressions)).toHaveLength(1); // unique email, no dup
+    await recordEmailEvent(parseResendEvent(event('email.complained', { to: [`c${DOMAIN}`] }), NOW)!);
+    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: [`c${DOMAIN}`], email_id: 'msg-2' }), NOW)!);
+    expect(await db.select().from(emailSuppressions).where(like(emailSuppressions.email, SCOPE))).toHaveLength(1); // unique email, no dup
   });
 
   it('getSuppressedEmails returns only the suppressed subset (case-insensitive)', async () => {
-    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: ['gone@x.com'] }), NOW)!);
-    const got = await getSuppressedEmails(['Gone@X.com', 'fine@x.com']);
-    expect(got.has('gone@x.com')).toBe(true);
-    expect(got.has('fine@x.com')).toBe(false);
+    await recordEmailEvent(parseResendEvent(event('email.bounced', { to: [`gone${DOMAIN}`] }), NOW)!);
+    const got = await getSuppressedEmails([`Gone${DOMAIN.toUpperCase()}`, `fine${DOMAIN}`]);
+    expect(got.has(`gone${DOMAIN}`)).toBe(true);
+    expect(got.has(`fine${DOMAIN}`)).toBe(false);
   });
 });

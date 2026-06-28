@@ -39,6 +39,14 @@ const logger = pino({ name: 'cohort-a-supplemental-survey-blast' });
 const BRAND = '#9C1E23';
 const SUPPORT_EMAIL = 'support@oyoskills.com';
 
+// Story 13-9 (AC5) — the campaign tag for this blast's sends. Matches the
+// BY-CONSTRUCTION attribution tag the supplemental submit writes
+// (registration.controller.ts: raw_data.campaign = 'cohort_a_supplemental_survey'),
+// so the funnel's email legs (sent/delivered/clicked from email_events) and the
+// converted leg key off the SAME id. No utm round-trip here (that page has no
+// 13-1 parseUtm) — the send tag is what links the email events to this campaign.
+const CAMPAIGN_ID = 'cohort_a_supplemental_survey';
+
 // Cohort A is FROZEN at ~63 — well below Resend Free 100/day. The Pro-tier
 // confirm flag is still wired in case the cohort grows or operator bundles runs.
 const RESEND_FREE_TIER_DAILY_LIMIT = 100;
@@ -357,7 +365,7 @@ async function main() {
         subject: emailContent.subject,
         html: emailContent.html,
         text: emailContent.text,
-      }, 'supplemental-survey'); // Story 9-63 AC1 — explicit category for the meter.
+      }, 'supplemental-survey', CAMPAIGN_ID); // Story 9-63 AC1 category for the meter; Story 13-9 AC5 campaign tag for the funnel.
 
       if (result.success) {
         sent++;

@@ -14,6 +14,11 @@ const logger = pino({ name: 'resend-provider' });
  */
 export class ResendEmailProvider implements EmailProvider {
   readonly name = 'resend';
+  // Story 13-9 (AC5/L1) — Resend tag values are restricted to ASCII
+  // letters/digits/underscore/hyphen. A non-compliant value makes Resend reject
+  // the ENTIRE send (HTTP 422), which would silently break a whole blast — so we
+  // validate here rather than trust callers.
+  private static readonly TAG_VALUE_RE = /^[A-Za-z0-9_-]+$/;
   private readonly client: Resend;
   private readonly fromAddress: string;
   private readonly fromName: string;
@@ -41,6 +46,26 @@ export class ResendEmailProvider implements EmailProvider {
   async send(email: EmailContent): Promise<EmailResult> {
     const from = `${this.fromName} <${this.fromAddress}>`;
 
+    // Story 13-9 (AC5) — tag the send with the campaign id so Resend echoes it
+    // back on every inbound webhook event (delivered/clicked/bounced/...), letting
+    // `parseResendEvent` lift it onto `email_events.campaign_id` for the per-campaign
+    // funnel. Omitted entirely when untagged. (AC5/L1) A campaignId that violates
+    // Resend's tag-value charset is dropped + warned rather than sent — a mis-set
+    // campaign id must NOT take down the blast; the email still goes out, untagged.
+    let tags: { tags: { name: string; value: string }[] } | undefined;
+    if (email.campaignId) {
+      if (ResendEmailProvider.TAG_VALUE_RE.test(email.campaignId)) {
+        tags = { tags: [{ name: 'campaign_id', value: email.campaignId }] };
+      } else {
+        logger.warn({
+          event: 'email.resend.campaign_tag_skipped',
+          to: email.to,
+          campaignId: email.campaignId,
+          reason: 'campaignId is not a valid Resend tag value ([A-Za-z0-9_-]) — sending untagged',
+        });
+      }
+    }
+
     try {
       const response = await this.client.emails.send({
         from,
@@ -48,6 +73,7 @@ export class ResendEmailProvider implements EmailProvider {
         subject: email.subject,
         html: email.html,
         text: email.text,
+        ...(tags ?? {}),
       });
 
       if (response.error) {

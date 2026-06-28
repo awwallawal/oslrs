@@ -98,8 +98,14 @@ export class EmailService {
   private static async dispatch(
     data: { to: string; subject: string; html: string; text: string },
     category?: NotificationCategory,
+    /**
+     * Story 13-9 (AC5) — optional campaign id forwarded to the provider as a
+     * Resend tag (`campaign_id`), so inbound webhook events attribute to the
+     * campaign in `email_events`. Pure pass-through; never affects send behaviour.
+     */
+    campaignId?: string,
   ): Promise<EmailResult> {
-    const result = await this.getProvider().send(data);
+    const result = await this.getProvider().send({ ...data, campaignId });
     if (result.success) {
       // Count only real sends; bounce/complaint reconciliation is a later task.
       await NotificationMeter.recordEmailSend({
@@ -670,6 +676,12 @@ Government of Oyo State
      * notification-digest subjects all classify correctly without this.
      */
     category?: NotificationCategory,
+    /**
+     * Story 13-9 (AC5) — optional campaign id. Blast scripts pass their run's
+     * campaign id (e.g. `reengagement-2026-07`) so the Resend send is tagged and
+     * the resulting webhook events populate `email_events.campaign_id` per campaign.
+     */
+    campaignId?: string,
   ): Promise<EmailResult> {
     if (!this.isEnabled()) {
       logger.warn({
@@ -680,7 +692,7 @@ Government of Oyo State
       return { success: false, error: 'Email service is disabled' };
     }
 
-    return this.dispatch(data, category);
+    return this.dispatch(data, category, campaignId);
   }
 
 }

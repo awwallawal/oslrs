@@ -11,10 +11,29 @@
 import { db } from '../db/index.js';
 import { respondents } from '../db/schema/respondents.js';
 import { submissions } from '../db/schema/submissions.js'; // Story 13-1 (AC4)
-import { sql, gte } from 'drizzle-orm';
+import { emailEvents } from '../db/schema/email-events.js'; // Story 13-9 (AC5)
+import { sql, gte, eq } from 'drizzle-orm';
 import type { OverviewStats, SkillDistribution, LgaBreakdown, DailyTrend } from '@oslsr/types';
 
 export type { OverviewStats, SkillDistribution, LgaBreakdown, DailyTrend };
+
+/**
+ * Story 13-9 (AC5) — the per-campaign engagement funnel: the email legs read from
+ * `email_events` (populated by the Resend webhook for sends carrying this campaign tag),
+ * and `converted` read from completed registrations attributed to this campaign. This is
+ * the data the 13-10 dashboard visualises. NO `opened` leg (AC4).
+ */
+export interface CampaignFunnel {
+  campaignId: string;
+  /** Distinct recipients with a `sent` event (Resend `email.sent`). */
+  sent: number;
+  /** Distinct recipients with a `delivered` event. */
+  delivered: number;
+  /** Distinct recipients with a `clicked` event. */
+  clicked: number;
+  /** Completed registrations attributed to this campaign. */
+  converted: number;
+}
 
 export class ReportService {
   /**
@@ -75,6 +94,53 @@ export class ReportService {
       .groupBy(sql`1`)
       .orderBy(sql`2 DESC`);
     return rows.map((r) => ({ channel: r.channel, count: Number(r.count) }));
+  }
+
+  /**
+   * Story 13-9 (AC5) — the per-campaign funnel: sent → delivered → clicked → converted.
+   *
+   * Email legs come from `email_events` (the Resend webhook rows tagged with this
+   * `campaign_id`), counted as DISTINCT recipients so the funnel reads as people, not
+   * raw at-least-once events. `converted` is completed registrations attributed to this
+   * campaign — matching EITHER the wizard utm path (`raw_data.campaign_source.utm.campaign`,
+   * the reengagement blast → 13-1) OR the by-construction flat tag (`raw_data.campaign`,
+   * the supplemental blast, which has no utm round-trip). Both JSON accessors are FIXED
+   * expressions with the id passed as a bound parameter — never string-concatenated SQL.
+   * `opened` is deliberately absent (AC4).
+   */
+  static async getCampaignFunnel(campaignId: string): Promise<CampaignFunnel> {
+    const eventRows = await db
+      .select({
+        eventType: emailEvents.eventType,
+        recipients: sql<number>`COUNT(DISTINCT ${emailEvents.recipient})::int`,
+      })
+      .from(emailEvents)
+      .where(eq(emailEvents.campaignId, campaignId))
+      .groupBy(emailEvents.eventType);
+
+    const byType = new Map(eventRows.map((r) => [r.eventType, Number(r.recipients)]));
+
+    const convRows = await db
+      // Story 13-9 (AC5/L2) — count distinct REGISTRANTS, not raw rows, so the
+      // funnel's legs are all "people": a respondent who submits twice (e.g. a
+      // resubmission) is one conversion. Rows with no respondent_id (edge cases)
+      // fall back to their unique submission_uid so each still counts once.
+      .select({
+        count: sql<number>`COUNT(DISTINCT COALESCE(${submissions.respondentId}::text, ${submissions.submissionUid}))::int`,
+      })
+      .from(submissions)
+      .where(
+        sql`(${submissions.rawData} -> 'campaign_source' -> 'utm' ->> 'campaign' = ${campaignId})
+          OR (${submissions.rawData} ->> 'campaign' = ${campaignId})`,
+      );
+
+    return {
+      campaignId,
+      sent: byType.get('sent') ?? 0,
+      delivered: byType.get('delivered') ?? 0,
+      clicked: byType.get('clicked') ?? 0,
+      converted: Number(convRows[0]?.count ?? 0),
+    };
   }
 
   /**

@@ -27,6 +27,14 @@ export interface BaseEmailData {
 export interface EmailContent extends BaseEmailData {
   html: string;
   text: string;
+  /**
+   * Story 13-9 (AC5) — optional campaign id. When set, the provider tags the send
+   * (Resend tag `campaign_id`) so the inbound webhook events echo it back onto
+   * `email_events.campaign_id`, building the per-campaign funnel. Resend tag values
+   * are restricted to ASCII letters/numbers/`_`/`-`; campaign ids must comply
+   * (e.g. `reengagement-2026-07`, `cohort_a_supplemental_survey`).
+   */
+  campaignId?: string;
 }
 
 /**

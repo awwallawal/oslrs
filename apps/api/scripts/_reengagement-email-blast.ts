@@ -457,7 +457,7 @@ async function main() {
         subject: emailContent.subject,
         html: emailContent.html,
         text: emailContent.text,
-      }, 'reengagement-blast'); // Story 9-63 AC1 — explicit category for the meter.
+      }, 'reengagement-blast', CAMPAIGN_ID); // Story 9-63 AC1 category for the meter; Story 13-9 AC5 campaign tag for the funnel.
 
       if (result.success) {
         sent++;
