@@ -132,6 +132,13 @@ app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal', ...CLOUDFLARE_IP
 // Express's default trust-proxy behavior. See middleware/real-ip.ts for details.
 app.use(realIpMiddleware);
 
+// Story 13-9 (AC3) — the Resend webhook needs the RAW body for Svix signature verification. It MUST
+// be mounted BEFORE `app.use('/api/v1', cspRoutes)` (and the global express.json) because cspRoutes
+// installs its own express.json for ALL /api/v1/* paths, which would otherwise consume the webhook
+// body first and break the signature check. express.raw sets req._body, so downstream JSON parsers
+// skip it. Scoped to /api/v1/webhooks only.
+app.use('/api/v1/webhooks', express.raw({ type: '*/*', limit: '1mb' }), webhookRoutes);
+
 // CSP violation report endpoint — registered BEFORE helmet so it's never blocked by CSP enforcement
 app.use('/api/v1', cspRoutes);
 
@@ -231,10 +238,6 @@ app.use(cors({
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());
-// Story 13-9 (AC3) — the Resend webhook needs the RAW body for Svix signature verification, so it
-// is mounted with express.raw BEFORE the global express.json (which would otherwise consume the
-// body, breaking the signature check). Scoped to /api/v1/webhooks only — all other routes use json.
-app.use('/api/v1/webhooks', express.raw({ type: '*/*', limit: '1mb' }), webhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(metricsMiddleware);
