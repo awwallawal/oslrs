@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 52 total action types across all categories', () => {
+    it('should have 53 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -194,8 +194,10 @@ describe('AuditService', () => {
       //   RESPONDENT_SELF_EDITED ('respondent.self_edited'),
       //   RESPONDENT_SELF_NIN_COMPLETED ('respondent.self_nin_completed'),
       //   RESPONDENT_SELF_UPDATED ('respondent.self_updated') → 52.
+      // Story 13-11 (Cohort C thank-you/referral blast) added 1:
+      //   OPERATOR_THANKYOU_REFERRAL_SENT ('operator.thankyou_referral_sent') → 53.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(52);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(53);
     });
   });
 

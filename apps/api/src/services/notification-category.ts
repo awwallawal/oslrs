@@ -26,6 +26,7 @@ export type NotificationCategory =
   | 'backup-FAILURE'
   | 'health-alert-digest'
   | 'reengagement-blast'
+  | 'thankyou-referral'
   | 'notification-digest'
   | 'registration-status'
   | 'other';
@@ -44,6 +45,7 @@ export function classifyEmailSubject(subjectRaw: string): NotificationCategory {
   if (s.includes('sign in to your')) return 'magiclink-login';
   if (s.includes('continue your') && s.includes('registration')) return 'magiclink-wizard-resume';
   if (s.includes('add your nin')) return 'pending-nin-reminder';
+  if (s.includes('thank you for registering') || s.includes('help a friend')) return 'thankyou-referral';
   if (s.includes('one more step') || s.includes('skills profile')) return 'supplemental-survey';
   if (s.includes('registration attempt detected')) return 'duplicate-registration';
   if (s.includes('your oyo state skills registry status')) return 'registration-status';
