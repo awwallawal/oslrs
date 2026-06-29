@@ -14,6 +14,8 @@ const mockQueueFraudDetection = vi.fn();
 // Story 9-12 Task 3.5 — race-resolution merge uses db.execute(sql`UPDATE...`)
 // Default returns { rows: [] } (no merge); tests can override per-case.
 const mockDbExecute = vi.fn().mockResolvedValue({ rows: [] });
+// Story 13-12 — the evergreen thank-you auto-send checks the 13-9 suppression list.
+const mockGetSuppressed = vi.fn();
 
 vi.mock('../../db/index.js', () => ({
   db: {
@@ -80,6 +82,11 @@ vi.mock('../reference-code.service.js', () => ({
 const mockSendGenericEmail = vi.fn();
 vi.mock('../email.service.js', () => ({
   EmailService: { sendGenericEmail: (...args: unknown[]) => mockSendGenericEmail(...args) },
+}));
+
+// Story 13-12 — suppression check for the evergreen thank-you auto-send.
+vi.mock('../email-events.service.js', () => ({
+  getSuppressedEmails: (...args: unknown[]) => mockGetSuppressed(...args),
 }));
 
 vi.mock('../../queues/fraud-detection.queue.js', () => ({
@@ -190,6 +197,7 @@ describe('SubmissionProcessingService', () => {
     // Re-establish race-resolution merge default (Story 9-12 Task 3.5):
     // empty rows means "no pending row matched → caller falls through to insert".
     mockDbExecute.mockResolvedValue({ rows: [] });
+    mockGetSuppressed.mockResolvedValue(new Set()); // Story 13-12 — nothing suppressed by default
   });
 
   describe('processSubmission', () => {
@@ -286,6 +294,67 @@ describe('SubmissionProcessingService', () => {
       expect(mockFindFirstForm).not.toHaveBeenCalled();
       expect(mockInsertRespondent).not.toHaveBeenCalled();
       expect(mockUpdateSubmissionSet).not.toHaveBeenCalled();
+    });
+
+    // ── Story 13-12 — evergreen thank-you/referral auto-send ─────────────────
+    // A public self-service completion via the merge path (_isNew false → the 9-58 confirmation does
+    // NOT fire, so only the thank-you can). The thank-you method re-queries the respondent
+    // (columns.source) — mockImplementation returns the public row for THAT query, null for NIN-check.
+    function setupPublicCompletion(respondentOverride: Record<string, unknown> = {}) {
+      const submission = makeSubmission({
+        rawData: { nin: '61961438053', first_name: 'Pub', last_name: 'User', email: 'pub.user@example.com' },
+      });
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockPublicUserRole();
+      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'resp-pub' }] }); // merge → _isNew false
+      mockFindFirstRespondent.mockImplementation((arg: { columns?: { source?: boolean } }) =>
+        arg?.columns?.source
+          ? Promise.resolve({ source: 'public', firstName: 'Pub', metadata: null, ...respondentOverride })
+          : Promise.resolve(null),
+      );
+      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'msg-ty' });
+    }
+    const wasAutoThankYouSent = () =>
+      mockSendGenericEmail.mock.calls.some((c) => c[2] === 'thankyou-referral-auto');
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it('13-12: auto-sends the thank-you (tagged thankyou-referral-auto) to a public completer', async () => {
+      setupPublicCompletion();
+      await SubmissionProcessingService.processSubmission('sub-001');
+      await vi.waitFor(() => expect(wasAutoThankYouSent()).toBe(true));
+      const call = mockSendGenericEmail.mock.calls.find((c) => c[2] === 'thankyou-referral-auto')!;
+      expect((call[0] as { subject: string }).subject).toMatch(/thank you for registering/i);
+    });
+
+    it('13-12: does NOT auto-send for a NON-public (enumerator) respondent', async () => {
+      setupPublicCompletion({ source: 'enumerator' });
+      await SubmissionProcessingService.processSubmission('sub-001');
+      await flush();
+      expect(wasAutoThankYouSent()).toBe(false);
+    });
+
+    it('13-12: does NOT auto-send when the marker is already set (idempotent)', async () => {
+      setupPublicCompletion({ metadata: { thankyou_referral_sent_at: '2026-06-01T00:00:00.000Z' } });
+      await SubmissionProcessingService.processSubmission('sub-001');
+      await flush();
+      expect(wasAutoThankYouSent()).toBe(false);
+    });
+
+    it('13-12: does NOT auto-send when the address is suppressed (13-9)', async () => {
+      setupPublicCompletion();
+      mockGetSuppressed.mockResolvedValue(new Set(['pub.user@example.com']));
+      await SubmissionProcessingService.processSubmission('sub-001');
+      await flush();
+      expect(wasAutoThankYouSent()).toBe(false);
+    });
+
+    it('13-12: a thank-you email failure does NOT fail ingestion (fire-and-forget)', async () => {
+      setupPublicCompletion();
+      mockSendGenericEmail.mockRejectedValue(new Error('resend down'));
+      const result = await SubmissionProcessingService.processSubmission('sub-001');
+      expect(result.action).toBe('processed'); // ingestion succeeds regardless of comms
+      await flush();
     });
 
     it('should reject submission on duplicate NIN with original registration date (AC 3.7.1)', async () => {

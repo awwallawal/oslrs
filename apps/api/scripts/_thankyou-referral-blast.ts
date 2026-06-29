@@ -33,12 +33,15 @@ import { sql } from 'drizzle-orm';
 import { EmailService } from '../src/services/email.service.js';
 import { getSuppressedEmails } from '../src/services/email-events.service.js'; // Story 13-9 (AC2)
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
+import {
+  buildThankYouEmail,
+  buildThankYouReferralUrl,
+  escapeHtml,
+  firstNameFrom,
+} from '../src/services/thankyou-email.js'; // Story 13-12 — shared builder
 import pino from 'pino';
 
 const logger = pino({ name: 'thankyou-referral-blast' });
-
-const BRAND = '#9C1E23';
-const SUPPORT_EMAIL = 'support@oyoskills.com';
 
 // Story 13-9 — campaign id for BOTH the shareable referral link's utm_campaign AND the send tag, so
 // the funnel keys off one id. BUMP per run (e.g. thankyou-referral-2026-07b) to compare rounds.
@@ -149,78 +152,14 @@ export function maskEmail(email: string): string {
   return `${head}${'*'.repeat(Math.max(0, at - head.length))}${email.slice(at)}`;
 }
 
-export function firstNameFrom(firstName: string | undefined): string {
-  if (!firstName) return 'there';
-  const trimmed = firstName.trim();
-  if (!trimmed) return 'there';
-  return trimmed.split(/\s+/)[0];
-}
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/** The SHAREABLE public referral link — campaign-tagged so referred signups attribute (13-9/13-1). */
+// Story 13-12 — the copy + referral-link builders were extracted to the shared module
+// `src/services/thankyou-email.ts` so the blast and the evergreen auto-send stay in lockstep (no
+// copy drift). Re-exported here to keep this script's public API + tests stable.
+// `buildReferralUrl()` wraps the shared builder with THIS blast's campaign id.
+export { escapeHtml, firstNameFrom };
+export const buildEmail = buildThankYouEmail;
 export function buildReferralUrl(): string {
-  const base = process.env.PUBLIC_APP_URL || 'http://localhost:5173';
-  const u = new URL('/register', base);
-  u.searchParams.set('utm_campaign', CAMPAIGN_ID);
-  u.searchParams.set('utm_source', 'referral');
-  return u.toString();
-}
-
-export function buildEmail(firstName: string, referralUrl: string): {
-  subject: string;
-  text: string;
-  html: string;
-} {
-  const subject = 'Thank you for registering — help a friend join the Oyo State Skills Registry';
-  const text = `Hi ${firstName},
-
-Thank you for completing your profile on the Oyo State Skills Registry. Your registration helps
-Oyo State match residents with the right training programs and job opportunities.
-
-You can help expand the reach: if you know someone who would benefit, please share this registration
-link with them:
-
-  ${referralUrl}
-
-It only takes a few minutes to register, and every profile helps build a stronger picture of Oyo
-State's talent.
-
-Thank you for being part of it.
-
-The Oyo State Skills Registry team
-${SUPPORT_EMAIL}
-
----
-You are receiving this because you registered on the Oyo State Skills Registry. If you'd prefer not
-to receive these messages, email ${SUPPORT_EMAIL} and we'll remove you. (Please do not reply to this
-address — it is not monitored.)`;
-
-  const safeFirstName = escapeHtml(firstName);
-  const html = `<!doctype html>
-<html><body style="font-family:system-ui,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:24px;">
-  <h2 style="color:${BRAND};margin:0 0 16px;">Thank you for registering</h2>
-  <p>Hi <strong>${safeFirstName}</strong>,</p>
-  <p>Thank you for completing your profile on the <strong>Oyo State Skills Registry</strong>. Your registration helps Oyo State match residents with the right training programs and job opportunities.</p>
-  <p>You can help expand the reach — if you know someone who would benefit, please share this registration link with them:</p>
-  <p style="margin:24px 0;text-align:center;">
-    <a href="${referralUrl}" style="display:inline-block;background:${BRAND};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Share the registration link</a>
-  </p>
-  <p style="color:#555;font-size:13px;word-break:break-all;">Or copy this link: <a href="${referralUrl}" style="color:${BRAND};">${referralUrl}</a></p>
-  <p>It only takes a few minutes to register, and every profile helps build a stronger picture of Oyo State's talent.</p>
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-  <p style="color:#777;font-size:12px;">The Oyo State Skills Registry team<br/><a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a></p>
-  <p style="color:#999;font-size:11px;">You are receiving this because you registered on the Oyo State Skills Registry. If you'd prefer not to receive these messages, email <a href="mailto:${SUPPORT_EMAIL}" style="color:#999;">${SUPPORT_EMAIL}</a> and we'll remove you. (This address is not monitored for replies.)</p>
-</body></html>`;
-
-  return { subject, text, html };
+  return buildThankYouReferralUrl(CAMPAIGN_ID);
 }
 
 interface CohortRow {
@@ -391,6 +330,18 @@ async function main() {
           ipAddress: operatorHost,
           userAgent: operatorInvocation,
         });
+        // Story 13-12 (Task 4) — stamp the per-respondent marker so the evergreen auto-send (which
+        // fires on completion in submission-processing) never re-thanks anyone this blast reached.
+        // JSONB `||` preserves sibling metadata keys. Failure logged, never thrown (parity with 9-58).
+        try {
+          await db.execute(sql`
+            UPDATE "respondents"
+            SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ thankyou_referral_sent_at: new Date().toISOString() })}::jsonb
+            WHERE "id" = ${row.respondent_id}
+          `);
+        } catch (markErr) {
+          logger.warn({ event: 'thankyou_referral.marker_failed', respondentId: row.respondent_id, error: (markErr as Error).message });
+        }
       } else {
         failed++;
         logger.warn({

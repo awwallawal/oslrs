@@ -108,6 +108,13 @@ export interface RespondentMetadata {
    */
   confirmation_email_sent_at?: string;
   /**
+   * Story 13-12 — ISO timestamp the evergreen thank-you/referral email was dispatched (or the
+   * one-off 13-11 blast stamped it). Send-once guard: the auto-send in submission-processing only
+   * fires when this is ABSENT. Mirrors `confirmation_email_sent_at`. Set via JSONB merge after a
+   * confirmed dispatch; covered by the metadata-clearing erasure path.
+   */
+  thankyou_referral_sent_at?: string;
+  /**
    * Story 9-38 — set `true` when the post-submit passwordless `public_user`
    * provisioning threw (non-fatal to the wizard submit, per AC#4). Marks the
    * row for the operator-gated `_backfill-wizard-public-users.ts` recovery so

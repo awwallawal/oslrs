@@ -25,6 +25,8 @@ import { evaluateMinorGuardianConsent, isValidReferenceCode, type GuardianData }
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { ReferenceCodeService } from './reference-code.service.js';
 import { EmailService } from './email.service.js';
+import { getSuppressedEmails } from './email-events.service.js'; // Story 13-12 (13-9 suppression)
+import { buildThankYouEmail, buildThankYouReferralUrl, firstNameFrom } from './thankyou-email.js'; // Story 13-12
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -288,6 +290,18 @@ export class SubmissionProcessingService {
           referenceCode: respondent.referenceCode,
           status: respondent.status ?? 'active',
         });
+      }
+    }
+
+    // Story 13-12 — evergreen thank-you + referral for SELF-SERVICE completers. Fires on EVERY
+    // end-to-end completion (not just _isNew); the method gates on source='public' + the send-once
+    // `metadata.thankyou_referral_sent_at` marker + 13-9 suppression. Fire-and-forget: a comms
+    // failure must NEVER fail ingestion (9-26 data-integrity lesson), mirroring the 9-58 path above.
+    {
+      const tyRaw = rawData['email'] ?? rawData['email_address'];
+      const tyEmail = typeof tyRaw === 'string' && tyRaw.includes('@') ? tyRaw.trim() : null;
+      if (tyEmail) {
+        void this.sendThankYouReferralEmail({ respondentId: respondent.id, email: tyEmail });
       }
     }
 
@@ -896,6 +910,78 @@ export class SubmissionProcessingService {
     } catch (err) {
       logger.warn({
         event: 'registration_confirmation.email_error',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Story 13-12 — evergreen thank-you + referral auto-send on end-to-end completion.
+   * Gated to SELF-SERVICE (`source='public'`) completers (they hold the link + can refer peers;
+   * enumerator/clerk/imported rows get the 9-58 confirmation instead). Idempotent via the
+   * `metadata.thankyou_referral_sent_at` send-once marker; honors the 13-9 suppression list; tagged
+   * `thankyou-referral-auto` (DISTINCT from the one-off blast) so the funnel separates organic
+   * onboarding referrals from the campaign blast. Fully FAIL-SOFT — any error is logged, never thrown
+   * (a registration must succeed even if this email doesn't), mirroring sendReferenceConfirmationEmail.
+   */
+  private static async sendThankYouReferralEmail(args: { respondentId: string; email: string }): Promise<void> {
+    const AUTO_CAMPAIGN_ID = 'thankyou-referral-auto';
+    try {
+      const r = await db.query.respondents.findFirst({
+        where: eq(respondents.id, args.respondentId),
+        columns: { source: true, firstName: true, metadata: true },
+      });
+      if (!r) return;
+      if (r.source !== 'public') return; // referral ask is for self-service registrants only
+      const metadata = (r.metadata ?? null) as RespondentMetadata | null;
+      if (metadata?.thankyou_referral_sent_at) {
+        logger.info({ event: 'thankyou_referral_auto.skipped_already_sent', respondentId: args.respondentId });
+        return;
+      }
+      const suppressed = await getSuppressedEmails([args.email]);
+      if (suppressed.has(args.email.trim().toLowerCase())) {
+        logger.info({ event: 'thankyou_referral_auto.skipped_suppressed', respondentId: args.respondentId });
+        return;
+      }
+
+      const referralUrl = buildThankYouReferralUrl(AUTO_CAMPAIGN_ID);
+      const content = buildThankYouEmail(firstNameFrom(r.firstName), referralUrl);
+      const result = await EmailService.sendGenericEmail(
+        { to: args.email, subject: content.subject, html: content.html, text: content.text },
+        'thankyou-referral',
+        AUTO_CAMPAIGN_ID,
+      );
+      if (!result.success) {
+        logger.warn({ event: 'thankyou_referral_auto.email_failed', respondentId: args.respondentId, error: result.error });
+        return;
+      }
+
+      // Stamp the send-once marker only after a confirmed dispatch (JSONB merge preserves siblings).
+      await db.execute(sql`
+        UPDATE "respondents"
+        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ thankyou_referral_sent_at: new Date().toISOString() })}::jsonb
+        WHERE "id" = ${args.respondentId}
+      `);
+
+      AuditService.logAction({
+        actorId: null,
+        action: AUDIT_ACTIONS.OPERATOR_THANKYOU_REFERRAL_SENT,
+        targetResource: AUDIT_TARGETS.RESPONDENT,
+        targetId: args.respondentId,
+        details: {
+          email: args.email,
+          channel: 'email',
+          campaign: AUTO_CAMPAIGN_ID,
+          auto: true,
+          provider_message_id: result.messageId ?? null,
+        },
+        ipAddress: 'system',
+        userAgent: 'submission-processing.auto-thankyou',
+      });
+    } catch (err) {
+      logger.warn({
+        event: 'thankyou_referral_auto.email_error',
+        respondentId: args.respondentId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
