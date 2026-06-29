@@ -14,7 +14,7 @@ const generalInquiries = {
   description: 'For questions about registration, verification, or the marketplace.',
   items: [
     { icon: Mail, label: 'Email', value: supportEmail, href: `mailto:${supportEmail}` },
-    { icon: Phone, label: 'Phone', value: '+234 816 135 4694', href: 'tel:+2348161354694' },
+    { icon: Phone, label: 'Phone', value: '+234 706 560 6479', href: 'tel:+2347065606479' },
     { icon: Clock, label: 'Hours', value: 'Monday - Friday, 8:00 AM - 5:00 PM' },
     { icon: Timer, label: 'Response time', value: 'We typically respond within 2-3 business days' },
   ],
