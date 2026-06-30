@@ -27,6 +27,7 @@ import analyticsRoutes from './analytics.routes.js';
 import registrationRoutes from './registration.routes.js';
 import registrationStatusRoutes from './registration-status.routes.js';
 import meRoutes from './me.routes.js';
+import unsubscribeRoutes from './unsubscribe.routes.js';
 
 const router = Router();
 
@@ -61,6 +62,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/registration', registrationRoutes);
 router.use('/registration-status', registrationStatusRoutes);
 router.use('/me', meRoutes);
+router.use('/unsubscribe', unsubscribeRoutes);
 
 // Dev routes (only available in non-production)
 if (process.env.NODE_ENV !== 'production') {

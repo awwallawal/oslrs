@@ -35,6 +35,13 @@ export interface EmailContent extends BaseEmailData {
    * (e.g. `reengagement-2026-07`, `cohort_a_supplemental_survey`).
    */
   campaignId?: string;
+  /**
+   * Story 13-13 (AC3/AC4) — extra SMTP headers the provider attaches verbatim. Used to carry
+   * `List-Unsubscribe` + `List-Unsubscribe-Post` on MARKETING sends only; the email service builds
+   * these (it knows the NotificationCategory) and the provider stays a thin transport. Omitted for
+   * transactional / ops mail, which is non-unsubscribable.
+   */
+  headers?: Record<string, string>;
 }
 
 /**

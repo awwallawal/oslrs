@@ -10,6 +10,9 @@ vi.mock('../middleware/rate-limit.js', () => ({
   publicVerificationRateLimit: mocks.rateLimitMock,
   ninCheckRateLimit: mocks.rateLimitMock,
   profileUpdateRateLimit: mocks.rateLimitMock,
+  // Story 13-13 — the unsubscribe routes (mounted via routes/index.ts) import this; without it the
+  // mock returns undefined and `router.post('/', undefined, …)` throws at import time.
+  unsubscribeRateLimit: mocks.rateLimitMock,
 }));
 
 // Mock auth so supertest requests pass authentication

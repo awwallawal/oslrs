@@ -73,6 +73,10 @@ export class ResendEmailProvider implements EmailProvider {
         subject: email.subject,
         html: email.html,
         text: email.text,
+        // Story 13-13 (AC3/AC4) — forward caller-supplied headers verbatim (List-Unsubscribe on
+        // marketing sends). The email service decides which categories get them; the provider just
+        // transports. Omitted entirely when absent.
+        ...(email.headers ? { headers: email.headers } : {}),
         ...(tags ?? {}),
       });
 

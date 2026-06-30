@@ -1,6 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { emailEvents, emailSuppressions, type EmailEventType } from '../db/schema/index.js';
+import { toCanonicalEmail } from '../lib/canonical-email.js';
 
 /**
  * Story 13-9 (AC3/AC2) — map verified Resend webhook payloads → `email_events`, and feed the
@@ -91,10 +92,24 @@ export async function recordEmailEvent(ev: ParsedResendEvent, webhookId?: string
   }
 }
 
+/**
+ * Story 13-13 (AC1/AC5) — the USER-driven suppression inlet. A verified one-click unsubscribe upserts
+ * the address with `reason='unsubscribed'` (idempotent: an already-suppressed address — for ANY reason
+ * — is left untouched, so this never downgrades a bounce/complaint). Same `onConflictDoNothing` shape
+ * the 13-9 webhook uses for bounces/complaints, so `getSuppressedEmails` honours it by construction.
+ */
+export async function suppressUnsubscribe(email: string): Promise<void> {
+  const normalized = toCanonicalEmail(email);
+  await db
+    .insert(emailSuppressions)
+    .values({ email: normalized, reason: 'unsubscribed' })
+    .onConflictDoNothing({ target: emailSuppressions.email });
+}
+
 /** AC2 — the blast scripts call this to filter out suppressed addresses before sending. */
 export async function getSuppressedEmails(emails: string[]): Promise<Set<string>> {
   if (emails.length === 0) return new Set();
-  const lowered = emails.map((e) => e.trim().toLowerCase());
+  const lowered = emails.map(toCanonicalEmail);
   // code-review M2 — query only the cohort's addresses (don't load the whole suppression table).
   const rows = await db
     .select({ email: emailSuppressions.email })

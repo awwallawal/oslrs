@@ -58,6 +58,35 @@ export const profileUpdateRateLimit = rateLimit({
   validate: { keyGeneratorIpFallback: false },
 });
 
+// Story 13-13 (AC7) — public one-click unsubscribe endpoint. Per-IP; unauthenticated.
+//
+// code-review AI-2: the cap must NOT throttle legitimate RFC 8058 one-click POSTs. Those are fired
+// by the mail PROVIDER's servers (Gmail/Yahoo/Apple), not the user's browser, and behind Cloudflare
+// `realIpMiddleware` resolves req.ip to the provider's SHARED egress IP — so a single blast can make
+// many recipients' one-click POSTs collide on one key. A 429 there silently drops the suppression
+// (the provider does not retry) — the exact reputation harm the feature exists to prevent. So the cap
+// is GENEROUS (default 120/min, operator-tunable via UNSUBSCRIBE_RATE_MAX) while still capping the
+// cost of token-grinding (forged tokens decrypt to nothing and write nothing regardless).
+const UNSUBSCRIBE_RATE_MAX = Number(process.env.UNSUBSCRIBE_RATE_MAX) || 120;
+export const unsubscribeRateLimit = rateLimit({
+  store: isTestEnv ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+  }),
+  windowMs: 60 * 1000, // 1 minute
+  max: UNSUBSCRIBE_RATE_MAX, // requests per minute per IP (default 120)
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many unsubscribe requests, please try again later',
+  },
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const publicVerificationRateLimit = rateLimit({
   store: isTestEnv ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis

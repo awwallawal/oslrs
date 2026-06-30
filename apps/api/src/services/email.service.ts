@@ -15,6 +15,7 @@ import type {
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 import { NotificationMeter } from './notification-meter.service.js';
 import type { NotificationCategory } from './notification-category.js';
+import { buildListUnsubscribeHeaders } from './list-unsubscribe.js';
 
 const logger = pino({ name: 'email-service' });
 
@@ -105,7 +106,12 @@ export class EmailService {
      */
     campaignId?: string,
   ): Promise<EmailResult> {
-    const result = await this.getProvider().send({ ...data, campaignId });
+    // Story 13-13 (AC3/AC4) — attach List-Unsubscribe headers for MARKETING categories only. The
+    // category lives here (not in the provider), so this is the single decision point; the provider
+    // stays a thin transport that forwards whatever headers it's handed. Returns undefined (→ no
+    // headers) for transactional / ops mail.
+    const headers = buildListUnsubscribeHeaders(category, data.to);
+    const result = await this.getProvider().send({ ...data, campaignId, headers });
     if (result.success) {
       // Count only real sends; bounce/complaint reconciliation is a later task.
       await NotificationMeter.recordEmailSend({
