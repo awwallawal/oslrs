@@ -55,6 +55,17 @@ Prod reality (2026-06-15): **139 distinct respondents = 76 completed + 55 data_l
 2. A **real-DB smoke** (integration test in `__tests__/`, `beforeAll`/`afterAll`) runs the new raw SQL against the live schema with at least three structurally-distinct respondent rows (one completed, one data_lost via `metadata.questionnaire_data_lost`, one no_submission) + a schema-column-existence guard, so a renamed/removed column (e.g. `respondents.status`/`source`/`metadata`, `submissions.raw_data`) fails the test instead of silently 500-ing in prod. (Project raw-SQL drift Pitfall — bitten twice: `users.role→role_id` and a hotfix.)
 3. Controller/route test: `getRegistryTotals` is wired and reachable under the existing RBAC chain (mirror the existing `analytics.routes.test.ts` registration assertion).
 
+### AC7 — Orthogonal 3-axis decomposition (RE-ANCHOR 2026-07-01: this is now THE taxonomy model)
+1. In ADDITION to `byDataStatus` (the flat status, KEPT as the row-level primary badge), `getRegistryTotals` returns the THREE orthogonal axis breakdowns the taxonomy mandates: **`bySource`** (`respondents.source`), **`byCompleteness`** `{full, core, partial}`, **`byVerification`** `{nin_on_file, self_declared, pending_nin, unverified_import}`. Each is a zero-filled count map that sums to `totalRespondents`. The flat `byDataStatus` and the axes COEXIST (the flat enum is derivable from the axes; do NOT remove it — it stays the badge). [Source: `_bmad-output/planning-artifacts/registry-data-status-taxonomy.md`]
+2. **COMPLETENESS is DERIVED from present fields, form-agnostic** (NOT from which form): a designated **deep-field marker set** present ⇒ `full`; the core set present but not deep ⇒ `core`; no non-empty submission ⇒ `partial`. Define the marker sets ONCE (Axis-2 config), reusing `hasNonEmptyRawData` semantics. This is what lets a Public-Core (13-14) row and a full enumerator row classify by what they CONTAIN.
+
+### AC8 — Drafts are a FUNNEL metric, NEVER in the total
+1. The return adds **`inProgressDrafts`** = count of non-expired `wizard_drafts` (started, not completed) exposed SEPARATELY, so 12-5/12-6 render "N registered **+ M in progress**" and never fold drafts into `totalRespondents`. [Source: taxonomy §Pre-registry]
+
+### AC9 — Verification honesty: `nin_on_file` ≠ `verified` (GROUNDED 2026-07-01)
+1. There is **NO NIMC/NIN-validation path** in the codebase — NIN is **CAPTURED, not validated** [Source: grep 2026-07-01 — no `verify_nin`/`nimc` service exists]. So Axis-3's top tier is **`nin_on_file`** (NIN present, unvalidated), NOT `verified`. A `verifiedRegistry` figure EXCLUDES `unverified_import` and does NOT claim NIN-holders are "verified" until a real check exists (NIMC validation OR the 13-2 member-side confirmation). **Do not overstate.** *(This was John's PM Open-Question 1 — resolved: nin_on_file.)*
+2. **`imported_association`** (added by 13-2) classifies as `source=imported_association / completeness=core / verification=unverified_import`; the derivation must handle it via the existing `imported` branch + the axis maps WITHOUT a 12-4 edit once the enum lands.
+
 ## Tasks / Subtasks
 
 - [ ] Task 1 — `getRegistryTotals()` aggregate method (AC: #1, #2, #3)

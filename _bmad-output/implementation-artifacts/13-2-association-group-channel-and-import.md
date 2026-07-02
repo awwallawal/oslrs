@@ -2,6 +2,8 @@
 
 Status: backlog
 
+> 🔗 **Anchors on the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (2026-07-01; **12-4** is the derivation MODEL). Association rows classify as **`source=imported_association` / `completeness=core` / `verification=unverified_import`** — they enter `respondents` + the frontend in an HONEST unverified stratum (excluded from the "verified registry" headline) until a **member-side check** (confirmation SMS once Termii clears, or a sampled **Assessor callback** — the Assessor "verify imported rows" queue) promotes them. Adding `imported_association` to `respondents.source` + import-sources config is the cheap PRE-Jul-1 slice; the verify-queue is post-launch. _The taxonomy is the honest-display contract these AC5.x checks must satisfy._
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). Sheet = FROZEN for Monday 2026-06-29 (zero-cost, no gate); importer = FAST-FOLLOW (the cascade is async). REUSE the Epic 11 import spine — do NOT rebuild it. -->
 

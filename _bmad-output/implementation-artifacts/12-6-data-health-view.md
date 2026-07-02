@@ -2,6 +2,8 @@
 
 Status: ready-for-dev
 
+> 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS the honest breakdowns from the 12-4 model: **by-completeness** (139 → 76 `full` / 63 `partial`) + **by-verification** + **by-source**, and the **"+N in progress (drafts)"** funnel line. _Amendment only — ACs unchanged._
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-16 by Bob (SM) via the create-story workflow as Epic 12 "Dashboard System Refresh" Tier-1 (analytics-redesign / Track-A legibility). POST-LAUNCH, NON-GATING. This story CONSUMES 12-4's getRegistryTotals() aggregate + 9-59's row-level data_status taxonomy (registry-data-status.ts, MERGED on main). It does NOT define data_status and does NOT re-count the registry — it renders the 139→76 funnel + per-data_status breakdown from 12-4, and OWNS the per-field response-rate computation (which 12-4 deliberately placed here). Reuse the ~41 existing chart components + shadcn primitives — compose, don't rebuild. No new stat methods. -->
 

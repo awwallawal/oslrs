@@ -2,6 +2,8 @@
 
 Status: ready-for-dev
 
+> 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS it: no surface labels a submissions-count as "Total Respondents"; deep-field charts (labour-force participation, household) carry a **"(field-collected sample, N=…)"** label so `core`/`unverified` rows are excluded and said so. _Amendment only — ACs unchanged._
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-16 by Bob (SM) via the create-story workflow as Epic 12 "Dashboard System Refresh" Tier-1 (Track A: counting/legibility). POST-LAUNCH, NON-GATING. This story is LABELS + DENOMINATORS ONLY — it CONSUMES 12-4's getRegistryTotals() aggregate and 9-59's row-level data_status atom. It does NOT define data_status, does NOT build a new aggregate, and adds NO new charts or stat methods. Track A is counting/legibility, not analysis volume. Reuse the ~41 existing chart components + shadcn primitives — compose, do not rebuild. -->
 

@@ -2,6 +2,8 @@
 
 Status: backlog
 
+> 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (2026-07-01; **12-4** is the derivation MODEL). The channel breakdown reads the **provenance (source) axis**; coverage (LGA × trade) must show **verified vs pending-verification separately** (association `unverified_import` rows never inflate a coverage-vs-target claim). _Amendment only — ACs unchanged._
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). FAST-FOLLOW (post-launch). DEPENDS-ON Epic 12 (12-4 + 12-6) to avoid the 76-vs-139 mislabel. A DIMENSION-ADD that EXTENDS existing analytics — NOT a new dashboard. -->
 

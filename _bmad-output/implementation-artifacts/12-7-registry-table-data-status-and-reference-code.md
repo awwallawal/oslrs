@@ -2,6 +2,8 @@
 
 Status: ready-for-dev
 
+> 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). The per-row **`data_status` badge** = the 12-4 model (flat status + the 3 axes: source / completeness / verification) + **source filter chips** (13-2). _Amendment only — ACs unchanged._
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-16 by Bob (SM) via *create-story for Epic 12 "Dashboard System Refresh" (Tier 1, analytics-redesign track). Grounded against the real registry list path (RespondentService.listRespondents — raw SQL `DISTINCT ON`), the canonical 9-59 data-status module, and the existing hand-rolled `<table>` in RespondentRegistryTable.tsx. POST-LAUNCH, NON-GATING. CONSUMES 9-59's deriveDataStatus + the real `reference_code` column; MIGRATES the table to the 12-1 DataTable primitive — so it HARD-depends on 12-1 landing first. -->
 
