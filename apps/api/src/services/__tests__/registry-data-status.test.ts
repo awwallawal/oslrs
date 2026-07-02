@@ -52,6 +52,10 @@ describe('deriveDataStatus', () => {
     expect(
       deriveDataStatus({ hasSubmissionData: false, source: 'imported_other' }),
     ).toBe('imported');
+    // Story 13-2 — association proxy import classifies as 'imported' via the imported_* prefix.
+    expect(
+      deriveDataStatus({ hasSubmissionData: false, source: 'imported_association' }),
+    ).toBe('imported');
   });
 
   it('returns "no_submission" for an active field respondent with no answers', () => {

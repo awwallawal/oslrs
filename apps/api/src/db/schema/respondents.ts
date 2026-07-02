@@ -24,6 +24,11 @@ export const respondentSourceTypes = [
   'clerk',
   'imported_itf_supa',
   'imported_other',
+  // Story 13-2 / Registry Data-Status Taxonomy (2026-07-01) — association-head proxy import. Rows
+  // classify source=imported_association / completeness=core / verification=unverified_import, held
+  // in an honest unverified stratum until a member-side check. Added foundationally (backward-compat,
+  // no DDL — `source` is a plain-text drizzle enum) so provenance is honest from the first import.
+  'imported_association',
 ] as const;
 export type RespondentSource = typeof respondentSourceTypes[number];
 
