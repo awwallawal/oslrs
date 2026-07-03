@@ -72,6 +72,26 @@ if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   : "${VITEST_MAX_THREADS:=2}"
   export VITEST_MAX_THREADS
   echo "[pre-push] vitest worker pool capped at VITEST_MAX_THREADS=$VITEST_MAX_THREADS"
+
+  # Story (2026-07-03): run the suite against the CLEAN, guard-enforced test DB
+  # (app_test), NOT the dev DB (app_db). Previously this gate inherited root .env
+  # (DATABASE_URL=app_db, NODE_ENV=development), which made the db-guard
+  # (apps/api/test/db-guard.ts) NO-OP and ran the full suite against the 499k-row
+  # dev DB — polluting it with test fixtures and drifting its schema out of sync
+  # (the exact failure that blocked the 2026-07-03 push). NODE_ENV=test engages
+  # the guard (the DB name MUST contain "test"); app_test is provisioned by
+  # `db:push:full:force` — the SAME command CI uses for its test_db (ci-cd.yml) —
+  # so the local gate and CI validate an identical clean slate. dotenv.config in
+  # db/index.ts does NOT override an already-exported var, so these win over root
+  # .env. Override the DB with TEST_DATABASE_URL=... git push if your scratch DB
+  # is named differently. Keep app_test schema current after any schema change:
+  #   DATABASE_URL=postgres://user:password@localhost:5432/app_test \
+  #     pnpm --filter @oslsr/api db:push:full:force
+  export NODE_ENV=test
+  : "${TEST_DATABASE_URL:=postgres://user:password@localhost:5432/app_test}"
+  export DATABASE_URL="$TEST_DATABASE_URL"
+  echo "[pre-push] tests → $DATABASE_URL (NODE_ENV=test; db-guard enforced)"
+
   pnpm exec turbo run test --concurrency=1
 else
   echo "[pre-push] Feature-branch/backup push → skipping full suite."

@@ -4,10 +4,11 @@
  * states (none / draft / pending_nin / complete) against the actual
  * `respondents.user_id` link + wizard-draft-by-email fallback.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { uuidv7 } from 'uuidv7';
 import { MeService } from '../me.service.js';
+import { NativeFormService } from '../native-form.service.js';
 import { db } from '../../db/index.js';
 import { users, roles, respondents, wizardDrafts, submissions, auditLogs, lgas } from '../../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
@@ -221,6 +222,29 @@ describe('MeService 9-61 — editable read + session edit + complete-nin (real D
   const ninA = generateValidNin();
   let ninB = generateValidNin();
   while (ninB === ninA) ninB = generateValidNin();
+
+  // Own the completeness gate's fixture. A real published form is pinned in
+  // UAT/prod DBs (app_db) but NOT in a clean DB (CI / app_test), so the real
+  // getPublicActiveForm would enforce the full Step-4 required-field set here
+  // and reject these NIN-dedupe fixtures with INCOMPLETE_SUBMISSION before the
+  // logic-under-test runs — passing in CI but failing locally against app_db.
+  // Stub it to a trivial (no-required-field) form so the gate passes
+  // deterministically regardless of ambient wizard.public_form_id. Mirrors the
+  // getPublicActiveForm mock in registration.routes.test.ts.
+  // MUST be beforeEach, not beforeAll: vitest.base.ts sets restoreMocks:true,
+  // which restores every spy before each test — a beforeAll spy would be wiped
+  // before these tests run (the 13-13 mockReset-wiped-spy pitfall).
+  beforeEach(() => {
+    vi.spyOn(NativeFormService, 'getPublicActiveForm').mockResolvedValue({
+      formId: 'me-9-61-test-form',
+      title: 'Me 9-61 Test Form',
+      version: '1.0.0',
+      questions: [],
+      choiceLists: {},
+      sectionShowWhen: {},
+      calculations: [],
+    });
+  });
 
   beforeAll(async () => {
     await db.insert(roles).values([{ name: 'public_user', description: 'Public User' }]).onConflictDoNothing();
