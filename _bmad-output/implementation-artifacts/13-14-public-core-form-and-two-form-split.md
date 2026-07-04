@@ -44,7 +44,8 @@ The public wizard collects 11 identity/contact/consent fields natively (Steps 1�
 **Root-cause fix → Story 13-16 (`13-16-lga-value-canonicalization`).** The LGA UUID↔slug mismatch is deeper than the dedup: `respondents.lgaId` is `text` (no FK) and holds the **UUID** on the public/wizard path but the **slug** on the enumerator path (verified vs prod: 139 UUID public + 1 slug enumerator), so the analytics `l.code = r.lga_id` join FAILS for all 139 public rows (they render as UUID/"Unknown"). 13-16 canonicalizes to the **slug** everywhere (wizard writes `lga.code`, backfills the 139). **This story (13-14) stays independent:** removing `lga_id` from the Public Core is the immediate pre-launch, form-only fix; 13-16 is the systemic cure (keep both — belt-and-suspenders; do NOT make 13-14 depend on 13-16). Enumerators are unaffected on the DUPLICATE (they fill the FULL form directly, no wizard) but ARE part of the value-split 13-16 fixes.
 
 ## Dev Agent Record
-_(empty — populated by the dev/operator)_
+
+- **2026-07-04 — AC7 form edit DONE (Ministry nod given):** removed `lga_id` (survey row 20) from `docs/launch-campaign/oslsr-public-core-v1.xlsx`. Verified: `lga_id` absent, groups balanced (6 begin / 6 end), identity block = surname/firstname/gender/dob/phone/email/nin (no lga_id), `lga_list` choices left intact (unused, harmless). The wizard collects LGA natively (Step 2 → `respondents.lgaId`), so no data loss. **Remaining Task-1/2 work (verify shared names vs master, publish BOTH forms, pin the Public Core) is operator — run via the BMAD flow.**
 
 ### File List
 _(empty)_
