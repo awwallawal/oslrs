@@ -92,9 +92,13 @@ test.describe('Public Registration Wizard (smoke-level)', () => {
     await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
     await expect(page.getByTestId('step1-validation-summary')).toBeVisible();
 
-    // A checksum-INVALID 11-digit NIN surfaces the Modulus-11 failure.
+    // Story 13-15 — a well-formed 11-digit NIN that fails the (retired) Mod-11
+    // checksum is now ACCEPTED (format-only; NINs are random, no check digit).
+    // No "invalid" state renders; Continue stays disabled here only because the
+    // OTHER required Step-1 fields are still empty. (NIN format-only coverage is
+    // in nin-validation.spec.ts.)
     await page.getByTestId('wizard-step1-nin-input').fill('12345678910');
-    await expect(page.getByTestId('wizard-step1-nin-invalid')).toBeVisible();
+    await expect(page.getByTestId('wizard-step1-nin-invalid')).toHaveCount(0);
     await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
 
     // Pressing the pending-NIN toggle disables the NIN input + reveals the
