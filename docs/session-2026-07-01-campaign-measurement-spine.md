@@ -77,3 +77,24 @@ Roadmap Tiers: launch-critical (Phases 0-2) = **done in code**. Everything open 
 
 ## Resume-cold pointer
 Prod `9fd9e7a`, in-sync, CI green. The campaign spine is live + prod-verified. Next action is **operator** (Pro + re-pin → fire the blasts). For the fire: cohort dry-run first, then live A→B spaced, watch the meter + funnel. Every send/bounce/click/conversion/unsubscribe now lands in `email_events`/`email_suppressions` and is measurable via `ReportService.getCampaignFunnel(campaignId)`.
+
+---
+
+## ADDENDUM — 2026-07-03/04 session: stranded-push resolution + local test-DB parity
+**main @ `13275f1` (deployed, CI green).** The prior session's laptop died mid-`git push`, leaving two commits committed-but-unpushed (`main` 1 ahead of `origin`). This session landed them and fixed the root cause the push exposed. Full context: `local-test-db-parity` memory + Pitfall #42.
+
+**What was stranded (item 8 of that session's agenda — "confirm the push landed and CI is green"):**
+- `d55dadc` — 13-2 `imported_association` added to the `respondents.source` enum (the cheap pre-launch slice of the [Registry Data-Status Taxonomy](../_bmad-output/planning-artifacts/registry-data-status-taxonomy.md)).
+- `13275f1` — the test-infra parity fix (this session).
+
+**The gate failure was NOT code — it was local DB drift.** The pre-push hook ran the full suite against the DEV DB (`app_db`, `NODE_ENV=development`) because it inherited root `.env` and the db-guard no-ops outside `NODE_ENV=test`. `app_db` had fallen ~an epic behind (missing `email_events`/`email_suppressions`, the new enum, constraints) while an earlier agent kept `app_test` current per convention. Resolution, in order:
+1. **Synced `app_db`** (`db:push:full:force`) after clearing **21 leaked constraint-rejection fixtures** (`Invalid Status Test`/`Invalid Org Test`/`totally_made_up_status`) that were blocking the CHECK-constraint migrations.
+2. **Dropped stale `oslsr_bench`** (spent 9-11 benchmark DB, via its own `cleanup:audit-bench`).
+3. **Re-pointed `.husky/pre-push` at `app_test` + `NODE_ENV=test`** — so the local gate validates the SAME clean slate CI's `test_db` uses; the guard is now engaged, making it impossible to silently test against (and pollute) `app_db` again.
+4. **Made `me.service.test.ts` (9-61) own its form fixture** (`vi.spyOn(getPublicActiveForm)` in `beforeEach` — `beforeAll` is wiped by `restoreMocks:true`). These 2 tests were an ambient-DB coupling: green in CI (no form pinned), red on `app_db` (real form → completeness enforced).
+
+**Local DB layout now (settled):** `app_db` = canonical dev DB (499k seed, form pinned, prod-faithful) — run the app here, NOT the suite; `app_test` = clean CI-mirror (suite runs here); `oslsr_bench` = dropped.
+
+**Pitfall footnote:** the first push "failed" only because the laptop slept overnight mid-run (9h duration, hook timeouts, **0 assertion failures**). Re-push with the machine awake was green. See Pitfall #37/#42.
+
+**Items 2/4/5 (loose threads) status:** addressed at the DESIGN level by John's taxonomy spec + Bob's story sweep (12-4 model, 12-5/12-6/12-7 renderers, 13-2/13-6 amendments, 13-14 Public-Core split) — all `ready-for-dev`/`backlog`, NONE implemented. Four open tensions flagged this session (recorded for the retrospective): (1) the `COUNT(DISTINCT)` key is under-specified for no-NIN/shared-phone rows and must match the importer's dedup key; (2) **"verified" is undefined until taxonomy Open-Q1 — does the system VALIDATE NIN vs only CAPTURE it? — is answered; do not show a "verified registry" number before then**; (3) the two-form split makes Public-Core rows `core` forever → the `full` field-sample (the baseline-study substance) could stay thin while the headline grows — someone must own the required `full` count; (4) all honest-display renderers are post-launch, so **pull 12-5 (label honesty) forward** to avoid a wrong "Total Respondents" in front of the Ministry during the launch window.
