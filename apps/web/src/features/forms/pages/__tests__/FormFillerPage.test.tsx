@@ -328,23 +328,26 @@ describe('FormFillerPage', () => {
       sectionShowWhen: {},
     };
 
-    it('shows modulus11 validation error for invalid NIN', () => {
+    it('Story 13-15 — passes a well-formed NIN that fails Mod-11 (rule is format-only)', async () => {
       mockHookReturn = { data: ninForm, isLoading: false, error: null };
       renderPage();
 
+      // 12345678902 fails the RETIRED Modulus-11 checksum — real NINs carry
+      // no check digit, so any 11-digit input passes the `modulus11` rule.
       fireEvent.change(screen.getByTestId('input-nin'), {
         target: { value: '12345678902' },
       });
       fireEvent.click(screen.getByTestId('continue-btn'));
 
-      expect(screen.getByRole('alert')).toHaveTextContent('Invalid NIN');
+      await waitFor(() => {
+        expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+      });
     });
 
     it('passes modulus11 validation for valid NIN', async () => {
       mockHookReturn = { data: ninForm, isLoading: false, error: null };
       renderPage();
 
-      // 61961438053 is a known valid NIN (from project context)
       fireEvent.change(screen.getByTestId('input-nin'), {
         target: { value: '61961438053' },
       });

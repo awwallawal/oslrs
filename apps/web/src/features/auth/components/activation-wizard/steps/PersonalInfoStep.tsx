@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { cn } from '../../../../../lib/utils';
 import type { StepRenderProps } from '../ActivationWizard';
 
@@ -8,7 +7,9 @@ import type { StepRenderProps } from '../ActivationWizard';
  * Step 2: Personal Info
  *
  * Collects NIN, Date of Birth, and Home Address.
- * NIN requires 11 digits with valid Modulus 11 checksum (validated by schema).
+ * NIN requires 11 digits — format only (validated by schema). No checksum
+ * exists for NINs ("11 randomly generated, non-intelligible digits", NIMC) —
+ * the retired Mod-11 gate rejected 74% of real NINs (Story 13-15).
  */
 export function PersonalInfoStep({
   formData,
@@ -16,10 +17,10 @@ export function PersonalInfoStep({
   errors,
   isSubmitting,
 }: StepRenderProps) {
-  // Real-time NIN checksum validation (only when 11 digits entered)
+  // Real-time NIN format validation — any 11-digit input is valid (the input
+  // already strips non-digits); <11 digits is incomplete.
   const ninStatus = useMemo(() => {
-    if (formData.nin.length < 11) return 'incomplete';
-    return modulus11Check(formData.nin) ? 'valid' : 'invalid';
+    return formData.nin.length < 11 ? 'incomplete' : 'valid';
   }, [formData.nin]);
 
   // Calculate reasonable date bounds for DOB
@@ -87,7 +88,7 @@ export function PersonalInfoStep({
             'w-full px-4 py-3 rounded-lg border transition-colors',
             'focus:outline-none focus-visible:ring-2',
             'disabled:bg-neutral-100 disabled:cursor-not-allowed',
-            errors.nin || ninStatus === 'invalid'
+            errors.nin
               ? 'border-error-600 focus-visible:ring-error-600 focus:border-error-600'
               : ninStatus === 'valid'
                 ? 'border-success-500 focus-visible:ring-success-500 focus:border-success-500'
@@ -106,11 +107,6 @@ export function PersonalInfoStep({
             <CheckCircle2 className="w-4 h-4" />
             Valid NIN
           </p>
-        ) : ninStatus === 'invalid' ? (
-          <p id="nin-hint" className="flex items-center gap-1 text-error-600 text-sm">
-            <XCircle className="w-4 h-4" />
-            Invalid NIN — please check for typos
-          </p>
         ) : (
           <p id="nin-hint" className="text-neutral-500 text-xs">
             Your 11-digit National Identification Number from NIMC
@@ -121,9 +117,7 @@ export function PersonalInfoStep({
           <span
             className={cn(
               'text-xs',
-              ninStatus === 'valid' ? 'text-success-600' :
-              ninStatus === 'invalid' ? 'text-error-600' :
-              'text-neutral-400'
+              ninStatus === 'valid' ? 'text-success-600' : 'text-neutral-400'
             )}
           >
             {formData.nin.length}/11 digits

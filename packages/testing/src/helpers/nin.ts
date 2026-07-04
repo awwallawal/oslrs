@@ -1,11 +1,19 @@
 /**
- * NIN (National Identification Number) Test Helpers
+ * NIN (National Identification Number) Test Helpers — TEST-NIN GENERATION ONLY.
  *
- * Nigerian NINs use Modulus 11 checksum algorithm.
- * ~9% of random base numbers produce check digit 10, which is invalid.
- * These helpers handle the edge case with retry logic.
+ * Real Nigerian NINs have NO check digit — NIMC: "11 randomly generated,
+ * non-intelligible digits" (Story 13-15, 2026-07-04; verified against prod
+ * n=105 where 74% of real NINs fail Mod-11). Every production validation path
+ * is format-only (`^\d{11}$`).
  *
- * @see docs/SESSION-NOTES-2026-01-25-STORY-1-11-COMPLETION.md for algorithm details
+ * These helpers still derive synthetic NINs via `modulus11Generate` — that is
+ * merely a convenient deterministic way to build unique 11-digit strings; it
+ * is harmless that they happen to be Mod-11-consistent. ~9% of base numbers
+ * produce check digit 10 (not representable), hence the retry logic.
+ *
+ * @see docs/SESSION-NOTES-2026-01-25-STORY-1-11-COMPLETION.md — HISTORICAL:
+ *   that session inferred "NINs use Modulus 11" from n=2 real NINs; Story
+ *   13-15 disproved it. Never infer a national-ID algorithm from 2 samples.
  */
 
 import { modulus11Generate } from '@oslsr/utils/src/validation';
@@ -14,24 +22,24 @@ import { modulus11Generate } from '@oslsr/utils/src/validation';
 let ninCounter = 0;
 
 /**
- * Generate a valid Nigerian NIN with retry logic.
+ * Generate a well-formed 11-digit test NIN with retry logic.
  *
- * About 9% of random 10-digit base numbers produce a check digit of 10,
+ * About 9% of random 10-digit base numbers produce a Mod-11 check digit of 10,
  * which cannot be represented as a single digit. This function retries
- * with different seeds until a valid NIN is generated.
+ * with different seeds until generation succeeds.
  *
  * Uses a global counter combined with random values to ensure uniqueness
  * even when fallback is needed.
  *
  * @param maxAttempts - Maximum retry attempts (default: 20)
- * @returns A valid 11-digit NIN string
+ * @returns A well-formed 11-digit NIN string
  *
  * @example
  * ```typescript
  * import { generateValidNin } from '@oslsr/testing/helpers/nin';
  *
  * const nin = generateValidNin();
- * // => "61961438053" (valid Modulus 11 checksum)
+ * // => "61961438053" (well-formed 11 digits)
  * ```
  */
 export function generateValidNin(maxAttempts = 20): string {
@@ -67,10 +75,10 @@ export function generateValidNin(maxAttempts = 20): string {
 }
 
 /**
- * Generate multiple unique valid NINs.
+ * Generate multiple unique well-formed test NINs.
  *
  * @param count - Number of NINs to generate
- * @returns Array of unique valid NIN strings
+ * @returns Array of unique 11-digit NIN strings
  *
  * @example
  * ```typescript
@@ -89,12 +97,14 @@ export function generateMultipleNins(count: number): string[] {
 }
 
 /**
- * Known valid Nigerian NINs for test fixtures.
- * These were verified against real government-issued NINs.
+ * Deterministic 11-digit NIN fixtures for tests that need stable values.
  *
- * Use when you need deterministic NINs across test runs.
+ * These two real NINs pass Mod-11 by COINCIDENCE (n=2) — that coincidence is
+ * how the retired checksum gate was wrongly inferred in Story 1-11. They are
+ * kept only as stable well-formed fixtures; nothing may treat Mod-11
+ * consistency as meaningful (Story 13-15).
  */
 export const KNOWN_VALID_NINS = [
-  '61961438053', // Weighted sum 250, check digit 3
-  '21647846180', // Weighted sum 231, check digit 0
+  '61961438053', // stable fixture (weighted sum 250 — Mod-11-consistent by chance)
+  '21647846180', // stable fixture (weighted sum 231 — Mod-11-consistent by chance)
 ] as const;

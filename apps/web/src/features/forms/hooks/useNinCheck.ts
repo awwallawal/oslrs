@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { checkNinAvailability } from '../api/nin-check.api';
 
 interface NinCheckState {
@@ -28,9 +27,10 @@ export function useNinCheck() {
     // Skip if offline
     if (!navigator.onLine) return;
 
-    // Client-side format validation before API call
+    // Client-side format validation before API call. Format-only (Story
+    // 13-15): the dup-check runs for ANY well-formed 11-digit NIN — no
+    // checksum gate (no check digit exists for NINs).
     if (!/^\d{11}$/.test(nin)) return;
-    if (!modulus11Check(nin)) return;
 
     setState(prev => ({ ...prev, isChecking: true }));
 

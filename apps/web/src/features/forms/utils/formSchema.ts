@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import type { ValidationRule } from '@oslsr/types';
 import type { FlattenedQuestion } from '../api/form.api';
 
@@ -54,7 +53,12 @@ function checkRule(rule: ValidationRule, value: unknown): string | undefined {
       break;
     }
     case 'modulus11':
-      if (!modulus11Check(strVal)) return rule.message;
+      // Story 13-15: the rule NAME is kept for published-form-config
+      // back-compat (existing forms carry `modulus11` on NIN questions), but
+      // the behavior is FORMAT-ONLY (`^\d{11}$`). No checksum exists for NINs
+      // ("11 randomly generated, non-intelligible digits", NIMC) — the old
+      // Mod-11 check rejected 74% of real NINs.
+      if (!/^\d{11}$/.test(strVal)) return rule.message;
       break;
   }
 

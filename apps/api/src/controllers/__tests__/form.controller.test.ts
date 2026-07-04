@@ -37,13 +37,8 @@ vi.mock('../../services/reference-code.service.js', () => ({
     generateUnique: () => Promise.resolve('OSL-2026-TEST00'),
   },
 }));
-vi.mock('@oslsr/utils/src/validation', () => ({
-  modulus11Check: (nin: string) => {
-    // Known valid NINs for testing
-    const validNins = ['61961438053', '21647846180'];
-    return validNins.includes(nin);
-  },
-}));
+// Story 13-15: no validation-module mock — checkNin is FORMAT-ONLY (^\d{11}$
+// via zod); the Mod-11 checksum gate is retired (real NINs have no check digit).
 
 describe('FormController', () => {
   let mockReq: Partial<Request>;
@@ -658,8 +653,10 @@ describe('FormController', () => {
       });
     });
 
-    it('returns 422 for invalid NIN format (fails Modulus 11)', async () => {
-      mockReq.body = { nin: '12345678901' }; // Invalid checksum
+    it('Story 13-15 — runs the dup-check for a well-formed NIN that fails Mod-11 (format-only)', async () => {
+      mockReq.body = { nin: '12345678901' }; // Fails the RETIRED Mod-11 check — must still be checked
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
 
       await FormController.checkNin(
         mockReq as Request,
@@ -667,10 +664,7 @@ describe('FormController', () => {
         mockNext
       );
 
-      expect(statusMock).toHaveBeenCalledWith(422);
-      expect(jsonMock).toHaveBeenCalledWith({
-        error: { code: 'INVALID_NIN_FORMAT', message: 'NIN failed Modulus 11 checksum validation' },
-      });
+      expect(jsonMock).toHaveBeenCalledWith({ data: { available: true } });
     });
 
     it('returns validation error for non-11-digit input', async () => {

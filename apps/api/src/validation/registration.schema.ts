@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 
 /**
  * Canonical wizard-submission payload schema.
@@ -10,8 +9,9 @@ import { modulus11Check } from '@oslsr/utils/src/validation';
  * validation surface). Lives in a db-free module so importing it never pulls in
  * the database layer (the controllers do, the schema must not).
  *
- * NIN: 11 digits + Modulus-11 checksum, enforced server-side for parity with the
- * enumerator/clerk path + the Step-1 client gate (registration.controller AI-Review L1).
+ * NIN: FORMAT-ONLY (`^\d{11}$`). NINs are "11 randomly generated, non-intelligible
+ * digits" (NIMC) — no check digit exists, so no offline checksum is possible
+ * (Story 13-15: the Mod-11 gate rejected 74% of real NINs on prod).
  * `familyName` optional (mononym-inclusive). `questionnaireResponses` optional
  * (Step 4 may be empty when no public form is configured).
  */
@@ -29,7 +29,6 @@ export const submitWizardSchema = z.object({
   nin: z
     .string()
     .regex(/^\d{11}$/, 'NIN must be 11 digits')
-    .refine(modulus11Check, 'NIN failed the Modulus 11 checksum')
     .optional(),
   pendingNin: z.boolean().optional(),
   deferReasonNin: z.string().max(500).optional(),

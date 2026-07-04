@@ -84,9 +84,8 @@ vi.mock('../../../../components/skeletons', () => ({
   SkeletonForm: () => <div data-testid="skeleton-form" />,
 }));
 
-vi.mock('@oslsr/utils/src/validation', () => ({
-  modulus11Check: (val: string) => val === '61961438053',
-}));
+// Story 13-15: no modulus11Check mock — NIN validation is format-only
+// (^\d{11}$); the Mod-11 checksum gate is retired.
 
 // Mock useNinCheck for NIN pre-check tests
 let mockNinCheckReturn = {

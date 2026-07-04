@@ -89,7 +89,7 @@ Quick disambiguation: enumerator = field; clerk = office; supervisor = oversight
 ## III. Identity / verification terms
 
 ### `NIN` — National Identity Number
-11-digit ID issued by NIMC. Validated locally via Modulus 11 checksum (per Story 1-11 session note — original PRD spec was Verhoeff but real Nigerian NINs are Modulus 11).
+11-digit ID issued by NIMC. Validated **format-only** (`^\d{11}$`) — real NINs are "11 randomly generated, non-intelligible digits" (NIMC), so **no check digit exists** and no offline checksum is possible (Story 13-15, 2026-07-04: the earlier Mod-11 gate — itself a Story 1-11 revision of the PRD's Verhoeff spec, inferred from n=2 — rejected 74% of real NINs on prod). Validation beyond format requires NIMC online verification (future, cost-gated); a format-valid NIN is `nin_on_file`, never "verified" (registry data-status taxonomy).
 
 **FR21 (refined per SCP-2026-04-22):** NIN dedupe enforced at DB layer via partial UNIQUE index `WHERE nin IS NOT NULL`. Exclusions: rows with `status` in `{pending_nin_capture, nin_unavailable, imported_unverified}` exempt from FR21.
 

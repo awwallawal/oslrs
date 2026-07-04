@@ -2,11 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-// Mock modulus11Check
-const mockModulus11Check = vi.hoisted(() => vi.fn());
-vi.mock('@oslsr/utils/src/validation', () => ({
-  modulus11Check: mockModulus11Check,
-}));
+// Story 13-15: no modulus11Check mock — the hook is FORMAT-ONLY (^\d{11}$);
+// the Mod-11 checksum gate is retired (real NINs have no check digit).
 
 // Mock checkNinAvailability API
 const mockCheckNinAvailability = vi.hoisted(() => vi.fn());
@@ -20,7 +17,6 @@ describe('useNinCheck', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    mockModulus11Check.mockReturnValue(true);
     vi.stubGlobal('navigator', { ...window.navigator, onLine: true });
   });
 
@@ -140,20 +136,22 @@ describe('useNinCheck', () => {
     expect(mockCheckNinAvailability).not.toHaveBeenCalled();
   });
 
-  it('skips API call when modulus11 check fails', async () => {
-    mockModulus11Check.mockReturnValue(false);
+  it('Story 13-15 — runs the dup-check for a well-formed NIN that fails Mod-11 (AC4)', async () => {
+    mockCheckNinAvailability.mockResolvedValue({ available: true });
 
     const { result } = renderHook(() => useNinCheck());
 
     act(() => {
-      result.current.checkNin('61961438053');
+      // 12345678901 fails the RETIRED Modulus-11 checksum — the availability
+      // check must still fire for any ^\d{11}$ input.
+      result.current.checkNin('12345678901');
     });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(mockCheckNinAvailability).not.toHaveBeenCalled();
+    expect(mockCheckNinAvailability).toHaveBeenCalledWith('12345678901');
   });
 
   it('clears duplicate state on API error (non-blocking)', async () => {

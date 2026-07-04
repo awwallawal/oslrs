@@ -596,12 +596,48 @@ describe('POST /registration/wizard', () => {
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });
 
-  it('returns 400 on a checksum-invalid 11-digit NIN (Modulus-11, AI-Review L1)', async () => {
-    // 12345678901 is 11 digits but fails the Modulus-11 check digit — the server
-    // now rejects it (parity with the clerk path + the Step-1 client gate).
+  it('Story 13-15 — ACCEPTS a well-formed NIN that fails Mod-11 (format-only, no checksum gate)', async () => {
+    // 12345678901 is 11 digits but fails the RETIRED Modulus-11 check digit.
+    // Real NINs carry no check digit (NIMC; 74% of prod NINs fail Mod-11), so
+    // the server accepts any ^\d{11}$ NIN and proceeds to dup-check + insert.
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({
+          returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]),
+        }),
+      };
+      const submissionsInsertChain = {
+        values: () => Promise.resolve(undefined),
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: 'form-uuid-1' },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
     const res = await request(buildApp())
       .post('/registration/wizard')
       .send(validBody({ nin: '12345678901' }));
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ respondentId: 'resp-1', status: 'active' });
+  });
+
+  it('Story 13-15 — still rejects a malformed NIN (format guard retained)', async () => {
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '1234567890' })); // 10 digits — not ^\d{11}$
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });

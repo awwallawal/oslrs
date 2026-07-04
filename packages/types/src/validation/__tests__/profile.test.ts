@@ -6,10 +6,10 @@ import {
   ninSchema,
 } from '../profile.js';
 
-// Valid test data using real NIN with correct Modulus 11 checksum
+// Valid test data — NIN is format-only (^\d{11}$) per Story 13-15.
 const validActivationData = {
   password: 'SecurePass123!',
-  nin: '12345678919', // Valid NIN with correct Modulus 11 checksum (generated from 1234567891)
+  nin: '12345678919', // Any 11-digit string is a well-formed NIN
   dateOfBirth: '1990-05-15',
   homeAddress: '123 Main Street, Lagos',
   bankName: 'First Bank',
@@ -27,8 +27,15 @@ const rawBase64Image = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQN
 
 describe('NIN Schema', () => {
   it('should validate a valid NIN', () => {
-    // Using valid NIN with correct Modulus 11 checksum
     const result = ninSchema.safeParse('12345678919');
+    expect(result.success).toBe(true);
+  });
+
+  it('Story 13-15 — accepts a well-formed NIN that fails Mod-11 (format-only)', () => {
+    // 12345678901 fails the RETIRED Modulus-11 checksum. Real NINs carry no
+    // check digit (NIMC: "11 randomly generated, non-intelligible digits");
+    // the old gate rejected 74% of real NINs on prod.
+    const result = ninSchema.safeParse('12345678901');
     expect(result.success).toBe(true);
   });
 
@@ -43,16 +50,6 @@ describe('NIN Schema', () => {
   it('should fail on NIN with non-digit characters', () => {
     const result = ninSchema.safeParse('1234567890A');
     expect(result.success).toBe(false);
-  });
-
-  it('should fail on invalid NIN checksum', () => {
-    const result = ninSchema.safeParse('12345678901'); // Invalid Modulus 11 checksum
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      // Error message was reworded to UX-friendlier "please check for typos"
-      // instead of mentioning the technical "checksum" word.
-      expect(result.error.errors[0].message).toContain('Invalid NIN');
-    }
   });
 });
 

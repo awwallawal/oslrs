@@ -31,9 +31,8 @@ vi.mock('../../db/index.js', () => ({
 }));
 vi.mock('../../services/native-form.service.js');
 vi.mock('../../queues/webhook-ingestion.queue.js');
-vi.mock('@oslsr/utils/src/validation', () => ({
-  modulus11Check: () => true,
-}));
+// Story 13-15: the modulus11Check mock is gone — form.controller no longer
+// imports the validation module (NIN gates are format-only).
 
 // Mock drizzle-orm operators
 const mockEq = vi.fn((...args: unknown[]) => ({ _type: 'eq', args }));

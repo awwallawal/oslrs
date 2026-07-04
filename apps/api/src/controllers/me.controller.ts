@@ -9,18 +9,14 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AppError } from '@oslsr/utils';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { MeService, type WizardShapedData } from '../services/me.service.js';
 import { submitWizardSchema } from '../validation/registration.schema.js';
 
 // Story 9-61 (AC#3) — session-authed NIN completion input. Same NIN rules as the
-// wizard submit (11 digits + Modulus-11) — the token is dropped (the JWT is the
-// credential), nothing else is accepted.
+// wizard submit (format-only, 11 digits; no checksum exists per Story 13-15) —
+// the token is dropped (the JWT is the credential), nothing else is accepted.
 const meCompleteNinSchema = z.object({
-  nin: z
-    .string()
-    .regex(/^\d{11}$/, 'NIN must be 11 digits')
-    .refine(modulus11Check, 'NIN failed the Modulus 11 checksum'),
+  nin: z.string().regex(/^\d{11}$/, 'NIN must be 11 digits'),
 });
 
 export class MeController {

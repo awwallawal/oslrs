@@ -208,9 +208,21 @@ describe('POST /me/registration/complete-nin (Story 9-61 AC#3)', () => {
     );
   });
 
-  it('rejects a checksum-invalid NIN with 400', async () => {
+  it('Story 13-15 — accepts a well-formed NIN that fails Mod-11 (format-only)', async () => {
+    // 12345678901 fails the RETIRED Modulus-11 checksum — real NINs carry no
+    // check digit, so any ^\d{11}$ input reaches the service.
     authAsUser(PUBLIC_USER);
+    mockCompleteNinAuthenticated.mockResolvedValueOnce({ state: 'complete' });
     const res = await request(buildApp()).post('/me/registration/complete-nin').send({ nin: '12345678901' });
+    expect(res.status).toBe(200);
+    expect(mockCompleteNinAuthenticated).toHaveBeenCalledWith(
+      expect.objectContaining({ nin: '12345678901' }),
+    );
+  });
+
+  it('rejects a malformed NIN with 400 (format guard retained)', async () => {
+    authAsUser(PUBLIC_USER);
+    const res = await request(buildApp()).post('/me/registration/complete-nin').send({ nin: '1234567890' }); // 10 digits
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('COMPLETE_NIN_INVALID_INPUT');
     expect(mockCompleteNinAuthenticated).not.toHaveBeenCalled();

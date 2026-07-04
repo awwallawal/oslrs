@@ -113,3 +113,6 @@ SESSION_LOG.md
 
 # Story 13-3 — Cloudflare Pages local wrangler state (never commit)
 .wrangler/
+
+# Saved Claude Code session transcript (scratch working memory) — never commit
+zzzzzzzzzz.txt

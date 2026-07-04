@@ -8,7 +8,6 @@ import {
 import { queueSubmissionForIngestion } from '../queues/webhook-ingestion.queue.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
 import { AppError } from '@oslsr/utils';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { db } from '../db/index.js';
 import { respondents } from '../db/schema/respondents.js';
 import { users } from '../db/schema/users.js';
@@ -212,12 +211,8 @@ export class FormController {
 
       const { nin } = parsed.data;
 
-      // Validate Modulus 11 checksum
-      if (!modulus11Check(nin)) {
-        return res.status(422).json({
-          error: { code: 'INVALID_NIN_FORMAT', message: 'NIN failed Modulus 11 checksum validation' },
-        });
-      }
+      // Format-only validation (schema above). No checksum exists for NINs —
+      // "11 randomly generated, non-intelligible digits" (NIMC, Story 13-15).
 
       // Check respondents table first (AC 3.7.2 — respondents takes priority)
       const respondent = await db.query.respondents.findFirst({

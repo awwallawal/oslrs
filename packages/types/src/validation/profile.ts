@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 
+// FORMAT-ONLY: NINs are "11 randomly generated, non-intelligible digits" (NIMC)
+// — no check digit exists, so no offline checksum is possible (Story 13-15).
 export const ninSchema = z.string()
   .length(11, 'NIN must be exactly 11 digits')
-  .regex(/^\d{11}$/, 'NIN must contain only digits')
-  .refine(modulus11Check, 'Invalid NIN — please check for typos');
+  .regex(/^\d{11}$/, 'NIN must contain only digits');
 
 export const activationSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),

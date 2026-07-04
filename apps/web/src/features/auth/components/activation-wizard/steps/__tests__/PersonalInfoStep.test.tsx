@@ -158,7 +158,7 @@ describe('PersonalInfoStep', () => {
     expect(screen.getByText('5/11 digits')).toBeInTheDocument();
   });
 
-  it('shows success color when NIN is 11 digits with valid checksum', () => {
+  it('shows success color when NIN is 11 digits (format-only, Story 13-15)', () => {
     render(
       <PersonalInfoStep
         {...createMockProps({

@@ -152,7 +152,7 @@ describe('Auth Activation Integration', () => {
       expect(res.status).toBe(401);
   });
 
-  it('should validate NIN checksum', async () => {
+  it('Story 13-15 — accepts a well-formed NIN that fails Mod-11 (format-only)', async () => {
       const newToken = generateInvitationToken();
       const email = `nin-test-${Date.now()}@example.com`;
       await db.insert(users).values({
@@ -163,11 +163,45 @@ describe('Auth Activation Integration', () => {
           invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
       });
 
+      // Real NINs carry no check digit (NIMC) — derive a unique 11-digit NIN
+      // that FAILS the retired Mod-11 check by bumping the generated check digit.
+      const base = generateValidNin();
+      const nonMod11Nin = base.slice(0, 10) + String((Number(base[10]) + 1) % 10);
+
       const res = await request
         .post(`/api/v1/auth/activate/${newToken}`)
         .send({
             password: 'password123',
-            nin: '12345678901', // Invalid checksum (1234567890 -> 2)
+            nin: nonMod11Nin,
+            dateOfBirth: '1990-01-01',
+            homeAddress: '123 Test St',
+            bankName: 'Test Bank',
+            accountNumber: '0123456789',
+            accountName: 'Test',
+            nextOfKinName: 'Test',
+            nextOfKinPhone: '08012345678'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+  });
+
+  it('should reject a malformed NIN (format guard retained)', async () => {
+      const newToken = generateInvitationToken();
+      const email = `nin-format-test-${Date.now()}@example.com`;
+      await db.insert(users).values({
+          email,
+          fullName: 'NIN Format Test',
+          roleId: fieldRoleId, // Must be field role to trigger NIN validation
+          status: 'invited',
+          invitationToken: hashInvitationToken(newToken), // OPS-2: stored hashed at rest
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+            password: 'password123',
+            nin: '1234567890', // 10 digits — fails ^\d{11}$
             dateOfBirth: '1990-01-01',
             homeAddress: '123 Test St',
             bankName: 'Test Bank',

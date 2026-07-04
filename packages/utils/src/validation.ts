@@ -3,8 +3,16 @@
  */
 
 /**
- * Modulus 11 algorithm implementation
- * Used for validating Nigerian National Identification Numbers (NIN).
+ * Modulus 11 algorithm implementation.
+ *
+ * @deprecated DO NOT use as a NIN validation gate (Story 13-15, 2026-07-04).
+ * Nigerian NINs have NO check digit — NIMC: "11 randomly generated,
+ * non-intelligible digits". Verified against prod (n=105): this check rejects
+ * 74% of REAL NINs. Every production validation path is format-only
+ * (`^\d{11}$`); NIN validation beyond format requires NIMC online
+ * verification. Kept only as the inverse of `modulus11Generate` (test-NIN
+ * generation via `packages/testing/src/helpers/nin.ts`) — no production code
+ * imports it.
  *
  * Algorithm:
  * 1. Multiply first 10 digits by weights 10, 9, 8, 7, 6, 5, 4, 3, 2, 1
@@ -47,6 +55,10 @@ export function modulus11Check(input: string): boolean {
 
 /**
  * Generates a Modulus 11 check digit and appends it to a 10-digit input.
+ *
+ * TEST-NIN GENERATION ONLY (see `packages/testing/src/helpers/nin.ts`
+ * `generateValidNin`). Real NINs carry no check digit (Story 13-15) — it's
+ * merely harmless that synthetic test NINs happen to be Mod-11-consistent.
  */
 export function modulus11Generate(input: string): string {
   if (!/^\d{10}$/.test(input)) {

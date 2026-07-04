@@ -565,7 +565,8 @@ export class MeService {
    * `pending_nin_capture` caller supplies their NIN; we promote the row to
    * active in-session, replacing the magic-link TOKEN gate (which stays intact
    * for unauthenticated email-link returns via `CompleteNinPage`). NIN-dedupe is
-   * self-aware. The Modulus-11 checksum is enforced at the controller (Zod).
+   * self-aware. NIN format (`^\d{11}$`) is enforced at the controller (Zod);
+   * format-only per Story 13-15 (no checksum exists for NINs).
    */
   static async completeNinAuthenticated(args: {
     userId: string;

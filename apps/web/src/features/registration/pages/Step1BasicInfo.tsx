@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import { modulus11Check } from '@oslsr/utils/src/validation';
 import { WizardNavigation } from '../components/WizardNavigation';
 import { NinHelpHint } from '../components/NinHelpHint';
 import { PendingNinToggle } from '../components/PendingNinToggle';
@@ -12,13 +11,16 @@ import type { WizardDraftData } from '../api/wizard.api';
  * Story 9-12 Step 1 + Story 9-18 Part A (AC#A1-A5) + Part F (AC#F1).
  *
  * Step 1 is now the single canonical identity-capture point:
- *   - NIN first (Modulus-11 + live duplicate check + pending-NIN toggle) — the
- *     State A/B/C Step-5 dispatcher is retired; NIN lives here, once.
+ *   - NIN first (format-only `^\d{11}$` + live duplicate check + pending-NIN
+ *     toggle) — the State A/B/C Step-5 dispatcher is retired; NIN lives here,
+ *     once. No checksum: NINs are "11 randomly generated, non-intelligible
+ *     digits" (NIMC) — the retired Mod-11 gate rejected 74% of real NINs
+ *     (Story 13-15).
  *   - Given name + Family name as two explicit fields (Yoruba/Nigerian
  *     surname-first safe) — replaces the lossy single "Full Name" parse.
  *   - Date of birth + gender (unchanged).
  *
- * Continue is gated (AC#A3): disabled until the NIN gate (checksum-valid &
+ * Continue is gated (AC#A3): disabled until the NIN gate (11-digit format &
  * non-duplicate, OR pending-NIN chosen) AND name/DOB/gender all pass. A visible
  * validation summary explains what's outstanding (wired to the button's
  * aria-describedby).
@@ -101,18 +103,18 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack, edit
   // duplicate-checked field so they can supply a NIN.
   const ninLocked = editMode === true && !!ownNin;
 
-  // AC#A1 — NIN status machine mirrors the retired Step5NinInput.
-  const ninStatus: 'incomplete' | 'valid' | 'invalid' =
-    !nin || nin.length < 11 ? 'incomplete' : modulus11Check(nin) ? 'valid' : 'invalid';
+  // AC#A1 — NIN status machine. Format-only (Story 13-15): any 11-digit input
+  // is 'valid' (the input already strips non-digits); <11 digits is 'incomplete'.
+  const ninStatus: 'incomplete' | 'valid' = !nin || nin.length < 11 ? 'incomplete' : 'valid';
 
   // Auto-focus the NIN field (it's the first field now).
   useEffect(() => {
     document.getElementById('wizard-step1-nin')?.focus();
   }, []);
 
-  // AC#A2 — live duplicate check once the NIN is checksum-valid. The hook
+  // AC#A2 — live duplicate check once the NIN is format-valid. The hook
   // debounces (~500ms) and only calls the (rate-limited, unauthenticated)
-  // /forms/check-nin endpoint for checksum-valid 11-digit input.
+  // /forms/check-nin endpoint for well-formed 11-digit input.
   useEffect(() => {
     if (pending || ninLocked) {
       resetNinCheck();
@@ -163,11 +165,9 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack, edit
   // aria-describedby so screen-reader users hear it (not just the help hint).
   const ninMsgId = ninDuplicateError
     ? 'wizard-step1-nin-duplicate'
-    : !pending && ninStatus === 'invalid'
-      ? 'wizard-step1-nin-invalid'
-      : !pending && ninStatus === 'valid' && isChecking
-        ? 'wizard-step1-nin-checking'
-        : undefined;
+    : !pending && ninStatus === 'valid' && isChecking
+      ? 'wizard-step1-nin-checking'
+      : undefined;
   const ninDescribedBy = ['wizard-step1-nin-help', ninMsgId].filter(Boolean).join(' ');
 
   function handleContinue() {
@@ -209,10 +209,10 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack, edit
             disabled={pending}
             readOnly={ninLocked}
             aria-describedby={ninDescribedBy}
-            aria-invalid={!pending && (ninStatus === 'invalid' || !!ninDuplicateError)}
+            aria-invalid={!pending && !!ninDuplicateError}
             placeholder="11-digit NIN"
             className={`w-full rounded-lg border px-4 py-3 font-mono transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:bg-neutral-100 disabled:opacity-60 read-only:bg-neutral-100 read-only:text-neutral-600 ${
-              !pending && (ninStatus === 'invalid' || ninDuplicateError)
+              !pending && ninDuplicateError
                 ? 'border-error-600 focus:border-error-600'
                 : !pending && ninStatus === 'valid' && !isChecking
                   ? 'border-success-500 focus:border-success-500'
@@ -235,17 +235,6 @@ export function Step1BasicInfo({ formData, mergeFields, onContinue, onBack, edit
             <p className="flex items-center gap-1 text-sm text-success-600" data-testid="wizard-step1-nin-valid">
               <CheckCircle2 className="h-4 w-4" />
               NIN format looks good. We do a final check when you submit.
-            </p>
-          )}
-          {!pending && !ninLocked && ninStatus === 'invalid' && (
-            <p
-              id="wizard-step1-nin-invalid"
-              role="alert"
-              className="flex items-center gap-1 text-sm text-error-600"
-              data-testid="wizard-step1-nin-invalid"
-            >
-              <XCircle className="h-4 w-4" />
-              NIN failed the Modulus 11 checksum. Please double-check it.
             </p>
           )}
           {ninDuplicateError && (

@@ -19,8 +19,11 @@ const mockedCheckNin = vi.mocked(checkNinAvailability);
  * Story 9-18 Part A (AC#D1) + Part F (AC#F6) — Step 1 NIN-first + name split.
  */
 
-const VALID_NIN = '12345678919'; // passes Modulus 11
-const INVALID_NIN = '12345678910'; // 11 digits, wrong check digit
+// Story 13-15: NIN validation is FORMAT-ONLY (^\d{11}$) — no checksum exists
+// for real NINs, so ANY 11-digit string is valid.
+const VALID_NIN = '12345678919';
+const NON_MOD11_NIN = '12345678910'; // 11 digits; fails the RETIRED Mod-11 — must be treated as valid
+const SHORT_NIN = '123456789'; // <11 digits — incomplete
 
 // A fully-valid Step-1 state minus whatever a test wants to omit/override.
 function validState(overrides: Partial<WizardDraftData> = {}): WizardDraftData {
@@ -70,15 +73,29 @@ describe('Step1BasicInfo (9-18 Part A + F)', () => {
     expect(screen.getByTestId('step1-validation-summary')).toBeInTheDocument();
   });
 
-  it('enables Continue once NIN is checksum-valid and all fields are filled', () => {
+  it('enables Continue once NIN is 11 digits and all fields are filled', () => {
     renderStep(validState());
     expect(screen.getByTestId('wizard-nav-continue')).not.toBeDisabled();
     expect(screen.queryByTestId('step1-validation-summary')).not.toBeInTheDocument();
   });
 
-  it('shows the Modulus-11 failure and keeps Continue disabled for an invalid NIN', () => {
-    renderStep(validState({ nin: INVALID_NIN }));
-    expect(screen.getByTestId('wizard-step1-nin-invalid')).toBeInTheDocument();
+  it('Story 13-15 — accepts a well-formed NIN that fails Mod-11 (AC3: no red invalid state, Continue enabled)', () => {
+    renderStep(validState({ nin: NON_MOD11_NIN }));
+    // No checksum-failure alert exists any more (format-only validation).
+    expect(screen.queryByTestId('wizard-step1-nin-invalid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('wizard-nav-continue')).not.toBeDisabled();
+  });
+
+  it('Story 13-15 — runs the duplicate check for a NIN that fails Mod-11 (AC4)', async () => {
+    mockedCheckNin.mockResolvedValueOnce({ available: true });
+    renderStep(validState({ nin: NON_MOD11_NIN }));
+    // Debounced (~500ms) — the availability check must fire for ANY ^\d{11}$.
+    expect(await screen.findByTestId('wizard-step1-nin-valid', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(mockedCheckNin).toHaveBeenCalledWith(NON_MOD11_NIN);
+  });
+
+  it('keeps Continue disabled while the NIN is incomplete (<11 digits)', () => {
+    renderStep(validState({ nin: SHORT_NIN }));
     expect(screen.getByTestId('wizard-nav-continue')).toBeDisabled();
   });
 

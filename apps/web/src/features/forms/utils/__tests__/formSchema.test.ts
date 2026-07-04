@@ -67,13 +67,18 @@ describe('validateQuestionValue', () => {
     expect(validateQuestionValue(q, '08012345678')).toBe('Phone must be valid');
   });
 
-  it('supports modulus11', () => {
+  it('supports modulus11 as a FORMAT-ONLY rule (Story 13-15 — rule name kept for form-config back-compat)', () => {
     const q = makeQuestion({
       name: 'nin',
       validation: [{ type: 'modulus11', value: 1, message: 'Invalid NIN' }],
     });
-    expect(validateQuestionValue(q, '12345678902')).toBe('Invalid NIN');
+    // Any 11-digit NIN passes — including ones that fail the retired Mod-11
+    // checksum (real NINs carry no check digit).
+    expect(validateQuestionValue(q, '12345678902')).toBeUndefined();
     expect(validateQuestionValue(q, '61961438053')).toBeUndefined();
+    // Format is still enforced.
+    expect(validateQuestionValue(q, '1234567890')).toBe('Invalid NIN'); // 10 digits
+    expect(validateQuestionValue(q, '1234567890A')).toBe('Invalid NIN'); // non-numeric
   });
 });
 

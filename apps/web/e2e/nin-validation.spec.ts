@@ -1,10 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * NIN Modulus 11 Validation E2E.
+ * NIN FORMAT-ONLY Validation E2E (Story 13-15).
+ *
+ * NINs are "11 randomly generated, non-intelligible digits" (NIMC) — no check
+ * digit exists. The Mod-11 checksum gate (which rejected 74% of real NINs on
+ * prod) is retired: any ^\d{11}$ input is valid on every surface.
  *
  * Two surfaces:
- *   1. Public wizard Step 1 (Story 9-18 Part A / AC#D5) — client-side Modulus-11
+ *   1. Public wizard Step 1 (Story 9-18 Part A / AC#D5) — client-side format
  *      feedback + the pending-NIN toggle. Active (only needs /register to
  *      render, which the full-stack webServer provides; the form-404 settles the
  *      wizard to Step 1).
@@ -12,30 +16,38 @@ import { test, expect } from '@playwright/test';
  *      NIN question. Still skipped pending a published-form dev seed.
  */
 
-test.describe('Wizard Step 1 — NIN validation (Story 9-18 AC#D5)', () => {
-  const VALID_NIN = '61961438053'; // passes Modulus 11
-  const INVALID_NIN = '12345678910'; // 11 digits, wrong check digit
+test.describe('Wizard Step 1 — NIN validation (Story 9-18 AC#D5, format-only per 13-15)', () => {
+  const VALID_NIN = '61961438053'; // stable 11-digit fixture (its Mod-11 consistency is a meaningless coincidence)
+  const NON_MOD11_NIN = '12345678910'; // 11 digits; fails the RETIRED Mod-11 — must be accepted
 
-  test('rejects a checksum-invalid NIN with the Modulus-11 message + disabled Continue', async ({
+  test('Story 13-15 — accepts a well-formed NIN that fails Mod-11 (no invalid state)', async ({
     page,
   }) => {
     await page.goto('/register');
     await expect(page.getByTestId('step1-basic-info')).toBeVisible();
 
-    await page.getByTestId('wizard-step1-nin-input').fill(INVALID_NIN);
-    const invalid = page.getByTestId('wizard-step1-nin-invalid');
-    await expect(invalid).toBeVisible();
-    await expect(invalid).toContainText(/modulus 11/i);
-    await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
+    await page.getByTestId('wizard-step1-nin-input').fill(NON_MOD11_NIN);
+    // The checksum-failure alert no longer exists; the field goes green.
+    await expect(page.getByTestId('wizard-step1-nin-valid')).toBeVisible();
+    await expect(page.getByTestId('wizard-step1-nin-invalid')).toHaveCount(0);
   });
 
-  test('accepts a checksum-valid NIN (green format indicator)', async ({ page }) => {
+  test('accepts an 11-digit NIN (green format indicator)', async ({ page }) => {
     await page.goto('/register');
     await expect(page.getByTestId('step1-basic-info')).toBeVisible();
 
     await page.getByTestId('wizard-step1-nin-input').fill(VALID_NIN);
     await expect(page.getByTestId('wizard-step1-nin-valid')).toBeVisible();
     await expect(page.getByTestId('wizard-step1-nin-invalid')).toHaveCount(0);
+  });
+
+  test('keeps Continue disabled while the NIN is incomplete (<11 digits)', async ({ page }) => {
+    await page.goto('/register');
+    await expect(page.getByTestId('step1-basic-info')).toBeVisible();
+
+    await page.getByTestId('wizard-step1-nin-input').fill('123456789');
+    await expect(page.getByTestId('wizard-step1-nin-valid')).toHaveCount(0);
+    await expect(page.getByTestId('wizard-nav-continue')).toBeDisabled();
   });
 
   test('pending-NIN toggle disables the NIN input + shows the consequence card', async ({
@@ -70,7 +82,7 @@ test.describe('Enumerator form-filler — NIN validation (Story 3.4 Task 0.7)', 
   // SKIPPED: requires a published native form with a NIN question after
   // db:seed:dev (the seed orchestrator doesn't yet create one). Re-enable by
   // adding a published-survey seed module + removing the `.skip`.
-  test.skip('should reject invalid NIN with modulus11 error and accept valid NIN', async ({ page }) => {
+  test.skip('should reject a malformed NIN with a format error and accept any 11-digit NIN (Story 13-15)', async ({ page }) => {
     await page.goto('/staff/login');
     await page.getByLabel('Email Address').fill('enumerator@dev.local');
     await page.getByLabel('Password', { exact: true }).fill('enum123');
@@ -113,14 +125,16 @@ test.describe('Enumerator form-filler — NIN validation (Story 3.4 Task 0.7)', 
 
     await expect(ninInput).toBeVisible({ timeout: 5000 });
 
-    await ninInput.fill('12345678902');
+    // Malformed (10 digits) — the ^\d{11}$ format guard still rejects.
+    await ninInput.fill('1234567890');
     await continueBtn.click();
     const errorAlert = page.getByRole('alert');
     await expect(errorAlert).toBeVisible({ timeout: 5000 });
     await expect(errorAlert).toContainText(/NIN|invalid/i);
     await expect(continueBtn).toBeDisabled();
 
-    await ninInput.fill('61961438053');
+    // Any 11-digit NIN is valid (format-only; 12345678902 fails the retired Mod-11).
+    await ninInput.fill('12345678902');
     await expect(errorAlert).not.toBeVisible({ timeout: 5000 });
     await expect(continueBtn).toBeEnabled();
     await expect(page.getByLabel('Valid')).toBeVisible();

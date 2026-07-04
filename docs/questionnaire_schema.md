@@ -439,8 +439,7 @@ The XLSForm parser in Story 2.1 must validate these OSLSR-specific required fiel
 
 | Rule | Constraint | Error Message |
 | :--- | :--- | :--- |
-| NIN Format | 11 digits, numeric only | "NIN must be exactly 11 digits" |
-| NIN Checksum | Modulus 11 (frontend) | "Invalid NIN - please verify and re-enter" |
+| NIN Format | 11 digits, numeric only (format-only — no checksum exists for NINs; the Mod-11 rule was retired by Story 13-15) | "NIN must be exactly 11 digits" |
 | Phone Format | Nigerian mobile (0[7-9][0-1]xxxxxxxx) | "Enter valid Nigerian mobile number" |
 | Age Minimum | >= 15 years from DOB | "Respondent must be 15 years or older" |
 | Hours Worked | 0-168 range | "Hours must be between 0 and 168" |
