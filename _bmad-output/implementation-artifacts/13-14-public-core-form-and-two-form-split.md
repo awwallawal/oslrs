@@ -3,6 +3,8 @@
 Status: ready-for-dev
 
 > Tier: **pre-launch-eligible** (mostly operator + a small enablement/verification; NOT heavy code — the forms engine is data-driven per 9-54). Emerged 2026-07-01 (survey-fatigue reduction discussion). Anchors on the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md) — introduces the **`completeness=core`** state.
+>
+> 🔒 **RESOLUTION R3 2026-07-04 (Awwal-approved): the `core` channel must NOT starve the `full` stratum.** Deliverable floor = **`full` (field-collected) ≥ 330 responses AND ≥ 10 per LGA across all 33 LGAs** (mirrors the validation-exercise design, ch06 n=330). Track `full` count + per-LGA `full`-coverage-vs-floor as a first-class dashboard metric (12-6/13-6). Public Core drives volume, but pinning/UX must keep the enumerator FULL channel alive above this floor. Ministry-revisable.
 
 ## Story
 As the **launch operator driving public traffic**, I want the **public self-serve wizard to render a SHORT "Public Core" form** while **enumerators/clerks keep the FULL baseline instrument**, so that **public fatigue drops and completion rises — without fragmenting the registry**: every channel still aggregates into one `respondents` table and every dashboard reads it honestly.

@@ -3,6 +3,7 @@
 Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+> 🔒 **Taxonomy RESOLUTIONS 2026-07-04 (must implement):** (R1/NIN) Axis-3 top tier from a captured NIN is **`nin_on_file`, NOT `verified`** — there is no offline checksum (see Story 13-15; NINs have no check digit). "Verified" = NIMC-online/member-side only. (R2/DISTINCT) the headline `COUNT(DISTINCT)` key precedence is **NIN → E.164 phone → respondent.id**, with an explicit **`identity_ambiguous`** bucket (no-NIN + no/shared phone); the importer (11-2) must resolve to the SAME key. See taxonomy §Resolutions.
 <!-- Authored 2026-06-16 by Bob (SM) via the create-story workflow as Epic 12 "Dashboard System Refresh" Tier-0 / Track-A foundation. POST-LAUNCH, NON-GATING. This story OWNS THE AGGREGATE over 9-59's row-level data_status atom (registry-data-status.ts, MERGED on main). It does NOT define a new taxonomy — the inversion: 9-59 defines the row-level atom; 12-4 aggregates over it and becomes the single source of truth every analytics surface (12-5/12-6/12-7/12-8) calls. Cite registry-data-status.ts by path+signature; never redefine the statuses. -->
 
 ## Story

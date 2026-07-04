@@ -75,8 +75,33 @@ Derived from **which fields are present in `raw_data`/the respondent**, NOT from
 - **POST-launch (Epic-12 sequence):** the derivation service (12-4) + the dashboard renderers (12-5/12-6/12-7) + 13-6. These read the data the launch generates — build them once there's real multi-channel volume to render.
 
 ## Open questions for Bob / the story (resolve in the story, or flag to the DPIA/Ministry owner)
-1. **Does the system VALIDATE NIN (against NIMC) or only CAPTURE it?** Axis-3's honesty hinges on this — if NIN is only captured, the top tier is `nin_on_file`, not `verified`, and "verified" is reserved for member-side-confirmed / NIMC-validated. **Do not overstate "verified."**
+1. ✅ **RESOLVED 2026-07-04 — see "Resolutions" below.** Does the system VALIDATE NIN (against NIMC) or only CAPTURE it? Answer: **CAPTURE + FORMAT only.** There is no offline validation because Nigerian NINs have no check digit (NIMC: "11 randomly generated, non-intelligible digits"; verified vs prod n=105 — the old Mod-11 gate rejected 74% of real NINs and is being retired in **Story 13-15**). The top tier is `nin_on_file`, NOT `verified`. "Verified" is reserved for NIMC-online or member-side confirmation.
 2. **Is `data_status` DERIVED (recomputed on read) or MATERIALIZED (a stored/cached column)?** Recommend **derived** for correctness (no drift), with a cached read-model only if perf demands it at scale.
 3. **Member-side check mechanism** for association rows pre-Termii — is the sampled **Assessor callback** the launch answer (SMS confirm being Termii-blocked)? Recommend yes.
 
 → **Hand to Bob (SM):** re-anchor 12-4 as the taxonomy model story (ground the derivation against `registry-data-status.ts` + `report.service.ts:55` + the source/status enums) + do the parity-sweep amendments (pointers only) + author the NEW Public-Core two-form-split story. Do NOT rewrite the consumer stories.
+
+---
+
+## RESOLUTIONS — 2026-07-04 (John PM + Bob SM round; Awwal-approved)
+
+These lock the open decisions the contract depended on. All are pointers/rules — no story rewrites.
+
+### R1 — NIN verification (resolves Open-Q1) — LOCKED
+Nigerian NINs are **"11 randomly generated, non-intelligible digits" (NIMC)** — **no check digit exists.** Verified against prod (`oslsr_db`, n=105): the `modulus11Check` gate rejected **74% of real NINs**; no scheme (Mod-11 variants / Verhoeff / Luhn) fits. Therefore:
+- **Offline validation = FORMAT ONLY** (`^\d{11}$`). The Mod-11 hard gate is retired in **Story 13-15** (launch-blocking).
+- **Axis-3 tiers (final):** `nin_absent`/`pending_nin` → **`nin_on_file`** (format-valid, self-declared — where MOST public rows land) → **`nin_verified`** (NIMC-online **or** member-side confirmation only). **There is NO offline "checksum-valid" tier.** No surface may label a format-valid NIN "verified."
+- NIMC-online validation is out of scope for launch (cost-gated); do it on a **sample** + high-stakes actions (e.g. marketplace contact reveal) in a future story.
+
+### R2 — The DISTINCT identity key (resolves the double-count loophole precisely) — LOCKED
+The headline `COUNT(DISTINCT respondent)` and the importer dedup (11-2) **MUST use ONE shared key** with this precedence:
+1. **NIN** (when present) → 2. **phone (E.164-normalised)** (when no NIN) → 3. **`respondent.id`** (when neither).
+- Rows resolvable only by rule 3 (no NIN, no usable phone, or a **shared/duplicate phone** that would wrongly merge distinct people — e.g. a household sharing one number) go into an explicit **`identity_ambiguous`** bucket, surfaced beside the headline (never silently merged, never silently double-counted).
+- 12-4 owns this key; 11-2's importer skip-logic must resolve to the SAME key so the dashboard's distinct total and the importer's "skipped as duplicate" count reconcile.
+
+### R3 — `full` stratum target (resolves the two-form study-validity tension) — LOCKED (Ministry-revisable)
+The Public Core (`core`) channel grows registry VOLUME; the baseline study's ANALYTICAL depth (labour-force participation, household welfare, income) rests on the `full` (field-collected, enumerator) instrument. **Deliverable floor: `full` stratum ≥ 330 responses AND ≥ 10 per LGA across all 33 LGAs** — mirroring the study's own validation-exercise design (n=330, 10/LGA × 33, ch06). Scale up where possible; below this floor, per-LGA deep analytics are not defensible.
+- **Tracked as a first-class dashboard metric** (12-6 / 13-6): `full` count + per-LGA `full` coverage vs the ≥10 floor, so a `core`-heavy registry can't quietly hollow out the analysis. 13-14 (Public Core) must not be pinned in a way that starves the `full` channel below this floor.
+
+### R4 — Sequencing: pull 12-5 forward — LOCKED
+**Story 12-5 (label honesty) ships BEFORE/early in the launch campaign** (pre-launch-eligible), so no surface shows a submissions-count mislabeled as "Total Respondents" while the Ministry is watching. The rest of Epic 12 (12-4 model, 12-6/12-7 renderers) stays post-launch on real volume. (12-5 depends on 12-4's model shape; ship the minimal 12-4 model + 12-5 label pass together as the pre-launch slice.)
