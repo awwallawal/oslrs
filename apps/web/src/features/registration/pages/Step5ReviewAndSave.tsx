@@ -87,9 +87,14 @@ export function Step5ReviewAndSave({
   });
   // AI-Review L8: show a loading state instead of the raw `lga-egbeda` id slug
   // while the public-LGA query is in flight.
+  // Story 13-16 (AC1) — the wizard now stores the LGA slug (lga.code); match on
+  // it first, keeping the row-UUID fallback for drafts saved before the switch.
   const lgaName = lgaQuery.isLoading
     ? 'Loading…'
-    : (lgaQuery.data ?? []).find((l) => l.id === formData.lgaId)?.name ?? formData.lgaId ?? '—';
+    : (lgaQuery.data ?? []).find((l) => l.code === formData.lgaId || l.id === formData.lgaId)
+        ?.name ??
+      formData.lgaId ??
+      '—';
 
   // AI-Review M1: same derivation as the submit — label/badge can't drift.
   const pending = derivePendingNin(formData);

@@ -366,18 +366,22 @@ export class PersonalStatsService {
       if (row?.avg_time != null) return Number(row.avg_time);
     }
 
-    // Fallback: LGA-wide average
+    // Fallback: LGA-wide average. Story 13-16 (AC5) — `users.lga_id` is the
+    // lgas row UUID while `respondents.lga_id` is canonically the SLUG
+    // (lgas.code); resolve through the lgas table (analytics-scope pattern)
+    // instead of comparing the two columns raw.
     const lgaRows = await db.execute(sql`
-      SELECT u.lga_id
+      SELECT l.code AS lga_code
       FROM users u
+      JOIN lgas l ON l.id = u.lga_id
       WHERE u.id = ${userId}::uuid
     `);
-    const lgaId = (lgaRows.rows[0] as { lga_id?: string } | undefined)?.lga_id;
-    if (!lgaId) return null;
+    const lgaCode = (lgaRows.rows[0] as { lga_code?: string } | undefined)?.lga_code;
+    if (!lgaCode) return null;
 
     const where = sql.join(
       [
-        sql`r.lga_id = ${lgaId}`,
+        sql`r.lga_id = ${lgaCode}`,
         ...dateConditions,
       ],
       sql` AND `,

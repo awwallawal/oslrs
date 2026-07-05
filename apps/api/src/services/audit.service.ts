@@ -122,6 +122,10 @@ export const AUDIT_ACTIONS = {
   // reference-code backfill (assigns OSL-YYYY-XXXXXX codes to pre-9-58
   // respondents that have none).
   OPERATOR_REFERENCE_CODE_BACKFILLED: 'operator.reference_code_backfilled',
+  // Story 13-16 (AC2) — per-row forensic trail for the operator-gated LGA
+  // canonicalization backfill (converts UUID-shaped respondents.lga_id values,
+  // the pre-13-16 public-wizard vocabulary, to the canonical lgas.code slug).
+  OPERATOR_LGA_ID_CANONICALIZED: 'operator.lga_id_canonicalized',
   // Story 9-58 (Deliverable A) — public registration-status check request.
   // Records the identifier CLASS (email / phone / reference-code) + whether a
   // status notification was dispatched — NEVER the raw PII identifier value

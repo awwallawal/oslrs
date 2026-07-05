@@ -12,7 +12,7 @@
     "test:security": "vitest run --test-name-pattern='Security'",
     "test:contract": "vitest run --test-name-pattern='Contract'",
     "test:ui": "vitest run --test-name-pattern='UI'",
-    "lint": "eslint src",
+    "lint": "eslint src scripts",
     "db:generate": "tsc && drizzle-kit generate",
     "db:migrate": "tsc && drizzle-kit migrate",
     "db:push": "tsc && drizzle-kit push",

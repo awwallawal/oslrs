@@ -27,7 +27,6 @@
 import os from 'node:os';
 import { sql } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
-import { respondents } from '../src/db/schema/respondents.js';
 import { ReferenceCodeService } from '../src/services/reference-code.service.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 import pino from 'pino';

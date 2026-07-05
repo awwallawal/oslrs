@@ -104,7 +104,32 @@ function h(title: string) {
   console.log(`\n${c.bold(c.cyan(`━━━ ${title} `))}${c.cyan('━'.repeat(Math.max(0, 50 - title.length)))}`);
 }
 
-function renderRum(rum: any) {
+// Minimal structural types for the Cloudflare GraphQL rollups this script renders.
+interface CfDimensionRow {
+  count: number;
+  sum?: { visits?: number };
+  dimensions: Record<string, string>;
+}
+interface CfRumData {
+  total?: Array<{ count?: number; sum?: { visits?: number } }>;
+  byHost?: CfDimensionRow[];
+  byPath?: CfDimensionRow[];
+  byCountry?: CfDimensionRow[];
+}
+interface CfZoneDay {
+  sum?: {
+    requests?: number;
+    bytes?: number;
+    cachedRequests?: number;
+    threats?: number;
+    pageViews?: number;
+    responseStatusMap?: Array<{ edgeResponseStatus: number; requests?: number }>;
+    countryMap?: Array<{ clientCountryName: string; requests?: number }>;
+  };
+  uniq?: { uniques?: number };
+}
+
+function renderRum(rum: CfRumData | null | undefined) {
   h('Web Analytics (RUM / page-views)');
   if (!rum) {
     console.log(c.gray('  (no data — beacon may be new, or no JS traffic in window)'));
@@ -130,7 +155,7 @@ function renderRum(rum: any) {
   }
 }
 
-function renderZone(label: string, days: any[], windowNote: string) {
+function renderZone(label: string, days: CfZoneDay[], windowNote: string) {
   h(`Zone Analytics — ${label} ${c.gray(`(${windowNote})`)}`);
   if (!days || days.length === 0) {
     console.log(c.gray('  (no data — free-plan retention is limited; try a shorter --days)'));

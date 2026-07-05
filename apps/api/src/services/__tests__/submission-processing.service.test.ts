@@ -9,6 +9,9 @@ const mockFindFirstRespondent = vi.fn();
 const mockFindFirstUser = vi.fn();
 const mockFindFirstRole = vi.fn();
 const mockInsertRespondent = vi.fn();
+// Story 13-16 (review M3) — captures the .values() payload of every insert so
+// tests can assert on the persisted lga_id vocabulary.
+const mockInsertValues = vi.fn();
 const mockUpdateSubmissionSet = vi.fn();
 const mockQueueFraudDetection = vi.fn();
 // Story 9-12 Task 3.5 — race-resolution merge uses db.execute(sql`UPDATE...`)
@@ -29,9 +32,12 @@ vi.mock('../../db/index.js', () => ({
     insert: (...args: unknown[]) => {
       mockInsertRespondent(...args);
       return {
-        values: (val: unknown) => ({
-          returning: () => [{ id: 'resp-001', ...val as Record<string, unknown> }],
-        }),
+        values: (val: unknown) => {
+          mockInsertValues(val);
+          return {
+            returning: () => [{ id: 'resp-001', ...val as Record<string, unknown> }],
+          };
+        },
       };
     },
     update: (...args: unknown[]) => {
@@ -569,6 +575,52 @@ describe('SubmissionProcessingService', () => {
       // Users table should NOT be checked for NIN (respondents check fires first)
       // determineSubmitterRole calls users.findFirst once (by ID), but the cross-table
       // check should never be reached because respondent check throws first
+    });
+  });
+
+  // ── Story 13-16 (review M3) — enumerator write-site LGA canonicalization ──
+  describe('findOrCreateRespondent — LGA value canonicalization (Story 13-16)', () => {
+    beforeEach(() => {
+      mockInsertValues.mockClear();
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockFindFirstUser.mockResolvedValue(null);
+    });
+
+    it('persists the canonical slug when the live form delivers a retired lga_list alias', async () => {
+      await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          firstName: 'Fossil',
+          lgaId: 'ibadan_ne', // pre-13-16 form vocabulary, live until the 13-14 re-pin
+          consentMarketplace: false,
+          consentEnriched: false,
+        },
+        'enumerator',
+      );
+      const inserted = mockInsertValues.mock.calls.at(0)?.[0] as { lgaId?: string | null };
+      expect(inserted.lgaId).toBe('ibadan_north_east');
+    });
+
+    it('passes a canonical slug through untouched', async () => {
+      await SubmissionProcessingService.findOrCreateRespondent(
+        {
+          firstName: 'Canonical',
+          lgaId: 'ibadan_north',
+          consentMarketplace: false,
+          consentEnriched: false,
+        },
+        'enumerator',
+      );
+      const inserted = mockInsertValues.mock.calls.at(0)?.[0] as { lgaId?: string | null };
+      expect(inserted.lgaId).toBe('ibadan_north');
+    });
+
+    it('stores null when the form carries no LGA answer', async () => {
+      await SubmissionProcessingService.findOrCreateRespondent(
+        { firstName: 'NoLga', consentMarketplace: false, consentEnriched: false },
+        'enumerator',
+      );
+      const inserted = mockInsertValues.mock.calls.at(0)?.[0] as { lgaId?: string | null };
+      expect(inserted.lgaId).toBeNull();
     });
   });
 

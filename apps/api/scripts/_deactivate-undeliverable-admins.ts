@@ -18,7 +18,7 @@
  */
 import { db, pool } from '../src/db/index.js';
 import { users, roles } from '../src/db/schema/index.js';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { AuditService } from '../src/services/audit.service.js';
 
 /** Domains / prefixes that can never deliver → bounce-reputation hazards. */

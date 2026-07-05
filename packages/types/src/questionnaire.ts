@@ -2,6 +2,7 @@
  * XLSForm and Questionnaire types for Story 2.1
  * Aligned with docs/questionnaire_schema.md v3.0
  */
+import { Lga } from './constants.js';
 
 // ============================================================================
 // XLSForm Structure Types
@@ -126,10 +127,25 @@ export const OSLSR_RECOMMENDED_FIELDS = [
 ] as const;
 
 /**
- * Required choice lists with minimum options
+ * Required choice lists with minimum options. `canonicalValues`, when present,
+ * pins the exact allowed choice VALUES — the validator flags any value outside
+ * the set.
  */
-export const OSLSR_REQUIRED_CHOICE_LISTS = {
-  lga_list: { minOptions: 33, description: 'Oyo State LGAs' },
+export const OSLSR_REQUIRED_CHOICE_LISTS: Record<
+  string,
+  { minOptions: number; description: string; canonicalValues?: readonly string[] }
+> = {
+  // Story 13-16 — lga_list choice VALUES must equal the canonical LGA slug
+  // (`Lga` enum, mirrored by `lgas.code` in apps/api lgas.seed.ts):
+  // `respondents.lga_id` canonically holds this slug and every LGA analytics
+  // join assumes it. A divergent form value (e.g. the retired `ibadan_ne` /
+  // `ogbomoso_north` fossils) silently drops those submissions out of every
+  // per-LGA count.
+  lga_list: {
+    minOptions: 33,
+    description: 'Oyo State LGAs',
+    canonicalValues: Object.values(Lga),
+  },
   skill_list: { minOptions: 150, description: 'ISCO-08 aligned skills across 20 sectors' },
   experience_list: { minOptions: 5, description: 'Years of experience ranges' },
   emp_type: { minOptions: 6, description: 'Employment types' },

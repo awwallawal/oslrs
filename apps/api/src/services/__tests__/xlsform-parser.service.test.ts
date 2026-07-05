@@ -53,8 +53,14 @@ function createValidOslsrForm(): Buffer {
     'Ogo Oluwa', 'Olorunsogo', 'Oluyole', 'Ona Ara', 'Orelope', 'Ori Ire',
     'Oyo East', 'Oyo West', 'Saki East', 'Saki West', 'Surulere',
   ];
-  lgaNames.forEach((name, idx) => {
-    lgaChoices.push({ list_name: 'lga_list', name: `lga_${idx + 1}`, label: name });
+  // Story 13-16 — values must be the canonical LGA slug (Lga enum / lgas.code);
+  // the validator now flags any lga_list value outside that set.
+  lgaNames.forEach((name) => {
+    lgaChoices.push({
+      list_name: 'lga_list',
+      name: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+      label: name,
+    });
   });
 
   // Create 50+ skills
@@ -547,10 +553,15 @@ describe('XlsformParserService', () => {
         { type: 'select_one lga_list', name: 'lga_id', label: 'LGA' },
       ];
 
-      const choices: Partial<XlsformChoiceRow>[] = [];
-      for (let i = 1; i <= 10; i++) {
-        choices.push({ list_name: 'lga_list', name: `lga_${i}`, label: `LGA ${i}` });
-      }
+      // Canonical slugs (Story 13-16) so ONLY the min-count warning fires here.
+      const tenCanonical = [
+        'afijio', 'akinyele', 'atiba', 'atisbo', 'egbeda',
+        'ibadan_north', 'ibadan_north_east', 'ibadan_north_west',
+        'ibadan_south_east', 'ibadan_south_west',
+      ];
+      const choices: Partial<XlsformChoiceRow>[] = tenCanonical.map((slug, i) => ({
+        list_name: 'lga_list', name: slug, label: `LGA ${i + 1}`,
+      }));
 
       const settings = [{ form_id: 'test', version: '1', form_title: 'Test' }];
       const buffer = createXlsxBuffer(survey, choices, settings);
@@ -563,6 +574,42 @@ describe('XlsformParserService', () => {
       expect(lgaWarnings.length).toBe(1);
       expect(lgaWarnings[0].message).toContain('10 options');
       expect(lgaWarnings[0].message).toContain('33');
+    });
+
+    // Story 13-16 — the canonical-value pin: lga_list values feed
+    // respondents.lga_id verbatim (enumerator path) and every LGA analytics
+    // join assumes lgas.code, so a divergent value must be flagged at upload.
+    it('should warn about a non-canonical lga_list value (the retired ibadan_ne fossil)', () => {
+      const survey = [
+        { type: 'select_one lga_list', name: 'lga_id', label: 'LGA' },
+      ];
+      const choices: Partial<XlsformChoiceRow>[] = [
+        { list_name: 'lga_list', name: 'ibadan_north', label: 'Ibadan North' },
+        { list_name: 'lga_list', name: 'ibadan_ne', label: 'Ibadan North-East' },
+        { list_name: 'lga_list', name: 'ogbomoso_north', label: 'Ogbomosho North' },
+      ];
+      const settings = [{ form_id: 'test', version: '1', form_title: 'Test' }];
+      const buffer = createXlsxBuffer(survey, choices, settings);
+      const formData = XlsformParserService.parseXlsxFile(buffer);
+      const issues = XlsformParserService.validateSchema(formData);
+
+      const canonicalWarnings = issues.filter(
+        i => i.field === 'lga_list' && i.severity === 'warning' && i.message.includes('not a canonical')
+      );
+      expect(canonicalWarnings).toHaveLength(2);
+      expect(canonicalWarnings.map(w => w.message).join(' ')).toContain("'ibadan_ne'");
+      expect(canonicalWarnings.map(w => w.message).join(' ')).toContain("'ogbomoso_north'");
+    });
+
+    it('should NOT warn on the full canonical 33-slug lga_list', () => {
+      const buffer = createValidOslsrForm();
+      const formData = XlsformParserService.parseXlsxFile(buffer);
+      const issues = XlsformParserService.validateSchema(formData);
+
+      const canonicalWarnings = issues.filter(
+        i => i.field === 'lga_list' && i.message.includes('not a canonical')
+      );
+      expect(canonicalWarnings).toHaveLength(0);
     });
   });
 

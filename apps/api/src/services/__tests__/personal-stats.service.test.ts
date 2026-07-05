@@ -111,6 +111,33 @@ describe('PersonalStatsService', () => {
       expect(result.cumulativeCount).toBe(0);
     });
 
+    it('resolves the LGA-wide fallback through lgas.code, never comparing users.lga_id (UUID) to respondents.lga_id (slug) raw (Story 13-16 AC5)', async () => {
+      // No supervisor team → the team-average path falls back to LGA-wide.
+      mockGetEnumeratorIds.mockResolvedValue([]);
+      const lgaFallbackQueries: string[] = [];
+      mockExecute.mockImplementation((q: unknown) => {
+        const text = sqlToText(q);
+        if (text.includes('JOIN lgas l ON l.id = u.lga_id')) {
+          lgaFallbackQueries.push(text);
+          return Promise.resolve(mockRows([{ lga_code: 'ibadan_north' }]));
+        }
+        if (text.includes('r.lga_id =')) {
+          lgaFallbackQueries.push(text);
+          return Promise.resolve(mockRows([{ avg_time: '250' }]));
+        }
+        return Promise.resolve(mockRows([]));
+      });
+
+      const result = await PersonalStatsService.getPersonalStats('user-lga-fallback');
+
+      expect(result.teamAvgCompletionTimeSec).toBe(250);
+      // The user's LGA is resolved to the slug via the lgas table…
+      expect(lgaFallbackQueries[0]).toContain('SELECT l.code AS lga_code');
+      // …and the respondents filter uses that slug (parameterized), not u.lga_id.
+      expect(lgaFallbackQueries[1]).toContain('r.lga_id =');
+      expect(lgaFallbackQueries[1]).not.toContain('u.lga_id');
+    });
+
     it('passes isClerk flag to scorecard', async () => {
       setupUniversalMock();
 

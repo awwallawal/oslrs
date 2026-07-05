@@ -16,7 +16,7 @@ vi.mock('dotenv', () => ({
 
 // ── Import tested functions ────────────────────────────────────────────────
 
-import { parseArgs, resolveS3Key, resolveManifestKey, isProductionDb, listBackups } from '../restore-backup.js';
+import { resolveS3Key, resolveManifestKey, isProductionDb, listBackups } from '../restore-backup.js';
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 

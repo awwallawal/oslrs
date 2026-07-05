@@ -27,6 +27,7 @@ import { db } from '../db/index.js';
 import { respondents, wizardDrafts, submissions, lgas, type WizardDraftData } from '../db/schema/index.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { NativeFormService } from './native-form.service.js';
+import { canonicalizeLgaId } from './lga-canonical.service.js';
 import {
   validateSubmissionCompleteness,
   validateMinorGuardianConsent,
@@ -423,6 +424,9 @@ export class MeService {
     const pendingNin = data.pendingNin === true || !data.nin;
     const ninValue = pendingNin ? null : data.nin ?? null;
     const responses = (data.questionnaireResponses ?? {}) as Record<string, unknown>;
+    // Story 13-16 (AC1) — canonicalize a stale-client UUID LGA value to the
+    // slug (lgas.code) before writing; parity with the public wizard submit.
+    const lgaSlug = await canonicalizeLgaId(data.lgaId);
 
     // Completeness gate + authoritative computed fields (reuse the wizard's
     // validators — AC#5). PUBLIC_FORM_NOT_CONFIGURED → Step 4 was empty.
@@ -485,7 +489,7 @@ export class MeService {
           lastName,
           dateOfBirth: data.dateOfBirth ?? null,
           phoneNumber: data.phone,
-          lgaId: data.lgaId,
+          lgaId: lgaSlug,
           consentMarketplace: data.consentMarketplace,
           consentEnriched: data.consentEnriched ?? false,
           status,
@@ -507,7 +511,6 @@ export class MeService {
           last_name: lastName,
           date_of_birth: data.dateOfBirth ?? null,
           phone_number: data.phone,
-          lga_id: data.lgaId,
           nin: ninValue,
           consent_marketplace: data.consentMarketplace,
           consent_enriched: data.consentEnriched ?? false,
@@ -515,6 +518,11 @@ export class MeService {
           gender: data.gender ?? null,
           auth_choice: 'session',
           ...responses,
+          // Story 13-16 (review L1) — the canonicalized slug is authoritative
+          // over a Step-4 lga_id answer (which can carry a retired form alias
+          // until the 13-14 re-publish); spread AFTER responses, parity with
+          // the wizard submit.
+          lga_id: lgaSlug,
           ...computedFields,
         } as Record<string, unknown>,
         gpsLatitude: null,
@@ -535,7 +543,7 @@ export class MeService {
           // 9-61 review L3 — PII minimisation: actorId + targetId already
           // identify the subject + record; don't duplicate the raw email here.
           trigger: 'authenticated_dashboard_edit',
-          lgaId: data.lgaId,
+          lgaId: lgaSlug,
           ninProvided: !!ninValue,
           pendingNin,
         },

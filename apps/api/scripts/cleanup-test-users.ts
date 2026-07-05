@@ -95,9 +95,10 @@ async function main() {
       await db.delete(users).where(inArray(users.id, ids));
       deleted += batch.length;
       console.log(`   Deleted ${deleted}/${testUsers.length}...`);
-    } catch (err: any) {
+    } catch (err) {
       // Log specific errors but continue
-      console.log(`   ⚠️  Error deleting batch: ${err.detail || err.message}`);
+      const e = err as { detail?: string; message?: string };
+      console.log(`   ⚠️  Error deleting batch: ${e.detail || e.message}`);
       // Try deleting one by one
       for (const id of ids) {
         try {

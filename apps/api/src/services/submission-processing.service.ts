@@ -24,6 +24,7 @@ import {
 import { evaluateMinorGuardianConsent, isValidReferenceCode, type GuardianData } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { ReferenceCodeService } from './reference-code.service.js';
+import { canonicalizeLgaId } from './lga-canonical.service.js';
 import { EmailService } from './email.service.js';
 import { getSuppressedEmails } from './email-events.service.js'; // Story 13-12 (13-9 suppression)
 import { buildThankYouEmail, buildThankYouReferralUrl, firstNameFrom } from './thankyou-email.js'; // Story 13-12
@@ -568,6 +569,12 @@ export class SubmissionProcessingService {
     // UNIQUE index remains the true backstop — see the 23505 retry below.
     let referenceCode = data.referenceCode ?? (await ReferenceCodeService.generateUnique(db));
 
+    // Story 13-16 (review M3) — respondents.lga_id is canonically the SLUG
+    // (lgas.code). The live published form's lga_list still carries 6 retired
+    // alias values until the 13-14 re-publish/re-pin, so canonicalize here
+    // (fossil alias or stray UUID → slug) exactly like the public write-sites.
+    const lgaSlug = (await canonicalizeLgaId(data.lgaId)) ?? null;
+
     // Story 9-58 (review M3) — bounded retry on a reference_code unique
     // violation. The insert can trip the `respondents.reference_code` UNIQUE
     // index independently of NIN (e.g. a pending-NIN insert racing another, or
@@ -584,7 +591,7 @@ export class SubmissionProcessingService {
         lastName: canonical.lastName,
         dateOfBirth: canonical.dateOfBirth,
         phoneNumber: canonical.phoneNumber,
-        lgaId: data.lgaId ?? null,
+        lgaId: lgaSlug,
         consentMarketplace: data.consentMarketplace,
         consentEnriched: data.consentEnriched,
         source,

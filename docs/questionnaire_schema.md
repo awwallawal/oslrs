@@ -148,6 +148,9 @@
 | reg_status | in_progress | Registration in progress |
 
 ### lga_list (33 Oyo State Local Government Areas)
+
+> **Story 13-16 — choice `name` values MUST equal the canonical LGA slug (`lgas.code`, seeded by `apps/api/src/db/seeds/lgas.seed.ts`).** `respondents.lga_id` canonically holds this slug on every channel and all LGA analytics join `lgas.code = respondents.lga_id`; a divergent form value silently drops those submissions out of every per-LGA count.
+
 | list_name | name | label |
 | :--- | :--- | :--- |
 | lga_list | afijio | Afijio |
@@ -156,10 +159,10 @@
 | lga_list | atisbo | Atisbo |
 | lga_list | egbeda | Egbeda |
 | lga_list | ibadan_north | Ibadan North |
-| lga_list | ibadan_ne | Ibadan North-East |
-| lga_list | ibadan_nw | Ibadan North-West |
-| lga_list | ibadan_se | Ibadan South-East |
-| lga_list | ibadan_sw | Ibadan South-West |
+| lga_list | ibadan_north_east | Ibadan North-East |
+| lga_list | ibadan_north_west | Ibadan North-West |
+| lga_list | ibadan_south_east | Ibadan South-East |
+| lga_list | ibadan_south_west | Ibadan South-West |
 | lga_list | ibarapa_central | Ibarapa Central |
 | lga_list | ibarapa_east | Ibarapa East |
 | lga_list | ibarapa_north | Ibarapa North |
@@ -170,8 +173,8 @@
 | lga_list | iwajowa | Iwajowa |
 | lga_list | kajola | Kajola |
 | lga_list | lagelu | Lagelu |
-| lga_list | ogbomoso_north | Ogbomosho North |
-| lga_list | ogbomoso_south | Ogbomosho South |
+| lga_list | ogbomosho_north | Ogbomosho North |
+| lga_list | ogbomosho_south | Ogbomosho South |
 | lga_list | ogo_oluwa | Ogo Oluwa |
 | lga_list | olorunsogo | Olorunsogo |
 | lga_list | oluyole | Oluyole |

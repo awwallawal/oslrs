@@ -47,7 +47,10 @@ function renderStep5(formData: WizardDraftData, mergeFields = vi.fn()) {
 describe('Step5ReviewAndSave (Story 9-18 Part C AC#C1/D2)', () => {
   beforeEach(() => {
     mockedLgas.mockReset();
-    mockedLgas.mockResolvedValue([{ id: 'lga-egbeda', name: 'Egbeda', code: 'EGB' }]);
+    // Story 13-16 — formData.lgaId now holds the SLUG (lga.code); id is the row UUID.
+    mockedLgas.mockResolvedValue([
+      { id: '018e5f2a-1234-7890-abcd-1234567890ab', name: 'Egbeda', code: 'lga-egbeda' },
+    ]);
   });
 
   it('lists every summary field', async () => {
@@ -124,7 +127,10 @@ describe('Step5ReviewAndSave (Story 9-18 Part C AC#C1/D2)', () => {
 describe('Step5ReviewAndSave incomplete-questionnaire guard (Story 9-54 AC6.2)', () => {
   beforeEach(() => {
     mockedLgas.mockReset();
-    mockedLgas.mockResolvedValue([{ id: 'lga-egbeda', name: 'Egbeda', code: 'EGB' }]);
+    // Story 13-16 — slug-first lookup parity with the main describe block.
+    mockedLgas.mockResolvedValue([
+      { id: '018e5f2a-1234-7890-abcd-1234567890ab', name: 'Egbeda', code: 'lga-egbeda' },
+    ]);
   });
 
   function renderGuarded(incomplete: boolean, missingStepIndex: number | null) {

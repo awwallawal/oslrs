@@ -68,11 +68,6 @@ if (fixes.length === 0) {
   process.exit(0);
 }
 
-// Convert back to sheet
-const newSheet = XLSX.utils.json_to_sheet(data);
-
-// Preserve original column order by getting headers from original
-const originalHeaders = XLSX.utils.sheet_to_json(surveySheet, { header: 1 })[0] as string[];
 const newData = XLSX.utils.sheet_to_json(surveySheet, { header: 1 }) as unknown[][];
 
 // Update the specific cells that need labels

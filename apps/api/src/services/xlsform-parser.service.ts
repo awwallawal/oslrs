@@ -426,14 +426,35 @@ export class XlsformParserService {
         });
       } else {
         // Count options in list
-        const optionCount = formData.choices.filter(c => c.list_name === listName).length;
-        if (optionCount < config.minOptions) {
+        const listChoices = formData.choices.filter(c => c.list_name === listName);
+        if (listChoices.length < config.minOptions) {
           issues.push({
             worksheet: 'choices',
             field: listName,
-            message: `Choice list '${listName}' has ${optionCount} options, minimum required is ${config.minOptions}`,
+            message: `Choice list '${listName}' has ${listChoices.length} options, minimum required is ${config.minOptions}`,
             severity: 'warning',
           });
+        }
+
+        // Story 13-16 — canonical-value pin. lga_list values feed
+        // respondents.lga_id verbatim on the enumerator path, and every LGA
+        // analytics join assumes lgas.code — a divergent value (the retired
+        // ibadan_ne / ogbomoso_north fossils) silently drops those
+        // submissions from every per-LGA count. Flag ANY value outside the
+        // canonical set so a stale vocabulary can never be re-uploaded
+        // unnoticed.
+        if (config.canonicalValues) {
+          const canonical = new Set<string>(config.canonicalValues);
+          for (const choice of listChoices) {
+            if (!canonical.has(choice.name)) {
+              issues.push({
+                worksheet: 'choices',
+                field: listName,
+                message: `Choice list '${listName}' value '${choice.name}' is not a canonical ${config.description} slug (must match lgas.code) — submissions carrying it will not join to any LGA in analytics`,
+                severity: 'warning',
+              });
+            }
+          }
         }
       }
     }

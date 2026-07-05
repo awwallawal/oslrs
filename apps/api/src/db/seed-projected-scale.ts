@@ -89,14 +89,18 @@ if (RESET && process.env.SEED_PROJECTED_SCALE_RESET_CONFIRM !== 'yes') {
 }
 
 // ---- deterministic-ish data generators ------------------------------------
+// Story 13-16 — MUST be the canonical lgas.code slugs (mirrors the Lga enum in
+// @oslsr/types + lgas.seed.ts): seeded respondents.lga_id feeds the analytics
+// join `l.code = r.lga_id`, so a fake slug here silently drops rows from every
+// per-LGA count in scale testing. (The old list carried oyo_north/oyo_south/
+// iddo/orire — none are real Oyo LGA codes.)
 const LGAS = [
-  'oyo_west', 'oyo_east', 'oyo_north', 'oyo_south', 'ibadan_north',
+  'afijio', 'akinyele', 'atiba', 'atisbo', 'egbeda', 'ibadan_north',
   'ibadan_north_east', 'ibadan_north_west', 'ibadan_south_east', 'ibadan_south_west',
-  'ido', 'akinyele', 'ona_ara', 'lagelu', 'ogbomoso_north', 'ogbomoso_south',
-  'oluyole', 'iseyin', 'kajola', 'iwajowa', 'saki_west', 'saki_east',
-  'orelope', 'olorunsogo', 'ogo_oluwa', 'irepo', 'iddo', 'atiba',
-  'atisbo', 'ibarapa_central', 'ibarapa_east', 'ibarapa_north',
-  'afijio', 'surulere', 'orire',
+  'ibarapa_central', 'ibarapa_east', 'ibarapa_north', 'ido', 'irepo', 'iseyin',
+  'itesiwaju', 'iwajowa', 'kajola', 'lagelu', 'ogbomosho_north', 'ogbomosho_south',
+  'ogo_oluwa', 'olorunsogo', 'oluyole', 'ona_ara', 'orelope', 'ori_ire',
+  'oyo_east', 'oyo_west', 'saki_east', 'saki_west', 'surulere',
 ];
 const SOURCES = ['enumerator', 'public', 'clerk', 'imported_itf_supa', 'imported_other'] as const;
 // STATUSES is a type-level reference for the inline annotation below — keep it

@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 53 total action types across all categories', () => {
+    it('should have 54 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -196,8 +196,10 @@ describe('AuditService', () => {
       //   RESPONDENT_SELF_UPDATED ('respondent.self_updated') → 52.
       // Story 13-11 (Cohort C thank-you/referral blast) added 1:
       //   OPERATOR_THANKYOU_REFERRAL_SENT ('operator.thankyou_referral_sent') → 53.
+      // Story 13-16 (LGA value canonicalization backfill) added 1:
+      //   OPERATOR_LGA_ID_CANONICALIZED ('operator.lga_id_canonicalized') → 54.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(53);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(54);
     });
   });
 

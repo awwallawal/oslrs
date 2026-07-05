@@ -17,6 +17,7 @@ import {
 import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
+import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-controller' });
@@ -487,6 +488,10 @@ export class RegistrationController {
       const normalisedEmail = data.email.toLowerCase().trim();
       const pendingNin = data.pendingNin === true || !data.nin;
       const ninValue = pendingNin ? null : data.nin ?? null;
+      // Story 13-16 (AC1) — respondents.lga_id is canonically the SLUG
+      // (lgas.code). Stale drafts saved before the wizard's slug switch still
+      // carry the UUID; canonicalize here so no new UUID-shaped row is written.
+      const lgaSlug = await canonicalizeLgaId(data.lgaId);
       const responses = (data.questionnaireResponses ?? {}) as Record<string, unknown>;
 
       // Story 9-54 AC5 — enforce required-answer completeness SYNCHRONOUSLY,
@@ -616,7 +621,7 @@ export class RegistrationController {
             lastName,
             dateOfBirth: data.dateOfBirth ?? null,
             phoneNumber: data.phone,
-            lgaId: data.lgaId,
+            lgaId: lgaSlug,
             consentMarketplace: data.consentMarketplace,
             consentEnriched: data.consentEnriched ?? false,
             source: 'public',
@@ -653,7 +658,6 @@ export class RegistrationController {
             last_name: lastName,
             date_of_birth: data.dateOfBirth ?? null,
             phone_number: data.phone,
-            lga_id: data.lgaId,
             nin: ninValue,
             consent_marketplace: data.consentMarketplace,
             consent_enriched: data.consentEnriched ?? false,
@@ -664,9 +668,13 @@ export class RegistrationController {
             gender: data.gender ?? null,
             auth_choice: data.authChoice,
             // Questionnaire answers from Step 4 — formerly dropped; now
-            // canonical. Spread last so they cannot accidentally overwrite
-            // identity fields with the same key.
+            // canonical: for any key duplicated above, the Step-4 answer wins.
             ...responses,
+            // Story 13-16 (review L1) — EXCEPT lga_id: the canonicalized slug
+            // is authoritative and must match respondents.lga_id (a shown
+            // Step-4 lga_id question can carry a retired form-vocabulary
+            // alias until the 13-14 re-publish), so it spreads AFTER responses.
+            lga_id: lgaSlug,
             // Story 9-54 AC1.3 — server-recomputed calculate fields (e.g. age)
             // are authoritative: spread AFTER responses so a client cannot forge
             // them.
@@ -695,7 +703,7 @@ export class RegistrationController {
           details: {
             trigger: 'public_wizard_submit',
             email: normalisedEmail,
-            lgaId: data.lgaId,
+            lgaId: lgaSlug,
             ninProvided: !!ninValue,
             pendingNin,
             // Story 9-26 — submissionUid for cross-table forensic trace.

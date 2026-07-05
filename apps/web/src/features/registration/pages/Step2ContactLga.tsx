@@ -51,6 +51,24 @@ export function Step2ContactLga({ formData, mergeFields, onContinue, onBack }: S
     if (el) el.focus();
   }, []);
 
+  // Story 13-16 (AC1) — the select now writes the LGA slug (lga.code), the
+  // canonical respondents.lga_id vocabulary. Drafts saved before the switch
+  // hold the row UUID (lga.id); remap them to the slug once the list loads so
+  // the resumed draft pre-selects correctly and submits the slug.
+  // NOTE (review L3): this remap only runs if the user re-enters Step 2 — a
+  // draft resumed at a later step submits the UUID untouched. The SERVER guard
+  // (canonicalizeLgaId at both public write-sites) is the authoritative net;
+  // never remove it on the strength of this client-side remap.
+  const lgaList = lgaQuery.data;
+  const draftLgaId = formData.lgaId;
+  useEffect(() => {
+    if (!draftLgaId || !lgaList) return;
+    const staleUuidMatch = lgaList.find((l) => l.id === draftLgaId);
+    if (staleUuidMatch) mergeFields({ lgaId: staleUuidMatch.code });
+    // mergeFields is a stable callback from WizardPage; keyed on the data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftLgaId, lgaList]);
+
   function validate(): boolean {
     const next: Record<string, string> = {};
     const phone = formData.phone ?? '';
@@ -182,8 +200,11 @@ export function Step2ContactLga({ formData, mergeFields, onContinue, onBack }: S
             <option value="">
               {lgaQuery.isLoading ? 'Loading LGAs…' : 'Select your LGA'}
             </option>
+            {/* Story 13-16 (AC1) — value is the SLUG (lga.code): the canonical
+                respondents.lga_id vocabulary shared with the enumerator form
+                and every analytics join. */}
             {(lgaQuery.data ?? []).map((lga) => (
-              <option key={lga.id} value={lga.id}>
+              <option key={lga.id} value={lga.code}>
                 {lga.name}
               </option>
             ))}
