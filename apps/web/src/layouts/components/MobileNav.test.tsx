@@ -37,6 +37,7 @@ const mockUseAuthNotAuthenticated = {
   loginWithMagicLink: vi.fn(),
   logout: vi.fn(),
   reAuthenticate: vi.fn(),
+  cancelReAuth: vi.fn(),
   clearError: vi.fn(),
   updateActivity: vi.fn(),
   refreshUser: vi.fn(),

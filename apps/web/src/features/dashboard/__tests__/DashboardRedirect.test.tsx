@@ -58,6 +58,7 @@ function TestWrapper({ user, isLoading = false, initialEntries = ['/dashboard'] 
       loginWithMagicLink: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     reAuthenticate: vi.fn(),
+    cancelReAuth: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
     refreshUser: vi.fn(),

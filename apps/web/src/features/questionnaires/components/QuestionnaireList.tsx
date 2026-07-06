@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '../../../components/ui/alert-dialog';
 import { useGetSetting, useUpdateSetting } from '../../settings/api/settings.api';
+import { ApiError } from '../../../lib/api-client';
 import { VALID_STATUS_TRANSITIONS } from '@oslsr/types';
 import type { QuestionnaireFormStatus } from '@oslsr/types';
 
@@ -143,10 +144,22 @@ export function QuestionnaireList() {
           queryClient.invalidateQueries({ queryKey: ['settings', WIZARD_PIN_KEY] });
           toast.success(mode === 'pin' ? `Pinned ${formTitle}` : `Un-pinned ${formTitle}`);
         },
-        onError: () => {
+        onError: (err) => {
           setPinnedFormId(previous); // rollback
-          // Anti-enumeration: never surface the backend error code.
-          toast.error("Couldn't pin the form. Please try again.");
+          // Story 13-17: the global api-client interceptor already ran the
+          // step-up re-auth flow — a rejection with AUTH_REAUTH_REQUIRED here
+          // means the user cancelled it (or re-auth didn't stick). Say so
+          // honestly instead of the generic "try again" toast.
+          if (err instanceof ApiError && err.code === 'AUTH_REAUTH_REQUIRED') {
+            toast.error(
+              mode === 'pin'
+                ? 'Re-authentication is required to pin a form. The form was not pinned.'
+                : 'Re-authentication is required to un-pin a form. The form is still pinned.',
+            );
+            return;
+          }
+          // Anti-enumeration: never surface other backend error codes.
+          toast.error(mode === 'pin' ? "Couldn't pin the form. Please try again." : "Couldn't un-pin the form. Please try again.");
         },
       },
     );

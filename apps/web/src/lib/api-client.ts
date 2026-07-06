@@ -1,4 +1,5 @@
 import { getAccessToken, awaitAccessToken } from './auth-token-holder';
+import { requestReAuth } from './reauth-gate';
 
 // Story 9-45 AC#6 (F-003): the localhost dev fallback is gated behind
 // `import.meta.env.DEV` so Vite constant-folds it OUT of the production bundle
@@ -36,6 +37,15 @@ export function getAuthHeaders(): Record<string, string> {
 }
 
 export async function apiClient(endpoint: string, options: RequestInit = {}) {
+  return request(endpoint, options, true);
+}
+
+/**
+ * Story 13-17: `allowReAuthRetry` bounds the step-up re-auth loop to a single
+ * shot per originating request — the retried request runs with it false, so a
+ * second `AUTH_REAUTH_REQUIRED` rejects instead of re-opening the modal.
+ */
+async function request(endpoint: string, options: RequestInit, allowReAuthRetry: boolean) {
   const { headers, ...rest } = options;
 
   // Story 9-49 (AC#3): queue behind any in-flight boot/silent refresh so requests
@@ -59,6 +69,28 @@ export async function apiClient(endpoint: string, options: RequestInit = {}) {
   const data = await response.json();
 
   if (!response.ok) {
+    // Story 13-17: a privileged/sensitive action was refused pending step-up
+    // re-auth. Hand off to the global ReAuthModal (via the gate) and replay
+    // the original request once the user re-authenticates. ONLY this exact
+    // code triggers the flow — a plain 403 authz denial must reject normally.
+    if (response.status === 403 && data.code === 'AUTH_REAUTH_REQUIRED' && allowReAuthRetry) {
+      // The server's `details.action` is its route path (req.path) — not
+      // user-facing copy. Only surface it if it reads like a description;
+      // otherwise let the modal show its generic fallback.
+      const rawAction = (data.details as { action?: string } | undefined)?.action;
+      const action = rawAction && !rawAction.startsWith('/') ? rawAction : 'this action';
+      const reAuthenticated = await requestReAuth(action);
+      if (reAuthenticated) {
+        return request(endpoint, options, false);
+      }
+      throw new ApiError(
+        'Re-authentication was not completed, so this action was cancelled.',
+        response.status,
+        data.code,
+        data.details
+      );
+    }
+
     throw new ApiError(
       data.message || 'Something went wrong',
       response.status,

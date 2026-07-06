@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Switch } from '../../../components/ui/switch';
 import { useUpdateSetting } from '../api/settings.api';
+import { ApiError } from '../../../lib/api-client';
 
 const KEY = 'auth.sms_otp_enabled';
 
@@ -36,8 +37,16 @@ export function SmsOtpToggle({ initialValue }: Props) {
             description: 'Audit-logged.',
           });
         },
-        onError: () => {
+        onError: (err) => {
           setEnabled(previous); // rollback
+          // Story 13-17: the global interceptor already ran the re-auth flow;
+          // this rejection means the user cancelled it — be honest about why.
+          if (err instanceof ApiError && err.code === 'AUTH_REAUTH_REQUIRED') {
+            toast.error('Re-authentication is required to change this setting', {
+              description: 'The SMS OTP setting was not changed.',
+            });
+            return;
+          }
           toast.error('Failed to update SMS OTP setting', {
             description: 'Please try again or check the system status.',
           });

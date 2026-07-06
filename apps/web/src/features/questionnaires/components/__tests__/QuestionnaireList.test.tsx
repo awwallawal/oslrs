@@ -19,6 +19,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { QuestionnaireList } from '../QuestionnaireList';
+import { ApiError } from '../../../../lib/api-client';
 
 afterEach(() => {
   cleanup();
@@ -276,6 +277,51 @@ describe('QuestionnaireList — public-wizard pin (Story 9-17)', () => {
     expect(
       screen.getByText(/Public users won't see any survey questions until you pin a form/),
     ).toBeInTheDocument();
+  });
+
+  // Story 13-17: the global interceptor runs the re-auth flow; a rejection
+  // with AUTH_REAUTH_REQUIRED means the user cancelled it — the toast must be
+  // honest (not the generic "try again"), and the optimistic pin rolls back.
+  it('11. reauth-cancelled pin shows the honest re-auth toast and rolls back (Story 13-17)', async () => {
+    setPinned('id-a'); // Alpha pinned
+    mockUpdateSettingMutate.mockImplementation((_payload, opts) =>
+      opts?.onError?.(
+        new ApiError('Re-authentication was not completed, so this action was cancelled.', 403, 'AUTH_REAUTH_REQUIRED'),
+      ),
+    );
+    renderWithProviders(<QuestionnaireList />);
+
+    await userEvent.click(within(rowFor('Beta Survey')).getByTestId('qm-pin-button'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Re-authentication is required to pin a form. The form was not pinned.',
+      );
+    });
+    // Rolled back: Alpha still pinned, Beta not.
+    expect(within(rowFor('Alpha Survey')).getByTestId('qm-pinned-badge')).toBeInTheDocument();
+    expect(within(rowFor('Beta Survey')).queryByTestId('qm-pinned-badge')).not.toBeInTheDocument();
+  });
+
+  it('12. reauth-cancelled UNPIN shows the unpin-specific honest toast (Story 13-17)', async () => {
+    setPinned('id-a');
+    mockUpdateSettingMutate.mockImplementation((_payload, opts) =>
+      opts?.onError?.(
+        new ApiError('Re-authentication was not completed, so this action was cancelled.', 403, 'AUTH_REAUTH_REQUIRED'),
+      ),
+    );
+    renderWithProviders(<QuestionnaireList />);
+
+    await userEvent.click(within(rowFor('Alpha Survey')).getByTestId('qm-unpin-button'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Un-pin' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Re-authentication is required to un-pin a form. The form is still pinned.',
+      );
+    });
+    expect(within(rowFor('Alpha Survey')).getByTestId('qm-pinned-badge')).toBeInTheDocument();
   });
 
   it('10. confirming Unpin sets the mutation payload value to null', async () => {

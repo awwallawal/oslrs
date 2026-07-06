@@ -7,6 +7,11 @@ import { syncManager } from '../../../services/sync-manager';
 // Story 9-49 (ADR-022): the access token lives in this in-memory holder, NEVER in
 // web storage. AuthContext writes it; lib/api-client.ts reads it for the Bearer header.
 import { setAccessToken, getAccessToken, clearAccessToken, setBootRefresh } from '../../../lib/auth-token-holder';
+// Story 13-17: api-client detects 403 AUTH_REAUTH_REQUIRED and asks this gate
+// for a step-up re-auth. AuthContext is the HOST — it opens the global
+// ReAuthModal (REQUIRE_REAUTH) and settles the gate on success/cancel so the
+// queued request replays or rejects.
+import { setReAuthRequestListener, resolveReAuth } from '../../../lib/reauth-gate';
 
 // Token refresh buffer (refresh 1 minute before expiry)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
@@ -149,6 +154,7 @@ interface AuthContextValue extends AuthState {
   showLogoutWarning: boolean;
   cancelLogout: () => void;
   reAuthenticate: (password: string) => Promise<boolean>;
+  cancelReAuth: () => void;
   refreshUser: () => Promise<void>;
   clearError: () => void;
   updateActivity: () => void;
@@ -245,7 +251,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           saveToken(response.accessToken);
           scheduleTokenRefresh(response.expiresIn);
         } catch {
-          // Token refresh failed, log out
+          // Token refresh failed, log out. Settle any pending re-auth gate
+          // first — this can fire while the ReAuthModal is open, and an
+          // unsettled gate would leave the queued api-client request (and its
+          // mutation's isPending) hanging forever.
+          resolveReAuth(false);
           dispatch({ type: 'AUTH_LOGOUT' });
           clearToken();
         }
@@ -452,6 +462,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setShowLogoutWarning(false);
     setUnsyncedCount(0);
     clearToken();
+    // Reject any api-client request still queued behind an open re-auth
+    // prompt — after logout it can never legitimately replay.
+    resolveReAuth(false);
     dispatch({ type: 'AUTH_LOGOUT' });
   }, [state.accessToken, clearToken]);
 
@@ -504,6 +517,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.reAuthenticate({ password }, state.accessToken);
       if (response.verified) {
         dispatch({ type: 'REAUTH_COMPLETE' });
+        // Story 13-17: replay any request the api-client queued behind this
+        // re-auth (no-op when the modal was opened without a pending request).
+        resolveReAuth(true);
         return true;
       }
       return false;
@@ -515,6 +531,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   }, [state.accessToken]);
+
+  // Story 13-17: cancel path for the step-up re-auth flow — closes the modal
+  // state and rejects any request the api-client queued behind the gate.
+  const cancelReAuth = useCallback(() => {
+    dispatch({ type: 'REAUTH_COMPLETE' });
+    resolveReAuth(false);
+  }, []);
+
+  // Story 13-17: host the global re-auth gate. When api-client hits a
+  // 403 AUTH_REAUTH_REQUIRED it calls requestReAuth() → this listener opens
+  // the globally-rendered ReAuthModal via the REQUIRE_REAUTH context flag.
+  useEffect(() => {
+    setReAuthRequestListener((action) => {
+      dispatch({ type: 'REQUIRE_REAUTH', payload: action });
+    });
+    return () => {
+      setReAuthRequestListener(null);
+      // Provider unmount (teardown/HMR): fail a pending flight closed so the
+      // awaiting request rejects honestly instead of hanging.
+      resolveReAuth(false);
+    };
+  }, []);
 
   // Refresh user data from /auth/me (Story 9.1: re-sync after profile edit)
   const refreshUser = useCallback(async () => {
@@ -641,6 +679,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     showLogoutWarning,
     cancelLogout,
     reAuthenticate,
+    cancelReAuth,
     refreshUser,
     clearError,
     updateActivity,

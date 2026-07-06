@@ -1,6 +1,6 @@
 # Story 13-17: Wire the step-up re-auth UX for privileged UI actions (pin + the whole class)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Authored 2026-07-05 by Bob (SM) via *create-story. EMERGENT from the 13-14 launch prep: pinning the Public Core as wizard.public_form_id failed with the generic toast "Couldn't pin the form. Please try again." Root cause = a FRONTEND bug: the pin is a step-up-re-auth-gated privileged action (server returns 403 AUTH_REAUTH_REQUIRED), but the pin mutation's onError is a generic catch that never triggers the ReAuthModal — and there is NO global interceptor to do it either. So on a "Remember Me" session the pin (and, by the same gap, other privileged actions) can NEVER succeed via the UI. Immediate unblock done via a direct DB pin (operator); this story fixes the UX properly. -->
 
@@ -27,11 +27,19 @@ so that **privileged actions are actually usable through the UI instead of faili
 6. **AC6 — Tests.** Interceptor unit test (`403 AUTH_REAUTH_REQUIRED` → modal opens → reauth → original request retried & resolves; cancel → rejects). QM pin component/integration test (reauth-required path → success after reauth). E2E if the harness allows a Remember-Me + reauth flow. Full web suite green.
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC1, AC2)** — add the `AUTH_REAUTH_REQUIRED` response interceptor in `api-client.ts` (mirror the 9-49 refresh queue): detect the code → open the re-auth modal via the re-auth context → on success replay the queued request → on cancel reject. One place fixes the whole class.
-- [ ] **Task 2 (AC3)** — QM pin: drop the generic `onError` swallow (QuestionnaireList.tsx:146-149) so the interceptor handles reauth; keep a genuine error message for non-reauth failures. Verify pin/unpin E2E on a Remember-Me session.
-- [ ] **Task 3 (AC5)** — grep-audit privileged/sensitive-action callers; fix any other generic swallow; list them.
-- [ ] **Task 4 (AC4, AC6)** — tests (interceptor + pin) + full web suite; `tsc`/eslint clean.
-- [ ] **Task 5 (Operator-traceability)** — see below: emit a retroactive audit row for the 2026-07-05 manual DB pin OR document it in the ops log; note the mechanism so a future manual setting-write is traceable.
+- [x] **Task 1 (AC1, AC2)** — add the `AUTH_REAUTH_REQUIRED` response interceptor in `api-client.ts` (mirror the 9-49 refresh queue): detect the code → open the re-auth modal via the re-auth context → on success replay the queued request → on cancel reject. One place fixes the whole class.
+- [x] **Task 2 (AC3)** — QM pin: drop the generic `onError` swallow (QuestionnaireList.tsx:146-149) so the interceptor handles reauth; keep a genuine error message for non-reauth failures. Verify pin/unpin E2E on a Remember-Me session. *(Live prod E2E on a Remember-Me session = operator step post-deploy — the planned audited re-pin.)*
+- [x] **Task 3 (AC5)** — grep-audit privileged/sensitive-action callers; fix any other generic swallow; list them. *(6 surfaces audited — see Completion Notes; SmsOtpToggle fixed, staff hooks pass-through OK, MFA separate-path by design.)*
+- [x] **Task 4 (AC4, AC6)** — tests (interceptor + pin) + full web suite; `tsc`/eslint clean.
+- [x] **Task 5 (Operator-traceability)** — see below: emit a retroactive audit row for the 2026-07-05 manual DB pin OR document it in the ops log; note the mechanism so a future manual setting-write is traceable. *(Script shipped + runbook rule; prod `--apply` run = operator residual.)*
+
+### Review Follow-ups (AI) — adversarial code-review 2026-07-06
+- [x] [AI-Review][Medium] M1 — settle the re-auth gate when the session dies with the modal open: `resolveReAuth(false)` added to `performLogout`, the scheduled-token-refresh failure path, and the gate-listener effect cleanup (previously a pending privileged request would hang `isPending` forever). [apps/web/src/features/auth/context/AuthContext.tsx]
+- [x] [AI-Review][Medium] M2 — the AC5 SmsOtpToggle fix shipped untested: new `SmsOtpToggle.test.tsx` pins the honest reauth-cancel toast, the generic-failure toast, and the optimistic rollback (3 tests). [apps/web/src/features/settings/components/__tests__/SmsOtpToggle.test.tsx]
+- [x] [AI-Review][Medium] M3 — the modal displayed the server's raw route path ("continue with /api/v1/admin/settings/…"): interceptor now passes 'this action' when `details.action` is a path; api-client + integration tests updated. [apps/web/src/lib/api-client.ts:76-81]
+- [x] [AI-Review][Low] L1 — duplicate `drizzle-orm` import merged. [apps/api/scripts/_retro-audit-2026-07-05-manual-pin.ts:29]
+- [ ] [AI-Review][Low] L2 — commit discipline (operator step at commit time): tree carries an unrelated `.gitignore` hunk (`_bmad-output/slide-presentation/`) + ~40 baseline-report files — SELECTIVE add of this File List only (13-16 M2 rule); commit the `.gitignore` hunk separately or leave it.
+- [ ] [AI-Review][Low] L3 — follow-up story (server, out of 13-17 scope by design): the `SENSITIVE_ACTIONS` profile/password patterns (`/users/:id/profile` etc., sensitive-action.ts:20-24) match a path shape the web app never calls (web uses `/users/profile`) — profile/password changes are effectively NOT step-up-gated server-side today. Raise with PM/SM as a security-hygiene story.
 
 ## Dev Notes
 - **Do NOT touch the server middleware** — it's behaving correctly (step-up re-auth on privileged actions is a deliberate security control). This is purely a client-UX wiring gap.
@@ -51,7 +59,61 @@ The Public Core pin on 2026-07-05 was set **directly on the prod DB** (`UPDATE s
 - Prod evidence: `privileged_action.reauth_required action:"/wizard.public_form_id"` in `oslsr-api` logs, 2026-07-05.
 
 ## Dev Agent Record
+
+### Implementation Plan (2026-07-06, Claude Fable 5)
+- **Gate module (`reauth-gate.ts`)** — the 9-49 pattern split: `api-client.ts` is framework-free, the modal is React, so a module-level single-flight gate bridges them (exactly like `auth-token-holder.ts` bridges token state). `requestReAuth(action)` (api-client side) ↔ `setReAuthRequestListener` + `resolveReAuth(ok)` (AuthContext side). Single-flight: N concurrent 403s share ONE modal; fail-closed when no host is registered.
+- **Interceptor** — `apiClient` delegates to an internal `request(endpoint, options, allowReAuthRetry)`; on `403` + code `AUTH_REAUTH_REQUIRED` (and ONLY that code — PM guardrail) it awaits the gate, then replays the original request exactly once (`allowReAuthRetry=false` on the replay, so a second reauth-403 rejects instead of looping). Cancel rejects with an honest specific message. `auth.api`/`mfa.api` use their own fetch, so no recursion into the interceptor from `/auth/reauth` itself.
+- **Host wiring** — AuthContext registers the gate listener (dispatches the previously-never-dispatched `REQUIRE_REAUTH`); `reAuthenticate()` success → `resolveReAuth(true)`; new `cancelReAuth()` → `REAUTH_COMPLETE` + `resolveReAuth(false)`. `useReAuth.close/reset` now call `cancelReAuth` — this also fixes a latent bug where a context-opened modal could never clear the context flag (nothing dispatched `REAUTH_COMPLETE` on cancel).
+- **Server untouched** per Dev Notes.
+
+### Completion Notes
+- **Task 1 (AC1+AC2) ✅** — `reauth-gate.ts` + interceptor + AuthContext/useReAuth wiring. 6 gate unit tests + 6 interceptor tests (replay-preserves-method/body, cancel-rejects-honest, single-shot guardrail, plain-403-does-NOT-prompt guardrail, fail-closed, concurrent-share-one-prompt) + 3 gate↔context↔modal integration tests (success resolves true + modal closes; cancel resolves false; wrong-password keeps modal open then succeeds).
+- **Task 2 (AC3) ✅** — QuestionnaireList pin `onError` no longer swallows: `AUTH_REAUTH_REQUIRED` gets an honest mode-aware message (pin vs un-pin); generic anti-enumeration toast retained for real failures (now also mode-aware). 2 new component tests (11, 12). Live-repro E2E on prod Remember-Me session = operator verification after deploy (AC3 residual).
+- **Task 3 (AC5 class audit) ✅** — enumerated every frontend caller of a `privileged_action`/`SENSITIVE_ACTIONS` route:
+  1. `QuestionnaireList` pin/unpin (PATCH `/admin/settings/:key`) — **fixed** (Task 2).
+  2. `SmsOtpToggle` (PATCH `/admin/settings/:key`) — **fixed**: reauth-cancel now gets an honest toast instead of "Failed to update".
+  3. Staff `useUpdateRole`/`useDeactivateStaff`/`useReactivateStaff` (privileged staff routes, via `apiClient`) — **no change needed**: fallback branch surfaces `err.message`, which is the interceptor's honest cancel message (no masking; interceptor supplies the modal).
+  4. MFA enroll/disable/regenerate (`mfa.api.ts` own `mfaFetch`, NOT `apiClient`) — **deliberately out of interceptor scope**: MfaEnrollmentPage already handles `AUTH_REAUTH_REQUIRED` inline with its own reauth sub-step + retry (9-13 design); disable/regenerate have no UI callers yet.
+  5. `POST /admin/email-queue/drain` (privileged) — no frontend caller (ops-only).
+  6. `SENSITIVE_ACTIONS` list routes (profile `/users/:id/profile`, change-password, bank-details, payment-disputes, security, sessions) — no current frontend caller matches those path patterns (web profile PATCH is `/users/profile`, which the `:id` pattern does not match).
+- **Task 5 (operator-traceability, PM option a) ✅ dev-side** — `apps/api/scripts/_retro-audit-2026-07-05-manual-pin.ts`: emits the missing `settings.flipped` row **through `AuditService.logActionTx`** (hash chain preserved — never raw-INSERT), actor resolved+role-verified by `--actor-email`/`--actor-id`, `new_value` read from the live setting, idempotent via `details.retroactive_of`, dry-run default/`--apply` to write, bare-flag guard (13-16 M1 lesson). Dry-run verified locally (actor resolution + setting read + guards exit 1 correctly). **Operator residual: run with `--apply` on prod via Tailscale.** General rule added to `pre-launch-operator-runbook.md` Step 5.
+- Updated 8 test files' `useAuth` mocks with the new `cancelReAuth` member.
+- **AC6 e2e decision** — no new Playwright spec: a reauth pin e2e needs a *published-form fixture* the e2e dev-DB setup doesn't provide, and the wiring it would cover is already exercised by the 3 React-integration tests (real gate + real AuthContext + real ReAuthModal) plus the 6 interceptor tests. The authoritative end-to-end check is the operator's audited prod re-pin on a Remember-Me session (AC3 residual, part of the launch plan anyway). Server-side note: only `POST /auth/reauth` ever sets the `reauth:<userId>` Redis key (login does NOT), so `requireFreshReAuth` routes 403 on ANY session without a recent re-auth — the class fix matters beyond Remember-Me.
+
 ### File List
+- apps/web/src/lib/reauth-gate.ts (new)
+- apps/web/src/lib/api-client.ts
+- apps/web/src/features/auth/context/AuthContext.tsx
+- apps/web/src/features/auth/hooks/useReAuth.ts
+- apps/web/src/features/questionnaires/components/QuestionnaireList.tsx
+- apps/web/src/features/settings/components/SmsOtpToggle.tsx
+- apps/web/src/lib/__tests__/reauth-gate.test.ts (new)
+- apps/web/src/lib/__tests__/api-client.test.ts
+- apps/web/src/features/auth/context/__tests__/reauth-flow.integration.test.tsx (new)
+- apps/web/src/features/questionnaires/components/__tests__/QuestionnaireList.test.tsx
+- apps/web/src/__tests__/route-resolution.integration.test.tsx (mock update)
+- apps/web/src/features/dashboard/__tests__/rbac-routes.test.tsx (mock update)
+- apps/web/src/features/dashboard/__tests__/DashboardRedirect.test.tsx (mock update)
+- apps/web/src/layouts/__tests__/DashboardLayout.test.tsx (mock update)
+- apps/web/src/layouts/components/SmartCta.test.tsx (mock update)
+- apps/web/src/layouts/components/MobileNav.test.tsx (mock update)
+- apps/web/src/features/dashboard/pages/__tests__/AssessorOfficialRbac.test.tsx (mock update)
+- apps/web/src/features/dashboard/pages/__tests__/PublicUserRbac.test.tsx (mock update)
+- apps/api/scripts/_retro-audit-2026-07-05-manual-pin.ts (new)
+- docs/runbooks/pre-launch-operator-runbook.md
+- apps/web/src/features/settings/components/__tests__/SmsOtpToggle.test.tsx (new — review follow-up M2)
+
+## Senior Developer Review (AI) — 2026-07-06
+
+**Outcome: APPROVED after fixes — 0 High / 3 Medium / 3 Low; all Mediums + L1 fixed in-session, L2/L3 recorded as open follow-ups.**
+
+- Every File-List file read; git tree matched the File List exactly (no undocumented story changes; the unrelated `.gitignore` hunk is flagged in L2).
+- All 6 ACs verified IMPLEMENTED (AC3 live-prod E2E and the script's prod `--apply` are the PM-sanctioned operator residuals). All 5 tasks verified genuinely done — no false [x].
+- AC5 class-audit claims independently re-verified: `withReAuth` has zero callers (no double-handling); `useUpdateSetting` rides `apiClient` (both fixed surfaces interceptor-covered); MFA is inline-by-design on its own `mfaFetch`; web profile PATCH `/users/profile` genuinely doesn't match the server's `/users/:id/profile` pattern — which also means that server guard is dead for profile/password today → L3 follow-up.
+- Retro-audit script deps verified against reality: `AUDIT_ACTIONS.SETTINGS_FLIPPED`, `getSettingRow`, nullable `targetId`, `ip_address` is `text` (not `inet` — the `--apply` write won't type-fail), `targetResource: 'system_settings'` matches the canonical value in settings.service.
+- PM guardrails held under test: single-shot replay (one prompt per originating request), only `AUTH_REAUTH_REQUIRED` triggers the flow, honest non-reauth errors retained.
+- Fixes applied: **M1** gate settled on logout/refresh-failure/unmount (was: hung `isPending` forever if the session died with the modal open); **M2** SmsOtpToggle reauth branch now tested (3 tests); **M3** modal no longer shows a raw route path; **L1** import merge.
+- Gates re-run by the reviewer post-fix: web tsc 0, eslint 0, full web suite **2744 passed** (2741 + 3 new; 2 todo).
 
 ## PM Validation (John, 2026-07-05)
 
@@ -71,3 +133,5 @@ The Public Core pin on 2026-07-05 was set **directly on the prod DB** (`UPDATE s
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-05 | Story drafted via *create-story — global `AUTH_REAUTH_REQUIRED` interceptor so privileged UI actions (pin + the class) surface the re-auth modal + retry, instead of a generic toast. EMERGENT from the 13-14 pin failure; immediate unblock was a manual DB pin (operator). Includes the operator-traceability note. 6 ACs / 5 Tasks. sprint-status entry added. | Bob (SM) |
+| 2026-07-06 | dev-story implementation: `reauth-gate.ts` single-flight gate + api-client interceptor (single-shot replay, code-gated, fail-closed) + AuthContext host wiring (`REQUIRE_REAUTH` finally dispatched; new `cancelReAuth`) + useReAuth cancel path (also fixes the latent stuck-modal bug) + QM pin & SmsOtpToggle honest reauth toasts + AC5 6-surface class audit + retroactive-audit script (hash-chain-safe, dry-run verified) + runbook Step-5 manual-write rule. +11 unit/interceptor tests, +3 integration tests, +2 component tests; 8 useAuth mocks extended. api+web tsc 0, eslint 0. Operator residuals: prod `--apply` of the retro-audit script; live Remember-Me pin E2E (the planned audited re-pin). | Claude Fable 5 (dev-story) |
+| 2026-07-06 | Adversarial code-review: APPROVED after fixes (0H/3M/3L). M1 re-auth gate now settled on logout/token-refresh-failure/unmount (hung-promise fix); M2 +3 SmsOtpToggle tests; M3 modal shows 'this action' instead of the raw route path; L1 import merge. L2 (selective-add commit discipline) + L3 (server SENSITIVE_ACTIONS profile patterns don't match real web routes — follow-up story) left open as action items. Reviewer re-ran gates independently: web tsc 0, eslint 0, full suite 2744 green. Status → done. | Claude Fable 5 (code-review) |

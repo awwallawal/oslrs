@@ -47,6 +47,7 @@
 ### Step 5 — Master-form re-pin (MANDATORY discipline)
 - If the survey form changed: re-upload **mints a NEW form row** → you MUST **re-pin `wizard.public_form_id`** (publish → re-pin). Old versions are not auto-retired.
 - Verify the wizard renders the intended form (calc + group-relevance live).
+- **Pin via the UI, not the DB (Story 13-17 rule).** A direct prod-DB setting-write bypasses `audit_logs` — the 2026-07-05 manual pin left no audit row (repaired retroactively via `apps/api/scripts/_retro-audit-2026-07-05-manual-pin.ts`). The UI pin path works on Remember-Me sessions since 13-17 (global re-auth prompt + retry). If a manual DB write is ever truly unavoidable, follow it immediately with a retroactive `settings.flipped` audit row **through `AuditService.logActionTx`** (hash chain — never raw-INSERT); use that script as the template.
 
 ### Step 6 — (pre-blast) 9-63 notification meter live
 - Once `9-63` Tasks 2–4 ship (in progress), confirm the **email meter + budget guard** see the high-volume paths and the **volume/abuse Telegram alert** is armed — so the blasts are observable and can't silently re-exhaust the quota. *This is the direct lesson of the incident that spawned 9-63 — don't fire blind.*

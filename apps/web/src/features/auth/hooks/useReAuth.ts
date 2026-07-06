@@ -19,7 +19,7 @@ interface UseReAuthReturn {
  * Used when a "Remember Me" session attempts to perform sensitive actions
  */
 export function useReAuth(): UseReAuthReturn {
-  const { reAuthenticate, requiresReAuth, reAuthAction } = useAuth();
+  const { reAuthenticate, cancelReAuth, requiresReAuth, reAuthAction } = useAuth();
 
   const [password, setPasswordState] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +35,18 @@ export function useReAuth(): UseReAuthReturn {
     setError(null);
   }, []);
 
-  // Close re-auth modal
+  // Close re-auth modal. Story 13-17: also settle the global re-auth flow —
+  // clears the context REQUIRE_REAUTH flag (without this, a context-opened
+  // modal could never close) and rejects any api-client request queued behind
+  // the gate. After a SUCCESSFUL submit the gate is already resolved, so the
+  // cancel there is a no-op.
   const close = useCallback(() => {
     setIsOpen(false);
     setPendingAction(null);
     setPasswordState('');
     setError(null);
-  }, []);
+    cancelReAuth();
+  }, [cancelReAuth]);
 
   // Set password
   const setPassword = useCallback((value: string) => {
@@ -79,14 +84,15 @@ export function useReAuth(): UseReAuthReturn {
     }
   }, [password, reAuthenticate, close]);
 
-  // Reset state
+  // Reset state (Story 13-17: settles the global re-auth flow like `close`)
   const reset = useCallback(() => {
     setIsOpen(false);
     setPendingAction(null);
     setPasswordState('');
     setError(null);
     setIsLoading(false);
-  }, []);
+    cancelReAuth();
+  }, [cancelReAuth]);
 
   // Auto-open when re-auth is required from context
   if (requiresReAuth && !isOpen && reAuthAction) {

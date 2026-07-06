@@ -54,6 +54,7 @@ function createMockAuthValue(user: AuthUser | null, isLoading = false) {
     loginWithMagicLink: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     reAuthenticate: vi.fn(),
+    cancelReAuth: vi.fn(),
     clearError: vi.fn(),
     updateActivity: vi.fn(),
     refreshUser: vi.fn(),
