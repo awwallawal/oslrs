@@ -1,138 +1,91 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '@oslsr/utils';
+import { eq } from 'drizzle-orm';
 import { getRedisClient } from '../lib/redis.js';
+import { REAUTH_KEY_PREFIX } from '../lib/reauth-grace.js';
+import { db } from '../db/index.js';
+import { users } from '../db/schema/index.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'sensitive-action-middleware' });
 
-// Re-auth key prefix
-const REAUTH_KEY_PREFIX = 'reauth:';
-
-// Re-auth validity duration (5 minutes)
-const REAUTH_VALIDITY = 5 * 60;
-
-/**
- * List of sensitive actions that require re-authentication
- * when the user logged in with "Remember Me"
- */
-const SENSITIVE_ACTIONS = [
-  // Profile changes
-  { method: 'PUT', pathPattern: /^\/api\/v1\/users\/[^/]+\/profile$/ },
-  { method: 'PATCH', pathPattern: /^\/api\/v1\/users\/[^/]+\/profile$/ },
-
-  // Password changes
-  { method: 'PUT', pathPattern: /^\/api\/v1\/users\/[^/]+\/password$/ },
-  { method: 'POST', pathPattern: /^\/api\/v1\/auth\/change-password$/ },
-
-  // Bank details
-  { method: 'PUT', pathPattern: /^\/api\/v1\/users\/[^/]+\/bank-details$/ },
-  { method: 'PATCH', pathPattern: /^\/api\/v1\/users\/[^/]+\/bank-details$/ },
-
-  // Payment disputes
-  { method: 'POST', pathPattern: /^\/api\/v1\/payments\/disputes$/ },
-  { method: 'PUT', pathPattern: /^\/api\/v1\/payments\/disputes\/[^/]+$/ },
-
-  // Security settings
-  { method: 'PUT', pathPattern: /^\/api\/v1\/users\/[^/]+\/security$/ },
-  { method: 'DELETE', pathPattern: /^\/api\/v1\/users\/[^/]+\/sessions$/ },
-];
+// 13-18 review L4 — the grace lifecycle (set/clear/ttl of the `reauth:` key)
+// lives in lib/reauth-grace.ts; re-exported here so existing import paths and
+// route-test mocks of this module stay stable.
+export { setReAuthValid, clearReAuth, getReAuthValidity } from '../lib/reauth-grace.js';
 
 /**
- * Checks if a request is for a sensitive action
- */
-function isSensitiveAction(method: string, path: string): boolean {
-  return SENSITIVE_ACTIONS.some(
-    (action) => action.method === method && action.pathPattern.test(path)
-  );
-}
-
-/**
- * Middleware to require re-authentication for sensitive actions
- * when the user is logged in with "Remember Me"
+ * Story 13-18 — canonical inventory of step-up-gated routes.
  *
- * Usage flow:
- * 1. User makes request to sensitive endpoint
- * 2. If Remember Me session and no recent re-auth, return 403 with AUTH_REAUTH_REQUIRED
- * 3. Frontend shows re-auth modal
- * 4. User submits password to POST /api/v1/auth/reauth
- * 5. On success, re-auth is stored in Redis for 5 minutes
- * 6. User retries original request, now succeeds
+ * Every route that mounts a fresh-reauth gate MUST be listed here, and every
+ * entry MUST correspond to a really-registered route + method. The anti-drift
+ * test (`__tests__/security.reauth-routes.test.ts`) asserts BOTH directions
+ * against the live Express router stack, so a route rename can no longer
+ * silently un-gate a sensitive action — and a gate can no longer be added
+ * without being inventoried.
+ *
+ * This list is documentation + test fixture, NOT runtime dispatch: enforcement
+ * is the explicit per-route middleware mount (grep the `gate` name).
+ *
+ * Removed phantom intents from the pre-13-18 regex list (they matched NO
+ * registered route — the middleware that consumed them, `requireReAuth`, was
+ * additionally never mounted, so the old list was doubly dead):
+ *   - `PUT /users/:id/password`, `POST /auth/change-password` — no
+ *     authenticated change-password route exists today; the only password
+ *     routes are the UNauthenticated forgot/reset flow (auth.routes.ts).
+ *     GAP (accepted): if an authenticated change-password route is ever
+ *     added, it must be gated + inventoried here.
+ *   - `PUT|PATCH /users/:id/bank-details` — no such route; bank fields
+ *     (bankName/accountNumber/accountName) are part of the
+ *     `PATCH /users/profile` payload, which IS gated below.
+ *   - `POST|PUT /payments/disputes*` — no payments routes exist.
+ *   - `PUT /users/:id/security`, `DELETE /users/:id/sessions` — no such
+ *     routes; MFA mutations (the real "security settings") are gated below,
+ *     and session invalidation happens via logout / staff deactivate.
  */
-export const requireReAuth = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // Skip if not authenticated
-    if (!req.user) {
-      return next();
-    }
+export const SENSITIVE_ACTIONS = [
+  // Own-profile mutation — includes staff bank details in its payload.
+  // Passwordless-exempt: see requireFreshReAuthExceptPasswordless below.
+  { method: 'PATCH', path: '/api/v1/users/profile', gate: 'requireFreshReAuthExceptPasswordless' },
 
-    // Skip if not a sensitive action
-    if (!isSensitiveAction(req.method, req.path)) {
-      return next();
-    }
+  // System settings write (includes the wizard.public_form_id pin — 13-17).
+  { method: 'PATCH', path: '/api/v1/admin/settings/:key', gate: 'requireFreshReAuth' },
 
-    // Skip if not a "Remember Me" session
-    if (!req.user.rememberMe) {
-      return next();
-    }
+  // Destructive admin action.
+  { method: 'POST', path: '/api/v1/admin/email-queue/drain', gate: 'requireFreshReAuth' },
 
-    // Check for recent re-authentication
-    const redis = getRedisClient();
-    const reAuthKey = `${REAUTH_KEY_PREFIX}${req.user.sub}`;
-    const reAuthTime = await redis.get(reAuthKey);
+  // Privileged staff-account mutations (F-014, Story 9-45).
+  { method: 'PATCH', path: '/api/v1/staff/:userId/role', gate: 'requireFreshReAuth' },
+  { method: 'POST', path: '/api/v1/staff/:userId/deactivate', gate: 'requireFreshReAuth' },
+  { method: 'POST', path: '/api/v1/staff/:userId/reactivate', gate: 'requireFreshReAuth' },
 
-    if (reAuthTime) {
-      // Re-auth is still valid
-      logger.info({
-        event: 'sensitive_action.reauth_valid',
-        userId: req.user.sub,
-        action: req.path,
-      });
-      return next();
-    }
+  // MFA mutations (Story 9-13).
+  { method: 'POST', path: '/api/v1/auth/mfa/enroll', gate: 'requireFreshReAuth' },
+  { method: 'POST', path: '/api/v1/auth/mfa/disable', gate: 'requireFreshReAuth' },
+  { method: 'POST', path: '/api/v1/auth/mfa/regenerate-codes', gate: 'requireFreshReAuth' },
+] as const;
 
-    // Re-authentication required
-    logger.info({
-      event: 'sensitive_action.reauth_required',
-      userId: req.user.sub,
-      action: req.path,
-      method: req.method,
-    });
-
-    throw new AppError(
-      'AUTH_REAUTH_REQUIRED',
-      'Please re-enter your password to continue with this action',
-      403,
-      {
-        action: req.path,
-        reason: 'sensitive_action',
-      }
-    );
-  } catch (error) {
-    if (error instanceof AppError) {
-      return next(error);
-    }
-
-    logger.error({
-      event: 'sensitive_action.error',
-      error: (error as Error).message,
-    });
-
-    next(error);
-  }
-};
+// Story 13-18 — `requireReAuth` (the old Remember-Me-conditional middleware
+// that pattern-matched req.path against a regex list) was DELETED: it was
+// never mounted anywhere, and its patterns matched no registered route. Its
+// intent is now served by the explicit per-route gates below plus the
+// login-grace lifecycle (see setReAuthValid / auth.service.ts): a fresh
+// interactive password login grants the 5-minute grace, so only stale /
+// resumed / token-only sessions get re-prompted — which is the behaviour the
+// old "Remember Me" framing was reaching for, without the dead plumbing.
 
 /**
- * Story 9-45 AC#3 (F-014) — UNCONDITIONAL step-up re-auth for privileged
- * mutations (role change, deactivate/reactivate, destructive admin actions).
+ * UNCONDITIONAL step-up re-auth for privileged/sensitive mutations
+ * (Story 9-45 AC#3 / F-014; consolidated single implementation in 13-18).
  *
- * Unlike `requireReAuth` (which only triggers for "Remember Me" sessions on a
- * fixed allowlist), this gate ALWAYS requires a recent re-authentication
- * regardless of `rememberMe`. Apply it directly to the privileged route so a
- * stolen-but-valid access token cannot silently promote/deactivate accounts
- * without the actor re-proving their password within the 5-minute window.
+ * ALWAYS requires a recent re-authentication regardless of session type, so a
+ * stolen-but-valid access token cannot perform the gated mutation unless the
+ * actor re-proved their password within the 5-minute window — OR logged in
+ * with their password within that window (login grants the same grace; see
+ * AC4 ruling in story 13-18).
  *
- * Reuses the same Redis re-auth marker + `POST /auth/reauth` flow as
- * `requireReAuth` (no net-new primitive).
+ * Apply directly on the route, AFTER `authenticate`. Every mount must be
+ * listed in SENSITIVE_ACTIONS (anti-drift test enforces this).
  */
 export const requireFreshReAuth = async (req: Request, _res: Response, next: NextFunction) => {
   try {
@@ -170,36 +123,72 @@ export const requireFreshReAuth = async (req: Request, _res: Response, next: Nex
 };
 
 /**
- * Marks a user as recently re-authenticated
- * Called after successful re-auth POST /api/v1/auth/reauth
+ * Story 13-18 — fresh-reauth gate for `PATCH /users/profile`, which is used
+ * by EVERY role including public_user.
+ *
+ * Passwordless accounts exist (wizard-provisioned public users with
+ * `passwordHash: null`, magic-link login only — Story 9-16/9-38). They cannot
+ * answer a password re-auth modal (`POST /auth/reauth` bcrypt-compares and
+ * 401s on a null hash), so an unconditional gate would permanently lock them
+ * out of profile self-service (an NDPA data-subject-rights problem). Their
+ * single-use magic-link possession at login is their identity proof; the risk
+ * delta vs the pre-13-18 state (route fully ungated) is zero for that cohort.
+ *
+ * Behaviour: identical to `requireFreshReAuth`, except a passwordless account
+ * passes with an audit-visible log event instead of a 403.
  */
-export async function setReAuthValid(userId: string): Promise<void> {
-  const redis = getRedisClient();
-  const reAuthKey = `${REAUTH_KEY_PREFIX}${userId}`;
-  await redis.setex(reAuthKey, REAUTH_VALIDITY, Date.now().toString());
+export const requireFreshReAuthExceptPasswordless = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.user) {
+      throw new AppError('AUTH_REQUIRED', 'Authentication required', 401);
+    }
 
-  logger.info({
-    event: 'sensitive_action.reauth_granted',
-    userId,
-    validFor: REAUTH_VALIDITY,
-  });
-}
+    const redis = getRedisClient();
+    const reAuthKey = `${REAUTH_KEY_PREFIX}${req.user.sub}`;
+    const reAuthTime = await redis.get(reAuthKey);
 
-/**
- * Clears re-auth status for a user (e.g., on logout)
- */
-export async function clearReAuth(userId: string): Promise<void> {
-  const redis = getRedisClient();
-  const reAuthKey = `${REAUTH_KEY_PREFIX}${userId}`;
-  await redis.del(reAuthKey);
-}
+    if (reAuthTime) {
+      logger.info({ event: 'privileged_action.reauth_valid', userId: req.user.sub, action: req.path });
+      return next();
+    }
 
-/**
- * Gets the remaining validity time for a user's re-auth (in seconds)
- */
-export async function getReAuthValidity(userId: string): Promise<number | null> {
-  const redis = getRedisClient();
-  const reAuthKey = `${REAUTH_KEY_PREFIX}${userId}`;
-  const ttl = await redis.ttl(reAuthKey);
-  return ttl > 0 ? ttl : null;
-}
+    // No fresh grace — exempt passwordless accounts (they cannot re-auth).
+    const [account] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, req.user.sub));
+
+    if (account && account.passwordHash === null) {
+      logger.info({
+        event: 'privileged_action.passwordless_exemption',
+        userId: req.user.sub,
+        action: req.path,
+        method: req.method,
+      });
+      return next();
+    }
+
+    logger.info({
+      event: 'privileged_action.reauth_required',
+      userId: req.user.sub,
+      action: req.path,
+      method: req.method,
+    });
+
+    throw new AppError(
+      'AUTH_REAUTH_REQUIRED',
+      'Please re-enter your password to continue with this action',
+      403,
+      { action: req.path, reason: 'privileged_action' },
+    );
+  } catch (error) {
+    if (error instanceof AppError) return next(error);
+    logger.error({ event: 'privileged_action.error', error: (error as Error).message });
+    next(error);
+  }
+};
+

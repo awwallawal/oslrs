@@ -48,8 +48,9 @@ vi.mock('../../middleware/settings-rate-limit.js', () => ({
 // behavior is covered by middleware/__tests__/require-fresh-reauth.test.ts.
 // Without this the mocked super-admin (no Redis marker) 403s before the handler.
 vi.mock('../../middleware/sensitive-action.js', () => ({
-  requireReAuth: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // 13-18: `requireReAuth` deleted (dead code); pass-through the live gates.
   requireFreshReAuth: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  requireFreshReAuthExceptPasswordless: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   setReAuthValid: vi.fn(),
   clearReAuth: vi.fn(),
   getReAuthValidity: vi.fn(),

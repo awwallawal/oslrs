@@ -10,6 +10,7 @@ import { PhotoProcessingService } from './photo-processing.service.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import { MfaService } from './mfa.service.js';
 import { MagicLinkService } from './magic-link.service.js';
+import { setReAuthValid, clearReAuth } from '../lib/reauth-grace.js';
 import pino from 'pino';
 
 /**
@@ -49,6 +50,30 @@ const logger = pino({ name: 'auth-service' });
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const EXTENDED_LOCKOUT_THRESHOLD = 10;
+
+/**
+ * Story 13-18 AC4 (PM ruling 2026-07-06) — a successful INTERACTIVE PASSWORD
+ * login grants the same 5-minute re-auth grace as `POST /auth/reauth`: the
+ * user just proved their password, so step-up-gated actions shouldn't
+ * re-prompt seconds later. Applied on staff login, public login, and MFA
+ * step-2 completion (password was proven at step 1). Deliberately NOT applied
+ * on silent token refresh or magic-link login (neither is a password proof).
+ *
+ * Non-fatal by design: the grace is a UX nicety — a Redis blip must never
+ * fail a login (worst case the user sees the re-auth modal, i.e. the
+ * pre-grace behaviour).
+ */
+async function grantLoginReAuthGrace(userId: string): Promise<void> {
+  try {
+    await setReAuthValid(userId);
+  } catch (error) {
+    logger.warn({
+      event: 'auth.login_reauth_grace_failed',
+      userId,
+      error: (error as Error).message,
+    });
+  }
+}
 
 export class AuthService {
   /**
@@ -412,6 +437,7 @@ export class AuthService {
         userId: user.id,
         email: user.email,
         rememberMe,
+        passwordProven: true, // 13-18 M1 — step-1 was a password proof
       });
 
       logger.info({
@@ -429,7 +455,9 @@ export class AuthService {
     }
 
     // Success - create session and tokens
-    return this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    const session = await this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    await grantLoginReAuthGrace(user.id); // 13-18 AC4 — password proven interactively
+    return session;
   }
 
   /**
@@ -442,6 +470,10 @@ export class AuthService {
     rememberMe: boolean,
     ipAddress?: string,
     userAgent?: string,
+    // 13-18 review M1 — grace is granted only when the challenge token says
+    // step-1 was a PASSWORD proof. Defaults to false so a caller that forgets
+    // to thread it through fails safe (no grace), never the other way.
+    passwordProven = false,
   ): Promise<LoginResponse & { refreshToken: string; sessionId: string }> {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -457,7 +489,13 @@ export class AuthService {
         403,
       );
     }
-    return this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    const session = await this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    if (passwordProven) {
+      // 13-18 AC4 — password proven at MFA step-1 (staff login). A magic-link
+      // step-1 (possession proof) deliberately grants NO grace (review M1).
+      await grantLoginReAuthGrace(user.id);
+    }
+    return session;
   }
 
   /**
@@ -573,7 +611,9 @@ export class AuthService {
       );
     }
 
-    return this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    const session = await this.createLoginSession(user, rememberMe, ipAddress, userAgent);
+    await grantLoginReAuthGrace(user.id); // 13-18 AC4 — password proven interactively
+    return session;
   }
 
   /**
@@ -669,6 +709,9 @@ export class AuthService {
         userId: user.id,
         email: user.email,
         rememberMe,
+        // 13-18 M1 — magic-link possession is NOT a password proof; step-2
+        // completion must not grant the re-auth grace for this login.
+        passwordProven: false,
       });
 
       logger.info({
@@ -915,6 +958,18 @@ export class AuthService {
 
     // Invalidate the session
     await SessionService.invalidateSession(sessionId, 'logout');
+
+    // 13-18 — the re-auth grace must not outlive the session that earned it.
+    // Non-fatal: logout must succeed even if the Redis DEL blips.
+    try {
+      await clearReAuth(userId);
+    } catch (error) {
+      logger.warn({
+        event: 'auth.logout_reauth_clear_failed',
+        userId,
+        error: (error as Error).message,
+      });
+    }
 
     // Clear session ID from user record
     await db.update(users)

@@ -294,6 +294,7 @@ describe('MfaService', { timeout: 15000 }, () => {
         userId: 'user-abc',
         email: 'cha@example.com',
         rememberMe: true,
+        passwordProven: true,
       });
       expect(token).toMatch(/^[A-Za-z0-9_-]+$/); // base64url
 
@@ -302,6 +303,9 @@ describe('MfaService', { timeout: 15000 }, () => {
         userId: 'user-abc',
         email: 'cha@example.com',
         rememberMe: true,
+        // 13-18 review M1 — the step-1 proof kind must survive the roundtrip;
+        // step-2 uses it to decide whether login grants the re-auth grace.
+        passwordProven: true,
       });
     });
 
@@ -310,6 +314,7 @@ describe('MfaService', { timeout: 15000 }, () => {
         userId: 'user-xyz',
         email: 'one@example.com',
         rememberMe: false,
+        passwordProven: false,
       });
       await MfaService.consumeChallengeToken(token);
       const second = await MfaService.consumeChallengeToken(token);

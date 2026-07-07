@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { EmailService } from '../services/email.service.js';
-import { setReAuthValid } from '../middleware/sensitive-action.js';
+import { setReAuthValid } from '../lib/reauth-grace.js';
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `RegistrationService` import
 // removed alongside the deleted controller methods (publicRegister /
 // verifyEmail / verifyOtp / resendVerification). `publicRegistrationRequestSchema`,

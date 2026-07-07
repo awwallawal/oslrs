@@ -241,6 +241,7 @@ export class MfaController {
         payload.rememberMe,
         ipAddress,
         userAgent,
+        payload.passwordProven === true, // 13-18 M1 — grace only on password step-1
       );
 
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken, {
@@ -318,6 +319,7 @@ export class MfaController {
         payload.rememberMe,
         ipAddress,
         userAgent,
+        payload.passwordProven === true, // 13-18 M1 — grace only on password step-1
       );
 
       res.cookie(REFRESH_TOKEN_COOKIE_NAME, session.refreshToken, {

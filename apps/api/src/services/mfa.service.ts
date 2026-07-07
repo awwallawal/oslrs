@@ -75,6 +75,14 @@ export interface ChallengePayload {
   email: string;
   exp: number;
   rememberMe: boolean;
+  /**
+   * 13-18 review M1 — whether step-1 was an interactive PASSWORD proof
+   * (staff password login) as opposed to a possession proof (magic link).
+   * Step-2 completion only grants the re-auth grace when true. Optional so
+   * in-flight tokens minted before this field existed read as undefined →
+   * no grace (fail-safe).
+   */
+  passwordProven?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,7 +349,12 @@ export class MfaService {
   // Login step-2 challenge tokens (Redis-backed, EX=300)
   // ---------------------------------------------------------------------------
 
-  static async mintChallengeToken(payload: { userId: string; email: string; rememberMe: boolean }): Promise<string> {
+  static async mintChallengeToken(payload: {
+    userId: string;
+    email: string;
+    rememberMe: boolean;
+    passwordProven: boolean;
+  }): Promise<string> {
     const token = crypto.randomBytes(32).toString('base64url');
     const exp = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS;
     const data: ChallengePayload = {
@@ -349,6 +362,7 @@ export class MfaService {
       email: payload.email,
       exp,
       rememberMe: payload.rememberMe,
+      passwordProven: payload.passwordProven,
     };
     await getRedisClient().set(CHALLENGE_KEY(token), JSON.stringify(data), 'EX', CHALLENGE_TTL_SECONDS);
     return token;

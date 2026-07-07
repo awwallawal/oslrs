@@ -5,10 +5,11 @@ import { AppError } from '@oslsr/utils';
 // `loginByMagicLinkToken` can be unit-tested in isolation. The token/session
 // services are only reached via the private `createLoginSession`, which the
 // happy-path test spies (so we never touch Redis/JWT here).
-const { mockConsumeToken, mockMintChallengeToken, mockFindFirst } = vi.hoisted(() => ({
+const { mockConsumeToken, mockMintChallengeToken, mockFindFirst, mockSetReAuthValid } = vi.hoisted(() => ({
   mockConsumeToken: vi.fn(),
   mockMintChallengeToken: vi.fn(),
   mockFindFirst: vi.fn(),
+  mockSetReAuthValid: vi.fn(),
 }));
 
 vi.mock('../magic-link.service.js', () => ({
@@ -16,6 +17,12 @@ vi.mock('../magic-link.service.js', () => ({
 }));
 vi.mock('../mfa.service.js', () => ({
   MfaService: { mintChallengeToken: mockMintChallengeToken },
+}));
+// 13-18 review M1 — intercept the grace lifecycle so the conditional grant in
+// completeStaffLoginAfterMfa is observable without touching Redis.
+vi.mock('../../lib/reauth-grace.js', () => ({
+  setReAuthValid: mockSetReAuthValid,
+  clearReAuth: vi.fn(),
 }));
 vi.mock('../../db/index.js', () => ({
   db: {
@@ -205,8 +212,10 @@ describe('AuthService', () => {
 
       const result = await AuthService.loginByMagicLinkToken({ plaintext: 'tok', rememberMe: true });
 
+      // 13-18 review M1 — a magic-link step-1 is a possession proof, not a
+      // password proof; the challenge must carry that so step-2 grants no grace.
       expect(mockMintChallengeToken).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'user-1', rememberMe: true }),
+        expect.objectContaining({ userId: 'user-1', rememberMe: true, passwordProven: false }),
       );
       expect(result).toEqual({
         requiresMfa: true,
@@ -227,6 +236,47 @@ describe('AuthService', () => {
         statusCode: 400,
       });
       expect(mockFindFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeStaffLoginAfterMfa — 13-18 review M1 (grace only on password step-1)', () => {
+    const session = { accessToken: 'a', user: {}, expiresIn: 900, refreshToken: 'r', sessionId: 's' };
+
+    const spyCreateSession = () =>
+      vi
+        .spyOn(AuthService as unknown as { createLoginSession: (...a: unknown[]) => unknown }, 'createLoginSession')
+        .mockResolvedValueOnce(session as never);
+
+    beforeEach(() => vi.clearAllMocks());
+
+    it('grants the re-auth grace when the challenge says step-1 was a PASSWORD proof', async () => {
+      mockFindFirst.mockResolvedValueOnce(makePublicUser({ role: { name: 'super_admin' } }));
+      const createSpy = spyCreateSession();
+
+      await AuthService.completeStaffLoginAfterMfa('user-1', false, '1.2.3.4', 'jest', true);
+
+      expect(mockSetReAuthValid).toHaveBeenCalledWith('user-1');
+      createSpy.mockRestore();
+    });
+
+    it('grants NO grace when step-1 was a possession proof (magic link)', async () => {
+      mockFindFirst.mockResolvedValueOnce(makePublicUser());
+      const createSpy = spyCreateSession();
+
+      await AuthService.completeStaffLoginAfterMfa('user-1', false, '1.2.3.4', 'jest', false);
+
+      expect(mockSetReAuthValid).not.toHaveBeenCalled();
+      createSpy.mockRestore();
+    });
+
+    it('fails safe: grants NO grace when the flag is absent (legacy in-flight challenge tokens)', async () => {
+      mockFindFirst.mockResolvedValueOnce(makePublicUser({ role: { name: 'super_admin' } }));
+      const createSpy = spyCreateSession();
+
+      await AuthService.completeStaffLoginAfterMfa('user-1', false, '1.2.3.4', 'jest');
+
+      expect(mockSetReAuthValid).not.toHaveBeenCalled();
+      createSpy.mockRestore();
     });
   });
 });
