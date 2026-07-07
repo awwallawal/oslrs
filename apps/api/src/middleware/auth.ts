@@ -122,7 +122,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
         req.viewAs = viewAsState;
         // F-010 — enforce read-only via the SHARED decision (exact-pathname,
         // method-aware), STATICALLY imported so the control can't fail open on a
-        // dynamic-import error. Same code path as `blockMutationsInViewAs`.
+        // dynamic-import error. `viewAsReadOnlyError` is the shared decision.
         const viewAsErr = viewAsReadOnlyError(req);
         if (viewAsErr) return next(viewAsErr);
       }

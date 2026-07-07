@@ -1,33 +1,21 @@
 /**
- * View-As Middleware — Attaches View-As session state and blocks mutations
+ * View-As read-only enforcement (Story 6-7: Super Admin View-As Feature).
  *
- * Two middleware functions:
- * 1. attachViewAsState — checks Redis for active View-As session, attaches to req.viewAs
- * 2. blockMutationsInViewAs — rejects POST/PUT/PATCH/DELETE when View-As is active
+ * The actual enforcement lives in the `authenticate` middleware (auth.ts),
+ * which attaches the View-As session state and calls `viewAsReadOnlyError` to
+ * block mutations. This module exports the shared, PURE decision helpers
+ * (`viewAsReadOnlyError` / `isViewAsManagementRoute`) so prod and tests
+ * exercise the SAME logic — Story 9-45 AC#2 (F-010).
  *
- * Story 6-7: Super Admin View-As Feature
+ * (2026-07-07 hygiene) The old standalone middleware `attachViewAsState` +
+ * `blockMutationsInViewAs` were removed: both were exported but mounted on no
+ * route (a full security-middleware sweep confirmed the real enforcement is the
+ * inline `authenticate` path). Restore from git history if a standalone mount
+ * is ever wanted.
  */
 
-import { Request, Response, NextFunction } from 'express';
+import { Request } from 'express';
 import { AppError } from '@oslsr/utils';
-import { ViewAsService } from '../services/view-as.service.js';
-
-/**
- * Middleware that checks Redis for an active View-As session and attaches to req.viewAs.
- * Must run after authenticate middleware so req.user is available.
- */
-export const attachViewAsState = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
-  if (!req.user) {
-    return next();
-  }
-
-  const viewAsState = await ViewAsService.getViewAsState(req.user.sub);
-  if (viewAsState) {
-    req.viewAs = viewAsState;
-  }
-
-  next();
-};
 
 const MUTATION_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -55,10 +43,10 @@ export function isViewAsManagementRoute(req: Request): boolean {
 
 /**
  * Returns a 403 AppError if this request is a mutation that must be blocked
- * while View-As is active, else null. Pure decision — shared by the standalone
- * `blockMutationsInViewAs` middleware AND the `authenticate` flow so prod and
- * tests exercise the SAME logic (the old code ran a flawed inline copy while
- * tests greened against dead middleware — F-010 test-integrity lesson).
+ * while View-As is active, else null. Pure decision — consumed by the
+ * `authenticate` flow (auth.ts) so prod and tests exercise the SAME logic (the
+ * old code ran a flawed inline copy while tests greened against dead
+ * middleware — F-010 test-integrity lesson).
  */
 export function viewAsReadOnlyError(req: Request): AppError | null {
   if (!req.viewAs) return null;
@@ -66,13 +54,3 @@ export function viewAsReadOnlyError(req: Request): AppError | null {
   if (isViewAsManagementRoute(req)) return null;
   return new AppError('VIEW_AS_READ_ONLY', 'Actions disabled in View-As mode', 403);
 }
-
-/**
- * Middleware that rejects mutation requests (POST/PUT/PATCH/DELETE) when View-As
- * is active, exempting the exact view-as management routes.
- */
-export const blockMutationsInViewAs = (req: Request, _res: Response, next: NextFunction): void => {
-  const err = viewAsReadOnlyError(req);
-  if (err) return next(err);
-  next();
-};

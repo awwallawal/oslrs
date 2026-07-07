@@ -1,138 +1,39 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
-const { mockGetViewAsState } = vi.hoisted(() => ({
-  mockGetViewAsState: vi.fn(),
-}));
-
-vi.mock('../../services/view-as.service.js', () => ({
-  ViewAsService: {
-    getViewAsState: mockGetViewAsState,
-  },
-}));
-
-import {
-  attachViewAsState,
-  blockMutationsInViewAs,
-  isViewAsManagementRoute,
-  viewAsReadOnlyError,
-} from '../view-as.middleware.js';
+import { isViewAsManagementRoute, viewAsReadOnlyError } from '../view-as.middleware.js';
 import { AppError } from '@oslsr/utils';
 
-const ADMIN_ID = '01234567-0000-7000-8000-000000000001';
-const LGA_ID = '01234567-0000-7000-8000-000000000010';
+// (2026-07-07 hygiene) The standalone `attachViewAsState` / `blockMutationsInViewAs`
+// middleware were removed as dead code (mounted on no route — enforcement is the
+// inline `authenticate` path). These tests now exercise the shared PURE decision
+// (`viewAsReadOnlyError` / `isViewAsManagementRoute`) that `authenticate` calls,
+// so the read-only + F-010 bypass coverage is preserved without the dead wrappers.
 
-describe('View-As Middleware', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('attachViewAsState', () => {
-    it('populates req.viewAs when session active', async () => {
-      const viewAsState = {
-        targetRole: 'enumerator',
-        targetLgaId: LGA_ID,
-        startedAt: '2026-03-01T10:00:00.000Z',
-        expiresAt: '2026-03-01T10:30:00.000Z',
-      };
-      mockGetViewAsState.mockResolvedValue(viewAsState);
-
-      const req = { user: { sub: ADMIN_ID } } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      await attachViewAsState(req, res, next);
-
-      expect(req.viewAs).toEqual(viewAsState);
-      expect(next).toHaveBeenCalledWith();
-    });
-
-    it('does nothing when no session active', async () => {
-      mockGetViewAsState.mockResolvedValue(null);
-
-      const req = { user: { sub: ADMIN_ID } } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      await attachViewAsState(req, res, next);
-
-      expect(req.viewAs).toBeUndefined();
-      expect(next).toHaveBeenCalledWith();
-    });
-
-    it('does nothing when no user on request', async () => {
-      const req = {} as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      await attachViewAsState(req, res, next);
-
-      expect(mockGetViewAsState).not.toHaveBeenCalled();
-      expect(next).toHaveBeenCalledWith();
-    });
-  });
-
-  describe('blockMutationsInViewAs', () => {
+describe('View-As read-only enforcement', () => {
+  describe('viewAsReadOnlyError — mutation blocking', () => {
     it('blocks POST requests when View-As active', () => {
       const req = { viewAs: { targetRole: 'enumerator' }, method: 'POST' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      const error = next.mock.calls[0][0] as AppError;
-      expect(error.statusCode).toBe(403);
-      expect(error.message).toBe('Actions disabled in View-As mode');
+      const err = viewAsReadOnlyError(req);
+      expect(err).toBeInstanceOf(AppError);
+      expect(err?.statusCode).toBe(403);
+      expect(err?.message).toBe('Actions disabled in View-As mode');
     });
 
-    it('blocks PUT requests when View-As active', () => {
-      const req = { viewAs: { targetRole: 'enumerator' }, method: 'PUT' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-    });
-
-    it('blocks PATCH requests when View-As active', () => {
-      const req = { viewAs: { targetRole: 'enumerator' }, method: 'PATCH' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-    });
-
-    it('blocks DELETE requests when View-As active', () => {
-      const req = { viewAs: { targetRole: 'enumerator' }, method: 'DELETE' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
+    it('blocks PUT/PATCH/DELETE requests when View-As active', () => {
+      for (const method of ['PUT', 'PATCH', 'DELETE']) {
+        const req = { viewAs: { targetRole: 'enumerator' }, method } as any;
+        expect(viewAsReadOnlyError(req)).toBeInstanceOf(AppError);
+      }
     });
 
     it('allows GET requests when View-As active', () => {
       const req = { viewAs: { targetRole: 'enumerator' }, method: 'GET' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith();
+      expect(viewAsReadOnlyError(req)).toBeNull();
     });
 
     it('does nothing when no View-As session', () => {
       const req = { method: 'POST' } as any;
-      const res = {} as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, res, next);
-
-      expect(next).toHaveBeenCalledWith();
+      expect(viewAsReadOnlyError(req)).toBeNull();
     });
 
     // ── Story 9-45 AC#2 (F-010) — query-string bypass closed ───────────
@@ -143,12 +44,9 @@ describe('View-As Middleware', () => {
         method: 'POST',
         originalUrl: '/api/v1/staff/abc/deactivate?x=/view-as/end',
       } as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, {} as any, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect((next.mock.calls[0][0] as AppError).statusCode).toBe(403);
+      const err = viewAsReadOnlyError(req);
+      expect(err).toBeInstanceOf(AppError);
+      expect(err?.statusCode).toBe(403);
     });
 
     it('ALLOWS the legitimate POST /view-as/end while View-As is active', () => {
@@ -157,11 +55,7 @@ describe('View-As Middleware', () => {
         method: 'POST',
         originalUrl: '/api/v1/view-as/end',
       } as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, {} as any, next);
-
-      expect(next).toHaveBeenCalledWith();
+      expect(viewAsReadOnlyError(req)).toBeNull();
     });
 
     it('ALLOWS POST /view-as/start (with a trailing slash / query)', () => {
@@ -170,11 +64,7 @@ describe('View-As Middleware', () => {
         method: 'POST',
         originalUrl: '/api/v1/view-as/start?foo=bar',
       } as any;
-      const next = vi.fn();
-
-      blockMutationsInViewAs(req, {} as any, next);
-
-      expect(next).toHaveBeenCalledWith();
+      expect(viewAsReadOnlyError(req)).toBeNull();
     });
   });
 

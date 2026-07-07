@@ -122,20 +122,6 @@ export const verifyCaptcha = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-/**
- * Optional CAPTCHA verification - logs but doesn't fail
- * Useful for monitoring without blocking
- */
-export const optionalCaptcha = async (req: Request, res: Response, next: NextFunction) => {
-  const { captchaToken } = req.body;
-
-  if (!captchaToken) {
-    logger.info({
-      event: 'captcha.skipped',
-      reason: 'no_token_provided',
-    });
-    return next();
-  }
-
-  return verifyCaptcha(req, res, next);
-};
+// (2026-07-07 hygiene) `optionalCaptcha` was removed here — it was exported but
+// mounted on no route (verified by a full security-middleware sweep). Restore
+// from git history if an optional/monitor-only CAPTCHA path is ever needed.
