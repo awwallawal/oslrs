@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
 import { XlsformParserService } from '../xlsform-parser.service.js';
 import type { XlsformSurveyRow, XlsformChoiceRow } from '@oslsr/types';
+import { SKILL_SLUGS } from '@oslsr/types';
 
 /**
  * Helper to create an XLSX buffer from sheet data
@@ -76,8 +77,12 @@ function createValidOslsrForm(): Buffer {
     'Furniture Making', 'Upholstery', 'Shoe Making', 'Leather Works', 'Jewelry Making',
     'Beadwork', 'Pottery', 'Sculpting', 'Music', 'Dance',
   ];
+  // Story 13-20 — skill_list now carries a canonicalValues pin (SKILL_SLUGS).
+  // Use real canonical slugs (mirrors the 13-16 lga_list fixture cleanup) so this
+  // "valid" fixture doesn't emit spurious non-canonical skill warnings. Labels are
+  // display-only; the pinned VALUE is what matters.
   skillNames.forEach((name, idx) => {
-    skillChoices.push({ list_name: 'skill_list', name: `skill_${idx + 1}`, label: name });
+    skillChoices.push({ list_name: 'skill_list', name: SKILL_SLUGS[idx], label: name });
   });
 
   // Experience ranges

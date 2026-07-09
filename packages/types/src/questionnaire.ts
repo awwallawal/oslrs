@@ -3,6 +3,7 @@
  * Aligned with docs/questionnaire_schema.md v3.0
  */
 import { Lga } from './constants.js';
+import { SKILL_SLUGS } from './skills-taxonomy.js';
 
 // ============================================================================
 // XLSForm Structure Types
@@ -146,7 +147,16 @@ export const OSLSR_REQUIRED_CHOICE_LISTS: Record<
     description: 'Oyo State LGAs',
     canonicalValues: Object.values(Lga),
   },
-  skill_list: { minOptions: 150, description: 'ISCO-08 aligned skills across 20 sectors' },
+  // Story 13-20 — skill_list choice VALUES must equal a canonical Skill slug
+  // (`SKILL_TAXONOMY` / SKILL_SLUGS, derived from appendix-c-skills-taxonomy.md).
+  // `respondents … raw_data.skills_possessed` stores these slugs and all skills
+  // analytics group by them; a divergent value silently drops out of every
+  // per-skill tally (the same failure mode 13-16 pinned for lga_list).
+  skill_list: {
+    minOptions: 150,
+    description: 'ISCO-08 aligned skills across 20 sectors',
+    canonicalValues: SKILL_SLUGS,
+  },
   experience_list: { minOptions: 5, description: 'Years of experience ranges' },
   emp_type: { minOptions: 6, description: 'Employment types' },
 } as const;

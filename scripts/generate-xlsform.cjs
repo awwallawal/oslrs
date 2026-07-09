@@ -162,8 +162,8 @@ const choices = [
   ['lga_list', 'saki_east', 'Saki East'],
   ['lga_list', 'saki_west', 'Saki West'],
   ['lga_list', 'surulere', 'Surulere'],
-  // skill_list (50+ skills)
-  // Construction & Building Trades
+  // skill_list — canonical 150-skill taxonomy (Story 13-20; source: appendix-c-skills-taxonomy.md)
+  // Construction & Building
   ['skill_list', 'carpentry', 'Carpentry/Woodwork'],
   ['skill_list', 'plumbing', 'Plumbing'],
   ['skill_list', 'electrical', 'Electrical Installation'],
@@ -175,6 +175,7 @@ const choices = [
   ['skill_list', 'hvac', 'HVAC/Air Conditioning'],
   ['skill_list', 'solar', 'Solar Installation'],
   ['skill_list', 'aluminum', 'Aluminum & Glass Fitting'],
+  ['skill_list', 'pop_plastering', 'POP/Plaster of Paris Work'],
   // Automotive & Mechanical
   ['skill_list', 'auto_mechanic', 'Auto Mechanic'],
   ['skill_list', 'auto_electrician', 'Auto Electrician'],
@@ -183,6 +184,7 @@ const choices = [
   ['skill_list', 'motorcycle_repair', 'Motorcycle/Tricycle Repair'],
   ['skill_list', 'heavy_equipment', 'Heavy Equipment Operation'],
   ['skill_list', 'generator_repair', 'Generator Repair'],
+  ['skill_list', 'battery_inverter', 'Battery/Inverter Technician'],
   // Fashion, Beauty & Personal Care
   ['skill_list', 'tailoring', 'Tailoring/Sewing'],
   ['skill_list', 'fashion_design', 'Fashion Design'],
@@ -192,6 +194,7 @@ const choices = [
   ['skill_list', 'shoe_making', 'Shoe Making/Cobbling'],
   ['skill_list', 'bag_making', 'Bag Making/Leather Craft'],
   ['skill_list', 'jewelry', 'Jewelry Making'],
+  ['skill_list', 'nail_technology', 'Nail Technology'],
   // Food, Agriculture & Processing
   ['skill_list', 'farming', 'Crop Farming'],
   ['skill_list', 'livestock', 'Livestock/Poultry Farming'],
@@ -200,6 +203,8 @@ const choices = [
   ['skill_list', 'baking', 'Baking & Confectionery'],
   ['skill_list', 'food_processing', 'Food Processing/Preservation'],
   ['skill_list', 'butchery', 'Butchery/Meat Processing'],
+  ['skill_list', 'agro_processing', 'Agro-Processing Equipment Operation'],
+  ['skill_list', 'horticulture', 'Horticulture/Floriculture'],
   // Digital, Technology & Office
   ['skill_list', 'software_dev', 'Software Development'],
   ['skill_list', 'web_design', 'Web Design/Development'],
@@ -210,6 +215,7 @@ const choices = [
   ['skill_list', 'office_admin', 'Office Administration'],
   ['skill_list', 'computer_repair', 'Computer/Phone Repair'],
   ['skill_list', 'social_media', 'Social Media Management'],
+  ['skill_list', 'digital_marketing', 'Digital Marketing/SEO'],
   // Healthcare & Wellness
   ['skill_list', 'nursing', 'Nursing/Patient Care'],
   ['skill_list', 'pharmacy_tech', 'Pharmacy Assistant'],
@@ -217,14 +223,17 @@ const choices = [
   ['skill_list', 'community_health', 'Community Health Worker'],
   ['skill_list', 'caregiving', 'Elderly/Child Caregiving'],
   ['skill_list', 'physiotherapy', 'Physiotherapy Assistant'],
+  ['skill_list', 'traditional_medicine', 'Traditional Medicine/Herbalism'],
+  ['skill_list', 'dental_assistant', 'Dental Assistant'],
   // Education & Professional Services
   ['skill_list', 'teaching', 'Teaching/Tutoring'],
   ['skill_list', 'driving', 'Professional Driving'],
-  ['skill_list', 'security', 'Security Services'],
   ['skill_list', 'event_planning', 'Event Planning/Decoration'],
   ['skill_list', 'photography', 'Photography/Videography'],
   ['skill_list', 'cleaning', 'Professional Cleaning'],
   ['skill_list', 'laundry', 'Laundry/Dry Cleaning'],
+  ['skill_list', 'translation', 'Translation/Interpretation'],
+  ['skill_list', 'paralegal', 'Legal Clerk/Paralegal'],
   // Artisan & Traditional Crafts
   ['skill_list', 'furniture', 'Furniture Making'],
   ['skill_list', 'upholstery', 'Upholstery'],
@@ -232,7 +241,98 @@ const choices = [
   ['skill_list', 'blacksmith', 'Blacksmithing'],
   ['skill_list', 'weaving', 'Weaving/Textile Crafts'],
   ['skill_list', 'sign_writing', 'Sign Writing/Branding'],
-];
+  ['skill_list', 'calabash_carving', 'Calabash/Gourd Carving'],
+  // Transport & Logistics
+  ['skill_list', 'commercial_driving', 'Commercial Bus/Taxi Driving'],
+  ['skill_list', 'okada_riding', 'Motorcycle Taxi (Okada) Riding'],
+  ['skill_list', 'keke_operation', 'Tricycle (Keke) Operation'],
+  ['skill_list', 'haulage_driving', 'Truck/Haulage Driving'],
+  ['skill_list', 'dispatch_courier', 'Dispatch Riding/Courier'],
+  ['skill_list', 'warehouse_management', 'Warehouse Management'],
+  ['skill_list', 'logistics_coordination', 'Freight/Logistics Coordination'],
+  ['skill_list', 'forklift_operation', 'Forklift Operation'],
+  // Sales & Commerce
+  ['skill_list', 'trading', 'Trading/General Commerce'],
+  ['skill_list', 'agrochemical_sales', 'Agrochemical Sales'],
+  ['skill_list', 'medical_sales', 'Pharmaceutical/Medical Sales'],
+  ['skill_list', 'building_materials_sales', 'Building Materials Sales'],
+  ['skill_list', 'electronics_sales', 'Electronics/Phone Sales'],
+  ['skill_list', 'fmcg_distribution', 'Provisions/FMCG Distribution'],
+  ['skill_list', 'fuel_retailing', 'Fuel/Gas Retailing'],
+  ['skill_list', 'auto_parts_sales', 'Auto Parts Sales'],
+  // Mining & Quarrying
+  ['skill_list', 'quarrying', 'Quarrying/Stone Cutting'],
+  ['skill_list', 'sand_mining', 'Sand Mining/Dredging'],
+  ['skill_list', 'mineral_mining', 'Gold/Mineral Artisan Mining'],
+  ['skill_list', 'clay_extraction', 'Clay/Kaolin Extraction'],
+  ['skill_list', 'aggregate_processing', 'Gravel/Aggregate Processing'],
+  // Manufacturing & Industrial
+  ['skill_list', 'soap_making', 'Soap/Detergent Making'],
+  ['skill_list', 'water_production', 'Sachet/Bottled Water Production'],
+  ['skill_list', 'block_making', 'Block/Brick Making'],
+  ['skill_list', 'paint_manufacturing', 'Paint Manufacturing'],
+  ['skill_list', 'plastic_recycling', 'Plastic/Rubber Recycling'],
+  ['skill_list', 'garment_factory', 'Textile/Garment Factory Work'],
+  ['skill_list', 'metal_fabrication', 'Metal Fabrication/Foundry'],
+  ['skill_list', 'printing_production', 'Paper/Printing Production'],
+  // Hospitality & Tourism
+  ['skill_list', 'hotel_management', 'Hotel/Guest House Management'],
+  ['skill_list', 'restaurant_management', 'Restaurant/Bar Management'],
+  ['skill_list', 'bartending', 'Bartending/Mixology'],
+  ['skill_list', 'tour_guide', 'Tour Guide Services'],
+  ['skill_list', 'event_centre_management', 'Event Centre Management'],
+  ['skill_list', 'apartment_hosting', 'Short-Let/Apartment Hosting'],
+  ['skill_list', 'chef', 'Chef/Professional Cooking'],
+  // Entertainment & Creative Arts
+  ['skill_list', 'music_production', 'Music Production/DJ'],
+  ['skill_list', 'acting', 'Acting/Theatre Performance'],
+  ['skill_list', 'comedy_mc', 'Comedy/MC/Entertainment'],
+  ['skill_list', 'dance', 'Dance/Choreography'],
+  ['skill_list', 'sound_engineering', 'Sound Engineering'],
+  ['skill_list', 'instrument_playing', 'Musical Instrument Playing'],
+  ['skill_list', 'fine_art', 'Fine Art/Painting'],
+  ['skill_list', 'animation', 'Animation/Motion Graphics'],
+  // Security & Safety Services
+  ['skill_list', 'security', 'Private Security Guard'],
+  ['skill_list', 'cctv_installation', 'CCTV/Surveillance Installation'],
+  ['skill_list', 'fire_safety', 'Fire Safety/Extinguisher Services'],
+  ['skill_list', 'locksmith', 'Locksmith Services'],
+  ['skill_list', 'dog_training', 'Dog Training/K9 Handler'],
+  ['skill_list', 'crowd_management', 'Traffic/Crowd Management'],
+  // Waste Management & Environmental
+  ['skill_list', 'waste_collection', 'Waste Collection/Disposal'],
+  ['skill_list', 'scrap_dealing', 'Recycling/Scrap Dealing'],
+  ['skill_list', 'pest_control', 'Fumigation/Pest Control'],
+  ['skill_list', 'drainage_services', 'Sewage/Drainage Services'],
+  ['skill_list', 'environmental_remediation', 'Environmental Remediation'],
+  // Religious & Community Services
+  ['skill_list', 'clergy', 'Religious Leadership/Clergy'],
+  ['skill_list', 'islamic_teaching', 'Quranic/Islamic Teaching'],
+  ['skill_list', 'choir_direction', 'Church Music/Choir Direction'],
+  ['skill_list', 'community_development', 'Community Development Work'],
+  ['skill_list', 'counselling', 'Counselling Services'],
+  // Energy & Utilities
+  ['skill_list', 'borehole_drilling', 'Borehole Drilling'],
+  ['skill_list', 'water_treatment', 'Water Treatment/Purification'],
+  ['skill_list', 'power_line_work', 'Electrical Power Line Work'],
+  ['skill_list', 'gas_pipeline', 'Gas Pipeline Fitting'],
+  ['skill_list', 'engine_servicing', 'Diesel/Petrol Engine Servicing'],
+  ['skill_list', 'renewable_energy', 'Renewable Energy Technician'],
+  // Marine & Waterway Services
+  ['skill_list', 'boat_building', 'Boat Building/Repair'],
+  ['skill_list', 'river_fishing', 'Fishing (River/Lake)'],
+  ['skill_list', 'boat_operation', 'Canoe/Boat Operation'],
+  ['skill_list', 'fish_smoking', 'Fish Smoking/Drying'],
+  ['skill_list', 'pond_construction', 'Pond/Dam Construction'],
+  // Real Estate & Property Services
+  ['skill_list', 'estate_agency', 'Property/Estate Agency'],
+  ['skill_list', 'land_surveying', 'Land Surveying'],
+  ['skill_list', 'quantity_surveying', 'Building/Quantity Surveying'],
+  ['skill_list', 'architecture', 'Architecture/Draughtsmanship'],
+  ['skill_list', 'interior_design', 'Interior Design/Decoration'],
+  ['skill_list', 'facility_management', 'Facility Management'],
+  ['skill_list', 'pool_maintenance', 'Swimming Pool Construction/Maintenance'],
+  ['skill_list', 'storage_construction', 'Pest-Proof Storage Construction'],];
 
 // === SETTINGS SHEET ===
 const settings = [

@@ -436,13 +436,14 @@ export class XlsformParserService {
           });
         }
 
-        // Story 13-16 — canonical-value pin. lga_list values feed
-        // respondents.lga_id verbatim on the enumerator path, and every LGA
-        // analytics join assumes lgas.code — a divergent value (the retired
-        // ibadan_ne / ogbomoso_north fossils) silently drops those
-        // submissions from every per-LGA count. Flag ANY value outside the
-        // canonical set so a stale vocabulary can never be re-uploaded
-        // unnoticed.
+        // Canonical-value pin (Story 13-16 lga_list, Story 13-20 skill_list).
+        // These choice VALUES feed respondents verbatim — lga_list →
+        // respondents.lga_id (every LGA join assumes lgas.code), skill_list →
+        // raw_data.skills_possessed (every skills tally groups by the slug). A
+        // divergent value (e.g. the retired ibadan_ne / ogbomoso_north LGA
+        // fossils, or a non-canonical skill) silently drops those submissions
+        // out of every aggregate. Flag ANY value outside the canonical set so a
+        // stale vocabulary can never be re-uploaded unnoticed.
         if (config.canonicalValues) {
           const canonical = new Set<string>(config.canonicalValues);
           for (const choice of listChoices) {
@@ -450,7 +451,7 @@ export class XlsformParserService {
               issues.push({
                 worksheet: 'choices',
                 field: listName,
-                message: `Choice list '${listName}' value '${choice.name}' is not a canonical ${config.description} slug (must match lgas.code) — submissions carrying it will not join to any LGA in analytics`,
+                message: `Choice list '${listName}' value '${choice.name}' is not a canonical value for '${listName}' (${config.description}) — submissions carrying it will not aggregate correctly in analytics`,
                 severity: 'warning',
               });
             }
