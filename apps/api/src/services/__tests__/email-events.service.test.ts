@@ -50,6 +50,21 @@ describe('parseResendEvent (Story 13-9 AC3/AC4) — PURE', () => {
     expect(r?.campaignId).toBeNull();
   });
 
+  // Story 13-21 (AC3) — the REAL Resend webhook shape: tags is an OBJECT MAP,
+  // not an array. The 13-9 array-only read recorded every tagged send untagged.
+  it('lifts campaign_id from the OBJECT-MAP tags shape (real Resend webhook — AC3)', () => {
+    const r = parseResendEvent(
+      event('email.delivered', { tags: { campaign_id: 'thankyou-referral-auto' } }),
+      NOW,
+    );
+    expect(r?.campaignId).toBe('thankyou-referral-auto');
+  });
+
+  it('object-map tags without a campaign_id key → campaignId null (AC3)', () => {
+    const r = parseResendEvent(event('email.delivered', { tags: { category: 'confirm_email' } }), NOW);
+    expect(r?.campaignId).toBeNull();
+  });
+
   it('returns null on missing message id or recipient', () => {
     expect(parseResendEvent(event('email.delivered', { email_id: '', id: '' }), NOW)).toBeNull();
     expect(parseResendEvent(event('email.delivered', { to: [] }), NOW)).toBeNull();

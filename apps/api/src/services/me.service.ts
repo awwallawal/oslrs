@@ -445,10 +445,20 @@ export class MeService {
       // Anything else is swallowed-but-LOGGED, mirroring the public wizard submit
       // (registration.controller `wizard.completeness_skipped`) so a silently
       // skipped validation is observable rather than invisible. (9-61 review L2.)
-      logger.warn({
-        event: 'me.registration_edit.completeness_skipped',
-        reason: err instanceof AppError ? err.code : 'unknown',
-      });
+      if (err instanceof AppError) {
+        logger.warn({
+          event: 'me.registration_edit.completeness_skipped',
+          reason: err.code,
+        });
+      } else {
+        // Story 13-21 — promote a genuine (non-AppError) validator crash to ERROR
+        // so it's visible/alertable rather than hiding as `reason:'unknown'` in a
+        // warn. Mirrors the registration.controller hardening. Behaviour unchanged.
+        logger.error({
+          event: 'me.registration_edit.completeness_error',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     const minorResult: MinorGuardianResult = validateMinorGuardianConsent(

@@ -28,6 +28,7 @@ import { canonicalizeLgaId } from './lga-canonical.service.js';
 import { EmailService } from './email.service.js';
 import { getSuppressedEmails } from './email-events.service.js'; // Story 13-12 (13-9 suppression)
 import { buildThankYouEmail, buildThankYouReferralUrl, firstNameFrom } from './thankyou-email.js'; // Story 13-12
+import { recordAutoSendFailure } from './email-autosend-monitor.js'; // Story 13-21 (AC4)
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -275,36 +276,26 @@ export class SubmissionProcessingService {
       updatedAt: new Date(),
     }).where(eq(submissions.id, submissionId));
 
-    // Story 9-58 (AC5 enhancement, operator-chosen 2026-06-15) — when an
-    // enumerator/clerk submission captured the respondent's email, proactively
-    // send a registration confirmation carrying their reference code + status +
-    // a pointer to the self-service status check. Fire-and-forget: a comms
-    // failure must NEVER fail the ingestion (data integrity > notification, the
-    // 9-26 unified-ingestion lesson). Only on a NEW respondent (not a merge).
-    if (respondent._isNew && respondent.referenceCode) {
-      const emailRaw = rawData['email'] ?? rawData['email_address'];
-      const email = typeof emailRaw === 'string' && emailRaw.includes('@') ? emailRaw.trim() : null;
-      if (email) {
-        void this.sendReferenceConfirmationEmail({
-          respondentId: respondent.id,
-          email,
-          referenceCode: respondent.referenceCode,
-          status: respondent.status ?? 'active',
-        });
-      }
-    }
-
-    // Story 13-12 — evergreen thank-you + referral for SELF-SERVICE completers. Fires on EVERY
-    // end-to-end completion (not just _isNew); the method gates on source='public' + the send-once
-    // `metadata.thankyou_referral_sent_at` marker + 13-9 suppression. Fire-and-forget: a comms
-    // failure must NEVER fail ingestion (9-26 data-integrity lesson), mirroring the 9-58 path above.
-    {
-      const tyRaw = rawData['email'] ?? rawData['email_address'];
-      const tyEmail = typeof tyRaw === 'string' && tyRaw.includes('@') ? tyRaw.trim() : null;
-      if (tyEmail) {
-        void this.sendThankYouReferralEmail({ respondentId: respondent.id, email: tyEmail });
-      }
-    }
+    // Story 13-21 (AC1/AC2) — both registration auto-emails (9-58 reference-code
+    // confirmation + 13-12 evergreen thank-you/referral) route through ONE shared
+    // entrypoint so the enumerator/clerk QUEUE path (here) and the public WIZARD
+    // path (registration.controller.submitWizard — which writes its submission as
+    // processed:true and DELIBERATELY bypasses this worker) send the identical
+    // set. Before 13-21 both sends lived only here, so the whole public channel
+    // got NEITHER (0/140 markers). Fire-and-forget: a comms failure must NEVER
+    // fail the ingestion (data integrity > notification, the 9-26 lesson). The
+    // confirmation self-gates on _isNew + referenceCode; the thank-you self-gates
+    // on source='public' + the send-once marker + 13-9 suppression.
+    const autoEmailRaw = rawData['email'] ?? rawData['email_address'];
+    const autoEmail =
+      typeof autoEmailRaw === 'string' && autoEmailRaw.includes('@') ? autoEmailRaw.trim() : null;
+    void this.sendRegistrationAutoEmails({
+      respondentId: respondent.id,
+      email: autoEmail,
+      referenceCode: respondent.referenceCode,
+      status: respondent.status ?? 'active',
+      isNew: respondent._isNew,
+    });
 
     logger.info({
       event: 'submission_processing.processed',
@@ -834,6 +825,41 @@ export class SubmissionProcessingService {
   }
 
   /**
+   * Story 13-21 (AC1/AC2) — the SINGLE entrypoint for the two registration
+   * auto-emails. Previously both were inlined in `processSubmission`, so the
+   * PUBLIC WIZARD path (registration.controller.submitWizard) — which writes its
+   * submission as `processed:true` and DELIBERATELY bypasses this worker — never
+   * sent EITHER for the entire public channel (0/140 markers; 13-12's evergreen
+   * thank-you was dead-on-arrival since it shipped). Both the queue path and the
+   * wizard controller now call this, so there is one code path and no drift.
+   *
+   * Fully fire-and-forget + fail-soft: each send self-contains its try/catch and
+   * never throws, and a failure records to the AC4 monitor (loud + counted). The
+   * confirmation is gated on a NEW respondent carrying a reference code; the
+   * thank-you self-gates on source='public' + the send-once marker + suppression.
+   */
+  static async sendRegistrationAutoEmails(args: {
+    respondentId: string;
+    email: string | null;
+    referenceCode?: string;
+    status?: RespondentStatus | string;
+    isNew: boolean;
+  }): Promise<void> {
+    if (!args.email) return;
+    // 9-58 reference-code confirmation — only for a NEW respondent with a code.
+    if (args.isNew && args.referenceCode) {
+      await this.sendReferenceConfirmationEmail({
+        respondentId: args.respondentId,
+        email: args.email,
+        referenceCode: args.referenceCode,
+        status: args.status ?? 'active',
+      });
+    }
+    // 13-12 evergreen thank-you/referral — self-gates on source='public' inside.
+    await this.sendThankYouReferralEmail({ respondentId: args.respondentId, email: args.email });
+  }
+
+  /**
    * Story 9-58 — proactive registration-confirmation email for an
    * enumerator/clerk-entered respondent who supplied an email. Carries the
    * human-friendly reference code + plain-language status + a pointer to the
@@ -901,22 +927,42 @@ export class SubmissionProcessingService {
 
       const result = await EmailService.sendGenericEmail({ to: args.email, subject, html, text });
       if (!result.success) {
-        logger.warn({ event: 'registration_confirmation.email_failed', error: result.error });
+        // Story 13-21 (AC4) — was a swallowed warn; now a counted ERROR that can page.
+        await recordAutoSendFailure({
+          kind: 'confirmation',
+          respondentId: args.respondentId,
+          error: result.error,
+        });
         return;
       }
 
       // Story 9-58 (review L1) — stamp the explicit idempotency marker only after
       // a confirmed dispatch. JSONB `||` preserves any sibling metadata keys
-      // (guardian, normalisation_warnings, etc.). A failure to record the stamp
-      // is logged but never thrown (ingestion must not depend on email).
-      await db.execute(sql`
-        UPDATE "respondents"
-        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ confirmation_email_sent_at: new Date().toISOString() })}::jsonb
-        WHERE "id" = ${args.respondentId}
-      `);
+      // (guardian, normalisation_warnings, etc.).
+      // Story 13-21 (review M1) — the email ALREADY dispatched successfully here;
+      // a marker-stamp failure must NOT route through recordAutoSendFailure — that
+      // would false-count a good send and could trip a spurious AC4 page. It DOES
+      // risk a duplicate on the next backfill/re-process (the marker is the
+      // idempotency guard), so log it loudly at warn. Own try so it can't reach
+      // the outer send-failure catch.
+      try {
+        await db.execute(sql`
+          UPDATE "respondents"
+          SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ confirmation_email_sent_at: new Date().toISOString() })}::jsonb
+          WHERE "id" = ${args.respondentId}
+        `);
+      } catch (stampErr) {
+        logger.warn({
+          event: 'registration_confirmation.marker_stamp_failed',
+          respondentId: args.respondentId,
+          error: stampErr instanceof Error ? stampErr.message : String(stampErr),
+        });
+      }
     } catch (err) {
-      logger.warn({
-        event: 'registration_confirmation.email_error',
+      // Story 13-21 (AC4) — a genuine pre/at-send failure: counted + loud.
+      await recordAutoSendFailure({
+        kind: 'confirmation',
+        respondentId: args.respondentId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -959,16 +1005,33 @@ export class SubmissionProcessingService {
         AUTO_CAMPAIGN_ID,
       );
       if (!result.success) {
-        logger.warn({ event: 'thankyou_referral_auto.email_failed', respondentId: args.respondentId, error: result.error });
+        // Story 13-21 (AC4) — was a swallowed warn; now a counted ERROR that can page.
+        await recordAutoSendFailure({
+          kind: 'thankyou',
+          respondentId: args.respondentId,
+          error: result.error,
+        });
         return;
       }
 
       // Stamp the send-once marker only after a confirmed dispatch (JSONB merge preserves siblings).
-      await db.execute(sql`
-        UPDATE "respondents"
-        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ thankyou_referral_sent_at: new Date().toISOString() })}::jsonb
-        WHERE "id" = ${args.respondentId}
-      `);
+      // Story 13-21 (review M1) — the email already dispatched; a stamp failure
+      // must NOT count as a send failure (false AC4 page). It risks a duplicate on
+      // re-run, so log loudly at warn instead. Own try so a stamp error can't reach
+      // the outer send-failure catch.
+      try {
+        await db.execute(sql`
+          UPDATE "respondents"
+          SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ thankyou_referral_sent_at: new Date().toISOString() })}::jsonb
+          WHERE "id" = ${args.respondentId}
+        `);
+      } catch (stampErr) {
+        logger.warn({
+          event: 'thankyou_referral_auto.marker_stamp_failed',
+          respondentId: args.respondentId,
+          error: stampErr instanceof Error ? stampErr.message : String(stampErr),
+        });
+      }
 
       AuditService.logAction({
         actorId: null,
@@ -986,8 +1049,9 @@ export class SubmissionProcessingService {
         userAgent: 'submission-processing.auto-thankyou',
       });
     } catch (err) {
-      logger.warn({
-        event: 'thankyou_referral_auto.email_error',
+      // Story 13-21 (AC4) — counted + loud (was a swallowed warn).
+      await recordAutoSendFailure({
+        kind: 'thankyou',
         respondentId: args.respondentId,
         error: err instanceof Error ? err.message : String(err),
       });

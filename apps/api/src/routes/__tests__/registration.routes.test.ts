@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { AppError } from '@oslsr/utils';
 
 const {
   mockPeekToken,
@@ -34,6 +35,7 @@ const {
   mockTransactionImpl,
   mockGetPublicActiveForm,
   mockProvisionPublicUser,
+  mockSendRegistrationAutoEmails,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
   mockConsumeTokenTx: vi.fn(),
@@ -52,6 +54,7 @@ const {
   mockTransactionImpl: vi.fn(),
   mockGetPublicActiveForm: vi.fn(),
   mockProvisionPublicUser: vi.fn(),
+  mockSendRegistrationAutoEmails: vi.fn(),
 }));
 
 // Rate-limit middleware: pass-through.
@@ -134,6 +137,26 @@ vi.mock('../../services/auth.service.js', () => ({
   },
 }));
 
+// Story 13-21 (AC2) — submitWizard fires the shared registration auto-send
+// entrypoint after commit, because the public channel bypasses processSubmission
+// (where the confirmation + thank-you live). Override ONLY that method so the
+// route tests assert the CALL without actually sending. We preserve the module's
+// OTHER exports via importActual — `form-submission-validation.service` imports
+// `RESPONDENT_FIELD_MAP` from here, so a blanket mock would null it and break the
+// wizard completeness gate. (The queues this module imports create their Redis
+// connection lazily, so importActual opens nothing at import time.)
+vi.mock('../../services/submission-processing.service.js', async () => {
+  const actual = await vi.importActual<typeof import('../../services/submission-processing.service.js')>(
+    '../../services/submission-processing.service.js',
+  );
+  return {
+    ...actual,
+    SubmissionProcessingService: {
+      sendRegistrationAutoEmails: mockSendRegistrationAutoEmails,
+    },
+  };
+});
+
 vi.mock('../../db/schema/index.js', () => ({
   respondents: { name: 'respondents' },
   wizardDrafts: { name: 'wizard_drafts', email: 'email' },
@@ -210,9 +233,16 @@ beforeEach(() => {
   // Story 9-54 — default: no public form pinned, so the completeness gate is
   // skipped (mirrors pre-H1 behaviour where the unmocked settings DB threw).
   // NG1 tests override this with a resolved form to exercise the real gate.
-  mockGetPublicActiveForm.mockRejectedValue(new Error('no public form pinned (test default)'));
+  // Story 13-21 — reject with the REAL AppError prod throws (was a plain Error,
+  // which mis-logged as reason:'unknown'), so the test exercises the expected
+  // warn-level `PUBLIC_FORM_NOT_CONFIGURED` path, not the new ERROR crash branch.
+  mockGetPublicActiveForm.mockRejectedValue(
+    new AppError('PUBLIC_FORM_NOT_CONFIGURED', 'No public-wizard form is currently configured.', 404),
+  );
   // Story 9-38 — default: provisioning succeeds and links a new account.
   mockProvisionPublicUser.mockResolvedValue({ userId: 'user-prov-1', created: true });
+  // Story 13-21 (AC2) — auto-send entrypoint is fire-and-forget (`void`); resolve.
+  mockSendRegistrationAutoEmails.mockResolvedValue(undefined);
   // Default: transactions just invoke the callback with a passthrough tx that
   // returns the same mock chains so the controllers' tx.insert/tx.delete/etc
   // calls behave like the top-level db. Individual tests override.
@@ -701,6 +731,43 @@ describe('POST /registration/wizard', () => {
       expect.anything(),
       expect.objectContaining({ action: 'data.create' }),
     );
+    // Story 13-21 (AC2) — the wizard fires the shared auto-send entrypoint after
+    // commit (isNew:true + the minted reference code + the normalised email), so
+    // the public channel finally gets the confirmation + thank-you it never did.
+    expect(mockSendRegistrationAutoEmails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        respondentId: 'resp-1',
+        email: 'awwal@example.com',
+        referenceCode: 'OSL-2026-TEST00',
+        isNew: true,
+      }),
+    );
+  });
+
+  it('Story 13-21 — an UNEXPECTED validator crash is logged at ERROR but the submit still proceeds (no 500)', async () => {
+    // A NON-AppError from the completeness gate must not sink the submit: it is
+    // swallowed + logged at error level (wizard.completeness_error), then the
+    // wizard proceeds with empty computed fields. Distinct from the expected
+    // PUBLIC_FORM_NOT_CONFIGURED AppError (warn-level) default.
+    mockGetPublicActiveForm.mockRejectedValueOnce(new Error('validator boom'));
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-crash', status: 'pending_nin_capture' }]) }),
+      };
+      const submissionsInsertChain = { values: () => Promise.resolve(undefined) };
+      const tx = {
+        query: { wizardDrafts: { findFirst: () => Promise.resolve({ createdAt: new Date('2026-07-10T00:00:00Z'), formData: {} }) } },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ pendingNin: true }));
+    expect(res.status).toBe(201);
   });
 
   it('Story 13-1 (AC5.1) — merges campaign_source into submission raw_data from the draft extras', async () => {

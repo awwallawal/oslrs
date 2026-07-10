@@ -95,6 +95,13 @@ vi.mock('../email-events.service.js', () => ({
   getSuppressedEmails: (...args: unknown[]) => mockGetSuppressed(...args),
 }));
 
+// Story 13-21 (AC4) — the auto-send failure monitor touches Redis + Telegram.
+// Stub it so unit tests never open a real connection; assert it's called on a fail.
+const mockRecordAutoSendFailure = vi.fn().mockResolvedValue({ failuresToday: 0, alerted: false });
+vi.mock('../email-autosend-monitor.js', () => ({
+  recordAutoSendFailure: (...args: unknown[]) => mockRecordAutoSendFailure(...args),
+}));
+
 vi.mock('../../queues/fraud-detection.queue.js', () => ({
   queueFraudDetection: (...args: unknown[]) => mockQueueFraudDetection(...args),
 }));
@@ -204,6 +211,7 @@ describe('SubmissionProcessingService', () => {
     // empty rows means "no pending row matched → caller falls through to insert".
     mockDbExecute.mockResolvedValue({ rows: [] });
     mockGetSuppressed.mockResolvedValue(new Set()); // Story 13-12 — nothing suppressed by default
+    mockRecordAutoSendFailure.mockResolvedValue({ failuresToday: 0, alerted: false }); // Story 13-21
   });
 
   describe('processSubmission', () => {
@@ -1232,6 +1240,85 @@ describe('SubmissionProcessingService', () => {
 
       // The INSERT succeeded; the audit failure was contained.
       expect(result._isNew).toBe(true);
+    });
+  });
+
+  // ── Story 13-21 (AC1/AC2) — shared registration auto-email entrypoint ──────
+  // This is the method the PUBLIC WIZARD (registration.controller) now calls
+  // after its own commit — the fix for the whole public channel getting NEITHER
+  // email (0/140 markers). The confirmation gates on isNew + referenceCode; the
+  // thank-you self-gates on source='public' + send-once marker + suppression.
+  describe('sendRegistrationAutoEmails (Story 13-21)', () => {
+    const wasConfirmation = () =>
+      mockSendGenericEmail.mock.calls.find((c) => c[2] === undefined); // no campaign tag
+    const wasThankYou = () =>
+      mockSendGenericEmail.mock.calls.find((c) => c[2] === 'thankyou-referral-auto');
+
+    it('sends BOTH the confirmation and the thank-you for a NEW public registrant', async () => {
+      // Confirmation reads columns.metadata; thank-you reads columns.source/firstName/metadata.
+      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Modupe', metadata: null });
+      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'm1' });
+
+      await SubmissionProcessingService.sendRegistrationAutoEmails({
+        respondentId: 'resp-pub',
+        email: 'modupe@example.test.real', // non-suppressed, non-test for this unit
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: true,
+      });
+
+      expect(wasConfirmation()).toBeTruthy();
+      expect(wasThankYou()).toBeTruthy();
+      // Confirmation carries the reference code.
+      expect((wasConfirmation()![0] as { text: string }).text).toContain('OSL-2026-ABC123');
+    });
+
+    it('does NOTHING when there is no email on file', async () => {
+      await SubmissionProcessingService.sendRegistrationAutoEmails({
+        respondentId: 'resp-pub',
+        email: null,
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: true,
+      });
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
+    });
+
+    it('skips the confirmation when NOT new (isNew=false) but still attempts the thank-you', async () => {
+      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Repeat', metadata: null });
+      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'm1' });
+
+      await SubmissionProcessingService.sendRegistrationAutoEmails({
+        respondentId: 'resp-pub',
+        email: 'repeat@example.test.real',
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: false,
+      });
+
+      expect(wasConfirmation()).toBeUndefined();
+      expect(wasThankYou()).toBeTruthy();
+    });
+
+    it('AC4: records a counted failure when a send fails (was a swallowed warn)', async () => {
+      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Fail', metadata: null });
+      mockSendGenericEmail.mockResolvedValue({ success: false, error: 'resend 500' });
+
+      await SubmissionProcessingService.sendRegistrationAutoEmails({
+        respondentId: 'resp-fail',
+        email: 'fail@example.test.real',
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: true,
+      });
+
+      // Both the confirmation and the thank-you failed → both recorded to the monitor.
+      expect(mockRecordAutoSendFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'confirmation', respondentId: 'resp-fail' }),
+      );
+      expect(mockRecordAutoSendFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'thankyou', respondentId: 'resp-fail' }),
+      );
     });
   });
 });

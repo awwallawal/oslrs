@@ -18,6 +18,7 @@ import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
+import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-controller' });
@@ -519,12 +520,27 @@ export class RegistrationController {
       } catch (err) {
         // INCOMPLETE_SUBMISSION is the authoritative rejection — re-throw it.
         if (err instanceof AppError && err.code === 'INCOMPLETE_SUBMISSION') throw err;
-        // PUBLIC_FORM_NOT_CONFIGURED (no form pinned/published) → Step 4 empty.
-        logger.warn({
-          event: 'wizard.completeness_skipped',
-          email: normalisedEmail,
-          reason: err instanceof AppError ? err.code : 'unknown',
-        });
+        if (err instanceof AppError) {
+          // PUBLIC_FORM_NOT_CONFIGURED (no form pinned/published) → Step 4 empty.
+          // Expected operational state — warn-level, proceed with empty computed.
+          logger.warn({
+            event: 'wizard.completeness_skipped',
+            email: normalisedEmail,
+            reason: err.code,
+          });
+        } else {
+          // Story 13-21 — a NON-AppError here is a genuine validator crash that
+          // would SILENTLY skip the completeness gate. It was previously folded
+          // into the warn above as `reason:'unknown'`; promote it to ERROR so an
+          // unexpected failure is visible/alertable rather than hiding (the 13-21
+          // silent-failure lesson). Behaviour is unchanged (still swallowed +
+          // proceed) — only the observability level changes.
+          logger.error({
+            event: 'wizard.completeness_error',
+            email: normalisedEmail,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
 
       // Story 9-55 — minor age-gate. Keys on the SERVER-recomputed age
@@ -753,6 +769,25 @@ export class RegistrationController {
         respondentId: respondent.id,
         submissionUid,
         pendingNin,
+      });
+
+      // Story 13-21 (AC1/AC2) — the public wizard writes its submission as
+      // processed:true and BYPASSES SubmissionProcessingService.processSubmission
+      // (the enumerator/clerk queue worker), where the 9-58 confirmation + 13-12
+      // thank-you/referral auto-sends live. That bypass meant NEITHER email ever
+      // fired for the whole public channel (0/140 markers; 13-12's evergreen
+      // thank-you dead-on-arrival since it shipped). Fire them here, now that the
+      // respondent + submission are durably committed, via the SAME shared
+      // entrypoint the queue path uses. Fire-and-forget + fail-soft: a comms
+      // failure must never sink a completed registration (9-26 lesson). The
+      // wizard row is always a fresh insert (isNew:true) with a minted reference
+      // code; the thank-you self-gates on source='public' (all wizard regs are).
+      void SubmissionProcessingService.sendRegistrationAutoEmails({
+        respondentId: respondent.id,
+        email: normalisedEmail,
+        referenceCode,
+        status: respondent.status,
+        isNew: true,
       });
 
       // Story 9-38 — provision a passwordless `public_user` account so the new

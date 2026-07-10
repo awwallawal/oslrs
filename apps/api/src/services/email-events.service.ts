@@ -48,6 +48,13 @@ export function parseResendEvent(payload: unknown, now: Date): ParsedResendEvent
   const recipient = str(toRaw).trim().toLowerCase();
   if (!messageId || !recipient) return null;
 
+  // Story 13-21 (AC3) — Resend WEBHOOK events echo tags as an OBJECT MAP
+  // (`data.tags: { campaign_id: "..." }`), NOT the array-of-{name,value} shape
+  // the *send* API accepts. The original array-only read never matched a real
+  // inbound event, so EVERY tagged send recorded with a blank `campaign_id`
+  // (13-9 attribution broken for auto-sends + blasts). Read the object-map shape
+  // first (the live shape), keep the array shape as a defensive fallback for any
+  // legacy/alternate payloads or hand-built test fixtures.
   let campaignId: string | null = null;
   if (Array.isArray(data.tags)) {
     for (const t of data.tags) {
@@ -57,6 +64,9 @@ export function parseResendEvent(payload: unknown, now: Date): ParsedResendEvent
         break;
       }
     }
+  } else if (data.tags && typeof data.tags === 'object') {
+    const v = str((data.tags as Record<string, unknown>).campaign_id);
+    if (v) campaignId = v;
   }
 
   const tsRaw = str(p.created_at) || str(data.created_at);
