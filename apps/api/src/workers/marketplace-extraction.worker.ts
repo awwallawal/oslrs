@@ -18,6 +18,7 @@ import { lgas } from '../db/schema/lgas.js';
 import type { MarketplaceExtractionJobData } from '../queues/marketplace-extraction.queue.js';
 import { sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
+import { extractSelectMultipleValues } from '../lib/skills-extraction.js';
 
 const logger = pino({ name: 'marketplace-extraction-worker' });
 
@@ -86,14 +87,10 @@ function extractSkills(rawData: Record<string, unknown>): { profession: string; 
     });
   }
 
-  // Handle both array (native form) and space-delimited string (XLSForm) formats
-  let skillsList: string[];
-  if (Array.isArray(skillsValue)) {
-    skillsList = skillsValue.map(s => String(s).trim()).filter(Boolean);
-  } else {
-    const skillsStr = String(skillsValue);
-    skillsList = skillsStr.split(' ').map(s => s.trim()).filter(Boolean);
-  }
+  // Route through the ONE shared extractor (Story 13-22) so this worker can't
+  // drift from the SQL readers. Handles both the canonical JSONB array (native
+  // form) and a legacy space-delimited string, identical to the SQL fragment.
+  const skillsList = extractSelectMultipleValues(skillsValue);
 
   return {
     profession: skillsList[0] || '',

@@ -233,13 +233,15 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
     expect(result.thresholds.allSkills.met).toBe(true);
   });
 
-  it('groups skills by ISCO-08 category correctly', async () => {
+  it('groups skills by sector (derived SKILL_SECTOR_BY_SLUG) correctly', async () => {
+    // Canonical slugs (Story 13-22): masonry + tiling both live in
+    // 'Construction & Building'; tailoring + catering fall to other sectors.
     mockExecute
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '20' },
-        { skill: 'plastering', count: '15' },
+        { skill: 'masonry', count: '20' },
+        { skill: 'tiling', count: '15' },
         { skill: 'tailoring', count: '10' },
         { skill: 'catering', count: '5' },
       ]))
@@ -261,20 +263,20 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
       .mockResolvedValueOnce(mockRows([{ total: '100' }]))
       .mockResolvedValueOnce(mockRows([{ total: '100' }]))
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '50' },
+        { skill: 'masonry', count: '50' },
         { skill: 'tailoring', count: '30' },
       ]))
       .mockResolvedValueOnce(mockRows([
-        { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'bricklaying', count: '20' },
+        { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'masonry', count: '20' },
         { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'tailoring', count: '15' },
         { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'plumbing', count: '10' },
       ]))
       // gap analysis: have query, want query
-      .mockResolvedValueOnce(mockRows([{ skill: 'bricklaying', count: '50' }]))
-      .mockResolvedValueOnce(mockRows([{ skill: 'web_dev', count: '30' }]))
+      .mockResolvedValueOnce(mockRows([{ skill: 'masonry', count: '50' }]))
+      .mockResolvedValueOnce(mockRows([{ skill: 'web_design', count: '30' }]))
       // diversity index
       .mockResolvedValueOnce(mockRows([
-        { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'bricklaying', count: '30' },
+        { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'masonry', count: '30' },
         { lga_id: 'lga1', lga_name: 'Ibadan North', skill: 'tailoring', count: '20' },
       ]));
 
@@ -290,20 +292,20 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '30' },
+        { skill: 'masonry', count: '30' },
         { skill: 'tailoring', count: '20' },
       ]))
       // byLga for system scope
       .mockResolvedValueOnce(mockRows([]))
       // gap: have
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '30' },
+        { skill: 'masonry', count: '30' },
         { skill: 'tailoring', count: '20' },
       ]))
       // gap: want
       .mockResolvedValueOnce(mockRows([
-        { skill: 'web_dev', count: '25' },
-        { skill: 'bricklaying', count: '10' },
+        { skill: 'web_design', count: '25' },
+        { skill: 'masonry', count: '10' },
       ]))
       // diversity
       .mockResolvedValueOnce(mockRows([]));
@@ -311,21 +313,21 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
     const result = await SurveyAnalyticsService.getSkillsInventory(systemScope);
 
     expect(result.gapAnalysis).not.toBeNull();
-    const bricklaying = result.gapAnalysis!.find(g => g.skill === 'bricklaying');
-    expect(bricklaying).toEqual({ skill: 'bricklaying', haveCount: 30, wantCount: 10 });
-    const webDev = result.gapAnalysis!.find(g => g.skill === 'web_dev');
-    expect(webDev).toEqual({ skill: 'web_dev', haveCount: 0, wantCount: 25 });
+    const masonry = result.gapAnalysis!.find(g => g.skill === 'masonry');
+    expect(masonry).toEqual({ skill: 'masonry', haveCount: 30, wantCount: 10 });
+    const webDev = result.gapAnalysis!.find(g => g.skill === 'web_design');
+    expect(webDev).toEqual({ skill: 'web_design', haveCount: 0, wantCount: 25 });
   });
 
   it('returns null gapAnalysis when no training_interest data exists', async () => {
     mockExecute
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
-      .mockResolvedValueOnce(mockRows([{ skill: 'bricklaying', count: '30' }]))
+      .mockResolvedValueOnce(mockRows([{ skill: 'masonry', count: '30' }]))
       // byLga (system scope)
       .mockResolvedValueOnce(mockRows([]))
       // gap: have + want (parallel — Promise.all resolves both)
-      .mockResolvedValueOnce(mockRows([{ skill: 'bricklaying', count: '30' }]))
+      .mockResolvedValueOnce(mockRows([{ skill: 'masonry', count: '30' }]))
       .mockResolvedValueOnce(mockRows([]))  // want — EMPTY → wantMap.size === 0 → null
       // diversity
       .mockResolvedValueOnce(mockRows([]));
@@ -341,7 +343,7 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '25' },
+        { skill: 'masonry', count: '25' },
         { skill: 'tailoring', count: '25' },
       ]))
       // byLga
@@ -351,7 +353,7 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
       .mockResolvedValueOnce(mockRows([]))
       // diversity
       .mockResolvedValueOnce(mockRows([
-        { lga_id: 'lga1', lga_name: 'Test LGA', skill: 'bricklaying', count: '25' },
+        { lga_id: 'lga1', lga_name: 'Test LGA', skill: 'masonry', count: '25' },
         { lga_id: 'lga1', lga_name: 'Test LGA', skill: 'tailoring', count: '25' },
       ]));
 
@@ -369,7 +371,7 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))
       .mockResolvedValueOnce(mockRows([
-        { skill: 'bricklaying', count: '20' },
+        { skill: 'masonry', count: '20' },
         { skill: 'tailoring', count: '3' }, // below SUPPRESSION_MIN_N
       ]))
       // gap: have + want (lga scope)
@@ -379,7 +381,7 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
     const result = await SurveyAnalyticsService.getSkillsInventory(lgaScope);
 
     expect(result.allSkills).toHaveLength(1);
-    expect(result.allSkills[0].skill).toBe('bricklaying');
+    expect(result.allSkills[0].skill).toBe('masonry');
   });
 
   it('returns per-section thresholds correctly', async () => {
@@ -400,10 +402,10 @@ describe('SurveyAnalyticsService - Skills Inventory', () => {
     mockExecute
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))  // totalWithSkills
       .mockResolvedValueOnce(mockRows([{ total: '50' }]))  // totalSubmissions
-      .mockResolvedValueOnce(mockRows([{ skill: 'bricklaying', count: '30' }]))  // allSkills
+      .mockResolvedValueOnce(mockRows([{ skill: 'masonry', count: '30' }]))  // allSkills
       // byLga skipped (lga scope)
       // gap: have + want (parallel)
-      .mockResolvedValueOnce(mockRows([{ skill: 'bricklaying', count: '30' }]))
+      .mockResolvedValueOnce(mockRows([{ skill: 'masonry', count: '30' }]))
       .mockResolvedValueOnce(mockRows([]));
       // diversityIndex skipped (lga scope)
 

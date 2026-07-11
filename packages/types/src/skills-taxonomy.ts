@@ -10,11 +10,13 @@
 // which maps to Appendix-C #116 "Private Security Guard" — slug unchanged, so no
 // stored value is orphaned; only the display label follows the canonical source.
 //
-// NOTE (drift follow-up): ISCO08_SECTOR_MAP below is a SEPARATE, older 151-entry
-// sector-grouping map whose slugs predate — and mostly do not match — these
-// canonical 150. Reconciling it onto SKILL_TAXONOMY (so the skills combobox /
-// analytics byCategory group the real slugs instead of falling back to 'Other')
-// is out of scope for 13-20 and tracked as a fast-follow.
+// SECTOR GROUPING (Story 13-22): the skill->sector map is DERIVED from
+// SKILL_TAXONOMY (see SKILL_SECTOR_BY_SLUG below). It replaces the former
+// hand-maintained `ISCO08_SECTOR_MAP`, a separate 151-entry vocabulary whose
+// slugs predated — and mostly did not match — these canonical 150, so 90/150
+// real slugs fell to 'Other'. Deriving from the taxonomy makes the combobox
+// grouping and analytics `byCategory` resolve every canonical slug to its
+// Appendix-C sector, and it can never drift from the source again.
 export interface SkillDefinition {
   /** Stable snake_case slug — the value stored in raw_data.skills_possessed. */
   name: string;
@@ -188,185 +190,34 @@ export type SkillSlug = (typeof SKILL_TAXONOMY)[number]['name'];
 export const SKILL_SLUGS: readonly SkillSlug[] = SKILL_TAXONOMY.map((s) => s.name);
 
 /**
- * ISCO-08 sector mapping: skill code -> sector name
- * 151 skills across 20 sectors. Source of truth for both frontend grouping
- * (ComboboxMultiSelect) and backend analytics aggregation.
+ * The single bucket for non-canonical values — custom_* free-text skills a
+ * registrant declared (e.g. `custom_realtor`) and any legacy/unknown slug.
+ * These are counted, never silently dropped (Story 13-22 AC3), but they do not
+ * belong to any Appendix-C sector, so they group here.
  */
-export const ISCO08_SECTOR_MAP: Record<string, string> = {
-  // Construction & Building (16 skills)
-  bricklaying: 'Construction & Building',
-  plastering: 'Construction & Building',
-  painting: 'Construction & Building',
-  tiling: 'Construction & Building',
-  carpentry: 'Construction & Building',
-  plumbing: 'Construction & Building',
-  electrical: 'Construction & Building',
-  welding: 'Construction & Building',
-  aluminium_glass: 'Construction & Building',
-  pop_ceiling: 'Construction & Building',
-  iron_bending: 'Construction & Building',
-  roofing: 'Construction & Building',
-  heavy_equipment: 'Construction & Building',
-  interlocking_paving: 'Construction & Building',
-  surveying: 'Construction & Building',
-  quantity_surveying: 'Construction & Building',
-  // Automotive & Mechanical (7 skills)
-  auto_mechanic: 'Automotive & Mechanical',
-  auto_electrician: 'Automotive & Mechanical',
-  motorcycle_repair: 'Automotive & Mechanical',
-  vulcanizing: 'Automotive & Mechanical',
-  panel_beating: 'Automotive & Mechanical',
-  generator_repair: 'Automotive & Mechanical',
-  hvac: 'Automotive & Mechanical',
-  // Fashion, Beauty & Personal Care (11 skills)
-  tailoring: 'Fashion, Beauty & Personal Care',
-  fashion_design: 'Fashion, Beauty & Personal Care',
-  aso_oke_weaving: 'Fashion, Beauty & Personal Care',
-  adire_dyeing: 'Fashion, Beauty & Personal Care',
-  hairdressing: 'Fashion, Beauty & Personal Care',
-  barbing: 'Fashion, Beauty & Personal Care',
-  makeup: 'Fashion, Beauty & Personal Care',
-  cosmetology: 'Fashion, Beauty & Personal Care',
-  nail_tech: 'Fashion, Beauty & Personal Care',
-  leather_work: 'Fashion, Beauty & Personal Care',
-  bead_making: 'Fashion, Beauty & Personal Care',
-  // Food, Agriculture & Processing (15 skills)
-  crop_farming: 'Food, Agriculture & Processing',
-  vegetable_farming: 'Food, Agriculture & Processing',
-  poultry: 'Food, Agriculture & Processing',
-  fish_farming: 'Food, Agriculture & Processing',
-  livestock: 'Food, Agriculture & Processing',
-  cassava_processing: 'Food, Agriculture & Processing',
-  palm_oil: 'Food, Agriculture & Processing',
-  baking: 'Food, Agriculture & Processing',
-  catering: 'Food, Agriculture & Processing',
-  butchery: 'Food, Agriculture & Processing',
-  snail_farming: 'Food, Agriculture & Processing',
-  bee_keeping: 'Food, Agriculture & Processing',
-  grain_milling: 'Food, Agriculture & Processing',
-  cocoa_farming: 'Food, Agriculture & Processing',
-  farm_mechanisation: 'Food, Agriculture & Processing',
-  // Digital, Technology & Office (13 skills)
-  computer_repair: 'Digital, Technology & Office',
-  phone_repair: 'Digital, Technology & Office',
-  web_dev: 'Digital, Technology & Office',
-  mobile_app_dev: 'Digital, Technology & Office',
-  graphic_design: 'Digital, Technology & Office',
-  digital_marketing: 'Digital, Technology & Office',
-  data_entry: 'Digital, Technology & Office',
-  networking: 'Digital, Technology & Office',
-  cctv_security: 'Digital, Technology & Office',
-  photography: 'Digital, Technology & Office',
-  video_editing: 'Digital, Technology & Office',
-  solar_pv: 'Digital, Technology & Office',
-  accounting: 'Digital, Technology & Office',
-  // Healthcare & Wellness (9 skills)
-  community_health: 'Healthcare & Wellness',
-  nursing: 'Healthcare & Wellness',
-  pharmacy_tech: 'Healthcare & Wellness',
-  lab_tech: 'Healthcare & Wellness',
-  dental_tech: 'Healthcare & Wellness',
-  optometry: 'Healthcare & Wellness',
-  physiotherapy: 'Healthcare & Wellness',
-  traditional_medicine: 'Healthcare & Wellness',
-  health_records: 'Healthcare & Wellness',
-  // Education & Professional Services (7 skills)
-  teaching: 'Education & Professional Services',
-  vocational_instruction: 'Education & Professional Services',
-  adult_literacy: 'Education & Professional Services',
-  tutoring: 'Education & Professional Services',
-  sign_language: 'Education & Professional Services',
-  legal_clerking: 'Education & Professional Services',
-  tax_preparation: 'Education & Professional Services',
-  // Artisan & Traditional Crafts (8 skills)
-  blacksmithing: 'Artisan & Traditional Crafts',
-  woodcarving: 'Artisan & Traditional Crafts',
-  pottery: 'Artisan & Traditional Crafts',
-  mat_weaving: 'Artisan & Traditional Crafts',
-  calabash_carving: 'Artisan & Traditional Crafts',
-  bronze_casting: 'Artisan & Traditional Crafts',
-  upholstery: 'Artisan & Traditional Crafts',
-  sign_writing: 'Artisan & Traditional Crafts',
-  // Transport & Logistics (7 skills)
-  commercial_driving: 'Transport & Logistics',
-  motorcycle_dispatch: 'Transport & Logistics',
-  tricycle_operation: 'Transport & Logistics',
-  forklift_operation: 'Transport & Logistics',
-  freight_logistics: 'Transport & Logistics',
-  driving_instruction: 'Transport & Logistics',
-  fleet_management: 'Transport & Logistics',
-  // Sales, Marketing & Distribution (9 skills)
-  agrochem_sales: 'Sales, Marketing & Distribution',
-  pharma_sales: 'Sales, Marketing & Distribution',
-  fmcg_sales: 'Sales, Marketing & Distribution',
-  real_estate: 'Sales, Marketing & Distribution',
-  building_materials: 'Sales, Marketing & Distribution',
-  auto_parts: 'Sales, Marketing & Distribution',
-  market_trading: 'Sales, Marketing & Distribution',
-  ecommerce: 'Sales, Marketing & Distribution',
-  insurance_sales: 'Sales, Marketing & Distribution',
-  // Retail & Commerce (6 skills)
-  retail_management: 'Retail & Commerce',
-  pos_agent: 'Retail & Commerce',
-  fuel_station: 'Retail & Commerce',
-  patent_medicine: 'Retail & Commerce',
-  telecom_retail: 'Retail & Commerce',
-  provisions_retail: 'Retail & Commerce',
-  // Mining, Quarrying & Extraction (4 skills)
-  quarrying: 'Mining, Quarrying & Extraction',
-  sand_dredging: 'Mining, Quarrying & Extraction',
-  artisanal_mining: 'Mining, Quarrying & Extraction',
-  gemstone_cutting: 'Mining, Quarrying & Extraction',
-  // Oil, Gas & Energy (6 skills)
-  petroleum_distribution: 'Oil, Gas & Energy',
-  gas_plant: 'Oil, Gas & Energy',
-  pipeline_welding: 'Oil, Gas & Energy',
-  drilling: 'Oil, Gas & Energy',
-  power_line: 'Oil, Gas & Energy',
-  renewable_energy: 'Oil, Gas & Energy',
-  // Manufacturing & Processing (5 skills)
-  soap_manufacturing: 'Manufacturing & Processing',
-  water_production: 'Manufacturing & Processing',
-  block_making: 'Manufacturing & Processing',
-  plastic_manufacturing: 'Manufacturing & Processing',
-  printing: 'Manufacturing & Processing',
-  // Hospitality & Tourism (5 skills)
-  hotel_management: 'Hospitality & Tourism',
-  event_planning: 'Hospitality & Tourism',
-  bartending: 'Hospitality & Tourism',
-  tour_guiding: 'Hospitality & Tourism',
-  laundry: 'Hospitality & Tourism',
-  // Entertainment & Creative Arts (6 skills)
-  music_production: 'Entertainment & Creative Arts',
-  dj_services: 'Entertainment & Creative Arts',
-  mc_services: 'Entertainment & Creative Arts',
-  acting: 'Entertainment & Creative Arts',
-  drumming: 'Entertainment & Creative Arts',
-  animation: 'Entertainment & Creative Arts',
-  // Security & Safety (4 skills)
-  security_guard: 'Security & Safety',
-  fire_safety: 'Security & Safety',
-  ohs: 'Security & Safety',
-  traffic_management: 'Security & Safety',
-  // Domestic & Personal Services (4 skills)
-  housekeeping: 'Domestic & Personal Services',
-  childcare: 'Domestic & Personal Services',
-  elderly_care: 'Domestic & Personal Services',
-  gardening: 'Domestic & Personal Services',
-  // Waste, Recycling & Environment (4 skills)
-  waste_collection: 'Waste, Recycling & Environment',
-  scrap_recycling: 'Waste, Recycling & Environment',
-  plastic_recycling: 'Waste, Recycling & Environment',
-  fumigation: 'Waste, Recycling & Environment',
-  // Legal, Religious & Community (5 skills)
-  religious_ministry: 'Legal, Religious & Community',
-  quranic_teaching: 'Legal, Religious & Community',
-  community_development: 'Legal, Religious & Community',
-  mediation: 'Legal, Religious & Community',
-  cooperative_management: 'Legal, Religious & Community',
-};
+export const OTHER_SKILL_SECTOR = 'Other / Custom trades';
 
-/** Unique sector names derived from ISCO08_SECTOR_MAP */
-export const ISCO08_SECTORS: string[] = [
-  ...new Set(Object.values(ISCO08_SECTOR_MAP)),
+/**
+ * Skill slug -> Appendix-C sector, DERIVED from SKILL_TAXONOMY (Story 13-22).
+ * Single source of truth for both frontend grouping (ComboboxMultiSelect) and
+ * backend analytics aggregation (`byCategory`). Every one of the canonical 150
+ * slugs resolves to its sector; non-canonical/custom values fall to
+ * OTHER_SKILL_SECTOR via `skillSectorForSlug`.
+ */
+export const SKILL_SECTOR_BY_SLUG: Record<SkillSlug, string> = Object.fromEntries(
+  SKILL_TAXONOMY.map((s) => [s.name, s.sector]),
+) as Record<SkillSlug, string>;
+
+/**
+ * Resolve a stored skill value to its sector. Canonical slugs map to their
+ * Appendix-C sector; custom_* and any other non-canonical value bucket under
+ * OTHER_SKILL_SECTOR (never dropped).
+ */
+export function skillSectorForSlug(slug: string): string {
+  return SKILL_SECTOR_BY_SLUG[slug as SkillSlug] ?? OTHER_SKILL_SECTOR;
+}
+
+/** Unique canonical sector names, derived from the taxonomy (the 20 Appendix-C sectors). */
+export const SKILL_SECTORS: string[] = [
+  ...new Set(SKILL_TAXONOMY.map((s) => s.sector)),
 ];

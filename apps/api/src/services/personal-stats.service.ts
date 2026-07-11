@@ -17,6 +17,7 @@ import type {
 } from '@oslsr/types';
 import { TeamAssignmentService } from './team-assignment.service.js';
 import { toBuckets } from '../utils/analytics-suppression.js';
+import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 
 const logger = pino({ name: 'personal-stats' });
 
@@ -490,7 +491,7 @@ export class PersonalStatsService {
     const rows = await db.execute(sql`
       SELECT skill, COUNT(*) AS count
       FROM submissions s,
-           unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+           ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
       WHERE ${where}
       GROUP BY skill
       ORDER BY count DESC

@@ -5,6 +5,7 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 expect.extend(matchers);
 
 import { ComboboxMultiSelect } from '../ComboboxMultiSelect';
+import { OTHER_SKILL_SECTOR } from '@oslsr/types';
 import type { FlattenedQuestion } from '../../api/form.api';
 
 afterEach(() => {
@@ -101,6 +102,36 @@ describe('ComboboxMultiSelect', () => {
     expect(within(dropdown).getByText('Construction & Building')).toBeInTheDocument();
     expect(within(dropdown).getByText('Automotive & Mechanical')).toBeInTheDocument();
     expect(within(dropdown).getByText('Fashion, Beauty & Personal Care')).toBeInTheDocument();
+  });
+
+  // Story 13-22 AC5: grouping flows through the derived skillSectorForSlug —
+  // a canonical slug lands in its Appendix-C sector; custom_* / non-canonical
+  // values bucket under OTHER_SKILL_SECTOR (never silently dropped).
+  it('groups a canonical slug by its sector and buckets custom/non-canonical under OTHER_SKILL_SECTOR', () => {
+    const base = buildQuestion();
+    const question: FlattenedQuestion = {
+      ...base,
+      choices: [
+        ...(base.choices ?? []),
+        { label: 'Masonry/Bricklaying', value: 'masonry' }, // canonical → Construction & Building
+        { label: 'Realtor', value: 'custom_realtor' }, // custom_ free-text → OTHER_SKILL_SECTOR
+      ],
+    };
+    render(<ComboboxMultiSelect question={question} value={[]} onChange={vi.fn()} />);
+    fireEvent.focus(screen.getByTestId('combobox-search-skills_possessed'));
+    const dropdown = screen.getByTestId('combobox-dropdown-skills_possessed');
+
+    // Canonical `masonry` renders inside the 'Construction & Building' group.
+    const constructionGroup = within(dropdown).getByText('Construction & Building').parentElement!;
+    expect(
+      within(constructionGroup).getByTestId('option-skills_possessed-masonry'),
+    ).toBeInTheDocument();
+
+    // The custom value renders inside the OTHER_SKILL_SECTOR group.
+    const otherGroup = within(dropdown).getByText(OTHER_SKILL_SECTOR).parentElement!;
+    expect(
+      within(otherGroup).getByTestId('option-skills_possessed-custom_realtor'),
+    ).toBeInTheDocument();
   });
 
   it('filters choices when typing in search', () => {

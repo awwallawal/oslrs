@@ -1,6 +1,6 @@
 # Story 13-22: Root out the skill-vocabulary + skills-extraction drift (canonical sector map + JSON-array read)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Drafted 2026-07-09 (Amelia, scoped against PROD). EMERGENT from the 13-20 code-review: expanding skill_list to the canonical 150 surfaced that the skills subsystem carries THREE unreconciled vocabularies AND a storage/extraction format mismatch that silently breaks the skills analytics on 100% of real data. This is the LGA-UUID/slug situation (13-16) for skills — resolve it decisively at the source, not with another band-aid. -->
 
@@ -35,11 +35,19 @@ This is the **13-16 pattern** (canonical `Lga`/`lgas.code` + write-site canonica
 6. **AC6 — Consumer sweep sign-off.** Enumerate every skills consumer (SQL + TS + web) and confirm each uses the shared extractor + derived sector map; none left on space-split or the phantom map. Full api + web suites green; tsc/eslint clean.
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC4, AC6)** — Prod/`app_db` audit: distinct `skills_possessed` + `training_interest` values, canonical vs `custom_` vs unknown. Produces the alias list (if any) + the consumer inventory. (Scope-confirm BEFORE coding.)
-- [ ] **Task 2 (AC2, AC3)** — Shared skills extractor (JSONB-array read + custom/fallback handling); migrate survey-analytics, personal-stats, public-insights (possessed + training_interest), reconcile marketplace worker. Real-DB tests.
-- [ ] **Task 3 (AC1)** — Derive `SKILL_SECTOR_BY_SLUG` from `SKILL_TAXONOMY`; replace `ISCO08_SECTOR_MAP`; repoint analytics byCategory + ComboboxMultiSelect; retire dead `ISCO08_SECTORS` + non-running test.
-- [ ] **Task 4 (AC4)** — Alias map + idempotent audited backfill (only if audit finds real non-canonical values); CSV backup; dry-run→apply.
-- [ ] **Task 5 (AC5, AC6)** — Running guard tests in apps/api; full-suite + tsc/eslint gate; sweep sign-off.
+- [x] **Task 1 (AC4, AC6)** — Prod/`app_db` audit: distinct `skills_possessed` + `training_interest` values, canonical vs `custom_` vs unknown. Produces the alias list (if any) + the consumer inventory. (Scope-confirm BEFORE coding.)
+- [x] **Task 2 (AC2, AC3)** — Shared skills extractor (JSONB-array read + custom/fallback handling); migrate survey-analytics, personal-stats, public-insights (possessed + training_interest), reconcile marketplace worker. Real-DB tests.
+- [x] **Task 3 (AC1)** — Derive `SKILL_SECTOR_BY_SLUG` from `SKILL_TAXONOMY`; replace `ISCO08_SECTOR_MAP`; repoint analytics byCategory + ComboboxMultiSelect; retire dead `ISCO08_SECTORS` + non-running test.
+- [x] **Task 4 (AC4)** — Alias map + idempotent audited backfill (only if audit finds real non-canonical values); CSV backup; dry-run→apply. **NO-OP confirmed by the prod audit (0 unknown tokens) — no backfill built (per PM §2: audit gates it).**
+- [x] **Task 5 (AC5, AC6)** — Running guard tests in apps/api; full-suite + tsc/eslint gate; sweep sign-off.
+
+### Review Follow-ups (AI) — adversarial code-review 2026-07-11
+Reviewer verified against reality (ran unit guard 10/10, tsc types+api+web clean, independently re-swept AC6). No CRITICAL/HIGH; all real prod data (79/79 arrays, 0 unknown) reads correctly. Items below fixed in the same review pass.
+- [x] [AI-Review][Med] M1 — TS twin `extractSelectMultipleValues` diverged from the SQL fragment on a JSON `null` array element (`String(null)`→`"null"` survived `filter(Boolean)`; SQL yields SQL NULL). Drop null/undefined elements so the marketplace worker can't emit a `"null"` skill. [apps/api/src/lib/skills-extraction.ts:49-57]
+- [ ] [AI-Review][Med] M2 — Commit hygiene: the working tree carries unrelated `_bmad-output/baseline-report/*` + `.gitignore` churn not in this story's File List. Stage ONLY the 12 story files; do NOT `git add -A`. (Operator action — not a code fix.)
+- [x] [AI-Review][Low] L3 — Stale/non-canonical mock slugs in `cross-tab-skills.service.test.ts` (`bricklaying`/`web_dev`) that can't occur post-13-20; swapped to canonical (`masonry`/`web_design`). [apps/api/src/services/__tests__/cross-tab-skills.service.test.ts:266-279]
+- [x] [AI-Review][Low] L4 — No web-layer assertion that ComboboxMultiSelect groups via `skillSectorForSlug` (AC5). Added a test proving a canonical slug lands in its sector and a `custom_*`/non-canonical value buckets under `OTHER_SKILL_SECTOR`. [apps/web/src/features/forms/components/__tests__/ComboboxMultiSelect.test.tsx]
+- [x] [AI-Review][Low] L5 — `selectMultipleUnnest` string-fallback docstring overclaimed ("any legacy scalar form") while it only handles the space-delimited XLSForm shape; tightened the comment to match behaviour (SQL/TS parity preserved on purpose). [apps/api/src/lib/skills-extraction.ts]
 
 ## Dev Notes
 - **Mirror 13-16 exactly:** canonical source (`SKILL_TAXONOMY`) → derive the map → sweep consumers → alias/backfill legacy values → running guard. Proven; it's why `lga_list` can't drift.
@@ -72,10 +80,54 @@ This is the **13-16 pattern** (canonical `Lga`/`lgas.code` + write-site canonica
 **Dev-ready.** Start with Task 1 (prod value + consumer audit) to confirm the backfill is a no-op before any code. Schedule AC2 as an independently-shippable slice.
 
 ## Dev Agent Record
+
+### Implementation Plan / Approach
+Mirrored the 13-16 pattern exactly: single canonical source → derive the map → one shared extractor → sweep every consumer → audit/(conditional)backfill → RUNNING guard in `apps/api`.
+
+- **AC1 (sector map).** `SKILL_SECTOR_BY_SLUG` is now derived from `SKILL_TAXONOMY` (`Object.fromEntries` over the 150) in `packages/types`, plus `skillSectorForSlug()` (canonical → Appendix-C sector; custom/unknown → `OTHER_SKILL_SECTOR = 'Other / Custom trades'`) and `SKILL_SECTORS` (the 20 unique sectors). Deleted the phantom 151-entry `ISCO08_SECTOR_MAP` + `ISCO08_SECTORS`. All 150 canonical slugs now resolve (the 90-→'Other' bug is gone).
+- **AC2 (extraction).** New `apps/api/src/lib/skills-extraction.ts`: `selectMultipleUnnest(jsonbColumn, field)` returns a `jsonb_array_elements_text(CASE jsonb_typeof … WHEN 'array'/'string'/ELSE '[]')` fragment (the `CASE` guard is load-bearing — `jsonb_array_elements_text` throws on a scalar), and `extractSelectMultipleValues(value)` is its TS twin. Replaced all 9 `unnest(string_to_array(…,' '))` sites (survey-analytics ×6, personal-stats ×1, public-insights ×2, covering both `skills_possessed` and `training_interest`) and routed the marketplace worker through the TS twin (align-not-rewrite — its existing array/string tests stay green).
+- **AC3 (custom).** `custom_*` and any non-canonical token bucket under `OTHER_SKILL_SECTOR` via `skillSectorForSlug` (counted, never dropped) and survive extraction unchanged. Pinned by unit + real-DB tests.
+- **AC4 (audit + backfill).** Read-only `apps/api/scripts/_audit-skills-values.ts` classifies every distinct stored token canonical/custom/unknown. **Ran against PROD** (see tally below) → **0 unknown** → backfill is a confirmed no-op; per PM §2 no backfill machinery was built (the format fix is read-side only, NO `skills_possessed` migration).
+- **AC5 (running guard).** `apps/api/src/services/__tests__/skills-extraction.test.ts` runs under `pnpm test` (unlike the deleted `packages/types` test which never ran): sector-map parity (150 keys, no phantom keys, 20 sectors), extractor tokenisation, custom bucket. Real-DB proof in `skills-extraction.integration.test.ts` seeds the actual prod `["a","b","c"]` shape.
+
+### Prod skills-value audit (Task 1 / AC4 / DoD (c)) — run 2026-07-11 vs `oslsr_db`
+| Field | canonical | custom_ | **unknown** |
+|-------|-----------|---------|-------------|
+| `skills_possessed` | 43 | 10 | **0** |
+| `training_interest` | 46 | 4 | **0** |
+
+- **0 unknown tokens on either field → AC4 backfill is a NO-OP** (no non-canonical slug needs aliasing). Confirms PM §2's prediction.
+- `custom_` examples (kept per AC3, never auto-canonicalised): `custom_realtor`, `custom_trader`, `custom_phone_repair`, `custom_borehole_drilling`, `custom_software_development`, `custom_community_health`, `custom_writing_transcribing` — several overlap semantically with canonical slugs but were entered as free-text; intentionally left as-is.
+- Also ran locally vs `app_db` (3 tokens, 0 unknown) as a script smoke.
+
+### Completion Notes
+- Extraction fix is **read-only** — no schema change, no migration, deployable independently of the 13-19/13-20 form re-upload.
+- Consumer sweep (AC6): grep confirms **zero** remaining `string_to_array(…skills_possessed/training_interest)` sites and **zero** live `ISCO08_SECTOR_MAP`/`ISCO08_SECTORS` references (only a historical mention in a code comment).
+- No-regression verified: marketplace worker tests (array + space-string paths), registry export smoke (unified-export-db-smoke), analytics real-DB smoke — all green.
+- Gates (self-run): tsc clean (types + api + web); eslint clean (api `src scripts` + web changed file); targeted suites — skills-extraction unit 20 + integration 6, marketplace worker, cross-tab service+controller, public-insights, survey-analytics, personal-stats, export-query + unified export smoke, ComboboxMultiSelect + QuestionRenderer — all pass. `packages/types` has no eslint config (pre-existing; not linted standalone).
+
 ### File List
+**New**
+- `apps/api/src/lib/skills-extraction.ts` — shared `selectMultipleUnnest` (SQL) + `extractSelectMultipleValues` (TS)
+- `apps/api/src/services/__tests__/skills-extraction.test.ts` — running guard (sector parity + extractor)
+- `apps/api/src/services/__tests__/skills-extraction.integration.test.ts` — real-DB JSONB-array proof
+- `apps/api/scripts/_audit-skills-values.ts` — read-only prod value audit (Task 1 / gates AC4)
+
+**Modified**
+- `packages/types/src/skills-taxonomy.ts` — derive `SKILL_SECTOR_BY_SLUG` + `skillSectorForSlug` + `SKILL_SECTORS` + `OTHER_SKILL_SECTOR`; remove `ISCO08_SECTOR_MAP` + `ISCO08_SECTORS`; rewrite drift-note comment
+- `apps/api/src/services/survey-analytics.service.ts` — 6 unnest sites → `selectMultipleUnnest`; byCategory → `skillSectorForSlug`; imports
+- `apps/api/src/services/personal-stats.service.ts` — 1 unnest site → `selectMultipleUnnest`; import
+- `apps/api/src/services/public-insights.service.ts` — 2 unnest sites (possessed + training_interest) → `selectMultipleUnnest`; import
+- `apps/api/src/workers/marketplace-extraction.worker.ts` — route through `extractSelectMultipleValues` (align-not-rewrite)
+- `apps/web/src/features/forms/components/ComboboxMultiSelect.tsx` — group via `skillSectorForSlug`
+- `apps/api/src/services/__tests__/cross-tab-skills.service.test.ts` — byCategory test uses canonical slugs (`masonry`/`tiling`)
+
+**Deleted**
+- `packages/types/src/__tests__/skills-taxonomy.test.ts` — the never-running 151-entry parity test (packages/types has no `test` script)
 
 ## Change Log
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-09 | Story drafted (scoped against PROD). Root-out the skills vocabulary + JSON-array extraction drift surfaced by 13-20: derive the sector map from SKILL_TAXONOMY, fix the space-split-vs-JSON-array read across all consumers, bucket custom skills, audit/backfill legacy values, add a RUNNING guard. Mirrors 13-16. | Amelia (Dev, from 13-20 review) |
 | 2026-07-09 | PM validation (John): APPROVED. HIGH but sequenced behind 13-21; NOT launch-blocking (AC2 independently shippable). Key ruling: format fix is READ-ONLY (no data migration) → AC4 backfill softened to conditional-on-audit (expected no-op). Custom-skill bucket semantics locked; marketplace worker = align-not-rewrite; delete the never-running 151 test. DoD additions: real-DB test on prod shape + no-regression assertion + audit tally recorded. | John (PM) |
+| 2026-07-11 | dev-story implementation (all 6 ACs). Derived `SKILL_SECTOR_BY_SLUG` from `SKILL_TAXONOMY` (+`skillSectorForSlug`/`SKILL_SECTORS`/`OTHER_SKILL_SECTOR`); deleted phantom `ISCO08_SECTOR_MAP`/`ISCO08_SECTORS` + the never-running packages/types test. New shared `selectMultipleUnnest` (SQL) + `extractSelectMultipleValues` (TS) replacing all 9 space-split sites across survey-analytics/personal-stats/public-insights + marketplace worker; combobox groups via the derived resolver. Read-only prod audit → **0 unknown tokens** (skills 43c/10custom, training 46c/4custom) → AC4 backfill NO-OP (no migration). Running guard + real-DB JSONB-array proof added. tsc/eslint clean; all touched suites + no-regression (marketplace/export/analytics smoke) green. Status → review. | Amelia (Dev) |

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { QuestionRendererProps } from './QuestionRenderer';
 import type { Choice } from '@oslsr/types';
-import { ISCO08_SECTOR_MAP } from '@oslsr/types';
+import { skillSectorForSlug } from '@oslsr/types';
 
 /**
  * Searchable multi-select with sector grouping, selected chips, and custom entry.
@@ -16,12 +16,13 @@ import { ISCO08_SECTOR_MAP } from '@oslsr/types';
 
 /** Infer sector grouping from choice value prefixes or adjacent label patterns */
 function groupChoices(choices: Choice[]): { sector: string; choices: Choice[] }[] {
-  // ISCO-08 taxonomy imported from shared package (source of truth)
-  // See packages/types/src/skills-taxonomy.ts for the full 150-skill mapping
+  // Sector grouping is DERIVED from the canonical SKILL_TAXONOMY (source of truth)
+  // via skillSectorForSlug. See packages/types/src/skills-taxonomy.ts (Story 13-22).
+  // Custom / non-canonical values bucket under OTHER_SKILL_SECTOR.
 
   const grouped = new Map<string, Choice[]>();
   for (const choice of choices) {
-    const sector = ISCO08_SECTOR_MAP[choice.value] || 'Other';
+    const sector = skillSectorForSlug(choice.value);
     if (!grouped.has(sector)) grouped.set(sector, []);
     grouped.get(sector)!.push(choice);
   }

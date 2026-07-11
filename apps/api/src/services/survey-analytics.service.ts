@@ -44,7 +44,8 @@ import {
   wilsonScoreInterval,
 } from './statistical-tests.service.js';
 // simple-statistics used via statistical-tests.service.ts
-import { ISCO08_SECTOR_MAP } from '@oslsr/types';
+import { skillSectorForSlug } from '@oslsr/types';
+import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
@@ -597,7 +598,7 @@ export class SurveyAnalyticsService {
       SELECT skill, COUNT(*) AS count
       FROM submissions s
       LEFT JOIN respondents r ON r.id = s.respondent_id,
-           unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+           ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
       WHERE ${where}
         AND s.raw_data->>'skills_possessed' IS NOT NULL
         AND s.raw_data->>'skills_possessed' != ''
@@ -964,7 +965,7 @@ export class SurveyAnalyticsService {
         SELECT skill, COUNT(*) AS count
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id,
-             unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
         WHERE ${where}
           AND s.raw_data->>'skills_possessed' IS NOT NULL
           AND s.raw_data->>'skills_possessed' != ''
@@ -985,7 +986,7 @@ export class SurveyAnalyticsService {
     if (thresholds.byCategory.met && allSkills.length > 0) {
       const categoryMap = new Map<string, { totalCount: number; skills: SkillsFrequency[] }>();
       for (const skill of allSkills) {
-        const category = ISCO08_SECTOR_MAP[skill.skill] || 'Other';
+        const category = skillSectorForSlug(skill.skill);
         const entry = categoryMap.get(category) || { totalCount: 0, skills: [] };
         entry.totalCount += skill.count;
         entry.skills.push(skill);
@@ -1005,7 +1006,7 @@ export class SurveyAnalyticsService {
           SELECT r.lga_id, skill, COUNT(*) AS count
           FROM submissions s
           LEFT JOIN respondents r ON r.id = s.respondent_id,
-               unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+               ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
           WHERE ${where}
             AND s.raw_data->>'skills_possessed' IS NOT NULL
             AND s.raw_data->>'skills_possessed' != ''
@@ -1041,7 +1042,7 @@ export class SurveyAnalyticsService {
           SELECT skill, COUNT(*) AS count
           FROM submissions s
           LEFT JOIN respondents r ON r.id = s.respondent_id,
-               unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+               ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
           WHERE ${where}
             AND s.raw_data->>'skills_possessed' IS NOT NULL
             AND s.raw_data->>'skills_possessed' != ''
@@ -1052,7 +1053,7 @@ export class SurveyAnalyticsService {
           SELECT skill, COUNT(*) AS count
           FROM submissions s
           LEFT JOIN respondents r ON r.id = s.respondent_id,
-               unnest(string_to_array(s.raw_data->>'training_interest', ' ')) AS skill
+               ${selectMultipleUnnest(sql`s.raw_data`, 'training_interest')} AS skill
           WHERE ${where}
             AND s.raw_data->>'training_interest' IS NOT NULL
             AND s.raw_data->>'training_interest' != ''
@@ -1094,7 +1095,7 @@ export class SurveyAnalyticsService {
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id
         LEFT JOIN lgas l ON l.code = r.lga_id,
-             unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
         WHERE ${where}
           AND s.raw_data->>'skills_possessed' IS NOT NULL
           AND s.raw_data->>'skills_possessed' != ''

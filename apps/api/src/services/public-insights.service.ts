@@ -11,6 +11,7 @@ import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
 import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
 import { suppressSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
+import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
@@ -143,7 +144,7 @@ export class PublicInsightsService {
         SELECT skill, COUNT(*) AS count
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id,
-             unnest(string_to_array(s.raw_data->>'skills_possessed', ' ')) AS skill
+             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
         WHERE ${baseWhere}
           AND s.raw_data->>'skills_possessed' IS NOT NULL
           AND s.raw_data->>'skills_possessed' != ''
@@ -156,7 +157,7 @@ export class PublicInsightsService {
         SELECT skill, COUNT(*) AS count
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id,
-             unnest(string_to_array(s.raw_data->>'training_interest', ' ')) AS skill
+             ${selectMultipleUnnest(sql`s.raw_data`, 'training_interest')} AS skill
         WHERE ${baseWhere}
           AND s.raw_data->>'training_interest' IS NOT NULL
           AND s.raw_data->>'training_interest' != ''
