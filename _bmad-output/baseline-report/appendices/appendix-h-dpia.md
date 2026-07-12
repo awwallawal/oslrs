@@ -7,7 +7,7 @@
 | Parameter | Detail |
 |-----------|--------|
 | **Assessment Title** | DPIA for the Oyo State Skilled Labour Register |
-| **Data Controller** | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State |
+| **Data Controller** | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State |
 | **Data Processor** | Chemiroy Nigeria Limited |
 | **Legal Framework** | Nigeria Data Protection Act 2023 (NDPA); Nigeria Data Protection Regulation 2019 (NDPR) |
 | **Assessment Date** | January 2026 |

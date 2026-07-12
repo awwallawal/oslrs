@@ -23,7 +23,7 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 | Valid as of | The submission date stated above. Every factual claim in this Report is true as of that date. |
 | Classification | Confidential, for official use only |
 | Subject programme | Oyo State Labour & Skills Registry. Establishment of the State Electronic Labour Register. |
-| Authority | Ministry of Trade, Industry and Cooperatives, Oyo State Government |
+| Authority | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government |
 | Consultant | Chemiroy Nigeria Limited |
 | Engagement period | November 2025 – May 2026 (six-month consulting engagement) |
 | Conflicts of interest | None to declare |
@@ -33,16 +33,16 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 
 | Copy | Recipient | Format |
 |---|---|---|
-| 1 | Honourable Commissioner, Ministry of Trade, Industry and Cooperatives | Hard copy + Digital |
-| 2 | Permanent Secretary, Ministry of Trade, Industry and Cooperatives | Hard copy + Digital |
-| 3 | Director, Trade & Investment, Ministry of Trade, Industry and Cooperatives | Digital |
+| 1 | Honourable Commissioner, Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 2 | Permanent Secretary, Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 3 | Director, Trade & Investment, Ministry of Investment, Trade, Cooperatives and Industry | Digital |
 | 4 | SABER Secretariat, Oyo State | Digital, courtesy copy |
 | 5 | Mrs Fateemah Roy-Lagbaja, Managing Director, Chemiroy Nigeria Limited | Hard copy + Digital |
 | 6 | File Copy, Chemiroy Nigeria Limited | Hard copy |
 
 ## Confidentiality Notice
 
-This Report is confidential. It is prepared for the Ministry of Trade, Industry and Cooperatives and the recipients listed above, and contains commercially sensitive information about the Oyo State Labour & Skills Registry programme. Reproduction or distribution beyond the named recipients without our prior written consent is not permitted.
+This Report is confidential. It is prepared for the Ministry of Investment, Trade, Cooperatives and Industry and the recipients listed above, and contains commercially sensitive information about the Oyo State Labour & Skills Registry programme. Reproduction or distribution beyond the named recipients without our prior written consent is not permitted.
 
 The information contained herein has been prepared using data from publicly available sources, including the National Bureau of Statistics (NBS) Nigeria Labour Force Survey, National Population Commission (NPC) population projections, and International Labour Organization (ILO) statistical frameworks, supplemented by primary data collected during the baseline validation exercise and the professional expertise of Chemiroy Nigeria Limited. While every effort has been made to ensure accuracy, certain projections and estimates are based on assumptions that are clearly identified and classified throughout the document using the Assumption Classification Framework described in the Methodology chapter.
 
@@ -110,7 +110,7 @@ All recommendations are informed by established international standards, includi
 | **LGA** | Local Government Area |
 | **MAN** | Manufacturing Association of Nigeria |
 | **MSME** | Micro, Small and Medium Enterprise |
-| **MTIC** | Ministry of Trade, Industry and Cooperatives |
+| **MTIC** | Ministry of Investment, Trade, Cooperatives and Industry |
 | **NBS** | National Bureau of Statistics |
 | **NDPA** | Nigeria Data Protection Act, 2023 |
 | **NDPC** | Nigeria Data Protection Commission |
@@ -136,7 +136,7 @@ All recommendations are informed by established international standards, includi
 
 ## 1. Background
 
-The Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register**, a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
+The Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register**, a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
 
 The engagement, with a duration of six (6) months, encompasses three (3) principal deliverables: (1) Establishment of a Data Centre; (2) Creation of the State Labour Register; and (3) Training of Ministry/Government Officials on the Operations of the Registry.
 
@@ -315,7 +315,7 @@ Chemiroy Nigeria Limited has executed consulting engagements across multiple sec
 | # | Project | Client | Sector | Scope |
 |---|---------|--------|--------|-------|
 | 1 | Comprehensive Feasibility Study, 22-Hectare Oil Palm Plantation Development | Private Investor | Agriculture / Agribusiness | Full feasibility study comprising 18 chapters covering industry analysis, site assessment, agronomic blueprint, financial modelling, implementation roadmap, risk register, ESG framework, and monitoring KPIs |
-| 2 | Oyo State Skilled Labour Register, Baseline Study | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State | Government / ICT | Current engagement, design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
+| 2 | Oyo State Skilled Labour Register, Baseline Study | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State | Government / ICT | Current engagement, design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
 | 3 | Agricultural Project Consulting Portfolio | Multiple Clients | Agriculture | Crop comparison analyses, economic viability assessments, and value chain development strategies for oil palm, cassava, maize, soybean, and sugarcane |
 
 ---
@@ -341,7 +341,7 @@ Chemiroy Nigeria Limited is committed to delivering work products that meet or e
 
 ## 3.1 Engagement Background
 
-By Award Letter referenced [Award Letter Reference], the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
+By Award Letter referenced [Award Letter Reference], the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
 
 The engagement was commissioned in recognition of a fundamental gap in the state's economic planning infrastructure: **the absence of a comprehensive, digitised register of Oyo State's workforce**. Despite an estimated population of 8.6 million (NPC 2025 projection) and a labour force participation rate exceeding 70% (NBS NLFS 2024), no centralised system existed to capture, verify, and maintain granular data on the skills, employment status, and economic activity of workers across the state's 33 Local Government Areas.
 
@@ -399,7 +399,7 @@ The engagement Terms of Reference specify three (3) principal deliverables:
 
 ### 3.5.2 Ministry Oversight
 
-The project operates under the supervision of the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
+The project operates under the supervision of the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
 
 - Facilitating access to Ministry premises for Data Centre installation
 - Coordinating with relevant state agencies (e.g., National Population Commission state office, State Internal Revenue Service)
@@ -410,9 +410,9 @@ The project operates under the supervision of the Ministry of Trade, Industry, I
 
 | Report Type | Frequency | Recipient |
 |-------------|-----------|-----------|
-| Baseline Study Report (this document) | Mid-term | Ministry of Trade, Industry, Investment and Cooperatives |
+| Baseline Study Report (this document) | Mid-term | Ministry of Investment, Trade, Cooperatives and Industry |
 | Progress Updates | As required | Designated Ministry Supervisors |
-| Completion Report | End of engagement | Ministry of Trade, Industry, Investment and Cooperatives |
+| Completion Report | End of engagement | Ministry of Investment, Trade, Cooperatives and Industry |
 
 ---
 
@@ -747,7 +747,7 @@ The OSLSR operates within the following national policy context:
 |--------|-------------|
 | **Oyo State Development Agenda** | Focus on youth empowerment, skills acquisition, and MSME development |
 | **State Business Enabling Environment Reforms** | Oyo State's active participation in the federal subnational business reform assessment programme; state performance rose from 27th to 3rd place nationally, demonstrating sustained reform commitment |
-| **Ministry of Trade, Industry, Investment and Cooperatives** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
+| **Ministry of Investment, Trade, Cooperatives and Industry** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
 | **State Budget Allocation** | Annual allocations for youth empowerment and skills training programmes |
 | **Oyo State Digital Economy Strategy** | Emerging focus on technology-enabled service delivery |
 
@@ -1998,7 +1998,7 @@ The complete taxonomy is reproduced in **Appendix C** for reference.
 
 Deliverable 1 of the engagement Terms of Reference requires the **Establishment of a Data Centre** for the Oyo State Skilled Labour Register. This chapter documents the design rationale, procurement, configuration, and operational status of the Data Centre infrastructure, which employs a hybrid architecture combining on-premises computing resources with cloud-hosted production services.
 
-The Data Centre was established at the premises of the **Ministry of Trade, Industry, Investment and Cooperatives**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
+The Data Centre was established at the premises of the **Ministry of Investment, Trade, Cooperatives and Industry**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
 
 **Deliverable Status: COMPLETE** ✓
 
@@ -2050,7 +2050,7 @@ All workstations are configured with:
 
 ### 9.3.3 Physical Security
 
-The Data Centre is located within the secured premises of the Ministry of Trade, Industry, Investment and Cooperatives, benefiting from:
+The Data Centre is located within the secured premises of the Ministry of Investment, Trade, Cooperatives and Industry, benefiting from:
 - Ministry building security (access control, security personnel)
 - Designated workspace for Data Centre equipment
 - Equipment inventory and asset tagging for accountability
@@ -2409,7 +2409,7 @@ A comprehensive security assessment was conducted against the OWASP Top 10 (2021
 
 ## 11.5 Nigeria Data Protection Act 2023 (NDPA) Compliance
 
-The Registry is established under the mandate of the Ministry of Trade, Industry and Cooperatives, exercising its statutory function in respect of trade, industry, and labour matters within Oyo State. The OSLSR platform's data handling practices were assessed against the requirements of the Nigeria Data Protection Act 2023 and its predecessor, the Nigeria Data Protection Regulation (NDPR) 2019. The Data Protection Impact Assessment (DPIA) has been drafted in preparation for filing with the Nigeria Data Protection Commission (NDPC).
+The Registry is established under the mandate of the Ministry of Investment, Trade, Cooperatives and Industry, exercising its statutory function in respect of trade, industry, and labour matters within Oyo State. The OSLSR platform's data handling practices were assessed against the requirements of the Nigeria Data Protection Act 2023 and its predecessor, the Nigeria Data Protection Regulation (NDPR) 2019. The Data Protection Impact Assessment (DPIA) has been drafted in preparation for filing with the Nigeria Data Protection Commission (NDPC).
 
 | NDPA Requirement | OSLSR Implementation | Compliance |
 |-----------------|---------------------|:----------:|

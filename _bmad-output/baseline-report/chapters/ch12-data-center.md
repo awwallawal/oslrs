@@ -6,7 +6,7 @@
 
 Deliverable 1 of the engagement Terms of Reference requires the **Establishment of a Data Centre** for the Oyo State Skilled Labour Register. This chapter documents the design rationale, procurement, configuration, and operational status of the Data Centre infrastructure, which employs a hybrid architecture combining on-premises computing resources with cloud-hosted production services.
 
-The Data Centre was established at the premises of the **Ministry of Trade, Industry, Investment and Cooperatives**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
+The Data Centre was established at the premises of the **Ministry of Investment, Trade, Cooperatives and Industry**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
 
 **Deliverable Status: COMPLETE** ✓
 
@@ -58,7 +58,7 @@ All workstations are configured with:
 
 ### 9.3.3 Physical Security
 
-The Data Centre is located within the secured premises of the Ministry of Trade, Industry, Investment and Cooperatives, benefiting from:
+The Data Centre is located within the secured premises of the Ministry of Investment, Trade, Cooperatives and Industry, benefiting from:
 - Ministry building security (access control, security personnel)
 - Designated workspace for Data Centre equipment
 - Equipment inventory and asset tagging for accountability

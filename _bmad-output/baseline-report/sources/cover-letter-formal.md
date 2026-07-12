@@ -14,12 +14,12 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 # Letter of Submission
 
 **The Honourable Commissioner**
-Ministry of Trade, Industry and Cooperatives
+Ministry of Investment, Trade, Cooperatives and Industry
 Oyo State Government
 Ibadan, Oyo State
 
 *Through:* The Permanent Secretary
-Ministry of Trade, Industry and Cooperatives
+Ministry of Investment, Trade, Cooperatives and Industry
 
 **Date:** May 2026
 **Our reference:** CHM/OSLR/2026/001

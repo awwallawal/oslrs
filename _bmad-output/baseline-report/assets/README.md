@@ -6,7 +6,7 @@ Authored 2026-04-27 per recommendations in the prior session transcript (lines 3
 
 > *"A proper design pass, not a template tweak. The styling lives in a shared .css file that could also apply to future Ministry-facing documents."*
 
-This is the standalone delivery `delivery-1-baseline-v2-design-system`. It is intentionally generic enough to be reused beyond the OSLRS Baseline Report — any Chemiroy-authored document for the Ministry of Trade, Industry and Cooperatives (or other government clients) can render through this pipeline by supplying its own Markdown source with appropriate front-matter.
+This is the standalone delivery `delivery-1-baseline-v2-design-system`. It is intentionally generic enough to be reused beyond the OSLRS Baseline Report — any Chemiroy-authored document for the Ministry of Investment, Trade, Cooperatives and Industry (or other government clients) can render through this pipeline by supplying its own Markdown source with appropriate front-matter.
 
 ---
 
@@ -63,7 +63,7 @@ Each document source must begin with a YAML front-matter block. Required keys:
 docRef: CHM/OSLR/2026/002
 classification: Confidential — For Official Use Only
 title: Pre-Field Survey Status Report
-subtitle: Skilled Labour Registry deployment readiness for the Ministry of Trade, Industry and Cooperatives
+subtitle: Skilled Labour Registry deployment readiness for the Ministry of Investment, Trade, Cooperatives and Industry
 superhead: Oyo State Labour & Skills Registry
 authors: Lawal Awwal · Mrs Fateemah Roy-Lagbaja
 firm: Chemiroy Nigeria Limited

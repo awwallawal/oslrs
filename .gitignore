@@ -75,6 +75,9 @@ test-fixtures/oslsr_master_v3_email.xlsx
 # BMAD operator scratch — probe scripts, ad-hoc evidence dumps. NOT for commit.
 _bmad-output/scratch/
 
+# Slide-presentation working folder (SABER decks etc.) — side job, unrelated to OSLRS development.
+_bmad-output/slide-presentation/
+
 # Build artifacts (generated)
 *.tsbuildinfo
 apps/web/vite.config.d.ts

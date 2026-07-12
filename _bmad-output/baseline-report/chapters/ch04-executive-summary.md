@@ -4,7 +4,7 @@
 
 ## 1. Background
 
-The Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register**, a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
+The Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register**, a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
 
 The engagement, with a duration of six (6) months, encompasses three (3) principal deliverables: (1) Establishment of a Data Center; (2) Creation of the State Labour Register; and (3) Training of Ministry/Government Officials on the Operations of the Registry.
 

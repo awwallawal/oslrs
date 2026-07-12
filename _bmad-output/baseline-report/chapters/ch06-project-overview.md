@@ -4,7 +4,7 @@
 
 ## 3.1 Engagement Background
 
-By Award Letter referenced [Award Letter Reference], the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
+By Award Letter referenced [Award Letter Reference], the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
 
 The engagement was commissioned in recognition of a fundamental gap in the state's economic planning infrastructure: **the absence of a comprehensive, digitised register of Oyo State's workforce**. Despite an estimated population of 8.6 million (NPC 2025 projection) and a labour force participation rate exceeding 70% (NBS NLFS 2024), no centralised system existed to capture, verify, and maintain granular data on the skills, employment status, and economic activity of workers across the state's 33 Local Government Areas.
 
@@ -62,7 +62,7 @@ The engagement Terms of Reference specify three (3) principal deliverables:
 
 ### 3.5.2 Ministry Oversight
 
-The project operates under the supervision of the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
+The project operates under the supervision of the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
 
 - Facilitating access to Ministry premises for Data Centre installation
 - Coordinating with relevant state agencies (e.g., National Population Commission state office, State Internal Revenue Service)
@@ -73,9 +73,9 @@ The project operates under the supervision of the Ministry of Trade, Industry, I
 
 | Report Type | Frequency | Recipient |
 |-------------|-----------|-----------|
-| Baseline Study Report (this document) | Mid-term | Ministry of Trade, Industry, Investment and Cooperatives |
+| Baseline Study Report (this document) | Mid-term | Ministry of Investment, Trade, Cooperatives and Industry |
 | Progress Updates | As required | Designated Ministry Supervisors |
-| Completion Report | End of engagement | Ministry of Trade, Industry, Investment and Cooperatives |
+| Completion Report | End of engagement | Ministry of Investment, Trade, Cooperatives and Industry |
 
 ---
 

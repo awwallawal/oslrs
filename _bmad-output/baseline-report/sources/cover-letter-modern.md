@@ -14,7 +14,7 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 # Letter of Submission
 
 **To:** The Honourable Commissioner
-Ministry of Trade, Industry and Cooperatives
+Ministry of Investment, Trade, Cooperatives and Industry
 Oyo State Government
 
 **From:** Mrs Fateemah Roy-Lagbaja

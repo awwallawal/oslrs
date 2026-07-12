@@ -40,7 +40,7 @@ Chemiroy Nigeria Limited has executed consulting engagements across multiple sec
 | # | Project | Client | Sector | Scope |
 |---|---------|--------|--------|-------|
 | 1 | Comprehensive Feasibility Study, 22-Hectare Oil Palm Plantation Development | Private Investor | Agriculture / Agribusiness | Full feasibility study comprising 18 chapters covering industry analysis, site assessment, agronomic blueprint, financial modelling, implementation roadmap, risk register, ESG framework, and monitoring KPIs |
-| 2 | Oyo State Skilled Labour Register, Baseline Study | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State | Government / ICT | Current engagement, design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
+| 2 | Oyo State Skilled Labour Register, Baseline Study | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State | Government / ICT | Current engagement, design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
 | 3 | Agricultural Project Consulting Portfolio | Multiple Clients | Agriculture | Crop comparison analyses, economic viability assessments, and value chain development strategies for oil palm, cassava, maize, soybean, and sugarcane |
 
 ---

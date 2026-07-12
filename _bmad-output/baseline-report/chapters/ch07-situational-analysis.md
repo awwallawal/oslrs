@@ -323,7 +323,7 @@ The OSLSR operates within the following national policy context:
 |--------|-------------|
 | **Oyo State Development Agenda** | Focus on youth empowerment, skills acquisition, and MSME development |
 | **State Business Enabling Environment Reforms** | Oyo State's active participation in the federal subnational business reform assessment programme; state performance rose from 27th to 3rd place nationally, demonstrating sustained reform commitment |
-| **Ministry of Trade, Industry, Investment and Cooperatives** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
+| **Ministry of Investment, Trade, Cooperatives and Industry** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
 | **State Budget Allocation** | Annual allocations for youth empowerment and skills training programmes |
 | **Oyo State Digital Economy Strategy** | Emerging focus on technology-enabled service delivery |
 

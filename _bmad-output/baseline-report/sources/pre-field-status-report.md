@@ -2,7 +2,7 @@
 docRef: CHM/OSLR/2026/001
 classification: Confidential, for official use only
 title: Pre-Field Survey Status Report
-subtitle: Skilled Labour Registry deployment readiness for the Ministry of Trade, Industry and Cooperatives
+subtitle: Skilled Labour Registry deployment readiness for the Ministry of Investment, Trade, Cooperatives and Industry
 superhead: Oyo State Labour & Skills Registry
 authors: Mrs Fateemah Roy-Lagbaja
 firm: Chemiroy Nigeria Limited
@@ -22,7 +22,7 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 | Valid as of | The submission date stated above. Every factual claim in this Report is true as of that date. |
 | Classification | Confidential, for official use only |
 | Subject programme | Oyo State Labour & Skills Registry. Establishment of the State Electronic Labour Register. |
-| Authority | Ministry of Trade, Industry and Cooperatives, Oyo State Government |
+| Authority | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government |
 | Consultant | Chemiroy Nigeria Limited |
 | Engagement period | November 2025 – May 2026 (six-month consulting engagement) |
 | Conflicts of interest | None to declare |
@@ -31,16 +31,16 @@ coverCredit: 'Cover image: "A Tailor Sewing Clothes in Her Shop", Meritkosy / Wi
 
 | Copy | Recipient | Format |
 |---|---|---|
-| 1 | Honourable Commissioner, Ministry of Trade, Industry and Cooperatives | Hard copy + Digital |
-| 2 | Permanent Secretary, Ministry of Trade, Industry and Cooperatives | Hard copy + Digital |
-| 3 | Director, Trade & Investment, Ministry of Trade, Industry and Cooperatives | Digital |
+| 1 | Honourable Commissioner, Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 2 | Permanent Secretary, Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 3 | Director, Trade & Investment, Ministry of Investment, Trade, Cooperatives and Industry | Digital |
 | 4 | SABER Secretariat, Oyo State | Digital, courtesy copy |
 | 5 | Mrs Fateemah Roy-Lagbaja, Managing Director, Chemiroy Nigeria Limited | Hard copy + Digital |
 | 6 | File Copy, Chemiroy Nigeria Limited | Hard copy |
 
 ## Confidentiality Notice
 
-This Report is confidential. It is prepared for the Ministry of Trade, Industry and Cooperatives and the recipients listed above, and contains commercially sensitive information about the Oyo State Labour & Skills Registry programme. Reproduction or distribution beyond the named recipients without our prior written consent is not permitted.
+This Report is confidential. It is prepared for the Ministry of Investment, Trade, Cooperatives and Industry and the recipients listed above, and contains commercially sensitive information about the Oyo State Labour & Skills Registry programme. Reproduction or distribution beyond the named recipients without our prior written consent is not permitted.
 
 ## Disclaimer
 
@@ -86,13 +86,13 @@ Stakeholder sensitisation across the three Senatorial Districts of Oyo State is 
 
 ## Engagement context
 
-Chemiroy Nigeria Limited was appointed as Consultant by the Ministry of Trade, Industry and Cooperatives in November 2025, on a six-month engagement concluding in May 2026. The Letter of Introduction authorising the Consultant to engage development partners and counterpart agencies on behalf of the Ministry was issued at the end of February 2026. The Build Phase of the engagement, including this field-survey activity, is scheduled to conclude within the contractual period.
+Chemiroy Nigeria Limited was appointed as Consultant by the Ministry of Investment, Trade, Cooperatives and Industry in November 2025, on a six-month engagement concluding in May 2026. The Letter of Introduction authorising the Consultant to engage development partners and counterpart agencies on behalf of the Ministry was issued at the end of February 2026. The Build Phase of the engagement, including this field-survey activity, is scheduled to conclude within the contractual period.
 
 The survey instrument has been refined through two pre-field enumeration cycles conducted as instrument validation. The current questionnaire is Version 3, reflecting the iterative refinement that those cycles produced.
 
 # 2. Mandate Audit, Status by Workstream
 
-This Report sets out progress across the six workstreams that comprise the Registry engagement. The mandate authority is the Ministry of Trade, Industry and Cooperatives. Anticipated contributions from State agencies include the Ministries of Budget, Youth & Sport, Women Affairs, and Education; the Oyo State Investment Public and Private Partnership Agency (OYSIPA); and the Board for Technical and Vocational Training. Anticipated private-sector partners include the Manufacturing Association of Nigeria (MAN), the Association of Nigerian Artisans and Technicians (ASNAT), and the Association of Skilled and Vocational Artisans of Nigeria (ASVAN).
+This Report sets out progress across the six workstreams that comprise the Registry engagement. The mandate authority is the Ministry of Investment, Trade, Cooperatives and Industry. Anticipated contributions from State agencies include the Ministries of Budget, Youth & Sport, Women Affairs, and Education; the Oyo State Investment Public and Private Partnership Agency (OYSIPA); and the Board for Technical and Vocational Training. Anticipated private-sector partners include the Manufacturing Association of Nigeria (MAN), the Association of Nigerian Artisans and Technicians (ASNAT), and the Association of Skilled and Vocational Artisans of Nigeria (ASVAN).
 
 | Workstream | Description | Status |
 |---|---|---|
@@ -214,7 +214,7 @@ No new categories of strategic risk have surfaced in the period covered by this 
 
 ## 6.1 Nigeria Data Protection Act 2023
 
-The Registry is **NDPA-aligned**. It is established under the mandate of the Ministry of Trade, Industry and Cooperatives, exercising its statutory function in respect of trade, industry, and labour matters within Oyo State. The Data Protection Impact Assessment (DPIA) has been drafted in preparation for filing with the Nigeria Data Protection Commission (NDPC).
+The Registry is **NDPA-aligned**. It is established under the mandate of the Ministry of Investment, Trade, Cooperatives and Industry, exercising its statutory function in respect of trade, industry, and labour matters within Oyo State. The Data Protection Impact Assessment (DPIA) has been drafted in preparation for filing with the Nigeria Data Protection Commission (NDPC).
 
 The controls supporting this posture are: collection of National Identification Number as the sole personally-identifying identifier; retention periods consistent with the Nigeria Data Protection Act 2023 and supporting frameworks for State records; immutable audit logs; encrypted-at-rest backups (with client-side encryption being added on top); and role-based access control. These controls are described in greater detail in the security and platform sections of this Report.
 
@@ -295,7 +295,7 @@ The Oyo State Labour & Skills Registry is on track for the start of its Field Su
 
 The action items set out in Section 8 are the principal pre-launch matters that require the Ministry's attention. None is complex, and the full set can be addressed in a single working session at the Ministry's convenience.
 
-Chemiroy Nigeria Limited remains at the service of the Ministry of Trade, Industry and Cooperatives throughout the Build, Operate, and Transfer phases of this engagement. We are grateful for the Ministry's confidence and for the constructive collaboration that has brought the Registry to its current state of readiness, and we look forward to the field-survey phase and the empirical labour-market findings it will yield for Oyo State.
+Chemiroy Nigeria Limited remains at the service of the Ministry of Investment, Trade, Cooperatives and Industry throughout the Build, Operate, and Transfer phases of this engagement. We are grateful for the Ministry's confidence and for the constructive collaboration that has brought the Registry to its current state of readiness, and we look forward to the field-survey phase and the empirical labour-market findings it will yield for Oyo State.
 
 # 10. References
 

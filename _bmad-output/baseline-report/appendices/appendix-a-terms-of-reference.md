@@ -8,7 +8,7 @@
 
 ## A.2 Commissioning Authority
 
-Ministry of Trade, Industry, Investment and Cooperatives
+Ministry of Investment, Trade, Cooperatives and Industry
 Oyo State Government
 Secretariat, Agodi, Ibadan
 
@@ -60,7 +60,7 @@ The Terms of Reference specify that the following resources are required for Del
 
 ## A.9 Note
 
-*This appendix contains an extract of the Terms of Reference relevant to the scope of this Baseline Study Report. The full Terms of Reference document is held by the Ministry of Trade, Industry, Investment and Cooperatives.*
+*This appendix contains an extract of the Terms of Reference relevant to the scope of this Baseline Study Report. The full Terms of Reference document is held by the Ministry of Investment, Trade, Cooperatives and Industry.*
 
 ---
 

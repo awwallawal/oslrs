@@ -23,7 +23,7 @@
 
 | # | Question Text | Type | Required | Logic |
 |---|-------------|------|:--------:|-------|
-| 1.1 | *"Welcome to the Oyo State Labour & Skills Registry. This survey is conducted by the Ministry of Trade, Industry, Investment and Cooperatives in collaboration with Chemiroy Nigeria Limited. The survey takes approximately 10 minutes and collects information about your skills, employment, and demographic profile for the State Skilled Labour Register. Your data will be handled in accordance with the Nigeria Data Protection Act 2023."* | Display | — | Informational |
+| 1.1 | *"Welcome to the Oyo State Labour & Skills Registry. This survey is conducted by the Ministry of Investment, Trade, Cooperatives and Industry in collaboration with Chemiroy Nigeria Limited. The survey takes approximately 10 minutes and collects information about your skills, employment, and demographic profile for the State Skilled Labour Register. Your data will be handled in accordance with the Nigeria Data Protection Act 2023."* | Display | — | Informational |
 | 1.2 | Do you consent to participate in this survey? Your participation is voluntary. | Yes / No | **Yes** | No → Thank you, survey ends |
 
 ---

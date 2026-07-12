@@ -18,7 +18,7 @@
 
 **Commissioned by:**
 
-### Ministry of Trade, Industry, Investment and Cooperatives
+### Ministry of Investment, Trade, Cooperatives and Industry
 
 ### Oyo State Government
 
@@ -51,7 +51,7 @@
 | **Version** | 1.0 |
 | **Date of Issue** | March 2026 |
 | **Classification** | CONFIDENTIAL, For Official Use Only |
-| **Commissioned by** | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government |
+| **Commissioned by** | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government |
 | **Prepared by** | Chemiroy Nigeria Limited |
 | **Principal Consultant** | Lawal Awwal |
 | **Managing Director** | Mrs Fateemah Roy Lagbaja |
@@ -75,9 +75,9 @@
 
 | Copy # | Recipient | Organisation | Format |
 |--------|-----------|-------------|--------|
-| 1 | Honourable Commissioner | Ministry of Trade, Industry, Investment and Cooperatives | Hard copy + Digital |
-| 2 | Permanent Secretary | Ministry of Trade, Industry, Investment and Cooperatives | Hard copy + Digital |
-| 3 | Director, Trade & Investment | Ministry of Trade, Industry, Investment and Cooperatives | Digital |
+| 1 | Honourable Commissioner | Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 2 | Permanent Secretary | Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 3 | Director, Trade & Investment | Ministry of Investment, Trade, Cooperatives and Industry | Digital |
 | 4 | Lawal Awwal, Principal Consultant | Chemiroy Nigeria Limited | Hard copy + Digital |
 | 5 | Mrs Fateemah Roy Lagbaja, Managing Director | Chemiroy Nigeria Limited | Hard copy + Digital |
 | 6 | File Copy | Chemiroy Nigeria Limited | Hard copy |
@@ -86,7 +86,7 @@
 
 ## Confidentiality Notice
 
-This document has been prepared by Chemiroy Nigeria Limited exclusively for the use of the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, and contains proprietary information, technical analyses, research findings, and methodological frameworks that are confidential in nature. No part of this document may be reproduced, distributed, or disclosed to any third party without the prior written consent of Chemiroy Nigeria Limited.
+This document has been prepared by Chemiroy Nigeria Limited exclusively for the use of the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, and contains proprietary information, technical analyses, research findings, and methodological frameworks that are confidential in nature. No part of this document may be reproduced, distributed, or disclosed to any third party without the prior written consent of Chemiroy Nigeria Limited.
 
 The information contained herein has been prepared using data from publicly available sources, including the National Bureau of Statistics (NBS) Nigeria Labour Force Survey, National Population Commission (NPC) population projections, and International Labour Organization (ILO) statistical frameworks, supplemented by primary data collected during the baseline validation exercise and the professional expertise of Chemiroy Nigeria Limited. While every effort has been made to ensure accuracy, certain projections and estimates are based on assumptions that are clearly identified and classified throughout the document using the Assumption Classification Framework described in Chapter 9.
 

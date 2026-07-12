@@ -18,7 +18,7 @@
 
 **Commissioned by:**
 
-### Ministry of Trade, Industry, Investment and Cooperatives
+### Ministry of Investment, Trade, Cooperatives and Industry
 
 ### Oyo State Government
 
@@ -51,7 +51,7 @@
 | **Version** | 1.0 |
 | **Date of Issue** | March 2026 |
 | **Classification** | CONFIDENTIAL — For Official Use Only |
-| **Commissioned by** | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government |
+| **Commissioned by** | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government |
 | **Prepared by** | Chemiroy Nigeria Limited |
 | **Principal Consultant** | Lawal Awwal |
 | **Managing Director** | Mrs Fateemah Roy Lagbaja |
@@ -75,9 +75,9 @@
 
 | Copy # | Recipient | Organisation | Format |
 |--------|-----------|-------------|--------|
-| 1 | Honourable Commissioner | Ministry of Trade, Industry, Investment and Cooperatives | Hard copy + Digital |
-| 2 | Permanent Secretary | Ministry of Trade, Industry, Investment and Cooperatives | Hard copy + Digital |
-| 3 | Director, Trade & Investment | Ministry of Trade, Industry, Investment and Cooperatives | Digital |
+| 1 | Honourable Commissioner | Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 2 | Permanent Secretary | Ministry of Investment, Trade, Cooperatives and Industry | Hard copy + Digital |
+| 3 | Director, Trade & Investment | Ministry of Investment, Trade, Cooperatives and Industry | Digital |
 | 4 | Lawal Awwal, Principal Consultant | Chemiroy Nigeria Limited | Hard copy + Digital |
 | 5 | Mrs Fateemah Roy Lagbaja, Managing Director | Chemiroy Nigeria Limited | Hard copy + Digital |
 | 6 | File Copy | Chemiroy Nigeria Limited | Hard copy |
@@ -86,7 +86,7 @@
 
 ## Confidentiality Notice
 
-This document has been prepared by Chemiroy Nigeria Limited exclusively for the use of the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, and contains proprietary information, technical analyses, research findings, and methodological frameworks that are confidential in nature. No part of this document may be reproduced, distributed, or disclosed to any third party without the prior written consent of Chemiroy Nigeria Limited.
+This document has been prepared by Chemiroy Nigeria Limited exclusively for the use of the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, and contains proprietary information, technical analyses, research findings, and methodological frameworks that are confidential in nature. No part of this document may be reproduced, distributed, or disclosed to any third party without the prior written consent of Chemiroy Nigeria Limited.
 
 The information contained herein has been prepared using data from publicly available sources — including the National Bureau of Statistics (NBS) Nigeria Labour Force Survey, National Population Commission (NPC) population projections, and International Labour Organization (ILO) statistical frameworks — supplemented by primary data collected during the baseline validation exercise and the professional expertise of Chemiroy Nigeria Limited. While every effort has been made to ensure accuracy, certain projections and estimates are based on assumptions that are clearly identified and classified throughout the document using the Assumption Classification Framework described in Chapter 9.
 
@@ -544,7 +544,7 @@ All recommendations are informed by established international standards — incl
 
 ## 1. Background
 
-The Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register** — a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
+The Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, commissioned Chemiroy Nigeria Limited in November 2025 to undertake the **Production of the Oyo State Skilled Labour Register** — a comprehensive state-wide digital registry of skilled, semi-skilled, and unskilled workers across all thirty-three (33) Local Government Areas of Oyo State.
 
 The engagement, with a duration of six (6) months, encompasses three (3) principal deliverables: (1) Establishment of a Data Center; (2) Creation of the State Labour Register; and (3) Training of Ministry/Government Officials on the Operations of the Registry.
 
@@ -724,7 +724,7 @@ Chemiroy Nigeria Limited has executed consulting engagements across multiple sec
 | # | Project | Client | Sector | Scope |
 |---|---------|--------|--------|-------|
 | 1 | Comprehensive Feasibility Study — 22-Hectare Oil Palm Plantation Development | Private Investor | Agriculture / Agribusiness | Full feasibility study comprising 18 chapters covering industry analysis, site assessment, agronomic blueprint, financial modelling, implementation roadmap, risk register, ESG framework, and monitoring KPIs |
-| 2 | Oyo State Skilled Labour Register — Baseline Study | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State | Government / ICT | Current engagement — design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
+| 2 | Oyo State Skilled Labour Register — Baseline Study | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State | Government / ICT | Current engagement — design and deployment of a state-wide digital labour registry with offline-capable data collection, fraud detection, and public skills marketplace |
 | 3 | Agricultural Project Consulting Portfolio | Multiple Clients | Agriculture | Crop comparison analyses, economic viability assessments, and value chain development strategies for oil palm, cassava, maize, soybean, and sugarcane |
 
 ---
@@ -753,7 +753,7 @@ Chemiroy Nigeria Limited is committed to delivering work products that meet or e
 
 ## 6.1 Engagement Background
 
-By Award Letter referenced [Award Letter Reference], the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
+By Award Letter referenced [Award Letter Reference], the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, engaged **Chemiroy Nigeria Limited** to undertake the **Production of the Oyo State Skilled Labour Register**. The consultancy award was received on **18th November 2025**, with a project duration of **six (6) months** concluding in **May 2026**.
 
 The engagement was commissioned in recognition of a fundamental gap in the state's economic planning infrastructure: **the absence of a comprehensive, digitised register of Oyo State's workforce**. Despite an estimated population of 8.6 million (NPC 2025 projection) and a labour force participation rate exceeding 70% (NBS NLFS 2024), no centralised system existed to capture, verify, and maintain granular data on the skills, employment status, and economic activity of workers across the state's 33 Local Government Areas.
 
@@ -812,7 +812,7 @@ The engagement Terms of Reference specify three (3) principal deliverables:
 
 ### 6.5.2 Ministry Oversight
 
-The project operates under the supervision of the Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
+The project operates under the supervision of the Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Government, with designated Ministry officials serving as project supervisors responsible for:
 
 - Facilitating access to Ministry premises for Data Center installation
 - Coordinating with relevant state agencies (e.g., National Population Commission state office, State Internal Revenue Service)
@@ -823,9 +823,9 @@ The project operates under the supervision of the Ministry of Trade, Industry, I
 
 | Report Type | Frequency | Recipient |
 |-------------|-----------|-----------|
-| Baseline Study Report (this document) | Mid-term | Ministry of Trade, Industry, Investment and Cooperatives |
+| Baseline Study Report (this document) | Mid-term | Ministry of Investment, Trade, Cooperatives and Industry |
 | Progress Updates | As required | Designated Ministry Supervisors |
-| Completion Report | End of engagement | Ministry of Trade, Industry, Investment and Cooperatives |
+| Completion Report | End of engagement | Ministry of Investment, Trade, Cooperatives and Industry |
 
 ---
 
@@ -1221,7 +1221,7 @@ The OSLSR operates within the following national policy context:
 |--------|-------------|
 | **Oyo State Development Agenda** | Focus on youth empowerment, skills acquisition, and MSME development |
 | **State Business Enabling Environment Reforms** | Oyo State's active participation in the federal subnational business reform assessment programme; state performance rose from 27th to 3rd place nationally, demonstrating sustained reform commitment |
-| **Ministry of Trade, Industry, Investment and Cooperatives** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
+| **Ministry of Investment, Trade, Cooperatives and Industry** | Commissioning authority; mandate includes skills development, enterprise support, and business enabling environment reform |
 | **State Budget Allocation** | Annual allocations for youth empowerment and skills training programmes |
 | **Oyo State Digital Economy Strategy** | Emerging focus on technology-enabled service delivery |
 
@@ -2714,7 +2714,7 @@ The complete taxonomy is reproduced in **Appendix C** for reference.
 
 Deliverable 1 of the engagement Terms of Reference requires the **Establishment of a Data Center** for the Oyo State Skilled Labour Register. This chapter documents the design rationale, procurement, configuration, and operational status of the Data Center infrastructure, which employs a hybrid architecture combining on-premises computing resources with cloud-hosted production services.
 
-The Data Center was established at the premises of the **Ministry of Trade, Industry, Investment and Cooperatives**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
+The Data Center was established at the premises of the **Ministry of Investment, Trade, Cooperatives and Industry**, ensuring physical proximity to the commissioning authority, facilitating Ministry oversight, and establishing data sovereignty within a government-controlled environment.
 
 **Deliverable Status: COMPLETE** ✓
 
@@ -2766,7 +2766,7 @@ All workstations are configured with:
 
 ### 12.3.3 Physical Security
 
-The Data Center is located within the secured premises of the Ministry of Trade, Industry, Investment and Cooperatives, benefiting from:
+The Data Center is located within the secured premises of the Ministry of Investment, Trade, Cooperatives and Industry, benefiting from:
 - Ministry building security (access control, security personnel)
 - Designated workspace for Data Center equipment
 - Equipment inventory and asset tagging for accountability
@@ -6066,7 +6066,7 @@ The Consultant stands ready to execute the field enumeration phase immediately u
 
 ## A.2 Commissioning Authority
 
-Ministry of Trade, Industry, Investment and Cooperatives
+Ministry of Investment, Trade, Cooperatives and Industry
 Oyo State Government
 Secretariat, Agodi, Ibadan
 
@@ -6118,7 +6118,7 @@ The Terms of Reference specify that the following resources are required for Del
 
 ## A.9 Note
 
-*This appendix contains an extract of the Terms of Reference relevant to the scope of this Baseline Study Report. The full Terms of Reference document is held by the Ministry of Trade, Industry, Investment and Cooperatives.*
+*This appendix contains an extract of the Terms of Reference relevant to the scope of this Baseline Study Report. The full Terms of Reference document is held by the Ministry of Investment, Trade, Cooperatives and Industry.*
 
 ---
 
@@ -6153,7 +6153,7 @@ The Terms of Reference specify that the following resources are required for Del
 
 | # | Question Text | Type | Required | Logic |
 |---|-------------|------|:--------:|-------|
-| 1.1 | *"Welcome to the Oyo State Labour & Skills Registry. This survey is conducted by the Ministry of Trade, Industry, Investment and Cooperatives in collaboration with Chemiroy Nigeria Limited. The survey takes approximately 10 minutes and collects information about your skills, employment, and demographic profile for the State Skilled Labour Register. Your data will be handled in accordance with the Nigeria Data Protection Act 2023."* | Display | — | Informational |
+| 1.1 | *"Welcome to the Oyo State Labour & Skills Registry. This survey is conducted by the Ministry of Investment, Trade, Cooperatives and Industry in collaboration with Chemiroy Nigeria Limited. The survey takes approximately 10 minutes and collects information about your skills, employment, and demographic profile for the State Skilled Labour Register. Your data will be handled in accordance with the Nigeria Data Protection Act 2023."* | Display | — | Informational |
 | 1.2 | Do you consent to participate in this survey? Your participation is voluntary. | Yes / No | **Yes** | No → Thank you, survey ends |
 
 ---
@@ -7329,7 +7329,7 @@ oslrs/
 | Parameter | Detail |
 |-----------|--------|
 | **Assessment Title** | DPIA for the Oyo State Skilled Labour Register |
-| **Data Controller** | Ministry of Trade, Industry, Investment and Cooperatives, Oyo State |
+| **Data Controller** | Ministry of Investment, Trade, Cooperatives and Industry, Oyo State |
 | **Data Processor** | Chemiroy Nigeria Limited |
 | **Legal Framework** | Nigeria Data Protection Act 2023 (NDPA); Nigeria Data Protection Regulation 2019 (NDPR) |
 | **Assessment Date** | January 2026 |
@@ -7692,7 +7692,7 @@ The Consumer Onboarding Tracker (`docs/legal/consumer-onboarding-tracker.md`) re
 
 ## Plate 1: Data Center — On-Premises Workstations
 
-*Photograph showing the three HP workstations (2 desktops + 1 laptop) installed at the Ministry of Trade, Industry, Investment and Cooperatives. Workstations are arranged in the designated Data Center workspace with monitors, keyboards, and connectivity equipment visible.*
+*Photograph showing the three HP workstations (2 desktops + 1 laptop) installed at the Ministry of Investment, Trade, Cooperatives and Industry. Workstations are arranged in the designated Data Center workspace with monitors, keyboards, and connectivity equipment visible.*
 
 **Caption**: Data Center on-premises operations node at Ministry premises, Secretariat, Agodi, Ibadan. Left: Workstation 1 (Data Entry & QA). Centre: Workstation 2 (Administration & Reporting). Right: Workstation 3 (Field Supervision Laptop).
 
@@ -7716,9 +7716,9 @@ The Consumer Onboarding Tracker (`docs/legal/consumer-onboarding-tracker.md`) re
 
 ## Plate 4: Ministry of Trade Building — Exterior
 
-*Photograph showing the exterior of the Ministry of Trade, Industry, Investment and Cooperatives building at the Oyo State Secretariat, Agodi, Ibadan.*
+*Photograph showing the exterior of the Ministry of Investment, Trade, Cooperatives and Industry building at the Oyo State Secretariat, Agodi, Ibadan.*
 
-**Caption**: Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Secretariat, Agodi, Ibadan — host location for the OSLSR Data Center.
+**Caption**: Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Secretariat, Agodi, Ibadan — host location for the OSLSR Data Center.
 
 ---
 
@@ -7850,7 +7850,7 @@ The Consumer Onboarding Tracker (`docs/legal/consumer-onboarding-tracker.md`) re
 
 ## Oyo State Government Publications
 
-13. Oyo State Government. (2025). *Terms of Reference: Production of State Skilled Labour Register*. Ministry of Trade, Industry, Investment and Cooperatives. Ibadan.
+13. Oyo State Government. (2025). *Terms of Reference: Production of State Skilled Labour Register*. Ministry of Investment, Trade, Cooperatives and Industry. Ibadan.
 
 14. Oyo State Bureau of Statistics. (2023). *Oyo State Statistical Yearbook 2022*. Ibadan: Oyo State Planning Commission.
 

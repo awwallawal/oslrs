@@ -258,7 +258,7 @@ Both share these conventions:
 ## 11. Key Actors / Stakeholders
 
 **Direct Ministry counterparts:**
-- **Ministry of Trade, Industry and Cooperatives (MTIC)** — engagement authority
+- **Ministry of Investment, Trade, Cooperatives and Industry (MTIC)** — engagement authority
 - **Honourable Commissioner** — political head; address letters TO; never name as actor in body
 - **Permanent Secretary** — administrative head; co-recipient of Ministry-facing reports
 - **Director, Trade & Investment** — technical counterpart at Ministry level

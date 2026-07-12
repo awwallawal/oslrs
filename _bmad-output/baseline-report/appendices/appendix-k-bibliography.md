@@ -36,7 +36,7 @@
 
 ## Oyo State Government Publications
 
-13. Oyo State Government. (2025). *Terms of Reference: Production of State Skilled Labour Register*. Ministry of Trade, Industry, Investment and Cooperatives. Ibadan.
+13. Oyo State Government. (2025). *Terms of Reference: Production of State Skilled Labour Register*. Ministry of Investment, Trade, Cooperatives and Industry. Ibadan.
 
 14. Oyo State Bureau of Statistics. (2023). *Oyo State Statistical Yearbook 2022*. Ibadan: Oyo State Planning Commission.
 

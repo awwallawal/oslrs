@@ -4,7 +4,7 @@
 
 ## Plate 1: Data Center — On-Premises Workstations
 
-*Photograph showing the three HP workstations (2 desktops + 1 laptop) installed at the Ministry of Trade, Industry, Investment and Cooperatives. Workstations are arranged in the designated Data Center workspace with monitors, keyboards, and connectivity equipment visible.*
+*Photograph showing the three HP workstations (2 desktops + 1 laptop) installed at the Ministry of Investment, Trade, Cooperatives and Industry. Workstations are arranged in the designated Data Center workspace with monitors, keyboards, and connectivity equipment visible.*
 
 **Caption**: Data Center on-premises operations node at Ministry premises, Secretariat, Agodi, Ibadan. Left: Workstation 1 (Data Entry & QA). Centre: Workstation 2 (Administration & Reporting). Right: Workstation 3 (Field Supervision Laptop).
 
@@ -28,9 +28,9 @@
 
 ## Plate 4: Ministry of Trade Building — Exterior
 
-*Photograph showing the exterior of the Ministry of Trade, Industry, Investment and Cooperatives building at the Oyo State Secretariat, Agodi, Ibadan.*
+*Photograph showing the exterior of the Ministry of Investment, Trade, Cooperatives and Industry building at the Oyo State Secretariat, Agodi, Ibadan.*
 
-**Caption**: Ministry of Trade, Industry, Investment and Cooperatives, Oyo State Secretariat, Agodi, Ibadan — host location for the OSLSR Data Center.
+**Caption**: Ministry of Investment, Trade, Cooperatives and Industry, Oyo State Secretariat, Agodi, Ibadan — host location for the OSLSR Data Center.
 
 ---
 
