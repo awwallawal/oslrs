@@ -16,6 +16,16 @@ vi.mock('../../api/wizard.api', async (importOriginal) => {
 });
 const mockedLgas = vi.mocked(fetchPublicLgas);
 
+// Default LGA mock for every test — the ['wizard','lgas','public'] query must
+// never resolve to `undefined` (TanStack Query rejects it with a noisy stderr).
+// Blocks that assert on specific LGA names reset + reseed in their own
+// beforeEach (which runs AFTER this top-level one).
+beforeEach(() => {
+  mockedLgas.mockResolvedValue([
+    { id: '018e5f2a-1234-7890-abcd-1234567890ab', name: 'Egbeda', code: 'lga-egbeda' },
+  ]);
+});
+
 function fullState(overrides: Partial<WizardDraftData> = {}): WizardDraftData {
   return {
     givenName: 'Kayode',
@@ -195,6 +205,26 @@ describe('Step5ReviewAndSave — campaign attribution question (Story 13-1 AC2)'
 
   it('NEVER blocks submit — Save stays enabled regardless of the answer (AC2.2)', () => {
     renderStep5(fullState());
+    expect(screen.getByTestId('wizard-save-button')).not.toBeDisabled();
+  });
+});
+
+describe('Step5ReviewAndSave — acquisition-question prominence (Story 13-29 AC5)', () => {
+  it('presents the question as a prominent, accessible labelled region (not a buried optional select)', () => {
+    renderStep5(fullState());
+    // Elevated to a landmark region named by its own heading — assistive tech and
+    // sighted users both find it, instead of a faint "(optional)" select.
+    const region = screen.getByRole('region', { name: /how did you hear about us/i });
+    expect(region).toBeInTheDocument();
+    expect(region).toContainElement(screen.getByTestId('attribution-channel-select'));
+    // The prompt is a real, legible label (base weight/size), not a muted caption.
+    const label = screen.getByText('How did you hear about us?');
+    expect(label).toHaveClass('font-semibold');
+  });
+
+  it('remains optional + non-blocking — Save enabled with no channel chosen (13-1 guardrail)', () => {
+    renderStep5(fullState());
+    expect(screen.getByTestId('attribution-channel-select')).toHaveValue('');
     expect(screen.getByTestId('wizard-save-button')).not.toBeDisabled();
   });
 });

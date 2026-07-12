@@ -16,7 +16,7 @@ import {
   type WizardDraftData,
   type FlattenedForm,
 } from '../api/wizard.api';
-import { getVisibleQuestions } from '../../forms/utils/skipLogic';
+import { isSectionStepSkippable } from '../lib/section-relevance';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
 import { parseUtm, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
 import {
@@ -313,15 +313,25 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   // Story 9-18 AC#E5 — a section step whose questions are ALL hidden by
   // `showWhen` (given the current answers) is auto-skipped during Continue/Back.
   // Head + Review steps have no `sectionId` and are never skippable.
+  // Story 13-29 — visibility is evaluated against the calculated-field-augmented
+  // answer map (via `isSectionStepSkippable`), so a section gated on a computed
+  // field (e.g. `grp_labor` / `${age} >= 15`) resolves the SAME way it does at
+  // Review. This kills the two-pass "go back and fill survey" loop where a calc-
+  // gated section was skipped here (raw responses, no `age`) but demanded at
+  // Review (calc-augmented). The under-15 skip still holds — `age < 15` → hidden.
   const isStepSkippable = useCallback(
-    (idx: number): boolean => {
-      const step = steps[idx];
-      if (!step?.sectionId || !form) return false;
-      const sectionQuestions = form.questions.filter((q) => q.sectionId === step.sectionId);
-      const responses = draft.formData.questionnaireResponses ?? {};
-      return getVisibleQuestions(sectionQuestions, responses, form.sectionShowWhen).length === 0;
-    },
-    [steps, form, draft.formData.questionnaireResponses],
+    (idx: number): boolean =>
+      isSectionStepSkippable(
+        form,
+        steps[idx]?.sectionId,
+        draft.formData.questionnaireResponses ?? {},
+        undefined, // default clock (call-time now) — matches the Review completeness gate
+        // Story 13-29 (AI-Review L1) — exclude wizard-prefilled (hidden) questions
+        // so a section made up entirely of them auto-skips instead of stranding the
+        // user on FormRenderer's "No questions available" screen.
+        new Set(draft.formData.prefilledQuestionNames ?? []),
+      ),
+    [steps, form, draft.formData.questionnaireResponses, draft.formData.prefilledQuestionNames],
   );
 
   const handleContinue = useCallback(() => {

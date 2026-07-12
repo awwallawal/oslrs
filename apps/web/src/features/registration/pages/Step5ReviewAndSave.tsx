@@ -208,16 +208,34 @@ export function Step5ReviewAndSave({
         </p>
       )}
 
-      {/* Story 13-1 (AC2) — optional acquisition question. Best-effort, NEVER blocks submit. */}
+      {/* Story 13-1 (AC2) / Story 13-29 (AC5) — acquisition question. Elevated to a
+          prominent, legible card so it isn't missed on a scroll-to-submit (13-1's
+          channel attribution is the paid-launch CPA signal). Still OPTIONAL and
+          NEVER blocks submit (13-1 review guardrail: prominence ≠ mandatory). */}
       {ATTRIBUTION_ENABLED && (
-        <div className="mt-6" data-testid="step5-attribution">
-          <label htmlFor="attribution-channel" className="block text-sm font-medium text-neutral-700">
-            How did you hear about us? <span className="text-neutral-400">(optional)</span>
-          </label>
+        <section
+          className="mt-6 rounded-lg border border-primary-200 bg-primary-50/60 p-4"
+          aria-labelledby="attribution-heading"
+          data-testid="step5-attribution"
+        >
+          {/* AI-Review L2 — a real heading (in the document outline for screen-
+              reader `H` navigation), not a <label> styled to look like one. It
+              names both the region (aria-labelledby above) and the select
+              (aria-labelledby below), so the control keeps its accessible name. */}
+          <h3
+            id="attribution-heading"
+            className="block text-base font-semibold text-neutral-900"
+          >
+            How did you hear about us?
+          </h3>
+          <p className="mt-0.5 text-sm text-neutral-600">
+            Optional — it helps us reach more people across Oyo State.
+          </p>
           <select
             id="attribution-channel"
+            aria-labelledby="attribution-heading"
             data-testid="attribution-channel-select"
-            className="mt-1 block w-full rounded-md border-neutral-300 text-sm"
+            className="mt-3 block w-full rounded-md border-neutral-300 bg-white px-3 py-2.5 text-base text-neutral-900 shadow-sm focus:border-primary-500 focus:ring-primary-500"
             value={(formData.extras?.acquisition as { channel?: string } | undefined)?.channel ?? ''}
             onChange={(e) => {
               const channel = e.target.value;
@@ -233,7 +251,7 @@ export function Step5ReviewAndSave({
               </option>
             ))}
           </select>
-        </div>
+        </section>
       )}
 
       <WizardNavigation

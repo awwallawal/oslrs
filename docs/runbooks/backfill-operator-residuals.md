@@ -66,6 +66,15 @@ resolve in-shell) → `docker exec oslsr-postgres psql -U oslsr_user -d oslsr_db
 | Skills taxonomy 61→150 | 13-20 | Choices-sheet-only XLSX patch; survey sheets untouched. ➖ |
 | NIN format-only rows | 13-15 | 78 "failing" Mod-11 rows are VALID NINs — **do NOT purge**. ➖ |
 
+## D. Manual verification gates (pre-blast UAT — no script, but MUST run before firing)
+
+Not a mutating one-shot, but the same silent-failure class: a UI fix that can't be prod-SQL-probed and
+so relies on someone remembering to exercise it in a real browser. Tracked here so close-out sees it.
+
+| Gate | Story | What to run | Status | Evidence when done |
+|---|---|---|---|---|
+| Wizard one-pass (no two-pass "go back and fill survey" loop) | 13-29 (AC6) | 13-29 needs **NO re-pin** (deployed code fix). Manual dry-run on the **form pinned at blast time** (current `019f48c2`, or a new row **if** Step 5 re-pins — then run after it) — adult + exactly-15 boundary + under-15 branches; sentinel NIN, delete rows after. Full procedure: **`pre-launch-operator-runbook.md` → Step 5b**. | ⬜ **not run** | "Submit enabled on first arrival" screenshot + date. Standing automated guards meanwhile: the `section-relevance.test.ts` skippability↔completeness agreement invariant + `WizardPage.calcGatedSkip.test.tsx` (adult one-pass / under-15 skip). |
+
 ---
 
 ## Silent-cap audit (2026-07-12) — a sibling of "a fix that never fires"
