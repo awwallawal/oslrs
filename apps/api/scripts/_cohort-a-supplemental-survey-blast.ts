@@ -75,7 +75,8 @@ Options:
   --rate-per-minute <N>             Maximum sends per minute (default 10) — cap, not target
   --since <YYYY-MM-DD>              Respondents created on or after this date (parsed as UTC midnight)
   --lga <id>                        Filter by LGA id (respondents.lga_id)
-  --max-recipients <N>              Safety cap (default 100; Cohort A is ~63)
+  --max-recipients <N>              OPTIONAL safety cap. Default: NONE (send to all).
+                                    If set and it truncates, a LOUD warning names how many were dropped.
   --help                            Show this message and exit
 
 Cohort selection: respondents LEFT JOIN submissions WHERE submissions.id IS NULL
@@ -90,7 +91,7 @@ export interface Args {
   ratePerMinute: number;
   since: Date | null;
   lgaId: string | null;
-  maxRecipients: number;
+  maxRecipients: number | null; // null = UNCAPPED (send to all); a number is an opt-in cap
 }
 
 export function parseArgs(argv: string[]): Args {
@@ -118,8 +119,11 @@ export function parseArgs(argv: string[]): Args {
   }
 
   const maxRecipientsRaw = flags['max-recipients'];
-  const maxRecipients = typeof maxRecipientsRaw === 'string' ? Number(maxRecipientsRaw) : 100;
-  if (!Number.isFinite(maxRecipients) || maxRecipients <= 0) {
+  // NO SILENT CAP (operator directive 2026-07-12): default UNCAPPED (null) so the
+  // blast never quietly drops recipients beyond a hidden ceiling. --max-recipients
+  // is an OPT-IN safety valve; if it truncates, main() warns loudly.
+  const maxRecipients = typeof maxRecipientsRaw === 'string' ? Number(maxRecipientsRaw) : null;
+  if (maxRecipients !== null && (!Number.isInteger(maxRecipients) || maxRecipients <= 0)) {
     throw new Error(`--max-recipients must be a positive integer (got ${String(maxRecipientsRaw)})`);
   }
 
@@ -249,8 +253,9 @@ async function selectCohort(args: Args): Promise<CohortRow[]> {
       ${sinceFragment}
       ${lgaFragment}
     ORDER BY r.id, mlt.created_at DESC
-    LIMIT ${args.maxRecipients}
   `);
+  // No SQL LIMIT — full cohort selected so any --max-recipients cap is applied
+  // LOUDLY downstream (main()), never silently truncated in the query.
 
   return (result.rows as unknown[]).map((row) => {
     const r = row as Record<string, unknown>;
@@ -289,10 +294,27 @@ async function main() {
   const rawCohort = await selectCohort(args);
   // Story 13-9 (AC2) — skip suppressed (bounced/complained) addresses before sending.
   const suppressedSet = await getSuppressedEmails(rawCohort.map((r) => r.email));
-  const cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
+  let cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
   const suppressedSkipped = rawCohort.length - cohort.length;
   if (suppressedSkipped > 0) {
     logger.info({ event: 'cohort_a_supplemental.suppressed_skipped', skipped: suppressedSkipped });
+  }
+
+  // NO SILENT CAP — apply the OPT-IN --max-recipients here (post-suppression) and,
+  // if it truncates, announce it LOUDLY. UNCAPPED by default (maxRecipients null).
+  if (args.maxRecipients !== null && cohort.length > args.maxRecipients) {
+    const dropped = cohort.length - args.maxRecipients;
+    logger.warn({
+      event: 'cohort_a_supplemental.cohort_capped',
+      selected: cohort.length,
+      cap: args.maxRecipients,
+      dropped,
+    });
+    console.warn(
+      `⚠️  --max-recipients=${args.maxRecipients} CAPS the cohort: ${cohort.length} eligible → ` +
+        `sending ${args.maxRecipients}, DROPPING ${dropped}. Omit --max-recipients to send to all ${cohort.length}.`,
+    );
+    cohort = cohort.slice(0, args.maxRecipients);
   }
   logger.info({
     event: 'cohort_a_supplemental.cohort_selected',

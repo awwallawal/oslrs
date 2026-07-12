@@ -85,7 +85,8 @@ Options:
   --rate-per-minute <N>             Maximum sends per minute (default 10) — cap, not target
   --since <YYYY-MM-DD>              Drafts created on or after this date (parsed as UTC midnight)
   --lga <id>                        Filter by LGA id (form_data.lgaId)
-  --max-recipients <N>              Safety cap (default 200)
+  --max-recipients <N>              OPTIONAL safety cap. Default: NONE (send to all).
+                                    If set and it truncates, a LOUD warning names how many were dropped.
   --help                            Show this message and exit
 
 Note on --rate-per-minute: this is an UPPER BOUND. The script waits at least
@@ -100,7 +101,9 @@ export interface Args {
   ratePerMinute: number;
   since: Date | null;
   lgaId: string | null;
-  maxRecipients: number;
+  /** null = UNCAPPED (send to the whole selected cohort). A number is an opt-in
+   * safety valve; if it actually truncates, main() announces it LOUDLY. */
+  maxRecipients: number | null;
 }
 
 export function parseArgs(argv: string[]): Args {
@@ -128,8 +131,12 @@ export function parseArgs(argv: string[]): Args {
   }
 
   const maxRecipientsRaw = flags['max-recipients'];
-  const maxRecipients = typeof maxRecipientsRaw === 'string' ? Number(maxRecipientsRaw) : 200;
-  if (!Number.isFinite(maxRecipients) || maxRecipients <= 0) {
+  // NO SILENT CAP (operator directive 2026-07-12): default is UNCAPPED (null) so
+  // the blast never quietly drops recipients beyond a hidden ceiling — the old
+  // default of 200 silently truncated the 271-draft launch cohort. --max-recipients
+  // stays available as an OPT-IN safety valve, and if it truncates, main() warns loudly.
+  const maxRecipients = typeof maxRecipientsRaw === 'string' ? Number(maxRecipientsRaw) : null;
+  if (maxRecipients !== null && (!Number.isInteger(maxRecipients) || maxRecipients <= 0)) {
     throw new Error(`--max-recipients must be a positive integer (got ${String(maxRecipientsRaw)})`);
   }
 
@@ -337,8 +344,9 @@ async function selectCohort(args: Args): Promise<DraftRow[]> {
     })
     .from(wizardDrafts)
     .where(and(...conditions))
-    .orderBy(wizardDrafts.createdAt)
-    .limit(args.maxRecipients);
+    .orderBy(wizardDrafts.createdAt);
+  // No SQL LIMIT here — the full cohort is selected so any --max-recipients cap
+  // is applied LOUDLY downstream (main()), never silently truncated in the query.
 
   return rows;
 }
@@ -370,10 +378,31 @@ async function main() {
   // Story 13-9 (AC2) — drop suppressed (bounced/complained) addresses BEFORE sending. Protects
   // sender reputation/deliverability; never blast an address Resend told us hard-bounced/complained.
   const suppressedSet = await getSuppressedEmails(rawCohort.map((r) => r.email));
-  const cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
+  let cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
   const suppressedSkipped = rawCohort.length - cohort.length;
   if (suppressedSkipped > 0) {
     logger.info({ event: 'reengagement_email.suppressed_skipped', skipped: suppressedSkipped });
+  }
+
+  // NO SILENT CAP — apply the OPT-IN --max-recipients here (post-suppression, so
+  // the cap counts the actual send set) and, if it truncates, announce it LOUDLY.
+  // The blast is UNCAPPED by default (args.maxRecipients === null). Slicing after
+  // the createdAt-ASC order keeps the oldest N, same as the old SQL LIMIT — but
+  // visible, never silent.
+  if (args.maxRecipients !== null && cohort.length > args.maxRecipients) {
+    const dropped = cohort.length - args.maxRecipients;
+    logger.warn({
+      event: 'reengagement_email.cohort_capped',
+      selected: cohort.length,
+      cap: args.maxRecipients,
+      dropped,
+    });
+    console.warn(
+      `⚠️  --max-recipients=${args.maxRecipients} CAPS the cohort: ${cohort.length} eligible → ` +
+        `sending ${args.maxRecipients}, DROPPING ${dropped} (the newest by created_at). ` +
+        `Omit --max-recipients to send to all ${cohort.length}.`,
+    );
+    cohort = cohort.slice(0, args.maxRecipients);
   }
   logger.info({
     event: 'reengagement_email.cohort_selected',

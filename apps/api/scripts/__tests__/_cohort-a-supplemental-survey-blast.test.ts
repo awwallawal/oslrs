@@ -32,9 +32,15 @@ describe('_cohort-a-supplemental-survey-blast — parseArgs', () => {
     expect(args.ratePerMinute).toBe(10);
   });
 
-  it('defaults --max-recipients to 100 (Cohort A is ~63)', () => {
+  it('defaults --max-recipients to null (UNCAPPED — no silent drop)', () => {
+    // Operator directive 2026-07-12: no silent default cap. Uncapped by default;
+    // the cap is opt-in and warns loudly if it truncates.
     const args = parseArgs(['--dry-run']);
-    expect(args.maxRecipients).toBe(100);
+    expect(args.maxRecipients).toBeNull();
+  });
+
+  it('honours an explicit --max-recipients as an opt-in cap', () => {
+    expect(parseArgs(['--dry-run', '--max-recipients', '50']).maxRecipients).toBe(50);
   });
 
   it('parses --rate-per-minute integer', () => {

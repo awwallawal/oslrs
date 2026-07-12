@@ -37,9 +37,16 @@ describe('_reengagement-email-blast — parseArgs', () => {
     expect(args.ratePerMinute).toBe(10);
   });
 
-  it('defaults --max-recipients to 200', () => {
+  it('defaults --max-recipients to null (UNCAPPED — no silent drop)', () => {
+    // Operator directive 2026-07-12: the old default of 200 silently truncated the
+    // 271-draft launch cohort. Default is now uncapped; the cap is opt-in only.
     const args = parseArgs(['--dry-run']);
-    expect(args.maxRecipients).toBe(200);
+    expect(args.maxRecipients).toBeNull();
+  });
+
+  it('honours an explicit --max-recipients as an opt-in cap', () => {
+    const args = parseArgs(['--dry-run', '--max-recipients', '50']);
+    expect(args.maxRecipients).toBe(50);
   });
 
   it('parses --lga value', () => {
