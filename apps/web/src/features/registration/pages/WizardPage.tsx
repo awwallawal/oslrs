@@ -403,6 +403,13 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
       nin,
       pendingNin: pending,
       questionnaireResponses: fd.questionnaireResponses,
+      // Story 13-23 (AC2) — bind the submission to the form the wizard actually
+      // rendered. `form.formId` is the questionnaire_forms row PK UUID (Story
+      // 9-33), read from the top-level form query — the authoritative "which
+      // form did we render" value, present whenever a public form is configured
+      // and immune to the draft-autosave race that dropped the stamp server-side.
+      // Omitted (undefined) when no public form is pinned (Step 4 was empty).
+      questionnaireFormId: form?.formId,
       authChoice: fd.authChoice ?? ('magic-link' as const),
     };
 
@@ -457,7 +464,7 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft.formData, isSubmitting, reviewCompleteness, authenticated, navigate, queryClient, toast]);
+  }, [draft.formData, form, isSubmitting, reviewCompleteness, authenticated, navigate, queryClient, toast]);
 
   // AI-Review M1 — the pinned survey failed to load (a non-404 fetch error).
   // Surface it with a retry instead of silently dropping every section step and

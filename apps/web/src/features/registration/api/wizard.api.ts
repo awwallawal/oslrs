@@ -179,6 +179,14 @@ export interface SubmitWizardRequest {
   pendingNin?: boolean;
   deferReasonNin?: string;
   questionnaireResponses?: Record<string, unknown>;
+  /**
+   * Story 13-23 (AC2) — the UUID of the pinned form the wizard rendered
+   * (`FlattenedForm.formId` = the questionnaire_forms row PK per Story 9-33).
+   * Sent so the submission binds to its form directly from the reliable
+   * in-memory form query, instead of the server digging it out of the
+   * debounced best-effort wizard draft (which silently failed to persist it).
+   */
+  questionnaireFormId?: string;
   authChoice: 'magic-link' | 'password' | 'skip';
 }
 

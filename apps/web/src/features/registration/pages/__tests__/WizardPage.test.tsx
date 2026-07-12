@@ -34,8 +34,14 @@ expect.extend(matchers);
 // sections. A 1-section form keeps the step model at 5 (basics/contact/consent/
 // section/review) so these URL-race tests stay index-stable: index 3 = the
 // section step (Step4Questionnaire stub), index 4 = Review.
+// Story 13-23 (L4) — `formId` is a real questionnaire_forms row-PK UUID, matching
+// what `flattenForRender(schema, form.id)` serves and what the server's
+// `submitWizardSchema` accepts (`z.string().uuid()`). A non-UUID placeholder here
+// would pass this client-only test yet be 400'd by the real server, so it could
+// not catch a slug-vs-UUID payload regression (the 13-16 discipline).
+const PUBLIC_FORM_UUID = '019f48c2-a499-7000-8000-000000000abc';
 const ONE_SECTION_FORM = {
-  formId: 'f1',
+  formId: PUBLIC_FORM_UUID,
   title: 'Survey',
   version: '1.0.0',
   questions: [
@@ -128,7 +134,13 @@ vi.mock('../Step4Questionnaire', () => ({
   ),
 }));
 vi.mock('../Step5ReviewAndSave', () => ({
-  Step5ReviewAndSave: () => <div data-testid="step5-stub">Step 5</div>,
+  Step5ReviewAndSave: ({ onSubmit }: { onSubmit?: () => void }) => (
+    <div data-testid="step5-stub">
+      <button data-testid="step5-submit" onClick={() => onSubmit?.()}>
+        Save
+      </button>
+    </div>
+  ),
 }));
 
 // Layout / shared components — also stubbed so we don't pull in real
@@ -414,5 +426,47 @@ describe('WizardPage authenticated edit mode (Story 9-61)', () => {
     });
     // The public submit endpoint is never used in authenticated mode.
     expect(mockSubmitWizard).not.toHaveBeenCalled();
+  });
+});
+
+describe('WizardPage form binding (Story 13-23 AC2)', () => {
+  it('carries the pinned form UUID (`form.formId`) into the submit payload', async () => {
+    // Resume a COMPLETE draft landed on Review (step 5) so the submit guards
+    // pass. ONE_SECTION_FORM.occupation is optional → completeness is satisfied.
+    mockFetchWizardDraft.mockResolvedValue({
+      formData: {
+        givenName: 'Ada',
+        phone: '+2348012345678',
+        email: 'ada@example.test',
+        lgaId: 'lga-egbeda',
+        consentMarketplace: true,
+        nin: '12345678901',
+      },
+      currentStep: 5,
+    });
+    mockSubmitWizard.mockResolvedValue({
+      respondentId: 'r1',
+      submissionUid: 's1',
+      referenceCode: 'OSL-2026-AAA111',
+      status: 'active',
+      pendingNin: false,
+      authChoice: 'magic-link',
+    });
+    mockRequestMagicLink.mockResolvedValue(undefined);
+
+    renderAt('/register?token=abc123');
+
+    const submit = await screen.findByTestId('step5-submit');
+    await userEvent.click(submit);
+
+    await waitFor(() => {
+      expect(mockSubmitWizard).toHaveBeenCalled();
+    });
+    // The payload binds to the form the wizard rendered — `ONE_SECTION_FORM.formId`
+    // (a real row-PK UUID), the value the server persists as
+    // submissions.questionnaire_form_id (no longer a draft-race sentinel).
+    expect(mockSubmitWizard).toHaveBeenCalledWith(
+      expect.objectContaining({ questionnaireFormId: PUBLIC_FORM_UUID }),
+    );
   });
 });

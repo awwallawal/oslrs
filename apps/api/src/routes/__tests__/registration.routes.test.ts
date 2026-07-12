@@ -36,6 +36,7 @@ const {
   mockGetPublicActiveForm,
   mockProvisionPublicUser,
   mockSendRegistrationAutoEmails,
+  mockLoggerWarn,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
   mockConsumeTokenTx: vi.fn(),
@@ -55,6 +56,19 @@ const {
   mockGetPublicActiveForm: vi.fn(),
   mockProvisionPublicUser: vi.fn(),
   mockSendRegistrationAutoEmails: vi.fn(),
+  // Story 13-23 (AC3) — spy the controller's pino logger so the loud
+  // `wizard.form_binding_missing` fallback WARN is ASSERTED, not just visually
+  // present in the log output. This is the story's keystone observability; a
+  // silent removal must fail the suite (the 13-21 silent-fallback lesson).
+  mockLoggerWarn: vi.fn(),
+}));
+
+// Story 13-23 (AC3) — the controller creates `const logger = pino(...)` at
+// module load; mock pino so `logger.warn` is our spy. Mirrors the established
+// controller-test pattern (export.controller.test.ts). Only warn is asserted;
+// the rest are no-op sinks.
+vi.mock('pino', () => ({
+  default: () => ({ warn: mockLoggerWarn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
 // Rate-limit middleware: pass-through.
@@ -466,6 +480,37 @@ describe('PUT /registration/draft', () => {
     expect(res.body.code).toBe('WIZARD_DRAFT_INVALID_INPUT');
   });
 
+  it('Story 13-23 (AC1 root cause) — ACCEPTS a draft carrying `prefilledQuestionNames` (was silently 400ing)', async () => {
+    // Step 4 stamps `prefilledQuestionNames` into the draft in the SAME
+    // mergeFields call as `questionnaireFormId` (9-18 Part B). The field was
+    // never added to the .strict() schema, so every post-Step-4 autosave 400'd —
+    // silently dropping the form-id stamp for the whole public channel. It must
+    // now round-trip through the draft PUT.
+    mockWizardDraftsFindFirst.mockResolvedValueOnce(null);
+    mockOnConflictReturning.mockResolvedValueOnce([
+      {
+        id: 'draft-pfn',
+        currentStep: 4,
+        lastUpdatedAt: new Date('2026-07-11T10:00:00Z'),
+        expiresAt: new Date('2026-08-10T10:00:00Z'),
+      },
+    ]);
+    const res = await request(buildApp())
+      .put('/registration/draft')
+      .send({
+        email: 'awwal@example.com',
+        currentStep: 4,
+        formData: {
+          email: 'awwal@example.com',
+          questionnaireFormId: '019f48c2-0001-7000-8000-000000000001',
+          questionnaireFormVersionId: '1.0.0',
+          prefilledQuestionNames: ['full_name', 'email', 'phone'],
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data.id).toBe('draft-pfn');
+  });
+
   it('returns 200 with persisted shape on a clean save (upsert path)', async () => {
     mockWizardDraftsFindFirst.mockResolvedValueOnce(null);
     mockOnConflictReturning.mockResolvedValueOnce([
@@ -645,7 +690,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-05-20T07:00:00Z'),
-              formData: { questionnaireFormId: 'form-uuid-1' },
+              formData: { questionnaireFormId: '019f48c2-0001-7000-8000-000000000001' },
             }),
           },
         },
@@ -703,7 +748,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-05-20T07:00:00Z'),
-              formData: { questionnaireFormId: 'form-uuid-1' },
+              formData: { questionnaireFormId: '019f48c2-0001-7000-8000-000000000001' },
             }),
           },
         },
@@ -790,7 +835,7 @@ describe('POST /registration/wizard', () => {
               Promise.resolve({
                 createdAt: new Date('2026-05-20T07:00:00Z'),
                 formData: {
-                  questionnaireFormId: 'form-uuid-1',
+                  questionnaireFormId: '019f48c2-0001-7000-8000-000000000001',
                   extras: { acquisition: { channel: 'Radio' }, utm: { source: 'facebook' } },
                 },
               }),
@@ -912,7 +957,7 @@ describe('POST /registration/wizard', () => {
   /** A pinned public form with a single required, non-NIN question. */
   function pinnedFormWithRequiredOccupation() {
     return {
-      formId: 'pinned-form-1',
+      formId: '019f48c2-0002-7000-8000-000000000002',
       title: 'Public Survey',
       version: '1.0.0',
       questions: [
@@ -966,7 +1011,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-06-12T07:00:00Z'),
-              formData: { questionnaireFormId: 'pinned-form-1' },
+              formData: { questionnaireFormId: '019f48c2-0002-7000-8000-000000000002' },
             }),
           },
         },
@@ -1005,7 +1050,7 @@ describe('POST /registration/wizard', () => {
       sectionTitle: 'Parent / Guardian Consent',
     });
     return {
-      formId: 'pinned-form-guardian',
+      formId: '019f48c2-0003-7000-8000-000000000003',
       title: 'Public Survey',
       version: '1.0.0',
       questions: [
@@ -1070,7 +1115,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-06-12T07:00:00Z'),
-              formData: { questionnaireFormId: 'pinned-form-guardian' },
+              formData: { questionnaireFormId: '019f48c2-0003-7000-8000-000000000003' },
             }),
           },
         },
@@ -1120,7 +1165,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-05-20T07:00:00Z'),
-              formData: { questionnaireFormId: 'form-uuid-1' },
+              formData: { questionnaireFormId: '019f48c2-0001-7000-8000-000000000001' },
             }),
           },
         },
@@ -1195,7 +1240,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-05-20T07:00:00Z'),
-              formData: { questionnaireFormId: 'form-uuid-d1' },
+              formData: { questionnaireFormId: '019f48c2-0004-7000-8000-000000000004' },
             }),
           },
         },
@@ -1228,7 +1273,7 @@ describe('POST /registration/wizard', () => {
     expect(captured!.source).toBe('public');
     expect(captured!.processed).toBe(true);
     expect(captured!.submittedAt).toBeInstanceOf(Date);
-    expect(captured!.questionnaireFormId).toBe('form-uuid-d1');
+    expect(captured!.questionnaireFormId).toBe('019f48c2-0004-7000-8000-000000000004');
 
     const raw = captured!.rawData as Record<string, unknown>;
     expect(raw).toMatchObject({
@@ -1281,7 +1326,7 @@ describe('POST /registration/wizard', () => {
           wizardDrafts: {
             findFirst: () => Promise.resolve({
               createdAt: new Date('2026-05-20T07:00:00Z'),
-              formData: { questionnaireFormId: 'form-uuid-d2' },
+              formData: { questionnaireFormId: '019f48c2-0005-7000-8000-000000000005' },
             }),
           },
         },
@@ -1303,6 +1348,149 @@ describe('POST /registration/wizard', () => {
     expect(respondentInsertAttempted).toBe(true); // respondent insert ran...
     expect(res.status).not.toBe(201);              // ...but no success returned
     expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Story 13-23 — the submission binds to the form UUID the wizard rendered,
+  // via payload → server-resolved pin → draft → loud sentinel. Before this,
+  // the server read the form id ONLY from the debounced best-effort draft (a
+  // .strict() schema silently 400'd every post-Step-4 autosave since 9-18 Part
+  // B), so the WHOLE public channel bound to `no-form-pinned-at-submit`.
+  // ──────────────────────────────────────────────────────────────────────
+  const PAYLOAD_FORM_UUID = '019f48c2-1111-7000-8000-000000000011';
+  const SERVER_FORM_UUID = '019f48c2-2222-7000-8000-000000000022';
+  const DRAFT_FORM_UUID = '019f48c2-3333-7000-8000-000000000033';
+  const FORM_UNBOUND_SENTINEL = 'no-form-pinned-at-submit';
+
+  /** Wire a tx that captures the submissions insert payload for assertion. */
+  function captureSubmissionTx(
+    draftFormData: Record<string, unknown>,
+    capture: (v: Record<string, unknown>) => void,
+  ) {
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-fb', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = {
+        values: (v: Record<string, unknown>) => {
+          capture(v);
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () =>
+              Promise.resolve({ createdAt: new Date('2026-07-11T00:00:00Z'), formData: draftFormData }),
+          },
+        },
+        insert: vi
+          .fn()
+          .mockReturnValueOnce(respondentsInsertChain)
+          .mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+  }
+
+  it('AC2 — binds to the PAYLOAD form UUID, overriding a stale draft value', async () => {
+    let captured: Record<string, unknown> | undefined;
+    captureSubmissionTx({ questionnaireFormId: DRAFT_FORM_UUID }, (v) => (captured = v));
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919', questionnaireFormId: PAYLOAD_FORM_UUID }));
+
+    expect(res.status).toBe(201);
+    expect(captured!.questionnaireFormId).toBe(PAYLOAD_FORM_UUID);
+  });
+
+  it('AC2 — binds to the SERVER-RESOLVED pinned form when the payload is absent', async () => {
+    // The completeness gate resolves the pinned form server-side; its UUID is the
+    // authoritative backstop even with an empty draft + no payload id.
+    mockGetPublicActiveForm.mockResolvedValueOnce({
+      formId: SERVER_FORM_UUID,
+      title: 'Public Survey',
+      version: '1.0.0',
+      questions: [],
+      choiceLists: {},
+      sectionShowWhen: {},
+      calculations: [],
+    });
+    let captured: Record<string, unknown> | undefined;
+    captureSubmissionTx({}, (v) => (captured = v));
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919' }));
+
+    expect(res.status).toBe(201);
+    expect(captured!.questionnaireFormId).toBe(SERVER_FORM_UUID);
+  });
+
+  it('AC2 — falls back to the DRAFT form UUID (in-flight-draft back-compat) when payload + server pin are absent', async () => {
+    // Default beforeEach: getPublicActiveForm rejects (no pin) → no server value.
+    let captured: Record<string, unknown> | undefined;
+    captureSubmissionTx({ questionnaireFormId: DRAFT_FORM_UUID }, (v) => (captured = v));
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919' }));
+
+    expect(res.status).toBe(201);
+    expect(captured!.questionnaireFormId).toBe(DRAFT_FORM_UUID);
+  });
+
+  it('AC3 — stamps the loud sentinel (not a silent slug) when NO joinable form id is available', async () => {
+    let captured: Record<string, unknown> | undefined;
+    // No payload id, no server pin (default reject), draft carries no form id.
+    captureSubmissionTx({}, (v) => (captured = v));
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919' }));
+
+    expect(res.status).toBe(201);
+    expect(captured!.questionnaireFormId).toBe(FORM_UNBOUND_SENTINEL);
+    // AC3 keystone — the sentinel MUST emit the loud, counted fallback WARN so a
+    // future whole-channel regression is visible/alertable (not silently
+    // sentinel'd as it was since 9-18 Part B). Asserting the log call means a
+    // silent removal of the WARN fails the suite.
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'wizard.form_binding_missing',
+        reason: 'no_public_form_pinned',
+      }),
+    );
+  });
+
+  it('AC3 — a bound (non-sentinel) submission does NOT emit the form_binding_missing WARN', async () => {
+    // The keystone WARN must be specific to the unbound case — a healthy
+    // payload-bound submission stays quiet, so the counter/alert is meaningful.
+    let captured: Record<string, unknown> | undefined;
+    captureSubmissionTx({ questionnaireFormId: DRAFT_FORM_UUID }, (v) => (captured = v));
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919', questionnaireFormId: PAYLOAD_FORM_UUID }));
+
+    expect(res.status).toBe(201);
+    expect(captured!.questionnaireFormId).toBe(PAYLOAD_FORM_UUID);
+    expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'wizard.form_binding_missing' }),
+    );
+  });
+
+  it('AC2 — a non-UUID payload id is REJECTED at the schema (400), never persisted as a slug', async () => {
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678919', questionnaireFormId: 'oslsr_public_core_v1' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });
 });
 

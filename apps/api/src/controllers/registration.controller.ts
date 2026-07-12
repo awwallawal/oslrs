@@ -18,6 +18,7 @@ import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
+import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
 import pino from 'pino';
 
@@ -78,6 +79,14 @@ const saveDraftSchema = z.object({
       formHasNinQuestion: z.boolean().optional(),
       questionnaireFormId: z.string().max(64).optional(),
       questionnaireFormVersionId: z.string().max(64).optional(),
+      // Story 13-23 (AC1 root cause) — Step 4's stamp writes `prefilledQuestionNames`
+      // into the draft in the SAME mergeFields call as `questionnaireFormId`
+      // (Story 9-18 Part B, 2026-06-10). This field was NEVER added to the
+      // `.strict()` schema, so every autosave carrying it 400'd
+      // (WIZARD_DRAFT_INVALID_INPUT) — silently dropping the form-id stamp (and
+      // completion timing) for the whole public channel. Allow it so post-Step-4
+      // autosave persists again.
+      prefilledQuestionNames: z.array(z.string().max(200)).max(500).optional(),
       extras: z.record(z.unknown()).optional(),
     })
     .strict()
@@ -510,8 +519,15 @@ export class RegistrationController {
       // client state. When no form is pinned/published, Step 4 was empty
       // (PUBLIC_FORM_NOT_CONFIGURED) — no questionnaire gate applies.
       let computedFields: Record<string, number> = {};
+      // Story 13-23 (AC2) — capture the server-resolved pinned form UUID from the
+      // SAME canonical resolution the completeness gate uses. This is the
+      // authoritative "which form is pinned" value; it backstops the submission
+      // binding below whenever the client payload/draft are absent, so a
+      // registration binds correctly as long as ANY public form is pinned.
+      let resolvedPinnedFormId: string | undefined;
       try {
         const flattened = await NativeFormService.getPublicActiveForm();
+        resolvedPinnedFormId = flattened.formId;
         const { computed } = validateSubmissionCompleteness(flattened, responses, {
           pendingNin,
           today: new Date(),
@@ -614,7 +630,7 @@ export class RegistrationController {
       // `submissions` table) and so `questionnaireResponses` + `gender` +
       // `authChoice` + `email` are persisted to `submissions.raw_data` rather
       // than silently dropped (the pre-9-26 bug surfaced 2026-05-19).
-      const { respondent, submissionUid } = await db.transaction(async (tx) => {
+      const { respondent, submissionUid, formIdSource } = await db.transaction(async (tx) => {
         // Story 9-26 Part A — fetch the draft BEFORE we delete it, so we can
         // pull `questionnaireFormId` (Step 4 introspection-stamped) and
         // `createdAt` (for completion_time_seconds — fraud-engine signal).
@@ -623,8 +639,16 @@ export class RegistrationController {
           columns: { createdAt: true, formData: true },
         });
         const draftFormData = (draft?.formData ?? {}) as WizardDraftData;
-        const questionnaireFormId =
-          draftFormData.questionnaireFormId ?? 'no-form-pinned-at-submit';
+        // Story 13-23 — bind to the form the wizard rendered via the robust
+        // precedence (payload → server-resolved pin → draft → sentinel), NOT the
+        // draft alone. The draft is a debounced best-effort copy the browser
+        // may never have flushed (AC1), so it must not be the sole source.
+        const { formId: questionnaireFormId, source: formIdSource } =
+          resolveBoundQuestionnaireFormId({
+            payloadFormId: data.questionnaireFormId,
+            serverResolvedFormId: resolvedPinnedFormId,
+            draftFormId: draftFormData.questionnaireFormId,
+          });
         const completionTimeSeconds = draft?.createdAt
           ? Math.floor((Date.now() - draft.createdAt.getTime()) / 1000)
           : null;
@@ -758,7 +782,7 @@ export class RegistrationController {
         // partial failure.
         await tx.delete(wizardDrafts).where(eq(wizardDrafts.email, normalisedEmail));
 
-        return { respondent: row, submissionUid: newSubmissionUid };
+        return { respondent: row, submissionUid: newSubmissionUid, formIdSource };
       });
 
       // Story 9-26 — log the unified pipeline write at info-level for the
@@ -770,6 +794,32 @@ export class RegistrationController {
         submissionUid,
         pendingNin,
       });
+
+      // Story 13-23 (AC3) — LOUD FALLBACK. The submission could not be bound to
+      // a pinned-form UUID (no payload id, no server-resolved pin, no valid
+      // draft id) and was stamped with the sentinel — so it is excluded from
+      // every form-joined analytic. Registration still succeeded, but a silent
+      // sentinel is exactly the whole-channel gap this story fixes (the 13-21
+      // observability lesson: a silent fallback hid this since 9-18 Part B).
+      // Emit a counted WARN so a regression is VISIBLE/alertable, not silent.
+      if (formIdSource === 'sentinel') {
+        logger.warn({
+          event: 'wizard.form_binding_missing',
+          // Story 13-23 (L3) — distinguish the benign steady-state (no public
+          // form is pinned at all → Step 4 was empty, sentinel is expected) from
+          // a genuine regression (a form WAS resolvable but its id never reached
+          // the binding). With the server-resolved backstop the latter is
+          // effectively unreachable, so this should read `no_public_form_pinned`;
+          // a `binding_id_not_joinable` here means the precedence chain broke.
+          reason:
+            resolvedPinnedFormId === undefined
+              ? 'no_public_form_pinned'
+              : 'binding_id_not_joinable',
+          respondentId: respondent.id,
+          submissionUid,
+          email: normalisedEmail,
+        });
+      }
 
       // Story 13-21 (AC1/AC2) — the public wizard writes its submission as
       // processed:true and BYPASSES SubmissionProcessingService.processSubmission
