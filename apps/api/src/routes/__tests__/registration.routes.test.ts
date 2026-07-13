@@ -36,6 +36,7 @@ const {
   mockGetPublicActiveForm,
   mockProvisionPublicUser,
   mockSendRegistrationAutoEmails,
+  mockRunPostSubmissionSideEffects,
   mockLoggerWarn,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
@@ -56,6 +57,7 @@ const {
   mockGetPublicActiveForm: vi.fn(),
   mockProvisionPublicUser: vi.fn(),
   mockSendRegistrationAutoEmails: vi.fn(),
+  mockRunPostSubmissionSideEffects: vi.fn(),
   // Story 13-23 (AC3) — spy the controller's pino logger so the loud
   // `wizard.form_binding_missing` fallback WARN is ASSERTED, not just visually
   // present in the log output. This is the story's keystone observability; a
@@ -167,6 +169,10 @@ vi.mock('../../services/submission-processing.service.js', async () => {
     ...actual,
     SubmissionProcessingService: {
       sendRegistrationAutoEmails: mockSendRegistrationAutoEmails,
+      // Story 13-27 — submitWizard now fires the SHARED post-submission
+      // side-effects entrypoint (emails + consent-gated marketplace extraction),
+      // superseding the direct sendRegistrationAutoEmails call.
+      runPostSubmissionSideEffects: mockRunPostSubmissionSideEffects,
     },
   };
 });
@@ -257,6 +263,9 @@ beforeEach(() => {
   mockProvisionPublicUser.mockResolvedValue({ userId: 'user-prov-1', created: true });
   // Story 13-21 (AC2) — auto-send entrypoint is fire-and-forget (`void`); resolve.
   mockSendRegistrationAutoEmails.mockResolvedValue(undefined);
+  // Story 13-27 (AC1) — shared post-submission side-effects entrypoint is fired
+  // fire-and-forget (`void ...catch`); resolve so the .catch never triggers.
+  mockRunPostSubmissionSideEffects.mockResolvedValue(undefined);
   // Default: transactions just invoke the callback with a passthrough tx that
   // returns the same mock chains so the controllers' tx.insert/tx.delete/etc
   // calls behave like the top-level db. Individual tests override.
@@ -776,15 +785,21 @@ describe('POST /registration/wizard', () => {
       expect.anything(),
       expect.objectContaining({ action: 'data.create' }),
     );
-    // Story 13-21 (AC2) — the wizard fires the shared auto-send entrypoint after
-    // commit (isNew:true + the minted reference code + the normalised email), so
-    // the public channel finally gets the confirmation + thank-you it never did.
-    expect(mockSendRegistrationAutoEmails).toHaveBeenCalledWith(
+    // Story 13-27 (AC1/AC2) — the wizard fires the SHARED post-submission
+    // side-effects entrypoint after commit (isNew:true + the minted reference code
+    // + the normalised email + consentMarketplace + a real submissionId + gps:null),
+    // so the public channel finally gets the confirmation + thank-you (13-21) AND a
+    // marketplace profile (13-27) it never did. Supersedes the direct
+    // sendRegistrationAutoEmails call.
+    expect(mockRunPostSubmissionSideEffects).toHaveBeenCalledWith(
       expect.objectContaining({
         respondentId: 'resp-1',
         email: 'awwal@example.com',
         referenceCode: 'OSL-2026-TEST00',
         isNew: true,
+        consentMarketplace: true,
+        gps: null,
+        submissionId: expect.any(String),
       }),
     );
   });

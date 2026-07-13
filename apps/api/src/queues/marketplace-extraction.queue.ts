@@ -47,15 +47,31 @@ export function getMarketplaceExtractionQueue(): Queue<MarketplaceExtractionJobD
 }
 
 /**
+ * Canonical BullMQ jobId for a respondent's marketplace-extraction job. Exported
+ * (Story 13-27 review L1) so the backfill can probe for an in-flight duplicate
+ * via the SAME key this producer uses — no format drift between the two.
+ * Dedup key uses respondentId (not submissionId) — because UPSERT means only the
+ * latest matters per respondent.
+ */
+export const marketplaceExtractionJobId = (respondentId: string): string =>
+  `marketplace-${respondentId}`;
+
+/**
  * Queue a submission for marketplace profile extraction.
- * Dedup key uses respondentId (not submissionId) — because UPSERT means only the latest matters per respondent.
+ *
+ * BullMQ 5 note (Story 13-27 review L1): `queue.add` with an already-present
+ * jobId does NOT throw — it silently returns the existing job. So the legacy
+ * `'Job already exists'` catch below is a defensive relic that effectively never
+ * fires on this version; callers must not rely on a `null` return to detect a
+ * duplicate. Idempotency for re-queues is guaranteed by the worker's UPSERT on
+ * respondent_id, not by this return value.
  */
 export async function queueMarketplaceExtraction(
   data: MarketplaceExtractionJobData
 ): Promise<string | null> {
   const queue = getMarketplaceExtractionQueue();
 
-  const jobId = `marketplace-${data.respondentId}`;
+  const jobId = marketplaceExtractionJobId(data.respondentId);
 
   try {
     const job = await queue.add('marketplace-extraction', data, { jobId });

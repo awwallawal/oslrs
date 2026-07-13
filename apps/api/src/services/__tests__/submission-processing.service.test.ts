@@ -14,6 +14,9 @@ const mockInsertRespondent = vi.fn();
 const mockInsertValues = vi.fn();
 const mockUpdateSubmissionSet = vi.fn();
 const mockQueueFraudDetection = vi.fn();
+// Story 13-27 — captured so tests can assert marketplace extraction is queued
+// (consent-gated) via both processSubmission and the shared side-effects entrypoint.
+const mockQueueMarketplaceExtraction = vi.fn();
 // Story 9-12 Task 3.5 — race-resolution merge uses db.execute(sql`UPDATE...`)
 // Default returns { rows: [] } (no merge); tests can override per-case.
 const mockDbExecute = vi.fn().mockResolvedValue({ rows: [] });
@@ -107,7 +110,7 @@ vi.mock('../../queues/fraud-detection.queue.js', () => ({
 }));
 
 vi.mock('../../queues/marketplace-extraction.queue.js', () => ({
-  queueMarketplaceExtraction: vi.fn().mockResolvedValue(undefined),
+  queueMarketplaceExtraction: (...args: unknown[]) => mockQueueMarketplaceExtraction(...args),
 }));
 
 vi.mock('uuidv7', () => ({
@@ -212,6 +215,8 @@ describe('SubmissionProcessingService', () => {
     mockDbExecute.mockResolvedValue({ rows: [] });
     mockGetSuppressed.mockResolvedValue(new Set()); // Story 13-12 — nothing suppressed by default
     mockRecordAutoSendFailure.mockResolvedValue({ failuresToday: 0, alerted: false }); // Story 13-21
+    mockQueueFraudDetection.mockResolvedValue('fraud-job-id'); // Story 13-27 — awaited
+    mockQueueMarketplaceExtraction.mockResolvedValue('mkt-job-id'); // Story 13-27 — awaited
   });
 
   describe('processSubmission', () => {
@@ -228,6 +233,27 @@ describe('SubmissionProcessingService', () => {
       expect(result.respondentId).toBe('resp-001');
       expect(mockInsertRespondent).toHaveBeenCalled();
       expect(mockUpdateSubmissionSet).toHaveBeenCalled();
+      expect(mockQueueFraudDetection).toHaveBeenCalled();
+    });
+
+    // Story 13-27 (review L3) — pins the queue-path wiring end-to-end:
+    // processSubmission must still route through runPostSubmissionSideEffects so
+    // BOTH gated side-effects fire. The default fixture carries consent_marketplace
+    // = 'yes' + GPS, so a consented+located submission queues BOTH marketplace and
+    // fraud. Guards against a future refactor silently dropping the marketplace
+    // trigger from the queue path (the very bypass class this story closes).
+    it('queues marketplace extraction (consent-gated) via the shared entrypoint on the queue path', async () => {
+      const submission = makeSubmission();
+      mockFindFirstSubmission.mockResolvedValue(submission);
+      mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
+      mockFindFirstRespondent.mockResolvedValue(null);
+      mockEnumeratorRole();
+
+      await SubmissionProcessingService.processSubmission('sub-001');
+
+      expect(mockQueueMarketplaceExtraction).toHaveBeenCalledWith(
+        expect.objectContaining({ respondentId: 'resp-001', submissionId: 'sub-001' }),
+      );
       expect(mockQueueFraudDetection).toHaveBeenCalled();
     });
 
@@ -1319,6 +1345,120 @@ describe('SubmissionProcessingService', () => {
       expect(mockRecordAutoSendFailure).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'thankyou', respondentId: 'resp-fail' }),
       );
+    });
+  });
+
+  // ── Story 13-27 (AC1/AC2) — shared post-submission side-effects entrypoint ──
+  // THE fix for the public marketplace ghost town: the wizard bypassed
+  // processSubmission (where marketplace extraction lived), so 124 public opt-ins
+  // produced 0 profiles. Both channels now call this one method, so the extraction
+  // trigger fires for the public wizard too. Also the AC2 audit's executable spine:
+  // marketplace = consent-gated, fraud = GPS-gated (a no-op for the GPS-less
+  // wizard — AC4), emails = fire-and-forget.
+  describe('runPostSubmissionSideEffects (Story 13-27)', () => {
+    beforeEach(() => {
+      // The auto-emails sub-entrypoint re-queries the respondent (source gate).
+      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Pub', metadata: null });
+      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'm1' });
+    });
+
+    it('queues marketplace extraction when consent is given (the missing call now fires)', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: 'pub@example.test.real',
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: true,
+        consentMarketplace: true,
+        gps: null,
+      });
+
+      expect(mockQueueMarketplaceExtraction).toHaveBeenCalledWith({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+      });
+    });
+
+    it('does NOT queue marketplace extraction when consent is absent', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: 'pub@example.test.real',
+        isNew: true,
+        consentMarketplace: false,
+        gps: null,
+      });
+
+      expect(mockQueueMarketplaceExtraction).not.toHaveBeenCalled();
+    });
+
+    it('does NOT queue fraud detection when GPS is absent (public wizard is GPS-less — AC4)', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: null,
+        isNew: true,
+        consentMarketplace: true,
+        gps: null,
+      });
+
+      expect(mockQueueFraudDetection).not.toHaveBeenCalled();
+      // Marketplace still fires — the two gates are independent.
+      expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
+    });
+
+    it('queues fraud detection when GPS is present (enumerator/queue path)', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-field',
+        submissionId: 'sub-field',
+        email: null,
+        isNew: true,
+        consentMarketplace: false,
+        gps: { latitude: 7.3775, longitude: 3.947 },
+      });
+
+      expect(mockQueueFraudDetection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          submissionId: 'sub-field',
+          respondentId: 'resp-field',
+          gpsLatitude: 7.3775,
+          gpsLongitude: 3.947,
+        }),
+      );
+    });
+
+    it('still fires the auto-emails (fire-and-forget) alongside the queue side-effects', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: 'pub@example.test.real',
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+        isNew: true,
+        consentMarketplace: true,
+        gps: null,
+      });
+
+      // The confirmation (no campaign tag) + marketplace both fired.
+      await vi.waitFor(() =>
+        expect(mockSendGenericEmail.mock.calls.some((c) => c[2] === undefined)).toBe(true),
+      );
+      expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
+    });
+
+    it('propagates a marketplace queue failure to the caller (the wizard .catch guards it)', async () => {
+      mockQueueMarketplaceExtraction.mockRejectedValueOnce(new Error('redis down'));
+      await expect(
+        SubmissionProcessingService.runPostSubmissionSideEffects({
+          respondentId: 'resp-pub',
+          submissionId: 'sub-pub',
+          email: null,
+          isNew: true,
+          consentMarketplace: true,
+          gps: null,
+        }),
+      ).rejects.toThrow('redis down');
     });
   });
 });

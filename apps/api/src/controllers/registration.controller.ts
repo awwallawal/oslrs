@@ -20,6 +20,7 @@ import { ReferenceCodeService } from '../services/reference-code.service.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
+import { sendTelegramMessage } from '../services/alerting/telegram-channel.js'; // Story 13-27 (review M1)
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-controller' });
@@ -630,7 +631,7 @@ export class RegistrationController {
       // `submissions` table) and so `questionnaireResponses` + `gender` +
       // `authChoice` + `email` are persisted to `submissions.raw_data` rather
       // than silently dropped (the pre-9-26 bug surfaced 2026-05-19).
-      const { respondent, submissionUid, formIdSource } = await db.transaction(async (tx) => {
+      const { respondent, submissionId, submissionUid, formIdSource } = await db.transaction(async (tx) => {
         // Story 9-26 Part A — fetch the draft BEFORE we delete it, so we can
         // pull `questionnaireFormId` (Step 4 introspection-stamped) and
         // `createdAt` (for completion_time_seconds — fraud-engine signal).
@@ -683,8 +684,14 @@ export class RegistrationController {
         // `'public'` matches the wizard's identity provenance + the
         // analytics service's source filter.
         const newSubmissionUid = uuidv7();
+        // Story 13-27 — pre-generate the submission PK (UUIDv7, the project's
+        // client-side id pattern) so the post-submission side-effects entrypoint
+        // can reference it: the marketplace worker loads the submission by its
+        // `id`, NOT by `submission_uid`. Avoids a `.returning()` round-trip.
+        const newSubmissionId = uuidv7();
         const now = new Date();
         await tx.insert(submissions).values({
+          id: newSubmissionId,
           submissionUid: newSubmissionUid,
           questionnaireFormId,
           submitterId: null,
@@ -782,7 +789,12 @@ export class RegistrationController {
         // partial failure.
         await tx.delete(wizardDrafts).where(eq(wizardDrafts.email, normalisedEmail));
 
-        return { respondent: row, submissionUid: newSubmissionUid, formIdSource };
+        return {
+          respondent: row,
+          submissionId: newSubmissionId,
+          submissionUid: newSubmissionUid,
+          formIdSource,
+        };
       });
 
       // Story 9-26 — log the unified pipeline write at info-level for the
@@ -821,23 +833,50 @@ export class RegistrationController {
         });
       }
 
-      // Story 13-21 (AC1/AC2) — the public wizard writes its submission as
+      // Story 13-27 (AC1/AC2) — the public wizard writes its submission as
       // processed:true and BYPASSES SubmissionProcessingService.processSubmission
-      // (the enumerator/clerk queue worker), where the 9-58 confirmation + 13-12
-      // thank-you/referral auto-sends live. That bypass meant NEITHER email ever
-      // fired for the whole public channel (0/140 markers; 13-12's evergreen
-      // thank-you dead-on-arrival since it shipped). Fire them here, now that the
-      // respondent + submission are durably committed, via the SAME shared
-      // entrypoint the queue path uses. Fire-and-forget + fail-soft: a comms
-      // failure must never sink a completed registration (9-26 lesson). The
-      // wizard row is always a fresh insert (isNew:true) with a minted reference
-      // code; the thank-you self-gates on source='public' (all wizard regs are).
-      void SubmissionProcessingService.sendRegistrationAutoEmails({
+      // (the enumerator/clerk queue worker), where ALL post-submission
+      // side-effects live. That bypass silently dropped, one at a time: the 9-58
+      // confirmation + 13-12 thank-you (13-21), and marketplace extraction (this
+      // story — 124 public opt-ins → 0 profiles). Route BOTH through the ONE
+      // shared post-submission entrypoint the queue path uses, so a future
+      // side-effect can't be silently missed again. Fire-and-forget + fail-soft
+      // (`.catch`): a comms/queue failure must never sink a completed registration
+      // (9-26 lesson). The wizard row is always a fresh insert (isNew:true) with a
+      // minted reference code; the thank-you self-gates on source='public' (all
+      // wizard regs are); marketplace self-gates on consent_marketplace. GPS is
+      // null for the public wizard, so the shared fraud gate is a no-op (AC4).
+      void SubmissionProcessingService.runPostSubmissionSideEffects({
         respondentId: respondent.id,
+        submissionId,
         email: normalisedEmail,
         referenceCode,
         status: respondent.status,
         isNew: true,
+        consentMarketplace: data.consentMarketplace,
+        gps: null,
+      }).catch((sideEffectErr) => {
+        const errMsg = sideEffectErr instanceof Error ? sideEffectErr.message : String(sideEffectErr);
+        logger.error({
+          event: 'wizard.post_submission_side_effects_failed',
+          respondentId: respondent.id,
+          submissionUid,
+          err: errMsg,
+        });
+        // Story 13-27 (review M1) — the marketplace is a launch-facing surface the
+        // blast drives traffic to; unlike the 13-21 email path (which has the
+        // email-autosend-monitor → Telegram), an ENQUEUE failure here (e.g. Redis
+        // down) would otherwise vanish into a single log line with no page. Fire a
+        // one-shot Telegram alert so a launch-window outage is loud. `sendTelegramMessage`
+        // NEVER throws + is prod-gated, so this can't itself sink the request. Public
+        // registration volume is low (hundreds over days), so per-failure paging
+        // won't spam; a sustained outage pinging a few times is the desired signal.
+        void sendTelegramMessage(
+          `⚠️ OSLRS — post-submission side-effects FAILED for a public registration\n` +
+            `respondent=${respondent.id}\nsubmission=${submissionUid}\nerror: ${errMsg}\n\n` +
+            `The registration is committed, but its marketplace profile / auto-emails may not have queued. ` +
+            `Check Redis + the marketplace-extraction worker; the _backfill-marketplace-extraction.ts script can re-queue.`,
+        );
       });
 
       // Story 9-38 — provision a passwordless `public_user` account so the new

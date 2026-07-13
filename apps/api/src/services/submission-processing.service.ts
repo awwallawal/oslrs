@@ -276,27 +276,6 @@ export class SubmissionProcessingService {
       updatedAt: new Date(),
     }).where(eq(submissions.id, submissionId));
 
-    // Story 13-21 (AC1/AC2) — both registration auto-emails (9-58 reference-code
-    // confirmation + 13-12 evergreen thank-you/referral) route through ONE shared
-    // entrypoint so the enumerator/clerk QUEUE path (here) and the public WIZARD
-    // path (registration.controller.submitWizard — which writes its submission as
-    // processed:true and DELIBERATELY bypasses this worker) send the identical
-    // set. Before 13-21 both sends lived only here, so the whole public channel
-    // got NEITHER (0/140 markers). Fire-and-forget: a comms failure must NEVER
-    // fail the ingestion (data integrity > notification, the 9-26 lesson). The
-    // confirmation self-gates on _isNew + referenceCode; the thank-you self-gates
-    // on source='public' + the send-once marker + 13-9 suppression.
-    const autoEmailRaw = rawData['email'] ?? rawData['email_address'];
-    const autoEmail =
-      typeof autoEmailRaw === 'string' && autoEmailRaw.includes('@') ? autoEmailRaw.trim() : null;
-    void this.sendRegistrationAutoEmails({
-      respondentId: respondent.id,
-      email: autoEmail,
-      referenceCode: respondent.referenceCode,
-      status: respondent.status ?? 'active',
-      isNew: respondent._isNew,
-    });
-
     logger.info({
       event: 'submission_processing.processed',
       submissionId,
@@ -306,35 +285,33 @@ export class SubmissionProcessingService {
       isNewRespondent: respondent._isNew,
     });
 
-    // Queue fraud detection if GPS coordinates present
-    if (submission.gpsLatitude != null && submission.gpsLongitude != null) {
-      await queueFraudDetection({
-        submissionId,
-        respondentId: respondent.id,
-        gpsLatitude: submission.gpsLatitude,
-        gpsLongitude: submission.gpsLongitude,
-      });
-
-      logger.info({
-        event: 'submission_processing.fraud_queued',
-        submissionId,
-        respondentId: respondent.id,
-      });
-    }
-
-    // Queue marketplace profile extraction if consent given
-    if (respondentData.consentMarketplace) {
-      await queueMarketplaceExtraction({
-        respondentId: respondent.id,
-        submissionId,
-      });
-
-      logger.info({
-        event: 'submission_processing.marketplace_queued',
-        submissionId,
-        respondentId: respondent.id,
-      });
-    }
+    // Story 13-27 (AC1/AC2) — ALL post-submission side-effects (auto-emails +
+    // GPS-gated fraud detection + consent-gated marketplace extraction) now route
+    // through ONE shared entrypoint so the enumerator/clerk QUEUE path (here) and
+    // the public WIZARD path (registration.controller.submitWizard — which writes
+    // its submission as processed:true and DELIBERATELY bypasses this worker) run
+    // the identical set. Previously marketplace extraction lived ONLY here, so the
+    // whole public channel never queued a profile (124 opted in → 0 profiles; the
+    // 3rd bypass victim after 13-21 emails + 13-23 form-binding). Awaited here so
+    // the worker's semantics are unchanged (a queue failure surfaces as before);
+    // the wizard calls it fire-and-forget with a .catch (a comms/queue failure
+    // must never sink a committed registration — the 9-26 data-integrity lesson).
+    const autoEmailRaw = rawData['email'] ?? rawData['email_address'];
+    const autoEmail =
+      typeof autoEmailRaw === 'string' && autoEmailRaw.includes('@') ? autoEmailRaw.trim() : null;
+    await this.runPostSubmissionSideEffects({
+      respondentId: respondent.id,
+      submissionId,
+      email: autoEmail,
+      referenceCode: respondent.referenceCode,
+      status: respondent.status ?? 'active',
+      isNew: respondent._isNew,
+      consentMarketplace: respondentData.consentMarketplace,
+      gps:
+        submission.gpsLatitude != null && submission.gpsLongitude != null
+          ? { latitude: submission.gpsLatitude, longitude: submission.gpsLongitude }
+          : null,
+    });
 
     return {
       action: 'processed',
@@ -820,6 +797,97 @@ export class SubmissionProcessingService {
         event: 'audit.minor_guardian_consent_captured_failed',
         respondentId: args.respondentId,
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Story 13-27 (AC1/AC2) — the SINGLE post-submission side-effects entrypoint.
+   *
+   * Both the enumerator/clerk QUEUE path (`processSubmission`) and the public
+   * WIZARD path (`registration.controller.submitWizard`, which writes its own
+   * respondent + submission in a transaction and DELIBERATELY bypasses the queue
+   * worker) call this ONCE the respondent + submission are durably committed, so
+   * there is exactly one place every post-submission effect lives. This
+   * generalises the 13-21 `sendRegistrationAutoEmails` shared-entrypoint pattern
+   * to STOP the recurring "wizard silently skips a processSubmission side-effect"
+   * bug class (13-21 emails, 13-23 form-binding, 13-27 marketplace).
+   *
+   * SIDE-EFFECT AUDIT (AC2) — every effect processSubmission performs, and how
+   * the wizard path is covered:
+   *   1. Link respondent + mark processed  — wizard does its OWN in-tx (writes
+   *      processed:true); NOT shared here (wizard-native).
+   *   2. Provenance audit (DATA_CREATE / PENDING_NIN_CREATED / guardian consent)
+   *      — wizard emits its OWN in-tx (registration.controller); NOT shared here.
+   *   3. Registration auto-emails (9-58 confirmation + 13-12 thank-you) — SHARED
+   *      (13-21). Fire-and-forget; each send self-gates + is fail-soft.
+   *   4. Marketplace extraction (consent-gated) — SHARED (13-27, the fix). Was
+   *      queue-path-only → the whole public channel produced 0 profiles.
+   *   5. Fraud detection (GPS-gated) — SHARED here but a NO-OP for the wizard:
+   *      public wizard submissions carry no GPS (gps=null), so the gate never
+   *      fires. AC4 (product, 2026-07-12): the GPS-clustering/speed-run engine
+   *      keys on enumerator field-collection signals that don't exist for an
+   *      anonymous public submission; NIN partial-unique is the duplicate defense.
+   *      The controller.ts:658 skip is CORRECT — routing it through here keeps the
+   *      code path uniform and future-proofs a wizard that ever captures GPS.
+   *   6. PII normalisation / form-schema resolution — wizard is structured +
+   *      pre-validated (controller.ts:658); INTENTIONALLY not run for the wizard.
+   *
+   * The emails are fired void (fail-soft internally); the GPS/consent QUEUE ops
+   * are awaited so the queue worker preserves its existing throw-on-failure
+   * behaviour. The wizard invokes this fire-and-forget (`void ...catch`) so a
+   * transient queue/comms failure can never sink a committed registration.
+   */
+  static async runPostSubmissionSideEffects(args: {
+    respondentId: string;
+    submissionId: string;
+    email: string | null;
+    referenceCode?: string;
+    // Story 13-27 (review L2) — the enum, not `| string`: both callers pass the
+    // typed `respondents.status` column, so widening only lets a typo compile.
+    // (`sendRegistrationAutoEmails` keeps `| string` for its own broader callers.)
+    status?: RespondentStatus;
+    isNew: boolean;
+    consentMarketplace: boolean;
+    gps?: { latitude: number; longitude: number } | null;
+  }): Promise<void> {
+    // 3. Registration auto-emails — fire-and-forget + internally fail-soft, so a
+    //    slow/failing provider never delays (or sinks) the queue side-effects.
+    void this.sendRegistrationAutoEmails({
+      respondentId: args.respondentId,
+      email: args.email,
+      referenceCode: args.referenceCode,
+      status: args.status ?? 'active',
+      isNew: args.isNew,
+    });
+
+    // 5. Fraud detection — GPS-gated (no GPS ⇒ skipped; see AC4 note above).
+    if (args.gps) {
+      await queueFraudDetection({
+        submissionId: args.submissionId,
+        respondentId: args.respondentId,
+        gpsLatitude: args.gps.latitude,
+        gpsLongitude: args.gps.longitude,
+      });
+      logger.info({
+        event: 'submission_processing.fraud_queued',
+        submissionId: args.submissionId,
+        respondentId: args.respondentId,
+      });
+    }
+
+    // 4. Marketplace profile extraction — consent-gated (Story 13-27 fix). Fires
+    //    for BOTH channels now; the worker self-gates on consent + UPSERTs by
+    //    respondent, so a re-queue is idempotent.
+    if (args.consentMarketplace) {
+      await queueMarketplaceExtraction({
+        respondentId: args.respondentId,
+        submissionId: args.submissionId,
+      });
+      logger.info({
+        event: 'submission_processing.marketplace_queued',
+        submissionId: args.submissionId,
+        respondentId: args.respondentId,
       });
     }
   }
