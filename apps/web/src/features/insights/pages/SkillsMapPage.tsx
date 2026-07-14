@@ -76,7 +76,7 @@ export default function SkillsMapPage() {
         <SkillsGapChart allSkills={allSkills} desiredSkills={desiredSkills} />
       </section>
 
-      <MethodologyNote totalRegistered={data.totalRegistered} lastUpdated={data.lastUpdated} />
+      <MethodologyNote totalRegistered={data.totalRegistered} withAnswers={data.withAnswers ?? 0} lastUpdated={data.lastUpdated} />
     </div>
   );
 }

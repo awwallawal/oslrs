@@ -17,7 +17,7 @@ const mockTrends = vi.hoisted(() => ({
 }));
 
 const mockInsightsForMethodology = vi.hoisted(() => ({
-  data: { totalRegistered: 5000, lastUpdated: '2026-03-13T10:00:00.000Z' } as any,
+  data: { totalRegistered: 5000, withAnswers: 4200, lastUpdated: '2026-03-13T10:00:00.000Z' } as any,
 }));
 
 vi.mock('../../hooks/usePublicInsights', () => ({

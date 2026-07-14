@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
 import { suppressSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
+import { getRegistryCountCore } from './registry-totals.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
@@ -66,8 +67,13 @@ export class PublicInsightsService {
   private static async computeInsights(): Promise<PublicInsightsData> {
     const baseWhere = sql`s.raw_data IS NOT NULL AND s.respondent_id IS NOT NULL`;
 
-    // Run all queries in parallel
+    // Run all queries in parallel.
+    // `countCore` (13-25) is respondent-scoped — it counts registered PEOPLE
+    // (~139+) and the completed-survey subset (~79). The remaining eight
+    // queries stay submission-scoped (they require `raw_data`) so the
+    // demographic/skills breakdowns keep their honest with-answers denominator.
     const [
+      countCore,
       summaryRows,
       genderRows,
       ageRows,
@@ -77,6 +83,9 @@ export class PublicInsightsService {
       formalInformalRows,
       lgaRows,
     ] = await Promise.all([
+      // Respondent-scoped registry count-core (headline + funnel). Seed of 12-4.
+      getRegistryCountCore(),
+
       // Summary aggregates
       db.execute(sql`
         SELECT
@@ -227,6 +236,9 @@ export class PublicInsightsService {
     }
 
     const summary = summaryRows.rows[0] as unknown as SummaryRow | undefined;
+    // Submission-scoped with-answers count — the honest denominator for the
+    // demographic/skills breakdowns and their small-bucket suppression. This is
+    // NOT the headline: `totalRegistered` counts registered people (countCore).
     const total = Number(summary?.total ?? 0);
 
     // Skills total for percentage
@@ -259,7 +271,11 @@ export class PublicInsightsService {
     const meetsThreshold = total >= PUBLIC_MIN_N;
 
     return {
-      totalRegistered: total,
+      // Headline: registered PEOPLE, not submissions (13-25 AC1). ~139+ today.
+      totalRegistered: countCore.totalRespondents,
+      // Funnel subset: registered people with complete survey responses (~79).
+      // Breakdowns below are computed over this subset (13-25 AC2).
+      withAnswers: countCore.withAnswers,
       lgasCovered: Number(summary?.lgas_covered ?? 0),
       genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),

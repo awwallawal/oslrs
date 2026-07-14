@@ -1,6 +1,6 @@
 # Story 13-25: Public /insights registry-count honesty (launch-slice of Epic 12)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Authored 2026-07-10 by Bob (SM) via *create-story. EMERGENT (2026-07-10, Awwal): the PUBLIC oyoskills.com/insights page shows "Total Registered = 79" while the dashboard shows ~139. Root cause: public-insights.service.ts computes `totalRegistered` as COUNT(*) FROM submissions (79) and EVERY breakdown is submission-scoped — so the 55 data_lost (Cohort A soft-launch salvage, 9-26/9-28) + 7 no_submission + 1 pending_nin are invisible. This is the IDENTICAL bug Epic 12's 12-4 fixes for the INTERNAL dashboard, but Epic 12 never enumerated the public surface as a consumer (12-4 corrected 2026-07-10 to add it). The public page is what the LAUNCH BLAST drives traffic to, so this slice is launch-relevant while the rest of Epic 12 stays post-launch. This story is the minimal, FORWARD-COMPATIBLE public-page slice: count people not submissions + honest funnel/methodology note, using the SAME counting logic 12-4 defines so there is ONE registry story and no second count. -->
 
@@ -23,10 +23,17 @@ so that **the public register isn't understated by ~45% during the launch traffi
 5. **AC5 — Tests + suites green.** `public-insights.service.test.ts` updated: totalRegistered == distinct respondents (asserts the count-core, not submissions); the funnel shape; a real-DB smoke or fixture reproducing the 139/79 split (mirrors 12-4's drift-guard discipline for the raw SQL). Full api + web suites green; tsc/eslint clean.
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC1, AC4)** — extract the shared count-core (respondent-scoped `{ totalRespondents, withAnswers }` via `deriveDataStatus`/`hasNonEmptyRawData`, mirroring `getUnifiedExportData`'s LATERAL latest-non-empty-submission shape); wire `public-insights.service.ts` `totalRegistered` to it. Document it as 12-4's AC1/AC3 seed.
-- [ ] **Task 2 (AC2)** — funnel + methodology note on the insights page (web) + the `withAnswers` denominator; n-per-chart honesty per 12-5.
-- [ ] **Task 3 (AC3)** — coordinate the skills-render fix (13-22 consume-or-scope); ensure no garbled skills publicly.
-- [ ] **Task 4 (AC5)** — service + web tests; real-DB smoke/fixture for the split; suites green.
+- [x] **Task 1 (AC1, AC4)** — extracted the shared count-core (respondent-scoped `{ totalRespondents, withAnswers }` via `hasNonEmptyRawData`-embodying SQL, mirroring `getUnifiedExportData`'s LATERAL latest-non-empty-submission shape); wired `public-insights.service.ts` `totalRegistered` to it. Documented as 12-4's `getRegistryTotals()` AC1/AC3 seed.
+- [x] **Task 2 (AC2)** — funnel on the hero "Total Registered" card (`{withAnswers} with complete survey responses`) + rewrote `MethodologyNote` to show Registered People vs Complete Survey Responses + an honest clause that breakdowns cover the completed subset and the remainder are counted-not-recovered.
+- [x] **Task 3 (AC3)** — CONFIRMED no change needed: `public-insights.service.ts` already consumes 13-22's shared `selectMultipleUnnest` for both `skills_possessed` and `training_interest` (JSONB-array-correct; the space-split garbage bug is already fixed and DEPLOYED). No garbled skills at launch. Breakdowns stay submission-scoped with the correct denominator surfaced.
+- [x] **Task 4 (AC5)** — service unit tests (headline decoupled from breakdown denominator; prod 142/79 funnel), count-core unit test, real-DB smoke reproducing the split; web page + methodology + hero-funnel tests; full api + web suites green; tsc/eslint clean.
+
+### Review Follow-ups (AI) — adversarial code-review 2026-07-14 (Opus)
+- [x] **[AI-Review][High] H1 — stale-cache shape crashes public /insights during the launch window.** `getPublicInsights()` serves a Redis blob (1h TTL, survives deploys); a pre-13-25 blob has no `withAnswers`, and the frontend read `data.withAnswers.toLocaleString()` **unguarded** → `TypeError` white-screen on the launch-traffic page. `TrendsPage` already guarded (`?? 0`); the other sites didn't. **Fixed:** `data.withAnswers ?? 0` at both reads [PublicInsightsPage.tsx:85, PublicInsightsPage.tsx MethodologyNote, SkillsMapPage.tsx:79] + `withAnswers = 0` default in `MethodologyNote` + regression test (renders on omitted `withAnswers`).
+- [x] **[AI-Review][Med] M1 — MethodologyNote claimed a denominator it doesn't use.** Note said breakdowns are "computed over the {withAnswers} registrants" but the actual percentage/suppression denominator is submission-scoped `summary.total`, not respondent-scoped `withAnswers` (Dev Notes admit "the two 79s can diverge"). **Fixed:** softened to "based on the {withAnswers} registrants…"; corrected the mislabeled "the denominator" JSDoc on `RegistryCountCore.withAnswers` [registry-totals.service.ts] and `PublicInsightsData.withAnswers` [analytics.ts].
+- [x] **[AI-Review][Med] M2 — raw-SQL drift guard fires in CI (verified, no change).** `registry-totals-db-smoke.integration.test.ts` is caught by vitest's default `include` (ends `.test.ts`) and CI's `test-api` job runs `pnpm --filter @oslsr/api test` against `test_db` after `db:push:full:force` [ci-cd.yml:256-323]. Guard confirmed live.
+- [x] **[AI-Review][Low] L1 — type `withAnswers: number` (required) vs runtime-optional (stale cache).** Made `MethodologyNoteProps.withAnswers` optional-with-default; kept `PublicInsightsData.withAnswers` required (true API contract) with the `?? 0` guards as defense-in-depth for the cache transient. Resolved by H1.
+- [ ] **[AI-Review][Low] L2 — count-core adds a 9th parallel respondents full-scan + per-row LATERAL per cache-miss.** Acceptable at 499k rows and parallelized (no wall-clock cost); overlaps work the summary query does. Left as-is; fold into 12-4's `getRegistryTotals()` when these merge. No fix now.
 
 ## Dev Notes
 - **Use the taxonomy that already exists — don't invent a public-only count.** The 9-59 atom (`deriveDataStatus`, `hasNonEmptyRawData`, `REGISTRY_DATA_STATUSES`) + the `getUnifiedExportData` LATERAL pattern are the proven per-respondent consumption. The count-core is 12-4's AC1/AC3 minus the axes/identity-key/endpoint — a genuine subset, so 12-4 builds ON it later (no rework).
@@ -43,7 +50,39 @@ so that **the public register isn't understated by ~45% during the launch traffi
 - [Source: prod 2026-07-10 — 142 respondents / 79 submissions / 63 no-answer = 55 data_lost + 7 no_submission + 1 pending_nin]
 
 ## Dev Agent Record
+
+### Implementation Plan / Approach
+- **Count-core as a standalone module (not inlined in public-insights).** `getRegistryCountCore()` lives in its own `registry-totals.service.ts` precisely so 12-4's `getRegistryTotals()` can `import` and extend it rather than re-derive — the "ONE source of truth, no divergent second count" (AC1/AC4) is structural, not a comment. Its `{ totalRespondents, withAnswers }` is a genuine subset of 12-4's AC1/AC3.
+- **`withAnswers` is the SQL embodiment of the 9-59 `hasNonEmptyRawData` atom** (`deriveDataStatus === 'completed'`): the emptiness test (`raw_data IS NOT NULL AND raw_data <> '{}'`) + the latest-non-empty LATERAL mirror `getUnifiedExportData` exactly, so the export row-count, this count-core, and analytics all agree. Pure SQL `COUNT(*) FILTER`-style aggregation (not row-fetch-then-JS) so it stays scale-safe at 1M records — verified running on the local 499k-row `app_db` (instant, `total ≫ with_answers`).
+- **Headline decoupled from the breakdown denominator.** `totalRegistered` now = registered PEOPLE (count-core); the eight demographic/skills queries stay submission-scoped and keep `summary.total` (the with-answers count) as their percentage/suppression denominator (AC3). The two 79s (submissions-with-answers vs respondents-with-answers) can diverge in general — the funnel number is respondent-scoped (count-core) so it's always a true subset of the headline.
+- **No respondent-row exclusion filter** — the unfiltered respondent count IS the registry (mirrors `getUnifiedExportData`'s unfiltered count). The 142-vs-139 gap is just time passing (139 was the 2026-06-15 snapshot; +3 July registrants). Row-id-distinct grain per AC1; R2 identity-key dedup rides with full 12-4.
+
 ### File List
+**API (apps/api)**
+- `src/services/registry-totals.service.ts` — **NEW.** `getRegistryCountCore(): { totalRespondents, withAnswers }` + `RegistryCountCore` type. The pre-launch seed of 12-4's `getRegistryTotals()`.
+- `src/services/public-insights.service.ts` — import + run count-core as the first parallel query; `totalRegistered` → `countCore.totalRespondents`; add `withAnswers` to the payload; comments on the retained submission-scoped `total` denominator.
+- `src/services/__tests__/registry-totals.service.test.ts` — **NEW.** count-core parsing unit tests (number/text coercion, empty result).
+- `src/services/__tests__/registry-totals-db-smoke.integration.test.ts` — **NEW.** real-DB smoke; delta-based 4-respondent split (completed / no-submission / superseded-latest-empty / empty-only) → +4 total, +2 with-answers. Pins latest-non-empty + `<> '{}'`.
+- `src/services/__tests__/public-insights.service.test.ts` — mock the count-core module (keeps the 8-query `db.execute` sequence intact); assert `totalRegistered`==people, `withAnswers`==completed subset, prod 142/79 funnel, suppression driven by with-answers.
+
+**Types (packages/types)**
+- `src/analytics.ts` — `PublicInsightsData.withAnswers: number` (+ doc on `totalRegistered` = people).
+
+**Web (apps/web)**
+- `src/features/insights/components/MethodologyNote.tsx` — `withAnswers` prop; Registered People vs Complete Survey Responses cells + honest "remaining N counted not recovered" clause.
+- `src/features/insights/pages/PublicInsightsPage.tsx` — hero "Total Registered" funnel subtitle; pass `withAnswers` to `MethodologyNote`.
+- `src/features/insights/pages/TrendsPage.tsx` / `SkillsMapPage.tsx` — pass `withAnswers` to their `MethodologyNote` (required prop).
+- `src/features/insights/pages/__tests__/PublicInsightsPage.test.tsx` — `withAnswers` fixture; methodology (registered vs complete) + hero-funnel + "remaining 800 registered" tests.
+- `src/features/insights/pages/__tests__/SkillsMapPage.test.tsx` / `TrendsPage.test.tsx` — `withAnswers` in fixtures.
+
+### Completion Notes
+- **AC1 ✅** — `totalRegistered` counts registered people via the shared `getRegistryCountCore` (respondent-scoped, `hasNonEmptyRawData`-consistent), NOT `COUNT(*) FROM submissions`. Row-id-distinct grain; R2 identity-key noted as post-launch 12-4.
+- **AC2 ✅** — hero shows "{total} · {withAnswers} with complete survey responses"; MethodologyNote transparently funnels registered → completed subset and frames the remainder as data completeness (12-5 principle), not error.
+- **AC3 ✅** — skills already 13-22-correct (shared `selectMultipleUnnest`); breakdowns stay submission-scoped with the honest denominator surfaced. **No garbled skills at launch.**
+- **AC4 ✅** — count-core documented (JSDoc) as 12-4's `getRegistryTotals()` seed; 12-4 will `import`+extend it (3-axis / identity-key / endpoint). No permanent second count.
+- **AC5 ✅** — Full **API 2880 pass / 8 skip**, **web 2762 pass / 2 todo**, real-DB smoke green vs `app_test`, tsc clean (types/api/web), eslint clean (api/web). Reality-checked the raw SQL on the 499k-row `app_db`.
+- **Scope discipline** — did NOT pull forward 12-4's 3-axis decomposition, identity-key `COUNT(DISTINCT)`, the `/analytics/registry-totals` endpoint, or internal-dashboard wiring. The 55 `data_lost` are counted + funnelled, NOT recovered (9-28 make-do).
+- **Operator residual** — none required for correctness; the public `/insights` Redis cache (1h TTL) will serve the corrected count within an hour of deploy (or clear `analytics:public:insights` to refresh immediately).
 
 ## PM Validation (John, 2026-07-10)
 
@@ -61,3 +100,5 @@ so that **the public register isn't understated by ~45% during the launch traffi
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-10 | Story drafted via *create-story — public /insights counts submissions (79) not registered people (~139); launch-slice of Epic 12 (12-4 count-core + 12-5 label-honesty) for the public surface Epic 12 omitted. The 63 no-answer = 55 data_lost (Cohort A salvage, 9-26/9-28) + 7 no_submission + 1 pending_nin — real people, make-do, no recovery. Forward-compatible: count-core is 12-4's AC1/AC3 seed; converges post-launch. EMERGENT from the 79-vs-139 investigation. | Bob (SM) |
+| 2026-07-14 | Adversarial code-review (Opus) — 1 High / 2 Med / 2 Low. Counting logic sound (empty-filter `buildWhereClause` → count-core genuinely mirrors `getUnifiedExportData`'s unfiltered respondent count; AC1/AC4 ✅). **H1 (launch-window crash):** stale pre-13-25 Redis blob (1h TTL, survives deploy) lacks `withAnswers` → frontend `data.withAnswers.toLocaleString()` unguarded → TypeError white-screen on the public /insights page the blast drives traffic to — the project's own stale-carry class ([[pattern-ship-a-fix-that-never-fires]]). Fixed: `?? 0` at all read sites + `MethodologyNote` default + regression test. **M1:** note claimed a denominator (`withAnswers`, respondent-scoped) it doesn't use (breakdowns use submission-scoped `total`) — softened wording + corrected mislabeled JSDoc (types + count-core). **M2:** raw-SQL drift smoke verified to fire in CI (`test-api` job, default vitest include). **L1:** MethodologyNote prop optional-with-default. **L2:** 9th parallel scan accepted, deferred to 12-4. Gates re-run by reviewer: API 18/18 + web 31/31 (touched suites, +1 H1 regression), tsc(types/api/web)+eslint(web/api) clean. Status → done. | Amelia (Dev) / Code-Review (Opus) |
+| 2026-07-14 | dev-story COMPLETE (Amelia). NEW shared `registry-totals.service.ts getRegistryCountCore()` (respondent-scoped `{ totalRespondents, withAnswers }`, `hasNonEmptyRawData`-consistent LATERAL, seed of 12-4) wired into `public-insights.service.ts`: `totalRegistered` now counts registered PEOPLE, `withAnswers` funnel added; breakdowns stay submission-scoped (AC3). Hero funnel subtitle + honest `MethodologyNote` (registered vs completed subset, remainder counted-not-recovered). AC3 skills already 13-22-correct (shared extractor) — no change. Tests: count-core unit + real-DB delta smoke (+4/+2) + decoupled-headline service tests + web funnel/methodology tests. Gates: API 2880 pass/8 skip, web 2762 pass/2 todo, tsc(types/api/web)+eslint(api/web) clean, raw SQL reality-checked on 499k `app_db`. Status → review. NEXT: adversarial code-review (different LLM). | Amelia (Dev) |

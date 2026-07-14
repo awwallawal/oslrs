@@ -126,6 +126,7 @@ export default function TrendsPage() {
 
       <MethodologyNote
         totalRegistered={insightsData?.totalRegistered ?? 0}
+        withAnswers={insightsData?.withAnswers ?? 0}
         lastUpdated={data.lastUpdated}
       />
     </div>

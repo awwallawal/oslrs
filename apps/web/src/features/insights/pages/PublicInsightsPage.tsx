@@ -82,6 +82,7 @@ export default function PublicInsightsPage() {
               icon={Users}
               label="Total Registered"
               value={data.totalRegistered}
+              subtitle={`${(data.withAnswers ?? 0).toLocaleString()} with complete survey responses`}
             />
             <StatCard
               icon={MapPin}
@@ -131,7 +132,11 @@ export default function PublicInsightsPage() {
 
         <PublicLgaTable lgaDensity={data.lgaDensity} />
 
-        <MethodologyNote totalRegistered={data.totalRegistered} lastUpdated={data.lastUpdated} />
+        <MethodologyNote
+          totalRegistered={data.totalRegistered}
+          withAnswers={data.withAnswers ?? 0}
+          lastUpdated={data.lastUpdated}
+        />
 
         {/* Story 8.7: Key Findings — only shown when available */}
         {data.keyFindings && data.keyFindings.length > 0 && (

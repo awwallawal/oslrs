@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockExecute = vi.hoisted(() => vi.fn());
+const mockCountCore = vi.hoisted(() => vi.fn());
 
 vi.mock('../../db/index.js', () => ({
   db: { execute: (...args: unknown[]) => mockExecute(...args) },
+}));
+
+// 13-25: the respondent-scoped count-core is a separate module. Mocking it here
+// keeps the 8-query `db.execute` sequence below untouched AND lets each test
+// prove the headline (`totalRegistered`) is decoupled from the submission-scoped
+// breakdown denominator (`summary.total`).
+vi.mock('../registry-totals.service.js', () => ({
+  getRegistryCountCore: () => mockCountCore(),
 }));
 
 import { PublicInsightsService } from '../public-insights.service.js';
@@ -15,9 +24,13 @@ function mockRows(rows: Record<string, unknown>[]) {
 describe('PublicInsightsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: headline decoupled from breakdown denominator; tests override.
+    mockCountCore.mockResolvedValue({ totalRespondents: 0, withAnswers: 0 });
   });
 
   it('returns pre-computed public insights (cache miss)', async () => {
+    // 520 registered people, 500 of them with complete survey responses.
+    mockCountCore.mockResolvedValue({ totalRespondents: 520, withAnswers: 500 });
     // 8 parallel queries: summary, gender, age, skills, desiredSkills, emp, formal, lga
     mockExecute
       .mockResolvedValueOnce(mockRows([{
@@ -58,7 +71,9 @@ describe('PublicInsightsService', () => {
 
     const result = await PublicInsightsService.getPublicInsights();
 
-    expect(result.totalRegistered).toBe(500);
+    // Headline = registered PEOPLE (count-core), NOT the 500 answer-bearing submissions.
+    expect(result.totalRegistered).toBe(520);
+    expect(result.withAnswers).toBe(500);
     expect(result.lgasCovered).toBe(15);
     expect(result.genderSplit).toHaveLength(2);
     expect(result.allSkills).toHaveLength(2);
@@ -97,6 +112,7 @@ describe('PublicInsightsService', () => {
   });
 
   it('handles empty database', async () => {
+    mockCountCore.mockResolvedValue({ totalRespondents: 0, withAnswers: 0 });
     mockExecute
       .mockResolvedValueOnce(mockRows([{
         total: '0',
@@ -111,6 +127,7 @@ describe('PublicInsightsService', () => {
     const result = await PublicInsightsService.getPublicInsights();
 
     expect(result.totalRegistered).toBe(0);
+    expect(result.withAnswers).toBe(0);
     expect(result.lgasCovered).toBe(0);
     expect(result.genderSplit).toEqual([]);
     expect(result.allSkills).toEqual([]);
@@ -159,6 +176,9 @@ describe('PublicInsightsService', () => {
   });
 
   it('suppresses scalar metrics when total < PUBLIC_MIN_N (10)', async () => {
+    // 12 registered people, but only 8 answer-bearing submissions — scalar
+    // suppression is driven by the with-answers denominator, NOT the headline.
+    mockCountCore.mockResolvedValue({ totalRespondents: 12, withAnswers: 8 });
     mockExecute
       .mockResolvedValueOnce(mockRows([{
         total: '8', // below PUBLIC_MIN_N=10
@@ -171,11 +191,30 @@ describe('PublicInsightsService', () => {
       .mockResolvedValue(mockRows([]));
 
     const result = await PublicInsightsService.getPublicInsights();
-    expect(result.totalRegistered).toBe(8); // total always returned
-    expect(result.businessOwnershipRate).toBeNull();
+    expect(result.totalRegistered).toBe(12); // headline = registered people, always returned
+    expect(result.withAnswers).toBe(8);
+    expect(result.businessOwnershipRate).toBeNull(); // suppressed: with-answers 8 < 10
     expect(result.unemploymentEstimate).toBeNull();
     expect(result.youthEmploymentRate).toBeNull();
     expect(result.gpi).toBeNull();
+  });
+
+  it('funnel: headline counts registered people, withAnswers is the completed subset (prod 142/79)', async () => {
+    // The exact prod-verified split: 142 registered people, 79 with complete
+    // survey responses. The 63 answer-less registrants (data_lost + no_submission
+    // + pending_nin) are counted in the headline but excluded from breakdowns.
+    mockCountCore.mockResolvedValue({ totalRespondents: 142, withAnswers: 79 });
+    mockExecute
+      .mockResolvedValueOnce(mockRows([{
+        total: '79', lgas_covered: '20',
+        biz_rate: null, unemployment_est: null, youth_emp_rate: null, gpi: null,
+      }]))
+      .mockResolvedValue(mockRows([]));
+
+    const result = await PublicInsightsService.getPublicInsights();
+    expect(result.totalRegistered).toBe(142);
+    expect(result.withAnswers).toBe(79);
+    expect(result.totalRegistered - result.withAnswers).toBe(63);
   });
 
   it('filters out skills below public suppression threshold (count < 10)', async () => {

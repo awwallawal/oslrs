@@ -237,7 +237,19 @@ export interface VerificationPipelineQueryParams {
 // --- Public Insights ---
 
 export interface PublicInsightsData {
+  /** Registered PEOPLE — the honest headline count (Story 13-25). NOT submissions. */
   totalRegistered: number;
+  /**
+   * Subset of `totalRegistered` with complete survey responses (Story 13-25) —
+   * the count of registered PEOPLE the breakdowns describe. Note the breakdown
+   * percentages/suppression are computed over the answer-bearing SUBMISSIONS
+   * (submission-scoped `total`), which equals this people-count today but can
+   * diverge if a respondent has multiple non-empty submissions; the two
+   * converge under full 12-4. The remainder are registered people whose survey
+   * answers are not on file (soft-launch `data_lost` salvage + `no_submission`
+   * + `pending_nin`).
+   */
+  withAnswers: number;
   lgasCovered: number;
   genderSplit: FrequencyBucket[];
   ageDistribution: FrequencyBucket[];

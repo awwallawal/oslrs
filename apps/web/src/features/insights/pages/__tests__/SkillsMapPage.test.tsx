@@ -51,6 +51,7 @@ function renderPage() {
 
 const fullData: PublicInsightsData = {
   totalRegistered: 5000,
+  withAnswers: 4200,
   lgasCovered: 33,
   genderSplit: [],
   ageDistribution: [],

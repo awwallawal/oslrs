@@ -83,6 +83,7 @@ function renderPage() {
 
 const fullData: PublicInsightsData = {
   totalRegistered: 5000,
+  withAnswers: 4200,
   lgasCovered: 33,
   genderSplit: [
     { label: 'male', count: 2800, percentage: 56, suppressed: false },
@@ -177,8 +178,44 @@ describe('PublicInsightsPage', () => {
     mockInsights.error = null;
     renderPage();
     expect(screen.getByText(/methodology/i)).toBeInTheDocument();
-    expect(screen.getByText(/N = 5,000/)).toBeInTheDocument();
+    expect(screen.getByText('Registered People')).toBeInTheDocument();
+    expect(screen.getByText('Complete Survey Responses')).toBeInTheDocument();
     expect(screen.getByText(/data refreshed hourly/i)).toBeInTheDocument();
+  });
+
+  it('methodology note funnels registered vs completed-survey subset (13-25)', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData; // 5,000 registered · 4,200 with complete responses
+    mockInsights.error = null;
+    renderPage();
+    // The 800 answer-less registrants (5,000 − 4,200) are counted in the total
+    // but excluded from the breakdowns — surfaced transparently, not hidden.
+    // (The number sits in its own <span>, so assert the count and the
+    // explanatory clause separately.)
+    expect(screen.getByText('800')).toBeInTheDocument();
+    expect(screen.getByText(/identity captured during the soft-launch/i)).toBeInTheDocument();
+  });
+
+  it('hero "Total Registered" shows the completed-survey funnel subtitle (13-25)', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByText(/4,200 with complete survey responses/i)).toBeInTheDocument();
+  });
+
+  it('renders (does not crash) when a stale pre-13-25 cache omits withAnswers (H1)', () => {
+    // Redis serves the public payload with a 1h TTL; a blob computed by the
+    // pre-13-25 API has no `withAnswers`. The reads must default to 0, not throw
+    // `undefined.toLocaleString()` and white-screen the launch-traffic page.
+    mockInsights.isLoading = false;
+    const staleData = { ...fullData };
+    delete (staleData as { withAnswers?: number }).withAnswers;
+    mockInsights.data = staleData as PublicInsightsData;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByText(/0 with complete survey responses/i)).toBeInTheDocument();
+    expect(screen.getByText('Complete Survey Responses')).toBeInTheDocument();
   });
 
   it('renders last-updated badge in methodology section', () => {
