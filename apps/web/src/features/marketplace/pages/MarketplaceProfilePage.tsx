@@ -11,7 +11,7 @@ import { useAuth } from '../../auth/context/AuthContext';
 import { HCaptcha } from '../../auth/components/HCaptcha';
 import { ApiError } from '../../../lib/api-client';
 import { useQueryClient } from '@tanstack/react-query';
-import type { ContactRevealResponse } from '@oslsr/types';
+import { skillLabelForSlug, type ContactRevealResponse } from '@oslsr/types';
 
 function InfoRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -231,6 +231,32 @@ export default function MarketplaceProfilePage() {
               {formatDate(profile.createdAt)}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Skills Section (Story 13-28) — the core matchmaking signal, shown as
+          canonical labels. Degrades gracefully when the profile has no skills. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Skills</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(profile.skills ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-2" data-testid="profile-skills">
+              {(profile.skills ?? []).map((slug) => (
+                <span
+                  key={slug}
+                  className="inline-flex items-center rounded-full bg-primary-600/10 px-3 py-1 text-sm font-medium text-primary-600"
+                >
+                  {skillLabelForSlug(slug)}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-400 italic" data-testid="no-skills">
+              No skills listed yet.
+            </p>
+          )}
         </CardContent>
       </Card>
 

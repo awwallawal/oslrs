@@ -96,6 +96,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
     id: '018e1234-5678-7000-8000-000000000001',
     profession: 'Electrician',
+    skills: 'electrical, solar',
     lga_name: 'Ibadan North',
     experience_level: '5-10 years',
     verified_badge: true,
@@ -281,6 +282,32 @@ describe('MarketplaceService', () => {
       expect(item.relevanceScore).toBeNull();
     });
 
+    // ── Story 13-28 — skills surfaced on search results (AC1) ────────────
+
+    it('13-28 — splits the stored comma-separated skills into a string[] (AC1)', async () => {
+      setupDbMock([makeProfile({ skills: 'carpentry, plumbing, tiling' })], 1);
+
+      const result = await MarketplaceService.searchProfiles({ q: 'carpenter' });
+
+      expect(result.data[0].skills).toEqual(['carpentry', 'plumbing', 'tiling']);
+    });
+
+    it('13-28 — returns an empty skills array when skills is null (AC1 graceful)', async () => {
+      setupDbMock([makeProfile({ skills: null })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].skills).toEqual([]);
+    });
+
+    it('13-28 — trims whitespace and drops empty tokens from skills (AC1)', async () => {
+      setupDbMock([makeProfile({ skills: ' welding ,, fabrication ' })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].skills).toEqual(['welding', 'fabrication']);
+    });
+
     it('should return empty result with correct structure when no profiles exist', async () => {
       setupDbMock([], 0);
 
@@ -366,6 +393,7 @@ describe('MarketplaceService', () => {
       return {
         id: '018e1234-5678-7000-8000-000000000001',
         profession: 'Electrician',
+        skills: 'electrical, solar',
         lga_name: 'Ibadan North',
         experience_level: '5-10 years',
         verified_badge: true,
@@ -430,6 +458,28 @@ describe('MarketplaceService', () => {
       expect(result!.experienceLevel).toBeNull();
       expect(result!.bio).toBeNull();
       expect(result!.portfolioUrl).toBeNull();
+    });
+
+    // ── Story 13-28 — skills surfaced on profile detail (AC1) ────────────
+
+    it('13-28 — returns skills as a split string[] on the detail profile (AC1)', async () => {
+      mockDbExecute.mockResolvedValueOnce({
+        rows: [makeDetailProfile({ skills: 'electrical, solar, hvac' })],
+      });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.skills).toEqual(['electrical', 'solar', 'hvac']);
+    });
+
+    it('13-28 — returns an empty skills array when detail skills is null (AC1 graceful)', async () => {
+      mockDbExecute.mockResolvedValueOnce({
+        rows: [makeDetailProfile({ skills: null })],
+      });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.skills).toEqual([]);
     });
 
     it('should NOT return any PII fields', async () => {

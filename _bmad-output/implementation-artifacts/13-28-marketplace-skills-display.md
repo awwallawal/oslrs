@@ -1,6 +1,6 @@
 # Story 13-28: Display skills on marketplace profiles (+ skill-based discovery)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Authored 2026-07-10 by Bob (SM) via *create-story. EMERGENT (2026-07-10) from the /marketplace verification: the marketplace stores each worker's skills CLEAN (marketplace_profiles.skills, comma-separated, extracted array-correctly by the worker) but the API deliberately omits skills from both the search and profile-detail responses, and the frontend shows only profession/LGA/experience/bio/portfolio. For a SKILLED-labour marketplace, the skills a person holds are the core matchmaking signal — so this is a real product gap, though it was a DELIBERATE MVP scope decision (stories 7-1/7-3), not a bug. The data is already there and clean; this surfaces it. NOT launch-gating — a fast-follow AFTER 13-27 populates the marketplace (no point showing skills on 1 card). -->
 
@@ -26,10 +26,10 @@ so that **I can find people by what they can actually DO — the whole point of 
 5. **AC5 — Tests + suites green.** API response-shape tests (skills present + split); web render tests (chips + empty state); full api + web suites green; tsc/eslint clean.
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC1)** — add `skills` to the marketplace search + detail SELECT + response types; split to string[].
-- [ ] **Task 2 (AC2, AC3)** — render skills chips on `WorkerCard` + full list on `MarketplaceProfilePage`, via the `SKILL_TAXONOMY` label map; graceful empty state.
-- [ ] **Task 3 (AC4, optional)** — skill filter/rank on search (`search_vector`).
-- [ ] **Task 4 (AC5)** — API + web tests; suites.
+- [x] **Task 1 (AC1)** — add `skills` to the marketplace search + detail SELECT + response types; split to string[].
+- [x] **Task 2 (AC2, AC3)** — render skills chips on `WorkerCard` + full list on `MarketplaceProfilePage`, via the `SKILL_TAXONOMY` label map; graceful empty state.
+- [x] **Task 3 (AC4, optional)** — skill filter/rank on search (`search_vector`). VERIFIED already delivered by inspection: `search_vector` indexes `skills` at weight B (marketplace-trigger.sql:16) and the search bar routes free-text `q` → `search_vector @@ plainto_tsquery`, so skill-token discovery is already live. No new code added (would be an unwired param — avoids the ship-a-fix-that-never-fires class). **Caveat (code-review L4):** the `q:'carpenter'` service test is mock-based (`db.execute` is stubbed) so it proves query *construction*, not real Postgres FTS matching — the skills-token discovery is verified by code inspection, not an integration test. Real-FTS coverage + the slug-vs-label limitation (below) are the documented follow-up.
+- [x] **Task 4 (AC5)** — API + web tests; suites.
 
 ## Dev Notes
 - **Not a bug, a scope revisit** — the marketplace worker is correct and skills are stored; 7-1/7-3 simply didn't expose them. This story reverses that MVP cut now that the register's matchmaking value depends on it.
@@ -44,7 +44,41 @@ so that **I can find people by what they can actually DO — the whole point of 
 - [Source: 13-27 (populate the marketplace — hard dep) · 13-20 SKILL_TAXONOMY labels · 13-22 skills alignment · 7-1/7-3 (the original MVP scope that cut skills)]
 
 ## Dev Agent Record
+
+### Implementation Notes (2026-07-14, dev-story)
+- **AC1** — added `skills: string[]` to both `MarketplaceSearchResultItem` and `MarketplaceProfileDetail`; the service selects `mp.skills` in both the search and detail SQL and maps it through a new `splitSkills()` helper (splits the worker's `', '`-joined string, trims, drops empties → `[]` for null). API returns raw slugs; label resolution is the frontend's job (AC3) — consistent with the existing wizard combobox pattern.
+- **AC3** — added a single canonical label resolver `skillLabelForSlug()` + `SKILL_LABEL_BY_SLUG` to `packages/types/src/skills-taxonomy.ts` (mirrors the existing `SKILL_SECTOR_BY_SLUG`, so labels can't drift from Appendix-C). `custom_*` and legacy/unknown slugs humanize (strip `custom_`, `_`→space, Title-Case) rather than ever showing a raw slug. Free text is only ever rendered through React's escaping (no `dangerouslySetInnerHTML`) — treated as untrusted per AC4/privacy note.
+- **AC2** — `WorkerCard` shows up to 3 skill chips + "+N more"; `MarketplaceProfilePage` gains a **Skills** card with the full chip list and a graceful "No skills listed yet." empty state. Both defend against `skills` being absent from the payload (`profile.skills ?? []`).
+- **AC4** — no new code (see Task 3). **Caveat (follow-up candidate):** skills are stored/indexed as *slugs*, so free-text search matches slug tokens (`plumbing` → `plumbing`) but not multi-word *labels* (searching "tour guide" won't hit slug `tour_guide`). Making labels searchable would require the `search_vector` trigger to index resolved labels — deferred, not launch-relevant.
+- **No backfill / no data change** — 13-28 is display-only; the marketplace worker already stores skills clean (13-27 populated them). Nothing to run on prod.
+
 ### File List
+- `packages/types/src/marketplace.ts` (M) — `skills: string[]` on `MarketplaceSearchResultItem` + `MarketplaceProfileDetail`
+- `packages/types/src/skills-taxonomy.ts` (M) — `SKILL_LABEL_BY_SLUG` + `skillLabelForSlug()` + `humanizeSkillSlug()`
+- `apps/api/src/services/__tests__/skill-label-resolver.test.ts` (A) — label-resolver unit tests. **RELOCATED at commit-time (operator) from `packages/types/src/__tests__/skills-taxonomy.test.ts`: packages/types has NO `test` script so a test there never runs in CI (the exact "test that never runs" trap Story 13-22 removed). Moved to apps/api (imports from `@oslsr/types`) so it actually runs; 6/6 green.**
+- `apps/api/src/services/marketplace.service.ts` (M) — `splitSkills()`; `mp.skills` in search + detail SELECT + mapping
+- `apps/api/src/services/__tests__/marketplace.service.test.ts` (M) — skills fixtures + AC1 search/detail tests
+- `apps/web/src/features/marketplace/components/WorkerCard.tsx` (M) — top-3 skill chips + "+N more"
+- `apps/web/src/features/marketplace/pages/MarketplaceProfilePage.tsx` (M) — full Skills card + empty state
+- `apps/web/src/features/marketplace/__tests__/WorkerCard.test.tsx` (A) — card skills chip tests
+- `apps/web/src/features/marketplace/__tests__/MarketplaceProfilePage.test.tsx` (M) — profile skills-section tests
+
+### Completion Notes
+- **Validations self-run:** API marketplace suites 148/148, full web marketplace suite 103/103, types taxonomy 5/5; `tsc --noEmit` clean for both `@oslsr/api` and `@oslsr/web`; eslint clean on all changed api/web files (types package is typecheck-only, no lint task).
+- All 5 ACs satisfied. AC4 satisfied by verified existing behaviour (documented), not new code.
+
+## Senior Developer Review (AI) — 2026-07-15 (Opus, BMAD code-review workflow)
+
+**Outcome: APPROVED (→ done).** All 5 ACs implemented and independently verified; git File List ↔ git diff exact match (0 discrepancies). Gates re-run by the reviewer (not trusting the dev record): types 6/6, API marketplace 54/54, web marketplace 42/42; `tsc --noEmit` clean on types/api/web; eslint clean on all changed api/web files. Schema column `marketplace_profiles.skills text` confirmed (SQL `mp.skills` is correct — no typo). No raw-slug leak: the pre-existing `MarketplaceProfileAnonymous.skills: string` type is not consumed by any rendered endpoint — only the search + detail views (both now `string[]`) reach the frontend.
+
+Found 0 High/Critical, 1 Medium, 4 Low. All fixed inline and re-verified.
+
+### Review Follow-ups (AI) — all FIXED this pass
+- [x] [AI-Review][Med] **M1 — skill chips rendered in two different colours across surfaces.** `WorkerCard` used `bg-primary/10 text-primary` where `--primary` is greyscale near-black (index.css:195), while `MarketplaceProfilePage` hardcoded `bg-[#9C1E23]/10 text-[#9C1E23]` maroon — same element, off-brand grey on the list card vs maroon on the detail page. **Fix:** unified both on the canonical brand token `bg-primary-600/10 text-primary-600` (WorkerCard.tsx:59, MarketplaceProfilePage.tsx:249) — no more hardcoded hex, no card↔detail drift.
+- [x] [AI-Review][Low] **L2 — `splitSkills` did not de-duplicate** → a repeated stored slug renders a doubled chip + collides on React's `key={slug}`. **Fix:** `[...new Set(slugs)]` in `splitSkills` (marketplace.service.ts).
+- [x] [AI-Review][Low] **L3 — `humanizeSkillSlug` could still emit a raw slug** for degenerate input (`custom_` alone / all-underscores) via `if (!words) return slug`, contradicting AC3. **Fix:** neutral fallback `'Other skill'` (skills-taxonomy.ts) + locking test (`custom_`, `___`).
+- [x] [AI-Review][Low] **L4 — AC4 "locked by test" overstated.** The `q:'carpenter'` service test is mock-based (`db.execute` stubbed) so it verifies query construction, not real Postgres FTS. **Fix:** softened Task 3 wording — skills discovery verified by inspection, real-FTS coverage deferred (documented follow-up).
+- [x] [AI-Review][Low] **L5 — weak negative test assertions.** `expect(chips).not.toHaveTextContent('electrical')` is a case-sensitive substring check that "Electrical Installation" never trips, so it couldn't catch a raw-slug regression. **Fix:** replaced with exact-text `expect(screen.queryByText('electrical')).not.toBeInTheDocument()` guards (WorkerCard + MarketplaceProfilePage tests).
 
 ## PM Validation (John, 2026-07-10)
 
@@ -61,3 +95,5 @@ so that **I can find people by what they can actually DO — the whole point of 
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-10 | Story drafted via *create-story — surface the already-stored, already-clean marketplace skills on the card + profile (+ optional skill search), via canonical SKILL_TAXONOMY labels. Reverses the 7-1/7-3 MVP cut now that matchmaking value needs it. NOT launch-gating; fast-follow after 13-27 populates the marketplace. EMERGENT from the /marketplace verification. | Bob (SM) |
+| 2026-07-14 | Implemented via dev-story. AC1: `skills:string[]` on both response types + `splitSkills()` in service (search + detail SELECT). AC3: canonical `skillLabelForSlug()`/`SKILL_LABEL_BY_SLUG` in packages/types (custom_*/unknown humanized, never raw slugs). AC2: WorkerCard top-3 chips + "+N more"; MarketplaceProfilePage full Skills card + empty state; both null-safe. AC4: verified already-delivered via existing search_vector (skills weight B) — no unwired param added; slug-vs-label search caveat documented. AC5: +5 types, +5 API, +7 web tests. Self-verified: API marketplace 148/148, web marketplace 103/103, types 5/5, tsc + eslint clean. Status → review. | Amelia (Dev) |
+| 2026-07-15 | Adversarial code-review (Opus, BMAD workflow). 0 High/Critical, 1 Med + 4 Low — ALL fixed inline + re-verified. M1: unified skill-chip colour on the `primary-600` brand token (was greyscale `text-primary` on the card vs hardcoded `#9C1E23` maroon on the profile). L2: `splitSkills` de-dupes (`Set`) → no doubled chip / React key collision. L3: `humanizeSkillSlug` degenerate-input fallback → `'Other skill'`, never a raw slug (AC3) + locking test. L4: softened AC4 "locked by test" (the service test is mock-based, not real FTS). L5: strengthened weak `not.toHaveTextContent` negatives → exact-text `queryByText` guards. Reviewer re-ran gates independently: types 6/6, API marketplace 54/54, web marketplace 42/42, tsc(types/api/web) + eslint(api/web) clean; git File List ↔ diff exact. Status → done. | Amelia (Review) |

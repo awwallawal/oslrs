@@ -221,3 +221,44 @@ export function skillSectorForSlug(slug: string): string {
 export const SKILL_SECTORS: string[] = [
   ...new Set(SKILL_TAXONOMY.map((s) => s.sector)),
 ];
+
+/**
+ * Skill slug -> canonical human label, DERIVED from SKILL_TAXONOMY (Story 13-28).
+ * Single source of truth for public display of a stored skill slug. Mirrors
+ * SKILL_SECTOR_BY_SLUG so labels can never drift from the Appendix-C source.
+ */
+export const SKILL_LABEL_BY_SLUG: Record<SkillSlug, string> = Object.fromEntries(
+  SKILL_TAXONOMY.map((s) => [s.name, s.label]),
+) as Record<SkillSlug, string>;
+
+/**
+ * Humanize a non-canonical skill value for display (Story 13-28). Handles the
+ * `custom_*` free-text skills a registrant declared (the same encoding the
+ * wizard's ComboboxMultiSelect produces: `custom_` + snake_cased free text) and
+ * any legacy/unknown slug. Strips a leading `custom_`, turns `_` into spaces and
+ * Title-Cases each word. The input is treated as UNTRUSTED text (it is only ever
+ * rendered through React's escaping — never as HTML).
+ */
+function humanizeSkillSlug(slug: string): string {
+  const words = slug
+    .replace(/^custom_/, '')
+    .replace(/_/g, ' ')
+    .trim();
+  // Degenerate input (e.g. a bare `custom_` or all-underscores) strips to
+  // nothing — never fall back to the raw slug (AC3), show a neutral label.
+  if (!words) return 'Other skill';
+  return words
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/**
+ * Resolve a stored skill slug to its public display label (Story 13-28).
+ * Canonical slugs map to their Appendix-C label; `custom_*` and any other
+ * non-canonical value fall back to a humanized form of the slug (never dropped,
+ * never shown as a raw slug — AC3).
+ */
+export function skillLabelForSlug(slug: string): string {
+  return SKILL_LABEL_BY_SLUG[slug as SkillSlug] ?? humanizeSkillSlug(slug);
+}

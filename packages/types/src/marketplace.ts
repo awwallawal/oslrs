@@ -38,6 +38,12 @@ export type MarketplaceProfileView = MarketplaceProfileAnonymous | MarketplacePr
 export interface MarketplaceProfileDetail {
   id: string;
   profession: string | null;
+  /**
+   * Canonical skill slugs (Story 13-28) — split from the stored comma-separated
+   * `skills` string. Non-sensitive occupational data, consistent with the
+   * marketplace's public opt-in. Display via `skillLabelForSlug` (never raw slugs).
+   */
+  skills: string[];
   lgaName: string | null;
   experienceLevel: string | null;
   verifiedBadge: boolean;
@@ -64,6 +70,8 @@ export interface MarketplaceSearchParams {
 export interface MarketplaceSearchResultItem {
   id: string;
   profession: string | null;
+  /** Canonical skill slugs (Story 13-28) — see MarketplaceProfileDetail.skills. */
+  skills: string[];
   lgaName: string | null;
   experienceLevel: string | null;
   verifiedBadge: boolean;

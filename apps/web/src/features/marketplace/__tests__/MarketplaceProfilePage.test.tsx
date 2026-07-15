@@ -110,6 +110,7 @@ vi.mock('lucide-react', () => ({
 const sampleProfile = {
   id: '018e1234-5678-7000-8000-000000000001',
   profession: 'Electrician',
+  skills: ['electrical', 'solar', 'custom_realtor'],
   lgaName: 'Ibadan North',
   experienceLevel: '5-10 years',
   verifiedBadge: true,
@@ -121,6 +122,7 @@ const sampleProfile = {
 const unverifiedProfile = {
   ...sampleProfile,
   id: '018e1234-5678-7000-8000-000000000002',
+  skills: [],
   verifiedBadge: false,
   bio: null,
   portfolioUrl: null,
@@ -346,6 +348,52 @@ describe('MarketplaceProfilePage', () => {
     expect(screen.getByText('Location')).toBeInTheDocument();
     expect(screen.getByText('Experience Level')).toBeInTheDocument();
     expect(screen.getByText('Member Since')).toBeInTheDocument();
+  });
+
+  // ── Story 13-28 — skills display (AC2/AC3) ────────────────────────────────
+
+  it('13-28 — renders skills as canonical labels, not raw slugs (AC3)', () => {
+    renderProfilePage();
+
+    const skills = screen.getByTestId('profile-skills');
+    expect(skills).toBeInTheDocument();
+    // Canonical Appendix-C labels, never the stored slugs.
+    expect(skills).toHaveTextContent('Electrical Installation');
+    expect(skills).toHaveTextContent('Solar Installation');
+    // Exact-text guard: a raw-slug regression renders a node whose exact text
+    // is the slug (the substring check can't catch it — the label is a
+    // superstring with different casing).
+    expect(screen.queryByText('electrical')).not.toBeInTheDocument();
+    expect(screen.queryByText('solar')).not.toBeInTheDocument();
+  });
+
+  it('13-28 — renders a custom_* skill as its humanized free text (AC3)', () => {
+    renderProfilePage();
+
+    const skills = screen.getByTestId('profile-skills');
+    // custom_realtor → "Realtor" (prefix stripped, title-cased); never the slug.
+    expect(skills).toHaveTextContent('Realtor');
+    expect(screen.queryByText('custom_realtor')).not.toBeInTheDocument();
+  });
+
+  it('13-28 — shows a graceful empty state when the profile has no skills (AC2)', () => {
+    mockProfileReturn = {
+      data: unverifiedProfile, // skills: []
+      isLoading: false,
+      error: null,
+    };
+    renderProfilePage();
+
+    expect(screen.getByTestId('no-skills')).toHaveTextContent('No skills listed yet.');
+    expect(screen.queryByTestId('profile-skills')).not.toBeInTheDocument();
+  });
+
+  it('13-28 — does not crash when skills is absent from the payload (AC2 graceful)', () => {
+    const { skills: _omit, ...noSkills } = sampleProfile;
+    mockProfileReturn = { data: noSkills, isLoading: false, error: null };
+    renderProfilePage();
+
+    expect(screen.getByTestId('no-skills')).toBeInTheDocument();
   });
 
   it('renders "Unknown Profession" fallback when profession is null', () => {

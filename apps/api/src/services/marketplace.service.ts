@@ -26,6 +26,22 @@ import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-service' });
 
+/**
+ * Split the stored comma-separated `skills` string into an array of skill slugs
+ * (Story 13-28). The extraction worker stores `skillsList.join(', ')`, so we
+ * split on commas, trim, drop empties, and de-duplicate (a repeated slug would
+ * otherwise render a doubled chip + collide on React's `key`). Returns [] for
+ * null/empty input.
+ */
+function splitSkills(raw: unknown): string[] {
+  if (raw == null) return [];
+  const slugs = String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return [...new Set(slugs)];
+}
+
 /** Options carrying the request-time accountability inputs (Story 9-41). */
 export interface RevealContactOptions {
   /** AC#6 — stated purpose for a high-volume reveal (persisted on the row). */
@@ -146,6 +162,7 @@ export class MarketplaceService {
       SELECT
         mp.id,
         mp.profession,
+        mp.skills,
         COALESCE(l.name, mp.lga_name) as lga_name,
         mp.experience_level,
         mp.verified_badge,
@@ -169,6 +186,7 @@ export class MarketplaceService {
     const items: MarketplaceSearchResultItem[] = dataRows.map((row) => ({
       id: String(row.id),
       profession: row.profession ? String(row.profession) : null,
+      skills: splitSkills(row.skills),
       lgaName: row.lga_name ? String(row.lga_name) : null,
       experienceLevel: row.experience_level ? String(row.experience_level) : null,
       verifiedBadge: Boolean(row.verified_badge),
@@ -220,6 +238,7 @@ export class MarketplaceService {
       SELECT
         mp.id,
         mp.profession,
+        mp.skills,
         COALESCE(l.name, mp.lga_name) as lga_name,
         mp.experience_level,
         mp.verified_badge,
@@ -239,6 +258,7 @@ export class MarketplaceService {
     return {
       id: String(row.id),
       profession: row.profession ? String(row.profession) : null,
+      skills: splitSkills(row.skills),
       lgaName: row.lga_name ? String(row.lga_name) : null,
       experienceLevel: row.experience_level ? String(row.experience_level) : null,
       verifiedBadge: Boolean(row.verified_badge),
