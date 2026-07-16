@@ -1,0 +1,104 @@
+# osv-scanner ignore config — Story 13-31 (2026-07-16)
+#
+# Why this file exists
+# --------------------
+# npm retired the legacy audit endpoint (HTTP 410 Gone, 2026-07-15) that
+# `pnpm audit` called; pnpm has no released version on the bulk advisory
+# endpoint (broken across the 9.x + 10.x lines — pnpm/pnpm#11265). CI's
+# `pnpm audit --audit-level=high --prod` gate therefore hard-failed every
+# deploy. We replaced it with osv-scanner (reads pnpm-lock.yaml against the
+# OSV database, no dependency on the retired endpoint) — see .github/workflows/ci-cd.yml.
+#
+# osv-scanner has no `--prod` equivalent: it scans the WHOLE lockfile, so it
+# surfaces the dev/build/test-tooling subtree that the prior `--prod` gate
+# correctly excluded (and that Story 9-54's structural fixes already assessed).
+# Every entry below was verified NOT to be in the production dependency tree
+# (`pnpm why -r --prod <pkg>` empty, 2026-07-16). Grandfathering them here
+# reproduces the team's signed-off posture — no high/critical in *prod* deps —
+# while keeping osv-scanner a HARD gate for any NEW vulnerability.
+#
+# ignoreUntil = 2026-08-15 forces re-triage in ~4 weeks (post-launch): each
+# ignore expires and re-fails the build unless burned down or re-justified in
+# Story 13-31's remediation pass (turbo 2.x major, xlsx→SheetJS CDN, dev-tree
+# patch bumps). Fixed at adoption via bounded overrides: vite, form-data,
+# follow-redirects (see package.json pnpm.overrides).
+
+[[IgnoredVulns]]
+id = "GHSA-3qcw-2rhx-2726"
+ignoreUntil = 2026-08-15
+reason = "turbo 1.13.0 CRITICAL (9.8) — dev-only monorepo build orchestrator (root devDependency); not shipped to prod runtime (pnpm why --prod empty). Fix = turbo 2.x major bump, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-hcf7-66rw-9f5r"
+ignoreUntil = 2026-08-15
+reason = "turbo 1.13.0 (5.1) — dev-only build orchestrator; same major-bump remediation as GHSA-3qcw-2rhx-2726."
+
+[[IgnoredVulns]]
+id = "GHSA-4r6h-8v6p-xvw6"
+ignoreUntil = 2026-08-15
+reason = "xlsx 0.18.5 (7.8, prototype pollution) — SheetJS dev/script-only (one-time xlsform migration), not in --prod tree; pre-existing accepted-risk. No npm fix published; remediation = SheetJS CDN build, tracked in 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-5pgg-2g8v-p4x9"
+ignoreUntil = 2026-08-15
+reason = "xlsx 0.18.5 (7.5, ReDoS) — same SheetJS dev/script-only dep; no npm fix; remediation tracked in 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-rf6f-7fwh-wjgh"
+ignoreUntil = 2026-08-15
+reason = "flatted 3.3.3 (8.9) — dev-only, pulled via eslint/test reporters; not in --prod tree. Fix = flatted 3.4.2 (transitive), deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-25h7-pfq9-p65f"
+ignoreUntil = 2026-08-15
+reason = "flatted 3.3.3 (7.5) — dev-only via eslint/test reporters; not in --prod tree."
+
+[[IgnoredVulns]]
+id = "GHSA-22p9-wv53-3rq4"
+ignoreUntil = 2026-08-15
+reason = "linkify-it 5.0.0 (8.7) — dev-only via markdown-it (root devDependency, doc/tooling); not in --prod tree. Fix = linkify-it 5.0.1, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-5c6j-r48x-rmvq"
+ignoreUntil = 2026-08-15
+reason = "serialize-javascript 6.0.2 (8.1) — dev-only via workbox-build; not in --prod tree; pre-existing accepted-risk."
+
+[[IgnoredVulns]]
+id = "GHSA-qj8w-gfj5-8c6v"
+ignoreUntil = 2026-08-15
+reason = "serialize-javascript 6.0.2 (5.9) — dev-only via workbox-build; same as GHSA-5c6j-r48x-rmvq."
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+ignoreUntil = 2026-08-15
+reason = "esbuild 0.18.20 (5.3) — dev-only build tooling (an old esbuild pulled by a dev transitive); not in --prod tree. Fix = bump the consumer to esbuild >=0.25, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-qx2v-qp2m-jg93"
+ignoreUntil = 2026-08-15
+reason = "postcss 8.5.6/8.5.9 (6.1) — dev-only via vite/vitest build tooling; not in --prod tree. Fix = postcss 8.5.10, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-2g4f-4pwh-qvx6"
+ignoreUntil = 2026-08-15
+reason = "ajv 6.12.6 (5.5) — dev-only via eslint; not in --prod tree; pre-existing accepted-risk."
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68"
+ignoreUntil = 2026-08-15
+reason = "js-yaml 4.1.1 (5.3) — dev-only root devDependency (sprint/doc tooling); not in --prod tree. Fix = js-yaml 4.2.0, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-6v5v-wf23-fmfq"
+ignoreUntil = 2026-08-15
+reason = "markdown-it 14.1.1 (5.3) — dev-only root devDependency (doc tooling); not in --prod tree. Fix = markdown-it 14.2.0, deferred to 13-31."
+
+[[IgnoredVulns]]
+id = "GHSA-x565-32qp-m3vf"
+ignoreUntil = 2026-08-15
+reason = "phin 2.9.3 (4.3) — dev-only via potrace/jimp; not in --prod tree; pre-existing accepted-risk."
+
+[[IgnoredVulns]]
+id = "GHSA-4x5r-pxfx-6jf8"
+ignoreUntil = 2026-08-15
+reason = "@babel/core 7.28.5 (3.2, Low) — dev-only build tooling; not in --prod tree. Fix = @babel/core 7.29.6, deferred to 13-31."
