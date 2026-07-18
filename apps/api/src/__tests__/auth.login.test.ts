@@ -3,8 +3,8 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, sql } from 'drizzle-orm';
-import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
+import { eq } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain, withAuditLogsMutable } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
 const request = supertest(app);
@@ -320,13 +320,11 @@ describe('Auth Login Integration', () => {
     });
 
     afterAll(async () => {
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
+      await withAuditLogsMutable(async (tx) => {
         if (suspendedUserId) {
           await tx.delete(auditLogs).where(eq(auditLogs.actorId, suspendedUserId));
           await tx.delete(users).where(eq(users.id, suspendedUserId));
         }
-        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       });
     });
 

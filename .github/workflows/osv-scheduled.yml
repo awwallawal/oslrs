@@ -1,0 +1,82 @@
+name: Scheduled OSV Audit (prod scope)
+
+# Story 13-32 AC6 — catch vulnerabilities NEWLY DISCLOSED against dependencies
+# we ALREADY ship, without waiting for the next push to main. The push/PR gate
+# in ci-cd.yml only runs when code changes; a dependency that becomes vulnerable
+# after the last deploy would otherwise sit un-flagged until someone pushes.
+#
+# This runs the SAME production-scope gate as ci-cd.yml (hard-fails iff a PROD
+# dependency is vulnerable). A red scheduled run notifies the repo admins via
+# GitHub's native scheduled-workflow failure email. Dev-tree findings are
+# surfaced non-blocking via SARIF (same two-tier model).
+
+on:
+  schedule:
+    # Mondays 06:17 UTC (weekly). Off the hour to avoid the cron thundering herd.
+    - cron: '17 6 * * 1'
+  workflow_dispatch: {}
+
+# Scan main's current lockfile regardless of which ref triggered a manual run.
+concurrency:
+  group: osv-scheduled
+  cancel-in-progress: true
+
+jobs:
+  osv-prod-scheduled:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      # Pinned identically to ci-cd.yml (Node 20-compatible pnpm; matches the
+      # `packageManager` field). Bump both in lockstep with the workspace.
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Security audit — production scope (BLOCKING)
+        run: |
+          pnpm ls -r --prod --depth Infinity --json > osv-prod-ls.json
+          docker run --rm -v "$PWD:/src" -w /src \
+            ghcr.io/google/osv-scanner-action@sha256:48406c58197201fe55e56615ad9d414f85063da320e204d0b0ed460fb3908dba \
+            --format=json --lockfile=pnpm-lock.yaml --output-file=osv-full.json || true
+          pnpm --filter @oslsr/api exec tsx scripts/osv-prod-gate.ts "$PWD/osv-prod-ls.json" "$PWD/osv-full.json"
+
+      - name: Security audit — full-tree report (non-blocking → SARIF)
+        if: always()
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            ghcr.io/google/osv-scanner-action@sha256:48406c58197201fe55e56615ad9d414f85063da320e204d0b0ed460fb3908dba \
+            --config=osv-scanner.toml --format=sarif --lockfile=pnpm-lock.yaml --output-file=osv-full.sarif || true
+
+      - name: Upload OSV SARIF to GitHub Security tab
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@fbcef3fba75224ed6476919775448de80b23cb15 # v3.32.0
+        with:
+          sarif_file: osv-full.sarif
+          category: osv-scanner-scheduled
+
+      - name: Upload OSV dependency report (JSON + SARIF)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: osv-dependency-report-scheduled
+          path: |
+            osv-full.json
+            osv-full.sarif
+          retention-days: 30

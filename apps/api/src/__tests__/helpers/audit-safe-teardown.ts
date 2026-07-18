@@ -1,108 +1,145 @@
 /**
- * Race-free integration-test teardown for fixtures that fire fire-and-forget
- * audit writes (Story 13-30).
+ * Race-free, deadlock-free integration-test teardown for fixtures that touch the
+ * append-only `audit_logs` table (Story 13-30; generalised + made deadlock-safe
+ * and superuser-independent in 13-32).
  *
- * WHY THIS EXISTS
- * The audit path is fire-and-forget by design (the 9-26 lesson: comms/audit
- * must never sink a request). A request therefore RESOLVES before its
- * `AuditService.logAction` INSERT has committed — e.g. `auth.login_success`
- * (auth.service.ts) writes `audit_logs.actor_id = <the user>` after the HTTP
- * response is already sent. In an `afterAll` that deletes those test users, an
- * in-flight audit row can land AFTER we delete `audit_logs` but BEFORE we delete
- * `users`, so the users delete violates `audit_logs_actor_id_users_id_fk`
- * (Postgres 23503). Every assertion passed; only the cleanup throws. This
- * intermittently reddened CI and blocked deploys (run 29249011546, 2026-07-13;
- * again on the 13-28 re-push via user.profile.test.ts). `actor_id` is the sole
- * FK from `audit_logs` to `users` (`target_id` has no reference), so the race
- * exists only where a fire-and-forget write carries the deleted user as `actorId`.
+ * TWO PROBLEMS THIS SOLVES
+ *  A. The FK race (SQLSTATE 23503). Audit writes are fire-and-forget by design
+ *     (the 9-26 lesson: comms/audit must never sink a request), so a request
+ *     RESOLVES before its `audit_logs.actor_id = <user>` INSERT commits. An
+ *     `afterAll` that deletes those users can then hit
+ *     `audit_logs_actor_id_users_id_fk`. Closed by taking `FOR UPDATE` on the
+ *     users FIRST (see purgeUsersWithAuditDrain): that conflicts with the
+ *     `FOR KEY SHARE` a concurrent audit-insert must take on the users row, so no
+ *     new referencing row can appear for those users during the tx.
+ *  B. The teardown deadlock (SQLSTATE 40P01). Deleting `audit_logs` rows requires
+ *     getting past the append-only `BEFORE UPDATE OR DELETE` trigger, and the only
+ *     owner-privilege way is `ALTER TABLE ... DISABLE TRIGGER`, which takes a
+ *     strong, self-conflicting table lock (`ShareRowExclusiveLock` on PG 13+).
+ *     Two teardowns doing that concurrently DEADLOCK (both wait for
+ *     ShareRowExclusiveLock on audit_logs, each blocked by the other). Closed by
+ *     a `pg_advisory_xact_lock` that serialises all audit
+ *     teardowns (only one holds the table lock at a time) + a bounded retry for
+ *     the narrow teardown-vs-insert window.
  *
- * THE FIX (deterministic, not probabilistic)
- * Because NO HTTP requests run during `afterAll`, the set of in-flight audit
- * writes is finite and monotonically draining. We retry the
- * (delete audit_logs -> delete users) pair inside one transaction; the loop
- * returns ONLY on a clean delete, so it cannot exit while the FK race is still
- * live — the window is closed by construction, not merely narrowed. Once the
- * last straggling audit write has committed, the next attempt's audit delete
- * removes it and the users delete succeeds. A non-draining FK violation or any
- * other error escapes after the bounded attempts, by design (surfacing a real
- * problem instead of masking it).
+ * WHY NOT `session_replication_role='replica'`? It is lock-free but needs a
+ * SUPERUSER role AND disables FK enforcement (so cascade/SET-NULL on a deleted
+ * user's other children would silently not fire). The advisory + DISABLE TRIGGER
+ * approach needs only table OWNERSHIP (every test DB here — `user` locally,
+ * `test_user` in CI — owns its schema) and keeps FK enforcement ON, so cascades
+ * work. It is the single path used everywhere.
  *
- * The product FK and the audit-immutability trigger are UNTOUCHED — only the
- * test teardown ORDERING is corrected (per AC1 guardrail).
+ * The product FK and the audit-immutability trigger are UNTOUCHED — only the test
+ * teardown transaction is corrected. Verified: 240/240 concurrent teardowns with
+ * zero errors + a deterministic 2-connection race test (audit-safe-teardown.race.test.ts).
+ *
+ * HONEST GUARANTEE (13-32 review L3): the *original* 23503 was never reproduced,
+ * so what is proven is (a) the FK-invariant BY CONSTRUCTION for the locked users
+ * and (b) deadlock-safety of the serialised `DISABLE TRIGGER` — NOT full
+ * determinism. The residual is a low-probability empirical one: sustained
+ * parallel audit-write pressure could in principle exhaust the bounded retry
+ * (`maxAttempts`), re-surfacing the flake class under 40P01/23503. Burn-in, not
+ * a proof-of-absence.
  */
 import { db } from '../../db/index.js';
 import { auditLogs, users } from '../../db/schema/index.js';
 import { inArray, sql } from 'drizzle-orm';
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+/** The transaction handle drizzle passes to a `db.transaction` callback. */
+export type AuditTeardownTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/**
- * True when the error is the audit_logs -> users FK race this helper closes.
- * Matched by both the named constraint and the SQLSTATE so it survives a driver
- * that surfaces one but not the other.
- */
-function isAuditActorFkRace(err: unknown): boolean {
-  const e = err as { message?: string; code?: string; constraint?: string };
-  if (e?.code === '23503' || e?.constraint === 'audit_logs_actor_id_users_id_fk') {
-    return true;
-  }
-  const msg = String(e?.message ?? err);
-  return msg.includes('audit_logs_actor_id_users_id_fk') || msg.includes('23503');
+// Stable, arbitrary key so ALL audit teardowns (this helper + any caller of
+// withAuditLogsMutable) serialise on the same advisory lock.
+const AUDIT_TEARDOWN_ADVISORY_KEY = 429_142;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Unwrap the pg error code through drizzle's wrapper (`.cause`). */
+function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e?.code ?? e?.cause?.code;
 }
 
-export interface PurgeUsersOptions {
-  /** Max attempts before rethrowing the FK error (default 12; ~1.5s total backoff). */
-  maxAttempts?: number;
+/** Retryable teardown error: deadlock (40P01) or the FK race (23503). */
+function isRetryableTeardownError(err: unknown): boolean {
+  const c = pgCode(err);
+  if (c === '40P01' || c === '23503') return true;
+  const msg = String((err as { message?: string })?.message ?? err);
+  return msg.includes('40P01') || msg.includes('23503') || msg.includes('deadlock');
 }
 
 /**
- * Delete the given test users and their audit trail without a teardown FK race.
- * Safe no-op when no ids are given; idempotent (re-running deletes nothing new).
+ * Run `body(tx)` in a transaction where `audit_logs` is deletable (the
+ * append-only trigger is disabled) WITHOUT the deadlock the table-wide ACCESS
+ * EXCLUSIVE lock would otherwise cause under concurrent teardowns.
  *
- * Use in an integration test's `afterAll` in place of the hand-rolled
- * "disable trigger -> delete audit_logs by actor -> delete users" block whenever
- * the test performed a real login/logout/re-auth (or any action that fires a
- * fire-and-forget audit write) as one of the users being deleted.
+ * Serialised across all callers via one advisory lock; bounded-retried on
+ * deadlock/FK-race (the in-flight audit-write set is finite in an `afterAll`, so
+ * it converges). FK enforcement stays ON, so any cascade/SET-NULL on rows `body`
+ * deletes still fires. `body` must be idempotent (it may run more than once) —
+ * plain deletes are.
  *
- * Non-audit child rows that carry their OWN foreign key to `users`
- * (e.g. user_backup_codes) must still be deleted by the caller BEFORE calling
- * this; rows unrelated to the FK (magic_link_tokens, keyed by email) can be
- * cleaned up in any order.
+ * Use this in an integration `afterAll` for ANY cleanup that deletes `audit_logs`
+ * rows (by actor OR target). For the common "delete these users + their audit
+ * trail" case, prefer {@link purgeUsersWithAuditDrain}.
  */
-export async function purgeUsersWithAuditDrain(
-  userIds: Array<string | undefined | null>,
-  options: PurgeUsersOptions = {},
+export async function withAuditLogsMutable(
+  body: (tx: AuditTeardownTx) => Promise<void>,
+  maxAttempts = 5,
 ): Promise<void> {
-  const ids = userIds.filter((id): id is string => Boolean(id));
-  if (ids.length === 0) return;
-
-  const maxAttempts = options.maxAttempts ?? 12;
-
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await db.transaction(async (tx) => {
+        // Serialise teardowns: no two hold the DISABLE-TRIGGER table lock
+        // (ShareRowExclusiveLock, self-conflicting) at once, so the
+        // teardown-vs-teardown deadlock cannot form. Held until commit. No
+        // privilege required.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_TEARDOWN_ADVISORY_KEY})`);
         await tx.execute(
           sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`,
         );
-        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, ids));
-        await tx.delete(users).where(inArray(users.id, ids));
+        await body(tx);
         await tx.execute(
           sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`,
         );
       });
-      return; // clean delete — the window is closed for this run
+      return;
     } catch (err) {
-      if (!isAuditActorFkRace(err) || attempt === maxAttempts) throw err;
-      // A straggling fire-and-forget audit write committed between our two
-      // deletes. It is now visible and will be removed on the next attempt;
-      // the in-flight set is finite (no requests run in afterAll), so this
-      // converges. Brief, growing backoff to let the pool settle first.
-      // NOTE: each retry re-runs the `DISABLE TRIGGER` above, which takes an
-      // ACCESS EXCLUSIVE lock on audit_logs — so retries serialize teardowns
-      // under parallel load. This only bites on the rare race path (attempt 1
-      // is lock-cost-equivalent to the old inline block), so it's acceptable.
+      // Narrow window: a fire-and-forget insert holding RowExclusive(audit_logs)
+      // and wanting KEY SHARE(user) can deadlock our FOR UPDATE(user) +
+      // DISABLE-TRIGGER lock request; Postgres kills one tx. Retry — the
+      // in-flight set drains, so this converges.
+      if (!isRetryableTeardownError(err) || attempt === maxAttempts) throw err;
       await sleep(20 * attempt);
     }
   }
+}
+
+/**
+ * Delete the given test users and their audit trail without a teardown FK race
+ * or a `DISABLE TRIGGER` deadlock. Safe no-op when no ids are given; idempotent.
+ *
+ * Use in an integration test's `afterAll` in place of a hand-rolled
+ * "disable trigger -> delete audit_logs by actor -> delete users" block whenever
+ * the test performed a real login/logout/re-auth (or any action that fires a
+ * fire-and-forget audit write) as one of the users being deleted.
+ *
+ * Child rows with a RESTRICT/NO ACTION FK to `users` must still be deleted by the
+ * caller BEFORE calling this; cascade / SET-NULL children are handled by the FK
+ * actions on the users delete (FK enforcement stays on).
+ */
+export async function purgeUsersWithAuditDrain(
+  userIds: Array<string | undefined | null>,
+): Promise<void> {
+  const ids = userIds.filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return;
+
+  await withAuditLogsMutable(async (tx) => {
+    // Parent lock FIRST — conflicts with the FOR KEY SHARE a concurrent audit
+    // insert takes on the referenced users row, so no new audit_logs row can
+    // reference these users for the rest of the tx (closes the 23503 window).
+    await tx.select({ id: users.id }).from(users).where(inArray(users.id, ids)).for('update');
+    await tx.delete(auditLogs).where(inArray(auditLogs.actorId, ids));
+    await tx.delete(users).where(inArray(users.id, ids));
+  });
 }

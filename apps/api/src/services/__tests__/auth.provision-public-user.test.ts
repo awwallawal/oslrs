@@ -9,7 +9,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { AuthService } from '../auth.service.js';
 import { db } from '../../db/index.js';
 import { users, roles, auditLogs } from '../../db/schema/index.js';
-import { eq, inArray, or, sql } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
+import { withAuditLogsMutable } from '../../__tests__/helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
 describe('AuthService.provisionPublicUserForWizard (Story 9-38)', () => {
@@ -33,19 +34,13 @@ describe('AuthService.provisionPublicUserForWizard (Story 9-38)', () => {
       .from(users)
       .where(inArray(users.email, createdEmails));
     const userIds = rows.map((r) => r.id);
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`,
-      );
+    await withAuditLogsMutable(async (tx) => {
       if (userIds.length > 0) {
         await tx
           .delete(auditLogs)
           .where(or(inArray(auditLogs.targetId, userIds), inArray(auditLogs.actorId, userIds)));
       }
       await tx.delete(users).where(inArray(users.email, createdEmails));
-      await tx.execute(
-        sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`,
-      );
     });
   }, 30000);
 

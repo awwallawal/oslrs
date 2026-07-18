@@ -3,8 +3,8 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, sql } from 'drizzle-orm';
-import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
+import { eq } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain, withAuditLogsMutable } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { Redis } from 'ioredis';
@@ -247,13 +247,11 @@ describe('Auth Password Reset Integration', () => {
     });
 
     afterAll(async () => {
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
+      await withAuditLogsMutable(async (tx) => {
         if (expiredUserId) {
           await tx.delete(auditLogs).where(eq(auditLogs.actorId, expiredUserId));
           await tx.delete(users).where(eq(users.id, expiredUserId));
         }
-        await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
       });
       // Clean up Redis token (hashed key, F-011)
       await testRedisClient.del(`password_reset:${createHash('sha256').update(expiredToken).digest('hex')}`);

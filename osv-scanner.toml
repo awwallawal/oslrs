@@ -1,104 +1,75 @@
-# osv-scanner ignore config — Story 13-31 (2026-07-16)
+# osv-scanner accepted-risk config — Story 13-32 (2026-07-18)
 #
-# Why this file exists
-# --------------------
-# npm retired the legacy audit endpoint (HTTP 410 Gone, 2026-07-15) that
-# `pnpm audit` called; pnpm has no released version on the bulk advisory
-# endpoint (broken across the 9.x + 10.x lines — pnpm/pnpm#11265). CI's
-# `pnpm audit --audit-level=high --prod` gate therefore hard-failed every
-# deploy. We replaced it with osv-scanner (reads pnpm-lock.yaml against the
-# OSV database, no dependency on the retired endpoint) — see .github/workflows/ci-cd.yml.
+# What changed from Story 13-31
+# -----------------------------
+# 13-31 adopted osv-scanner (npm retired the legacy `pnpm audit` endpoint, 410
+# Gone) but osv-scanner has no `--prod` mode: it scans the WHOLE pnpm-lock.yaml,
+# surfacing the dev/build/test-tooling subtree the retired `pnpm audit --prod`
+# gate correctly excluded. 13-31 grandfathered 17 such findings here with
+# `ignoreUntil = 2026-08-15` — a deliberate forcing function that would re-fail
+# CI on that date. 13-32 removes that expiry cliff at the ROOT CAUSE.
 #
-# osv-scanner has no `--prod` equivalent: it scans the WHOLE lockfile, so it
-# surfaces the dev/build/test-tooling subtree that the prior `--prod` gate
-# correctly excluded (and that Story 9-54's structural fixes already assessed).
-# Every entry below was verified NOT to be in the production dependency tree
-# (`pnpm why -r --prod <pkg>` empty, 2026-07-16). Grandfathering them here
-# reproduces the team's signed-off posture — no high/critical in *prod* deps —
-# while keeping osv-scanner a HARD gate for any NEW vulnerability.
+# The new two-tier CI gate (.github/workflows/ci-cd.yml)
+# ------------------------------------------------------
+#   1. BLOCKING gate — PRODUCTION scope only. Reproduces the retired
+#      `pnpm audit --prod` posture: osv-scanner scans the full lockfile, then
+#      apps/api/scripts/osv-prod-gate.ts keeps ONLY findings whose package is in
+#      pnpm's production dependency closure (`pnpm ls -r --prod --depth Infinity
+#      --json`) and fails the build iff a PROD dependency is vulnerable. This
+#      config file is NOT consulted by the blocking gate — the prod scope makes
+#      the entire dev-tree class evaporate from the deploy-blocking surface, so
+#      no per-CVE ignore is needed to keep it green.
+#   2. REPORT-ONLY tier — full lockfile, NON-BLOCKING. osv-scanner scans the
+#      whole tree with `--config=osv-scanner.toml` → SARIF → GitHub Security
+#      tab. This preserves dev-tree visibility (a compromised build tool is a
+#      real supply-chain signal) WITHOUT blocking deploys. The entries below
+#      filter the handful of PERMANENTLY-accepted dev-only risks out of that
+#      report so it stays actionable (any NEW dev-tree vuln still surfaces).
 #
-# ignoreUntil = 2026-08-15 forces re-triage in ~4 weeks (post-launch): each
-# ignore expires and re-fails the build unless burned down or re-justified in
-# Story 13-31's remediation pass (turbo 2.x major, xlsx→SheetJS CDN, dev-tree
-# patch bumps). Fixed at adoption via bounded overrides: vite, form-data,
-# follow-redirects (see package.json pnpm.overrides).
+# Why these three remain (13-32 remediation, 2026-07-16 → 2026-07-18)
+# -------------------------------------------------------------------
+# 11 of the 13-31 findings were fixed at source and their ignore lines DELETED:
+#   * turbo 1.13 → 2.10.5 (major bump via @turbo/codemod) — kills the 9.8 Critical.
+#   * bounded overrides (>=fixed <nextMajor, per package.json override-policy):
+#     flatted, postcss, esbuild, js-yaml, markdown-it, linkify-it, ajv, @babel/core.
+# The THREE below have NO in-policy fix (their patch crosses a major, which the
+# repo override-policy forbids — the 9-54 footgun — or no npm fix exists). All
+# three are dev-only (`pnpm why -r --prod <pkg>` empty, re-verified 2026-07-18)
+# and OUT of the blocking prod-scope gate entirely. They are converted from an
+# EXPIRING grandfather to a PERMANENT (no `ignoreUntil`) accepted-risk, mirroring
+# package.json pnpm.comments.accepted-risks. AC4: zero expiring entries remain.
 
-[[IgnoredVulns]]
-id = "GHSA-3qcw-2rhx-2726"
-ignoreUntil = 2026-08-15
-reason = "turbo 1.13.0 CRITICAL (9.8) — dev-only monorepo build orchestrator (root devDependency); not shipped to prod runtime (pnpm why --prod empty). Fix = turbo 2.x major bump, deferred to 13-31."
-
-[[IgnoredVulns]]
-id = "GHSA-hcf7-66rw-9f5r"
-ignoreUntil = 2026-08-15
-reason = "turbo 1.13.0 (5.1) — dev-only build orchestrator; same major-bump remediation as GHSA-3qcw-2rhx-2726."
-
+# --- xlsx (SheetJS) — no npm fix published -------------------------------------
+# devDependency; the only consumer, apps/api/src/services/xlsform-parser.service.ts
+# (admin one-time XLSForm import, Story 2-9), dynamically imports it and returns
+# 503 under a `--prod` install where xlsx is absent. Removal was assessed in
+# 13-32 and rejected: it would force `parseXlsxFile` async (exceljs.load is async)
+# across the runtime feature path + ~40 synchronous test call sites — a large
+# churn to a live feature for zero prod-gate benefit (xlsx is already out of prod
+# scope). Permanent accepted-risk.
 [[IgnoredVulns]]
 id = "GHSA-4r6h-8v6p-xvw6"
-ignoreUntil = 2026-08-15
-reason = "xlsx 0.18.5 (7.8, prototype pollution) — SheetJS dev/script-only (one-time xlsform migration), not in --prod tree; pre-existing accepted-risk. No npm fix published; remediation = SheetJS CDN build, tracked in 13-31."
+reason = "xlsx 0.18.5 (7.8, prototype pollution) — SheetJS dev-only (admin XLSForm import; 503 under --prod). No npm fix published. Not in --prod tree. Permanent accepted-risk (13-32)."
 
 [[IgnoredVulns]]
 id = "GHSA-5pgg-2g8v-p4x9"
-ignoreUntil = 2026-08-15
-reason = "xlsx 0.18.5 (7.5, ReDoS) — same SheetJS dev/script-only dep; no npm fix; remediation tracked in 13-31."
+reason = "xlsx 0.18.5 (7.5, ReDoS) — same SheetJS dev-only dep; no npm fix. Not in --prod tree. Permanent accepted-risk (13-32)."
 
-[[IgnoredVulns]]
-id = "GHSA-rf6f-7fwh-wjgh"
-ignoreUntil = 2026-08-15
-reason = "flatted 3.3.3 (8.9) — dev-only, pulled via eslint/test reporters; not in --prod tree. Fix = flatted 3.4.2 (transitive), deferred to 13-31."
-
-[[IgnoredVulns]]
-id = "GHSA-25h7-pfq9-p65f"
-ignoreUntil = 2026-08-15
-reason = "flatted 3.3.3 (7.5) — dev-only via eslint/test reporters; not in --prod tree."
-
-[[IgnoredVulns]]
-id = "GHSA-22p9-wv53-3rq4"
-ignoreUntil = 2026-08-15
-reason = "linkify-it 5.0.0 (8.7) — dev-only via markdown-it (root devDependency, doc/tooling); not in --prod tree. Fix = linkify-it 5.0.1, deferred to 13-31."
-
+# --- serialize-javascript — fix crosses a major (6 → 7) ------------------------
+# dev-only via workbox-build (PWA service-worker generation at web-build time).
+# Fixes land in 7.0.3/7.0.5; a 6→7 override violates the bounded override-policy
+# (>=x <nextMajor). Not in --prod tree. Permanent accepted-risk.
 [[IgnoredVulns]]
 id = "GHSA-5c6j-r48x-rmvq"
-ignoreUntil = 2026-08-15
-reason = "serialize-javascript 6.0.2 (8.1) — dev-only via workbox-build; not in --prod tree; pre-existing accepted-risk."
+reason = "serialize-javascript 6.0.2 (8.1) — dev-only via workbox-build; fix @7.0.5 crosses a major (override-policy forbids). Not in --prod tree. Permanent accepted-risk (13-32)."
 
 [[IgnoredVulns]]
 id = "GHSA-qj8w-gfj5-8c6v"
-ignoreUntil = 2026-08-15
-reason = "serialize-javascript 6.0.2 (5.9) — dev-only via workbox-build; same as GHSA-5c6j-r48x-rmvq."
+reason = "serialize-javascript 6.0.2 (5.9) — dev-only via workbox-build; fix @7.0.5 crosses a major. Not in --prod tree. Permanent accepted-risk (13-32)."
 
-[[IgnoredVulns]]
-id = "GHSA-67mh-4wv8-2f99"
-ignoreUntil = 2026-08-15
-reason = "esbuild 0.18.20 (5.3) — dev-only build tooling (an old esbuild pulled by a dev transitive); not in --prod tree. Fix = bump the consumer to esbuild >=0.25, deferred to 13-31."
-
-[[IgnoredVulns]]
-id = "GHSA-qx2v-qp2m-jg93"
-ignoreUntil = 2026-08-15
-reason = "postcss 8.5.6/8.5.9 (6.1) — dev-only via vite/vitest build tooling; not in --prod tree. Fix = postcss 8.5.10, deferred to 13-31."
-
-[[IgnoredVulns]]
-id = "GHSA-2g4f-4pwh-qvx6"
-ignoreUntil = 2026-08-15
-reason = "ajv 6.12.6 (5.5) — dev-only via eslint; not in --prod tree; pre-existing accepted-risk."
-
-[[IgnoredVulns]]
-id = "GHSA-h67p-54hq-rp68"
-ignoreUntil = 2026-08-15
-reason = "js-yaml 4.1.1 (5.3) — dev-only root devDependency (sprint/doc tooling); not in --prod tree. Fix = js-yaml 4.2.0, deferred to 13-31."
-
-[[IgnoredVulns]]
-id = "GHSA-6v5v-wf23-fmfq"
-ignoreUntil = 2026-08-15
-reason = "markdown-it 14.1.1 (5.3) — dev-only root devDependency (doc tooling); not in --prod tree. Fix = markdown-it 14.2.0, deferred to 13-31."
-
+# --- phin — fix crosses a major (2 → 3) ----------------------------------------
+# dev-only via potrace/jimp (image tooling). Fix lands in 3.7.1; a 2→3 override
+# violates the bounded override-policy. Not in --prod tree. Permanent accepted-risk.
 [[IgnoredVulns]]
 id = "GHSA-x565-32qp-m3vf"
-ignoreUntil = 2026-08-15
-reason = "phin 2.9.3 (4.3) — dev-only via potrace/jimp; not in --prod tree; pre-existing accepted-risk."
-
-[[IgnoredVulns]]
-id = "GHSA-4x5r-pxfx-6jf8"
-ignoreUntil = 2026-08-15
-reason = "@babel/core 7.28.5 (3.2, Low) — dev-only build tooling; not in --prod tree. Fix = @babel/core 7.29.6, deferred to 13-31."
+reason = "phin 2.9.3 (4.3) — dev-only via potrace/jimp; fix @3.7.1 crosses a major (override-policy forbids). Not in --prod tree. Permanent accepted-risk (13-32)."

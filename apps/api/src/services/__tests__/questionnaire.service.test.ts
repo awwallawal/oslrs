@@ -7,7 +7,8 @@ import {
   questionnaireVersions,
 } from '../../db/schema/index.js';
 import { users, roles, auditLogs } from '../../db/schema/index.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
+import { withAuditLogsMutable } from '../../__tests__/helpers/audit-safe-teardown.js';
 import { QuestionnaireService } from '../questionnaire.service.js';
 import { hashPassword } from '@oslsr/utils';
 import { modulus11Generate } from '@oslsr/utils/src/validation';
@@ -146,8 +147,7 @@ describe('QuestionnaireService', () => {
 
   afterAll(async () => {
     // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
+    await withAuditLogsMutable(async (tx) => {
       if (testFormIds.length > 0) {
         await tx.delete(auditLogs).where(inArray(auditLogs.targetId, testFormIds));
         await tx.delete(questionnaireVersions).where(inArray(questionnaireVersions.questionnaireFormId, testFormIds));
@@ -157,7 +157,6 @@ describe('QuestionnaireService', () => {
         await tx.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
         await tx.delete(users).where(eq(users.id, testUserId));
       }
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
     });
   });
 

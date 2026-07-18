@@ -20,7 +20,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { authenticator } from 'otplib';
 import { db } from '../../db/index.js';
 import { users, roles, userBackupCodes, auditLogs } from '../../db/schema/index.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
+import { withAuditLogsMutable } from '../../__tests__/helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 import { MfaService, BACKUP_CODE_COUNT, BACKUP_CODE_LENGTH, MFA_ISSUER } from '../mfa.service.js';
 import { getRedisClient } from '../../lib/redis.js';
@@ -67,12 +68,10 @@ describe('MfaService', { timeout: 15000 }, () => {
 
   afterAll(async () => {
     if (testUsers.length === 0) return;
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
+    await withAuditLogsMutable(async (tx) => {
       await tx.delete(auditLogs).where(inArray(auditLogs.actorId, testUsers));
       await tx.delete(userBackupCodes).where(inArray(userBackupCodes.userId, testUsers));
       await tx.delete(users).where(inArray(users.id, testUsers));
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
     });
   });
 

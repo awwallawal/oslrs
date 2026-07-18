@@ -1,48 +1,114 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env"],
-  "pipeline": {
+  "globalDependencies": [
+    ".env"
+  ],
+  "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "lint": {
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "VITEST_MAX_THREADS"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**",
+        "vitest-report.json",
+        ".vitest-live-*.json"
+      ],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "VITEST_MAX_THREADS"
+      ]
     },
     "test:golden": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**",
+        "vitest-report.json",
+        ".vitest-live-*.json"
+      ],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
     },
     "test:security": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**",
+        "vitest-report.json",
+        ".vitest-live-*.json"
+      ],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
     },
     "test:contract": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**",
+        "vitest-report.json",
+        ".vitest-live-*.json"
+      ],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
     },
     "test:ui": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**", "vitest-report.json", ".vitest-live-*.json"],
-      "env": ["NODE_ENV"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**",
+        "vitest-report.json",
+        ".vitest-live-*.json"
+      ],
+      "env": [
+        "NODE_ENV"
+      ]
     },
     "test:e2e": {
-      "dependsOn": ["^build"],
-      "outputs": ["playwright-report/**", "test-results/**"],
-      "env": ["CI", "NODE_ENV"],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "playwright-report/**",
+        "test-results/**"
+      ],
+      "env": [
+        "CI",
+        "NODE_ENV"
+      ],
       "cache": false
     },
     "test:dashboard": {
       "dependsOn": [],
-      "outputs": ["test-pipeline.html", ".vitest-live.json"],
+      "outputs": [
+        "test-pipeline.html",
+        ".vitest-live.json"
+      ],
       "cache": false
     }
   }
