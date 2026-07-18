@@ -99,7 +99,14 @@
       ],
       "env": [
         "CI",
-        "NODE_ENV"
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "REFRESH_TOKEN_SECRET",
+        "PUBLIC_APP_URL",
+        "VITE_E2E",
+        "E2E"
       ],
       "cache": false
     },
