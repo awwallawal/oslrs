@@ -3,7 +3,8 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
 const request = supertest(app);
@@ -59,16 +60,10 @@ describe('User Profile Integration', () => {
   }, 30000);
 
   afterAll(async () => {
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-      const userIds = [userId, otherUserId].filter(Boolean);
-      if (userIds.length > 0) {
-        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
-      }
-      if (userId) await tx.delete(users).where(eq(users.id, userId));
-      if (otherUserId) await tx.delete(users).where(eq(users.id, otherUserId));
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-    });
+    // Story 13-30: the login (beforeAll) and profile-update tests fire
+    // fire-and-forget `audit_logs.actor_id` writes for these users; drain them
+    // to avoid the delete-order FK teardown race.
+    await purgeUsersWithAuditDrain([userId, otherUserId]);
   });
 
   describe('GET /api/v1/users/profile', () => {

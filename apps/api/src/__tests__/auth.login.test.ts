@@ -3,7 +3,8 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
 const request = supertest(app);
@@ -63,22 +64,10 @@ describe('Auth Login Integration', () => {
   }, 30000);
 
   afterAll(async () => {
-    // Wrap in transaction to prevent race conditions with parallel test files
-    // toggling the immutable trigger (Story 6-1 code review fix)
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-      const userIds = [staffUserId, publicUserId].filter(Boolean);
-      if (userIds.length > 0) {
-        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
-      }
-      if (staffUserId) {
-        await tx.delete(users).where(eq(users.id, staffUserId));
-      }
-      if (publicUserId) {
-        await tx.delete(users).where(eq(users.id, publicUserId));
-      }
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-    });
+    // Story 13-30: the successful staff + public logins in this block fire
+    // fire-and-forget `audit_logs.actor_id` writes for these users; drain them
+    // deterministically to avoid the delete-order FK teardown race.
+    await purgeUsersWithAuditDrain([staffUserId, publicUserId]);
   });
 
   describe('Staff Login - POST /api/v1/auth/staff/login', () => {

@@ -4,6 +4,7 @@ import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
 import { eq, sql } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { Redis } from 'ioredis';
@@ -46,15 +47,10 @@ describe('Auth Password Reset Integration', () => {
   });
 
   afterAll(async () => {
-    // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-      if (testUserId) {
-        await tx.delete(auditLogs).where(eq(auditLogs.actorId, testUserId));
-        await tx.delete(users).where(eq(users.id, testUserId));
-      }
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-    });
+    // Story 13-30: the "allow login with new password" test performs a
+    // successful login as testUser, firing a fire-and-forget audit_logs write;
+    // drain it before deleting to avoid the teardown FK race.
+    await purgeUsersWithAuditDrain([testUserId]);
     await testRedisClient.quit();
   });
 

@@ -2,8 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
-import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq, sql } from 'drizzle-orm';
+import { users, roles } from '../db/schema/index.js';
+import { eq } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
 /**
@@ -48,15 +49,10 @@ describe('Audit Routes - Authorization', () => {
   });
 
   afterAll(async () => {
-    // Wrap in transaction to prevent race conditions with parallel test files (Story 6-1 review fix)
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-      if (enumeratorUserId) {
-        await tx.delete(auditLogs).where(eq(auditLogs.actorId, enumeratorUserId));
-        await tx.delete(users).where(eq(users.id, enumeratorUserId));
-      }
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-    });
+    // Story 13-30: the staff login in beforeAll fires a fire-and-forget
+    // `audit_logs.actor_id` write for this user; drain it to avoid the
+    // delete-order FK teardown race.
+    await purgeUsersWithAuditDrain([enumeratorUserId]);
   });
 
   it('should return 401 for unauthenticated request', async () => {

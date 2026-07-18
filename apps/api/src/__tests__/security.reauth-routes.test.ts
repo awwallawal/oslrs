@@ -22,9 +22,10 @@ import { app } from '../app.js';
 import { SENSITIVE_ACTIONS } from '../middleware/sensitive-action.js';
 import { getRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
-import { users, roles, auditLogs, magicLinkTokens } from '../db/schema/index.js';
+import { users, roles, magicLinkTokens } from '../db/schema/index.js';
 import { MagicLinkService } from '../services/magic-link.service.js';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 import { randomUUID } from 'node:crypto';
 
@@ -217,19 +218,17 @@ describe('13-18 AC2/AC4 — step-up re-auth gating E2E', () => {
   }, 30000);
 
   afterAll(async () => {
-    const userIds = [adminId, logoutUserId, graceUserId, pwlessId].filter(Boolean);
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-      if (userIds.length > 0) {
-        await tx.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
-      }
-      await tx.delete(magicLinkTokens).where(eq(magicLinkTokens.email, pwlessEmail));
-      if (userIds.length > 0) {
-        await tx.delete(users).where(inArray(users.id, userIds));
-      }
-      await tx.execute(sql`DO $$ BEGIN ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable; EXCEPTION WHEN undefined_object THEN NULL; END $$`);
-    });
-    for (const id of userIds) {
+    const userIds = [adminId, logoutUserId, graceUserId, pwlessId];
+    // magic_link_tokens references users via `user_id ... ON DELETE cascade`,
+    // and pre-redemption rows are email-keyed (user_id null) — so its delete
+    // order relative to the users delete is irrelevant either way. Clean the
+    // email-keyed rows up separately; cascade takes care of any user_id-linked ones.
+    await db.delete(magicLinkTokens).where(eq(magicLinkTokens.email, pwlessEmail));
+    // Story 13-30: the E2E body above performs real login / re-auth / logout as
+    // these users, each firing a fire-and-forget `audit_logs.actor_id` write.
+    // purgeUsersWithAuditDrain closes the delete-order FK race deterministically.
+    await purgeUsersWithAuditDrain(userIds);
+    for (const id of userIds.filter(Boolean)) {
       await redis.del(reAuthKey(id));
     }
   });

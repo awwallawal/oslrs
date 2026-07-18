@@ -1,6 +1,6 @@
 # Story 13-30: Fix the `security.reauth-routes.test.ts` teardown FK-race flake
 
-Status: ready-for-dev
+Status: done
 
 <!-- Authored 2026-07-13 by Bob (SM) via *create-story. EMERGENT: the 13-27 deploy was blocked once by a CI `test-api` failure that was NOT a 13-27 defect — it was a latent flake in the 13-18 `security.reauth-routes.test.ts` `afterAll` cleanup. The test's assertions all passed; the teardown threw `audit_logs_actor_id_users_id_fk` (23503) deleting the test users. Passed clean on `gh run rerun --failed` → deployed. It will keep intermittently reddening CI and forcing a re-run on future deploys. Test-hygiene, NOT launch-gating. -->
 
@@ -22,9 +22,14 @@ so that **a passing test suite doesn't intermittently fail in CI teardown and bl
 4. **AC4 — Suites green + no new flake.** Full api suite green; the reauth-routes suite green across repeated runs (e.g. a `--repeat`/burn-in locally); tsc/eslint clean.
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC1, AC2)** — close the teardown FK window in `security.reauth-routes.test.ts` (await pending audit writes, or re-delete audit_logs pre-users-delete); justify determinism.
-- [ ] **Task 2 (AC3)** — sweep sibling integration teardowns for the same delete-users-after-async-audit pattern; fix or clear.
-- [ ] **Task 3 (AC4)** — burn-in the reauth-routes suite; full api suite + tsc/eslint.
+- [x] **Task 1 (AC1, AC2)** — close the teardown FK window in `security.reauth-routes.test.ts` (await pending audit writes, or re-delete audit_logs pre-users-delete); justify determinism.
+- [x] **Task 2 (AC3)** — sweep sibling integration teardowns for the same delete-users-after-async-audit pattern; fix or clear.
+- [x] **Task 3 (AC4)** — burn-in the reauth-routes suite; full api suite + tsc/eslint.
+
+### Review Follow-ups (AI) — 13-30 code-review, 2026-07-18 (all fixed same-pass)
+- [x] [AI-Review][Low] Correct the `security.reauth-routes.test.ts` teardown comment: `magic_link_tokens` DOES have a `user_id → users.id ON DELETE cascade` FK (not "no users FK"); reorder is safe via cascade + email-keyed null rows. [security.reauth-routes.test.ts:~227]
+- [x] [AI-Review][Low] AC3 sweep scope gap: the `DISABLE TRIGGER`-keyed grep couldn't surface `user.id-card`/`user.selfie` teardowns (delete users w/o that pattern). Verified both clean (endpoints don't audit); enumerated in the sweep table + scope note. [Dev Agent Record → AC3 sweep]
+- [x] [AI-Review][Low] Note in `audit-safe-teardown.ts` that each retry re-acquires an `ACCESS EXCLUSIVE` lock via `DISABLE TRIGGER` (serializes teardowns under parallel load); acceptable on the rare race path. [audit-safe-teardown.ts:~97]
 
 ## Dev Notes
 - **The audit path is fire-and-forget by design** (comms/audit never sinks a request — the 9-26 lesson), so any test that fires audited actions then deletes the actor in `afterAll` has this latent window. That's why AC3 sweeps for siblings.
@@ -38,7 +43,72 @@ so that **a passing test suite doesn't intermittently fail in CI teardown and bl
 - [Source: 13-18 (the test that owns this suite); 9-26 (fire-and-forget audit/comms lesson)]
 
 ## Dev Agent Record
+
+### Implementation Plan & Approach
+
+**Chosen fix = AC1 option (b) generalised into a shared, deterministic drain helper** — new
+`apps/api/src/__tests__/helpers/audit-safe-teardown.ts` exporting `purgeUsersWithAuditDrain(userIds)`.
+Pure option (a) ("await the fire-and-forget writes") is not available without instrumenting product
+code: `AuditService.logAction` dispatches `db.transaction(...).catch(...)` and exposes **no handle** to
+await (audit.service.ts:253/339). So the helper closes the window instead:
+
+- disable trigger → `DELETE audit_logs WHERE actor_id IN (ids)` → `DELETE users WHERE id IN (ids)` → re-enable,
+  all inside one `db.transaction`, wrapped in a **bounded retry loop** that re-attempts only on the
+  `audit_logs_actor_id_users_id_fk` / SQLSTATE `23503` race.
+- **Why this is deterministic, not probabilistic (AC2):** during `afterAll` no HTTP requests run, so the
+  set of in-flight fire-and-forget audit writes is **finite and monotonically draining**. The loop returns
+  ONLY on a clean delete — it cannot exit while the FK race is still live, so the window is closed *by
+  construction*, not merely narrowed. Once the last straggler commits, the next attempt's audit-delete
+  removes it and the users-delete succeeds. Any non-draining FK, or any other error, escapes after the
+  bounded attempts by design (surfaces a real problem instead of masking it).
+- **Guardrail honoured (AC1/PM item 3):** the product FK and the `audit_logs` immutable trigger are
+  untouched — only the *test teardown ordering* changed.
+
+**Root-cause precision (verify-before-asserting):** `audit_logs.actor_id → users.id` is the **sole** FK from
+`audit_logs` to `users` (`target_id` is a plain uuid, no reference — audit.ts:9/24). So the race exists
+**only** where a fire-and-forget write carries the deleted user as `actorId`. That write is
+`auth.login_success` / `auth.logout` / re-auth (auth.service.ts:918/991, fire-and-forget `logAction`).
+`auth.login_failed` etc. are `logger` events, **not** audit rows.
+
+### AC3 sweep — every `DISABLE TRIGGER trg_audit_logs_immutable` + `delete(users)` teardown, classified
+
+| Test file / block | Fires fire-and-forget audit with `actorId` = deleted user? | Verdict | Action |
+|---|---|---|---|
+| `security.reauth-routes.test.ts` (afterAll) | Yes — login/grace/logout/re-auth/privileged (the CI failure) | **RACY** | Fixed → helper |
+| `auth.login.test.ts` block 1 (successful staff+public login) | Yes — `auth.login_success` | **RACY** | Fixed → helper |
+| `auth.login.test.ts` block 2 (suspended user) | No — login rejected, only a `logger` event, no audit row | not racy | left as-is |
+| `auth.password-reset.test.ts` block 1 ("allow login with new password", :184) | Yes — successful `auth.login_success` | **RACY** | Fixed → helper (kept `testRedisClient.quit()`) |
+| `auth.password-reset.test.ts` block 2 (expired token) | No — logins rejected (401), no audit row | not racy | left as-is |
+| `user.profile.test.ts` (afterAll) | Yes — login (beforeAll) + profile-update audit | **RACY** | Fixed → helper |
+| `audit.verify-chain.test.ts` (afterAll) | Yes — staff login in beforeAll | **RACY** | Fixed → helper |
+| `auth.provision-public-user.test.ts` (afterAll) | No — provision audit is `actorId: null` (auth.service.ts:816); `target_id` is not an FK | not racy | left as-is |
+| `mfa.service.test.ts` (afterAll) | No — `mfa.service.ts` makes **zero** `AuditService` calls (service-level test, no HTTP) | not racy | left as-is |
+| `questionnaire.service.test.ts` (afterAll) | No — only awaited `logActionTx` (committed before the test's `await` returns) | not racy | left as-is |
+| `user.id-card.test.ts` (afterAll) | No — auths via a pre-signed JWT (no login audit); `downloadIDCard`/`verifyStaff` fire zero `AuditService` calls (UserController's sole `logAction` is profile-update) | not racy | left as-is |
+| `user.selfie.test.ts` (afterAll) | No — pre-signed JWT auth; `uploadSelfie` fires no audit write | not racy | left as-is |
+
+> **Sweep-scope note (13-30 code-review):** the primary grep keyed on the `DISABLE TRIGGER trg_audit_logs_immutable` + `delete(users)` pattern, which cannot surface teardowns that delete users *without* that pattern. A follow-up grep for **all** `delete(users)` HTTP-integration teardowns caught `user.id-card` / `user.selfie` (above) — both verified clean (their endpoints don't audit), so no action. Net remains **5 racy fixed**; the not-racy set is now **6, fully enumerated**.
+
+Net: **5 racy teardowns fixed** via the shared helper; **6 confirmed not-racy** with evidence (kept
+untouched to avoid churn/masking). Non-audit child cleanups unrelated to the FK (`magic_link_tokens` by
+email; `user_backup_codes`; form/version rows) were left in their files — only the audit↔users window needed the drain.
+
+### Verification (AC2/AC4)
+
+- **Reauth suite green:** `security.reauth-routes.test.ts` → 9/9 pass, teardown clean.
+- **Burn-in (parallel, the condition the race needs):** the 5 racy files run together, **~33 iterations, 0 `audit_logs_actor_id_users_id_fk` / 23503 hits** and 49/49 tests every green iteration. (One non-FK hook blip appeared once — `fkHits=0`, all 49 tests passed, a single file's hook threw — coincident with a transient network drop; not the audit FK race and not reproducible across the subsequent ~30 iterations.)
+- **ESLint:** clean on the helper + all 5 edited files. tsc: API `tsconfig` excludes `**/__tests__/**` + `**/*.test.ts`, so these are vitest-checked (esbuild) not `tsc`-checked — same as every other test file; the helper lives under `src/__tests__/helpers/` so it ships nowhere.
+- **Full API suite (authoritative AC4 gate, real parallelism profile):** `229 passed | 2 skipped (231 files)`, `3107 passed | 7 skipped (3114 tests)`, exit 0, **0** `audit_logs_actor_id_users_id_fk`/23503 occurrences in the entire run. The one burn-in blip did NOT recur — the full suite exercises all 5 files under real parallel load and was clean.
+- **tsc:** API `tsc --noEmit` exit 0 (product code untouched).
+
 ### File List
+- **NEW** `apps/api/src/__tests__/helpers/audit-safe-teardown.ts` — shared `purgeUsersWithAuditDrain` deterministic-drain teardown helper.
+- **MOD** `apps/api/src/__tests__/security.reauth-routes.test.ts` — afterAll → helper; dropped now-unused `auditLogs`/`inArray`/`sql` imports.
+- **MOD** `apps/api/src/__tests__/auth.login.test.ts` — block-1 afterAll → helper; dropped unused `inArray`.
+- **MOD** `apps/api/src/__tests__/auth.password-reset.test.ts` — block-1 afterAll → helper (kept `testRedisClient.quit()`).
+- **MOD** `apps/api/src/__tests__/user.profile.test.ts` — afterAll → helper; dropped unused `inArray`/`sql`.
+- **MOD** `apps/api/src/__tests__/audit.verify-chain.test.ts` — afterAll → helper; dropped unused `auditLogs`/`sql`.
+- **MOD** `_bmad-output/implementation-artifacts/sprint-status.yaml` — 13-30 → in-progress → review.
 
 ## PM Validation (John, 2026-07-13)
 
@@ -55,3 +125,5 @@ so that **a passing test suite doesn't intermittently fail in CI teardown and bl
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-13 | Story drafted via *create-story — the 13-18 `security.reauth-routes.test.ts` `afterAll` deletes test users after fire-and-forget audit writes can re-reference them, causing an intermittent `audit_logs_actor_id_users_id_fk` (23503) CI teardown failure that blocked the 13-27 deploy until a re-run. Fix the teardown ordering (await/re-delete), sweep sibling teardowns for the same class, burn-in. Test-hygiene, NOT launch-gating. EMERGENT from the 13-27 deploy flake. | Bob (SM) |
+| 2026-07-18 | **Code-review (adversarial, AI) — APPROVED, status → done.** All 4 ACs verified independently: AC1/AC2 retry-drain logic sound under READ COMMITTED (loop exits only on clean delete → window closed by construction); AC3 sweep re-audited (traced UserController's sole `logAction` = profile-update, so id-card/selfie confirmed non-auditing); AC4 re-run locally against `app_test` — eslint 0, reauth 9/9 clean teardown, **burn-in 4× the 5-file parallel set = 49/49 every iter, 0 `audit_logs_actor_id_users_id_fk`/23503**. 3 LOW findings, all fixed same-pass: (1) reauth comment "no users FK" corrected — it's a `ON DELETE cascade` FK; (2) AC3 table extended with id-card/selfie + scope note (grep blind spot, both clean); (3) helper retry ACCESS-EXCLUSIVE-lock note. No CRITICAL/HIGH/MEDIUM. | Amelia (Review) |
+| 2026-07-17 | Implemented. New shared `purgeUsersWithAuditDrain` helper (`apps/api/src/__tests__/helpers/audit-safe-teardown.ts`) closes the audit↔users delete-order FK window deterministically via a bounded retry that drains the finite in-flight fire-and-forget audit writes (AC1/AC2). AC3 sweep: 5 racy teardowns converted (reauth, auth.login b1, auth.password-reset b1, user.profile, audit.verify-chain); 4 confirmed not-racy (provision null-actor, mfa no-audit, questionnaire awaited-Tx, failed-login blocks) — evidenced in Dev Agent Record, left untouched. Verified: reauth 9/9; parallel burn-in ~33 iters / 0 FK hits; eslint clean; full API suite green. | Amelia (Dev) |
