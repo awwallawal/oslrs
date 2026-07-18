@@ -46,7 +46,14 @@ _(to be completed by the dev)_
 ### File List
 _(to be completed by the dev)_
 
-## PM Validation (to be completed)
+## PM Validation (John, 2026-07-18)
+
+**Validated — approved. Conversion-path polish, NOT launch-gating; pre-blast-nice-to-have.**
+1. **Priority:** the skills-picker close friction (AC1) could cost a few completions on the blast, so it's a nice-to-have before the send; the prefill re-framing (AC3) is pure polish. Neither blocks launch.
+2. **Scope is right — correctly built AROUND 13-29:** it does NOT redo the all-prefilled section skip (13-29's L1 shipped it) and does NOT touch the dedup mechanism (load-bearing raw_data plumbing). Framing + close affordance only.
+3. **Good call on NOT close-on-select** — skills is genuinely multi-select; the "Done ({n})" button is the right pattern.
+
+**No AC changes.** Dev-ready; pre-blast-nice-to-have, else post-launch.
 
 ## Change Log
 | Date | Change | By |

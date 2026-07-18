@@ -48,7 +48,14 @@ _(to be completed by the dev)_
 ### File List
 _(to be completed by the dev)_
 
-## PM Validation (to be completed)
+## PM Validation (John, 2026-07-18)
+
+**Validated — approved. Test-hygiene, NOT launch-gating; post-launch.**
+1. **Priority:** low urgency, real value. The E2E Tests workflow doesn't gate deploy, so a red never blocks a release — but an untrustworthy signal everyone learns to re-run is exactly how a *real* regression sails through (it nearly did: the 13-32 turbo-env regression hid under this flake). Fix it in the first post-launch hygiene pass, alongside 13-30.
+2. **Scope is right:** deterministic data-ready waits (AC1), NOT a bigger timeout, plus a sibling sweep (AC3) so it's fixed as a class. The AC2 test-side-vs-product-side gate is correct — prefer the test-side wait unless the page genuinely withholds the button behind avoidable data-gating.
+3. **AC4 (required vs informational)** is the right question to force — a workflow nobody trusts should be made trustworthy or explicitly labelled informational, never left ambiguous.
+
+**No AC changes.** Dev-ready; schedule post-launch.
 
 ## Change Log
 | Date | Change | By |

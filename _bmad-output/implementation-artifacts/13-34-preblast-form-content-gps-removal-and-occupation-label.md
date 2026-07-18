@@ -49,7 +49,15 @@ _(to be completed by the dev)_
 ### File List
 _(to be completed by the dev)_
 
-## PM Validation (to be completed)
+## PM Validation (John, 2026-07-18)
+
+**Validated — approved. PRE-BLAST / LAUNCH-RELEVANT — the only one of this batch on the launch path.**
+1. **Priority:** do BEFORE the blast. The live GPS prompt is a conversion tax on every public registration (a permission dialog mid-signup) for a value that's discarded. Batch the re-upload+re-pin with any other pending form change (one publish cycle), per the 13-19/13-20 pattern.
+2. **Guardrail (critical):** label-ONLY on `main_occupation` — never the question name (it's the raw_data key + the 13-29 relevance gate). Correctly stated; enforce with a before/after parsed-form name diff.
+3. **AC2 defensive guard** (public wizard never renders geopoint) is the right belt-and-suspenders against a future re-upload reintroducing it — approve.
+4. Mostly operator/form work + one code guard; low blast radius.
+
+**No AC changes.** Dev-ready; PRE-BLAST — pin the corrected form before the send.
 
 ## Change Log
 | Date | Change | By |

@@ -54,7 +54,14 @@ _(to be completed by the dev)_
 ### File List
 _(to be completed by the dev)_
 
-## PM Validation (to be completed)
+## PM Validation (John, 2026-07-18)
+
+**Validated — approved with a scope note. FOUNDATIONAL, post-launch, NOT launch-gating.**
+1. **Priority:** high architectural value but post-launch — the density map self-heals with volume and the convergence is internal-correctness, not a launch blocker. It IS the foundation the GPS/dedup/marketplace surface fixes sit on, so build it before deeper work on those.
+2. **Scope flag (watch in dev):** this is the largest emergent draft — canonical read (AC1) + repoint consumers (AC2/AC5) + density banding (AC3) + importer contract (AC4). If it gets unwieldy, split the density-map DISPLAY (AC3 banding) from the convergence READ (AC1/2/4/5): the read is the foundation, the map is one consumer. Bundling is acceptable because the map is the proving ground — but dev should flag early if it's too big for one story.
+3. **Guardrails correctly stated:** don't remove the dedup/prefill (load-bearing raw_data plumbing) and don't remove the k-anon floor (band it). Both honoured.
+
+**No AC changes.** Dev-ready; schedule post-launch as the convergence foundation.
 
 ## Change Log
 | Date | Change | By |
