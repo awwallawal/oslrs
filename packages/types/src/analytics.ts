@@ -21,6 +21,14 @@ export interface FrequencyBucket {
   count: number | null;
   percentage: number | null;
   suppressed?: boolean;
+  /**
+   * Story 13-33 AC3 — banded disclosure. `true` marks a bucket that is PRESENT
+   * but below the k-anonymity floor: `count`/`percentage` are nulled (exact small
+   * number withheld) yet the bucket still exists, so a public map/list can render
+   * a "present / fewer than N" state instead of dropping it to blank. Set only by
+   * `bandSmallBuckets`; absent (undefined) for normally-suppressed or exact buckets.
+   */
+  banded?: boolean;
 }
 
 export interface SkillsFrequency {

@@ -144,6 +144,32 @@ describe('LgaChoroplethMap', () => {
     expect(onClick).toHaveBeenCalledWith('ibadan_north');
   });
 
+  it('banded LGAs render present (lightest shade, no exact number) — distinct from absent (Story 13-33 AC3)', async () => {
+    const bandedData = [
+      { lgaName: 'Ibadan North', value: 100, banded: false }, // exact → graduated
+      { lgaName: 'Akinyele', value: 0, banded: true },        // present, <10 → lightest shade
+      // 'Ido' omitted entirely → absent → blank
+    ];
+    render(<LgaChoroplethMap data={bandedData} colorScale={['#FEE2E2', '#9C1E23']} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('mock-geojson')).toBeInTheDocument();
+    });
+
+    // Banded → lightest "present" shade (colorScale[0]); tooltip shows the band
+    // ("Fewer than 10"), never the actual sub-floor count.
+    expect(mockStyles.get('Akinyele')?.fillColor).toBe('#FEE2E2');
+    expect(mockTooltips.get('Akinyele')).toContain('Fewer than 10 registrations');
+    expect(mockTooltips.get('Akinyele')).not.toMatch(/^.*\b[1-9] registrations/);
+
+    // Exact → graduated (not the grey blank, not necessarily the lightest).
+    expect(mockStyles.get('Ibadan North')?.fillColor).not.toBe('#E5E7EB');
+    expect(mockTooltips.get('Ibadan North')).toContain('100');
+
+    // Absent → grey blank + "Insufficient data".
+    expect(mockStyles.get('Ido')?.fillColor).toBe('#E5E7EB');
+    expect(mockTooltips.get('Ido')).toContain('Insufficient data');
+  });
+
   it('highlightLgaName greys out non-target LGAs', async () => {
     render(<LgaChoroplethMap data={sampleData} highlightLgaName="Ibadan North" />);
     await vi.waitFor(() => {

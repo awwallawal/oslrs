@@ -1117,6 +1117,15 @@ jobs:
             # deploy. Both columns are NULLABLE (below-threshold reveals stay NULL).
             cd apps/api && pnpm tsx scripts/migrate-reveal-purpose-init.ts && cd ~/oslrs
 
+            # Story 13-33: registry_unified VIEW. The canonical respondent-anchored
+            # unified read (public insights headline + breakdowns + density, count-
+            # core, and 12-4 post-launch) is created from the SAME SQL the runtime
+            # service composes inline (registry-unified.sql.ts), so the view and the
+            # app can't drift. CREATE OR REPLACE (DROP-first) — idempotent, no
+            # dependents. The app reads inline (belt), so a missing view never 500s;
+            # this view is the analyst/BI/12-4 "one table" + the parity-test target.
+            cd apps/api && pnpm tsx scripts/migrate-registry-unified-view-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern

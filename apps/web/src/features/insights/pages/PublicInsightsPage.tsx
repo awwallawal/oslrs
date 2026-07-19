@@ -121,13 +121,20 @@ export default function PublicInsightsPage() {
 
         <PublicSkillsChart allSkills={data.allSkills} />
 
-        {/* Story 8.8 AC#3: Geographic choropleth for public insights */}
+        {/* Story 8.8 AC#3: Geographic choropleth for public insights.
+            Story 13-33 AC3: banded disclosure is pre-computed by the backend
+            (`bandSmallBuckets`, the single authority) and carried on each datum's
+            `banded` flag — so the map no longer re-suppresses via `suppressionMinN`.
+            LGAs with ≥10 render graduated with counts; 1–9 render a lightest
+            "present" shade with no exact number; 0 are blank. */}
         <section data-testid="geographic-map-section">
           <h2 className="text-2xl font-bold text-neutral-900 mb-6">Registration Density Map</h2>
-          <LgaChoroplethMap
-            data={lgaDistributionToMapData(data.lgaDensity)}
-            suppressionMinN={10}
-          />
+          <LgaChoroplethMap data={lgaDistributionToMapData(data.lgaDensity)} />
+          <p className="mt-2 text-xs text-neutral-500">
+            Shaded areas show registration density. The lightest shade marks local
+            governments with registrations present but fewer than 10; exact counts
+            are shown only where at least 10 people are registered, to protect privacy.
+          </p>
         </section>
 
         <PublicLgaTable lgaDensity={data.lgaDensity} />

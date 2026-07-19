@@ -8,7 +8,12 @@ interface PublicLgaTableProps {
 export function PublicLgaTable({ lgaDensity }: PublicLgaTableProps) {
   const [showAll, setShowAll] = useState(false);
 
-  const visible = lgaDensity.filter(b => !b.suppressed);
+  // Story 13-33 (review M1): banded LGAs (present but below the k-anon floor) are
+  // `suppressed: true` yet must still appear — as "Fewer than 10" — so the table
+  // agrees with the map (which shades them "present"). Only NON-banded suppressed
+  // buckets are dropped. Exact buckets come first (backend orders by count DESC
+  // before banding), so banded rows sort to the bottom.
+  const visible = lgaDensity.filter(b => !b.suppressed || b.banded);
   const displayed = showAll ? visible : visible.slice(0, 10);
 
   return (
@@ -29,7 +34,7 @@ export function PublicLgaTable({ lgaDensity }: PublicLgaTableProps) {
                 <tr key={lga.label} className="border-b border-neutral-100 hover:bg-neutral-50">
                   <td className="py-3 px-4 text-sm text-neutral-900">{lga.label}</td>
                   <td className="py-3 px-4 text-sm text-neutral-700 text-right">
-                    {(lga.count ?? 0).toLocaleString()}
+                    {lga.banded ? 'Fewer than 10' : (lga.count ?? 0).toLocaleString()}
                   </td>
                   <td className="py-3 px-4 text-sm text-neutral-500 text-right">
                     {lga.percentage != null ? `${lga.percentage.toFixed(1)}%` : '-'}

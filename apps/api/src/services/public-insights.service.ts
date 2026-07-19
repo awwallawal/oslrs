@@ -10,9 +10,10 @@ import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
 import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
-import { suppressSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
+import { suppressSmallBuckets, bandSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import { getRegistryCountCore } from './registry-totals.service.js';
+import { registryUnifiedSource } from './registry-unified.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
@@ -65,13 +66,24 @@ export class PublicInsightsService {
   }
 
   private static async computeInsights(): Promise<PublicInsightsData> {
-    const baseWhere = sql`s.raw_data IS NOT NULL AND s.respondent_id IS NOT NULL`;
+    // Story 13-33 (AC2) — everything reads the ONE canonical respondent-anchored
+    // unified source (`registry-unified`), NOT `FROM submissions`. Consequences:
+    //   • per-respondent (a person with multiple submissions is counted once —
+    //     `ru` is one row per respondent), and
+    //   • no exclusion of submission-less registrants (imported / data_lost /
+    //     no_submission still appear — they just carry a null `ru.raw_data`).
+    // The DEMOGRAPHIC/SKILLS breakdowns need answers, so they filter to the
+    // answer-bearing subset (`answersWhere`); the DENSITY + LGAs-covered count
+    // ALL respondents (so the map agrees with the headline count by construction
+    // and kills the 13-25-class drift). `answersWhere` on `ru` == "has answers"
+    // because the LATERAL already keeps only the latest NON-EMPTY submission.
+    const answersWhere = sql`ru.raw_data IS NOT NULL`;
 
     // Run all queries in parallel.
-    // `countCore` (13-25) is respondent-scoped — it counts registered PEOPLE
-    // (~139+) and the completed-survey subset (~79). The remaining eight
-    // queries stay submission-scoped (they require `raw_data`) so the
-    // demographic/skills breakdowns keep their honest with-answers denominator.
+    // `countCore` (13-25) is respondent-scoped — registered PEOPLE (headline) +
+    // the completed-survey subset (`withAnswers`). It now reads the SAME
+    // `registry-unified` source these breakdowns do, so the headline, the
+    // breakdown denominator, and the density can no longer disagree.
     const [
       countCore,
       summaryRows,
@@ -86,46 +98,45 @@ export class PublicInsightsService {
       // Respondent-scoped registry count-core (headline + funnel). Seed of 12-4.
       getRegistryCountCore(),
 
-      // Summary aggregates
+      // Summary aggregates. FROM the whole respondent set (no outer answers
+      // filter): `lgas_covered` counts ALL respondents' LGAs (matches the density
+      // map); the answer-based RATES use per-metric `FILTER (WHERE answersWhere)`
+      // so their denominator stays the honest with-answers subset.
       db.execute(sql`
         SELECT
-          COUNT(*) AS total,
-          COUNT(DISTINCT r.lga_id) FILTER (WHERE r.lga_id IS NOT NULL) AS lgas_covered,
+          COUNT(DISTINCT ru.lga_id) FILTER (WHERE ru.lga_id IS NOT NULL) AS lgas_covered,
           ROUND(
-            COUNT(*) FILTER (WHERE s.raw_data->>'has_business' = 'yes')::numeric * 100.0 /
-            NULLIF(COUNT(*), 0)
+            COUNT(*) FILTER (WHERE ru.raw_data->>'has_business' = 'yes')::numeric * 100.0 /
+            NULLIF(COUNT(*) FILTER (WHERE ${answersWhere}), 0)
           , 1) AS biz_rate,
           ROUND(
             COUNT(*) FILTER (WHERE
-              s.raw_data->>'employment_status' = 'no'
-              AND COALESCE(s.raw_data->>'temp_absent', 'no') = 'no'
-              AND s.raw_data->>'looking_for_work' = 'yes'
-            )::numeric * 100.0 / NULLIF(COUNT(*), 0)
+              ru.raw_data->>'employment_status' = 'no'
+              AND COALESCE(ru.raw_data->>'temp_absent', 'no') = 'no'
+              AND ru.raw_data->>'looking_for_work' = 'yes'
+            )::numeric * 100.0 / NULLIF(COUNT(*) FILTER (WHERE ${answersWhere}), 0)
           , 1) AS unemployment_est,
           ROUND(
             COUNT(*) FILTER (WHERE
-              s.raw_data->>'employment_status' = 'yes'
-              AND EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 35
+              ru.raw_data->>'employment_status' = 'yes'
+              AND EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 35
             )::numeric * 100.0 /
             NULLIF(COUNT(*) FILTER (WHERE
-              EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 35
+              EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 35
             ), 0)
           , 1) AS youth_emp_rate,
           ROUND(
-            COUNT(*) FILTER (WHERE s.raw_data->>'gender' = 'female')::numeric /
-            NULLIF(COUNT(*) FILTER (WHERE s.raw_data->>'gender' = 'male'), 0)
+            COUNT(*) FILTER (WHERE ru.raw_data->>'gender' = 'female')::numeric /
+            NULLIF(COUNT(*) FILTER (WHERE ru.raw_data->>'gender' = 'male'), 0)
           , 2) AS gpi
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${baseWhere}
+        FROM ${registryUnifiedSource('ru')}
       `),
 
-      // Gender split
+      // Gender split (per answer-bearing respondent)
       db.execute(sql`
-        SELECT s.raw_data->>'gender' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${baseWhere} AND s.raw_data->>'gender' IS NOT NULL
+        SELECT ru.raw_data->>'gender' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${answersWhere} AND ru.raw_data->>'gender' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
 
@@ -133,30 +144,28 @@ export class PublicInsightsService {
       db.execute(sql`
         SELECT
           CASE
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 24 THEN '15-24'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 25 AND 34 THEN '25-34'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 35 AND 44 THEN '35-44'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 45 AND 54 THEN '45-54'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 55 AND 64 THEN '55-64'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) >= 65 THEN '65+'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 24 THEN '15-24'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 25 AND 34 THEN '25-34'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 35 AND 44 THEN '35-44'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 45 AND 54 THEN '45-54'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 55 AND 64 THEN '55-64'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) >= 65 THEN '65+'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${baseWhere} AND s.raw_data->>'dob' IS NOT NULL
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${answersWhere} AND ru.raw_data->>'dob' IS NOT NULL
         GROUP BY label ORDER BY label
       `),
 
       // All skills (no LIMIT — frontend slices for display)
       db.execute(sql`
         SELECT skill, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id,
-             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
-        WHERE ${baseWhere}
-          AND s.raw_data->>'skills_possessed' IS NOT NULL
-          AND s.raw_data->>'skills_possessed' != ''
+        FROM ${registryUnifiedSource('ru')},
+             ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
+        WHERE ${answersWhere}
+          AND ru.raw_data->>'skills_possessed' IS NOT NULL
+          AND ru.raw_data->>'skills_possessed' != ''
         GROUP BY skill
         ORDER BY count DESC
       `),
@@ -164,12 +173,11 @@ export class PublicInsightsService {
       // Desired skills (training_interest — want-to-learn)
       db.execute(sql`
         SELECT skill, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id,
-             ${selectMultipleUnnest(sql`s.raw_data`, 'training_interest')} AS skill
-        WHERE ${baseWhere}
-          AND s.raw_data->>'training_interest' IS NOT NULL
-          AND s.raw_data->>'training_interest' != ''
+        FROM ${registryUnifiedSource('ru')},
+             ${selectMultipleUnnest(sql`ru.raw_data`, 'training_interest')} AS skill
+        WHERE ${answersWhere}
+          AND ru.raw_data->>'training_interest' IS NOT NULL
+          AND ru.raw_data->>'training_interest' != ''
         GROUP BY skill
         ORDER BY count DESC
       `),
@@ -178,15 +186,14 @@ export class PublicInsightsService {
       db.execute(sql`
         SELECT
           CASE
-            WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
-            WHEN s.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
-            WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
+            WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
+            WHEN ru.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
+            WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
             ELSE 'other'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${baseWhere}
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${answersWhere}
         GROUP BY label ORDER BY count DESC
       `),
 
@@ -194,30 +201,33 @@ export class PublicInsightsService {
       db.execute(sql`
         SELECT
           CASE
-            WHEN s.raw_data->>'employment_type' IN ('wage_public', 'wage_private', 'contractor') THEN 'formal'
-            WHEN s.raw_data->>'employment_type' IN ('self_employed', 'family_unpaid', 'apprentice') THEN 'informal'
+            WHEN ru.raw_data->>'employment_type' IN ('wage_public', 'wage_private', 'contractor') THEN 'formal'
+            WHEN ru.raw_data->>'employment_type' IN ('self_employed', 'family_unpaid', 'apprentice') THEN 'informal'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${baseWhere} AND s.raw_data->>'employment_type' IS NOT NULL
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${answersWhere} AND ru.raw_data->>'employment_type' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
 
-      // LGA density
+      // LGA density — ALL respondents per LGA (NOT the answer-bearing subset), so
+      // the map counts every registered person (incl. submission-less imports)
+      // and equals COUNT(DISTINCT r.id) per LGA over the unified read (AC2/AC3).
+      // Null-`lga_id` respondents are EXCLUDED (13-33 review L2): they're already
+      // in the headline (`totalRespondents`), but they can't be placed on a
+      // geographic map — emitting them as an `'Unknown'` bucket would surface an
+      // unplaceable row on the public table and a bucket the map silently drops.
       db.execute(sql`
-        SELECT COALESCE(l.name, r.lga_id, 'Unknown') AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        LEFT JOIN lgas l ON l.code = r.lga_id
-        WHERE ${baseWhere}
+        SELECT COALESCE(l.name, ru.lga_id) AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        LEFT JOIN lgas l ON l.code = ru.lga_id
+        WHERE ru.lga_id IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
     ]);
 
     interface SummaryRow {
-      total: string;
       lgas_covered: string;
       biz_rate: string | null;
       unemployment_est: string | null;
@@ -236,10 +246,12 @@ export class PublicInsightsService {
     }
 
     const summary = summaryRows.rows[0] as unknown as SummaryRow | undefined;
-    // Submission-scoped with-answers count — the honest denominator for the
-    // demographic/skills breakdowns and their small-bucket suppression. This is
-    // NOT the headline: `totalRegistered` counts registered people (countCore).
-    const total = Number(summary?.total ?? 0);
+    // Respondent-scoped with-answers count (13-33 AC2) — the honest denominator
+    // for the demographic/skills breakdowns and their small-bucket suppression.
+    // Sourced from `countCore` (the SAME registry-unified read the breakdowns use)
+    // so it can no longer drift from the summary query's own tally. This is NOT
+    // the headline: `totalRegistered` counts ALL registered people.
+    const total = countCore.withAnswers;
 
     // Skills total for percentage
     const skillsTotal = (skillRows.rows as unknown as SkillCountRow[]).reduce(
@@ -287,7 +299,13 @@ export class PublicInsightsService {
       unemploymentEstimate: meetsThreshold && summary?.unemployment_est != null ? Number(summary.unemployment_est) : null,
       youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
-      lgaDensity: suppressSmallBuckets(toBuckets(lgaRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
+      // Density is respondent-scoped over ALL registered people (share of the
+      // headline total, not the with-answers subset) and BANDED, not blank-
+      // suppressed (13-33 AC3): ≥10 → exact graduated count; 1–9 → present-but-
+      // banded (exact number withheld, k-anon floor kept); 0 → absent (blank).
+      // `bandSmallBuckets` is the SINGLE suppression authority — the frontend map
+      // no longer re-suppresses.
+      lgaDensity: bandSmallBuckets(toBuckets(lgaRows.rows as unknown as LabelCountRow[], countCore.totalRespondents), PUBLIC_MIN_N),
       lastUpdated: new Date().toISOString(),
       // Story 8.7: Key findings from inferential engine (Redis cache bridge)
       ...(await PublicInsightsService.getKeyFindings(total)),

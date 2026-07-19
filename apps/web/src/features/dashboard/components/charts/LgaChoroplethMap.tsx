@@ -10,15 +10,26 @@ import type { Layer, LeafletMouseEvent } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 interface LgaChoroplethMapProps {
-  /** Array of LGA data — lgaName must match GeoJSON feature lgaName property */
-  data: { lgaName: string; value: number }[];
+  /**
+   * Array of LGA data — `lgaName` must match the GeoJSON feature `lgaName`.
+   * Story 13-33 AC3: a datum may carry `banded: true` (present but below the
+   * public k-anon floor) — it renders in the lightest "present" shade with NO
+   * exact number, distinct from an absent LGA (not in the array → blank).
+   */
+  data: { lgaName: string; value: number; banded?: boolean }[];
   /** Color gradient [min, max]. Default: ['#FEE2E2', '#9C1E23'] (light pink → brand maroon) */
   colorScale?: [string, string];
   /** Fires on LGA click with the LGA code (slug). Omit to disable click. */
   onLgaClick?: (lgaCode: string) => void;
   /** When set, this LGA renders in full color and all others are greyed out (Supervisor view) */
   highlightLgaName?: string;
-  /** LGAs with value < this show "Insufficient data". Default: 0 (no suppression) */
+  /**
+   * Legacy blank-suppression for INTERNAL dashboards: LGAs with value < this show
+   * "Insufficient data" (grey). Default 0 (off). Story 13-33: the PUBLIC map no
+   * longer passes this — banded disclosure comes pre-computed from the backend via
+   * the datum `banded` flag (the single suppression authority). A `banded` datum
+   * always takes precedence over this legacy threshold.
+   */
   suppressionMinN?: number;
   className?: string;
 }
@@ -99,42 +110,56 @@ export function LgaChoroplethMap({
     }
   }, [geoJson]);
 
-  // Build lookup: lgaName → value (memoized to stabilize useCallback deps)
-  const dataMap = useMemo(() => new Map(data.map(d => [d.lgaName, d.value])), [data]);
-  const values = useMemo(() => data.map(d => d.value).filter(v => v > 0), [data]);
+  // Build lookup: lgaName → datum (memoized to stabilize useCallback deps).
+  const dataMap = useMemo(() => new Map(data.map(d => [d.lgaName, d])), [data]);
+  // Colour scale spans only EXACT (non-banded) present values.
+  const values = useMemo(() => data.filter(d => !d.banded && d.value > 0).map(d => d.value), [data]);
   const minVal = values.length > 0 ? Math.min(...values) : 0;
   const maxVal = values.length > 0 ? Math.max(...values) : 1;
   // Stable key for GeoJSON re-mount when data changes
-  const dataKey = useMemo(() => data.map(d => `${d.lgaName}:${d.value}`).join(','), [data]);
+  const dataKey = useMemo(() => data.map(d => `${d.lgaName}:${d.value}:${d.banded ? 'b' : ''}`).join(','), [data]);
 
   const getStyle = useCallback((feature: GeoJsonFeature) => {
     const lgaName = feature.properties.lgaName;
-    const value = dataMap.get(lgaName);
-    const isSuppressed = value != null && suppressionMinN > 0 && value < suppressionMinN;
+    const datum = dataMap.get(lgaName);
 
     // Supervisor view: grey out non-highlighted LGAs
     if (highlightLgaName && lgaName !== highlightLgaName) {
       return { fillColor: GREY, fillOpacity: 0.5, weight: 1, color: '#9CA3AF', opacity: 0.6 };
     }
 
-    if (value == null || isSuppressed) {
+    // Absent (not in data) → blank. Legacy internal suppression (value < minN,
+    // non-banded) → blank too.
+    const isLegacySuppressed = datum != null && !datum.banded && suppressionMinN > 0 && datum.value < suppressionMinN;
+    if (datum == null || isLegacySuppressed) {
       return { fillColor: GREY, fillOpacity: 0.4, weight: 1, color: '#9CA3AF', opacity: 0.6 };
     }
 
-    const t = maxVal > minVal ? (value - minVal) / (maxVal - minVal) : 0.5;
+    // Banded (present, <k-anon floor): lightest "present" shade, no graduation.
+    if (datum.banded) {
+      return { fillColor: colorScale[0], fillOpacity: 0.65, weight: 1, color: '#fff', opacity: 0.8 };
+    }
+
+    const t = maxVal > minVal ? (datum.value - minVal) / (maxVal - minVal) : 0.5;
     const fillColor = interpolateColor(colorScale[0], colorScale[1], t);
     return { fillColor, fillOpacity: 0.75, weight: 1, color: '#fff', opacity: 0.8 };
   }, [dataMap, minVal, maxVal, highlightLgaName, suppressionMinN, colorScale]);
 
   const onEachFeature = useCallback((feature: GeoJsonFeature, layer: Layer) => {
     const lgaName = feature.properties.lgaName;
-    const value = dataMap.get(lgaName);
-    const isSuppressed = value != null && suppressionMinN > 0 && value < suppressionMinN;
+    const datum = dataMap.get(lgaName);
+    const isLegacySuppressed = datum != null && !datum.banded && suppressionMinN > 0 && datum.value < suppressionMinN;
 
-    // Tooltip
-    const tooltipContent = (value == null || isSuppressed)
-      ? `<strong>${lgaName}</strong><br/>Insufficient data`
-      : `<strong>${lgaName}</strong><br/>${value.toLocaleString()} registrations`;
+    // Tooltip: banded → "fewer than N" (no exact number); exact → the count;
+    // absent/legacy-suppressed → "Insufficient data".
+    let tooltipContent: string;
+    if (datum != null && datum.banded) {
+      tooltipContent = `<strong>${lgaName}</strong><br/>Fewer than 10 registrations`;
+    } else if (datum == null || isLegacySuppressed) {
+      tooltipContent = `<strong>${lgaName}</strong><br/>Insufficient data`;
+    } else {
+      tooltipContent = `<strong>${lgaName}</strong><br/>${datum.value.toLocaleString()} registrations`;
+    }
     layer.bindTooltip(tooltipContent);
 
     // Click handler

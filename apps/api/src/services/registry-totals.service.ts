@@ -27,6 +27,14 @@
  * mirror `getUnifiedExportData` (export-query.service.ts) exactly, so the export
  * row-count, this count-core, and analytics all agree on what "completed" means.
  *
+ * ── Canonical unified read (Story 13-33) ────────────────────────────────────
+ * As of 13-33 this count is expressed OVER the ONE canonical respondent-anchored
+ * read (`registryUnifiedSource`) rather than a hand-rolled LATERAL, so count-core
+ * and every other consumer (public insights, density, 12-4) read the identical
+ * shape — no second definition to drift from. `with_answers` = the count of
+ * unified rows whose `raw_data` is non-null (the LATERAL already keeps only the
+ * latest NON-EMPTY submission's answers).
+ *
  * ── Grain ───────────────────────────────────────────────────────────────────
  * Row-id-distinct (one row per `respondents.id`) is the accepted slice grain;
  * the R2 identity-key refinement (`COUNT(DISTINCT person)`) rides with the full
@@ -39,6 +47,7 @@
  */
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
+import { registryUnifiedSource } from './registry-unified.js';
 
 export interface RegistryCountCore {
   /** Distinct registered people (one row per `respondents.id`) — the honest headline count. */
@@ -62,17 +71,8 @@ export async function getRegistryCountCore(): Promise<RegistryCountCore> {
   const result = await db.execute(sql`
     SELECT
       COUNT(*)::int AS total_respondents,
-      COUNT(answers.raw_data)::int AS with_answers
-    FROM respondents r
-    LEFT JOIN LATERAL (
-      SELECT sx.raw_data
-      FROM submissions sx
-      WHERE sx.respondent_id = r.id
-        AND sx.raw_data IS NOT NULL
-        AND sx.raw_data <> '{}'::jsonb
-      ORDER BY sx.submitted_at DESC NULLS LAST
-      LIMIT 1
-    ) answers ON true
+      COUNT(ru.raw_data)::int AS with_answers
+    FROM ${registryUnifiedSource('ru')}
   `);
 
   const row = result.rows[0] as

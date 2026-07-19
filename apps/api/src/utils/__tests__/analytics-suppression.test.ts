@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { suppressSmallBuckets, suppressIfTooFew } from '../analytics-suppression.js';
+import { suppressSmallBuckets, suppressIfTooFew, bandSmallBuckets, toBuckets } from '../analytics-suppression.js';
 import type { FrequencyBucket } from '@oslsr/types';
 
 describe('suppressSmallBuckets', () => {
@@ -49,6 +49,65 @@ describe('suppressSmallBuckets', () => {
     ];
     const result = suppressSmallBuckets(buckets);
     expect(result[0].suppressed).toBe(true);
+  });
+});
+
+describe('bandSmallBuckets (Story 13-33 AC3 — banded disclosure)', () => {
+  const rows = [
+    { label: 'Ibadan North', count: 16 },
+    { label: 'Egbeda', count: 10 }, // exactly at floor → exact
+    { label: 'Lagelu', count: 9 },  // below floor → banded
+    { label: 'Ido', count: 1 },     // present, tiny → banded
+  ];
+
+  it('keeps exact counts for buckets >= minN (graduated, banded:false)', () => {
+    const out = bandSmallBuckets(toBuckets(rows, 40), 10);
+    const north = out.find((b) => b.label === 'Ibadan North')!;
+    expect(north.count).toBe(16);
+    expect(north.banded).toBe(false);
+
+    const egbeda = out.find((b) => b.label === 'Egbeda')!;
+    expect(egbeda.count).toBe(10); // at the floor → still exact
+    expect(egbeda.banded).toBe(false);
+  });
+
+  it('bands (present, exact number withheld) for 0 < count < minN', () => {
+    const out = bandSmallBuckets(toBuckets(rows, 40), 10);
+    for (const label of ['Lagelu', 'Ido']) {
+      const b = out.find((x) => x.label === label)!;
+      expect(b.banded).toBe(true);
+      expect(b.suppressed).toBe(true);
+      // k-anon floor: the exact small number never leaves the server.
+      expect(b.count).toBeNull();
+      expect(b.percentage).toBeNull();
+    }
+  });
+
+  it('never emits a 0 bucket (absent LGAs are not in the GROUP BY)', () => {
+    const out = bandSmallBuckets(toBuckets(rows, 40), 10);
+    expect(out.every((b) => b.count === null || b.count > 0)).toBe(true);
+  });
+
+  it('differs from suppressSmallBuckets: only banded marks the bucket present', () => {
+    const banded = bandSmallBuckets(toBuckets(rows, 40), 10);
+    const suppressed = suppressSmallBuckets(toBuckets(rows, 40), 10);
+    expect(banded.find((b) => b.label === 'Lagelu')!.banded).toBe(true);
+    expect((suppressed.find((b) => b.label === 'Lagelu') as FrequencyBucket).banded).toBeUndefined();
+  });
+
+  it('defaults minN to 10', () => {
+    const out = bandSmallBuckets([{ label: 'x', count: 9, percentage: 100 }]);
+    expect(out[0].banded).toBe(true);
+    expect(out[0].count).toBeNull();
+  });
+
+  it('passes a pre-nulled bucket through untouched (no incoherent suppressed+banded:false)', () => {
+    // review M2: a bucket already suppressed upstream (count null) must not be
+    // stamped banded:false — it is returned exactly as received.
+    const pre: FrequencyBucket = { label: 'y', count: null, percentage: null, suppressed: true };
+    const [out] = bandSmallBuckets([pre]);
+    expect(out).toBe(pre); // same reference — untouched
+    expect(out.banded).toBeUndefined();
   });
 });
 
