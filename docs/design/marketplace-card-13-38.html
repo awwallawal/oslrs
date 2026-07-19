@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Story 13-38 marketplace card redesign — design reference (UX: Sally, 2026-07-19). Open in a browser; mirrors the published artifact. -->
+</head>
+<body>
+<title>Marketplace Card Redesign — Story 13-38</title>
+<style>
+  :root {
+    --ground:#faf7f4; --surface:#ffffff; --surface-2:#f4efec; --surface-3:#efe8e4;
+    --ink:#241c1b; --ink-soft:#6f635f; --ink-faint:#9c8f8a; --line:#e8e0db;
+    --brand:#9c1e23; --brand-strong:#7c1519; --brand-tint:#f8e9e9; --brand-text:#9c1e23;
+    --good:#16794d; --good-tint:#e3f1ea; --assoc:#255e9e; --assoc-tint:#e6eef8;
+    --gold:#a9741c;
+    --shadow:0 1px 2px rgba(40,20,18,.06), 0 1px 3px rgba(40,20,18,.05);
+    --shadow-lift:0 12px 28px -8px rgba(60,20,18,.30), 0 4px 10px -4px rgba(60,20,18,.18);
+    --radius:16px;
+    --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#151110; --surface:#211a18; --surface-2:#2a211f; --surface-3:#332826;
+      --ink:#f5ede9; --ink-soft:#b6a9a3; --ink-faint:#8a7c76; --line:#3a2f2c;
+      --brand:#c74a4f; --brand-strong:#b03b40; --brand-tint:#3a201f; --brand-text:#e58a8e;
+      --good:#4cae83; --good-tint:#17322a; --assoc:#6ea3dd; --assoc-tint:#182634; --gold:#d1a24e;
+      --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lift:0 14px 32px -10px rgba(0,0,0,.72);
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#faf7f4; --surface:#ffffff; --surface-2:#f4efec; --surface-3:#efe8e4;
+    --ink:#241c1b; --ink-soft:#6f635f; --ink-faint:#9c8f8a; --line:#e8e0db;
+    --brand:#9c1e23; --brand-strong:#7c1519; --brand-tint:#f8e9e9; --brand-text:#9c1e23;
+    --good:#16794d; --good-tint:#e3f1ea; --assoc:#255e9e; --assoc-tint:#e6eef8; --gold:#a9741c;
+    --shadow:0 1px 2px rgba(40,20,18,.06), 0 1px 3px rgba(40,20,18,.05);
+    --shadow-lift:0 12px 28px -8px rgba(60,20,18,.30), 0 4px 10px -4px rgba(60,20,18,.18);
+  }
+  :root[data-theme="dark"]{
+    --ground:#151110; --surface:#211a18; --surface-2:#2a211f; --surface-3:#332826;
+    --ink:#f5ede9; --ink-soft:#b6a9a3; --ink-faint:#8a7c76; --line:#3a2f2c;
+    --brand:#c74a4f; --brand-strong:#b03b40; --brand-tint:#3a201f; --brand-text:#e58a8e;
+    --good:#4cae83; --good-tint:#17322a; --assoc:#6ea3dd; --assoc-tint:#182634; --gold:#d1a24e;
+    --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lift:0 14px 32px -10px rgba(0,0,0,.72);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);
+    line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:clamp(28px,5vw,64px) clamp(18px,4vw,40px) 80px}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:44px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-text);
+    font-weight:700;margin:0 0 12px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5vw,46px);line-height:1.05;
+    margin:0 0 14px;text-wrap:balance;letter-spacing:-.01em}
+  .lede{font-size:clamp(16px,2vw,18px);color:var(--ink-soft);max-width:60ch;margin:0}
+  section{margin-top:56px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:22px}
+  .sec-head h2{font-family:var(--serif);font-weight:600;font-size:23px;margin:0;letter-spacing:-.01em}
+  .sec-head p{margin:0;color:var(--ink-soft);font-size:14px}
+  .rule{flex:1;height:1px;background:var(--line);align-self:center}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:22px}
+  .card{position:relative;display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    overflow:hidden;transition:transform .18s ease,box-shadow .18s ease;cursor:pointer}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lift)}
+  .card:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  .accent{height:3px;background:transparent;transition:background .18s ease}
+  .card:hover .accent{background:var(--av,var(--brand))}
+  .card-head{display:flex;gap:12px;padding:16px 16px 12px}
+  .avatar{flex:none;width:54px;height:54px;border-radius:14px;display:grid;place-items:center;
+    background-color:var(--av,#6B7A2E);
+    background-image:linear-gradient(152deg,rgba(255,255,255,.18),rgba(0,0,0,.16));
+    color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 2px 6px -2px rgba(0,0,0,.25)}
+  .avatar svg{width:27px;height:27px;stroke:#fff;stroke-width:1.7;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  .head-main{min-width:0;flex:1}
+  .prof{font-weight:650;font-size:15.5px;letter-spacing:-.01em;margin:1px 0 0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{display:flex;align-items:center;gap:5px;color:var(--ink-soft);font-size:13px;margin-top:3px}
+  .meta svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.7;fill:none}
+  .card-body{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px;flex:1}
+
+  /* experience — promoted to a hero stat */
+  .stat{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border-radius:11px;
+    background:var(--surface-2);border:1px solid var(--line)}
+  .stat .num{font-size:22px;font-weight:750;color:var(--brand-text);line-height:1;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat .unit{font-size:12px;font-weight:650;color:var(--brand-text);text-transform:uppercase;
+    letter-spacing:.04em}
+  .stat .lbl{font-size:12.5px;color:var(--ink-soft);margin-left:auto;display:flex;align-items:center;gap:4px}
+  .stat .star{color:var(--gold)}
+  .stat .star svg{width:13px;height:13px;fill:var(--gold);stroke:none}
+
+  .divider{height:1px;background:var(--line)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:12px;font-weight:550;padding:3px 9px;border-radius:999px;
+    background:var(--brand-tint);color:var(--brand-text);white-space:nowrap}
+  .chip.more{background:var(--surface-2);color:var(--ink-soft)}
+  .bio{font-size:13px;color:var(--ink-soft);margin:0;display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden}
+  .prov{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--assoc);
+    font-weight:550;background:var(--assoc-tint);padding:6px 10px;border-radius:9px;min-width:0}
+  .prov svg{flex:none;width:15px;height:15px;stroke:var(--assoc);stroke-width:1.7;fill:none}
+  .prov span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cta{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:7px;
+    background:var(--brand);color:#fff;font-weight:600;font-size:13.5px;padding:10px 12px;
+    border-radius:11px;transition:background .16s ease}
+  .card:hover .cta{background:var(--brand-strong)}
+  .cta svg{width:15px;height:15px;stroke:#fff;stroke-width:2;fill:none}
+
+  .pill{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;
+    padding:4px 8px 4px 6px;border-radius:999px;letter-spacing:.01em;align-self:flex-start;white-space:nowrap}
+  .pill svg{width:13px;height:13px;stroke-width:1.9;fill:none}
+  .pill.gov{background:var(--brand-tint);color:var(--brand-text)} .pill.gov svg{stroke:var(--brand-text)}
+  .pill.mem{background:var(--good-tint);color:var(--good)} .pill.mem svg{stroke:var(--good)}
+
+  .before-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:22px;align-items:start}
+  .compare{display:flex;flex-direction:column;gap:10px}
+  .compare .tag{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .compare.old .tag{color:var(--ink-faint)} .compare.new .tag{color:var(--good)}
+  .oldcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .oldcard .otitle{font-weight:600;font-size:15px}
+  .oldcard .orow{display:flex;align-items:center;gap:6px;color:var(--ink-soft);font-size:13px;margin-top:8px}
+  .oldcard .orow svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7}
+  .oldcard .obio{font-size:13px;color:var(--ink-soft);margin:10px 0 0}
+  .oldcard .ochips{display:flex;gap:6px;margin-top:10px}
+  .oldcard .oview{display:block;text-align:center;font-size:13px;font-weight:500;color:var(--brand-text);
+    border:1px solid var(--line);border-radius:8px;padding:7px;margin-top:12px}
+
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .lcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:16px 16px 15px}
+  .lcard h3{margin:10px 0 5px;font-size:14.5px}
+  .lcard p{margin:0;font-size:13px;color:var(--ink-soft)}
+  .swatch{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;padding:4px 9px 4px 7px;border-radius:999px}
+  .swatch svg{width:13px;height:13px;stroke-width:1.9;fill:none}
+  .notes{margin-top:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+  .notes ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px}
+  .notes li{font-size:14px;color:var(--ink)}
+  .k{color:var(--brand-text);font-weight:600}
+  .sparse-note{font-size:13px;color:var(--ink-soft);margin:0 0 4px}
+  footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-faint);font-size:12.5px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Oyo State Skills Registry · Marketplace · Story 13-38</p>
+    <h1>A card that shows a skilled person, not a spreadsheet row.</h1>
+    <p class="lede">Same data, redesigned to feel human and trustworthy — a trade-glyph identity, years of
+      mastery worn proudly, one clear verification signal, honest association provenance, and a real call to
+      action. No names, no photos (scraper &amp; privacy safe); the full profile sits behind employer login.</p>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>Before &amp; after</h2><span class="rule"></span><p>the same worker, both treatments</p></div>
+    <div class="before-row">
+      <div class="compare old">
+        <span class="tag">Today</span>
+        <div class="oldcard">
+          <div class="otitle">Tiling &amp; Marble Work</div>
+          <div class="orow"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Ona Ara</div>
+          <div class="orow"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>34 years</div>
+          <p class="obio">Skilled tiler and terrazzo specialist serving greater Ibadan for over three decades…</p>
+          <div class="ochips"><span class="chip">Tiling</span><span class="chip">Terrazzo</span><span class="chip">Marble</span></div>
+          <span class="oview">View Profile</span>
+        </div>
+      </div>
+      <div class="compare new">
+        <span class="tag">Redesigned</span>
+        <article class="card" tabindex="0" style="--av:#2E7D74">
+          <div class="accent"></div>
+          <div class="card-head">
+            <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></span>
+            <div class="head-main">
+              <p class="prof">Tiling &amp; Marble Work</p>
+              <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Ona Ara</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="stat"><span class="num">34</span><span class="unit">yrs</span><span class="lbl"><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 18.1 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z"/></svg></span>seasoned</span></div>
+            <div class="chips"><span class="chip">Tiling</span><span class="chip">Terrazzo</span><span class="chip">Marble</span><span class="chip more">+2</span></div>
+            <p class="bio">Skilled tiler and terrazzo specialist serving greater Ibadan for over three decades.</p>
+            <div class="prov" title="Association of Nigerian Aluminium &amp; Tiling Artisans (Oyo) — confirmed member. Identity not independently verified.">
+              <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+              <span>Assoc. of Nigerian Aluminium &amp; Tiling Artisans — confirmed member</span>
+            </div>
+            <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>The card, across trust states</h2><span class="rule"></span><p>one verification pill · provenance separate · mastery up front</p></div>
+    <div class="grid">
+
+      <article class="card" tabindex="0" style="--av:#B7862B">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3l7 7-4 4-7-7z"/><path d="M10 7l-6 6 3 3 6-6"/><path d="M4 20l3-1"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Furniture &amp; Cabinet Making</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Ibadan North</span>
+          </div>
+          <span class="pill gov"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>Government verified</span>
+        </div>
+        <div class="card-body">
+          <div class="stat"><span class="num">12</span><span class="unit">yrs</span><span class="lbl">at this trade</span></div>
+          <div class="chips"><span class="chip">Carpentry</span><span class="chip">Joinery</span><span class="chip">Upholstery</span></div>
+          <p class="bio">Bespoke cabinetry and hardwood furniture; workshop-trained apprentices.</p>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+
+      <article class="card" tabindex="0" style="--av:#8A3B6B">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 9h16"/><path d="M4 13h16"/><path d="M4 17h16"/><path d="M7 3v18"/><path d="M17 3v18"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Aso-Oke Weaving</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Iseyin</span>
+          </div>
+          <span class="pill mem"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12l2.2 2.2L16 9"/></svg>Member-verified</span>
+        </div>
+        <div class="card-body">
+          <div class="stat"><span class="num">20</span><span class="unit">yrs</span><span class="lbl"><span class="star"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 18.1 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z"/></svg></span>seasoned</span></div>
+          <div class="chips"><span class="chip">Weaving</span><span class="chip">Natural dyeing</span><span class="chip">Pattern design</span></div>
+          <p class="bio">Traditional Aso-Oke and contemporary handwoven textiles for ceremonies.</p>
+          <div class="prov" title="Iseyin Weavers Guild — confirmed member, and this member has confirmed their own record.">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+            <span>Iseyin Weavers Guild — confirmed member</span>
+          </div>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+
+      <article class="card" tabindex="0" style="--av:#C1543A">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 20V9l6-4 6 4v11"/><path d="M10 20v-5h4v5"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Masonry &amp; Bricklaying</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Lagelu</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="stat"><span class="num">16</span><span class="unit">yrs</span><span class="lbl">at this trade</span></div>
+          <div class="chips"><span class="chip">Blockwork</span><span class="chip">Plastering</span><span class="chip">Screeding</span></div>
+          <p class="bio">Foundations, block-laying and finishing for residential builds.</p>
+          <div class="prov" title="Oyo Masons &amp; Builders Association — confirmed member. Identity not independently verified.">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+            <span>Oyo Masons &amp; Builders Association — confirmed member</span>
+          </div>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+
+      <article class="card" tabindex="0" style="--av:#4A55A2">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 5l3-2 3 2"/><path d="M14.5 6.5l3 3-8 8-3-3z"/><path d="M6.5 14.5L4 20l5.5-2.5"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Auto Mechanic</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Egbeda</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="stat"><span class="num">8</span><span class="unit">yrs</span><span class="lbl">at this trade</span></div>
+          <div class="chips"><span class="chip">Engine repair</span><span class="chip">Diagnostics</span><span class="chip">Brakes</span></div>
+          <p class="bio">Petrol and diesel engine repair; mobile roadside service across Ibadan.</p>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Sparse profiles stay dignified</h2><span class="rule"></span><p>the most common launch card</p></div>
+    <p class="sparse-note">A brand-new self-registrant with one skill and no bio is the commonest card at launch — and the easiest to let look broken. The glyph, trade, LGA and CTA carry it.</p>
+    <div class="grid">
+      <article class="card" tabindex="0" style="--av:#6B7A2E">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M9 21h6"/><path d="M12 15v6"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Hairdressing &amp; Barbing</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Oluyole</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="stat"><span class="num">3</span><span class="unit">yrs</span><span class="lbl">at this trade</span></div>
+          <div class="chips"><span class="chip">Barbing</span></div>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+      <article class="card" tabindex="0" style="--av:#255e6a">
+        <div class="accent"></div>
+        <div class="card-head">
+          <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h13l5 5-5 5H3z"/><path d="M8 12h6"/></svg></span>
+          <div class="head-main">
+            <p class="prof">Welding &amp; Fabrication</p>
+            <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5-7-11a7 7 0 0 1 14 0c0 6-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Akinyele</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chips"><span class="chip">Fabrication</span><span class="chip">Gates &amp; grills</span></div>
+          <span class="cta">View profile &amp; contact <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>The trust system</h2><span class="rule"></span><p>two slots, never fighting</p></div>
+    <div class="legend">
+      <div class="lcard">
+        <span class="swatch" style="background:var(--brand-tint);color:var(--brand-text)"><svg viewBox="0 0 24 24" style="stroke:var(--brand-text)"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>Government verified</span>
+        <h3>Slot 1 · Verification pill</h3>
+        <p>Top-right, at most one, by precedence: Government verified → Member-verified → none. Answers <i>how independently verified</i>.</p>
+      </div>
+      <div class="lcard">
+        <span class="swatch" style="background:var(--good-tint);color:var(--good)"><svg viewBox="0 0 24 24" style="stroke:var(--good)"><circle cx="12" cy="12" r="9"/><path d="M8.5 12l2.2 2.2L16 9"/></svg>Member-verified</span>
+        <h3>Earned, not assumed</h3>
+        <p>Appears only once the person confirms their own record via the magic-link / Assessor callback. Ghost rows never earn it.</p>
+      </div>
+      <div class="lcard">
+        <span class="swatch" style="background:var(--assoc-tint);color:var(--assoc)"><svg viewBox="0 0 24 24" style="stroke:var(--assoc)"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>[Association] — confirmed member</span>
+        <h3>Slot 2 · Provenance line</h3>
+        <p>Who vouches. Shown for any association-sourced worker, additive to the pill. Never says a bare “Verified.” Long names truncate; full text on hover.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <ul>
+        <li><b>Mastery up front.</b> Years-at-trade is often the strongest trust signal a worker has — promoted to a <span class="k">hero stat</span>, with a ★ “seasoned” cue at 20+ years. Honest: it's derived from the number, not a claim.</li>
+        <li><b>No names, no photos.</b> Scraper defence + privacy — the card is <span class="k">profession-led</span>; full profile &amp; contact sit behind <span class="k">employer login</span>. Trade-glyph avatars give warmth with zero PII.</li>
+        <li><b>Future-proof.</b> If Government relaxes the photo rule, the <span class="k">Story 9-12 magic-link self-update</span> flow already exists — reach each worker by email/phone to add a photo. No new infrastructure.</li>
+        <li><b>Build it once.</b> <span class="k">TradeAvatar</span> and <span class="k">TrustBadge</span> should be shared components — the same person looks the same on the card, the profile page, and the registry table.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>Mockup · fictional sample data (no real registrant shown) · Story 13-38 · UX: Sally · brand maroon #9C1E23 · light &amp; dark theme-aware</footer>
+</div>
+
+</body>
+</html>

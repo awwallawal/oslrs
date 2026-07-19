@@ -60,13 +60,15 @@ so that **I can trust an association-vouched skilled worker — and the platform
 - **Experience is a HERO stat** — years-at-trade promoted to a prominent stat block (large brand-coloured tabular number + unit + label), NOT a quiet meta row; a ★ "seasoned" cue at **≥20 years** (derived from the number — honest, not a claim). Omitted gracefully when years are absent.
 - **Sparse profiles stay dignified** — the commonest launch card (one skill, no bio, no association, maybe no experience) must still look intentional: the trade-glyph avatar + profession + LGA + CTA carry it. Every optional block (stat, bio, chips-overflow, provenance, pill) degrades gracefully.
 - **Build `TradeAvatar` + `TrustBadge` as SHARED components** (not marketplace-local) — the same person renders identically on the card, the profile page, and the registry table. `TrustBadge` maps the verification substrate (do not re-derive); `TradeAvatar` = glyph-map(profession/skill) + deterministic colour(id).
-- **Interactive mockup (v2):** https://claude.ai/code/artifact/f354d58d-f969-41d6-95e9-770539cb1ebc (before/after · all trust states · experience-as-stat · sparse profiles · light + dark).
+- **Interactive mockup (v2):** in-repo at `docs/design/marketplace-card-13-38.html` (durable, version-controlled) · rendered preview https://claude.ai/code/artifact/f354d58d-f969-41d6-95e9-770539cb1ebc (before/after · all trust states · experience-as-stat · sparse profiles · light + dark).
 
 ### Project Structure Notes
 - **Web only** (render): marketplace card component + a badge under `apps/web/src/features/<marketplace>/…` (confirm the exact feature path at build); co-located tests. Reuse the existing badge pill; no new primitive.
 - No new deps. No DB. Any read-shape change threads the association name through the existing marketplace query (additive), never a new registry read.
 
 ### References
+- [Design (DURABLE, in-repo): `docs/design/marketplace-card-13-38.html` — Sally's card redesign, version-controlled so it travels with the code. THE visual spec this story builds against. Open in a browser. Rendered preview also at https://claude.ai/code/artifact/f354d58d-f969-41d6-95e9-770539cb1ebc (before/after, all trust states, experience-as-stat, sparse profiles, light + dark).]
+- [Source: apps/web/src/features/marketplace/components/WorkerCard.tsx — the current card being redesigned; GovernmentVerifiedBadge.tsx = the existing badge to coexist with]
 - [Source: _bmad-output/implementation-artifacts/13-2-association-group-channel-and-import.md — top DECISION block (Awwal 2026-07-19: include-with-badge, two-tier, honest naming) + the WRITE side that persists source/association-name/member-confirmed]
 - [Source: _bmad-output/planning-artifacts/registry-data-status-taxonomy.md — Axis-3 verification tiers (association-confirmed vs member-verified vs nin_on_file); R1 no-NIMC-path locked]
 - [Source: docs/launch-campaign/association-condensed-sheet-spec.md §1 — the sheet header carries the association/guild name (the badge's `[Association]`)]
