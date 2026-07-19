@@ -88,4 +88,6 @@ Afijio · Akinyele · Atiba · Atisbo · Egbeda · Ibadan North · Ibadan North-
 
 ### Appendix B — suggested trade list (DRAFT — Awwal to confirm/extend)
 
-Tailoring / Fashion · Carpentry / Woodwork · Welding / Fabrication · Electrical / Electronics · Plumbing · Masonry / Bricklaying · Auto Mechanic · Hairdressing / Barbing · Catering / Food · Cosmetology / Make-up · Photography / Videography · Painting · Vulcanizing · Phone / Computer repair · Shoemaking / Leatherwork · Textile / Aso-Oke weaving · Agriculture / Agro-processing · **Other (specify)**
+Tailoring / Fashion · Carpentry / Woodwork · Welding / Fabrication · Electrical / Electronics · Plumbing · Masonry / Bricklaying · Tiling / Terrazzo / Marble · Auto Mechanic · Hairdressing / Barbing · Catering / Food · Cosmetology / Make-up · Photography / Videography · Painting · Vulcanizing · Phone / Computer repair · Shoemaking / Leatherwork · Textile / Aso-Oke weaving · Agriculture / Agro-processing · **Other (specify)**
+
+_Added 2026-07-20 (Awwal): **Tiling / Terrazzo / Marble** — the first real association (ASNAT Tiller Association) is exactly this trade and the list lacked it. Maps to the existing `SKILL_TAXONOMY` slug `tiling` ("Tiling & Flooring", ISCO 7122) — no taxonomy change. Living list: fold popular "Other (specify)" write-ins back in per-association (13-2 does the free-text→controlled→slug reconciliation)._
