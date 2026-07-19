@@ -28,6 +28,19 @@
 
 ---
 
+## 💳 External launch-gates tracker — paid / long-lead (standing reference, added 2026-07-20)
+
+These are **external, paid, long-lead** gates — a subscription to pay or an approval to await. The discipline: **none of them blocks the build.** Every dependent feature ships a working "tier-1 / without-the-paid-thing"; the paid gate is a **progressive-enhancement unlock**, not a prerequisite — so development never stalls, and you never pay for a subscription before the stories that use it are done.
+
+| Gate | Unlocks | Ships **without** it (tier-1) | Don't pay/apply until | Wait type |
+|---|---|---|---|---|
+| **Resend Pro** (~$20) | the email **blast** volume (Cohorts A/B/C) | all email code works (13-9/11/12/13/21); welcome + thank-you auto-sends fire | the pre-blast public-facing stories are done + a dry-run passes | **payment** (instant) |
+| **Termii sender-ID** | tier-2 **Member-verified SMS** (13-2 association) + the phone-only cohort's manual SMS | the association importer + tier-1 "[Association] — confirmed member" badge (13-2/13-38); registrations work | 13-2 lands + you're ready to run member confirmations | **approval** (LONG — apply early) |
+
+**Rule of thumb:** if you're ever unsure *"am I blocked on Resend/Termii?"* — the answer is **no**. The build ships tier-1; the paid gate is the enhancement. Apply for the *long-lead approval* one (Termii sender-ID) **early** (approval, not payment, is the wait); **pay** for the *instant* one (Resend Pro) only when its dependencies are done, so you're not burning a subscription you can't use yet. Keep this table current as new external gates appear.
+
+---
+
 ## Phase 0 — Close the nearly-done (now; mostly operator/validation gates)
 
 These are `review` or operator-gated — they need a decision or a validation, not dev time.
