@@ -11,9 +11,24 @@
  * live PDF round-trip.
  */
 
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { buildParsedRow } from '../normalise-row.js';
 import { tableFromItems, type PdfTextItem } from './pdf-layout.js';
 import type { ParseResult, ParserInput, ParsedRow, ParseFailure } from './types.js';
+
+// Resolve the pdfjs-dist asset dirs so Node text extraction can decode standard
+// fonts + CMaps. Without these, pdfjs 5.x silently yields ZERO text for real PDFs
+// embedding standard-14 / CID fonts (the ITF-SUPA register) — 6.x was more
+// lenient but requires Node 22 (CI + the VPS run Node 20). Providing the data
+// keeps us on a Node-20-compatible pdfjs while extracting correctly. pdfjs's
+// factory validates a URL string ending in '/', so use a file:// URL
+// (forward-slashed + trailing slash) which is correct on Windows AND Linux.
+const requireFromHere = createRequire(import.meta.url);
+const PDFJS_DIST_DIR = path.dirname(requireFromHere.resolve('pdfjs-dist/package.json'));
+const STANDARD_FONT_DATA_URL = pathToFileURL(path.join(PDFJS_DIST_DIR, 'standard_fonts') + path.sep).href;
+const CMAP_URL = pathToFileURL(path.join(PDFJS_DIST_DIR, 'cmaps') + path.sep).href;
 
 /** Extract positioned text items from a PDF buffer using pdfjs (Node, no worker). */
 export async function extractPdfItems(buffer: Buffer): Promise<PdfTextItem[]> {
@@ -26,6 +41,11 @@ export async function extractPdfItems(buffer: Buffer): Promise<PdfTextItem[]> {
     data: new Uint8Array(buffer),
     // Node-safe: don't fetch remote fonts (main-thread, no worker).
     useSystemFonts: true,
+    // Local font + CMap data so text extraction works on Node 20 pdfjs (5.x) —
+    // without these, real PDFs with standard/CID fonts extract to zero text.
+    standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    cMapUrl: CMAP_URL,
+    cMapPacked: true,
   });
 
   const doc = await loadingTask.promise;
