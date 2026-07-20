@@ -7,7 +7,13 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { lgas } from '../../db/schema/index.js';
-import { canonicalizeLgaId, UUID_SHAPED_RE, FOSSIL_LGA_ALIASES } from '../lga-canonical.service.js';
+import { OYO_STATE_LGAS } from '../../db/seeds/lgas.seed.js';
+import {
+  canonicalizeLgaId,
+  UUID_SHAPED_RE,
+  FOSSIL_LGA_ALIASES,
+  buildLgaLabelResolver,
+} from '../lga-canonical.service.js';
 
 describe('canonicalizeLgaId (Story 13-16 AC1)', () => {
   const stamp = Date.now();
@@ -62,5 +68,55 @@ describe('canonicalizeLgaId (Story 13-16 AC1)', () => {
     expect(UUID_SHAPED_RE.test('ibadan_north')).toBe(false);
     // Prefix-only lookalike must NOT match (backfill parity: full shape only).
     expect(UUID_SHAPED_RE.test('0198c2f4-dead-beef')).toBe(false);
+  });
+});
+
+describe('buildLgaLabelResolver (Story 11-2 code-review L1) — pure, no DB', () => {
+  const rows = OYO_STATE_LGAS.map((l) => ({ code: l.code, name: l.name }));
+  const resolve = buildLgaLabelResolver(rows);
+
+  it('resolves the canonical name and slug exactly', () => {
+    expect(resolve('Ibadan North-East').code).toBe('ibadan_north_east');
+    expect(resolve('ibadan_north_east').code).toBe('ibadan_north_east');
+    expect(resolve('Egbeda').code).toBe('egbeda');
+  });
+
+  it('resolves structural variants (case / hyphen / space / underscore)', () => {
+    for (const v of ['IBADAN NORTH EAST', 'ibadan north-east', 'Ibadan_North_East', '  ibadan   north   east ']) {
+      expect(resolve(v).code).toBe('ibadan_north_east');
+    }
+  });
+
+  it('resolves spaceless and re-spaced forms of two-word LGAs', () => {
+    expect(resolve('Onaara').code).toBe('ona_ara');
+    expect(resolve('Ona Ara').code).toBe('ona_ara');
+    expect(resolve('ORI IRE').code).toBe('ori_ire');
+    expect(resolve('Ogooluwa').code).toBe('ogo_oluwa');
+  });
+
+  it('resolves the Ogbomosho/Ogbomoso (silent-h) + Saki/Shaki spelling aliases', () => {
+    expect(resolve('Ogbomoso North').code).toBe('ogbomosho_north');
+    expect(resolve('Ogbomosho North').code).toBe('ogbomosho_north');
+    expect(resolve('Shaki West').code).toBe('saki_west');
+    expect(resolve('Saki West').code).toBe('saki_west');
+  });
+
+  it('resolves directional abbreviations (NE/NW/SE/SW, with or without dots)', () => {
+    expect(resolve('Ibadan NE').code).toBe('ibadan_north_east');
+    expect(resolve('Ibadan N.E.').code).toBe('ibadan_north_east');
+    expect(resolve('Ibadan SW').code).toBe('ibadan_south_west');
+  });
+
+  it('returns null + warning for genuinely non-Oyo-LGA text (honest, not guessed)', () => {
+    expect(resolve('Lagos Mainland')).toEqual({ code: null, warning: 'unresolved_lga' });
+    expect(resolve('N/A').code).toBeNull();
+    expect(resolve('   ').code).toBeNull();
+  });
+
+  it('never maps an alias to a slug absent from the supplied rows', () => {
+    // A minimal row set without Saki must not resolve the Shaki alias.
+    const tiny = buildLgaLabelResolver([{ code: 'egbeda', name: 'Egbeda' }]);
+    expect(tiny('Shaki West').code).toBeNull();
+    expect(tiny('Egbeda').code).toBe('egbeda');
   });
 });

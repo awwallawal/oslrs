@@ -67,3 +67,73 @@ export async function canonicalizeLgaId(
   }
   return row.code;
 }
+
+// ---------------------------------------------------------------------------
+// Free-text LGA label → canonical slug (Story 11-2 code-review L1).
+//
+// `canonicalizeLgaId` above assumes the input is ALREADY a slug/UUID/fossil —
+// correct for the wizard + enumerator paths, which submit a slug from a
+// dropdown. Secondary-data IMPORTS are the one channel carrying human-readable
+// LGA *names* ("Ibadan North-East", "Ogbomoso North", "Shaki West") with
+// arbitrary casing/punctuation/spelling. Rather than have the import service
+// keep its own weak exact-match map (which dropped every variant to null), this
+// is the ONE robust name→slug resolver — so imports resolve LGAs as reliably as
+// every other channel, and only genuinely non-Oyo-LGA text falls through.
+// ---------------------------------------------------------------------------
+
+/** Collapse to a spaced match key: lowercase, non-alphanumerics → single space. */
+export function lgaMatchKey(raw: string): string {
+  return raw.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Collapse to a tight (space-less) key so "Ona Ara" ≡ "Onaara" ≡ "ona_ara". */
+export function lgaTightKey(raw: string): string {
+  return raw.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * Spelling/abbreviation aliases keyed by an arbitrary label form → canonical
+ * slug. Extends the retired-form fossils with the real-world register variants:
+ * the `Ogbomosho`↔`Ogbomoso` (silent-h) split and `Saki`↔`Shaki`. Keys are
+ * normalised at build time, so any casing/punctuation of these works.
+ */
+export const LGA_TEXT_ALIASES: Readonly<Record<string, string>> = {
+  ...FOSSIL_LGA_ALIASES, // ibadan_ne→…north_east, ogbomoso_north→ogbomosho_north, etc.
+  shaki_east: 'saki_east',
+  shaki_west: 'saki_west',
+};
+
+/**
+ * Build a pure resolver from the loaded `lgas` rows (code + name). Indexes both
+ * the spaced and tight key of every name AND code, plus the alias table
+ * (registered only when its canonical slug is a real row). Returns
+ * `{ code }` on a hit, `{ code: null, warning: 'unresolved_lga' }` otherwise —
+ * the caller preserves the raw value for review rather than guessing.
+ */
+export function buildLgaLabelResolver(
+  rows: ReadonlyArray<{ code: string; name: string }>,
+): (raw: string) => { code: string | null; warning?: string } {
+  const byKey = new Map<string, string>();
+  const add = (k: string, code: string) => {
+    if (k && !byKey.has(k)) byKey.set(k, code);
+  };
+  for (const r of rows) {
+    add(lgaMatchKey(r.name), r.code);
+    add(lgaTightKey(r.name), r.code);
+    add(lgaMatchKey(r.code), r.code);
+    add(lgaTightKey(r.code), r.code);
+  }
+  const validCodes = new Set(rows.map((r) => r.code));
+  for (const [aliasLabel, canonicalSlug] of Object.entries(LGA_TEXT_ALIASES)) {
+    if (!validCodes.has(canonicalSlug)) continue; // never map to a non-existent LGA
+    add(lgaMatchKey(aliasLabel), canonicalSlug);
+    add(lgaTightKey(aliasLabel), canonicalSlug);
+  }
+
+  return (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return { code: null };
+    const hit = byKey.get(lgaMatchKey(trimmed)) ?? byKey.get(lgaTightKey(trimmed));
+    return hit ? { code: hit } : { code: null, warning: 'unresolved_lga' };
+  };
+}

@@ -44,9 +44,14 @@ vi.mock('../../services/fraud-engine.service.js', () => ({
 }));
 
 const mockInsert = vi.fn().mockReturnValue({ values: () => Promise.resolve() });
+// Story 11-2 — the worker now does a defensive respondent-status lookup before
+// scoring (skips imported_unverified / rolled_back). Mock it to return an active
+// respondent so the guard passes through to FraudEngine.evaluate.
+const mockRespondentFindFirst = vi.fn().mockResolvedValue({ status: 'active' });
 vi.mock('../../db/index.js', () => ({
   db: {
     insert: () => mockInsert(),
+    query: { respondents: { findFirst: (...args: unknown[]) => mockRespondentFindFirst(...args) } },
   },
 }));
 
@@ -71,6 +76,7 @@ describe('fraud-detection worker', () => {
   beforeEach(() => {
     // Re-establish mock implementations after mockReset (vitest base config)
     mockInsert.mockReturnValue({ values: () => Promise.resolve() });
+    mockRespondentFindFirst.mockResolvedValue({ status: 'active' });
   });
 
   it('should call FraudEngine.evaluate and return result', async () => {

@@ -14,6 +14,7 @@ import { eq, and } from 'drizzle-orm';
 import pino from 'pino';
 import { db } from '../db/index.js';
 import { submissions, respondents, marketplaceProfiles, fraudDetections } from '../db/schema/index.js';
+import { PIPELINE_EXCLUDED_STATUSES } from '../db/schema/respondents.js';
 import { lgas } from '../db/schema/lgas.js';
 import type { MarketplaceExtractionJobData } from '../queues/marketplace-extraction.queue.js';
 import { sql } from 'drizzle-orm';
@@ -198,7 +199,7 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     // 2. Load respondent
     const respondent = await db.query.respondents.findFirst({
       where: eq(respondents.id, respondentId),
-      columns: { id: true, consentMarketplace: true, consentEnriched: true, lgaId: true },
+      columns: { id: true, status: true, consentMarketplace: true, consentEnriched: true, lgaId: true },
     });
 
     if (!respondent) {
@@ -208,6 +209,20 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
         respondentId,
       });
       return { action: 'error', respondentId, reason: 'respondent_not_found' };
+    }
+
+    // 2b. Status gate (Story 11-2 AC#6) — imported_unverified / rolled_back rows
+    // are low-trust secondary-data imports and MUST NOT earn a marketplace
+    // profile. The primary gate is by-construction (the import service never
+    // enqueues this worker), but we also refuse defensively so a stray enqueue
+    // can never leak an import into the marketplace.
+    if (PIPELINE_EXCLUDED_STATUSES.includes(respondent.status)) {
+      logger.info({
+        event: 'marketplace_extraction.status_excluded',
+        respondentId,
+        status: respondent.status,
+      });
+      return { action: 'skipped', respondentId, reason: `status_${respondent.status}` };
     }
 
     // 3. Consent gate

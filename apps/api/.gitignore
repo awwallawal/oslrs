@@ -1,0 +1,4 @@
+
+# Real ITF-SUPA register — third-party PII, never commit (Story 11-2). Local-only
+# test fixture; the pdf-tabular fixture test skips when absent (e.g. in CI).
+test-fixtures/itf-supa-sample.pdf

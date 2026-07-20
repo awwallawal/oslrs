@@ -37,8 +37,33 @@ export const respondentStatusTypes = [
   'pending_nin_capture',
   'nin_unavailable',
   'imported_unverified',
+  // Story 11-2 — batch-level soft-delete. A 14-day rollback of an import_batch
+  // flips every one of its respondents to `rolled_back` (rows preserved for
+  // audit; never truly deleted). Excluded from every downstream pipeline like
+  // `imported_unverified`. CHECK constraint updated in lockstep by
+  // `scripts/migrate-import-service-init.ts`.
+  'rolled_back',
 ] as const;
 export type RespondentStatus = typeof respondentStatusTypes[number];
+
+/**
+ * Story 11-2 — statuses excluded from NIN-keyed downstream pipelines
+ * (fraud-detection, marketplace-extraction, partner-API `verify_nin`).
+ *
+ * `imported_unverified` rows are low-trust secondary-data imports that must not
+ * masquerade as field-verified; `rolled_back` rows are soft-deleted batches.
+ * Both are held out of the pipelines. The PRIMARY gate is by-construction — the
+ * importer never enqueues those workers — but the workers also consult this set
+ * defensively so a stray enqueue can never leak an import into fraud/marketplace.
+ *
+ * NOTE: `pending_nin_capture` / `nin_unavailable` are NOT excluded — those are
+ * legitimate field respondents who merely lack a NIN and still earn marketplace
+ * profiles once consented.
+ */
+export const PIPELINE_EXCLUDED_STATUSES: readonly RespondentStatus[] = [
+  'imported_unverified',
+  'rolled_back',
+];
 
 /**
  * Shape of the `respondents.metadata` JSONB column.
@@ -136,6 +161,16 @@ export interface RespondentMetadata {
    * misled about which step failed.
    */
   account_link_failed?: boolean;
+  /**
+   * Story 11-2 — secondary-data import provenance for fields the imported source
+   * carried but `respondents` has no column for (email, trade/profession,
+   * gender, town, age, experience, the source's original full-name string).
+   * Preserved here so nothing is lost at ingest; a later promotion path
+   * (Story 13-2's submission-write contract) can surface them. Covered by the
+   * metadata-clearing erasure path. Never a dedup key — dedup is phone/NIN only.
+   */
+  imported_email?: string;
+  import_extra?: Record<string, string>;
 }
 
 export const respondents = pgTable('respondents', {

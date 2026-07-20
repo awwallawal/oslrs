@@ -11,8 +11,10 @@
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../lib/redis.js';
 import pino from 'pino';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { fraudDetections } from '../db/schema/index.js';
+import { fraudDetections, respondents } from '../db/schema/index.js';
+import { PIPELINE_EXCLUDED_STATUSES } from '../db/schema/respondents.js';
 import type { FraudDetectionJobData } from '../queues/fraud-detection.queue.js';
 import { FraudEngine } from '../services/fraud-engine.service.js';
 import type { FraudDetectionResult } from '@oslsr/types';
@@ -42,6 +44,29 @@ export const fraudDetectionWorker = new Worker<FraudDetectionJobData, WorkerResu
       submissionId,
       respondentId: job.data.respondentId,
     });
+
+    // Status gate (Story 11-2 AC#6) — imported_unverified / rolled_back
+    // respondents are low-trust secondary-data imports and MUST NOT be scored
+    // for fraud (they never went through the field-collection path the engine
+    // assumes). The primary gate is by-construction (the import service never
+    // enqueues this worker), but we refuse defensively so a stray enqueue can
+    // never leak an import into fraud scoring.
+    if (job.data.respondentId) {
+      const respondent = await db.query.respondents.findFirst({
+        where: eq(respondents.id, job.data.respondentId),
+        columns: { status: true },
+      });
+      if (respondent && PIPELINE_EXCLUDED_STATUSES.includes(respondent.status)) {
+        logger.info({
+          event: 'fraud_detection.status_excluded',
+          jobId: job.id,
+          submissionId,
+          respondentId: job.data.respondentId,
+          status: respondent.status,
+        });
+        return { processed: false, submissionId };
+      }
+    }
 
     // Run the full fraud engine evaluation
     let result: FraudDetectionResult;

@@ -198,8 +198,11 @@ describe('AuditService', () => {
       //   OPERATOR_THANKYOU_REFERRAL_SENT ('operator.thankyou_referral_sent') → 53.
       // Story 13-16 (LGA value canonicalization backfill) added 1:
       //   OPERATOR_LGA_ID_CANONICALIZED ('operator.lga_id_canonicalized') → 54.
+      // Story 11-2 (secondary-data import batches) added 2:
+      //   IMPORT_BATCH_CREATED ('import_batch.created'),
+      //   IMPORT_BATCH_ROLLED_BACK ('import_batch.rolled_back') → 56.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(54);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(56);
     });
   });
 

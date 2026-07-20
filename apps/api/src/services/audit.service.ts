@@ -61,6 +61,9 @@ export const AUDIT_ACTIONS = {
   MFA_REGENERATED: 'mfa.regenerated',
   MFA_LOCKOUT: 'mfa.lockout',
   MFA_GRACE_EXPIRED_REDIRECT: 'mfa.grace_expired_redirect',
+  // Secondary-data import batches (Story 11-2)
+  IMPORT_BATCH_CREATED: 'import_batch.created',
+  IMPORT_BATCH_ROLLED_BACK: 'import_batch.rolled_back',
   // Admin Actions
   ADMIN_USER_DEACTIVATE: 'admin.user_deactivate',
   ADMIN_USER_REACTIVATE: 'admin.user_reactivate',

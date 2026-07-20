@@ -11,6 +11,7 @@ import { db } from '../db/index.js';
 import auditLogViewerRoutes from './audit-log-viewer.routes.js';
 import settingsRoutes from './settings.routes.js';
 import operationsRoutes from './operations.routes.js';
+import importsRoutes from './imports.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -29,6 +30,10 @@ router.use('/settings', settingsRoutes);
 // Story 9-19 — sub-router for the Operations Dashboard at /admin/operations/*.
 // Super-admin-gated inside the sub-router.
 router.use('/operations', operationsRoutes);
+
+// Story 11-2 — sub-router for secondary-data import at /admin/imports/*.
+// Super-admin-gated inside the sub-router (auth + SUPER_ADMIN authorize).
+router.use('/imports', importsRoutes);
 
 /**
  * GET /api/v1/admin/email-budget

@@ -1126,6 +1126,15 @@ jobs:
             # this view is the analyst/BI/12-4 "one table" + the parity-test target.
             cd apps/api && pnpm tsx scripts/migrate-registry-unified-view-init.ts && cd ~/oslrs
 
+            # Story 11-2: extend respondents_status_check to permit `rolled_back`
+            # (the import 14-day rollback soft-delete status). Drizzle db:push adds
+            # the enum value at the TS layer but does NOT touch the Postgres CHECK
+            # that Story 11-1's runner installed with only 4 values; without this a
+            # rollback write would be rejected. Idempotent (only drops+recreates the
+            # constraint when the live def lacks rolled_back). Must run AFTER
+            # migrate-multi-source-registry-init.ts (which creates the constraint).
+            cd apps/api && pnpm tsx scripts/migrate-import-service-init.ts && cd ~/oslrs
+
             # M3 fix: backup-before-overwrite for /var/www/oslsr — gives one-step
             # rollback (`mv /var/www/oslsr.bak.prev /var/www/oslsr`) if a future
             # build ships corrupt dist. Mirrors the nginx backup-test-restore pattern
