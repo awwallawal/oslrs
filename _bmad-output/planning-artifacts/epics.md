@@ -320,7 +320,7 @@ So that I can compute CPA per channel and see which LGAs are under-covered for w
 
 **Authoring status (2026-06-25 — Bob/SM):** Epic 13 authored via canonical `*create-story` per SCP-2026-06-25-launch-campaign. Six story files at `_bmad-output/implementation-artifacts/13-*.md`; `epic-13` keys already tracked in `sprint-status.yaml`. Pre-spend trio (13-1/13-3/13-4) → `ready-for-dev`; fast-follow trio (13-2/13-5/13-6) → `backlog`. Each story REUSES existing infrastructure (attribution = no-migration `extras`→`raw_data`; association = the Epic 11 import spine; capacity = the DONE monitoring stack; enumerator = the fully-wired field path; dashboard = EXTEND existing analytics) and cites the live codebase by `file:line`.
 
-**Emergent expansion 13-7 … 13-38 (parity note, 2026-07-18; 13-37/13-38 added 2026-07-19):** Epic 13 grew well past the original six as launch prep surfaced defects and mechanisms. These emergent stories are tracked canonically in `sprint-status.yaml` + their own `13-*.md` files (full ACs there — NOT re-documented here to avoid drift); this is the index:
+**Emergent expansion 13-7 … 13-40 (parity note, 2026-07-18; 13-37/13-38 added 2026-07-19; 13-39/13-40 added 2026-07-20):** Epic 13 grew well past the original six as launch prep surfaced defects and mechanisms. These emergent stories are tracked canonically in `sprint-status.yaml` + their own `13-*.md` files (full ACs there — NOT re-documented here to avoid drift); this is the index:
 - **Launch-deploy reliability/resilience:** 13-7 web-test IndexedDB polyfill (done) · 13-8 launch-resilience hardening (done).
 - **Campaign-measurement + email lifecycle:** 13-9 campaign engagement tracking (done) · 13-10 campaign dashboard (backlog, post-launch) · 13-11 thank-you/referral blast (done) · 13-12 evergreen thank-you auto-send (done) · 13-13 email unsubscribe→suppression (done).
 - **Public Core + data-integrity hardening (launch-gating cluster):** 13-14 Public Core two-form split (done — published+pinned) · 13-15 NIN format-only (done+deployed) · 13-16 LGA slug canonicalization (done+deployed+backfilled) · 13-17 privileged-action reauth UI (done+deployed) · 13-18 server reauth route hygiene (done+deployed) · 13-19 Public Core occupation-capture fix (done+deployed, Dry-run#1 verified) · 13-20 skill_list 61→150 taxonomy (done+deployed) · 13-21 registration auto-emails + failure alerting (done+deployed).
@@ -328,6 +328,7 @@ So that I can compute CPA per channel and see which LGAs are under-covered for w
 - **Wizard-bypass class + marketplace surface:** 13-27 public-wizard marketplace-extraction bypass (done+deployed — shared `runPostSubmissionSideEffects`, the 3rd wizard-bypass victim) · 13-28 marketplace skills display (done+deployed) · 13-29 wizard calculated-relevance reactivity + acquisition prominence (done — fixed the two-pass survey loop).
 - **CI + test-infra hardening (2026-07):** 13-30 reauth-routes test-teardown FK-race helper (done+deployed — shared audit-safe teardown) · 13-31 osv-scanner audit-gate migration (done+deployed — npm retired `pnpm audit`, 410) · 13-32 osv-scanner prod-scope + vuln remediation (done+deployed — two-tier prod/report gate + turbo 1.13→2.x; removed 13-31's 2026-08-15 grandfather-expiry cliff at the root) · 13-36 E2E messaging determinism + workflow reliability (ready-for-dev — test-hygiene; deterministic socket.io waits so the non-deploy-gating E2E workflow is trustworthy; emergent from the 13-32 turbo-2.x webServer env regression it had masked) · 13-37 registry-read-drift CI guard (ready-for-dev — post-launch tooling; fails `lint-and-build` on a NEW hand-rolled respondent⟕submission read outside the sanctioned modules, enforcing 13-33's canonical `registryUnifiedSource`; emergent from the 13-33 backlog-harmonization sweep).
 - **Convergence + pre-blast polish (2026-07):** 13-33 canonical unified registry read + honest density map (**done+deployed 2026-07-19** — respondent-anchored single read; banded density disclosure; parity smoke view≡inline≡count-core≡export; live /insights density now populated) · 13-34 pre-blast form-content (remove the live public GPS question + clarify the "Main Occupation/Job Title" label; form-only, re-upload+re-pin) · 13-35 wizard UX polish (skills-picker "Done" close affordance + positive framing of prefilled/"collected-earlier" questions) · 13-38 marketplace "[Association] — confirmed member" badge (ready-for-dev — two-tier association-confirmed→member-verified trust badge, honest-naming; renders 13-2's association provenance; emergent from Awwal's verification reframe).
+- **Multi-source import-verification stack (2026-07-20, from the 11-2 real-ITF-fixture findings):** 13-39 email import-verification loop (backlog — confirm-first magic-link → tier-1→tier-2 promotion + name/trade/LGA cleaning loop + Cohort-D + DPIA send-gate; depends 11-5 + 13-2/taxonomy Axis-3 marker) · 13-40 Assessor "verify imported rows" queue (backlog — the taxonomy-specified human fallback for member-side confirmation when SMS/email response is low). Epic-11 siblings: 11-5 email-channel ingest, 11-6 email backfill, 11-7 identity-ambiguous resolution+merge. Full provenance: `docs/session-2026-07-20-import-spine-and-email-channel.md`.
 - **Cross-epic reconciliation:** 13-25 is the public-facing slice of Epic 12's honest-count work (12-4/12-5/12-6 are internal-only); the "79-vs-139" public undercount = the 55 `data_lost` (Cohort A soft-launch salvage, 9-26/9-28) + 7 `no_submission` + 1 `pending_nin`, which reconciles to 12-4's documented `139 = 76 + 55 + 7 + 1`.
 
 ---
@@ -3109,3 +3110,28 @@ So that I can apply appropriate trust-tier thinking to each record without misre
 **Dependencies:** Story 11-1 (extended source enum + status column), Sally's component #13 (`SourceBadge`).
 
 **Status:** Backlog (per SCP-2026-04-22).
+
+### Story 11.5: Email-Channel Ingest — First-Class Respondent Email, Reachability Required Fields & Email Import-Verification
+
+As the Super Admin / Ministry data operator ingesting an accountable public register (ITF-SUPA) that carries email but not phone,
+I want email as a first-class respondent contact field, a per-source "reachable if phone OR email" required-field policy, `shared_email`-safe dedup, and an email magic-link loop that promotes imported rows from source-attested (tier-1) to Member-verified (tier-2),
+So that we can ingest and (double-opt-in) contact the ~3,600 email-reachable ITF artisans regardless of whether ITF gives us a clean CSV, without depending on Termii SMS, and without collapsing distinct people who share an email or exposing contact-PII publicly.
+
+**Scope:**
+- First-class `respondents.email` (normalized, non-unique index, never public — marketplace/insights excluded).
+- Per-source `requiredContact: phone | email | phone_or_email`; `planIngest` required-gate becomes a reachability check.
+- Email-aware dedup: phone/NIN hard keys; email SOFT key with a `shared_email` flag-not-collapse guard (proxy/cybercafé addresses).
+- Both eventualities: email-only PDF path AND clean CSV/XLSX with no extra code.
+- _(Email import-verification — confirm-first magic-link → tier-1→tier-2, cleaning loop, bounce — is carved to **Story 13-39** by the split; NOT in 11.5.)_
+
+**Dependencies:** Story 11-2 (import spine), 11-1 (schema), 9-12 (magic-links), 13-9 (email-events/suppression/bounce); coordinates with 13-2 taxonomy + 13-38 badge (verification tiers), 13-24 (Cohort-D sequencing), 13-33 (registry_unified carries email, never exposes).
+
+**Status:** ready-for-dev (authored 2026-07-20). **SPLIT (Awwal-ratified 2026-07-20):** this 11.5 = the INGEST half only (email column + reachability + `shared_email`-safe dedup + privacy + ITF both-eventualities), landing tier-1 `imported_unverified` rows. The verification/campaign half (confirm-first magic-link → tier-1→tier-2, bounce, Cohort-D send, DPIA) is carved to **Story 13-39** (Epic 13, backlog — blocked on 11-5 + 13-2 Axis-3 marker + DPIA). `shared_email` threshold ruled N=3; email = SOFT dedup key.
+
+### Story 11.6: Backfill `respondents.email` for Existing Wizard / OAuth Rows
+
+Populate `respondents.email` (added by 11-5) for existing self-registered rows from `users.email` / submission `raw_data` (normalized), so email dedup vs the live registry is strong + the campaign can target self-registered rows. One-shot, audited, idempotent (mirrors the input-sanitisation backfill pattern); no merges. **Depends:** 11-5. **Status:** backlog (shell; full ACs at `*create-story` time). Story file `11-6-respondent-email-backfill.md`.
+
+### Story 11.7: `identity_ambiguous` Resolution & Manual Respondent-Merge Tooling
+
+Super-Admin surface to ACT on the taxonomy **R2** `identity_ambiguous` / `email_match_review` / `shared_email` flags (created by 11-2/11-5/13-2 but flag-only today): manual merge (fold provenance, soft-delete, audited) or keep-separate — never auto-merge; respects the 9-26 "erase account ≠ delete survey data" rule. **Depends:** 11-2, 12-4 (R2 owner). **Status:** backlog (shell). Story file `11-7-identity-ambiguous-resolution-and-respondent-merge.md`.

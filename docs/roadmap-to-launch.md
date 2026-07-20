@@ -41,6 +41,24 @@ These are **external, paid, long-lead** gates — a subscription to pay or an ap
 
 ---
 
+## 🧩 Multi-source ingest + verification stack — pulled partly forward (added 2026-07-20)
+
+**What changed:** the ITF-SUPA artisan register (~3,675 real, government-accountable artisans) is now a **live acquisition cohort**, so Epic 11 (multi-source import) is no longer purely "Phase-5 if-the-Ministry-asks" — its spine is **built** and its ITF-specific slice is being pulled forward. Full provenance: `docs/session-2026-07-20-import-spine-and-email-channel.md`.
+
+- **11-2** import spine (dry-run/confirm/rollback + CSV/XLSX/PDF parsers + dedup + audit + status gates) — **DONE/review** (awaiting code-review).
+- **11-5** email-channel ingest — **ready-for-dev.** Makes the registry ingest **email-only** rows (ITF's shortlist PDF has redacted phones): first-class `respondents.email`, reachability (phone-OR-email), `shared_email`-safe dedup, email-never-public. **Independent of whether ITF ever gives a clean CSV.**
+- **13-39** email import-verification (confirm-first magic-link → tier-1→tier-2), **11-6** email backfill, **11-7** identity-ambiguous resolution+merge, **13-40** Assessor verify-imported queue — **backlog**, all downstream of 12-4.
+
+### 🔑 12-4 elevated to LINCHPIN (priority change)
+`12-4 registryTotals/data_status` is no longer just an Epic-12 dashboard story — it is the **derivation service every verification/identity story reads** (13-39, 11-6, 11-7, 13-40 all resolve tiers + the R2 identity key through it). **Priority ruling (John, 2026-07-20):**
+- 12-4 stays **NOT a gate for the self-serve launch** (Phases 0–2 unchanged — don't pull a dev off launch close-out).
+- BUT 12-4 **IS a gate for taking the ~3,600 ITF imports PUBLIC honestly** — without the honest-composition denominator, 3,600 `imported_unverified` rows would silently inflate the public "registered" headline. **So: land the minimal 12-4 model (+ 12-5 label pass) BEFORE the ITF ingest hits public /insights.**
+- Architecture constraint: **one promotion path** — all tier-1→tier-2 promotion (SMS/email/Assessor) goes through a single 12-4-aligned service method, never per-story.
+
+**Sequence (import/verification stack):** 11-2 code-review → **11-5** ∥ (**12-4** minimal model + **12-5** label) ∥ 11-3 (import UI) ∥ 11-4 (badges) → ITF dry-run rehearsal on prod → ITF confirm → **13-39** (needs 13-2 Axis-3 marker + DPIA) → 11-6/11-7/13-40 as the flags/queues fill.
+
+---
+
 ## Phase 0 — Close the nearly-done (now; mostly operator/validation gates)
 
 These are `review` or operator-gated — they need a decision or a validation, not dev time.
@@ -127,7 +145,7 @@ Fire the blasts only when **all** are green:
 
 ## Phase 5 — Future epics (separate initiatives, post-survey)
 
-- **Epic 11** (11-2 → 11-3 → 11-4) — multi-source import; do *if/when* the Ministry needs dataset (e.g. ITF-SUPA PDF) ingestion
+- **Epic 11** — multi-source import. **⬆ PARTLY PULLED FORWARD 2026-07-20** (the ITF-SUPA cohort is now live — see the "Multi-source ingest + verification stack" section above): 11-2 spine **DONE/review**; 11-5 (email ingest) ready-for-dev; 11-3 (import UI) / 11-4 (badges) ready-for-dev; 11-6 / 11-7 backlog. The rest (13-39 verify, 13-40 assessor queue) sequence with 12-4 + DPIA.
 - **Epic 10** — API governance for external consumers: **10-5** (`review` → done) first, then 10-1 / 10-2 / 10-3 / 10-4 / 10-6
 
 ---

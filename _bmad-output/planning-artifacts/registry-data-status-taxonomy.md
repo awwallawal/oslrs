@@ -105,3 +105,12 @@ The Public Core (`core`) channel grows registry VOLUME; the baseline study's ANA
 
 ### R4 — Sequencing: pull 12-5 forward — LOCKED
 **Story 12-5 (label honesty) ships BEFORE/early in the launch campaign** (pre-launch-eligible), so no surface shows a submissions-count mislabeled as "Total Respondents" while the Ministry is watching. The rest of Epic 12 (12-4 model, 12-6/12-7 renderers) stays post-launch on real volume. (12-5 depends on 12-4's model shape; ship the minimal 12-4 model + 12-5 label pass together as the pre-launch slice.)
+
+## RESOLUTIONS — 2026-07-20 (John PM; Awwal-directed, from the email-channel ingest thread)
+
+### R5 — Member-side confirmation is CHANNEL-AGNOSTIC; email is a confirmation vector, NOT an identity key — LOCKED
+The email-channel ingest (Story 11-5) + verification (Story 13-39) extend, not replace, this contract:
+- **The member-side check that promotes `unverified_import` → `nin_verified` is channel-agnostic:** SMS (Termii) · sampled **Assessor callback** · **email magic-link confirmation (NEW — Story 13-39).** For email-bearing imports (ITF, no phone), email confirmation is the **launch-viable channel** (Resend live; no Termii gate). Non-response never promotes (anti-padding preserved). All channels resolve to the SAME Axis-3 tier via the 12-4 derivation service — do NOT invent a parallel verification model.
+- **Email is a CONTACT channel + confirmation vector — it is NOT part of the R2 DISTINCT-identity key** (email is shared: proxy/head/cybercafé addresses). An email-only dedup match is a **review flag** that feeds the R2 **`identity_ambiguous`** bucket + the manual-merge tooling — **never a silent merge and never a change to the distinct count.** Story 11-5's `shared_email` guard (flag-not-collapse at ≥3 rows) is the batch-side expression of this rule.
+- **Confirm-first = double opt-in** (one-time transparency notice + opt-out FIRST; marketing only post-confirmation) is the NDPA basis for contacting an imported public register (13-39 AC2; DPIA Appendix-H gates the send).
+- **The "verify imported rows" Assessor queue** (already specified in the loophole-blocks table + 13-2 AC5.4/5.5) is the **human fallback** when SMS/email confirmation response is low — it now has its own story shell (see sprint-status).
