@@ -1,0 +1,25 @@
+# Line-ending normalization (added 2026-07-20).
+# Repo stores LF; checkout is LF on all platforms. Ends the CRLF/LF churn caused
+# by core.autocrlf=true with no attributes, which made Windows-authored files —
+# especially _bmad-output/baseline-report/* — show as perpetually "modified" and
+# littered every commit with "LF will be replaced by CRLF" warnings. LF also
+# matches the Linux CI runners + the VPS, so there is one consistent form.
+* text=auto eol=lf
+
+# Binary assets — never normalize (would corrupt them).
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.svg   text eol=lf
+*.pdf   binary
+*.xlsx  binary
+*.xls   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
