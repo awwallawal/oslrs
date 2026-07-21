@@ -69,6 +69,74 @@ const MAPPING: ColumnMapping = {
   Phone: 'phoneNumber',
 };
 
+// Column x-centres for a synthetic replica of the real ITF-SUPA register layout.
+// Spaced so the long header labels ('LGA OF RESIDENCE', 'PHONE NUMBER') never
+// overlap in x — an overlap merges header items and mis-detects the header row.
+const ITF_COLS = { sn: 24, adm: 62, name: 140, email: 250, phone: 352, lga: 432, trade: 520 };
+const ITF_LGAS = ['Egbeda', 'Oluyole', 'Lagelu', 'Akinyele'];
+const ITF_TRADES = ['Tiling', 'Welding', 'Plumbing', 'Carpentry'];
+
+/**
+ * Generate a PDF that faithfully replicates the real ITF-SUPA register FORMAT
+ * with FABRICATED data (so it is committable — no real PII, unlike the gitignored
+ * production fixture). Reproduces the known quirks: two title/preamble rows above
+ * the header, the real 6-column header (`ADM NO / FULL NAME / E-MAIL /
+ * PHONE NUMBER / LGA OF RESIDENCE / TRADE AREAS`) repeated on every page,
+ * multi-page continuation, and per-page footer noise. Closes code-review M3:
+ * the riskiest parser now exercises the production column-set + layout in CI
+ * (single-word LGAs keep column assignment unambiguous; the two-word-LGA density
+ * pathology is a documented pdf-layout limitation covered elsewhere).
+ */
+function buildItfFormatPdf(pages: number, rowsPerPage: number): Promise<{ buffer: Buffer; total: number }> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 24, size: 'A4' });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), total: pages * rowsPerPage }));
+    doc.on('error', reject);
+
+    doc.fontSize(7);
+    const put = (t: string, x: number, y: number) => doc.text(t, x, y, { lineBreak: false });
+    const header = (y: number) => {
+      put('S/N', ITF_COLS.sn, y);
+      put('ADM NO', ITF_COLS.adm, y);
+      put('FULL NAME', ITF_COLS.name, y);
+      put('E-MAIL', ITF_COLS.email, y);
+      put('PHONE NUMBER', ITF_COLS.phone, y);
+      put('LGA OF RESIDENCE', ITF_COLS.lga, y);
+      put('TRADE AREAS', ITF_COLS.trade, y);
+    };
+
+    let n = 0;
+    for (let p = 0; p < pages; p++) {
+      if (p > 0) doc.addPage();
+      let y = 40;
+      if (p === 0) {
+        put('INDUSTRIAL TRAINING FUND', ITF_COLS.sn, y);
+        y += 16;
+        put('OYO STATE SUPA - SHORTLISTED ARTISANS (SYNTHETIC TEST DATA)', ITF_COLS.sn, y);
+        y += 22;
+      }
+      header(y);
+      y += 16;
+      for (let r = 0; r < rowsPerPage; r++) {
+        const idx = n + 1;
+        put(String(idx), ITF_COLS.sn, y);
+        put(`OY${String(idx).padStart(4, '0')}`, ITF_COLS.adm, y);
+        put(`Artisan${idx} Surname${idx}`, ITF_COLS.name, y);
+        put(`artisan${idx}@example.test`, ITF_COLS.email, y);
+        put(`0803${String(1000000 + idx).padStart(7, '0')}`, ITF_COLS.phone, y);
+        put(ITF_LGAS[idx % ITF_LGAS.length], ITF_COLS.lga, y);
+        put(ITF_TRADES[idx % ITF_TRADES.length], ITF_COLS.trade, y);
+        y += 14;
+        n++;
+      }
+      put(`Page ${p + 1} of ${pages}`, ITF_COLS.sn, 800); // footer noise
+    }
+    doc.end();
+  });
+}
+
 describe('parsePdfTabular (real pdfjs round-trip)', () => {
   it('extracts a header + data rows from a generated tabular PDF', async () => {
     const buffer = await buildTabularPdf();
@@ -97,6 +165,40 @@ describe('parsePdfTabular (real pdfjs round-trip)', () => {
     expect(names).toContain('Bola Ade');
     expect(names).not.toContain('INDUSTRIAL TRAINING FUND');
   }, 20000);
+
+  // Code-review M1: the async pdf parser must ACTIVELY cancel (tear down pdfjs)
+  // once its deadline passes, not merely have the caller stop waiting.
+  it('actively cancels a PDF parse once the deadline has passed (M1)', async () => {
+    const buffer = await buildTabularPdf();
+    await expect(
+      parsePdfTabular({ buffer, columnMapping: MAPPING, deadlineAt: Date.now() - 1 }),
+    ).rejects.toMatchObject({ code: 'PARSE_DEADLINE_EXCEEDED' });
+  }, 20000);
+
+  // Code-review M3: full production-format coverage in CI (no PII fixture needed).
+  // Multi-page ITF-SUPA layout with title rows, repeated per-page headers, footer
+  // noise, and the real 6-column mapping — all fabricated data.
+  it('extracts a multi-page ITF-SUPA-format register via the real column mapping (M3)', async () => {
+    const { buffer, total } = await buildItfFormatPdf(3, 12); // 36 fabricated artisans
+    const config = getImportSourceConfig('imported_itf_supa')!;
+    const result = await parsePdfTabular({ buffer, columnMapping: config.columnMapping });
+
+    // Every artisan row across all 3 pages is extracted; title rows, the repeated
+    // per-page headers, and footers are all excluded from the data.
+    const withEmail = result.rows.filter((r) => (r.canonical.email ?? '').includes('@'));
+    expect(withEmail.length).toBe(total);
+
+    const first = withEmail.find((r) => r.canonical.externalReferenceId === 'OY0001');
+    expect(first).toBeTruthy();
+    expect(first!.canonical.email).toBe('artisan1@example.test');
+    expect(first!.canonical.phoneNumber).toMatch(/^\+234\d{10}$/);
+    expect(first!.canonical.lgaId).toBeTruthy(); // LGA OF RESIDENCE mapped
+    expect(first!.canonical.profession).toBeTruthy(); // TRADE AREAS mapped
+
+    // Title/preamble text must never leak in as a data row.
+    const leaked = result.rows.some((r) => Object.values(r.raw).join(' ').includes('INDUSTRIAL TRAINING FUND'));
+    expect(leaked).toBe(false);
+  }, 30000);
 
   // Real ITF-SUPA register regression. Skips in CI (fixture is gitignored PII).
   // Proves header auto-detection (skipping the 2 title rows) + clean extraction

@@ -82,6 +82,17 @@ export interface ParserInput {
    * order. Ignored by csv/xlsx (which read the header row).
    */
   orderedHeaders?: string[];
+  /**
+   * Wall-clock deadline (epoch ms). The pdf parser checks it between pages and
+   * actively cancels (tears down the pdfjs task) once passed. Defaults to no
+   * inner deadline (the service still applies an outer wall-clock backstop).
+   */
+  deadlineAt?: number;
+  /**
+   * Max data rows to accept before refusing with `PARSE_LIMIT_EXCEEDED`.
+   * Defaults to `MAX_IMPORT_ROWS`; overridable so bounding is cheaply testable.
+   */
+  maxRows?: number;
 }
 
 export type ParserFn = (input: ParserInput) => Promise<ParseResult>;

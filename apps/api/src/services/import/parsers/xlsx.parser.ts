@@ -15,6 +15,7 @@
 
 import ExcelJS from 'exceljs';
 import { buildParsedRow } from '../normalise-row.js';
+import { MAX_IMPORT_ROWS, assertWithinLimit } from '../parse-limits.js';
 import type { ParseResult, ParserInput, ParsedRow, ParseFailure } from './types.js';
 
 /** Coerce an exceljs cell value (which may be an object) to a display string. */
@@ -41,7 +42,7 @@ function cellToString(value: ExcelJS.CellValue): string {
   return String(value);
 }
 
-export async function parseXlsx({ buffer, columnMapping }: ParserInput): Promise<ParseResult> {
+export async function parseXlsx({ buffer, columnMapping, maxRows }: ParserInput): Promise<ParseResult> {
   const workbook = new ExcelJS.Workbook();
   try {
     // exceljs types want an ArrayBuffer-ish; a Node Buffer works at runtime.
@@ -54,6 +55,9 @@ export async function parseXlsx({ buffer, columnMapping }: ParserInput): Promise
   if (!worksheet) {
     throw new Error('XLSX parse failed: workbook has no worksheets');
   }
+
+  // Bound before the O(rows × cols) cell walk (+1 for the header row).
+  assertWithinLimit(worksheet.rowCount, (maxRows ?? MAX_IMPORT_ROWS) + 1, 'XLSX rows');
 
   // Header row = first row. Build a column-number -> header map.
   const headerByCol = new Map<number, string>();

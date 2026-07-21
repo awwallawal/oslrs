@@ -38,6 +38,7 @@ import { resolveColumnMapping, isImportableSource } from '../config/import-sourc
 import { getParser } from './import/parsers/index.js';
 import type { ColumnMapping, ParseFailure } from './import/parsers/types.js';
 import { planIngest, type IngestDisposition } from './import/ingest-plan.js';
+import { PARSE_DEADLINE_MS } from './import/parse-limits.js';
 
 const logger = pino({ name: 'import-service' });
 
@@ -45,18 +46,19 @@ const logger = pino({ name: 'import-service' });
 type DbTx = Parameters<Parameters<typeof db['transaction']>[0]>[0];
 
 const DRY_RUN_TTL_MS = 60 * 60 * 1000; // 1 hour
-const DRY_RUN_PARSE_TIMEOUT_MS = 30 * 1000; // AC#3 server-side parse cap
+const DRY_RUN_PARSE_TIMEOUT_MS = PARSE_DEADLINE_MS; // AC#3 server-side parse cap (shared with the parsers' active deadline)
 const ROLLBACK_WINDOW_DAYS = 14;
 const PREVIEW_ROWS = 50;
 const INSERT_CHUNK = 500;
 const ROLLBACK_REASON_MIN = 20;
 
 /**
- * Bound an async parse by wall-clock time (AC#3). Meaningfully caps the async
- * pdfjs path (it yields to the event loop between chunks); a purely synchronous
- * parser that never yields could still exceed the budget, but the intent —
- * refusing an operator upload that hangs the request — holds for the format
- * that motivated the requirement (large tabular PDFs).
+ * Outer wall-clock backstop (AC#3). The parsers now bound their own work — row
+ * caps (all), a page cap + active between-page deadline that tears down pdfjs
+ * (pdf) — and the 10 MB upload cap bounds CSV/XLSX to seconds, so this race is a
+ * belt-and-suspenders guard (e.g. an XLSX decompress that ignores the inner
+ * deadline), not the sole defence. Set slightly longer than the inner deadline
+ * so the parser's own cancellation fires first and yields a precise error.
  */
 function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => Error): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -209,9 +211,10 @@ export class ImportService {
 
     let parseResult;
     try {
+      const deadlineAt = Date.now() + DRY_RUN_PARSE_TIMEOUT_MS;
       parseResult = await withTimeout(
-        parser({ buffer, columnMapping: mapping }),
-        DRY_RUN_PARSE_TIMEOUT_MS,
+        parser({ buffer, columnMapping: mapping, deadlineAt }),
+        DRY_RUN_PARSE_TIMEOUT_MS + 5_000, // outer backstop; inner deadline fires first
         () =>
           new AppError(
             'PARSE_TIMEOUT',
@@ -221,6 +224,9 @@ export class ImportService {
       );
     } catch (err) {
       if (err instanceof AppError) throw err; // preserve PARSE_TIMEOUT status/code
+      const code = (err as { code?: string }).code;
+      if (code === 'PARSE_LIMIT_EXCEEDED') throw new AppError('PARSE_LIMIT_EXCEEDED', (err as Error).message, 413);
+      if (code === 'PARSE_DEADLINE_EXCEEDED') throw new AppError('PARSE_TIMEOUT', (err as Error).message, 408);
       throw new AppError('PARSE_ERROR', (err as Error).message, 422);
     }
 

@@ -9,10 +9,16 @@
 
 import { parse } from 'csv-parse/sync';
 import { buildParsedRow } from '../normalise-row.js';
+import { MAX_IMPORT_ROWS, assertWithinLimit, countLines } from '../parse-limits.js';
 import type { ParseResult, ParserInput, ParsedRow, ParseFailure } from './types.js';
 
-export async function parseCsv({ buffer, columnMapping }: ParserInput): Promise<ParseResult> {
+export async function parseCsv({ buffer, columnMapping, maxRows }: ParserInput): Promise<ParseResult> {
   const text = buffer.toString('utf8');
+
+  // Bound BEFORE the synchronous parse (which cannot be interrupted once
+  // started): a cheap O(n) line count caps the work deterministically. +1 for
+  // the header line.
+  assertWithinLimit(countLines(text), (maxRows ?? MAX_IMPORT_ROWS) + 1, 'CSV rows');
 
   let records: Record<string, unknown>[];
   try {

@@ -53,4 +53,15 @@ describe('parseXlsx', () => {
     const result = await parseXlsx({ buffer, columnMapping: { Name: 'fullName', Phone: 'phoneNumber' } });
     expect(result.rows[0].raw.Name).toContain('Adébáyọ̀');
   });
+
+  it('refuses a workbook exceeding the row cap before the cell walk (M1)', async () => {
+    // header + 3 data rows (rowCount 4); maxRows=1 → over the (1+1) threshold.
+    const buffer = await buildWorkbook(
+      [{ Name: 'A', Phone: '08010000001' }, { Name: 'B', Phone: '08010000002' }, { Name: 'C', Phone: '08010000003' }],
+      ['Name', 'Phone'],
+    );
+    await expect(
+      parseXlsx({ buffer, columnMapping: { Name: 'fullName', Phone: 'phoneNumber' }, maxRows: 1 }),
+    ).rejects.toMatchObject({ code: 'PARSE_LIMIT_EXCEEDED' });
+  });
 });

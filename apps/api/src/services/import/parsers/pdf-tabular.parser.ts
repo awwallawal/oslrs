@@ -15,6 +15,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildParsedRow } from '../normalise-row.js';
+import {
+  MAX_PDF_PAGES,
+  assertWithinLimit,
+  assertBeforeDeadline,
+  ParseLimitExceededError,
+  ParseDeadlineExceededError,
+} from '../parse-limits.js';
 import { tableFromItems, type PdfTextItem } from './pdf-layout.js';
 import type { ParseResult, ParserInput, ParsedRow, ParseFailure } from './types.js';
 
@@ -30,8 +37,19 @@ const PDFJS_DIST_DIR = path.dirname(requireFromHere.resolve('pdfjs-dist/package.
 const STANDARD_FONT_DATA_URL = pathToFileURL(path.join(PDFJS_DIST_DIR, 'standard_fonts') + path.sep).href;
 const CMAP_URL = pathToFileURL(path.join(PDFJS_DIST_DIR, 'cmaps') + path.sep).href;
 
-/** Extract positioned text items from a PDF buffer using pdfjs (Node, no worker). */
-export async function extractPdfItems(buffer: Buffer): Promise<PdfTextItem[]> {
+/**
+ * Extract positioned text items from a PDF buffer using pdfjs (Node, no worker).
+ *
+ * Bounds the work two ways (code-review M1): a hard page cap, and — because a
+ * 4K-row PDF can take 5–15s — an active wall-clock deadline checked between
+ * pages. On either breach it throws and the `finally` tears the pdfjs task down
+ * via `destroy()`, so the work actually STOPS rather than running on after a
+ * caller-side timeout.
+ */
+export async function extractPdfItems(
+  buffer: Buffer,
+  opts?: { deadlineAt?: number },
+): Promise<PdfTextItem[]> {
   // Dynamic import: pdfjs is ESM-only and heavy; load lazily so it never taxes
   // startup for deploys that don't import PDFs. The legacy build runs on the
   // main thread in Node (no worker file to configure).
@@ -52,7 +70,10 @@ export async function extractPdfItems(buffer: Buffer): Promise<PdfTextItem[]> {
   const items: PdfTextItem[] = [];
 
   try {
+    assertWithinLimit(doc.numPages, MAX_PDF_PAGES, 'PDF pages');
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+      // Active cancellation: bail (and destroy, via finally) once over deadline.
+      assertBeforeDeadline(opts?.deadlineAt, 'PDF extraction');
       const page = await doc.getPage(pageNum);
       const content = await page.getTextContent();
       for (const item of content.items) {
@@ -73,11 +94,14 @@ export async function extractPdfItems(buffer: Buffer): Promise<PdfTextItem[]> {
   return items;
 }
 
-export async function parsePdfTabular({ buffer, columnMapping }: ParserInput): Promise<ParseResult> {
+export async function parsePdfTabular({ buffer, columnMapping, deadlineAt }: ParserInput): Promise<ParseResult> {
   let items: PdfTextItem[];
   try {
-    items = await extractPdfItems(buffer);
+    items = await extractPdfItems(buffer, { deadlineAt });
   } catch (err) {
+    // Preserve the typed bound/deadline errors so the service maps them to the
+    // right HTTP status (413 / 408) instead of a generic parse error.
+    if (err instanceof ParseLimitExceededError || err instanceof ParseDeadlineExceededError) throw err;
     throw new Error(`PDF parse failed: ${(err as Error).message}`);
   }
 

@@ -49,4 +49,12 @@ describe('parseCsv', () => {
     const result = await parseCsv({ buffer: Buffer.from(csv, 'utf8'), columnMapping: { Name: 'fullName', Phone: 'phoneNumber' } });
     expect(result.rows[0].raw.Name).toContain('Adébáyọ̀');
   });
+
+  it('refuses a file exceeding the row cap BEFORE parsing (M1)', async () => {
+    // header + 3 data rows; maxRows=2 → over the (2+1) line threshold.
+    const csv = 'Name,Phone\nA,08010000001\nB,08010000002\nC,08010000003';
+    await expect(
+      parseCsv({ buffer: Buffer.from(csv, 'utf8'), columnMapping: { Name: 'fullName', Phone: 'phoneNumber' }, maxRows: 2 }),
+    ).rejects.toMatchObject({ code: 'PARSE_LIMIT_EXCEEDED' });
+  });
 });
