@@ -95,8 +95,19 @@ so that **a CPU-heavy background job (a large import parse, a fraud/marketplace 
 
 ### Review Follow-ups (AI)
 
+SM (Bob) + PM (John) review 2026-07-22 — **APPROVED for `backlog` as-is** (evidence grounding verified exemplary; structure matches house style). The below are **promotion-time actions** — do BEFORE this goes `ready-for-dev`; they are NOT backlog blockers:
+
+- [ ] **[Split — SM+PM consensus] Carve the async-import half (AC3) into its own story `11-9`** depending on 11-8. AC1/AC2 (process split) and AC3 have different triggers, risk surfaces, and done-conditions; bundling risks a half-done "AC3 dangles" outcome. Keep 11-8 = pure worker-process isolation (AC1/AC2/AC4/AC5 + the monitoring slice of AC6).
+- [ ] **[SM Med] AC3 changes the `/confirm` contract → sweep the consumer.** Moving confirm to `202 { jobId }` + a status endpoint replaces the synchronous `ConfirmResult` the **11-3 admin-import UI** consumes → that UI breaks. Add a web subtask (poll the status endpoint) + list 11-3's import UI in Project Structure Notes, or scope it as an explicit carve-out. (Goes with the 11-9 split.)
+- [ ] **[SM Med] AC6 monitoring is under-tasked.** Worker-liveness surfacing in `MonitoringService`/ops-digest is non-trivial but Task 4 only says "playbook + MEMORY update" — give it its own subtask or drop it from AC6 to keep scope honest.
+- [ ] **[SM Med / PM Info] AC5 isolation proof is CI-awkward** (needs two processes + Redis). Decide at pickup: automated harness vs a documented manual-UAT step — don't leave it an implied-automated "test that never runs".
+- [ ] **[SM+PM Low] Scheduler single-owner invariant.** `all` and (`api`+`worker`) are mutually exclusive topologies — running `all` alongside a `worker` double-fires the schedulers (nightly snapshot, daily backup, reminders, ops-digest). State the invariant explicitly in AC2/Dev-Notes and enforce it in the PM2 topology.
+- [x] **[PM Med — DONE 2026-07-22] epics.md parity closed.** 11-8 was the lone Epic-11 story missing from `epics.md` (11-5/6/7 were present) — a genuine drift per the planning-artifact parity discipline. Story 11.8 stub added.
+- [x] **[PM Low — DONE 2026-07-22] Flag-name aligned.** MEMORY "WORKER MODEL" note said `WORKER_ROLE`; corrected to `PROCESS_ROLE` (this story is the authority on the flag name).
+
 ## Change Log
 
 | Date | Change | Rationale |
 |------|--------|-----------|
 | 2026-07-22 | Story surfaced (Opus 4.8), emergent from an 11-2 architecture review that verified all BullMQ workers run in-process with the API (`app.ts:103`) → one shared event loop → BullMQ ≠ CPU isolation here. Two paired, trigger-deferred improvements captured: AC1/AC2 split workers into a second PM2 process behind a `PROCESS_ROLE` flag (the real isolation lever, backward-compatible default `all`, benefits every queue); AC3 move respondent import to a `respondent-import` BullMQ job (volume-gated). POST-LAUNCH, NON-GATING. Status → backlog with explicit trigger conditions so it is not missed when latitude permits. | Surface-so-we-don't-miss-it; the latent risk is that every background job shares the API loop, not imports specifically. Correct wording captured in MEMORY.md "WORKER MODEL". |
+| 2026-07-22 | SM (Bob) + PM (John) two-agent review — story APPROVED for `backlog` as-is; documentation process SOUND. Findings recorded under Review Follow-ups as promotion-time actions (split AC3 → 11-9, 11-3 `/confirm` consumer sweep, monitoring + AC5-harness own subtasks, scheduler single-owner invariant). Two process fixes applied now: added the Story 11.8 stub to `epics.md` (closed the lone Epic-11 parity gap) + aligned the MEMORY flag name to `PROCESS_ROLE`. | User-requested SM/PM review; PM (John) mandated closing the epics.md parity gap before the story is "properly filed". |
