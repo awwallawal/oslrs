@@ -17,6 +17,7 @@ import {
   type FlattenedForm,
 } from '../api/wizard.api';
 import { isSectionStepSkippable } from '../lib/section-relevance';
+import { unionGeopointNames } from '../../forms/utils/geopoint-suppression';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
 import { parseUtm, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
 import {
@@ -319,6 +320,20 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   // Review. This kills the two-pass "go back and fill survey" loop where a calc-
   // gated section was skipped here (raw responses, no `age`) but demanded at
   // Review (calc-augmented). The under-15 skip still holds — `age < 15` → hidden.
+  // Story 13-34 (AI-Review H2) — the public wizard mounts FormRenderer with
+  // `suppressGeopoint`, so geopoint questions are unreachable HERE too. They must
+  // union into the same hide-set the skip decision uses; otherwise a section left
+  // with only a geopoint is NOT auto-skipped and strands the user on "No questions
+  // available" — the exact dead-end 13-29 fixed for prefilled-only sections.
+  const unreachableQuestionNames = useMemo(
+    () =>
+      unionGeopointNames(
+        form?.questions ?? [],
+        new Set(draft.formData.prefilledQuestionNames ?? []),
+      ) ?? new Set<string>(),
+    [form, draft.formData.prefilledQuestionNames],
+  );
+
   const isStepSkippable = useCallback(
     (idx: number): boolean =>
       isSectionStepSkippable(
@@ -328,10 +343,11 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
         undefined, // default clock (call-time now) — matches the Review completeness gate
         // Story 13-29 (AI-Review L1) — exclude wizard-prefilled (hidden) questions
         // so a section made up entirely of them auto-skips instead of stranding the
-        // user on FormRenderer's "No questions available" screen.
-        new Set(draft.formData.prefilledQuestionNames ?? []),
+        // user on FormRenderer's "No questions available" screen. Story 13-34 adds
+        // suppressed geopoint questions to the same set.
+        unreachableQuestionNames,
       ),
-    [steps, form, draft.formData.questionnaireResponses, draft.formData.prefilledQuestionNames],
+    [steps, form, draft.formData.questionnaireResponses, unreachableQuestionNames],
   );
 
   const handleContinue = useCallback(() => {

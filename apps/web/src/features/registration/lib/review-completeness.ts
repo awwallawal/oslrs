@@ -12,6 +12,7 @@ import { withCalculatedFields } from '@oslsr/utils/src/xlsform-calculate';
 import { evaluateMinorGuardianConsent } from '@oslsr/utils/src/minor-guardian';
 import { derivePendingNin, type WizardDraftData, type FlattenedForm } from '../api/wizard.api';
 import { NIN_QUESTION_NAMES } from './wizard-provided-field-names';
+import { geopointQuestionNames } from '../../forms/utils/geopoint-suppression';
 
 export interface ReviewStepLike {
   sectionId?: string;
@@ -52,6 +53,13 @@ export function deriveReviewCompleteness(
       if (NIN_QUESTION_NAMES.includes(q.name)) exclude.add(q.name);
     }
   }
+
+  // Story 13-34 (AI-Review H2) — the public wizard renders with
+  // `suppressGeopoint`, so a geopoint question is unreachable: demanding it at
+  // Review would send the user "back to fill" a step that shows nothing. Mirrors
+  // the server's `excludeGeopoint` on the same submit path, so the client gate
+  // and the authoritative gate cannot disagree.
+  for (const name of geopointQuestionNames(form.questions)) exclude.add(name);
 
   // Resolve computed (calculate) fields ONCE, then gate on the merged map — the
   // rule itself is calc-free (Story 9-54 L2 fix).

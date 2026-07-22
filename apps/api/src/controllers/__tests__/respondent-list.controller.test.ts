@@ -413,6 +413,12 @@ describe('RespondentController.listRespondents', () => {
  * These tests verify the route module correctly wires the middleware.
  */
 describe('Respondent list route authorization', () => {
+  // Explicit timeout: this is the only test here that COLD-IMPORTS a routes
+  // module (which pulls the controller → service → db chain). Under the
+  // off-CI 2-worker cap that transform+import can exceed the 5s default on a
+  // busy box — observed 5253ms in a full-suite run, green in isolation
+  // (Pitfall #37, import cost — not a logic defect). Budget for it rather than
+  // letting the suite flake.
   it('route authorizes only 4 roles: super_admin, verification_assessor, government_official, supervisor', async () => {
     // Import the routes module to inspect middleware stack
     const routerModule = await import('../../routes/respondent.routes.js');
@@ -427,7 +433,7 @@ describe('Respondent list route authorization', () => {
     expect(listRoute).toBeDefined();
     // Route should have middleware stack (authenticate + authorize + handler)
     expect(listRoute.route.stack.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 20_000);
 
   it('rejects enumerator role (403 via authorize middleware)', async () => {
     const { authorize } = await import('../../middleware/rbac.js');

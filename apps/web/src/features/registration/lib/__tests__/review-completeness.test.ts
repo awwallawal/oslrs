@@ -45,6 +45,48 @@ function draft(responses: Record<string, unknown>): WizardDraftData {
   return { questionnaireResponses: responses } as unknown as WizardDraftData;
 }
 
+/** Story 13-34 — a form carrying a REQUIRED geopoint (the pre-fix prod shape). */
+function formWithRequiredGeopoint(): FlattenedForm {
+  return {
+    formId: 'f-gps',
+    title: 'Survey',
+    version: '1.0.0',
+    questions: [
+      { id: 'q-occ', type: 'text', name: 'main_occupation', label: 'Occupation', required: true, sectionId: 's1', sectionTitle: 'Work' },
+      { id: 'q-gps', type: 'geopoint', name: 'gps_location', label: 'GPS', required: true, sectionId: 's1', sectionTitle: 'Work' },
+    ],
+    choiceLists: {},
+    sectionShowWhen: {},
+    calculations: [],
+  } as unknown as FlattenedForm;
+}
+
+describe('deriveReviewCompleteness — geopoint suppression (Story 13-34 AC2, code-review H2)', () => {
+  it('does NOT demand a suppressed geopoint at Review (it is unreachable in the wizard)', () => {
+    const result = deriveReviewCompleteness(
+      formWithRequiredGeopoint(),
+      draft({ main_occupation: 'tailor' }),
+      [{}, {}, {}, { sectionId: 's1' }, {}],
+      TODAY,
+    );
+    // Pre-fix: missing=['gps_location'] → "go back and fill" pointing at a step
+    // whose only unanswered question is never rendered (the 13-29 loop).
+    expect(result.missing).toEqual([]);
+    expect(result.complete).toBe(true);
+  });
+
+  it('still demands other required answers on a form that has a geopoint', () => {
+    const result = deriveReviewCompleteness(
+      formWithRequiredGeopoint(),
+      draft({}),
+      [{}, {}, {}, { sectionId: 's1' }, {}],
+      TODAY,
+    );
+    expect(result.missing).toEqual(['main_occupation']);
+    expect(result.complete).toBe(false);
+  });
+});
+
 describe('deriveReviewCompleteness (Story 9-55 minor folding)', () => {
   it('is complete when no form is pinned (survey skipped)', () => {
     const result = deriveReviewCompleteness(undefined, draft({}), STEPS, TODAY);

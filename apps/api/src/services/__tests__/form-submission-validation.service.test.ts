@@ -23,6 +23,16 @@ function makeForm(overrides: Partial<FlattenedForm> = {}): FlattenedForm {
   };
 }
 
+/** Story 13-34 — a pinned form carrying a REQUIRED geopoint (the prod shape). */
+function formWithRequiredGeopoint(): FlattenedForm {
+  return makeForm({
+    questions: [
+      { id: 'q1', type: 'text', name: 'occupation', label: 'Occupation', required: true, sectionId: 's1', sectionTitle: 'S1' },
+      { id: 'q2', type: 'geopoint', name: 'gps_location', label: 'GPS', required: true, sectionId: 's1', sectionTitle: 'S1' },
+    ],
+  });
+}
+
 describe('buildCompletenessInput', () => {
   it('excludes NIN-mapped questions when pendingNin is set', () => {
     const input = buildCompletenessInput(makeForm(), { pendingNin: true });
@@ -38,6 +48,19 @@ describe('buildCompletenessInput', () => {
   it('merges caller-provided extra excludes', () => {
     const input = buildCompletenessInput(makeForm(), { extraExcludeNames: ['occupation'] });
     expect(input.excludeNames?.has('occupation')).toBe(true);
+  });
+
+  // Story 13-34 AC2 (code-review H1) — the public renderer suppresses geopoint;
+  // the authoritative gate must agree or it 422s over an invisible field.
+  it('excludes geopoint questions when excludeGeopoint is set (public paths)', () => {
+    const input = buildCompletenessInput(formWithRequiredGeopoint(), { excludeGeopoint: true });
+    expect(input.excludeNames?.has('gps_location')).toBe(true);
+    expect(input.excludeNames?.has('occupation')).toBe(false);
+  });
+
+  it('KEEPS geopoint required by default (clerk/enumerator submitForm still captures field GPS)', () => {
+    const input = buildCompletenessInput(formWithRequiredGeopoint());
+    expect(input.excludeNames?.has('gps_location')).toBe(false);
   });
 });
 
@@ -82,6 +105,25 @@ describe('validateSubmissionCompleteness', () => {
   it('does not require the NIN question on the pending-NIN path', () => {
     const res = validateSubmissionCompleteness(makeForm(), { occupation: 'tailor' }, { pendingNin: true });
     expect(res.computed).toEqual({});
+  });
+
+  // Story 13-34 AC2 (code-review H1) — a required geopoint would otherwise HARD
+  // BLOCK public registration: the wizard suppresses the question, so the
+  // respondent can never supply it.
+  it('accepts a public submission with an unanswered REQUIRED geopoint when excludeGeopoint is set', () => {
+    expect(() =>
+      validateSubmissionCompleteness(
+        formWithRequiredGeopoint(),
+        { occupation: 'tailor' },
+        { excludeGeopoint: true },
+      ),
+    ).not.toThrow();
+  });
+
+  it('still rejects the same submission on a NON-public path (geopoint enforced)', () => {
+    expect(() =>
+      validateSubmissionCompleteness(formWithRequiredGeopoint(), { occupation: 'tailor' }),
+    ).toThrow(AppError);
   });
 });
 

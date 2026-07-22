@@ -13,6 +13,7 @@ import {
   getRegistryUnifiedRows,
   registryUnifiedViewExists,
 } from '../registry-unified.js';
+import { countScopedRegistryRows } from '../../../test/registry-scoped-counts.js';
 
 /**
  * Real-DB SMOKE for the Story 13-33 canonical unified read.
@@ -31,10 +32,22 @@ import {
  *  • Raw-SQL ↔ schema drift guard (the project's twice-bitten pitfall).
  *
  * Global (no scope filter — the whole registry IS the read), so exact totals
- * aren't deterministic on a shared test DB. We capture a baseline, insert a known
- * synthetic split under unique tags/LGAs, and assert DELTAS + the per-LGA facts
- * for our OWN synthetic LGAs (which no real data touches). Integration suites run
- * serially (Pitfall #37), so deltas are stable.
+ * aren't deterministic on a shared test DB. We insert a known synthetic split
+ * under unique tags/LGAs and assert MEMBERSHIP of our own rows + the per-LGA
+ * facts for our OWN synthetic LGAs (which no real data touches).
+ *
+ * ⚠️ Do NOT reintroduce baseline-DELTA assertions here (`total - baseTotal ===
+ * INSERTED`). Vitest runs test FILES in parallel by default — only the pre-push
+ * gate serialises them (Pitfall #37) — so any other file that inserts a
+ * respondent between the baseline read and the assertion makes this suite red
+ * for a reason that has nothing to do with the registry read. That flake was
+ * observed 2026-07-22 (`expected 16 to be 15`) and fixed by making every
+ * assertion here concurrency-invariant:
+ *   • per-row facts are scoped to OUR respondent ids / OUR synthetic LGAs;
+ *   • the cross-source equality (view ≡ inline ≡ count-core ≡ export) is a claim
+ *     about ONE snapshot, so it is read until the quartet is internally
+ *     consistent (bounded retries). A genuine drift never converges — it fails
+ *     on every attempt; a concurrent INSERT converges on the next read.
  */
 
 const TAG = '_registry_unified_smoke_';
@@ -51,16 +64,43 @@ const completedSubId = uuidv7();
 const allRespondentIds = [...exactIds, ...bandIds, completedId, dataLostId];
 const INSERTED = allRespondentIds.length; // 15
 
-let baseTotal = 0;
-let baseAnswers = 0;
-
-async function inlineCount(): Promise<number> {
-  const r = await db.execute(sql`SELECT COUNT(*)::int AS n FROM (${sql.raw(REGISTRY_UNIFIED_SQL_TEXT)}) ru`);
-  return Number((r.rows[0] as { n: number | string }).n);
+/**
+ * Inline + view counted in ONE statement, so those two can never disagree
+ * because of a concurrent commit landing between two round-trips.
+ */
+async function inlineAndViewCounts(): Promise<{ inline: number; view: number }> {
+  const r = await db.execute(sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM (${sql.raw(REGISTRY_UNIFIED_SQL_TEXT)}) ru) AS inline_n,
+      (SELECT COUNT(*)::int FROM ${sql.raw(REGISTRY_UNIFIED_VIEW_NAME)}) AS view_n
+  `);
+  const row = r.rows[0] as { inline_n: number | string; view_n: number | string };
+  return { inline: Number(row.inline_n), view: Number(row.view_n) };
 }
-async function viewCount(): Promise<number> {
-  const r = await db.execute(sql`SELECT COUNT(*)::int AS n FROM ${sql.raw(REGISTRY_UNIFIED_VIEW_NAME)}`);
-  return Number((r.rows[0] as { n: number | string }).n);
+
+interface Quartet {
+  inline: number;
+  view: number;
+  core: number;
+  export: number;
+}
+
+/**
+ * Read all four sources repeatedly until they describe the SAME snapshot.
+ * Concurrency-invariant by construction: a writer committing mid-quartet is
+ * retried away, while a real drift between the four reads disagrees on every
+ * attempt and surfaces as a failed assertion on the last quartet read.
+ */
+async function readConsistentQuartet(attempts = 5): Promise<Quartet> {
+  let last: Quartet = { inline: -1, view: -2, core: -3, export: -4 };
+  for (let i = 0; i < attempts; i++) {
+    const core = await getRegistryCountCore();
+    const { inline, view } = await inlineAndViewCounts();
+    const exportData = await ExportQueryService.getUnifiedExportData({});
+    last = { inline, view, core: core.totalRespondents, export: exportData.totalCount };
+    if (new Set(Object.values(last)).size === 1) return last;
+  }
+  return last;
 }
 
 describe('registry-unified — real-DB smoke (view ≡ inline ≡ count-core ≡ export)', () => {
@@ -69,10 +109,6 @@ describe('registry-unified — real-DB smoke (view ≡ inline ≡ count-core ≡
     // test is self-sufficient even if the migrate-init runner hasn't run here.
     await db.execute(sql.raw(`DROP VIEW IF EXISTS "${REGISTRY_UNIFIED_VIEW_NAME}"`));
     await db.execute(sql.raw(`CREATE OR REPLACE VIEW "${REGISTRY_UNIFIED_VIEW_NAME}" AS ${REGISTRY_UNIFIED_SQL_TEXT}`));
-
-    const base = await getRegistryCountCore();
-    baseTotal = base.totalRespondents;
-    baseAnswers = base.withAnswers;
 
     // 10 exact-LGA respondents, no submission (still counted; density = 10).
     for (const id of exactIds) {
@@ -119,19 +155,29 @@ describe('registry-unified — real-DB smoke (view ≡ inline ≡ count-core ≡
   });
 
   it('AC5 PARITY: view ≡ inline ≡ count-core ≡ export (same distinct respondents)', async () => {
-    const core = await getRegistryCountCore();
-    const inline = await inlineCount();
-    const view = await viewCount();
+    // Cross-source agreement on ONE snapshot. Concurrency-invariant: see the
+    // header note — never re-express this as a delta over a captured baseline.
+    const q = await readConsistentQuartet();
+    const why = `quartet did not converge (real drift, or writes faster than the retry budget): ${JSON.stringify(q)}`;
+    expect(q.view, why).toBe(q.inline);
+    expect(q.core, why).toBe(q.inline);
+    expect(q.export, why).toBe(q.inline);
+  });
+
+  it('AC5 INCLUSION: every row this suite inserted is in the unified read exactly once', async () => {
+    // Replaces the old baseline-delta check: proves count-core's source sees our
+    // rows (it reads the same `registryUnifiedSource`) without depending on what
+    // any other test file is writing at the same moment.
+    const ours = await countScopedRegistryRows(allRespondentIds);
+    expect(ours.total).toBe(INSERTED); // one row per respondent, no fan-out
+    expect(ours.withAnswers).toBe(1); // only the completed one has answers
+
+    // And the export carries the same set (it is the other canonical consumer).
+    // `UnifiedExportRow` is the human-facing projection — no raw id column — so
+    // match on the tagged reference code this suite stamped on every row.
     const exportData = await ExportQueryService.getUnifiedExportData({});
-
-    // Deltas over baseline all equal the number we inserted.
-    expect(core.totalRespondents - baseTotal).toBe(INSERTED);
-    expect(core.withAnswers - baseAnswers).toBe(1); // only the completed row
-
-    // Absolute cross-source agreement (all read the same shape).
-    expect(inline).toBe(core.totalRespondents);
-    expect(view).toBe(core.totalRespondents);
-    expect(exportData.totalCount).toBe(core.totalRespondents);
+    const ourExportRows = exportData.data.filter((d) => d.referenceCode?.startsWith(TAG));
+    expect(ourExportRows).toHaveLength(INSERTED);
   });
 
   it('AC4 INCLUSION: submission-less respondents (imported + data_lost) appear with raw_data null', async () => {

@@ -436,6 +436,10 @@ export class MeService {
       const { computed } = validateSubmissionCompleteness(flattened, responses, {
         pendingNin,
         today: new Date(),
+        // Story 13-34 AC2 — same public-active form + same suppressing renderer
+        // as the public wizard submit (registration.controller), so the gate must
+        // agree that a geopoint question is unanswerable here.
+        excludeGeopoint: true,
       });
       computedFields = computed;
     } catch (err) {

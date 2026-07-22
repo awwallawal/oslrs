@@ -1,6 +1,6 @@
 # Story 13-34: Pre-blast form-content corrections — remove the public GPS question + clarify the occupation label
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Authored 2026-07-18 by Bob (SM). PRE-BLAST / LAUNCH-RELEVANT (conversion path). Two form-content corrections that share ONE re-upload + re-pin cycle: (1) the pinned Public Core form has a live geopoint question (verified prod: has_geopoint=t) → every public respondent hits a "📍 Capture GPS Location" browser permission prompt mid-registration (conversion killer; value is discarded — the public write path hardcodes gps null); (2) the occupation question is labelled "Main Occupation/Job Title", which conflates occupation with a formal job title and confuses the informal-sector audience. Both are form-content; bundling avoids two re-upload/re-pin cycles before the blast. A small defensive code guard (public wizard never renders geopoint) prevents GPS regressing via a future upload. -->
 
@@ -24,10 +24,35 @@ so that **I complete registration without friction or confusion — protecting c
 6. **AC6 — Wizard dry-run before blast.** End-to-end public wizard dry-run: no GPS prompt appears, the occupation question reads clearly, submission persists, occupation lands as `raw_data->>'main_occupation'`. (Fold into the standing pre-blast dry-run.)
 
 ## Tasks / Subtasks
-- [ ] **Task 1 (AC1, AC3)** — Edit the Public Core XLSForm: delete the geopoint row; relabel `main_occupation` (label/hint only). Edit the OSLSR master XLSForm: relabel `main_occupation` (keep GPS).
-- [ ] **Task 2 (AC2)** — Public-wizard geopoint suppression guard + regression test.
-- [ ] **Task 3 (AC4)** — Re-upload both forms; re-pin `wizard.public_form_id`; verify `has_geopoint=f` + new label + public-active serves the new row.
-- [ ] **Task 4 (AC5/AC6)** — Data-shape check (`main_occupation` key stable); wizard dry-run (no GPS prompt, clear label, correct persistence).
+- [ ] **Task 1 (AC1, AC3)** — ⚙️ OPERATOR/FORM (binary XLSForm edit in Excel, not app code) — Edit the Public Core XLSForm: delete the geopoint row; relabel `main_occupation` (label/hint only). Edit the OSLSR master XLSForm: relabel `main_occupation` (keep GPS).
+- [x] **Task 2 (AC2)** — Public-wizard geopoint suppression guard + regression test. ✅ DONE (dev-story 2026-07-22).
+- [ ] **Task 3 (AC4)** — ⚙️ OPERATOR (prod) — Re-upload both forms via admin UI; re-pin `wizard.public_form_id`; verify `has_geopoint=f` + new label + `/forms/public-active` serves the new row. **Flip the pin BEFORE the blast.**
+- [ ] **Task 4 (AC5/AC6)** — ⚙️ OPERATOR (prod dry-run) — Data-shape check (`main_occupation` key stable in `raw_data`); wizard dry-run (no GPS prompt, clear label, correct persistence). Fold into the standing pre-blast dry-run.
+- [ ] **Task 5 (EMERGENT prod fix) — ⏱️ RUN BEFORE DEPLOYING, NOT AFTER.** ⚙️ OPERATOR (prod) — Size the 22P02 blast radius on PROD **while the evidence still exists**:
+  - [ ] Run the two sizing queries in the **🔴 Blast radius** section against prod (`oslsr_db`) — sentinel population by value + the fraud-detection intersection. Record the counts in this story.
+  - [ ] Grep the PM2 API logs for `22P02` / `invalid input syntax for type uuid` and for 500s on `/api/v1/respondents` + `/api/v1/fraud-detections/`. **Any hit predates the fix** and tells you how long staff silently absorbed it.
+  - [ ] **Why before:** once the fix is deployed the error can never recur, so a later grep can only read history — and PM2 logs rotate. Five minutes now buys the permanent answer to "was this biting, and for how long?". A finding of **0 occurrences is a real result** (we caught the class before it bit) and should be recorded as such, not left blank.
+  - [ ] After deploy: re-run the sizing queries as the post-deploy baseline, and re-check the same log window is clean.
+
+### Review Follow-ups (AI)
+Raised by the adversarial code review (2026-07-22) against the Task 2 / AC2 implementation. All fixed in the same review pass — see "Code-Review Fixes" in the Dev Agent Record.
+- [x] [AI-Review][HIGH] H1 — Client-only suppression contradicted the AUTHORITATIVE server gate: a `required` geopoint on the pinned form would 422 (`INCOMPLETE_SUBMISSION`) every public submission over a field the respondent cannot see — a hard registration block in exactly the future-re-upload scenario AC2 defends against. [apps/api/src/services/form-submission-validation.service.ts:49; registration.controller.ts:532; me.service.ts:436]
+- [x] [AI-Review][HIGH] H2 — Wizard-level dead-end + 13-29 loop reintroduced: `WizardPage.isStepSkippable` and `deriveReviewCompleteness` did not union the suppressed geopoint names, so a section left with only a geopoint is not auto-skipped (renders "No questions available") and Review demands an unreachable answer. [apps/web/src/features/registration/pages/WizardPage.tsx:322; lib/review-completeness.ts:49]
+- [x] [AI-Review][MED] M1 — No wizard/mount-level regression: deleting either `suppressGeopoint` prop left the whole suite green (pattern-ship-a-fix-that-never-fires). [Step4Questionnaire.tsx:380; SupplementalSurveyPage.tsx:158]
+- [x] [AI-Review][MED] M2 — The documented "never validated / never gates Continue" contract was untested (`required` was hardcoded `false` in the test helper). [FormRenderer.suppressGeopoint.test.tsx]
+- [x] [AI-Review][MED] M3 — No test covered the ACTUAL prod mount shape (`sectionIndex` + `suppressGeopoint` union branch). [FormRenderer.tsx:128-139]
+- [x] [AI-Review][LOW] L1 — Tests asserted on the emoji copy `📍 Capture GPS Location` instead of the `geopoint-capture-<name>` testid. [FormRenderer.suppressGeopoint.test.tsx]
+- [x] [AI-Review][LOW] L2 — Prop docstring / Completion Notes claimed a system-wide guarantee; scoped to client-side + cross-referenced the server counterpart. [FormRenderer.tsx:78-95]
+- [x] [AI-Review][LOW] L3 — Preview (`disabled`) navigation bypassed `effectiveHidden` (raw `currentIndex ± 1`), landing on a suppressed question for a frame before the snap effect bounced away. [FormRenderer.tsx:303-320]
+- [x] [AI-Review][LOW] L4 — `sprint-status.yaml` was modified but missing from the File List.
+
+**Emergent during the same pass (NOT raised against AC2 — found by chasing a "flaky" test to ground):**
+- [x] [AI-Review][🔴 PROD] E1 — Staff registry list/search/detail could **500** (`22P02 invalid input syntax for type uuid`): a `::uuid` cast on the TEXT column `submissions.questionnaire_form_id`, which product code fills with sentinels (`'supplemental-survey'`, `'self-edit'`). The `AND <uuid regex>` guard does not order evaluation. Fixed at 3 sites. [apps/api/src/services/respondent.service.ts:127,313,689]
+- [x] [AI-Review][🔴 PROD] E2 — Same cast with **no guard at all** on the fraud-detection detail read → unconditional 500 for any detection whose submission carries a sentinel. [apps/api/src/controllers/fraud-detections.controller.ts:231]
+- [x] [AI-Review][MED] E3 — Prophylactic: identical `submitter_id::uuid` shape (no non-UUID writer today). [apps/api/src/controllers/supervisor.controller.ts:144]
+- [ ] [AI-Review][FOLLOW-UP] E5 — Make the E1/E2 class unwritable: **story 13-41 (`13-41-unsafe-sql-cast-ci-guard.md`) drafted + registered in sprint-status — scoped WIDE** (every stricter-type cast on a TEXT column incl. `raw_data->>'…'`, plus the false-guard idiom and sibling-conjunct division guards; the plumbing cost is identical to a uuid-only guard, so narrowing would only defer the next variant) as part of this pass. Sequences AFTER this story's API deploy. Not done here because a CI guard is its own story (and would red on the tree it protects until commit 1 lands).
+- [ ] [AI-Review][FOLLOW-UP] E6 — **Planning-artifact parity sweep on close** ([[feedback_planning_artifact_parity_sweep]]): `epics.md` ↔ `sprint-status.yaml` ↔ `docs/roadmap-to-launch.md` must all reflect that 13-34 now carries an API deploy and that the emergent 500-class fix + 13-41 exist. Commit 5 of the approach below.
+- [x] [AI-Review][MED] E4 — Four suites asserted on global state they don't own (registry ×2 baseline deltas, `user.profile` globally-latest audit row, `respondent-search` default-page `toContain`) + one 5s-timeout import flake. Shared helper + regression tests. [apps/api/test/registry-scoped-counts.ts]
 
 ## Dev Notes
 - **Mostly an operator/form task + one small code guard.** AC1/AC3 are XLSForm edits (no app code); AC2 is the only code change (public-context geopoint suppression). No DB migration.
@@ -44,10 +69,129 @@ so that **I complete registration without friction or confusion — protecting c
 - [Source: project_public_wizard_form_update (mandatory re-pin); 13-14/13-19 precedent; 13-29 (main_occupation relevance gate — do not rename)]
 
 ## Dev Agent Record
-_(to be completed by the dev)_
+
+### Implementation Plan (Task 2 / AC2)
+The one code task in this story. Implemented the public-context geopoint suppression as a **hide-set union** inside `FormRenderer.buildEffectiveHidden` — reusing the exact machinery Story 9-18 built for wizard-prefill dedup and Story 9-18-E built for section scoping — rather than a special-case in the render switch. Rationale: folding geopoint question names into the same `effectiveHidden` set means the existing skip-logic, one-at-a-time iteration, snap-off-hidden, empty-state (`form-renderer-empty`), progress-count, and **validation-exclusion** paths all handle it for free, with zero new control flow. A geopoint question is therefore never rendered, never gates Continue, and never counts toward progress.
+
+- New optional prop `FormRenderer.suppressGeopoint?: boolean` (default `false` ⇒ exact back-compat; clerk/enumerator/form-filler contexts omit it and keep rendering field GPS).
+- `buildEffectiveHidden` gained a `suppressGeopoint` param; a fast-path (`sectionIndex == null && !geopointToHide`) preserves the previous verbatim return (including `undefined`) so non-suppressing callers are byte-for-byte unchanged.
+- Threaded through both the `useState` initial-index seed and the `effectiveHidden` `useMemo` (added to its deps).
+- **Two public respondent mounts opt in**: `Step4Questionnaire` (public wizard Step 4) and `SupplementalSurveyPage` (Cohort-A skills-profile completion — same pinned public form via `fetchPublicActiveForm`). Both are belt-and-suspenders against a future form re-upload re-introducing GPS.
+
+### Completion Notes
+- ✅ **AC2 fully satisfied in code + tests.** Red-green-refactor: added `FormRenderer.suppressGeopoint.test.tsx` (5 cases) — confirmed 3 suppression cases RED before the guard, GREEN after; the 2 back-compat cases (geopoint DOES render when the prop is omitted) passed throughout, pinning that field-GPS contexts are unaffected.
+- Regression: full **forms + registration** web suites green (43 files / **421 tests**). Web `tsc --noEmit` exit 0; ESLint on all changed files exit 0.
+- ⚠️ **AC1 / AC3 / AC4 / AC5 / AC6 are OPERATOR/FORM residuals — NOT completed by this dev-story run and NOT checked off** (honest status). They require: (a) editing binary `.xlsx` XLSForms in Excel (delete geopoint row from Public Core; relabel `main_occupation` label/hint only — **name unchanged**; keep GPS in the master), (b) re-uploading via the admin UI, which mints a NEW `questionnaire_forms` row, (c) **re-pinning `wizard.public_form_id` on prod BEFORE the blast**, and (d) a prod wizard dry-run. None are executable autonomously (no prod access; XLSForm edits are spreadsheet work). See [[project_public_wizard_form_update]] (re-pin is mandatory & easy-to-forget) and [[pattern-ship-a-fix-that-never-fires]] (trace the fix to where it executes on prod data — here the operator re-pin IS the execution point). The AC2 guard is defensive only; it does NOT remove the GPS question from the pinned form — the operator re-upload does.
+- **Guardrail honored (not yet applied):** AC3 is label/hint-only; `main_occupation` question `name` MUST stay unchanged (it's the `raw_data` key analytics/export/13-29-relevance-gate read). Diff the parsed form before/after to prove no `name` drift when the operator edits the XLSForm.
+- XLSForm source files in-repo for the operator: `docs/launch-campaign/oslsr-public-core-v1.xlsx` (Public Core), `test-fixtures/oslsr_master_v3*.xlsx` (master).
+
+### Code-Review Fixes (adversarial review, 2026-07-22)
+The review found AC2 half-implemented: suppression stopped at the React component while the two systems that decide **whether the step exists** (WizardPage) and **whether the submission is accepted** (the server gate) were untouched. Both are now aligned on ONE derivation.
+
+- **New canonical primitive** `forms/utils/geopoint-suppression.ts` (`geopointQuestionNames` / `hasGeopointQuestion` / `unionGeopointNames`). FormRenderer, `WizardPage.isStepSkippable` and `deriveReviewCompleteness` all union the SAME set — the 13-29 lesson (renderer hide-set vs wizard skip-set disagreement = dead-end + two-pass loop) encoded as shared code rather than a comment.
+- **Server counterpart** `CompletenessOptions.excludeGeopoint`, set on the two PUBLIC submit paths only (`registration.controller` submitWizard, `me.service.updateRegistrationFromWizard`). The clerk/enumerator `submitForm` path is untouched and still enforces field GPS.
+- **RED-verified**, not assumed: removing the WizardPage union turns `WizardPage.geopointSuppression` red; removing `excludeGeopoint: true` from the controller turns the route test red (422 vs 201). Both restored green.
+- 🔴 **EMERGENT PRODUCTION DEFECT — the "flaky test" was real: staff registry list/search can 500 (22P02).** Chasing the intermittent `respondent-search-db-smoke` failure to ground surfaced a live bug, not a test artifact. `submissions.questionnaire_form_id` is TEXT and product code writes non-UUID sentinels into it — `'supplemental-survey'` (Cohort-A path, `registration.controller:1138`) and `'self-edit'` (`me.service:519`); the prod-shaped DB also holds legacy `'no-form-pinned-at-submit'`. Three registry reads joined forms with `questionnaire_form_id ~ <uuid regex> AND questionnaire_form_id::uuid = qf.id`, but **`AND` imposes no evaluation order**, so Postgres may evaluate the cast on rows the regex was meant to exclude and abort the whole statement with `22P02 invalid input syntax for type uuid` → **HTTP 500 on the staff registry list/search/detail**. Plan-dependent, hence intermittent, hence previously dismissed as a flake. FIX: join in TEXT space (`qf.id::text = s.questionnaire_form_id`) at all three sites in `respondent.service.ts` — no cast, identical semantics (a sentinel matches no form row). A sweep for the same shape found **two more sites**: `fraud-detections.controller:231` had the cast with **NO regex guard at all** (so it is an unconditional 500 on any fraud detection whose submission carries a sentinel — strictly worse than the respondent.service sites), and `supervisor.controller` casts `submitter_id::uuid` (prophylactic — no writer produces a non-UUID `submitter_id` today). Both now join in TEXT space. Every `::uuid` cast on a TEXT column in `apps/api` is accounted for. REGRESSION TEST uses the REAL sentinel: reverting the fix reproduces `invalid input syntax for type uuid: "supplemental-survey"` deterministically; with the fix, 12/12 green. ⚠️ **Launch-relevant**: the blast drives Cohort-A supplemental submissions, i.e. MORE `'supplemental-survey'` rows — this should ship before/with the blast, and it is an API change (deploy), unlike the rest of 13-34.
+- **Emergent test-hygiene: the shared-test-DB flake class, closed here (NOT deferred to 13-33).** The full-API run surfaced `registry-unified-db-smoke > AC5 PARITY` failing `expected 16 to be 15`. Root cause: the suite asserted a GLOBAL count delta over a baseline captured in `beforeAll`, while vitest runs test FILES in parallel (only the pre-push gate serialises them) — so any other file inserting a respondent in that window reddens it, and it passes in isolation, so it reads like contention and gets re-run instead of fixed. Fixed **both** suites carrying the pattern (`registry-unified-db-smoke` AND `registry-totals-db-smoke`) and made the safe way the easy way with a shared helper `apps/api/test/registry-scoped-counts.ts` (`countScopedRegistryRows`) that counts the canonical unified read scoped to the ids a suite OWNS. Cross-source equality is now read until the quartet describes ONE snapshot (bounded retries; genuine drift never converges); the global service call is kept only for what it uniquely proves (raw-SQL ↔ schema execution) plus writer-proof invariants. **Reproduced then refuted**: under a continuous in-container writer (`psql … \watch 0.05`) the pre-fix files fail (`expected 16 to be 15`; `expected 8/6/6 to be 4`, 3/3 runs), the fixed files pass 3/3 runs and 7/7 tests. Also budgeted an explicit 20s timeout on the one `respondent-list.controller` test that cold-imports a routes module (observed 5253ms vs the 5s default under the 2-worker cap; green in isolation — import cost, not logic). Rule recorded in both file headers and the helper: **never assert a global count or delta you don't own.** A sweep for the same class then fixed three more: `user.profile` took the globally-latest `user.profile_updated` audit row (any concurrent profile update stole it) → scoped to `actorId` + polled instead of a fixed 500ms sleep; `respondent-search-db-smoke` asserted `toContain(ourId)` on the default 20-row page of a globally-sorted result → explicit `pageSize`; `respondent-list.controller` timed out cold-importing a routes module → explicit budget. Both hardenings were later PROVEN by constructing the state rather than waiting for a flake: seeding 25 competing rows (same email, newer `registeredAt`) reproduces `expected [ …(20) ] to include '<our uuid>'` on the default page, and a second real user updating their profile after ours makes the globally-latest audit row provably belong to the interloper. Both reproductions are now permanent regression tests that go red if the fix is reverted.
+- L3: preview (`disabled`) navigation now steps over hidden names (`stepIgnoringSkipLogic`) instead of landing on one and relying on the snap effect; identical to `currentIndex ± 1` when nothing is hidden.
+
+### Verification (2026-07-22, end of review pass)
+| Gate | Result |
+|---|---|
+| API suite vs docker `app_test` | **3231 passed** / 7 skipped / 1 todo / **0 failed** (246 files) — 2 consecutive clean runs after the prod fix, 8+ clean runs across the session |
+| Web suite | **2792 passed** / 2 todo / 0 failed (257 files) |
+| `tsc --noEmit` | api ✅ web ✅ |
+| ESLint (all changed files) | ✅ |
+| Red-checks (fix reverted ⇒ test fails) | 5/5: WizardPage skip-union · controller `excludeGeopoint` (422 vs 201) · registry baseline-delta (`16 to be 15`) · page-1 (`[ …(20) ]`) · uuid cast (`22P02 "supplemental-survey"`) |
+
+### 🔴 Blast radius of the 22P02 defect — what this is actually dealing with
+
+**Trigger conditions differ per site — this is why it looked random:**
+| Site | Guard before fix | Throws when |
+|---|---|---|
+| `respondent.service` ×3 (registry list/search, respondent detail, submission-response detail) | `~ regex AND ::uuid` | A sentinel row is in scope **AND** the planner evaluates the cast before the regex — **plan-dependent**, so it can pass for months and then start failing when row counts/stats shift the plan |
+| `fraud-detections.controller:231` | **none** | **Always**, whenever the detection's submission carries a sentinel |
+| `supervisor.controller:144` (`submitter_id`) | none | Never today — no writer produces a non-UUID `submitter_id` (prophylactic fix) |
+
+**Sentinel population (measured 2026-07-22).** Against the local canonical DB (`app_db`, the 499k-respondent / 1,000,004-submission scale seed — **NOT a prod mirror**, so treat as shape-not-volume evidence):
+
+| Sentinel value | Submissions | Distinct respondents | Written by |
+|---|---|---|---|
+| `no-form-pinned-at-submit` | 3 | 3 | legacy (no form pinned at submit) |
+| `test-form` | 1 | 1 | fixture residue |
+| `supplemental-survey` | 0 | 0 | `registration.controller:1138` (Cohort-A path) |
+| `self-edit` | 0 | 0 | `me.service:519` (authenticated wizard edit) |
+| **fraud_detections joined to a sentinel submission** | **0** | — | — |
+
+**Interpretation — small today, structurally growing:**
+- The dangerous population is **not** legacy rows (4, static) but the two LIVE writers. Every Cohort-A supplemental completion writes `'supplemental-survey'`; every authenticated wizard edit writes `'self-edit'`. Both are ~0 today because 13-24 hasn't been sent.
+- **The blast is the accelerant.** 13-24 drives Cohort A to the supplemental survey — each completion adds a sentinel row, i.e. the blast is precisely the event that grows the population from ~0 into the range where a plan flip makes the staff registry read start 500-ing. That is the argument for deploying the fix *before* the blast, not after.
+- Staff-facing blast radius if it fires: the registry list/search is the primary staff surface (12-7), so a 500 there is a full workflow outage, not a cosmetic error. The fraud-detection detail read fails unconditionally on an affected row, but that intersection is empty today.
+
+**Operator: size it on PROD before/after deploy** (this measures real exposure; the numbers above do not):
+```sql
+-- 1. Sentinel population by value + affected respondents
+SELECT questionnaire_form_id AS sentinel, count(*) AS submissions, count(DISTINCT respondent_id) AS respondents
+FROM submissions
+WHERE questionnaire_form_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+GROUP BY 1 ORDER BY 2 DESC;
+
+-- 2. The unconditional-500 intersection (fraud detail on a sentinel submission)
+SELECT count(*) FROM fraud_detections fd JOIN submissions s ON s.id = fd.submission_id
+WHERE s.questionnaire_form_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$';
+```
+Then grep the PM2 API logs for `22P02` / `invalid input syntax for type uuid` and for 500s on `/api/v1/respondents` + `/api/v1/fraud-detections/` — **any hit predates this fix** and tells you how long staff have been silently absorbing it. Record the counts here when known; "0 occurrences" is itself a useful finding (it means we caught the class before it bit).
+
+### ⚠️ Deploy note — this story is no longer form-content-only
+13-34 as authored needed NO deploy (XLSForm + a client guard). The emergent prod fix changes that: **`respondent.service`, `fraud-detections.controller` and `supervisor.controller` are API code and must be deployed** for the 500 to be fixed on prod.
+
+### Commit approach (5 commits, most-valuable-first)
+Deliberately split so the launch-risk fix can ship and be reverted independently of form-content work. Per [[feedback_review_before_commit]] this all sits on the uncommitted tree; per [[feedback_space_pushes_to_main]] space the pushes by pipeline rather than firing all five at once.
+
+0. **⏱️ BEFORE commit 1 is deployed — run Task 5 (prod sizing + log grep).** Not a commit; a five-minute operator step with a deadline. The deploy destroys the evidence: after it, `22P02` can never recur, so the "how long was this biting?" question becomes unanswerable (PM2 logs rotate). Do it, paste the counts into this story, then deploy.
+1. **`fix(api): join questionnaire_form_id in text space (22P02 500)`** — 🔴 the only launch-risk item. `respondent.service.ts` (3 sites), `fraud-detections.controller.ts` (unguarded site), `supervisor.controller.ts` (prophylactic `submitter_id`) + the sentinel regression in `respondent-search-db-smoke.integration.test.ts`. **Deploy this one first and verify on prod** — it is independently valuable, independently revertable, and blocked by nothing (no form re-upload, no operator step).
+2. **`fix(13-34): align geopoint suppression across wizard + server gates`** — the AC2 review fixes: `geopoint-suppression.ts`, `FormRenderer`, `WizardPage`, `review-completeness`, both mounts, `form-submission-validation.service` + `excludeGeopoint` call sites, and their tests (`FormRenderer.suppressGeopoint`, `WizardPage.geopointSuppression`, `SupplementalSurveyPage`, `review-completeness`, `registration.routes`). Ship with or before the blast.
+3. **`test(api): de-flake shared-test-DB suites`** — `apps/api/test/registry-scoped-counts.ts` + the four de-flaked suites (`registry-unified`, `registry-totals`, `user.profile`, `respondent-search`) + the `respondent-list.controller` timeout budget. Zero runtime impact; safe to push any time.
+4. **`docs(13-41): CI guard story for the unsafe-SQL-cast class`** — the new story file `13-41-unsafe-sql-cast-ci-guard.md` + its `sprint-status.yaml` entry. Turns the incident into a mechanical guard instead of tribal memory (sibling of 13-37), scoped WIDE so the next variant — `(raw_data->>'x')::int` is the likely one — is caught by the same pass.
+5. **`docs(13-34): review record + planning-artifact parity sweep`** — this story file (review findings, verification table, blast radius, deploy note) + the 13-34 `sprint-status.yaml` line, **plus the parity sweep** ([[feedback_planning_artifact_parity_sweep]]): on close, audit that `epics.md` ↔ `sprint-status.yaml` ↔ `docs/roadmap-to-launch.md` agree that (a) 13-34 now carries an API deploy, (b) 13-41 exists and is sequenced after it, and (c) the emergent prod fix is visible OUTSIDE this story file — a 500-class defect recorded only inside a form-content story is invisible archaeology in six months. Strike/annotate the roadmap line in the SAME commit as the status flip.
+
+After deploying (1), run the prod sizing queries + log grep from the **Blast radius** section above and record the counts in this story.
 
 ### File List
-_(to be completed by the dev)_
+- `apps/web/src/features/forms/utils/geopoint-suppression.ts` (new) — canonical geopoint hide-name derivation shared by renderer + wizard gates [review H2]
+- `apps/web/src/features/forms/components/FormRenderer.tsx` (modified) — `suppressGeopoint` prop + geopoint hide-set union in `buildEffectiveHidden`; hide-set-aware preview navigation [review L2/L3]
+- `apps/web/src/features/registration/pages/Step4Questionnaire.tsx` (modified) — pass `suppressGeopoint` on the public-wizard `FormRenderer` mount
+- `apps/web/src/features/registration/pages/SupplementalSurveyPage.tsx` (modified) — pass `suppressGeopoint` on the Cohort-A public `FormRenderer` mount
+- `apps/web/src/features/registration/pages/WizardPage.tsx` (modified) — union geopoint names into the section auto-skip hide-set [review H2]
+- `apps/web/src/features/registration/lib/review-completeness.ts` (modified) — exclude suppressed geopoint questions from the Review gate [review H2]
+- `apps/api/src/services/form-submission-validation.service.ts` (modified) — `excludeGeopoint` option on the authoritative completeness gate [review H1]
+- `apps/api/src/controllers/registration.controller.ts` (modified) — public wizard submit passes `excludeGeopoint` [review H1]
+- `apps/api/src/services/me.service.ts` (modified) — authenticated wizard edit passes `excludeGeopoint` [review H1]
+- `apps/web/src/features/forms/components/__tests__/FormRenderer.suppressGeopoint.test.tsx` (new) — 8 regression tests for AC2 (5 original + required-geopoint gate + sectionIndex union + section-empty) [review M2/M3/L1]
+- `apps/web/src/features/registration/pages/__tests__/WizardPage.geopointSuppression.test.tsx` (new) — wizard-level wiring + auto-skip regression [review H2/M1]
+- `apps/web/src/features/registration/pages/__tests__/SupplementalSurveyPage.test.tsx` (modified) — assert the mount opts into suppression [review M1]
+- `apps/web/src/features/registration/lib/__tests__/review-completeness.test.ts` (modified) — geopoint not demanded at Review [review H2]
+- `apps/api/src/services/__tests__/form-submission-validation.service.test.ts` (modified) — `excludeGeopoint` on/off cases [review H1]
+- `apps/api/src/routes/__tests__/registration.routes.test.ts` (modified) — route-level proof the controller passes the flag (201, not 422) [review H1]
+- `apps/api/src/services/respondent.service.ts` (modified) — 🔴 EMERGENT PROD FIX: form join in TEXT space at 3 sites (kills the 22P02 500 on registry list/search/detail)
+- `apps/api/src/controllers/fraud-detections.controller.ts` (modified) — 🔴 EMERGENT PROD FIX: unguarded `questionnaire_form_id::uuid` join (unconditional 500 on sentinel submissions)
+- `apps/api/src/controllers/supervisor.controller.ts` (modified) — 🔴 EMERGENT PROD (prophylactic): same cast pattern removed on `submitter_id`
+- `apps/api/test/registry-scoped-counts.ts` (new) — EMERGENT, unrelated to AC2: shared `countScopedRegistryRows` helper + the "never assert a global count you don't own" rule
+- `apps/api/src/services/__tests__/registry-unified-db-smoke.integration.test.ts` (modified) — EMERGENT: de-flaked (baseline-delta → concurrency-invariant assertions + snapshot-consistent quartet)
+- `apps/api/src/services/__tests__/registry-totals-db-smoke.integration.test.ts` (modified) — EMERGENT: same defect class, same fix (scoped counts; global call kept only for schema-execution + writer-proof invariants)
+- `apps/api/src/controllers/__tests__/respondent-list.controller.test.ts` (modified) — EMERGENT: 20s budget on the one cold-routes-import test (5s-default timeout flake under the worker cap)
+- `apps/api/src/__tests__/user.profile.test.ts` (modified) — EMERGENT: audit assertion scoped to `actorId = userId` + polled instead of a fixed 500ms sleep (it took the globally-latest `user.profile_updated` row, which a concurrent file could steal)
+- `apps/api/src/services/__tests__/respondent-search-db-smoke.integration.test.ts` (modified) — EMERGENT: explicit `pageSize` so `toContain(ourId)` no longer depends on our rows landing on page 1 of a globally-sorted page
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified) — status sync [review L4]
+
+## Retro Input (Epic 13) — carry these into the epic retrospective
+
+<!-- Deliberately a top-level section in the STORY file: the retrospective workflow reads every story file of the epic in full (retrospective/instructions.md step 2, "For each story in epic {{epic_number}}, read the complete story file"), so this cannot be missed the way a standalone notes file could. Also mirrored as a one-liner in epics.md (which the retro loads via SELECTIVE_LOAD) and worth putting in commit 1's body, since the project mines commit history as retro input (prep-6-commit-history-retro-tool.md). -->
+
+1. **A heuristic we rely on nearly buried a production 500.** The standing rule "green in isolation ⇒ contention, fix the runner not the test" ([[feedback_local_full_suite_flakiness]]) is correct about runners and saved real time — but applied to `respondent-search-db-smoke` it would have closed the book on a live `22P02` defect on the primary staff surface. The failure was dismissible three times over: it passed in isolation, it never recurred across six full runs, and the LiveReporter artifact holding its error text had already been overwritten. **Proposed amendment to the heuristic, already written into memory ([[pattern-flaky-test-hiding-a-prod-bug]]): triage by failure SHAPE before deciding — wrong-VALUE ⇒ you asserted on rows you don't own; ~5s TIMEOUT ⇒ import/CPU cost; DB ERROR inside a query ⇒ suspect the product, not the test.** And capture the error text on the failing run before re-running, because re-running destroys it.
+2. **"Reproduce by construction" beat "reproduce by repetition".** Nine full API suite runs failed to reproduce the flake. Seeding the hypothesised state directly (25 competing rows; one `'supplemental-survey'` submission) reproduced it deterministically in seconds — twice, for two independent defects. Worth making the default move when a flake resists repetition.
+3. **Four writings of the same broken idiom survived review**, with a comment above them describing the very hazard they failed to prevent. That is the evidence for 13-41 (make it unwritable) and a general argument that "documented footgun" is not mitigation.
+4. **Adversarial review keeps paying, but the yield came from the *chase*, not the checklist.** The 2 High findings against AC2 were checklist-shaped; the production defect came from refusing to let one unexplained red go. Budget for the chase.
 
 ## PM Validation (John, 2026-07-18)
 
@@ -63,3 +207,5 @@ _(to be completed by the dev)_
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-18 | Story drafted via *create-story. Pre-blast form-content bundle (one re-upload/re-pin cycle): remove the live public GPS/geopoint question (conversion-killing permission prompt for a value the public path discards) + relabel "Main Occupation/Job Title" → plain "Main Occupation" (label-only, name unchanged) on Public Core + OSLSR forms, + a defensive public-wizard geopoint-suppression guard against regression. LAUNCH-RELEVANT (conversion path); pin the corrected form before the blast. | Bob (SM) |
+| 2026-07-22 | code-review (adversarial): 2 High / 3 Med / 4 Low — ALL FIXED in-pass. H1 the client-only guard contradicted the authoritative server completeness gate (a required geopoint would 422 every public submit over an invisible field) → new `CompletenessOptions.excludeGeopoint`, set on the two PUBLIC submit paths only. H2 `WizardPage.isStepSkippable` + `deriveReviewCompleteness` didn't union the suppressed names → geopoint-only section stranded the user on "No questions available" + the 13-29 two-pass Review loop → both now union ONE canonical derivation (`forms/utils/geopoint-suppression.ts`). M1 no wizard/mount-level regression (prop deletable with the suite green) → `WizardPage.geopointSuppression.test.tsx` + SupplementalSurvey mount assertion; M2 required-geopoint validation-exclusion untested; M3 `sectionIndex`+suppress union (the real prod mount) uncovered; L1 emoji-copy selectors→testids; L2 docstring scoped to client-side; L3 preview (`disabled`) nav now honours the hide-set; L4 File List completeness. RED-verified both High fixes (revert→red, restore→green). Web tsc + API tsc + eslint clean; web forms+registration 44 files/429 tests, API services+controllers 601 + routes 191 green. Story STAYS in-progress — AC1/AC3/AC4/AC5/AC6 remain operator/form residuals. | Awwal (review) |
+| 2026-07-22 | dev-story: implemented Task 2 / AC2 — `FormRenderer.suppressGeopoint` prop (geopoint hide-set union in `buildEffectiveHidden`), opted in by both public respondent mounts (Step4Questionnaire wizard + SupplementalSurveyPage Cohort-A). Added 5 regression tests (`FormRenderer.suppressGeopoint.test.tsx`). Web tsc + eslint clean; forms+registration suites green (421 tests). AC1/AC3/AC4/AC5/AC6 remain OPERATOR/FORM residuals (binary XLSForm edits + prod re-upload/re-pin/dry-run) — NOT done, NOT checked; story stays in-progress pending operator handoff. | Awwal (dev) |

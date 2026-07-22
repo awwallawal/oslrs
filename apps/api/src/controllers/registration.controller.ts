@@ -532,6 +532,12 @@ export class RegistrationController {
         const { computed } = validateSubmissionCompleteness(flattened, responses, {
           pendingNin,
           today: new Date(),
+          // Story 13-34 AC2 — the public wizard renders with
+          // `FormRenderer.suppressGeopoint`, so a geopoint question is never
+          // shown to a public respondent. Requiring it here would 422 a
+          // submission over a field the user cannot see. GPS on this path is
+          // discarded anyway (gpsLatitude/Longitude are hardcoded null below).
+          excludeGeopoint: true,
         });
         computedFields = computed;
       } catch (err) {

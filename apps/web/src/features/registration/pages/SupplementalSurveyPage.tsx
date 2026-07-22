@@ -152,6 +152,10 @@ export default function SupplementalSurveyPage() {
         <FormRenderer
           formSchema={form}
           initialResponses={initialResponses}
+          // Story 13-34 AC2 — same public respondent surface as the wizard (it
+          // serves the pinned public form), so it also suppresses any geopoint
+          // question rather than prompting a Cohort-A respondent for GPS.
+          suppressGeopoint
           onComplete={(all) => {
             // L11 fix — defense-in-depth: do not re-fire while a submit is
             // already in flight. FormRenderer typically gates this itself,

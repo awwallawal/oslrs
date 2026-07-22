@@ -26,10 +26,17 @@ vi.mock('../../api/supplemental-survey.api', () => ({
 vi.mock('../../../forms/components/FormRenderer', () => ({
   FormRenderer: ({
     onComplete,
+    suppressGeopoint,
   }: {
     onComplete: (responses: Record<string, unknown>) => void;
+    suppressGeopoint?: boolean;
   }) => (
-    <div data-testid="form-renderer-stub">
+    <div
+      data-testid="form-renderer-stub"
+      // Story 13-34 AC2 (code-review M1) — surface the prop so the mount's
+      // opt-in is asserted, not assumed.
+      data-suppress-geopoint={String(suppressGeopoint === true)}
+    >
       <button
         type="button"
         data-testid="stub-complete"
@@ -86,6 +93,27 @@ describe('SupplementalSurveyPage (Story 9-28 Path B)', () => {
       expect(screen.getByTestId('form-renderer-stub')).toBeInTheDocument();
     });
     expect(screen.getByText(/Complete your skills profile/i)).toBeInTheDocument();
+  });
+
+  // Story 13-34 AC2 (code-review M1) — this Cohort-A page serves the SAME pinned
+  // public form as the wizard, so it must opt into geopoint suppression too.
+  // Without this assertion the prop could be dropped with every suite still green.
+  it('mounts FormRenderer with geopoint suppression (public respondent surface)', async () => {
+    mockFetchPublicActiveForm.mockResolvedValueOnce({
+      formId: 'f1',
+      version: 'v1',
+      title: 'Skills Questionnaire',
+      questions: [],
+    });
+
+    renderAt('good-token');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('form-renderer-stub')).toHaveAttribute(
+        'data-suppress-geopoint',
+        'true',
+      );
+    });
   });
 
   it('renders no-form card when the public active form is null', async () => {

@@ -4,7 +4,8 @@ import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { submissions } from '../../db/schema/submissions.js';
 import { respondents } from '../../db/schema/respondents.js';
-import { getRegistryCountCore, type RegistryCountCore } from '../registry-totals.service.js';
+import { getRegistryCountCore } from '../registry-totals.service.js';
+import { countScopedRegistryRows } from '../../../test/registry-scoped-counts.js';
 
 /**
  * Real-DB SMOKE for the 13-25 count-core (`getRegistryCountCore`).
@@ -17,17 +18,24 @@ import { getRegistryCountCore, type RegistryCountCore } from '../registry-totals
  * "139 ≠ 79" registry split: registered PEOPLE > the completed-survey subset.
  *
  * The count-core is GLOBAL (no scope filter — the whole registry IS the count),
- * so exact totals aren't deterministic against a shared test DB. Instead we
- * capture a baseline, insert a known 4-respondent split, and assert the DELTA.
- * The project runs integration suites serially (pre-push `--concurrency=1`,
- * Pitfall #37), so the delta is stable.
+ * so exact totals aren't deterministic against a shared test DB.
+ *
+ * ⚠️ Do NOT assert a global DELTA over a baseline captured in `beforeAll`
+ * (`after.total - baseline.total === 4`). Vitest runs test FILES in parallel —
+ * only the pre-push gate serialises them — so any other file inserting a
+ * respondent in that window reddens this suite for a reason that has nothing to
+ * do with the count-core, while passing in isolation (so it reads like
+ * contention and gets re-run instead of fixed). Assert on the rows this suite
+ * OWNS via `countScopedRegistryRows` (same canonical SQL the count-core reads),
+ * and keep the global call only for what it uniquely proves: that the raw SQL
+ * EXECUTES against the real schema, plus invariants no writer can break.
  *
  * The four structurally-distinct rows:
  *   A — completed           (one non-empty submission)        → +1 total, +1 answers
  *   B — no submission       (registered, answers not on file) → +1 total, +0 answers
  *   C — superseded          (old non-empty + newer EMPTY '{}') → +1 total, +1 answers
  *   D — empty-only          (one '{}' submission)             → +1 total, +0 answers
- * Expected delta: totalRespondents +4, withAnswers +2.
+ * Expected over OUR rows: total 4, withAnswers 2.
  * C and D pin the two things the SQL must get right: latest-non-empty (not
  * latest) and the `<> '{}'` emptiness test (the `hasNonEmptyRawData` embodiment).
  */
@@ -44,13 +52,10 @@ const supersededOldSubId = uuidv7();
 const supersededNewSubId = uuidv7();
 const emptyOnlySubId = uuidv7();
 
-let baseline: RegistryCountCore;
+const ourRespondentIds = [completedId, noSubmissionId, supersededId, emptyOnlyId];
 
 describe('getRegistryCountCore — real-DB smoke (raw-SQL ↔ schema parity)', () => {
   beforeAll(async () => {
-    // Capture the baseline BEFORE inserting our synthetic split.
-    baseline = await getRegistryCountCore();
-
     // A — completed.
     await db.insert(respondents).values({
       id: completedId, nin: null, firstName: 'Completed', lastName: 'Person',
@@ -109,13 +114,17 @@ describe('getRegistryCountCore — real-DB smoke (raw-SQL ↔ schema parity)', (
   });
 
   it('executes against the real schema and reproduces the registered > with-answers split', async () => {
-    const after = await getRegistryCountCore();
+    // What ONLY the global call can prove: the raw LATERAL SQL executes against
+    // the live schema (the drift guard this suite exists for). Assert just the
+    // funnel invariant on it — B and D are registered-without-answers, so the
+    // strict inequality holds no matter what any concurrent writer adds.
+    const global = await getRegistryCountCore();
+    expect(global.withAnswers).toBeLessThan(global.totalRespondents);
 
-    // +4 registered people, +2 with complete survey responses.
-    expect(after.totalRespondents - baseline.totalRespondents).toBe(4);
-    expect(after.withAnswers - baseline.withAnswers).toBe(2);
-
-    // The funnel invariant: with-answers is a strict subset of registered.
-    expect(after.withAnswers).toBeLessThan(after.totalRespondents);
+    // The semantics (A/B/C/D) are asserted over the rows we OWN, through the
+    // SAME canonical source the count-core reads — concurrency-invariant.
+    const ours = await countScopedRegistryRows(ourRespondentIds);
+    expect(ours.total).toBe(4); // 4 registered people, one row each
+    expect(ours.withAnswers).toBe(2); // A + C (latest-NON-EMPTY wins for C; D's '{}' doesn't count)
   });
 });

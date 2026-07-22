@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
@@ -171,19 +171,102 @@ describe('User Profile Integration', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ fullName: 'Audit Test Name' });
 
-      // Wait for fire-and-forget audit log
-      await new Promise((r) => setTimeout(r, 500));
+      // The audit write is fire-and-forget. Poll for OUR row instead of
+      // sleeping a fixed 500ms (too short on a loaded box, wasted time when
+      // fast), and scope the query to `actorId = userId`: the previous version
+      // took the globally-latest `user.profile_updated` row, so any other test
+      // file updating a profile concurrently stole the assertion
+      // (`logs[0].actorId` = someone else). Never assert on global rows you
+      // don't own — cf. `test/registry-scoped-counts.ts`.
+      const deadline = Date.now() + 10_000;
+      let ours: typeof auditLogs.$inferSelect | undefined;
+      while (!ours && Date.now() < deadline) {
+        const logs = await db.query.auditLogs.findMany({
+          where: and(eq(auditLogs.action, 'user.profile_updated'), eq(auditLogs.actorId, userId)),
+          orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
+          limit: 1,
+        });
+        ours = logs[0];
+        if (!ours) await new Promise((r) => setTimeout(r, 100));
+      }
 
-      // Check audit log exists
-      const logs = await db.query.auditLogs.findMany({
+      expect(ours, 'no user.profile_updated audit row was written for this actor').toBeTruthy();
+      expect(ours!.actorId).toBe(userId);
+      expect(ours!.targetResource).toBe('user');
+    });
+
+    /**
+     * REGRESSION (2026-07-22) — STAGED RACE for the assertion above.
+     *
+     * The previous version of that test read the globally-latest
+     * `user.profile_updated` row (`limit: 1`, no actor filter) and then asserted
+     * `logs[0].actorId === userId`. That holds only while no other actor updates
+     * a profile in the same window — an assumption about the whole shared test
+     * DB, which any parallel test file can break (and did).
+     *
+     * Rather than argue about it, this test STAGES the race deterministically: a
+     * second, real user updates their profile through the same endpoint AFTER
+     * ours, so the globally-latest row provably belongs to the interloper. It
+     * then asserts both halves — the unscoped read returns the OTHER actor (the
+     * pre-fix assertion would fail here), and the actor-scoped read still finds
+     * OUR row (the fix holds).
+     */
+    it('actor-scoped audit lookup survives a concurrent profile update by another user', async () => {
+      // (1) Our update.
+      await request
+        .patch('/api/v1/users/profile')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ fullName: 'Race Ours' });
+
+      const findLatestFor = async (actorId: string) =>
+        (
+          await db.query.auditLogs.findMany({
+            where: and(eq(auditLogs.action, 'user.profile_updated'), eq(auditLogs.actorId, actorId)),
+            orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
+            limit: 1,
+          })
+        )[0];
+
+      const waitFor = async (fn: () => Promise<unknown>, label: string) => {
+        const deadline = Date.now() + 10_000;
+        let v = await fn();
+        while (!v && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 100));
+          v = await fn();
+        }
+        expect(v, `timed out waiting for ${label}`).toBeTruthy();
+        return v;
+      };
+
+      await waitFor(() => findLatestFor(userId), 'our audit row');
+
+      // (2) The interloper: a DIFFERENT real user updates their profile after us,
+      // through the same endpoint — a genuine concurrent actor, not a synthetic
+      // row (which would corrupt the audit hash chain that other suites verify).
+      const otherLogin = await request
+        .post('/api/v1/auth/staff/login')
+        .send({ email: otherEmail, password, captchaToken: 'test-captcha-bypass' });
+      const otherToken = otherLogin.body.data.accessToken as string;
+      await request
+        .patch('/api/v1/users/profile')
+        .set('Authorization', `Bearer ${otherToken}`)
+        .send({ fullName: 'Race Interloper' });
+
+      await waitFor(() => findLatestFor(otherUserId), "the interloper's audit row");
+
+      // (3) The pre-fix read — globally latest, no actor filter — now belongs to
+      // the OTHER user. This is exactly the state that reddened the old assertion.
+      const globalLatest = await db.query.auditLogs.findMany({
         where: eq(auditLogs.action, 'user.profile_updated'),
         orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
         limit: 1,
       });
+      expect(globalLatest[0]?.actorId).toBe(otherUserId);
 
-      expect(logs.length).toBeGreaterThan(0);
-      expect(logs[0].actorId).toBe(userId);
-      expect(logs[0].targetResource).toBe('user');
-    });
+      // (4) The fixed read is unaffected: it still resolves OUR row.
+      const scoped = await findLatestFor(userId);
+      expect(scoped!.actorId).toBe(userId);
+      expect(scoped!.targetResource).toBe('user');
+    }, 30_000);
   });
 });

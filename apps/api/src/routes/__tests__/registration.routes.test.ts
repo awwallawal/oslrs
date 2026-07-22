@@ -1048,6 +1048,50 @@ describe('POST /registration/wizard', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────
+  // Story 13-34 AC2 (code-review H1) — the public wizard renders with
+  // `FormRenderer.suppressGeopoint`, so a geopoint question is never shown and
+  // can never be answered by a public respondent. The controller must therefore
+  // pass `excludeGeopoint` to the authoritative gate; otherwise a re-upload that
+  // re-introduces a REQUIRED geopoint 422s every public registration over a
+  // field nobody can see — a hard launch-blocking regression, and exactly the
+  // scenario the client guard exists to survive. This test asserts the WIRING
+  // (controller → gate), not just the service option.
+  // ──────────────────────────────────────────────────────────────────────
+  it('13-34 — a public wizard submission is NOT blocked by an unanswered REQUIRED geopoint on the pinned form', async () => {
+    const form = pinnedFormWithRequiredOccupation();
+    form.questions.push({
+      id: 'q-gps',
+      type: 'geopoint',
+      name: 'gps_location',
+      label: 'GPS Location',
+      required: true,
+      sectionId: 's1',
+      sectionTitle: 'S1',
+    });
+    mockGetPublicActiveForm.mockResolvedValueOnce(form);
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const tx = {
+        query: { wizardDrafts: { findFirst: () => Promise.resolve(null) } },
+        insert: vi.fn()
+          .mockReturnValueOnce({
+            values: () => ({ returning: () => Promise.resolve([{ id: 'resp-gps', status: 'active' }]) }),
+          })
+          .mockReturnValueOnce({ values: () => Promise.resolve(undefined) }),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678920', questionnaireResponses: { occupation: 'tailor' } }));
+
+    expect(res.status).toBe(201);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
   // Story 9-55 — the minor age-gate + guardian consent, enforced server-side
   // at submitWizard against the canonical pinned form. Uses a dob that yields
   // a stable age < 15 against the real clock.

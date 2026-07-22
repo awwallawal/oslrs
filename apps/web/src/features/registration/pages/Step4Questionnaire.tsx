@@ -373,6 +373,11 @@ export function Step4Questionnaire({
         onPendingNinClick={undefined}
         hideQuestionNames={prefill.hideNames}
         sectionIndex={sectionIndex}
+        // Story 13-34 AC2 — the public wizard never renders a geopoint question:
+        // the public write path discards coordinates, and a GPS permission prompt
+        // mid-registration is a conversion tax. Belt-and-suspenders against a
+        // future form re-upload re-introducing GPS.
+        suppressGeopoint
         hideNavigation
         onNavReady={(api) => {
           navApi.current = api;

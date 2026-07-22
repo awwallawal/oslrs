@@ -24,11 +24,25 @@ import pino from 'pino';
 
 const logger = pino({ name: 'form-submission-validation' });
 
+/** Story 13-34 — question type suppressed on the public respondent path. */
+const GEOPOINT_QUESTION_TYPE = 'geopoint';
+
 export interface CompletenessOptions {
   /** When true (explicit pending-NIN defer), the NIN question is not required. */
   pendingNin?: boolean;
   /** Additional field names to exclude (e.g. wizard-prefilled identity). */
   extraExcludeNames?: Iterable<string>;
+  /**
+   * Story 13-34 AC2 (AI-Review H1) — PUBLIC respondent paths only. The public
+   * wizard / supplemental survey render with `FormRenderer.suppressGeopoint`, so
+   * a geopoint question is never shown and can never be answered there. Without
+   * this the gate would reject a public submission (422 INCOMPLETE_SUBMISSION)
+   * naming a field the respondent cannot see — a hard registration block, which
+   * is precisely the regression the client guard exists to prevent. Set ONLY on
+   * the public submit paths; the clerk/enumerator `submitForm` path renders
+   * field GPS and keeps enforcing it.
+   */
+  excludeGeopoint?: boolean;
   /**
    * Injected clock for `today()` in calculations (AC1.4). Controllers pass the
    * real `new Date()`; tests pass a fixed date so the authoritative server
@@ -53,6 +67,13 @@ export function buildCompletenessInput(
   const exclude = new Set<string>(options.extraExcludeNames ?? []);
   if (options.pendingNin) {
     for (const name of ninQuestionNames(form)) exclude.add(name);
+  }
+  // Story 13-34 (AI-Review H1) — mirror the public renderer's geopoint
+  // suppression so client and server agree on what is answerable.
+  if (options.excludeGeopoint) {
+    for (const q of form.questions) {
+      if (q.type === GEOPOINT_QUESTION_TYPE) exclude.add(q.name);
+    }
   }
   return {
     questions: form.questions.map((q) => ({

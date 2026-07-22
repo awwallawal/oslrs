@@ -11,6 +11,7 @@ import {
 } from '../utils/skipLogic';
 import { getCachedDynamicFormSchema, validateQuestionValue } from '../utils/formSchema';
 import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field-names';
+import { geopointQuestionNames, hasGeopointQuestion } from '../utils/geopoint-suppression';
 import { withCalculatedFields } from '@oslsr/utils/src/xlsform-calculate';
 import type { FlattenedForm } from '../api/form.api';
 
@@ -75,6 +76,25 @@ export interface FormRendererProps {
   sectionIndex?: number;
   /** Optional ref-callback exposing programmatic navigation. */
   onNavReady?: (api: { goNext: () => Promise<boolean>; goBack: () => void }) => void;
+  /**
+   * Story 13-34 AC2 — defensive public-context guard. When true, any question of
+   * type `geopoint` is scoped OUT of the user-visible flow (never rendered, never
+   * CLIENT-validated, excluded from the progress count) — belt-and-suspenders so
+   * a future form re-upload that re-introduces GPS can never surface a
+   * `navigator.geolocation` permission prompt on the public respondent path
+   * (where captured coordinates are discarded anyway). The public wizard
+   * (Step4Questionnaire) and the Cohort-A supplemental survey opt in; the
+   * clerk/enumerator/form-filler contexts omit it, so field GPS still renders.
+   *
+   * Client-side suppression alone is NOT sufficient for a REQUIRED geopoint —
+   * hiding it would make the authoritative server gate reject the submission
+   * (422 INCOMPLETE_SUBMISSION) naming a field the user cannot see. The
+   * co-required pieces: `WizardPage.isStepSkippable` +
+   * `deriveReviewCompleteness` (both union the same names via
+   * `utils/geopoint-suppression`) and the server's
+   * `CompletenessOptions.excludeGeopoint` on the public submit paths.
+   */
+  suppressGeopoint?: boolean;
 }
 
 /** Ordered distinct section ids (by first appearance). */
@@ -101,12 +121,29 @@ function buildEffectiveHidden(
   questions: FlattenedForm['questions'],
   hideQuestionNames: ReadonlySet<string> | undefined,
   sectionIndex: number | undefined,
+  suppressGeopoint: boolean,
 ): ReadonlySet<string> | undefined {
-  if (sectionIndex == null) return hideQuestionNames;
-  const targetSectionId = orderedSectionIds(questions)[sectionIndex];
+  // Story 13-34 AC2 — public-context geopoint suppression is expressed as a
+  // hide-set union (same machinery as wizard-prefill dedup + section scoping):
+  // every geopoint question is added to the hidden set, so the existing
+  // skip-logic / iteration / snap / empty-state / validation-exclusion paths
+  // guarantee it never renders and never gates navigation. The name derivation
+  // lives in `utils/geopoint-suppression` because the wizard's skip + Review
+  // completeness gates MUST union the identical set (13-29 lesson).
+  const geopointToHide = suppressGeopoint && hasGeopointQuestion(questions);
+
+  // Fast path: nothing to add — return the caller's set verbatim (back-compat).
+  if (sectionIndex == null && !geopointToHide) return hideQuestionNames;
+
   const set = new Set(hideQuestionNames ?? []);
-  for (const q of questions) {
-    if (q.sectionId !== targetSectionId) set.add(q.name);
+  if (geopointToHide) {
+    for (const name of geopointQuestionNames(questions)) set.add(name);
+  }
+  if (sectionIndex != null) {
+    const targetSectionId = orderedSectionIds(questions)[sectionIndex];
+    for (const q of questions) {
+      if (q.sectionId !== targetSectionId) set.add(q.name);
+    }
   }
   return set;
 }
@@ -123,13 +160,14 @@ export function FormRenderer({
   hideQuestionNames,
   sectionIndex,
   onNavReady,
+  suppressGeopoint = false,
 }: FormRendererProps) {
   // AI-Review L4: start on the first non-hidden question so a leading
   // wizard-prefilled (or out-of-section, AC#E2) question never paints for a frame
   // before the snap effect (below) moves off it. When nothing is hidden the
   // behaviour is identical to the old `useState(initialIndex)`.
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const eff = buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex);
+    const eff = buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex, suppressGeopoint);
     if (!eff?.size) return initialIndex;
     // Story 9-54 AC1 — evaluate computed fields into the seed answer map so a
     // section gated on a calculated field (e.g. ${age}) resolves at mount.
@@ -151,8 +189,8 @@ export function FormRenderer({
   // user-visible flow: wizard-prefilled fields ∪ (when sectionIndex is set) every
   // question outside the active section.
   const effectiveHidden = useMemo(
-    () => buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex),
-    [formSchema, hideQuestionNames, sectionIndex],
+    () => buildEffectiveHidden(formSchema.questions, hideQuestionNames, sectionIndex, suppressGeopoint),
+    [formSchema, hideQuestionNames, sectionIndex, suppressGeopoint],
   );
 
   const resolver = useCallback(
@@ -270,6 +308,22 @@ export function FormRenderer({
     : undefined;
   const displayError = ninDuplicateError ?? currentFieldError;
 
+  // AI-Review L3 (13-34) — preview (`disabled`) navigation deliberately ignores
+  // skip-logic so a previewer walks EVERY question, but it must still honour the
+  // hide-set: a suppressed/prefilled question isn't "not applicable right now",
+  // it is unreachable. Step over hidden names instead of landing on one and
+  // relying on the snap effect to bounce away (which flashed the question).
+  // Identical to the old `currentIndex ± 1` when nothing is hidden.
+  const stepIgnoringSkipLogic = useCallback(
+    (from: number, dir: 1 | -1): number => {
+      for (let i = from + dir; i >= 0 && i < formSchema.questions.length; i += dir) {
+        if (!effectiveHidden?.has(formSchema.questions[i].name)) return i;
+      }
+      return -1;
+    },
+    [formSchema, effectiveHidden],
+  );
+
   const goNext = useCallback(async (): Promise<boolean> => {
     if (!currentQuestion) return false;
     if (ninDuplicateError && !disabled) return false;
@@ -285,7 +339,7 @@ export function FormRenderer({
     }
 
     const nextIdx = disabled
-      ? (currentIndex + 1 < formSchema.questions.length ? currentIndex + 1 : -1)
+      ? stepIgnoringSkipLogic(currentIndex, 1)
       : getNextVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
 
     if (nextIdx === -1) {
@@ -309,6 +363,7 @@ export function FormRenderer({
     disabled,
     ninDuplicateError,
     effectiveHidden,
+    stepIgnoringSkipLogic,
     trigger,
     setError,
     clearErrors,
@@ -317,7 +372,7 @@ export function FormRenderer({
 
   const goBack = useCallback(() => {
     const prevIdx = disabled
-      ? (currentIndex > 0 ? currentIndex - 1 : -1)
+      ? stepIgnoringSkipLogic(currentIndex, -1)
       : getPrevVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden);
     if (prevIdx === -1) return;
 
@@ -327,7 +382,7 @@ export function FormRenderer({
       if (currentQuestion) clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentIndex, currentQuestion, evalData, formSchema, disabled, effectiveHidden, clearErrors]);
+  }, [currentIndex, currentQuestion, evalData, formSchema, disabled, effectiveHidden, stepIgnoringSkipLogic, clearErrors]);
 
   // Expose imperative API once on mount (and on goNext/goBack identity change).
   useEffect(() => {
@@ -335,9 +390,9 @@ export function FormRenderer({
   }, [goNext, goBack, onNavReady]);
 
   const hasNextQuestion = useMemo(() => {
-    if (disabled) return currentIndex + 1 < formSchema.questions.length;
+    if (disabled) return stepIgnoringSkipLogic(currentIndex, 1) !== -1;
     return getNextVisibleIndex(formSchema.questions, currentIndex, evalData, formSchema.sectionShowWhen, effectiveHidden) !== -1;
-  }, [formSchema, currentIndex, evalData, disabled, effectiveHidden]);
+  }, [formSchema, currentIndex, evalData, disabled, effectiveHidden, stepIgnoringSkipLogic]);
 
   // AI-Review M3: also guard the degenerate case where EVERY question is hidden
   // (e.g. a form composed entirely of wizard-provided fields). The snap effect

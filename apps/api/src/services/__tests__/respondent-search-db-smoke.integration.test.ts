@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { users } from '../../db/schema/users.js';
@@ -32,6 +32,17 @@ import { RespondentService } from '../respondent.service.js';
 
 const TAG = '_9_56_search_';
 const SUPER_ADMIN_ID = uuidv7();
+
+/**
+ * Explicit page size (default is 20). `listRespondents` resolves matching ids,
+ * then returns ONE globally-sorted page of them — so a `toContain(ourId)`
+ * assertion on the default page silently depends on how many other rows in the
+ * shared test DB match the same term and how they sort. That is the same
+ * "asserting on global state you don't own" trap that flaked the registry
+ * smokes (see `test/registry-scoped-counts.ts`); a page big enough to hold
+ * every plausible match removes the dependency without weakening the assertion.
+ */
+const PAGE_SIZE = 200;
 
 // LGA (FK target for team_assignments.lga_id + users.lga_id)
 const lgaId = uuidv7();
@@ -155,7 +166,7 @@ afterAll(async () => {
 describe('RespondentService.listRespondents — real-DB search smoke (Story 9-56)', () => {
   // AC7.1 — Reference ID (submission_uid) resolves to exactly one registrant.
   it('resolves a registrant by Reference ID (submission_uid)', async () => {
-    const res = await RespondentService.listRespondents({ search: REFERENCE_ID }, 'super_admin', SUPER_ADMIN_ID);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: REFERENCE_ID }, 'super_admin', SUPER_ADMIN_ID);
     expect(res.data).toHaveLength(1);
     expect(res.data[0].id).toBe(publicRespondentId);
     // AC3 — plain-language registration status surfaced on the result.
@@ -164,48 +175,158 @@ describe('RespondentService.listRespondents — real-DB search smoke (Story 9-56
 
   // AC7.2 — email (lives in submissions.raw_data->>'email', NOT a respondents column).
   it('resolves registrants by email (raw_data, case-insensitive)', async () => {
-    const res = await RespondentService.listRespondents({ search: SHARED_EMAIL.toUpperCase() }, 'super_admin', SUPER_ADMIN_ID);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: SHARED_EMAIL.toUpperCase() }, 'super_admin', SUPER_ADMIN_ID);
     const ids = res.data.map((r) => r.id);
     expect(ids).toContain(publicRespondentId);
     expect(ids).toContain(enumRespondentId);
   });
 
+  /**
+   * REGRESSION (2026-07-22) — page-1 independence.
+   *
+   * `listRespondents` returns ONE globally-sorted page (`registeredAt DESC`,
+   * default 20) of everything matching the term. With the default page size,
+   * `toContain(ourId)` therefore passes only while fewer than 20 OTHER rows
+   * match the same term with a newer `registeredAt` — an assumption about the
+   * whole shared test DB that this suite does not control.
+   *
+   * Proven, not theorised: seeding 25 competing rows (same email, newer
+   * registration date) makes the pre-fix assertions fail with
+   * `expected [ …(20) ] to include '<our uuid>'`. This test seeds exactly that
+   * state permanently, so reverting `PAGE_SIZE` (or reintroducing a default-page
+   * assertion anywhere in this file) goes red instead of waiting to flake.
+   */
+  it('finds our registrants even when a full page of NEWER rows shares the search term', async () => {
+    const NOISE = 25; // > the default pageSize of 20 — that is the whole point
+    const noiseRespondentIds = Array.from({ length: NOISE }, () => uuidv7());
+    const noiseSubmissionIds = Array.from({ length: NOISE }, () => uuidv7());
+    // Registered LATER than the fixtures → sorts ahead of them under registeredAt DESC.
+    const future = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+
+    try {
+      for (let i = 0; i < NOISE; i++) {
+        await db.insert(respondents).values({
+          id: noiseRespondentIds[i],
+          firstName: `${TAG}Noise`,
+          lastName: String(i),
+          lgaId: lgaCode,
+          status: 'active',
+          source: 'public',
+          referenceCode: `${TAG}noise_${i}_${noiseRespondentIds[i]}`,
+          createdAt: future,
+        });
+        await db.insert(submissions).values({
+          id: noiseSubmissionIds[i],
+          submissionUid: `${TAG}noise_${noiseSubmissionIds[i]}`,
+          questionnaireFormId: formId,
+          respondentId: noiseRespondentIds[i],
+          rawData: { email: SHARED_EMAIL },
+          submittedAt: future,
+          source: 'public',
+          processed: true,
+        });
+      }
+
+      const res = await RespondentService.listRespondents(
+        { pageSize: PAGE_SIZE, search: SHARED_EMAIL.toUpperCase() },
+        'super_admin',
+        SUPER_ADMIN_ID,
+      );
+      const ids = res.data.map((r) => r.id);
+      expect(ids).toContain(publicRespondentId);
+      expect(ids).toContain(enumRespondentId);
+    } finally {
+      await db.delete(submissions).where(inArray(submissions.id, noiseSubmissionIds));
+      await db.delete(respondents).where(inArray(respondents.id, noiseRespondentIds));
+    }
+  });
+
+  /**
+   * REGRESSION (2026-07-22) — PRODUCTION BUG, found via a cross-file test
+   * interaction, not by review.
+   *
+   * `submissions.questionnaire_form_id` is TEXT and product code writes non-UUID
+   * sentinels into it: `'supplemental-survey'` (Cohort-A path,
+   * registration.controller) and `'self-edit'` (me.service) — plus legacy values
+   * such as `'no-form-pinned-at-submit'`, which exist in the prod-shaped DB
+   * today. The registry queries joined forms with
+   * `questionnaire_form_id ~ <uuid regex> AND questionnaire_form_id::uuid = qf.id`,
+   * but `AND` imposes NO evaluation order, so Postgres could evaluate the cast
+   * on rows the regex meant to exclude and abort the whole statement with
+   * `22P02 invalid input syntax for type uuid` → **HTTP 500 on the staff registry
+   * list/search**, plan-dependent (hence intermittent, hence easy to dismiss as
+   * a flake — which is exactly what happened).
+   *
+   * This pins the fix (join in TEXT space, no cast) using the REAL sentinel.
+   */
+  it('does not blow up when a submission carries a NON-UUID questionnaire_form_id (prod sentinel)', async () => {
+    const sentinelSubId = uuidv7();
+    await db.insert(submissions).values({
+      id: sentinelSubId,
+      submissionUid: `${TAG}sentinel_${sentinelSubId}`,
+      questionnaireFormId: 'supplemental-survey', // the real Cohort-A sentinel
+      respondentId: publicRespondentId,
+      rawData: { email: SHARED_EMAIL },
+      submittedAt: new Date(),
+      source: 'public',
+      processed: true,
+    });
+    try {
+      // Both registry read paths must survive the non-UUID value.
+      const res = await RespondentService.listRespondents(
+        { pageSize: PAGE_SIZE, search: SHARED_EMAIL },
+        'super_admin',
+        SUPER_ADMIN_ID,
+      );
+      expect(res.data.map((r) => r.id)).toContain(publicRespondentId);
+
+      const detail = await RespondentService.getRespondentDetail(
+        publicRespondentId,
+        'super_admin',
+        SUPER_ADMIN_ID,
+      );
+      expect(detail.id).toBe(publicRespondentId);
+    } finally {
+      await db.delete(submissions).where(eq(submissions.id, sentinelSubId));
+    }
+  });
+
   // AC7.3 — phone (respondents.phone_number).
   it('resolves a registrant by phone number', async () => {
-    const res = await RespondentService.listRespondents({ search: PUBLIC_PHONE }, 'super_admin', SUPER_ADMIN_ID);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: PUBLIC_PHONE }, 'super_admin', SUPER_ADMIN_ID);
     expect(res.data.map((r) => r.id)).toContain(publicRespondentId);
   });
 
   // Story 9-58 AC6.2 / AC9.2g — staff search resolves by the human-friendly
   // reference code (exact, uppercased against the UNIQUE index).
   it('resolves a registrant by the human-friendly reference code', async () => {
-    const res = await RespondentService.listRespondents({ search: PUBLIC_REFERENCE_CODE }, 'super_admin', SUPER_ADMIN_ID);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: PUBLIC_REFERENCE_CODE }, 'super_admin', SUPER_ADMIN_ID);
     expect(res.data.map((r) => r.id)).toContain(publicRespondentId);
     // Lowercased input still resolves (server uppercases the term).
-    const lower = await RespondentService.listRespondents({ search: PUBLIC_REFERENCE_CODE.toLowerCase() }, 'super_admin', SUPER_ADMIN_ID);
+    const lower = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: PUBLIC_REFERENCE_CODE.toLowerCase() }, 'super_admin', SUPER_ADMIN_ID);
     expect(lower.data.map((r) => r.id)).toContain(publicRespondentId);
   });
 
   // AC7.4 — unknown Reference ID → clean empty no-match (not an error).
   it('returns a clean empty no-match for an unknown Reference ID', async () => {
-    const res = await RespondentService.listRespondents({ search: `${TAG}does-not-exist-xyz` }, 'super_admin', SUPER_ADMIN_ID);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: `${TAG}does-not-exist-xyz` }, 'super_admin', SUPER_ADMIN_ID);
     expect(res.data).toHaveLength(0);
     expect(res.meta.pagination.totalItems).toBe(0);
   });
 
   // AC7.7 — existing name / NIN search not regressed.
   it('still resolves by name and by NIN (no regression)', async () => {
-    const byName = await RespondentService.listRespondents({ search: UNIQUE_FIRST_NAME }, 'super_admin', SUPER_ADMIN_ID);
+    const byName = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: UNIQUE_FIRST_NAME }, 'super_admin', SUPER_ADMIN_ID);
     expect(byName.data.map((r) => r.id)).toContain(publicRespondentId);
 
-    const byNin = await RespondentService.listRespondents({ search: UNIQUE_NIN }, 'super_admin', SUPER_ADMIN_ID);
+    const byNin = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: UNIQUE_NIN }, 'super_admin', SUPER_ADMIN_ID);
     expect(byNin.data.map((r) => r.id)).toContain(publicRespondentId);
   });
 
   // AC5.2 + AC7.5 — supervisor: redacted PII + team-scope; the SAME email must NOT
   // leak the out-of-team public registrant (no PII-search side-channel).
   it('supervisor email search is team-scoped + PII-redacted (no out-of-scope leak)', async () => {
-    const res = await RespondentService.listRespondents({ search: SHARED_EMAIL }, 'supervisor', supervisorId);
+    const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: SHARED_EMAIL }, 'supervisor', supervisorId);
     const ids = res.data.map((r) => r.id);
     expect(ids).toContain(enumRespondentId); // in team scope
     expect(ids).not.toContain(publicRespondentId); // out of scope — not leaked
@@ -232,7 +353,7 @@ describe('RespondentService.listRespondents — real-DB search smoke (Story 9-56
       processed: true,
     });
     try {
-      const res = await RespondentService.listRespondents({ search: SHARED_EMAIL }, 'super_admin', SUPER_ADMIN_ID);
+      const res = await RespondentService.listRespondents({ pageSize: PAGE_SIZE, search: SHARED_EMAIL }, 'super_admin', SUPER_ADMIN_ID);
       expect(res.data.filter((r) => r.id === publicRespondentId)).toHaveLength(1);
     } finally {
       await db.delete(submissions).where(eq(submissions.submissionUid, extraUid));
