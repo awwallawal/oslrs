@@ -379,6 +379,49 @@ describe('MeService 9-61 — editable read + session edit + complete-nin (real D
     expect(after?.consentMarketplace).toBe(false);
   });
 
+  // Story 13-34 AC2 (code-review H1, second call site) — this authenticated edit
+  // path serves the SAME pinned public form through the SAME suppressing
+  // renderer as the public wizard, so it must pass `excludeGeopoint` to the
+  // completeness gate. Without it a REQUIRED geopoint on the pinned form 422s
+  // the edit over a field the respondent can never see. The public-wizard call
+  // site is covered by registration.routes.test.ts; this covers the other one —
+  // otherwise the flag is deletable here with the whole suite still green
+  // ([[pattern-ship-a-fix-that-never-fires]]).
+  it('updateRegistrationFromWizard is NOT blocked by an unanswered REQUIRED geopoint on the pinned form (13-34)', async () => {
+    vi.spyOn(NativeFormService, 'getPublicActiveForm').mockResolvedValue({
+      formId: 'me-13-34-geopoint-form',
+      title: 'Me 13-34 Geopoint Form',
+      version: '1.0.0',
+      questions: [
+        {
+          id: 'q-gps',
+          type: 'geopoint',
+          name: 'gps_location',
+          label: 'GPS Location',
+          required: true,
+          sectionId: 's1',
+          sectionTitle: 'S1',
+        },
+      ],
+      choiceLists: {},
+      sectionShowWhen: {},
+      calculations: [],
+    });
+
+    const res = await MeService.updateRegistrationFromWizard({
+      userId: userA,
+      data: {
+        givenName: 'Adaeze',
+        phone: '+2348010000031',
+        email: emailA,
+        lgaId: 'lga-egbeda',
+        nin: ninA,
+        consentMarketplace: false,
+      },
+    });
+    expect(res.state).toBe('complete');
+  });
+
   it('updateRegistrationFromWizard rejects ANOTHER respondent NIN (NIN_DUPLICATE, AC#2)', async () => {
     await expect(
       MeService.updateRegistrationFromWizard({

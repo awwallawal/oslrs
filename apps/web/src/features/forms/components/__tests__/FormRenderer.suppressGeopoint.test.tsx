@@ -175,6 +175,36 @@ describe('FormRenderer suppressGeopoint (Story 13-34 AC2)', () => {
     expect(gpsCapture()).not.toBeInTheDocument();
   });
 
+  // AI-Review L3 — preview (`disabled`) navigation deliberately ignores
+  // skip-logic (a previewer walks EVERY question) but used to ignore the
+  // hide-set too (`currentIndex ± 1`), landing on a suppressed question for a
+  // frame before the snap effect bounced away. This pinned the fix, which was
+  // otherwise shipped with no test at all.
+  // NOTE ON WHAT IS ACTUALLY TESTABLE HERE: for a MID-list hidden question the
+  // pre- and post-fix behaviour converge — the old code landed on the hidden
+  // question and the snap effect immediately bounced off it, so an end-state
+  // assertion cannot tell them apart (a first draft of this test asserted that
+  // and passed against the un-fixed code — i.e. proved nothing). The one
+  // OBSERVABLE difference is a TRAILING hidden question: the old
+  // `currentIndex + 1 < length` counted it as "next", so preview showed a
+  // "Continue" that led nowhere; `stepIgnoringSkipLogic` knows there is no
+  // reachable next and shows "Complete". That is what this pins.
+  it('preview (disabled) does not offer Continue into a trailing suppressed geopoint (L3)', () => {
+    render(
+      <FormRenderer
+        formSchema={makeForm([q('a', 'A'), q('gps', 'Capture GPS', 'geopoint')])}
+        suppressGeopoint
+        disabled
+      />,
+    );
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(gpsCapture()).not.toBeInTheDocument();
+    // Pre-fix this read "Continue" and clicking it went nowhere (snap bounced
+    // straight back), stranding the previewer on a dead button.
+    expect(screen.getByTestId('continue-btn')).toHaveTextContent('Complete');
+  });
+
   // AI-Review M2 — the prop's documented contract says a suppressed geopoint is
   // never client-validated and never gates Continue. Prove it with `required`.
   it('a REQUIRED suppressed geopoint never gates Continue (no validation dead-end)', async () => {
