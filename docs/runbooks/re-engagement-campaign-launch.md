@@ -3,6 +3,8 @@
 **Single entry point** for firing the Cohort A (data-loss recovery) + Cohort B (stalled-draft re-engagement) campaigns once the stories ship and the Resend/Termii accounts are live. This is the hub; the story files and scripts are the spokes. If you only read one doc before sending, read this one.
 
 > ⚠️ **The numbers below are a 2026-06-15 snapshot. DO NOT treat the Desktop CSVs as the send list.** The blast scripts re-query the live DB at send time (cohorts drift daily as drafts arrive/complete/expire). The CSVs are **planning/audit artifacts only.** Regenerate counts at send time.
+>
+> 🛑 **SEQUENCE + DEDUPE BELOW ARE STALE — SUPERSEDED BY 13-24 (do not fire yet).** A 2026-07-23 send-ownership triangulation found a VERIFIED double-send gap: the blast scripts check suppression (bounce/complaint/unsubscribe) but NOT "already contacted/welcomed" — `_thankyou-referral-blast.ts` writes `thankyou_referral_sent_at` but never reads it, so auto-welcomed completers get blasted again. The correct ordered sequence (Pro → Dry-run #2 → welcome-all-116 → 5-day gap → **deduped** blast) + the implemented cross-system dedupe are owned by **Story 13-24 (re-scoped to a code story)** and are NOT YET BUILT. This runbook's §-send-order + §-A↔B-dedupe are the OLD manual approach — do not follow them to fire until 13-24 lands + the dedicated dry-run runbook (`docs/runbooks/pre-blast-dry-run.md`) exists. Detail: `docs/handoff-2026-07-23-send-ownership-triangulation.md`.
 
 ---
 
