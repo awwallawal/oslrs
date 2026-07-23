@@ -228,7 +228,14 @@ export class FraudDetectionsController {
         .from(fraudDetections)
         .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
         .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
-        .leftJoin(questionnaireForms, sql`${submissions.questionnaireFormId}::uuid = ${questionnaireForms.id}`)
+        // Join in TEXT space — `submissions.questionnaire_form_id` is TEXT and
+        // legitimately holds non-UUID sentinels ('supplemental-survey',
+        // 'self-edit', legacy 'no-form-pinned-at-submit'). Casting it to uuid
+        // aborts the statement with `22P02 invalid input syntax for type uuid`
+        // as soon as such a row is in scope — and unlike the respondent.service
+        // sites (2026-07-22), this one had no regex guard at all, so it was an
+        // unconditional 500 for any fraud detection on a sentinel submission.
+        .leftJoin(questionnaireForms, sql`${questionnaireForms.id}::text = ${submissions.questionnaireFormId}`)
         .where(eq(fraudDetections.id, id))
         .limit(1);
 

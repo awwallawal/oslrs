@@ -133,6 +133,14 @@ export class SupervisorController {
         sql`, `,
       );
 
+      // Join in TEXT space (`u.id::text = s.submitter_id`): `submitter_id` is a
+      // TEXT column, so casting IT to uuid can abort the whole statement with
+      // `22P02 invalid input syntax for type uuid` if any row ever holds a
+      // non-UUID value — the WHERE filter does not protect the JOIN, because
+      // Postgres imposes no evaluation order between them. Same defect class
+      // fixed in respondent.service (2026-07-22), where the equivalent cast on
+      // `questionnaire_form_id` DID 500 against real sentinel values. No writer
+      // produces a non-UUID `submitter_id` today, so this one is prophylactic.
       const points = await db.execute(sql`
         SELECT DISTINCT ON (s.submitter_id)
           s.submitter_id AS "enumeratorId",
@@ -141,7 +149,7 @@ export class SupervisorController {
           s.gps_longitude AS "longitude",
           s.submitted_at AS "submittedAt"
         FROM submissions s
-        JOIN users u ON s.submitter_id::uuid = u.id
+        JOIN users u ON u.id::text = s.submitter_id
         WHERE s.submitter_id IN (${idList})
           AND s.gps_latitude IS NOT NULL
           AND s.gps_longitude IS NOT NULL

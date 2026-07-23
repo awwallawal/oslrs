@@ -42,8 +42,26 @@ const SEVERITY_ORDER: Record<string, number> = {
   critical: 4,
 };
 
-// Guard UUID casts from legacy/non-UUID questionnaire_form_id values in submissions.
-const UUID_V4_REGEX_SQL = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$';
+/**
+ * `submissions.questionnaire_form_id` is TEXT and legitimately holds non-UUID
+ * sentinels written by product code — `'supplemental-survey'`
+ * (registration.controller, Cohort-A path), `'self-edit'` (me.service), and
+ * legacy values like `'no-form-pinned-at-submit'`. Joining to
+ * `questionnaire_forms` therefore must never cast that column to `uuid`.
+ *
+ * The previous guard — `questionnaire_form_id ~ <uuid regex> AND
+ * questionnaire_form_id::uuid = qf.id` — was NOT safe: `AND` does not impose
+ * evaluation order, so Postgres may evaluate the cast on rows the regex was
+ * meant to exclude and abort the whole query with
+ * `22P02 invalid input syntax for type uuid`. That is plan-dependent, which is
+ * why it surfaced as an intermittent failure rather than a constant one (found
+ * 2026-07-22 via a cross-file test interaction; a `'smoke-form'` row elsewhere
+ * in `submissions` reddened an unrelated search test).
+ *
+ * Comparing the JOIN in TEXT space removes the cast entirely — no input value
+ * can throw, and the semantics are identical (a non-UUID sentinel simply
+ * matches no form row, exactly as the regex intended).
+ */
 
 export class RespondentService {
   /**
@@ -106,7 +124,7 @@ export class RespondentService {
       .leftJoin(users, sql`${submissions.enumeratorId} = ${users.id}::text`)
       .leftJoin(
         questionnaireForms,
-        sql`${submissions.questionnaireFormId} ~ ${UUID_V4_REGEX_SQL} AND ${submissions.questionnaireFormId}::uuid = ${questionnaireForms.id}`,
+        sql`${questionnaireForms.id}::text = ${submissions.questionnaireFormId}`,
       )
       .leftJoin(fraudDetections, eq(fraudDetections.submissionId, submissions.id))
       .where(eq(submissions.respondentId, respondentId))
@@ -292,7 +310,7 @@ export class RespondentService {
       FROM submissions s
       LEFT JOIN users u ON s.enumerator_id = u.id::text
       LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
-      LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id ~ ${UUID_V4_REGEX_SQL} AND s.questionnaire_form_id::uuid = qf.id
+      LEFT JOIN questionnaire_forms qf ON qf.id::text = s.questionnaire_form_id
       WHERE s.id = ${submissionId}::uuid
     `).then(r => r.rows as Record<string, unknown>[]);
 
@@ -668,7 +686,7 @@ export class RespondentService {
         ) last_name_fallback ON true
         LEFT JOIN lgas l ON r.lga_id = l.code
         LEFT JOIN users u ON s.enumerator_id = u.id::text
-        LEFT JOIN questionnaire_forms qf ON s.questionnaire_form_id ~ ${UUID_V4_REGEX_SQL} AND s.questionnaire_form_id::uuid = qf.id
+        LEFT JOIN questionnaire_forms qf ON qf.id::text = s.questionnaire_form_id
         LEFT JOIN fraud_detections fd ON fd.submission_id = s.id
         ${whereClause}
         ORDER BY r.id, s.submitted_at DESC NULLS LAST
