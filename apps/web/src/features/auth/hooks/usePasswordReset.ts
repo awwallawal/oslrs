@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toSafeInternalPath } from '../../../lib/safe-redirect';
 import {
   forgotPasswordRequestSchema,
   resetPasswordRequestSchema,
@@ -266,7 +267,7 @@ export function useResetPassword({ token, redirectTo = '/login' }: UseResetPassw
 
       // Redirect to login after brief delay
       setTimeout(() => {
-        navigate(redirectTo, { replace: true });
+        navigate(toSafeInternalPath(redirectTo), { replace: true });
       }, 2000);
     } catch (error) {
       if (error instanceof AuthApiError) {

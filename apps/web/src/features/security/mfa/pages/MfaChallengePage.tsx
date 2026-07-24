@@ -10,6 +10,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { toSafeInternalPath } from '../../../../lib/safe-redirect';
 import { useAuth } from '../../../auth/context/AuthContext';
 import { loginMfa, loginMfaBackup, MfaApiError } from '../../../auth/api/mfa.api';
 import { HCaptcha } from '../../../auth/components/HCaptcha';
@@ -67,7 +68,7 @@ export default function MfaChallengePage() {
       const fn = mode === 'totp' ? loginMfa : loginMfaBackup;
       const response = await fn({ mfaChallengeToken: challengeToken, code, captchaToken });
       await completeStaffLoginAfterMfa(response, rememberMe);
-      navigate(redirectTo, { replace: true });
+      navigate(toSafeInternalPath(redirectTo), { replace: true });
     } catch (err) {
       // F15 (code-review 2026-05-02): captcha tokens are single-use server-side.
       // For RETRY-ELIGIBLE error paths the user will resubmit, so the previous

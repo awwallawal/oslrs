@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toSafeInternalPath } from '../../../lib/safe-redirect';
 import { loginRequestSchema } from '@oslsr/types';
 import { useAuth } from '../context/AuthContext';
 import { AuthApiError } from '../api/auth.api';
@@ -134,7 +135,7 @@ export function useLogin({ type, redirectTo = '/' }: UseLoginOptions): UseLoginR
       }
 
       // Navigate to redirect URL on success
-      navigate(redirectTo, { replace: true });
+      navigate(toSafeInternalPath(redirectTo), { replace: true });
     } catch (error) {
       // Handle specific error codes
       if (error instanceof AuthApiError) {

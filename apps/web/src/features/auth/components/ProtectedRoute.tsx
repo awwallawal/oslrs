@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { toSafeInternalPath } from '../../../lib/safe-redirect';
 import { useAuth } from '../context/AuthContext';
 import { SkeletonForm } from '../../../components/skeletons';
 
@@ -121,7 +122,7 @@ export function PublicOnlyRoute({
     // Check if there's a stored destination
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const from = (location.state as any)?.from || redirectTo;
-    return <Navigate to={from} replace />;
+    return <Navigate to={toSafeInternalPath(from)} replace />;
   }
 
   // User is not authenticated, show the public route

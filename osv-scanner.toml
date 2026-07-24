@@ -73,3 +73,36 @@ reason = "serialize-javascript 6.0.2 (5.9) — dev-only via workbox-build; fix @
 [[IgnoredVulns]]
 id = "GHSA-x565-32qp-m3vf"
 reason = "phin 2.9.3 (4.3) — dev-only via potrace/jimp; fix @3.7.1 crosses a major (override-policy forbids). Not in --prod tree. Permanent accepted-risk (13-32)."
+
+# --- react-router / react-router-dom 6.30.4 — fix crosses a major (6 → 7); MITIGATED at the app layer ---
+# 2026-07-24: NEWLY-DISCLOSED advisories against react-router 6.30.4 (the pinned,
+# bounded `react-router: >=6.30.4 <7` override). UNLIKE every entry above, these ARE
+# in the --prod closure (react-router-dom is an apps/web runtime dependency bundled to
+# the browser) — so the blocking prod-scope gate would fail on them. They are filtered
+# here because osv-scanner AUTO-LOADS this config for the blocking-gate scan too (it is
+# adjacent to the scanned lockfile), so a documented accepted-risk clears the gate. The
+# fix lands only in v7 (7.18.0 / 7.13.0): a 6→7 override is forbidden by the bounded
+# override-policy AND broke our web build before (v7 MemoryRouterProps — the 9-54
+# lesson), and there is NO 6.x backport, so no in-policy fix exists. Disposition =
+# accepted-risk WITH an application-layer mitigation (not a blind ignore):
+#   * GHSA-337j — SSR-hydration deserializeErrors constructor injection: N/A, this is a
+#     client-side SPA (BrowserRouter), no SSR / framework data APIs.
+#   * GHSA-wrjc / GHSA-jjmj — open-redirect (→XSS) via unsanitised navigation targets.
+#     Every post-auth navigate(redirectTo) site (login / password-reset / MFA /
+#     ProtectedRoute) now routes its target through
+#     apps/web/src/lib/safe-redirect.ts::toSafeInternalPath, which admits ONLY same-origin
+#     root-relative paths (rejects //host, backslash, encoded and control-char bypasses),
+#     closing the vector regardless of react-router's missing sanitisation (+tests).
+# RE-REVIEW if we add attacker-controlled navigation input (e.g. a ?redirect= param) or
+# upgrade to react-router 7.
+[[IgnoredVulns]]
+id = "GHSA-337j-9hxr-rhxg"
+reason = "react-router 6.30.4 SSR-hydration constructor injection — N/A: client-side SPA, no SSR. Fix v7 only (crosses major, override-policy forbids; broke web build before). App-layer safe-redirect in place. Accepted-risk (2026-07-24)."
+
+[[IgnoredVulns]]
+id = "GHSA-wrjc-x8rr-h8h6"
+reason = "react-router 6.30.4 open-redirect via unsanitised navigation. MITIGATED at app layer: all post-auth navigate targets pass toSafeInternalPath (same-origin root-relative only, +tests). Fix v7 only (crosses major). Accepted-risk (2026-07-24)."
+
+[[IgnoredVulns]]
+id = "GHSA-jjmj-jmhj-qwj2"
+reason = "react-router-dom 6.30.4 open-redirect→XSS. Same app-layer mitigation (toSafeInternalPath). Fix v7 only (crosses major, override-policy forbids). Accepted-risk (2026-07-24)."
