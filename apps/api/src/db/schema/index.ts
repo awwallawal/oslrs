@@ -27,3 +27,5 @@ export * from './magic-link-tokens.js';
 export * from './wizard-drafts.js';
 export * from './email-events.js';
 export * from './email-suppressions.js';
+// Story 13-24 — cross-system marketing contact ledger (the inherited dedupe)
+export * from './campaign-sends.js';

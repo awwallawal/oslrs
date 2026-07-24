@@ -6,6 +6,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('../notification-meter.service.js', () => ({
   NotificationMeter: { recordEmailSend: vi.fn().mockResolvedValue(undefined) },
 }));
+// Story 13-24 — dispatch() now also writes the marketing contact ledger. Stubbed here for the same
+// reason the meter is: this test is about tag threading and should stay side-effect-free. The
+// ledger write itself is covered by `email-campaign-ledger.test.ts`.
+vi.mock('../campaign-contact.service.js', () => ({
+  recordCampaignSend: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { EmailService } from '../email.service.js';
 import { getMockEmailProvider, resetMockEmailProvider } from '../../providers/index.js';

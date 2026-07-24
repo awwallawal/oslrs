@@ -44,7 +44,14 @@ import { wizardDrafts } from '../src/db/schema/index.js';
 import { and, gt, sql } from 'drizzle-orm';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { EmailService } from '../src/services/email.service.js';
-import { getSuppressedEmails } from '../src/services/email-events.service.js'; // Story 13-9 (AC2)
+// Story 13-24 (AC3b) — the SHARED cohort filter (13-9 suppression + the 13-24 recent-contact
+// gap). Cohort B is the case that PROVES the ledger must be email-keyed: these recipients are
+// wizard_drafts rows with NO respondent record, so a respondents.metadata marker could never
+// dedupe them. The shared filter keys on the address, so drafts are covered like everyone else.
+import {
+  filterMarketingCohort,
+  type MarketingCohortFilterResult,
+} from '../src/services/campaign-contact.service.js';
 import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';
 import pino from 'pino';
 
@@ -305,7 +312,16 @@ interface DraftRow {
   currentStep: number;
 }
 
-async function selectCohort(args: Args): Promise<DraftRow[]> {
+// Exported (Story 13-24 AC6) so the dedupe regression test can compare the RAW cohort against
+// the filtered send cohort and pin the exclusion on the shared filter.
+export async function selectCohort(args: Args): Promise<DraftRow[]> {
+  // DISJOINTNESS INVARIANT (13-24 review L2): the Cat1 exclusion below drops any draft whose email
+  // belongs to a completed respondent, so this cohort is disjoint from the 13-12 auto-thank-you
+  // (completers-only). That is WHY no `thankyou_referral_sent_at` marker check is needed here — the
+  // audiences cannot overlap; the email-keyed `campaign_sends` filter is the cross-run backstop. If
+  // Cat1 is ever relaxed to admit completed users, the auto-send↔blast race reopens — restore a
+  // marker/ledger check accordingly.
+  //
   // Cat1 exclusion (Story 9-30 follow-up, 2026-05-31): drop any draft whose
   // email is already attached to a completed-registration respondent. Joins
   // magic_link_tokens (which holds the public-wizard email) -> respondents
@@ -351,6 +367,18 @@ async function selectCohort(args: Args): Promise<DraftRow[]> {
   return rows;
 }
 
+/**
+ * Story 13-24 (AC3b/AC6) — the SEND cohort: raw selection + the shared marketing filter.
+ * `main()` uses this and nothing else, so the regression test exercises exactly what the operator
+ * fires. Exported for that test.
+ */
+export async function selectSendCohort(
+  args: Args,
+): Promise<MarketingCohortFilterResult<DraftRow>> {
+  const rawCohort = await selectCohort(args);
+  return filterMarketingCohort(rawCohort, (r) => r.email);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
 
@@ -374,14 +402,22 @@ async function main() {
     process.exit(1);
   }
 
-  const rawCohort = await selectCohort(args);
-  // Story 13-9 (AC2) — drop suppressed (bounced/complained) addresses BEFORE sending. Protects
-  // sender reputation/deliverability; never blast an address Resend told us hard-bounced/complained.
-  const suppressedSet = await getSuppressedEmails(rawCohort.map((r) => r.email));
-  let cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
-  const suppressedSkipped = rawCohort.length - cohort.length;
+  // Story 13-24 (AC3b) — ONE inherited filter, replacing this script's bespoke suppression call:
+  // 13-9 suppression (never mail a bounce/complaint/unsubscribe) AND the 13-24 recent-contact gap
+  // (never mail someone the welcome backfill or another blast just reached).
+  const filtered = await selectSendCohort(args);
+  let cohort = filtered.cohort;
+  const { suppressedSkipped, recentlyContactedSkipped, duplicatesSkipped, gapDays } = filtered;
   if (suppressedSkipped > 0) {
     logger.info({ event: 'reengagement_email.suppressed_skipped', skipped: suppressedSkipped });
+  }
+  if (recentlyContactedSkipped > 0) {
+    logger.info({
+      event: 'reengagement_email.recently_contacted_skipped',
+      skipped: recentlyContactedSkipped,
+      gapDays,
+      cutoff: filtered.cutoff.toISOString(),
+    });
   }
 
   // NO SILENT CAP — apply the OPT-IN --max-recipients here (post-suppression, so
@@ -408,6 +444,8 @@ async function main() {
     event: 'reengagement_email.cohort_selected',
     count: cohort.length,
     suppressedSkipped,
+    recentlyContactedSkipped,
+    gapDays,
     dryRun: args.dryRun,
     since: args.since?.toISOString() ?? null,
     lgaId: args.lgaId,
@@ -434,7 +472,14 @@ async function main() {
   }
 
   if (args.dryRun) {
-    console.log(`\n[DRY-RUN] Cohort: ${cohort.length} recipient(s)\n`);
+    console.log(`\n[DRY-RUN] Cohort: ${cohort.length} recipient(s)`);
+    // Story 13-24 (AC5 iii) — counts honesty: state WHY people dropped out, so this output (not a
+    // stale doc snapshot) is the number the operator quotes.
+    console.log(
+      `[DRY-RUN] excluded: suppressed=${suppressedSkipped}, ` +
+        `contacted-within-${gapDays}d=${recentlyContactedSkipped}, ` +
+        `intra-run-duplicates=${duplicatesSkipped} (since ${filtered.cutoff.toISOString()})\n`,
+    );
     for (const row of cohort) {
       const fd = (row.formData ?? {}) as Record<string, unknown>;
       // Story 9-18 Part F (AC#F3): prefer the canonical given name from post-9-18

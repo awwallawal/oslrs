@@ -33,7 +33,12 @@ import os from 'node:os';
 import { sql } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { EmailService } from '../src/services/email.service.js';
-import { getSuppressedEmails } from '../src/services/email-events.service.js';
+// Story 13-24 (AC3b) — the SHARED marketing filter, replacing the bespoke suppression call.
+// The welcome backfill inherits the recent-contact gap in the REVERSE direction too: if a blast
+// already reached an address inside the window, this run holds the welcome back rather than
+// stacking a second email on it. (The forward direction — welcome then blast — is enforced by
+// the same filter in the three blast cohort builders.)
+import { filterMarketingCohort } from '../src/services/campaign-contact.service.js';
 import { SubmissionProcessingService } from '../src/services/submission-processing.service.js';
 import type { RespondentMetadata } from '../src/db/schema/respondents.js';
 import pino from 'pino';
@@ -215,22 +220,36 @@ async function readMarkers(
 async function selectEligible(args: Args): Promise<{
   eligible: CandidateRow[];
   suppressedSkipped: number;
+  recentlyContactedSkipped: number;
+  duplicatesSkipped: number;
+  gapDays: number;
   testSkipped: number;
   total: number;
 }> {
   const candidates = await fetchCandidates(args.maxRows);
   const notTest = candidates.filter((c) => !isTestEmail(c.email));
   const testSkipped = candidates.length - notTest.length;
-  const suppressed = await getSuppressedEmails(notTest.map((c) => c.email));
-  const eligible = notTest.filter((c) => !suppressed.has(c.email.trim().toLowerCase()));
-  const suppressedSkipped = notTest.length - eligible.length;
-  return { eligible, suppressedSkipped, testSkipped, total: candidates.length };
+  const filtered = await filterMarketingCohort(notTest, (c) => c.email);
+  return {
+    eligible: filtered.cohort,
+    suppressedSkipped: filtered.suppressedSkipped,
+    recentlyContactedSkipped: filtered.recentlyContactedSkipped,
+    duplicatesSkipped: filtered.duplicatesSkipped,
+    gapDays: filtered.gapDays,
+    testSkipped,
+    total: candidates.length,
+  };
 }
 
 async function runDryRun(args: Args): Promise<number> {
-  const { eligible, suppressedSkipped, testSkipped, total } = await selectEligible(args);
+  const { eligible, suppressedSkipped, recentlyContactedSkipped, duplicatesSkipped, gapDays, testSkipped, total } =
+    await selectEligible(args);
   console.log(`\n[DRY-RUN] ${total} public respondent(s) missing >=1 auto-send marker.`);
-  console.log(`[DRY-RUN] skipping test rows=${testSkipped}, suppressed=${suppressedSkipped}.`);
+  // Story 13-24 (AC5 iii) — counts honesty: this output IS the cohort size, and it says why rows dropped.
+  console.log(
+    `[DRY-RUN] skipping test rows=${testSkipped}, suppressed=${suppressedSkipped}, ` +
+      `contacted-within-${gapDays}d=${recentlyContactedSkipped}, intra-run-duplicates=${duplicatesSkipped}.`,
+  );
   console.log(`[DRY-RUN] ${eligible.length} eligible to backfill:\n`);
   for (const row of eligible.slice(0, 25)) {
     const kinds = missingKinds(row);
@@ -251,10 +270,12 @@ async function runApply(args: Args): Promise<number> {
     return 1;
   }
 
-  const { eligible, suppressedSkipped, testSkipped, total } = await selectEligible(args);
+  const { eligible, suppressedSkipped, recentlyContactedSkipped, duplicatesSkipped, gapDays, testSkipped, total } =
+    await selectEligible(args);
   console.log(
     `\n[${live ? 'LIVE' : 'PREVIEW'}] total=${total} testSkipped=${testSkipped} ` +
-      `suppressedSkipped=${suppressedSkipped} eligible=${eligible.length}`,
+      `suppressedSkipped=${suppressedSkipped} recentlyContactedSkipped=${recentlyContactedSkipped} ` +
+      `duplicatesSkipped=${duplicatesSkipped} (gap=${gapDays}d) eligible=${eligible.length}`,
   );
 
   const delayMs = Math.ceil(60_000 / args.ratePerMinute);

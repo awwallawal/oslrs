@@ -15,7 +15,8 @@ import type {
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 import { NotificationMeter } from './notification-meter.service.js';
 import type { NotificationCategory } from './notification-category.js';
-import { buildListUnsubscribeHeaders } from './list-unsubscribe.js';
+import { buildListUnsubscribeHeaders, isMarketingCategory } from './list-unsubscribe.js';
+import { recordCampaignSend } from './campaign-contact.service.js'; // Story 13-24 (AC3a)
 
 const logger = pino({ name: 'email-service' });
 
@@ -119,6 +120,25 @@ export class EmailService {
         recipient: data.to,
         category,
       });
+
+      // Story 13-24 (AC3a) — record the marketing contact HERE, at the one chokepoint, rather than
+      // in each blast script. Every initiator (the 3 operator blasts, the welcome backfill, the
+      // 13-12 evergreen auto-send) funnels through dispatch(), so the ledger is complete by
+      // construction and a future blast inherits it without opting in — the fragmentation that
+      // created the double-send gap cannot recur (13-24 Dev Notes; PM validation §2).
+      //
+      // MARKETING categories only, reusing the 13-13 set: you don't "already contacted" someone out
+      // of a password reset or a magic link. Fail-soft inside recordCampaignSend — instrumentation
+      // must never change send behaviour or the returned EmailResult.
+      if (isMarketingCategory(category)) {
+        await recordCampaignSend({
+          email: data.to,
+          campaignId: campaignId ?? null,
+          category: category ?? null,
+          channel: 'email',
+          messageId: result.messageId ?? null,
+        });
+      }
     }
     return result;
   }

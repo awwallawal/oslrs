@@ -31,7 +31,13 @@ import os from 'node:os';
 import { db } from '../src/db/index.js';
 import { sql } from 'drizzle-orm';
 import { EmailService } from '../src/services/email.service.js';
-import { getSuppressedEmails } from '../src/services/email-events.service.js'; // Story 13-9 (AC2)
+// Story 13-24 (AC3b) — the SHARED cohort filter (suppression 13-9 + recent-contact gap 13-24).
+// This replaces the bespoke per-script `getSuppressedEmails` call: every blast inherits BOTH rules
+// from one place, so a new script cannot ship with suppression but without dedupe.
+import {
+  filterMarketingCohort,
+  type MarketingCohortFilterResult,
+} from '../src/services/campaign-contact.service.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 import {
   buildThankYouEmail,
@@ -191,6 +197,13 @@ export async function selectCohort(args: Args): Promise<CohortRow[]> {
     INNER JOIN submissions s ON s.respondent_id = r.id
     WHERE mlt.email IS NOT NULL
       AND mlt.email <> ''
+      -- Story 13-24 (AC3c) — the AUTO-SEND↔BLAST race, closed at the source. This script has
+      -- always WRITTEN this marker after sending (:361 below) but never READ it, so a completer
+      -- already thanked by the 13-12 evergreen auto-send stayed in this cohort and got a second
+      -- copy of the same email. The email-keyed campaign_sends ledger covers every send made
+      -- from 13-24 onward; this marker check additionally covers the HISTORIC auto-sends that
+      -- predate the ledger (prod rows stamped before this story shipped).
+      AND r.metadata->>'thankyou_referral_sent_at' IS NULL
       ${sinceFragment}
       ${lgaFragment}
     ORDER BY r.id, mlt.created_at DESC
@@ -207,6 +220,21 @@ export async function selectCohort(args: Args): Promise<CohortRow[]> {
       created_at: r.created_at instanceof Date ? r.created_at : new Date(String(r.created_at)),
     };
   });
+}
+
+/**
+ * Story 13-24 (AC3b/AC6) — the SEND cohort: raw selection + the shared marketing filter.
+ *
+ * `main()` uses this and nothing else, so what the regression test exercises is exactly what the
+ * operator fires. Exported for that test (a filter that is only proven at the helper level is a
+ * [[pattern-ship-a-fix-that-never-fires]] candidate — AC6 requires the exclusion to be shown FIRING
+ * on the real cohort query).
+ */
+export async function selectSendCohort(
+  args: Args,
+): Promise<MarketingCohortFilterResult<CohortRow>> {
+  const rawCohort = await selectCohort(args);
+  return filterMarketingCohort(rawCohort, (r) => r.email);
 }
 
 async function main() {
@@ -234,13 +262,20 @@ async function main() {
 
   const referralUrl = buildReferralUrl();
 
-  const rawCohort = await selectCohort(args);
-  // Story 13-9 (AC2) — skip suppressed (bounced/complained) addresses before sending.
-  const suppressedSet = await getSuppressedEmails(rawCohort.map((r) => r.email));
-  let cohort = rawCohort.filter((r) => !suppressedSet.has(r.email.trim().toLowerCase()));
-  const suppressedSkipped = rawCohort.length - cohort.length;
+  // Story 13-24 (AC3b) — ONE inherited filter: 13-9 suppression AND the recent-contact gap.
+  const filtered = await selectSendCohort(args);
+  let cohort = filtered.cohort;
+  const { suppressedSkipped, recentlyContactedSkipped, duplicatesSkipped, gapDays } = filtered;
   if (suppressedSkipped > 0) {
     logger.info({ event: 'thankyou_referral.suppressed_skipped', skipped: suppressedSkipped });
+  }
+  if (recentlyContactedSkipped > 0) {
+    logger.info({
+      event: 'thankyou_referral.recently_contacted_skipped',
+      skipped: recentlyContactedSkipped,
+      gapDays,
+      cutoff: filtered.cutoff.toISOString(),
+    });
   }
 
   // NO SILENT CAP — apply the OPT-IN --max-recipients here (post-suppression) and,
@@ -263,6 +298,8 @@ async function main() {
     event: 'thankyou_referral.cohort_selected',
     count: cohort.length,
     suppressedSkipped,
+    recentlyContactedSkipped,
+    gapDays,
     dryRun: args.dryRun,
     since: args.since?.toISOString() ?? null,
     lgaId: args.lgaId,
@@ -290,6 +327,13 @@ async function main() {
 
   if (args.dryRun) {
     console.log(`\n[DRY-RUN] Cohort C: ${cohort.length} recipient(s)`);
+    // Story 13-24 (AC5 iii) — counts honesty: the dry-run states WHY people dropped out, so this
+    // output (not a stale doc snapshot) is the number the operator quotes.
+    console.log(
+      `[DRY-RUN] excluded: suppressed=${suppressedSkipped}, ` +
+        `contacted-within-${gapDays}d=${recentlyContactedSkipped}, ` +
+        `intra-run-duplicates=${duplicatesSkipped} (since ${filtered.cutoff.toISOString()})`,
+    );
     console.log(`[DRY-RUN] Referral link: ${referralUrl}\n`);
     for (const row of cohort) {
       const firstName = firstNameFrom(row.first_name ?? undefined);
