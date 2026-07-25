@@ -336,4 +336,198 @@ describe('ComboboxMultiSelect', () => {
     expect(option).toHaveClass('bg-[#9C1E23]/5');
     expect(option).toHaveClass('font-medium');
   });
+
+  // ---- Story 13-35 AC1/AC4: close affordance + a11y + multi-add focus ----
+
+  it('shows a sticky "Done ({n} selected)" button reflecting the selection count', () => {
+    render(
+      <ComboboxMultiSelect
+        question={buildQuestion()}
+        value={['carpentry', 'welding']}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.focus(screen.getByTestId('combobox-search-skills_possessed'));
+    const done = screen.getByTestId('combobox-done-skills_possessed');
+    expect(done).toHaveTextContent('Done (2 selected)');
+  });
+
+  it('closes the dropdown when the "Done" button is clicked', () => {
+    render(
+      <ComboboxMultiSelect
+        question={buildQuestion()}
+        value={['carpentry']}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.focus(screen.getByTestId('combobox-search-skills_possessed'));
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('combobox-done-skills_possessed'));
+    expect(
+      screen.queryByTestId('combobox-dropdown-skills_possessed')
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes the dropdown on Escape', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(
+      screen.queryByTestId('combobox-dropdown-skills_possessed')
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the dropdown open and refocuses search after a POINTER selection (multi-add)', () => {
+    const handleChange = vi.fn();
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={handleChange} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    // detail > 0 == a real pointer click (detail 0 is keyboard activation).
+    fireEvent.click(screen.getByTestId('option-skills_possessed-carpentry'), { detail: 1 });
+    // Multi-select: stays open so the user can keep picking...
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+    // ...and search regains focus for fast typing of the next skill.
+    expect(search).toHaveFocus();
+  });
+
+  // code-review H3 — the refocus must NOT fire for keyboard activation, or a
+  // keyboard user is thrown back to the top of the widget and has to re-Tab
+  // through the whole list to pick a second skill.
+  it('leaves focus ON the option after a KEYBOARD selection (no re-Tab cost)', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    const option = screen.getByTestId('option-skills_possessed-carpentry');
+    option.focus();
+    // Enter/Space on a focused button dispatches click with detail === 0.
+    fireEvent.click(option, { detail: 0 });
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+    expect(option).toHaveFocus();
+    expect(search).not.toHaveFocus();
+  });
+
+  it('exposes combobox/listbox/option roles with aria-expanded state', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={['welding']} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    expect(search).toHaveAttribute('role', 'combobox');
+    expect(search).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.focus(search);
+    expect(search).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    const selectedOption = screen.getByTestId('option-skills_possessed-welding');
+    expect(selectedOption).toHaveAttribute('role', 'option');
+    expect(selectedOption).toHaveAttribute('aria-selected', 'true');
+  });
+
+  // ---- Story 13-35 code-review fixes (M1 ARIA ownership, M2 focus, M3/L2) ----
+
+  it('the listbox owns ONLY option/group children, with Done outside it (aria-required-children)', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    fireEvent.focus(screen.getByTestId('combobox-search-skills_possessed'));
+
+    const listbox = screen.getByRole('listbox');
+    for (const child of Array.from(listbox.children)) {
+      expect(['group', 'option']).toContain(child.getAttribute('role'));
+    }
+    // A listbox may not own a button: nesting the close affordance inside it is
+    // invalid ARIA and lets AT option-navigation skip the only way out.
+    expect(listbox.contains(screen.getByTestId('combobox-done-skills_possessed'))).toBe(false);
+    expect(listbox.contains(screen.getByTestId('add-custom-skills_possessed'))).toBe(false);
+    // Sector groups are labelled so the grouping survives in the a11y tree.
+    expect(screen.getAllByRole('group').length).toBeGreaterThan(0);
+  });
+
+  it('returns focus to the search box when closed via Done (never dumps focus on <body>)', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    const done = screen.getByTestId('combobox-done-skills_possessed');
+    done.focus();
+    fireEvent.click(done, { detail: 1 });
+
+    expect(screen.queryByTestId('combobox-dropdown-skills_possessed')).not.toBeInTheDocument();
+    expect(search).toHaveFocus();
+    // ...and the restored focus must not immediately re-open the panel.
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the search box when closed via Escape from an option', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    const option = screen.getByTestId('option-skills_possessed-carpentry');
+    option.focus();
+    fireEvent.keyDown(option, { key: 'Escape' });
+
+    expect(screen.queryByTestId('combobox-dropdown-skills_possessed')).not.toBeInTheDocument();
+    expect(search).toHaveFocus();
+  });
+
+  it('re-opens on an explicit click after a close (focus alone cannot, it never left)', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    fireEvent.click(screen.getByTestId('combobox-done-skills_possessed'), { detail: 1 });
+    expect(screen.queryByTestId('combobox-dropdown-skills_possessed')).not.toBeInTheDocument();
+
+    fireEvent.click(search);
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+  });
+
+  it('Escape cancels the custom-skill field first, then closes the dropdown', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    fireEvent.click(screen.getByTestId('add-custom-skills_possessed'));
+
+    const custom = screen.getByTestId('custom-input-skills_possessed');
+    fireEvent.change(custom, { target: { value: 'kite making' } });
+
+    // First Escape: only the nested field goes away.
+    fireEvent.keyDown(custom, { key: 'Escape' });
+    expect(screen.queryByTestId('custom-input-skills_possessed')).not.toBeInTheDocument();
+    expect(screen.getByTestId('combobox-dropdown-skills_possessed')).toBeInTheDocument();
+
+    // Second Escape: now the dropdown closes.
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.queryByTestId('combobox-dropdown-skills_possessed')).not.toBeInTheDocument();
+  });
+
+  it('does not resurrect abandoned custom-skill text after a close/re-open', () => {
+    render(
+      <ComboboxMultiSelect question={buildQuestion()} value={[]} onChange={vi.fn()} />
+    );
+    const search = screen.getByTestId('combobox-search-skills_possessed');
+    fireEvent.focus(search);
+    fireEvent.click(screen.getByTestId('add-custom-skills_possessed'));
+    fireEvent.change(screen.getByTestId('custom-input-skills_possessed'), {
+      target: { value: 'kite making' },
+    });
+
+    fireEvent.click(screen.getByTestId('combobox-done-skills_possessed'), { detail: 1 });
+    fireEvent.click(search);
+    fireEvent.click(screen.getByTestId('add-custom-skills_possessed'));
+
+    expect(screen.getByTestId('custom-input-skills_possessed')).toHaveValue('');
+  });
 });

@@ -5,10 +5,12 @@ import { FormRenderer } from '../../forms/components/FormRenderer';
 import { fetchPublicActiveForm, type WizardDraftData, type FlattenedForm } from '../api/wizard.api';
 import {
   findWizardFieldForQuestionName,
-  mapWizardValueToChoice,
-  WIZARD_CHOICE_FIELD_KEYS,
   type WizardProvidedFieldKey,
 } from '../lib/wizard-provided-field-names';
+// Story 13-35 (code-review H1) — the Pattern C prefill derivation moved to a
+// shared lib so `WizardPage` can compute the same hide-set BEFORE this step
+// mounts (otherwise an all-prefilled section can't be skipped on the first pass).
+import { computePrefill, buildWizardIdentitySignature } from '../lib/wizard-prefill';
 
 /**
  * Story 9-12 AC#1 Step 4 + Task 5.4 — Questionnaire injection (Option B).
@@ -67,22 +69,6 @@ function orderedSectionIds(form: FlattenedForm | null): string[] {
   return ordered;
 }
 
-/** wizard field key -> the `WizardDraftData` field that holds its value. */
-const WIZARD_KEY_TO_FORMDATA_FIELD: Record<WizardProvidedFieldKey, string> = {
-  fullName: 'fullName',
-  givenName: 'givenName',
-  familyName: 'familyName',
-  phone: 'phone',
-  email: 'email',
-  dob: 'dateOfBirth',
-  nin: 'nin',
-  // Story 9-54 AC4 — choice fields (mapped via mapWizardValueToChoice).
-  gender: 'gender',
-  lgaId: 'lgaId',
-  consentMarketplace: 'consentMarketplace',
-  consentEnriched: 'consentEnriched',
-};
-
 /** Human-readable banner label per wizard field key (AC#B5). */
 const BANNER_LABELS: Record<WizardProvidedFieldKey, string> = {
   fullName: 'Name',
@@ -113,67 +99,6 @@ const BANNER_ORDER: WizardProvidedFieldKey[] = [
   'consentEnriched',
 ];
 
-interface PrefillResult {
-  /** Question names to hide from the renderer (auto-filled OR pending-NIN). */
-  hideNames: Set<string>;
-  /** Question name -> wizard value to auto-fill into questionnaireResponses. */
-  prefillValues: Record<string, unknown>;
-  /** Wizard field keys that contributed a value (drives the banner). */
-  prefilledKeys: Set<WizardProvidedFieldKey>;
-}
-
-/**
- * AC#B4 — introspect the form schema against the wizard's collected identity
- * fields. A question is a "prefill" when its name matches a wizard field alias
- * AND the wizard holds a non-empty value for that field. The pending-NIN edge
- * case hides the NIN question without a value (no NIN to write yet).
- */
-function computePrefill(form: FlattenedForm | null, formData: WizardDraftData): PrefillResult {
-  const hideNames = new Set<string>();
-  const prefillValues: Record<string, unknown> = {};
-  const prefilledKeys = new Set<WizardProvidedFieldKey>();
-  if (!form) return { hideNames, prefillValues, prefilledKeys };
-
-  const fdRecord = formData as Record<string, unknown>;
-  for (const q of form.questions) {
-    const key = findWizardFieldForQuestionName(q.name);
-    if (!key) continue;
-
-    // Pending-NIN edge case (AC#B4): hide the NIN question but do NOT auto-fill
-    // — there is no NIN value. Banner omits NIN (not added to prefilledKeys).
-    if (key === 'nin' && formData.pendingNinToggle === true) {
-      hideNames.add(q.name);
-      continue;
-    }
-
-    // Story 9-54 AC4 — CHOICE fields go through the value-mapping layer and are
-    // only deduped when the wizard value maps to a value that EXISTS in this
-    // question's choice list; an unmappable value falls through to NOT deduping
-    // (the question is shown) rather than injecting an invalid choice.
-    let value: unknown;
-    if (WIZARD_CHOICE_FIELD_KEYS.has(key)) {
-      value = mapWizardValueToChoice(key, fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]], q.choices);
-    } else if (key === 'fullName') {
-      // AI-Review H1: Part F removed `formData.fullName`, so a questionnaire
-      // "Full Name"/"name" question (which maps to the `fullName` key) must be
-      // composed from the given + family fields — otherwise the most common dedup
-      // case silently regressed (the user got re-asked their name in Step 4).
-      value =
-        [formData.givenName, formData.familyName].map((v) => (v ?? '').trim()).filter(Boolean).join(' ') ||
-        (formData.fullName ?? '').trim(); // legacy/unmigrated draft fallback
-    } else {
-      value = fdRecord[WIZARD_KEY_TO_FORMDATA_FIELD[key]];
-    }
-    if (value === undefined || value === null || value === '') continue;
-
-    hideNames.add(q.name);
-    prefillValues[q.name] = value;
-    prefilledKeys.add(key);
-  }
-
-  return { hideNames, prefillValues, prefilledKeys };
-}
-
 /** AC#B5 — Oxford-comma join: [], "A", "A and B", "A, B, and C". */
 function joinLabels(labels: string[]): string {
   if (labels.length === 0) return '';
@@ -189,7 +114,13 @@ function buildBannerCopy(prefilledKeys: Set<WizardProvidedFieldKey>): string {
     const label = BANNER_LABELS[key];
     if (!labels.includes(label)) labels.push(label); // collapse Name x3 -> one
   }
-  return `We've pre-filled ${joinLabels(labels)} from your earlier answers. Click Back to edit anything.`;
+  // Story 13-35 AC3 — positive confirmation framing. The dedup (prefill →
+  // raw_data) is unchanged and load-bearing (13-33); only the wording changes so
+  // "we already collected these" reads as reassurance, not an empty/broken screen.
+  // The leading ✓ is rendered as an aria-hidden span by the caller (code-review
+  // L4) so screen readers announce the sentence, not "check mark"; "Use Back"
+  // rather than "Click Back" for the mobile-first blast audience.
+  return `We already have your ${joinLabels(labels)} from your earlier answers — no need to re-enter. Use Back to edit anything.`;
 }
 
 export function Step4Questionnaire({
@@ -214,15 +145,13 @@ export function Step4Questionnaire({
   // Identity signature: recompute the prefill only when an identity value (not a
   // questionnaire answer) changes, so the hide-set passed to FormRenderer keeps a
   // stable identity across question-to-question navigation.
-  const fdRecord = formData as Record<string, unknown>;
   // AI-Review M2: derive the signature from WIZARD_KEY_TO_FORMDATA_FIELD (which
   // TypeScript forces to hold every wizard-field key) instead of a third
   // hand-maintained field list. Adding a wizard field now extends the signature
   // automatically — no silently-stale prefill when someone forgets this array.
-  const identitySig = JSON.stringify([
-    ...Object.values(WIZARD_KEY_TO_FORMDATA_FIELD).map((field) => fdRecord[field]),
-    formData.pendingNinToggle,
-  ]);
+  // Story 13-35 (code-review H1): shared with WizardPage via the same helper, so
+  // the two callers of `computePrefill` can never memoise on different inputs.
+  const identitySig = buildWizardIdentitySignature(formData);
   const prefill = useMemo(
     () => computePrefill(form, formData),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- identitySig captures the only inputs computePrefill reads
@@ -359,7 +288,10 @@ export function Step4Questionnaire({
           data-testid="step4-prefilled-banner"
           className="rounded-md border-l-4 border-info-600 bg-info-50 p-3 text-sm text-info-800"
         >
-          {buildBannerCopy(bannerKeys)}
+          {/* Story 13-35 AC3 (code-review L4) — the tick is decoration: hidden
+              from AT so the announcement starts at "We already have your…"
+              instead of "check mark". */}
+          <span aria-hidden="true">✓</span> {buildBannerCopy(bannerKeys)}
         </aside>
       )}
 

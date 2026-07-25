@@ -17,6 +17,7 @@ import {
   type FlattenedForm,
 } from '../api/wizard.api';
 import { isSectionStepSkippable } from '../lib/section-relevance';
+import { computePrefill, buildWizardIdentitySignature } from '../lib/wizard-prefill';
 import { unionGeopointNames } from '../../forms/utils/geopoint-suppression';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
 import { parseUtm, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
@@ -325,13 +326,48 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   // union into the same hide-set the skip decision uses; otherwise a section left
   // with only a geopoint is NOT auto-skipped and strands the user on "No questions
   // available" — the exact dead-end 13-29 fixed for prefilled-only sections.
-  const unreachableQuestionNames = useMemo(
-    () =>
-      unionGeopointNames(
-        form?.questions ?? [],
-        new Set(draft.formData.prefilledQuestionNames ?? []),
-      ) ?? new Set<string>(),
-    [form, draft.formData.prefilledQuestionNames],
+  // Story 13-35 (code-review H1) — DERIVE the prefilled hide-set here instead of
+  // reading `draft.formData.prefilledQuestionNames`. That field is stamped by
+  // `Step4Questionnaire`'s effect, i.e. by the very step this skip is meant to
+  // avoid: on a FIRST forward pass it is still empty, so an all-prefilled section
+  // read as "has visible questions", the wizard navigated into it, and
+  // FormRenderer painted "No questions available" — the 13-29 dead-end, alive
+  // again through the bootstrap door. `computePrefill` is a pure function of
+  // (form, draft identity), so it resolves the same on the first pass as on the
+  // tenth — exactly like `unionGeopointNames` already does for geopoints.
+  // The stamped names are still unioned in, so a RESUMED draft whose form has
+  // since changed keeps hiding whatever Step 4 previously auto-filled.
+  const identitySig = buildWizardIdentitySignature(draft.formData);
+  const unreachableQuestionNames = useMemo(() => {
+    const hidden = computePrefill(form, draft.formData).hideNames;
+    for (const name of draft.formData.prefilledQuestionNames ?? []) hidden.add(name);
+    return unionGeopointNames(form?.questions ?? [], hidden) ?? new Set<string>();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identitySig captures the only draft inputs computePrefill reads; memoising on the whole formData would churn this Set (and isStepSkippable/indicatorSteps) on every keystroke
+  }, [form, identitySig, draft.formData.prefilledQuestionNames]);
+
+  // Story 13-35 (code-review, follow-up) — the prefill VALUES, derived at the
+  // point of use rather than read back from the stamp `Step4Questionnaire`
+  // writes. Now that an all-prefilled section is correctly SKIPPED, that step may
+  // never mount — and it is the only writer of the prefill into
+  // `questionnaireResponses`. Two things would then break:
+  //   1. Submit HARD-BLOCKS. `deriveReviewCompleteness` excludes only pending-NIN
+  //      and geopoint names, so a required identity question that was never
+  //      stamped reads as MISSING → "Please answer all required survey questions"
+  //      pointing at a section that renders nothing.
+  //   2. `raw_data` loses the identity keys 13-33 analytics reads
+  //      (`raw_data->>'gender'` etc.) — the load-bearing dedup plumbing.
+  // Deriving here makes the gate, the skip predicate and the submit payload all
+  // immune to whether Step 4 ever rendered. Step 4 still stamps as before; this
+  // is the same value computed from the same pure function, not a second writer.
+  const effectiveFormData = useMemo(
+    () => ({
+      ...draft.formData,
+      questionnaireResponses: {
+        ...(draft.formData.questionnaireResponses ?? {}),
+        ...computePrefill(form, draft.formData).prefillValues,
+      },
+    }),
+    [form, draft.formData],
   );
 
   const isStepSkippable = useCallback(
@@ -339,7 +375,10 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
       isSectionStepSkippable(
         form,
         steps[idx]?.sectionId,
-        draft.formData.questionnaireResponses ?? {},
+        // Prefill-augmented (see `effectiveFormData`): a section gated on a
+        // CALCULATED field derived from a prefilled answer (e.g. `${age}` from a
+        // prefilled dob) must resolve the same here as it does at Review.
+        effectiveFormData.questionnaireResponses,
         undefined, // default clock (call-time now) — matches the Review completeness gate
         // Story 13-29 (AI-Review L1) — exclude wizard-prefilled (hidden) questions
         // so a section made up entirely of them auto-skips instead of stranding the
@@ -347,8 +386,45 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
         // suppressed geopoint questions to the same set.
         unreachableQuestionNames,
       ),
-    [steps, form, draft.formData.questionnaireResponses, unreachableQuestionNames],
+    [steps, form, effectiveFormData.questionnaireResponses, unreachableQuestionNames],
   );
+
+  // Story 13-35 (code-review, follow-up) — LANDING-step correction.
+  // `isStepSkippable` is otherwise consulted only by Continue/Back, so it cannot
+  // help a user who ARRIVES on a skippable step instead of navigating into one:
+  // a resumed draft whose saved `currentStep` points at an all-prefilled section
+  // — exactly what pre-fix drafts recorded, since the old bug DID land users
+  // there — would still paint "No questions available". Correcting forward here
+  // makes the AC2 invariant absolute: the user can never sit on a step with
+  // nothing to answer, however they arrived (resume, deep link, indicator jump).
+  //
+  // Cannot loop: `advanceStep` only ever returns a NON-skippable index and stops
+  // at Review (which has no sectionId and is never skippable), so this settles in
+  // one hop. `replace` keeps a system correction out of the history stack — the
+  // same convention as the seed and over-reach effects above. Bumping the ceiling
+  // mirrors `handleContinue` and is safe under Story 9-54 AC6.1: it only ever
+  // moves past steps that have nothing to answer, so a crafted `?step` still
+  // can't inflate `maxReached`.
+  useEffect(() => {
+    if (!draft.isHydrated || !formSettled) return;
+    if (stepFromUrl == null) return; // wait for the one-time URL seed
+    if (!isStepSkippable(currentStepIndex)) return;
+    const next = advanceStep(currentStepIndex, steps.length, isStepSkippable);
+    if (next === currentStepIndex) return;
+    setMaxReachedStepIndex((m) => (next > m ? next : m));
+    const params = new URLSearchParams(searchParams);
+    params.set('step', String(next));
+    setSearchParams(params, { replace: true });
+  }, [
+    draft.isHydrated,
+    formSettled,
+    stepFromUrl,
+    currentStepIndex,
+    isStepSkippable,
+    steps.length,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const handleContinue = useCallback(() => {
     const next = advanceStep(currentStepIndex, steps.length, isStepSkippable);
@@ -381,8 +457,11 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   // the server enforces (AC5) so Submit is disabled until every required +
   // relevant questionnaire answer is present; the server gate stays authoritative.
   const reviewCompleteness = useMemo(
-    () => deriveReviewCompleteness(form, draft.formData, steps),
-    [form, draft.formData, steps],
+    // Prefill-augmented (see `effectiveFormData`) — otherwise a skipped
+    // all-prefilled section leaves its required questions looking unanswered and
+    // Submit hard-blocks on a step that renders nothing.
+    () => deriveReviewCompleteness(form, effectiveFormData, steps),
+    [form, effectiveFormData, steps],
   );
 
   const handleSubmit = useCallback(async () => {
@@ -428,7 +507,10 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
       consentEnriched: fd.consentEnriched ?? false,
       nin,
       pendingNin: pending,
-      questionnaireResponses: fd.questionnaireResponses,
+      // Prefill-augmented (see `effectiveFormData`) — a skipped all-prefilled
+      // section means Step 4 never stamped these, and `raw_data` is what 13-33
+      // analytics reads. Same values, derived instead of read back.
+      questionnaireResponses: effectiveFormData.questionnaireResponses,
       // Story 13-23 (AC2) — bind the submission to the form the wizard actually
       // rendered. `form.formId` is the questionnaire_forms row PK UUID (Story
       // 9-33), read from the top-level form query — the authoritative "which
@@ -490,7 +572,17 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft.formData, form, isSubmitting, reviewCompleteness, authenticated, navigate, queryClient, toast]);
+  }, [
+    draft.formData,
+    effectiveFormData.questionnaireResponses,
+    form,
+    isSubmitting,
+    reviewCompleteness,
+    authenticated,
+    navigate,
+    queryClient,
+    toast,
+  ]);
 
   // AI-Review M1 — the pinned survey failed to load (a non-404 fetch error).
   // Surface it with a retry instead of silently dropping every section step and

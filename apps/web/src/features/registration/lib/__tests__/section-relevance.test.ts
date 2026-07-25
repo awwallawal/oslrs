@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import type { Calculation } from '@oslsr/types';
 import { isSectionStepSkippable } from '../section-relevance';
 import { deriveReviewCompleteness } from '../review-completeness';
+import { advanceStep } from '../wizard-navigation';
 import type { FlattenedForm } from '../../../forms/api/form.api';
 import type { WizardDraftData } from '../../api/wizard.api';
 
@@ -149,5 +150,60 @@ describe('agreement invariant: skippability never contradicts Review completenes
     const { skippable, labourRequired } = check('2015-05-01');
     expect(labourRequired).toBe(false);
     expect(skippable).toBe(true);
+  });
+});
+
+describe('Story 13-35 AC2: whole-questionnaire-all-prefilled never dead-ends on "No questions available"', () => {
+  // Every questionnaire question maps to a wizard-collected identity field, so the
+  // entire form is prefilled + hidden. This composes the REAL helpers exactly as
+  // WizardPage wires them (`isSectionStepSkippable(... unreachableQuestionNames)`
+  // feeding `advanceStep`) to prove the forward pass skips every section and lands
+  // on Review — rather than stranding the user on FormRenderer's empty state.
+  const allPrefilledForm: FlattenedForm = {
+    formId: 'f-all-prefill',
+    title: 'Public Core',
+    version: '1.0.0',
+    questions: [
+      { id: 'q-name', type: 'text', name: 'full_name', label: 'Full name', required: true, sectionId: 'sID', sectionTitle: 'Your details' },
+      { id: 'q-phone', type: 'text', name: 'phone', label: 'Phone', required: true, sectionId: 'sID', sectionTitle: 'Your details' },
+      { id: 'q-dob', type: 'date', name: 'dob', label: 'Date of birth', required: true, sectionId: 'sDemo', sectionTitle: 'About you' },
+      { id: 'q-gender', type: 'text', name: 'gender', label: 'Gender', required: true, sectionId: 'sDemo', sectionTitle: 'About you' },
+    ],
+    choiceLists: {},
+    sectionShowWhen: {},
+  };
+
+  // An ABSTRACT step model (head + one step per section + Review), NOT a copy of
+  // WizardPage.steps — the real `buildSteps` has THREE head steps. This unit test
+  // pins the pure `isSectionStepSkippable` → `advanceStep` composition only; the
+  // production wiring (including where the hide-set actually comes from) is
+  // covered by `WizardPage.prefilledSectionSkip.test.tsx`, which is the test that
+  // catches a real dead-end. See that file's header for why this one cannot.
+  const steps = [
+    { sectionId: undefined }, // 0 — head (never skippable)
+    { sectionId: 'sID' }, // 1 — all-prefilled
+    { sectionId: 'sDemo' }, // 2 — all-prefilled
+    { sectionId: undefined }, // 3 — Review (never skipped)
+  ];
+  const REVIEW_INDEX = steps.length - 1;
+
+  const isStepSkippable = (hidden: ReadonlySet<string>) => (idx: number) =>
+    isSectionStepSkippable(allPrefilledForm, steps[idx]?.sectionId, {}, TODAY, hidden);
+
+  it('with EVERY question prefilled, Continue from head skips all sections straight to Review', () => {
+    const hidden = new Set(['full_name', 'phone', 'dob', 'gender']);
+    // Both section steps individually read as skippable...
+    expect(isStepSkippable(hidden)(1)).toBe(true);
+    expect(isStepSkippable(hidden)(2)).toBe(true);
+    // ...so the single forward pass from step 0 lands on Review, not a dead-end.
+    expect(advanceStep(0, steps.length, isStepSkippable(hidden))).toBe(REVIEW_INDEX);
+  });
+
+  it('a section with even one NON-prefilled question still stops the user (no over-skip)', () => {
+    // `gender` left visible → sDemo (step 2) is not skippable; the user lands there.
+    const hidden = new Set(['full_name', 'phone', 'dob']);
+    expect(isStepSkippable(hidden)(1)).toBe(true); // sID still all-prefilled
+    expect(isStepSkippable(hidden)(2)).toBe(false); // sDemo has a live question
+    expect(advanceStep(0, steps.length, isStepSkippable(hidden))).toBe(2);
   });
 });

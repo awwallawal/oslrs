@@ -85,7 +85,7 @@ describe('Step4Questionnaire — Pattern C dedup (Story 9-18 AC#B4/B5)', () => {
 
     const banner = await screen.findByTestId('step4-prefilled-banner');
     expect(banner).toHaveTextContent(
-      "We've pre-filled Name, Phone, and Email from your earlier answers. Click Back to edit anything.",
+      '✓ We already have your Name, Phone, and Email from your earlier answers — no need to re-enter. Use Back to edit anything.',
     );
 
     await waitFor(() => {
@@ -153,7 +153,7 @@ describe('Step4Questionnaire — Pattern C dedup (Story 9-18 AC#B4/B5)', () => {
     });
 
     const banner = await screen.findByTestId('step4-prefilled-banner');
-    expect(banner).toHaveTextContent("We've pre-filled Phone from your earlier answers.");
+    expect(banner).toHaveTextContent('✓ We already have your Phone from your earlier answers — no need to re-enter.');
     expect(banner).not.toHaveTextContent('NIN');
 
     await waitFor(() => {
