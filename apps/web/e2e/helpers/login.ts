@@ -33,8 +33,24 @@ export async function staffLogin(page: Page, role: StaffRole): Promise<void> {
   // Race-safe pattern: start the URL wait BEFORE the click. Naive
   // click→waitForURL pattern can flake if React Router navigates faster
   // than the next await is registered. See feedback_route_registration_test_discipline.md.
+  //
+  // Story 13-36: the wait also accepts `/auth/mfa-challenge` so an MFA-enrolled
+  // account fails in ~1s with the line below instead of burning the full 30s
+  // navigationTimeout on an unexplained "waiting for **/dashboard/**".
   await Promise.all([
-    page.waitForURL('**/dashboard/**'),
+    page.waitForURL(/\/(dashboard|auth\/mfa-challenge)\b/),
     page.getByRole('button', { name: /sign in/i }).click(),
   ]);
+
+  if (page.url().includes('/auth/mfa-challenge')) {
+    throw new Error(
+      `E2E precondition failed: "${email}" has MFA enrolled, so staff login stops at the TOTP ` +
+        `challenge and every admin-dependent test times out.\n` +
+        `The suite expects the CI-equivalent dev-seed state (MFA off, no grace window).\n` +
+        `Fix: pnpm --filter @oslsr/api db:seed:dev  ` +
+        `(it re-converges drifted @dev.local accounts — see apps/api/src/db/seeds/index.ts).\n` +
+        `Same fix for the sibling symptom: login succeeds but privileged pages show ` +
+        `"MFA enrollment is required before you can continue" (a stale, expired mfa_grace_until).`,
+    );
+  }
 }

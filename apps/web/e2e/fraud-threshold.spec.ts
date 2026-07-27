@@ -15,6 +15,14 @@ import { staffLogin } from './helpers/login';
  *   3. page.getByText()   — visible text
  *   4. page.getByTestId() — only when above insufficient
  *
+ * Determinism sweep (Story 13-36 AC3, 2026-07-26 — audited, no change needed):
+ *   The inline edit/save clicks below DO depend on query output, but each is
+ *   preceded by an assertion on `fraud-thresholds-page` (or its heading), which
+ *   the page renders only after the loading / error / empty early-returns fall
+ *   through (SuperAdminFraudThresholdsPage.tsx:26-63). That assertion is the
+ *   data-ready gate, so no click here races an in-flight fetch the way the
+ *   messaging broadcast click did. Preserve that ordering when adding tests.
+ *
  * @see prep-7-e2e-test-expansion.md
  * @see 4-3-fraud-engine-configurable-thresholds.md
  */

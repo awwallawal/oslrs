@@ -1552,6 +1552,38 @@ After that single clear, the committed `755` takes over and every subsequent dep
 
 **Reference**: Story 9-57 code-review (2026-06-15). Runbook: `docs/runbooks/e2e-wizard-resume-harness.md`. Precedent for "verify the claim, don't inherit it": feedback_verify_against_reality_before_asserting.
 
+
+### Pitfall #44: A create-only seed can't heal drift — and a `waitForResponse` gate can't survive a missed event (two "fix that never fires" shapes, Story 13-36)
+
+**Symptom A — the seed that only ever creates.** Every admin-dependent Playwright test fails locally (`/auth/mfa-challenge`, or a 403 `FORCE_MFA_ENROLLMENT` on every privileged route) while the *same* commit is green in CI. Re-running `db:seed:dev` — the command whose whole job is to establish the dev contract — changes nothing.
+
+**Cause**: `seedDevelopmentUsers` was create-only (`if (existing) { … 'User already exists, skipping'; continue; }`). CI is green because it seeds a **fresh** `test_db` every run; a developer's box drifts once (here: a super-admin enrolled in MFA during Story 9-13) and stays broken forever. Two symptoms, one drift: `mfa_enabled = t` blocks login at the TOTP challenge; `mfa_enabled = f` **with a stale expired `mfa_grace_until`** passes login and then 403s every privileged route — the grace gate only lets a super_admin through when the column IS NULL (`mfa-grace.ts:69`), which is exactly what a fresh CI seed looks like.
+
+**Fix**: make the dev seed **converge** existing rows to a contract declared ONCE (`devSeedContract`), with the drift report *derived* from it (two hand-maintained lists rot — add a field to the reset, forget the report, and the log lies). Guard it: refuse under `NODE_ENV=production`, and never touch a row that is not `isSeeded`. **Do NOT apply this to the sibling seeds** — `seedRoles`/`seedLGAs`/`seedProductivityTargets`/`seedFraudThresholds` run on the **production** path, so converging them could overwrite live reference data. The rule: *converge where the blast radius is dev-only and seed-owned; stay create-only where a run could touch real data.* Watch for `map.get()` returning `undefined` in the update payload — drizzle treats it as "leave column alone", silently skipping the field you meant to converge.
+
+**Symptom B — the deterministic wait that made things less deterministic.** A flake fixed by gating on `page.waitForResponse('**/endpoint')` starts failing ~1-in-30 with `Timeout … while waiting for event "response"`, even though the page rendered fine.
+
+**Cause**: waiting on a network event is a hard dependency on *observing that exact event*. An aborted, retried, coalesced or service-worker-served request never emits it, and the test dies.
+
+**Fix / rule**: **gate a RENDER on the loaded-branch anchor** — an auto-retrying `expect()` on an element the page mounts only when the data has arrived, with an explicit generous timeout. Reserve `waitForResponse` for asserting a **write reached the server**, which no DOM state can prove. Pick anchors positively (real rows *or* the loaded empty state), never "skeleton absent" — that passes trivially before the skeleton mounts.
+
+**Corollary — a burn-in is what catches your own fix.** Both of these surfaced only under `--repeat-each`; a single green run hid them. And when a red *does* appear, make it name itself: on timeout, report the observed traffic and `navigator.onLine` (TanStack pauses queries when the browser reports offline — no request is ever sent, so the page hangs on its skeleton and it is a host condition, not a bug).
+
+**Also**: two `test.skip()`s in the same spec had been parked for ~2.5 months on **wrong** diagnoses (a "seed gap" that was really `role="listitem"` overriding a `<button>`'s implicit role so `getByRole('button')` could never match; a "propagation timing" issue that was really a test waiting for a broadcast in the *sender's own* inbox, which the API excludes by design). Re-verify a skip's stated reason before inheriting it — see Pitfall #38.
+
+**Three corrections from the story's own code review (2026-07-27) — all three were the *same* class, committed inside the fix:**
+1. **An anchor wait must cover EVERY settled branch — loaded, empty AND error.** The roster helper anchored on rows-or-empty but not on the component's error branch, so a failed roster fetch matched nothing and degraded to the anonymous 20s timeout the fix existed to remove — at exactly the moment something was genuinely broken. Enumerate the component's terminal states, then anchor on all of them.
+2. **A diagnostic must never assert what it did not observe.** The "no request was seen → the browser was probably offline" message was reachable from a call site that had attached no listener at all, so "none observed" was guaranteed regardless of reality. If the observer is absent, say *unknown*; only offer the offline hypothesis when something actually watched and saw nothing.
+3. **Making a create-only seed converge makes it destructive — re-check its guards against Pitfall #29.** `NODE_ENV !== 'production'` is an env-NAME guard, and `db:seed:dev` sets no NODE_ENV of its own (it inherits the root `.env` — Pitfall #42). Added a fail-closed allow-list on the database NAME (`test`/`dev` boundary-matched, or `app_db`) with an explicit `ALLOW_DEV_SEED_DB=1` override.
+
+**Two more, found by RUNNING the suite during that review rather than reading it — both in the test the story had just revived, both reported as "passes, 3/3" when it actually failed 2 of 3:**
+4. **Never `page.reload()` (or `page.goto()`) inside an authenticated E2E test.** The access token lives in memory, so a hard load forces a silent refresh that races the route guard; when it loses, the test lands on the public home page and no authenticated anchor can ever appear. Re-enter through the app (click a link) instead. A test whose premise is "reload proves the data came from the server" is buying that proof with a coin flip.
+5. **`--repeat-each` runs the copies CONCURRENTLY (`fullyParallel: true`), against ONE shared seed.** Any assertion that assumes "my write is the newest" — an inbox row previewing the latest message per partner, a "most recent" row, a top-of-list check — is clobbered by the sibling copies. CI hides it completely because CI runs `workers: 1`: **green in CI, flaky the moment a developer runs the burn-in locally.** Key such assertions on a stable identity (the partner) and put the per-test uniqueness where it is isolated (inside the opened thread). Treat "CI is green, my machine isn't" as a *concurrency* smell as readily as an environment one.
+
+**Meta-lesson**: a green burn-in cannot catch a defect on the unhappy path. `--repeat-each` proves the happy path is deterministic; it never executes the error branch, the missing-observer branch, or the teardown-time rejection. Those need a reader, not a repeat count.
+
+**Reference**: Story 13-36 (2026-07-26; review corrections 2026-07-27). `apps/api/src/db/seeds/index.ts`, `apps/web/e2e/helpers/messages.ts`.
+
 ---
 
 *Generated: 2026-02-21*

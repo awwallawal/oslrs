@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Story 13-36 AC4: on-demand burn-in. A determinism fix is only credible if you
+  # can re-prove it cheaply, so the same suite can be re-run N times from the
+  # Actions tab instead of by pushing empty commits.
+  workflow_dispatch:
+    inputs:
+      repeat_each:
+        description: 'Burn-in: run every test N times (1 = a normal run)'
+        required: false
+        default: '1'
 
 # Cancel in-progress runs for the same branch
 concurrency:
@@ -15,10 +24,30 @@ jobs:
   test-e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A normal run is ~6 min; the headroom is for a manual `repeat_each` burn-in.
+    timeout-minutes: 25
     # Stabilization period closed 2026-05-09: Pitfall #31 (cache key fix)
     # exposed 7 silently-failing tests, all triaged + fixed (6 selector-rot,
-    # 1 fixture-gap skipped with TODO). E2E is now a real CI gate.
+    # 1 fixture-gap skipped with TODO).
+    #
+    # ── STATUS OF THIS WORKFLOW (Story 13-36 AC4, decided 2026-07-26) ──────────
+    # INFORMATIONAL, NOT A DEPLOY GATE — and to be treated as a REAL signal.
+    #
+    #   * What gates deploy is `ci-cd.yml` (its own smaller `smoke-e2e` job).
+    #     This workflow has never blocked a release and is not proposed as a
+    #     required check: the team pushes straight to `main`, so a required
+    #     PR check would have nothing to attach to.
+    #   * "Informational" is about BLOCKING, not about trust. The rule is:
+    #     a red run gets TRIAGED, never reflexively re-run. If a re-run is the
+    #     answer, the flake gets a story — that reflex is what let the 13-32
+    #     turbo-2.x webServer regression (DATABASE_URL filtered out by strict
+    #     env mode) hide under the messaging flake for days.
+    #   * The one known-flaky test (messaging broadcast composer) was made
+    #     deterministic in 13-36 — see apps/web/e2e/helpers/messages.ts. To
+    #     re-establish trust after any change here, run this workflow manually
+    #     with `repeat_each: 3` and expect an unbroken green.
+    #   * The earlier header line "E2E is now a real CI gate" was wrong (it
+    #     never gated deploy) and is what made the red/green ambiguous.
 
     services:
       postgres:
@@ -120,10 +149,33 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @oslsr/web exec playwright install-deps chromium
 
+      # `--repeat-each` is forwarded through turbo's `--` passthrough so the
+      # burn-in run is byte-identical to a normal run apart from the repeat count
+      # (same turbo task = same `test:e2e.env` allowlist; running playwright
+      # directly here would re-open the 13-32 strict-env trap). The count comes in
+      # via env, never interpolated into the shell command.
+      #
+      # The count is validated and BOUNDED before use (review AI-15). A normal run
+      # is ~6 min, of which ~3 is fixed setup, so the job's 25-min budget covers
+      # roughly repeat_each=7. An unvalidated larger value would blow the timeout
+      # and produce a red that means nothing — re-creating the untrustworthy-red
+      # problem this story exists to end. Fail LOUDLY at the input instead.
       - name: Run E2E tests
-        run: pnpm test:e2e
+        run: |
+          set -euo pipefail
+          if ! [[ "$REPEAT_EACH" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::repeat_each must be a positive integer (got '$REPEAT_EACH')"
+            exit 1
+          fi
+          if [ "$REPEAT_EACH" -gt 7 ]; then
+            echo "::error::repeat_each=$REPEAT_EACH exceeds the 25-min job budget (max 7)."
+            echo "::error::Raise timeout-minutes in the same change if you genuinely need a deeper burn-in."
+            exit 1
+          fi
+          pnpm exec turbo run test:e2e -- --repeat-each="$REPEAT_EACH"
         env:
           CI: true
+          REPEAT_EACH: ${{ inputs.repeat_each || '1' }}
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

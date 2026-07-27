@@ -19,6 +19,12 @@ const storageState = {
 // NOTE: All auth setups are setup.skip() until the full stack is available in CI.
 // The dev server does NOT set NODE_ENV=test, so login rate limits ARE active.
 // Auth setups run sequentially (not parallel) to avoid triggering rate limits.
+//
+// Story 13-36 AC3 (2026-07-26): the "auth-setup projects render as skipped" line
+// in the E2E log is this `setup.skip()` by design — NOT an intermittent failure
+// and NOT the socket.io/data race fixed in messaging.spec.ts. The only consumer
+// (`golden-path`) logs in inline, so nothing depends on the storage state these
+// would write. Re-enabling them is a fixture/seed task, not a determinism one.
 
 /**
  * Helper: Login via the staff login page (/login) and save storage state.

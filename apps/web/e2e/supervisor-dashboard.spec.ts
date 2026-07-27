@@ -25,6 +25,16 @@ import { staffLogin } from './helpers/login';
  *   `feedback_route_registration_test_discipline.md` memory + the
  *   2026-05-14 supervisor-dashboard:53 flake post-mortem.
  *
+ * Determinism sweep (Story 13-36 AC3, 2026-07-26 — audited, no change needed):
+ *   Every post-nav wait here is an auto-retrying `expect()` on an element that
+ *   the page renders ONLY on its data-loaded branch — `team-roster` / `team-map`
+ *   are inside `!isLoading && !metricsError && metrics` (SupervisorTeamPage.tsx:141),
+ *   so the assertion IS the data-ready gate. The messaging flake came from a
+ *   `click()` (bounded only by the 15s actionTimeout) landing on a not-yet-mounted
+ *   control; the clicks in this file are all sidebar links — static layout chrome,
+ *   not query output. Keep it that way: if a test here ever needs to interact with
+ *   query-derived content, gate it on the response first (see helpers/messages.ts).
+ *
  * @see prep-7-e2e-test-expansion.md
  * @see 4-1-supervisor-team-dashboard.md
  */
