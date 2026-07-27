@@ -1,6 +1,6 @@
 # Story 13-36: Make the E2E Tests workflow reliably green (messaging determinism + non-deterministic-wait sweep)
 
-Status: in-progress
+Status: done
 
 <!-- Authored 2026-07-18 by Bob (SM). TEST-HYGIENE, NOT launch-gating (the E2E Tests workflow is separate from CI/CD Pipeline and does NOT gate deploy). The separate full-Playwright "E2E Tests" workflow (e2e.yml) intermittently reds on `messaging.spec.ts:49 › send a broadcast message and open the composer` — a socket.io/data-timing flake — which trains operators to reflexively re-run red CI (dangerous: it can mask a real failure, exactly what almost happened when a 13-32 turbo-2.x env regression hid *under* this flake). The regression itself (webServer `DATABASE_URL` unset) was fixed in the 13-32 adjudication (turbo.json test:e2e env); this story kills the flake beneath it so the workflow can be trusted green. -->
 
@@ -27,11 +27,15 @@ so that **the E2E Tests workflow is reliably green — a red means a real regres
 - [x] **Task 1 (AC1/AC2)** — Trace the Messages page's data dependencies for the broadcast button; add the deterministic wait (test-side) or de-gate the button (product-side); justify which.
 - [x] **Task 2 (AC3)** — Sweep + fix sibling socket.io/data-dependent e2e steps lacking explicit waits.
 - [x] **Task 3a (AC4)** — Decide required-vs-informational; document in `e2e.yml`. **Done.**
-- [ ] **Task 3b (AC4)** — Burn-in **the workflow itself**. NOT done: the burn-in evidence is local
-  (`--repeat-each` against the spec). The `workflow_dispatch` + turbo `--repeat-each` passthrough added to
-  `e2e.yml` has never executed in CI. Push-time only — confirm E2E Tests is green, then run it from the
-  Actions tab with `repeat_each: 3`. (Split out by the 2026-07-27 review, AI-2: it was marked complete
-  while its stated object had never been exercised.)
+- [x] **Task 3b (AC4)** — Burn-in **the workflow itself**. **DONE 2026-07-27 in adjudication, on CI.**
+  Push run [30232138393] green (57 tests → 34 passed / 23 skipped, 1.2m), then dispatched
+  `repeat_each: 3` → run [30232550112] **green**. The passthrough is PROVEN to have fired, not merely
+  assumed from a green: the log carries `> playwright test "--repeat-each=3"` and the count went
+  57 → **155** (100 passed / 55 skipped). 155 rather than 171 because Playwright runs setup-project
+  tests once regardless of the repeat count, and there are exactly 8 (`auth.setup.ts` 7 skipped +
+  `wizard-resume.setup.ts` 1 passing): 3×(34−1)+1 = 100 and 3×(23−7)+7 = 55. So the repeat applied to
+  all 49 real spec tests. Test phase 2.8m vs 1.2m baseline, ~4m wall inside the 25m budget — the
+  review's max of 7 is comfortable (~9-10m projected).
 - [x] **Task 4 (AC5)** — Web + e2e suites, tsc, eslint green.
 - [x] **Task 5 (AC4 follow-up, added 2026-07-26 at Awwal's request)** — Make the E2E suite reproducible
   locally: root-fix the dev-seed drift that made every admin-dependent test fail on a dev machine while
@@ -56,12 +60,13 @@ AC4 burn-in because they only fire on the unhappy path, which a green burn-in ne
   full 20s and died with a bare `toBeVisible` timeout — exactly the anonymous-timeout mode
   `expectInboxReady` was written to eliminate, in the same file, in the same story.
   [apps/web/e2e/helpers/messages.ts:155] → **FIXED** (error branch is now an anchor + a named throw).
-- [ ] [AI-Review][High] **AI-2 — Task 3 claimed a burn-in of `e2e.yml` that never ran.** The burn-in was
+- [x] [AI-Review][High] **AI-2 — Task 3 claimed a burn-in of `e2e.yml` that never ran.** The burn-in was
   `messaging.spec.ts --repeat-each=5` **locally**; the `workflow_dispatch` + turbo `--repeat-each`
   passthrough added to `e2e.yml` has never executed in CI even once. An unexecuted CI change is
   `pattern-ship-a-fix-that-never-fires` (precedent: the 13-32 turbo strict-env regression, which also
-  looked right locally). [.github/workflows/e2e.yml:152] → **OPEN — push-time only.** Task 3 has been
-  split so the undischarged half is visible as an unchecked box.
+  looked right locally). [.github/workflows/e2e.yml:152] → **CLOSED 2026-07-27 in adjudication.** Task 3b
+  above has the CI evidence: dispatched run [30232550112] green with `> playwright test "--repeat-each=3"`
+  in the log and the count 57 → 155. The change is no longer un-executed.
 - [x] [AI-Review][High] **AI-3 — the anti-misdiagnosis diagnostic misdiagnosed.** `expectInboxReady(page)`
   at the post-reload call site passed no traffic array, so on timeout it reported
   "(none — no response and no request failure was observed)" and volunteered the browser-offline
@@ -447,7 +452,21 @@ seed path (`db:seed:dev` — refuses to run under `NODE_ENV=production` and is n
 request path). Web suite **2821 passed + 2 todo / 259 files**; API suite **3271 passed / 248 files**;
 `tsc --noEmit` clean in both; `eslint src e2e` (web) and `eslint src scripts` (api) clean.
 
-### Residual for the adjudicator (honest gap)
+### Residual for the adjudicator — DISCHARGED 2026-07-27
+
+Deployed `830dcf7`; prod VPS SHA verified `830dcf7`, health 200. CI/CD Pipeline [30232138406] green on
+**all 10 jobs** (incl. `deploy`) — and, for once, no OSV prod-gate block (the streak was 5 consecutive).
+E2E Tests green on the push run and on the `repeat_each: 3` dispatch (evidence in Task 3b). AC4's
+"a couple of consecutive green runs on `main`" now holds: `5d80841` → `d687cf4` → `830dcf7`, plus the
+burn-in. **All ACs discharged; status → done.**
+
+⚠️ **What the burn-in does NOT prove.** CI runs `workers: 1` (playwright.config.ts:10), so
+`--repeat-each` there is repetition, not concurrency — it cannot exercise the parallel-clobber path that
+AI-16 was about. That defect class remains observable only locally, which is precisely the
+local-vs-CI asymmetry Task 5 exists to manage. The `Date.now()` collision flagged in the adjudication
+findings sits in that same blind spot: CI will never surface it.
+
+### Original residual note (superseded by the section above)
 AC4's "a couple of consecutive green runs on `main`" is a **push-time** observation and cannot be
 discharged locally — same shape as 13-35's AC5 e2e residual. Local evidence is the 20/20 burn-in + the
 RED-verify. On push, confirm the **E2E Tests** workflow is green, then optionally run it once from the
@@ -495,6 +514,7 @@ working tree by **another session** (not this story) — exclude them from this 
 ## Change Log
 | Date | Change | By |
 |------|--------|-----|
+| 2026-07-27 | **ADJUDICATED + DEPLOYED `830dcf7` → status done.** Verified independently, not inherited: api+web `tsc`, api `eslint` on the seed files, web `eslint e2e`, seed suite **16 passed**, and **two RED-verifies of my own** — neutering `assertDevSeedDatabase` fails 2 tests (`expected [Function] to throw`), restoring the create-only `if (existing) continue` fails the convergence canary (`expected true to be false`), both matching the dev's stated results including which siblings stay green. Read every new anchor against the component that renders it (`roster-error` and the empty state are genuinely INSIDE the `role="list"` container, so the AI-1 scoping fires). Confirmed the new seed gate can't break CI (all three `db:seed:dev` callers use `test_db`; prod runs `--admin-from-env` and never reaches it) and that the turbo passthrough is equivalent to the root `test:e2e` script it replaced. **3 findings fixed: AJ-1 (Med) the pitfall renumber collided AGAIN — AI-7 moved `#39a`→`#43` but `#43` was already taken 2026-07-20 by the 13-2→11-2 lesson (playbook:1611, also cited in `session-2026-07-20-…md:49`); renumbered #44.** Root cause: `#26`-`#38` are `### Pitfall #N` headings while `#39`-`#43` exist only as footer `*Updated:*` paragraphs, so neither convention alone reveals the highest number. AJ-2 (Low) the AI-3 diagnostic told the reader to use `reloadMessages()`, a helper the same file bans 40 lines above and which AI-16 deleted — third instance of the misdirecting-diagnostic class. AJ-3 (Low) stale "before the reload" comment. **Task 3b/AI-2 discharged on CI**: push run [30232138393] green (34/23), dispatched `repeat_each: 3` [30232550112] green with the passthrough PROVEN to fire (`> playwright test "--repeat-each=3"`; 57→155 tests, arithmetic reconciled via the 8 non-repeating setup tests). CI/CD [30232138406] green on all 10 jobs; prod SHA + health verified. **Flagged not fixed:** both messaging tests key uniqueness on `Date.now()` alone, so two same-millisecond copies under a parallel burn-in would collide in strict mode — invisible to CI's `workers: 1`. | Claude (Adjudication) |
 | 2026-07-27 | **Adversarial code review — 16 findings (1 Critical, 3 High, 6 Medium, 6 Low); 15 fixed, 1 push-time.** Full list + outcomes in "Review Follow-ups (AI)". The through-line: **the story's own defect class was committed inside the fix**, on the paths a green burn-in never executes. **AI-16 (Critical, found by RUNNING the suite):** the test revived in Task 6c failed **2 of 3 runs** — its "passes, 3/3" did not reproduce. Two causes, both introduced by 6c: `page.reload()` drops the in-memory access token (silent refresh races `ProtectedRoute` → public home page), and `filter({hasText: threadText})` assumes our message is the newest for that partner, which concurrent copies under `--repeat-each` (`fullyParallel: true`) clobber — invisible in CI (`workers: 1`), i.e. the Task-5 local-vs-CI divergence re-introduced two tasks later. Fixed by removing the reload (selection cleared through the UI) and keying the inbox row on PARTNER with the unique assertion moved into the thread log; **re-verified 8/8 isolated, 24/24 full spec, parallel workers**. **AI-1 (High):** `openTeamRoster` anchored on rows-or-empty but not the roster's error branch, so a failed fetch degraded to the anonymous 20s timeout the story exists to remove — all three settled branches are now anchors, with a named throw. **AI-3 (High):** `expectInboxReady(page)` on the reload path had no traffic listener, so its failure message asserted "no request was observed" and volunteered the §6d browser-offline hypothesis as fact — it now reports UNKNOWN and withholds the hypothesis unless something actually watched. **AI-2 (High, OPEN):** Task 3 claimed a burn-in of `e2e.yml` that never ran; split into 3a (done) / 3b (push-time). **AI-8 (Med):** making the seed converge made it destructive while its only environmental guard stayed an env-NAME check, against the project's own Pitfall #29 — added a fail-closed DB-name gate (`assertDevSeedDatabase`, `ALLOW_DEV_SEED_DB=1` override) wired at the `--dev` entry point, since `seedRoles`/`seedLGAs` WRITE before `seedDevelopmentUsers` is reached; RED-verified (refuses `pretend_prod_db` before "Seeding roles…", passes `app_test`). Also AI-5 File List omission, AI-7 pitfall renumbered #39a→#43 (#40-#42 already existed), AI-6 unhandled rejection, AI-9 order-coupled seed tests, + 6 LOW. Verification run by the reviewer, not inherited: web+api `tsc --noEmit` clean, web `eslint e2e` + api `eslint src scripts` clean, seed suite **16 passed** (was 7; +9 for the new gate), messaging spec **24/24** under `--repeat-each=4`. | Amelia (Review) |
 | 2026-07-26 | **Task 6 ("fix it all") + scope decision: resolved in THIS story, not carved out** (Awwal) — the diagnosis and the fix stay together so the nuance isn't stranded. (a) Seed contract is now declared ONCE (`devSeedContract`) with the drift report DERIVED from it, killing the two-parallel-lists rot one level down; fixed a latent `lgaMap.get() === undefined` bug that made drizzle SKIP the column instead of nulling it. (b) Swept the whole seed orchestrator: `seedRoles`/`seedLGAs`/`seedProductivityTargets`/`seedFraudThresholds` share the create-only shape but MUST stay that way — `main()` runs them on the PRODUCTION path, so converging them could overwrite live reference data (13-16 LGA canonicalization; fraud thresholds document "preserves manual config"); `seedTeamAssignments` was already convergent and now composes with the restored supervisor LGA. Rule recorded: converge where the blast radius is dev-only and seed-owned, stay create-only where a run could touch real data. (c) **Both messaging `test.skip()`s were parked on WRONG diagnoses and are now revived**: the DM test was blamed on the seed but the roster was always populated — `TeamRosterPicker.tsx:115` puts role="listitem" on the <button>, overriding the implicit role, so `getByRole('button')` could never match; the thread test was blamed on "propagation timing" but waited for a BROADCAST in the SENDER's own inbox, which `getInbox` excludes by design (message.service.ts:182-185) — rewritten over a direct message + reload, and a third latent strict-mode violation fixed en route. Suite 32→**34 passed / 23 skipped**. (d) **The AC4 burn-in caught a flake the FIX had introduced**: the helper's original `waitForResponse` gate failed ~1-in-30 (`Timeout 20000ms exceeded while waiting for event "response"`) — waiting on a network event is a hard dependency on observing it. Replaced by an auto-retrying assertion on the loaded-branch anchor; durable rule written into the helper (gate a RENDER on the anchor; use waitForResponse only to prove a WRITE reached the server). (e) A residual ~0.8% environment condition (query never issues a request; browser-offline signature) is deliberately NOT papered over with a retry — the helper now reports the observed inbox traffic + `navigator.onLine` so the next occurrence names itself. Full local Playwright 34/0, API 3271 pass, web 2821 pass, tsc + eslint clean. | Amelia (Dev) |
 | 2026-07-26 | **Task 5 (follow-up).** Killed the local-vs-CI divergence behind the 5 locally-failing admin tests instead of just documenting it. Root cause was NOT the `mfa_enabled` flag but `seedDevelopmentUsers` being **create-only** (`seeds/index.ts:184-187` "User already exists, skipping") — so `db:seed:dev` could establish the dev contract but never restore it, leaving `admin@dev.local` MFA-enrolled since 2026-05-09 and every admin-dependent E2E test red locally for ~2.5 months while CI stayed green on a fresh `test_db`. Two symptoms, one drift: `mfa_enabled=t` → login stops at `/auth/mfa-challenge`; `mfa_enabled=f` + stale expired `mfa_grace_until` → 403 `FORCE_MFA_ENROLLMENT` on every privileged route (the gate passes only when grace IS NULL, `mfa-grace.ts:69` — exactly what CI seeds). Fix in 3 layers: (1) the dev seed now **converges** drifted `@dev.local` rows (password/name/role/lga/status/lockout + the whole MFA block + `user_backup_codes`) and logs the drift, guarded by a `NODE_ENV=production` refusal and a never-touch-a-non-`isSeeded`-row rule; (2) the e2e login helper accepts `/auth/mfa-challenge` and throws a named, actionable error in ~1s instead of a 30s opaque timeout; (3) +4 integration tests. RED-verified (restoring create-only fails the convergence test: `expected true to be false`). Proven on the real local DB: re-drifted → `db:seed:dev` → `drift: [mfaEnabled, mfaSecret, mfaGraceUntil]` re-converged. **Full local Playwright suite now 32 passed / 0 failed** (was 27/5) — green on a dev machine for the first time. API suite 3271 passed / 248 files; tsc + eslint clean both packages. No AC text changed; additive under AC4's "trustworthy" clause. | Amelia (Dev) |

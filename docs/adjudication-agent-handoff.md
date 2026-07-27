@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-07-26 · **Prod deployed SHA:** `5d80841` (code = `a69a281`) · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-07-27 · **Prod deployed SHA:** `830dcf7` (code = `830dcf7`) · **Health:** https://oyoskills.com/api/v1/health
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
 
@@ -10,11 +10,14 @@
 ```bash
 git log --oneline -30                       # what shipped recently
 git status --short                          # is there uncommitted dev to adjudicate?
-git fetch origin -q && git rev-parse --short origin/main HEAD   # local vs origin
-# prod truth:
+git fetch origin -q && git status -sb | head -1   # local vs origin (ahead/behind N)
+# prod truth (both — SHA alone doesn't prove the app is up):
 ssh -o ConnectTimeout=25 root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'
+curl -s -o /dev/null -w '%{http_code}\n' https://oyoskills.com/api/v1/health   # want 200
 ```
-Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitted `apps/**` changes + a `_bmad-output/**/<story>.md` with `Status: done`, that IS the story to adjudicate.
+⚠️ **git ≥ 2.52:** `git rev-parse --short A B` now dies with `fatal: Needed a single revision` — `--short` takes exactly ONE rev. Use `git status -sb` (above) or two separate calls.
+
+Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitted `apps/**` changes + a `_bmad-output/**/<story>.md` with `Status: done`, that IS the story to adjudicate. **A clean tree = no story in flight** → say so and ask what to pick up (don't invent work).
 
 ---
 
@@ -23,7 +26,7 @@ Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitte
 - **Adjudication = verify it YOURSELF, never trust the self-report.** Run tsc/eslint/the suites yourself; read the load-bearing code; RED-verify the key fixes. The dev + a code-review LLM already ran; you are the third, independent layer.
 - **Then:** selective-commit the File List → push (pre-push runs the full suite) → confirm CI → deploy → VPS SHA → update `MEMORY.md`.
 - **Review BEFORE commit**, on the uncommitted tree. Never `git add -A`; never auto-commit at end of dev-story.
-- Commit trailer: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`. Branch = `main` (push directly; that's the convention here).
+- Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` (was Opus 4.8 through `d687cf4`; the history intentionally shows both). Branch = `main` (push directly; that's the convention here).
 
 ---
 
@@ -34,6 +37,7 @@ Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitte
 - `eslint` the touched files explicitly.
 - Run the touched test files: API `NODE_ENV=test DATABASE_URL="postgres://user:password@localhost:5432/app_test" pnpm vitest run <files>`; web `cd apps/web && pnpm vitest run <files>` (NEVER `pnpm vitest run` from root for web — wrong config).
 - **File List == git reality**: `git status --short` must match the story's File List. Flag drift.
+- **Anchors/IDs a fix introduces must be checked against the thing that defines them** — a test selector against the component that renders it, a new `Pitfall #N` against the whole playbook. On the playbook specifically: `#26`-`#38` are `### Pitfall #N` headings but `#39`+ live ONLY as footer `*Updated:*` paragraphs, so `grep -n "Pitfall #"` the ENTIRE file before minting a number. 13-36 collided twice (`#39a`, then `#43`) because each pass scanned only one convention.
 
 ### 2b. RED-verify (the core discipline — [[pattern-ship-a-fix-that-never-fires]])
 Every load-bearing fix must have a test that FAILS without it. Prove it:
@@ -78,8 +82,10 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 
 ---
 
-## 3. Current state (2026-07-26)
-- **Prod = `5d80841`** (code `a69a281`). Everything code-side for the launch send-system + the wizard is deployed + verified.
+## 3. Current state (2026-07-27)
+- **Prod = `830dcf7`**. Everything code-side for the launch send-system + the wizard is deployed + verified.
+- **E2E Tests is now a trustworthy signal** (13-36): green on push AND on a `repeat_each: 3` burn-in. A red there is now a real regression — triage it, never reflexively re-run. Burn-in on demand: `gh workflow run e2e.yml --ref main -f repeat_each=3` (max 7; `workers: 1`, so it tests repetition, NOT concurrency).
+- **`db:seed:dev` now CONVERGES drifted `@dev.local` accounts** — run it first when local e2e reds but CI is green. It is now destructive-by-design, so it refuses any DB whose name isn't `test`/`dev`-ish or `app_db` (`ALLOW_DEV_SEED_DB=1` overrides).
 - **`campaign_sends` table LIVE on prod** (7 cols + 2 indexes) — the 13-24 cross-system contact-dedupe ledger. Ledger-liveness PROVEN (0→1 on a dry-run, then cleaned).
 - Registry baseline: **144 respondents / 81 submissions / 0 campaign_sends** (restore target after any test reg).
 - Pinned public form = `019f8ed3` (GPS-free, "Main Occupation (e.g. …)" label). Master enumerator form = `019f8eff` (relabeled, GPS kept).
@@ -111,6 +117,17 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 4. **13-24 re-scope → dev → adjudication:** Bob(SM)+John(PM) re-scoped it in-CLI from "ops-only" to a CODE story (`f2a7c89`) + created the missing `pre-blast-dry-run.md` (`f7de970`); human developed the `campaign_sends` inherited dedupe elsewhere; I adjudicated (RED-verified, rebuilt local `app_test` for parity, caught + amended MM-drift), deployed `8145091`; the deploy was OSV-blocked on react-router → fixed with `safe-redirect` open-redirect guard + accept-risk `649af26`; **campaign_sends confirmed live on prod**; Dry-run #2 (Task 4) done — ledger-liveness proven.
 5. **Post-launch stories banked:** 13-43 (react-router v7) `e84a614`, 13-44 (campaign observability) `0d6f285`.
 6. **13-35 adjudication** (wizard UX polish): thorough dev + a TWO-pass adversarial review (H1-3/M1-4/L1-4, then F1/F2/F3). Headline: H1 = the AC2 dead-end still fired (draft-bootstrapped hide-set); F2 = the H1 fix could hard-block Submit + empty raw_data (Step4 never mounts). I re-oriented around the concurrent re-review, RED-verified H1 + F2, deployed `eee2877`; OSV-blocked on **brace-expansion** (5th) → bump `a69a281`; a bcrypt CI flake → re-run → deployed; **AC5 e2e closed via smoke-e2e**. 13-24 Task-4-done recorded `5d80841`.
+
+8. **13-36 adjudication** (2026-07-27, first session on Opus 5) — e2e messaging determinism + a converging
+   dev seed. Dev + a 16-finding review had already run; my layer added two RED-verifies (the seed DB-gate
+   and the convergence canary, both reproducing the dev's claims exactly) and three findings. Headline
+   **AJ-1: the review's own pitfall-renumber fix collided again** — AI-7 moved `#39a`→`#43`, but `#43` was
+   taken on 2026-07-20 and cited in another doc; renumbered `#44`. The trap: `#26`-`#38` are
+   `### Pitfall #N` headings while `#39`-`#43` live ONLY as footer `*Updated:*` paragraphs, so neither
+   convention alone shows the highest number — **grep `Pitfall #` across the whole file before minting one.**
+   Deployed `830dcf7`, all 10 CI jobs green, **no OSV block** (ending a 5-deploy streak). Task 3b/AI-2
+   discharged by dispatching the burn-in and checking the test COUNT (57→155), not just the green — the
+   passthrough could have been silently dropped and still passed.
 
 ---
 ### How to update this doc
