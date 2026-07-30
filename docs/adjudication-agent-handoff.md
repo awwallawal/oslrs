@@ -1,6 +1,7 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-07-27 · **Prod deployed SHA:** `830dcf7` (code = `830dcf7`) · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-07-30 · **Prod deployed SHA:** `be207c1` · **Health:** https://oyoskills.com/api/v1/health
+· **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
 
@@ -31,6 +32,42 @@ Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitte
 ---
 
 ## 2. THE ADJUDICATION PLAYBOOK (reusable every time)
+
+> **THIS SECTION IS THE STARTING POINT FOR EVERY ADJUDICATION.** Read §2 before touching the story. It is
+> the accumulated lessons of prior adjudications, and it is **living**: the moment a session learns
+> something that would have saved it time, write it back here. A lesson that stays in a story file is a
+> lesson the next session re-learns. When you add one, keep it short and put the *rule* first.
+
+### 2a0. The debt gate — the FIRST thing read and the LAST thing closed
+
+**Two touch points, both mandatory:**
+1. **At §0 cold-start (before reading the code):** enumerate what the story admits is unfinished, so you
+   *inherit* the debt instead of discovering it after the deploy. Mechanically:
+   ```bash
+   grep -nE '^- \[ \]' _bmad-output/implementation-artifacts/<story>.md    # unchecked tasks/findings
+   grep -inE 'NOT fixed|deliberately|residual|push-time|out of scope|accepted[- ]risk' <story>.md
+   ```
+2. **At close-out (before flipping `Status: done`):** every item found above must be resolved to one of
+   three states. **`done` is not permitted while any item is unresolved.**
+
+**What "resolved" means — this is the definition, not a vibe:**
+| State | Requires |
+|---|---|
+| **CLOSED** | evidence that can be **re-run**: a CI run ID, a named test, a SQL query. Not "verified" — *how*. |
+| **DISCHARGE-ON-PUSH** | provable only after deploy (13-36 Task 3b). Blocks `done`, not the commit. Discharge it in the same session: push, then check the *evidence*, not just the green. |
+| **ACCEPTED** | (a) a **measurement**, never a hypothesis; (b) a named owner; (c) a **reopen trigger**. |
+
+**Why ACCEPTED needs all three:** 13-36 shipped a residual reading "~0.8%, the browser was probably
+offline, deliberately not fixed". It was neither ~0.8% nor environmental — it was a real defect (shared
+seeded account × single-session API), found three days and one deploy later by a 10-minute probe. It had no
+measurement, no owner and no trigger, and would have failed this gate on day one. **An unexplained
+low-percentage failure rate is a measurement you have not made yet, not a property of the environment.**
+
+⚠️ **Known blind spot (measured 2026-07-30, precision NOT yet established):** **58 stories marked `done`
+carry 201 unchecked `[ ]` boxes**, and 14 stories' own `Status:` line disagrees with `sprint-status.yaml`.
+Most are probably un-ticked AC/template checklists (9-12 has 33, 9-9 has 30) — but two spot-checks were
+real and launch-gating (see §4). Treat a `done` story's unchecked boxes as unverified until read. Triage is
+deferred: §8.
 
 ### 2a. Verify-myself checklist
 - `pnpm --filter @oslsr/api exec tsc --noEmit` (API) / `cd apps/web && pnpm exec tsc --noEmit` (web). **Scripts are OUTSIDE tsconfig — RUN them / test them, don't trust tsc for `apps/api/scripts/*`.**
@@ -97,7 +134,10 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 2. **13-24 Task 5** — welcome backfill to ~116 emailable: `_backfill-registration-autosends.ts --dry-run` (read the `excluded:` line) → `--apply --confirm-i-am-not-dry-running --rate-per-minute 10`.
 3. → **5-day gap** → deduped blasts, **fired in ONE session** (the ledger's 5-day window means the marker + cohort disjointness carry "blast MINUS welcomed", ledger is the backstop — see `docs/runbooks/pre-blast-dry-run.md` §4).
 4. Before firing: `docs/runbooks/pre-blast-dry-run.md` — incl. **§2 ledger-liveness `SELECT`** (fail-soft `recordCampaignSend` could silently no-op).
-- **13-24 Task 4 (Dry-run #2) = DONE.** Only Task 5 remains on 13-24.
+- 🚨 **TWO LAUNCH-GATING ITEMS ARE UNCHECKED UNDER STORIES MARKED `done`** (found 2026-07-30 by the §2a0 gate — both were invisible on the board):
+  1. **13-24 Task 5** — `- [ ]` in the story: *operator: confirm Resend Pro live, then `_backfill-registration-autosends.ts --dry-run` → `--apply`*. This IS step 2 of the launch sequence below. Story + board both read `done`; the task is not.
+  2. **13-19 L3** — `- [ ]` *AC3 E2E remains an operator residual*: Task 2 is ticked for the **dev half only**; the real proof (operator re-upload + a public dry-run capturing occupation) was never taken. Story file says `review`, board says `done`, MEMORY tags 13-19 **LAUNCH-GATING**. Resolve the status divergence and take the proof BEFORE the blast.
+- **13-24 Task 4 (Dry-run #2) = DONE.** Only Task 5 remains on 13-24 — and see the alert above: it is unchecked while the story reads `done`.
 - The stale `re-engagement-campaign-launch.md` was superseded by 13-24's §2; follow 13-24.
 
 ## 5. Backlog you'll likely adjudicate next (all POST-LAUNCH, non-gating, ready-for-dev)
@@ -143,5 +183,31 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
    number from other docs.**
 
 ---
+
+## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
+
+Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
+without triggers becomes exactly the invisible debt §2a0 exists to catch** — that is the whole lesson of
+this session applied to this list. Nothing here blocks the blast; §4 holds the things that do.
+
+| # | Item | Why it matters | Trigger to do it |
+|---|---|---|---|
+| D1 | **Residual ledger**: a `## Residuals` table in the story template (ID / severity / state / re-runnable evidence / owner), using the §2a0 three states. Retrofit 13-36 as the worked example. | Makes the debt gate a *schema* instead of a discipline. Prose is not type-checked. | First story adjudicated after launch. ~15 min, no code. |
+| D2 | **`scripts/residual-inventory.ts`** — regenerates the debt table on demand (unchecked boxes + residual language + file-vs-board status divergence). | A hand-written list is stale in a week. Same script later feeds D3, so the parse is written once. | Do with D1; it *is* the report. |
+| D3 | **Story 13-45 — CI guard**: fail when a story reads `Status: done` while its ledger holds an OPEN/DISCHARGE-ON-PUSH row. | Without a guard, D1 is a convention — and conventions produced the 201. Needs a RED-failing canary, so it is real dev work. Sibling of 13-41/13-37. | After D1+D2 exist and one story has used the ledger for real. |
+| D4 | **Triage the blind spot**: 58 `done` stories / 201 unchecked boxes / 14 status divergences. Start with the launch-adjacent set (13-24, 13-19, 13-34, 13-21, 13-23, 13-27, 11-2, 13-16) and mark the OSV cluster (13-31/13-32/sec-1/sec-4, ~27 hits) as **managed-elsewhere** — `osv-scanner.toml` + the blocking gate already is their ledger. | The two launch-gating items in §4 came out of a 3-story spot-check. The rest is unmeasured. | Post-blast, or immediately if anything in §4's list turns out to have siblings. |
+| D5 | **Make §0 a script** (`scripts/adjudicate-coldstart.sh`): the five checks + prod registry baseline + pinned form, one screen. | A prose command block rots invisibly — §0's `git rev-parse --short A B` silently broke on git 2.52 and cost a session four commands to diagnose. A script fails loudly. | Next time a §0 command misbehaves, or with D2. |
+| D6 | **Drop the prod SHA from this doc's header.** | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD) and again on 2026-07-30. Let D5's script report ground truth instead. | Do with D5. |
+| D7 | **§5 needs a designated next pick**, one line, pointing at `[[next-story-sequence-post-11-2]]`. | Four stories with no ordering means every cold start re-litigates the choice. | Next cold start that has to choose. |
+| D8 | **Cap §7 at the last two sessions**, archiving older arcs to a dated `docs/session-*.md`. | This doc is growing unbounded; `MEMORY.md` already blew its size budget for exactly this reason. | When §7 passes ~10 entries. |
+| D9 | **§2j verdict format** — a fixed closing block (verdict / RED-verify evidence / File-List reconciliation / deploy SHA). | 13-36's close-out was hand-synced across five places (story body, Change Log, sprint-status, MEMORY, this doc) and the disproven claim survived in three of them. | Do with D1 — same problem, same fix. |
+| D10 | **Memory file `pattern-unexplained-rate-is-unmeasured`**, alongside `[[pattern-ship-a-fix-that-never-fires]]` and `[[pattern-flaky-test-hiding-a-prod-bug]]`. | The playbook only helps whoever opens it; memory files surface automatically in any future session. | Next memory write. |
+| D11 | ⚙️ **OPS, pre-blast: Tailscale is relaying via DERP(sfo)**, `direct connection not established`, 386-826 ms — two SSH attempts died in banner exchange on 2026-07-30 before one succeeded. | `pre-blast-dry-run.md` §2's ledger-liveness `SELECT` is **mandatory** and runs over this path, as do the Task-5 backfill verification and the §2h cleanup recipe. A flake mid-blast means you cannot verify at the moment it matters most. | **Before blast day** — get a direct WireGuard path up, or a documented fallback. |
+
+**DECIDED — do not reopen:** the **pre-push hook stays as-is**. It has earned its keep, and tuning turbo
+`inputs` to skip the unit suite on e2e-only commits is a convenience win against an under-invalidation risk
+— and Pitfall #39/9-58 exist in that hook precisely because it once ran *too little*. Not a pre-launch move.
+
+---
 ### How to update this doc
-At session end: bump the header (date + prod SHA), append to §7 the arc of what you did, and move any newly-adjudicated story out of §5. Keep §2 (the playbook) evergreen — add a recipe whenever a new gotcha costs you time.
+At session end: bump the header (date + prod SHA), append to §7 the arc of what you did, and move any newly-adjudicated story out of §5. Keep §2 (the playbook) evergreen — **add a recipe whenever a new gotcha costs you time; that is the primary way this doc earns its keep.** Check §8: if you did a deferred item, delete its row; if a trigger has fired, say so. And re-run the §2a0 gate before flipping any status to `done`.
