@@ -6,7 +6,27 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Story 13-36 review (2026-07-27): ONE worker everywhere — local included.
+  //
+  // This is a correctness constraint, not a performance choice. The suite shares
+  // ONE seeded account per role (`admin@dev.local`, `supervisor@dev.local`), and the
+  // API is single-session by design: every login reaps the user's previous refresh
+  // token (token.service.ts:146, "AT-MOST-ONE active refresh token per user"). Two
+  // workers signed in as the same account therefore invalidate each other, and any
+  // full page load after that gets 401 → AUTH_LOGOUT → the public home page.
+  //
+  // Measured on `fraud-threshold.spec.ts`'s reload test — failure rate scales
+  // cleanly with worker count:
+  //     workers=1 → 0%    workers=2 → 17%    workers=4 → 42%    workers=6 → 58%
+  // CI was already `workers: 1`, which is the ONLY reason this never turned CI red;
+  // locally it made the suite look broken. A suite that is green in CI and flaky on
+  // every developer's machine is not a trustworthy signal — the exact failure this
+  // story exists to end (Task 5), one layer down.
+  //
+  // Do NOT raise this to "speed up" a local run. Removing the cap requires giving
+  // each worker its OWN seeded account (per-worker fixtures), because the underlying
+  // conflict is the shared login, not the parallelism itself.
+  workers: 1,
   reporter: [
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],

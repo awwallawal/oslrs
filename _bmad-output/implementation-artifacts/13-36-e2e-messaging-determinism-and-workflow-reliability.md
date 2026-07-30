@@ -119,14 +119,51 @@ AC4 burn-in because they only fire on the unhappy path, which a green burn-in ne
   → **FIXED (documented)**.
 - [x] [AI-Review][Low] **AI-14 — `releaseInbox?.()`** implies a nullable path a synchronous Promise
   executor cannot produce. [apps/web/e2e/messaging.spec.ts:270] → **FIXED**.
+- [x] [AI-Review][**CRITICAL**] **AI-17 — the §6d "~0.8% residual" is NOT an unfixable environment
+  condition. Root-caused and fixed 2026-07-27** (Awwal: "chase it so we know we are fully resolved with no
+  technical debt"). §6d guessed "TanStack pauses queries when the browser reports offline" and left it
+  unfixed-but-self-diagnosing. Wrong: it is the **shared seeded account meeting a single-session API under
+  parallel workers**. Every spec logs in as the same `admin@dev.local` / `supervisor@dev.local`, and
+  `token.service.ts:146` reaps the user's previous refresh token on EVERY login ("AT-MOST-ONE active
+  refresh token per user"), so parallel workers invalidate each other; any full page load after that gets
+  401 → AUTH_LOGOUT → the public home page, where the target can never appear.
+  **Proven by instrumented probe, not inference** — the two outcomes are unambiguous:
+  `refresh=200 → me=200 → <query>=200` (renders 2-5s) vs `refresh=401, refresh=401` → url becomes `/`.
+  And the failure rate scales cleanly with concurrency: **workers 1/2/4/6 → 0% / 17% / 42% / 58%.**
+  That is why CI never went red (`workers: 1`) while the suite looked broken on a dev machine — the Task-5
+  divergence one layer down. **Fix: `workers: 1` in `playwright.config.ts` for local runs too** (CI was
+  already 1, so CI behaviour and timing are unchanged), with the constraint and the numbers written into
+  the config so nobody "optimises" it away. Two wrong turns recorded so they are not retried: a 20s
+  timeout bump (the cause is not slowness) and a re-login-after-bounced-reload helper (**doubles login
+  volume, trips the login rate limiter that is active locally per `auth.setup.ts:20`, and strands the page
+  on /staff/login — it made a rare flake reproducible: 2/12 where the plain reload was 0/5**).
+  Also fixed the missed AC3 sibling: `fraud-threshold.spec.ts:87` `page.reload()` — the sweep marked that
+  file "no change needed" because it only checked click-ordering, not that a reload restarts the auth boot
+  chain. **Verified: reload test 12/12, full suite ×2 → 67 passed / 39 skipped / 0 failed.**
+- [x] [AI-Review][High] **AI-18 — the residual's own diagnostic asserted what it never observed.** It
+  declared "never left its LOADING skeleton" without ever checking the skeleton was on screen — so it
+  mislabelled a page that had been redirected clean off `/messages` (exactly the AI-3 defect, one function
+  over). It now MEASURES url / skeleton visibility / inbox traffic / auth-refresh traffic / still-in-flight
+  requests / `navigator.onLine`, and names a diagnosis only when the evidence identifies one — including
+  the queue-behind-a-hung-refresh case (`apiClient` awaits `awaitAccessToken()` BEFORE `fetch`,
+  api-client.ts:52, so an unsettled refresh means NO request is ever issued and the query stays `pending`
+  forever). Where the evidence is inconclusive it says `UNRESOLVED — open a story` rather than blaming the
+  network. [apps/web/e2e/helpers/messages.ts] → **FIXED**.
 - [x] [AI-Review][**CRITICAL**] **AI-16 — the test revived in Task 6c was NOT deterministic, and its
   "passes, 3/3" claim did not reproduce.** Found by actually running the suite during this review, not by
   reading it. `open a thread from the inbox and verify messages render` failed **2 of 3 runs** locally.
   TWO independent defects, both introduced by Task 6c, both invisible to the AC4 burn-in as run:
-  1. **`page.reload()` drops the session.** The access token is in memory (AuthContext `saveToken`), so a
-     hard load forces a silent refresh that races `ProtectedRoute` — when it loses, the test lands on the
-     PUBLIC HOME PAGE and no inbox anchor can ever appear. The premise the rewrite was built on ("reload
-     so the inbox comes from the server") does not hold for an authenticated page.
+  1. **`page.reload()` drops the session.** ⚠️ **The MECHANISM stated here was wrong — corrected
+     2026-07-27 by probe, see the Change Log.** The observation (reload → public home page → no anchor)
+     held, but the cause is NOT a race with `ProtectedRoute` (there is none: `isLoading` starts true and
+     the guard renders a skeleton until the boot `/auth/refresh` settles). The real cause is that the
+     suite SHARES one seeded account while the API is single-session by design — each login reaps the
+     previous refresh token (`token.service.ts:146`), so parallel workers invalidate each other and
+     whoever reloads after a sibling logged in gets 401. Probe: `--workers=1` → 5/5 pass,
+     `/auth/refresh` [200, 200]; `--workers=4 --repeat-each=8` → 5/8 fail, [401, 401], url `/`.
+     **A shared-fixture artifact, not a product defect** — a real user pressing F5 keeps their session.
+     The premise the rewrite was built on ("reload so the inbox comes from the server") still does not
+     hold *in this suite*, so the fix below stands unchanged.
   2. **`filter({ hasText: threadText })` assumes our message is the newest for that partner.** `getInbox`
      returns ONE row per partner previewing the latest message, so any concurrent writer overwrites it.
      `--repeat-each` — the burn-in AC4 itself prescribes — runs copies of this test **concurrently**
@@ -167,6 +204,48 @@ renders it. Three findings, all fixed in this pass; none blocks the commit.
   `observeInboxTraffic()`, both of which exist).
 - [x] **AJ-3 [Low] — stale "before the reload" comment** left behind by the AI-16 fix, in the test whose
   whole revision was removing the reload. [apps/web/e2e/messaging.spec.ts:139] → **FIXED**.
+
+#### Final adjudication pass (2026-07-30, after the AI-17/AI-18 probe work landed)
+
+Re-verified from disk, not from memory. Web `tsc --noEmit` + `eslint e2e` clean. File List reconciles with
+`git status` exactly — `playwright.config.ts` IS listed (the AI-5 class did **not** recur). The AI-17
+verification counts reconcile independently against the 8-non-repeating-setup-test formula I derived for
+Task 3b: "full suite ×2 → 67 passed / 39 skipped" is exactly 2×(34−1)+1 = 67 and 2×(23−7)+7 = 39.
+
+**I verified the probe's CONCLUSION against source rather than inheriting it** — all four load-bearing
+claims hold: single-session by design (`token.service.ts`, "enforce AT-MOST-ONE active refresh token per
+user"); requests queue behind the boot refresh (`api-client.ts:53` awaits `awaitAccessToken()` *before*
+`fetch`); the token is module-memory only (`auth-token-holder.ts:17`); and **there is genuinely no
+`ProtectedRoute` race** — `AuthContext:58` initialises `isLoading: true` and `ProtectedRoute:55` checks it
+*before* the unauthenticated redirect, so the guard renders a skeleton until the refresh settles. AI-16's
+mechanism was wrong; AI-17's replacement is right.
+
+- [x] **AJ-4 [Med] — playbook item 4 contradicted both the probe and the shipped code, six lines above its
+  own correction.** It stated the disproven "silent refresh RACES the route guard" mechanism *and* a
+  blanket "never `page.reload()` in an authenticated E2E test" — while item 6 explains the real cause and
+  `fraud-threshold.spec.ts:87` now reloads deliberately and is documented as safe under `workers: 1`. A
+  reader following item 4 would have taken away a false model of the auth boot AND refused a legitimate
+  technique. → **FIXED**: mechanism corrected with the file:line that proves it, prescription softened to
+  "expensive, know what it restarts, budget for 2-5s", cross-referenced to #6. Added the meta-lesson —
+  an unverified mechanism reached the canonical playbook and had to be retracted, so **cite the source
+  that proves a mechanism or state none**. This is the doc-contradicts-code class (AI-4, AJ-2) again, and
+  the reason it keeps landing in the playbook is that prose is not type-checked.
+- [x] **AJ-5 [Low] — playbook item 5 asserted a present-tense fact that `workers: 1` had just falsified**
+  ("`--repeat-each` runs the copies CONCURRENTLY (`fullyParallel: true`)"). True historically, false of
+  today's suite; someone reasoning from it about current behaviour would be misled, and its "green in CI,
+  flaky locally" framing describes a divergence that is now closed. → **FIXED**: reframed as
+  "concurrently *whenever workers > 1*" with an explicit status note that the class is currently inert,
+  `fullyParallel: true` is retained but has no effect, and the rule goes live again the moment anyone
+  raises the worker count — which is precisely when per-worker accounts become mandatory.
+- [x] **AJ-6 [Low] — the File List called `fraud-threshold.spec.ts` "no logic change"** while a later entry
+  in the same list gives it a real 10s→20s timeout change. → **FIXED** (first entry now points forward).
+
+**Resolved by AI-17, not by me:** the `Date.now()`-collision risk I flagged in the first pass is now
+structurally closed. With `workers: 1` pinned everywhere, `--repeat-each` copies run serially, so two
+copies can no longer share a millisecond. Worth noting the shape: I proposed a per-test fix
+(`parallelIndex` in the key) and the right fix turned out to be one level up — remove the concurrency that
+made uniqueness load-bearing at all. Keep that ordering in mind if workers ever rise: per-worker accounts
+first, then per-test keys.
 
 **RED-verify (mine, independent of the dev's).** Both neuters applied by hand and restored by hand (the
 files are uncommitted, so `git checkout --` would have wiped the work); `grep -rn "RED-VERIFY" apps/`
@@ -422,8 +501,10 @@ real data.** "Fix it all" ≠ "apply the same change everywhere".
   which is what the test's name claimed all along.
 - ⚠️ **CORRECTION (2026-07-27 review, AI-16): the "passes, 3/3" above did not reproduce — the rewritten
   thread test failed 2 of 3 runs.** The rewrite fixed the *diagnosis* but shipped two new
-  non-determinism sources: `page.reload()` drops the in-memory access token (silent refresh races
-  `ProtectedRoute` → lands on the public home page), and `filter({hasText: threadText})` assumes our
+  non-determinism sources: `page.reload()` drops the in-memory access token (the boot `/auth/refresh`
+  then 401s because the suite's shared seeded account is single-session — mechanism corrected by probe
+  2026-07-27, see the Change Log; NOT a `ProtectedRoute` race → lands on the public home page), and
+  `filter({hasText: threadText})` assumes our
   message is the newest for that partner, which concurrent copies of the same test under `--repeat-each`
   routinely break. Both fixed; re-verified 8/8 isolated and 24/24 across the full spec with parallel
   workers. The lesson is recorded in the playbook: **a burn-in that only ever exercises the happy path
@@ -432,7 +513,16 @@ real data.** "Fix it all" ≠ "apply the same change everywhere".
   and neither was blocked by what its comment said. (The 34/0 figure predates AI-16 — it was recorded from
   a `workers: 1`-style local run, where the concurrency collision cannot occur.)
 
-**6d. Known remaining condition — NOT fixed, deliberately, and now self-diagnosing.** Across ~480
+**6d. ⚠️ SUPERSEDED 2026-07-27 — this condition was NOT environmental and is now FIXED (see AI-17).**
+The "browser was offline / TanStack paused the query" reading below was a hypothesis that the evidence did
+not support, and leaving it as an accepted residual was the technical debt. Root cause: the suite's
+**shared seeded account meeting a single-session API under parallel workers** — `token.service.ts:146`
+reaps the previous refresh token on every login, so workers invalidate each other and any full page load
+lands on `/` with `refresh=401`. Failure rate scales with concurrency (workers 1/2/4/6 → 0/17/42/58%),
+which is exactly why it looked like an unattributable ~1% background rate. Fixed by pinning `workers: 1`;
+verified full suite ×2 clean. The original text is kept below as the record of what was believed, and as a
+caution: an unexplained low-percentage failure rate is a *measurement not yet made*, not a property of the
+universe. Across ~480
 burn-in executions, ~0.8% fail with one signature: the Messages page sits on its loading skeleton and
 the inbox query never settles — **no response and no request failure observed**, i.e. no request was
 issued at all. That is the shape of TanStack pausing queries (`networkMode: 'online'`) when the browser
@@ -482,7 +572,9 @@ working tree by **another session** (not this story) — exclude them from this 
   **two `test.skip()`s revived** (role="listitem" selector fix; thread test rewritten off the
   impossible broadcast-in-own-inbox premise, assertion scoped to the log).
 - `apps/web/e2e/supervisor-dashboard.spec.ts` — MODIFIED. AC3 sweep verdict in the header (no logic change).
-- `apps/web/e2e/fraud-threshold.spec.ts` — MODIFIED. AC3 sweep verdict in the header (no logic change).
+- `apps/web/e2e/fraud-threshold.spec.ts` — MODIFIED. AC3 sweep verdict in the header. ⚠️ "no logic change"
+  was true only for the first pass — see the AI-17 entry below, which adds a real timeout change to this
+  same file (corrected in final adjudication, AJ-6).
 - `apps/web/e2e/auth.setup.ts` — MODIFIED. AC3: `setup.skip()`-by-design note closing the "skipped
   projects" adjacent risk (no logic change).
 - `.github/workflows/e2e.yml` — MODIFIED. Required-vs-informational decision block (stale "real CI gate"
@@ -498,6 +590,16 @@ working tree by **another session** (not this story) — exclude them from this 
   `waitForResponse` can't survive a missed event). **Was missing from this list until the 2026-07-27
   review (AI-5); renumbered #39a → #43 in the same pass (AI-7) and → **#44** in adjudication (AJ-1),
   since #40-#43 already existed.**
+- `apps/web/playwright.config.ts` — MODIFIED (2026-07-27, AI-17). `workers: process.env.CI ? 1 : undefined`
+  → `workers: 1`, so local runs match CI. This is the ROOT FIX for the §6d residual: the suite's shared
+  seeded accounts cannot survive concurrent logins against a single-session API. CI behaviour and timing
+  are unchanged (it was already 1). The measured concurrency dose-response is recorded in the comment.
+- `apps/web/e2e/fraud-threshold.spec.ts` — MODIFIED (2026-07-27, AI-17). The AC3 sibling the original sweep
+  missed: `page.reload()` restarts the auth boot chain, so it inherits the shared-account 401. Explicit
+  20s budget for the post-reload anchor + the reason (and the two failed remedies) recorded inline.
+- `apps/web/e2e/helpers/login.ts` — MODIFIED again (2026-07-27, AI-17). Header now records the two
+  hard constraints: one session per account (⇒ `workers: 1`) and rate-limited logins (⇒ never add
+  retry/recovery logins).
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED. Status ready-for-dev →
   **in-progress** (not "review" as this line previously claimed — corrected in adjudication; the story
   header agrees, and `in-progress` is the honest state while Task 3b is undischarged).
@@ -514,6 +616,9 @@ working tree by **another session** (not this story) — exclude them from this 
 ## Change Log
 | Date | Change | By |
 |------|--------|-----|
+| 2026-07-30 | **FINAL ADJUDICATION — story CLOSED.** Re-verified the AI-17/AI-18 tree from disk: web `tsc` + `eslint e2e` clean, File List reconciles with `git status` exactly (`playwright.config.ts` IS listed — the AI-5 class did NOT recur), and AI-17's "full suite ×2 → 67 passed / 39 skipped" reconciles independently against the 8-non-repeating-setup-test formula derived for Task 3b (2×33+1=67, 2×16+7=39). **Verified AI-17's conclusion against source rather than inheriting it** — single-session by design (`token.service.ts`), request-queueing (`api-client.ts:53` awaits `awaitAccessToken()` BEFORE `fetch`), module-memory-only token (`auth-token-holder.ts:17`), and critically **no `ProtectedRoute` race** (`AuthContext:58` initialises `isLoading: true` and `ProtectedRoute:55` checks it before the unauthenticated redirect). All four hold; AI-16's mechanism was wrong and AI-17's replacement is right. **3 findings, all fixed: AJ-4 (Med)** playbook item 4 carried the disproven "silent refresh races the route guard" mechanism AND a blanket "never reload" ban — six lines above the item that corrects it, and while the shipped `fraud-threshold.spec.ts:87` reloads deliberately and safely; corrected with the file:line that proves the mechanism plus the meta-rule **cite the source that proves a mechanism or state none**. **AJ-5 (Low)** item 5 asserted `--repeat-each` runs copies concurrently, which `workers: 1` had just falsified — reframed as conditional-on-workers with a status note that the class is inert today and goes live again the moment anyone raises the count. **AJ-6 (Low)** the File List called `fraud-threshold.spec.ts` "no logic change" while a later entry gives it a real 10s→20s change. The `Date.now()` collision I flagged in the first pass is closed **structurally** by `workers: 1` rather than by a test edit — the correct fix sat one level above where I proposed it. | Claude (Adjudication) |
+| 2026-07-27 | **§6d's "~0.8% environment condition" ROOT-CAUSED AND FIXED — the story's last accepted residual is gone** (Awwal: "chase it so that we know we are fully resolved with no technical debt"). It was never the browser-offline/TanStack-pause condition §6d hypothesised: it is the **shared seeded account meeting a single-session API under parallel workers** (`token.service.ts:146` reaps the previous refresh token on every login), so workers invalidate each other and any full page load 401s onto `/`. Established by instrumented probe rather than inference — `refresh=200 → me=200 → <query>=200` on the happy path vs `refresh=401, refresh=401` + url `/` on failure — with a clean concurrency dose-response, **workers 1/2/4/6 → 0% / 17% / 42% / 58%**. That gradient is the whole explanation for an apparently unattributable ~1% background rate, and for CI never going red (`workers: 1`). **Fix: pin `workers: 1` in `playwright.config.ts` for local runs too** (CI unchanged), with the measurements recorded in the config and in `helpers/login.ts` so it is not "optimised" back. Also fixed the AC3 sibling the sweep missed — `fraud-threshold.spec.ts` `page.reload()` (the sweep audited click-ordering but not that a reload restarts the auth boot chain). **Two wrong turns recorded so they are not retried:** a 20s timeout bump (cause is not slowness — 20s failed too) and a re-login-after-bounced-reload helper, which **doubled login volume, tripped the locally-active login rate limiter (`auth.setup.ts:20`) and stranded pages on /staff/login — making a rare flake reproducible (2/12, where the plain reload was 0/5)**. Also hardened the residual's own diagnostic (AI-18): it had declared "never left its LOADING skeleton" without ever checking the skeleton — the AI-3 defect one function over — and now measures url / skeleton / inbox + auth traffic / in-flight requests / `navigator.onLine`, naming a cause only when the evidence identifies one and saying `UNRESOLVED` when it does not. **Verified: reload test 12/12; messaging spec 228 consecutive passes across parallel burn-ins; full suite ×2 → 67 passed / 39 skipped / 0 failed; tsc + eslint clean.** §6d is marked SUPERSEDED in place. | Awwal + Claude |
+| 2026-07-27 | **AI-16's mechanism CORRECTED by probe — the reload failure is a shared-fixture artifact, not a `ProtectedRoute` race and not a product defect.** AI-16 got the observation right (reload → public home page) and the cause wrong. There is no race: the access token lives in `lib/auth-token-holder.ts` (9-49/ADR-022), `isLoading` starts true, and `ProtectedRoute` renders a skeleton until the boot `/auth/refresh` settles (AuthContext:588-645). The real cause is that **every spec logs in as the same seeded `supervisor@dev.local` while the API is single-session by design** — each login reaps the user's previous refresh token (`token.service.ts:146`, "AT-MOST-ONE active refresh token per user") — so parallel workers invalidate one another and whoever reloads after a sibling logged in gets 401 → AUTH_LOGOUT → `/`. Probe (temporary spec, removed): `--workers=1` → **5/5 pass**, `/auth/refresh` [200, 200], stays on `/messages`; `--workers=4 --repeat-each=8` → **5/8 fail**, [401, 401], url `/`. A real user pressing F5 keeps their session. The AI-16 FIX is unaffected (the reload still cannot work in this suite), but the recorded reason is now the true one, and the durable note moved into `helpers/messages.ts` where the next author will hit it. Corrected in the AI-16 finding, the §6c bullet and here. **Wider significance:** this is a second, larger instance of the shared-seeded-account concurrency class behind AI-16 — the same-partner inbox clobber and the `Date.now()` collision flagged in adjudication are siblings of it. Any future move off `workers: 1` needs per-worker accounts, not per-test tweaks. | Awwal + Claude |
 | 2026-07-27 | **ADJUDICATED + DEPLOYED `830dcf7` → status done.** Verified independently, not inherited: api+web `tsc`, api `eslint` on the seed files, web `eslint e2e`, seed suite **16 passed**, and **two RED-verifies of my own** — neutering `assertDevSeedDatabase` fails 2 tests (`expected [Function] to throw`), restoring the create-only `if (existing) continue` fails the convergence canary (`expected true to be false`), both matching the dev's stated results including which siblings stay green. Read every new anchor against the component that renders it (`roster-error` and the empty state are genuinely INSIDE the `role="list"` container, so the AI-1 scoping fires). Confirmed the new seed gate can't break CI (all three `db:seed:dev` callers use `test_db`; prod runs `--admin-from-env` and never reaches it) and that the turbo passthrough is equivalent to the root `test:e2e` script it replaced. **3 findings fixed: AJ-1 (Med) the pitfall renumber collided AGAIN — AI-7 moved `#39a`→`#43` but `#43` was already taken 2026-07-20 by the 13-2→11-2 lesson (playbook:1611, also cited in `session-2026-07-20-…md:49`); renumbered #44.** Root cause: `#26`-`#38` are `### Pitfall #N` headings while `#39`-`#43` exist only as footer `*Updated:*` paragraphs, so neither convention alone reveals the highest number. AJ-2 (Low) the AI-3 diagnostic told the reader to use `reloadMessages()`, a helper the same file bans 40 lines above and which AI-16 deleted — third instance of the misdirecting-diagnostic class. AJ-3 (Low) stale "before the reload" comment. **Task 3b/AI-2 discharged on CI**: push run [30232138393] green (34/23), dispatched `repeat_each: 3` [30232550112] green with the passthrough PROVEN to fire (`> playwright test "--repeat-each=3"`; 57→155 tests, arithmetic reconciled via the 8 non-repeating setup tests). CI/CD [30232138406] green on all 10 jobs; prod SHA + health verified. **Flagged not fixed:** both messaging tests key uniqueness on `Date.now()` alone, so two same-millisecond copies under a parallel burn-in would collide in strict mode — invisible to CI's `workers: 1`. | Claude (Adjudication) |
 | 2026-07-27 | **Adversarial code review — 16 findings (1 Critical, 3 High, 6 Medium, 6 Low); 15 fixed, 1 push-time.** Full list + outcomes in "Review Follow-ups (AI)". The through-line: **the story's own defect class was committed inside the fix**, on the paths a green burn-in never executes. **AI-16 (Critical, found by RUNNING the suite):** the test revived in Task 6c failed **2 of 3 runs** — its "passes, 3/3" did not reproduce. Two causes, both introduced by 6c: `page.reload()` drops the in-memory access token (silent refresh races `ProtectedRoute` → public home page), and `filter({hasText: threadText})` assumes our message is the newest for that partner, which concurrent copies under `--repeat-each` (`fullyParallel: true`) clobber — invisible in CI (`workers: 1`), i.e. the Task-5 local-vs-CI divergence re-introduced two tasks later. Fixed by removing the reload (selection cleared through the UI) and keying the inbox row on PARTNER with the unique assertion moved into the thread log; **re-verified 8/8 isolated, 24/24 full spec, parallel workers**. **AI-1 (High):** `openTeamRoster` anchored on rows-or-empty but not the roster's error branch, so a failed fetch degraded to the anonymous 20s timeout the story exists to remove — all three settled branches are now anchors, with a named throw. **AI-3 (High):** `expectInboxReady(page)` on the reload path had no traffic listener, so its failure message asserted "no request was observed" and volunteered the §6d browser-offline hypothesis as fact — it now reports UNKNOWN and withholds the hypothesis unless something actually watched. **AI-2 (High, OPEN):** Task 3 claimed a burn-in of `e2e.yml` that never ran; split into 3a (done) / 3b (push-time). **AI-8 (Med):** making the seed converge made it destructive while its only environmental guard stayed an env-NAME check, against the project's own Pitfall #29 — added a fail-closed DB-name gate (`assertDevSeedDatabase`, `ALLOW_DEV_SEED_DB=1` override) wired at the `--dev` entry point, since `seedRoles`/`seedLGAs` WRITE before `seedDevelopmentUsers` is reached; RED-verified (refuses `pretend_prod_db` before "Seeding roles…", passes `app_test`). Also AI-5 File List omission, AI-7 pitfall renumbered #39a→#43 (#40-#42 already existed), AI-6 unhandled rejection, AI-9 order-coupled seed tests, + 6 LOW. Verification run by the reviewer, not inherited: web+api `tsc --noEmit` clean, web `eslint e2e` + api `eslint src scripts` clean, seed suite **16 passed** (was 7; +9 for the new gate), messaging spec **24/24** under `--repeat-each=4`. | Amelia (Review) |
 | 2026-07-26 | **Task 6 ("fix it all") + scope decision: resolved in THIS story, not carved out** (Awwal) — the diagnosis and the fix stay together so the nuance isn't stranded. (a) Seed contract is now declared ONCE (`devSeedContract`) with the drift report DERIVED from it, killing the two-parallel-lists rot one level down; fixed a latent `lgaMap.get() === undefined` bug that made drizzle SKIP the column instead of nulling it. (b) Swept the whole seed orchestrator: `seedRoles`/`seedLGAs`/`seedProductivityTargets`/`seedFraudThresholds` share the create-only shape but MUST stay that way — `main()` runs them on the PRODUCTION path, so converging them could overwrite live reference data (13-16 LGA canonicalization; fraud thresholds document "preserves manual config"); `seedTeamAssignments` was already convergent and now composes with the restored supervisor LGA. Rule recorded: converge where the blast radius is dev-only and seed-owned, stay create-only where a run could touch real data. (c) **Both messaging `test.skip()`s were parked on WRONG diagnoses and are now revived**: the DM test was blamed on the seed but the roster was always populated — `TeamRosterPicker.tsx:115` puts role="listitem" on the <button>, overriding the implicit role, so `getByRole('button')` could never match; the thread test was blamed on "propagation timing" but waited for a BROADCAST in the SENDER's own inbox, which `getInbox` excludes by design (message.service.ts:182-185) — rewritten over a direct message + reload, and a third latent strict-mode violation fixed en route. Suite 32→**34 passed / 23 skipped**. (d) **The AC4 burn-in caught a flake the FIX had introduced**: the helper's original `waitForResponse` gate failed ~1-in-30 (`Timeout 20000ms exceeded while waiting for event "response"`) — waiting on a network event is a hard dependency on observing it. Replaced by an auto-retrying assertion on the loaded-branch anchor; durable rule written into the helper (gate a RENDER on the anchor; use waitForResponse only to prove a WRITE reached the server). (e) A residual ~0.8% environment condition (query never issues a request; browser-offline signature) is deliberately NOT papered over with a retry — the helper now reports the observed inbox traffic + `navigator.onLine` so the next occurrence names itself. Full local Playwright 34/0, API 3271 pass, web 2821 pass, tsc + eslint clean. | Amelia (Dev) |

@@ -20,6 +20,31 @@ const DEFAULT_CREDENTIALS: Record<StaffRole, { email: string; password: string }
  * Centralises the login flow so that all E2E specs share a single implementation.
  * If the login UI changes (hCaptcha selector, button text, etc.), only this file needs updating.
  */
+/**
+ * TWO CONSTRAINTS ON LOGIN IN THIS SUITE (measured 2026-07-27, Story 13-36 review).
+ * Both are easy to rediscover the hard way, so they are recorded here.
+ *
+ * 1. ONE SESSION PER ACCOUNT — the suite must run single-worker.
+ *    The access token lives only in memory (`lib/auth-token-holder.ts`, ADR-022), so
+ *    a hard page load rebuilds the session from the httpOnly refresh cookie. But the
+ *    API is single-session by design: every login reaps the user's previous refresh
+ *    token (`token.service.ts:146`). Because every spec logs in as the same seeded
+ *    account per role, parallel workers invalidate each other, and any reload after
+ *    that gets 401 → AUTH_LOGOUT → the public home page. Instrumented probe:
+ *      pass → `refresh=200, me=200, <page query>=200` (renders in 2-5s)
+ *      fail → `refresh=401, refresh=401`, url becomes `/`
+ *    Failure rate by worker count: 1 → 0%, 2 → 17%, 4 → 42%, 6 → 58%. Hence
+ *    `workers: 1` in playwright.config.ts — see the rationale there before changing it.
+ *
+ * 2. LOGINS ARE RATE-LIMITED — do not add retry/recovery logins.
+ *    The dev server does not set NODE_ENV=test, so the login rate limiter is ACTIVE
+ *    (auth.setup.ts:20). A `reloadAuthenticated()` helper that re-logged-in after a
+ *    bounced reload was tried and REVERTED: it roughly doubles login volume, trips
+ *    the limiter, and strands the page on /staff/login — turning a rare flake into a
+ *    reproducible failure (2/12 at `workers: 1`, where the plain reload was 0/5).
+ *    Fix the concurrency, never paper over it with more logins.
+ */
+
 export async function staffLogin(page: Page, role: StaffRole): Promise<void> {
   const { email, password } = DEFAULT_CREDENTIALS[role];
 

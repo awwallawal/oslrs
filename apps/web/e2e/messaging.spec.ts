@@ -95,12 +95,22 @@ test.describe('Supervisor Messaging', () => {
   //
   // REVISED 2026-07-27 (code review). The first rewrite did the round-trip with
   // `page.reload()`, on the reasoning that a reload proves the inbox came from the
-  // server rather than from in-memory state. It does — but it also drops the
-  // in-memory access token, so the session has to be rebuilt by a silent refresh
-  // that races ProtectedRoute; when it loses, the test lands on the public home
-  // page. Measured at **2 failures in 3 runs** locally, i.e. the rewrite shipped a
-  // fresh flake into the story whose whole purpose is removing them. (Its "3/3"
-  // claim did not reproduce.) See the note in helpers/messages.ts.
+  // server rather than from in-memory state. It does — but it drops the in-memory
+  // access token, so the session must be rebuilt by the boot `/auth/refresh`, and
+  // in THIS suite that refresh is not reliably valid: every spec logs in as the
+  // same seeded `supervisor@dev.local`, and the API is single-session by design —
+  // each login reaps the previous refresh token (token.service.ts:146). Parallel
+  // workers therefore invalidate each other, and whoever reloads after a sibling
+  // logged in gets 401 and lands on the public home page. Measured at 2 failures
+  // in 3 runs locally; the rewrite shipped a fresh flake into the story whose whole
+  // purpose is removing them. (Its "3/3" claim did not reproduce.)
+  //
+  // NOT a product defect: probed 2026-07-27, a lone session reloads cleanly 5/5
+  // (`/auth/refresh` → 200, stays on /messages). The root cause was the shared
+  // account under PARALLEL workers, which is now fixed at source by `workers: 1`
+  // in playwright.config.ts — so a reload here would be safe today. It stays out
+  // because it costs a 2-5s auth-boot chain to buy a weak property; see the note in
+  // helpers/messages.ts.
   //
   // The reload is therefore gone. Selection is cleared through the UI instead
   // (the broadcast button sets selectedPartnerId=null — SupervisorMessagesPage.tsx:167),

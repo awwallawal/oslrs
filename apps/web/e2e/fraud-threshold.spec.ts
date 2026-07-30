@@ -84,8 +84,25 @@ test.describe('Fraud Threshold Settings', () => {
     await expect(page.getByTestId('threshold-value-gps_cluster_radius_m')).toHaveText(newValue);
 
     // --- Verify persistence on page reload ---
+    // This reload is SAFE ONLY BECAUSE the suite runs single-worker (see the
+    // `workers: 1` rationale in playwright.config.ts). The suite shares one seeded
+    // account per role and the API is single-session — every login reaps the previous
+    // refresh token (token.service.ts:146) — so with parallel workers a sibling's
+    // login invalidates this page's cookie and the reload 401s onto the public home
+    // page. Measured 2026-07-27 while chasing the 13-36 residual: 0% flaky at
+    // `--workers=1`, 17% at 2, 42% at 4, 58% at 6.
+    //
+    // Do NOT "harden" this by re-logging-in after a failed reload: that doubles the
+    // suite's login volume and trips the login rate limiter (active locally because
+    // the dev server is not NODE_ENV=test — see auth.setup.ts:20), which strands the
+    // page on /staff/login. Tried and measured; it made things worse.
+    //
+    // The explicit budget stays: a reload restarts the whole auth boot chain
+    // (/auth/refresh → /auth/me → this page's query, serialized because apiClient
+    // awaits awaitAccessToken() before fetching — api-client.ts:52), which measured
+    // 2-5s even on the happy path.
     await page.reload();
-    await expect(page.getByTestId('fraud-thresholds-page')).toBeVisible();
+    await expect(page.getByTestId('fraud-thresholds-page')).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId('threshold-value-gps_cluster_radius_m')).toHaveText(newValue);
 
     // --- Cleanup: Restore original value ---

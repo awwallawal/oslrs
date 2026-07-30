@@ -85,6 +85,8 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 ## 3. Current state (2026-07-27)
 - **Prod = `830dcf7`**. Everything code-side for the launch send-system + the wizard is deployed + verified.
 - **E2E Tests is now a trustworthy signal** (13-36): green on push AND on a `repeat_each: 3` burn-in. A red there is now a real regression — triage it, never reflexively re-run. Burn-in on demand: `gh workflow run e2e.yml --ref main -f repeat_each=3` (max 7; `workers: 1`, so it tests repetition, NOT concurrency).
+- ⚠️ **The Playwright suite CANNOT go parallel — now enforced by `workers: 1` in `playwright.config.ts`** (probed 2026-07-27, verified against source 2026-07-30). Every spec logs in as the same seeded account per role and the API is **single-session by design** — each login reaps the user's previous refresh token (`token.service.ts`), so parallel workers invalidate each other and any full page load then 401s → `AUTH_LOGOUT` → public home page. Dose-response: workers 1/2/4/6 → **0% / 17% / 42% / 58%** failures. The symptom (test lands on `/`) looks exactly like a product bug and is not one; a real user pressing F5 keeps their session. **Do not raise the worker count to speed up a local run** — that needs per-worker seeded accounts first. Two remedies that made it WORSE, don't retry: raising the assertion timeout (the cause isn't slowness) and re-logging-in after a bounced reload (doubles login volume → trips the locally-active login rate limiter → strands on `/staff/login`).
+- 🧠 **Durable lesson from 13-36 worth more than the story**: an unexplained low-percentage failure rate is **a measurement you have not made yet**, not a property of the environment. The story shipped a "~0.8%, browser was probably offline, deliberately unfixed" residual; it was neither 0.8% nor environmental. Vary one variable (worker count) and instrument the request chain.
 - **`db:seed:dev` now CONVERGES drifted `@dev.local` accounts** — run it first when local e2e reds but CI is green. It is now destructive-by-design, so it refuses any DB whose name isn't `test`/`dev`-ish or `app_db` (`ALLOW_DEV_SEED_DB=1` overrides).
 - **`campaign_sends` table LIVE on prod** (7 cols + 2 indexes) — the 13-24 cross-system contact-dedupe ledger. Ledger-liveness PROVEN (0→1 on a dry-run, then cleaned).
 - Registry baseline: **144 respondents / 81 submissions / 0 campaign_sends** (restore target after any test reg).
@@ -128,6 +130,17 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
    Deployed `830dcf7`, all 10 CI jobs green, **no OSV block** (ending a 5-deploy streak). Task 3b/AI-2
    discharged by dispatching the burn-in and checking the test COUNT (57→155), not just the green — the
    passthrough could have been silently dropped and still passed.
+
+9. **13-36 final pass** (2026-07-30) — after the story was already deployed, a probe overturned the
+   mechanism behind its CRITICAL finding AND its last "accepted residual" (the "~0.8% browser-offline"
+   condition was really the shared-account/single-session collision). Root fix: `workers: 1` everywhere.
+   My pass verified that conclusion against source (`AuthContext:58` + `ProtectedRoute:55` prove there was
+   never a route-guard race) and found the canonical playbook now contradicted its own shipped code in two
+   places. **Two process lessons worth keeping: (1) I flipped `Status: done` while the tree was still
+   moving — the §1 ritual should end by asking "is the tree quiet?", the same question §0 opens with.
+   (2) Prose is not type-checked: three of this story's findings (AI-4, AJ-2, AJ-4) were all "the comment
+   says something the code disproves", and the playbook is the worst place for it because it is cited by
+   number from other docs.**
 
 ---
 ### How to update this doc
