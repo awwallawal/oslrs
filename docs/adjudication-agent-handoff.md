@@ -69,6 +69,27 @@ Most are probably un-ticked AC/template checklists (9-12 has 33, 9-9 has 30) —
 real and launch-gating (see §4). Treat a `done` story's unchecked boxes as unverified until read. Triage is
 deferred: §8.
 
+### 2a1. Invisible PAYMENT — the inverse of invisible debt
+
+§2a0 catches debt hiding behind `done`. The mirror case is just as real: **a later story can silently
+discharge an earlier story's residual, and nobody goes back to tick the box.** 13-19's operator residual
+(re-upload + re-pin + dry-run) was satisfied by 13-34 a week later, because 13-34 re-uploaded the very same
+workbook — yet 13-19 sat at `review`, tagged LAUNCH-GATING, until someone *remembered*. That is a false
+blocker, and near a launch a false blocker costs as much as a missed one.
+
+- **When a story performs an operator action** (form re-upload/re-pin, a backfill, a migration run,
+  a credential rotation), **grep the backlog for other stories waiting on the same action** and close them
+  in the same commit. Sibling of `[[feedback_canonical_primitive_backlog_sweep]]`; the operator equivalent
+  of the canonical-primitive sweep.
+- **When you find such a transitive discharge, check the opposite first.** The interesting question is not
+  "did the later story satisfy the earlier one?" but **"did the later story CLOBBER it?"** — 13-34 edited
+  the same workbook and could have dropped 13-19's edit (the stale-carry flavour of
+  `[[pattern-ship-a-fix-that-never-fires]]`). Prove survival with a re-runnable check — here a `md5sum`
+  drift comparison plus the guard test — not with the changelog.
+- **Take the closure that IS proven and give the sliver a mechanical trigger.** Don't tick what wasn't
+  observed, and don't leave the whole item open over a detail. Fold the gap into a run that is already
+  scheduled (13-19's last 2 fields → the pre-blast positive control) so the trigger fires by itself.
+
 ### 2a. Verify-myself checklist
 - `pnpm --filter @oslsr/api exec tsc --noEmit` (API) / `cd apps/web && pnpm exec tsc --noEmit` (web). **Scripts are OUTSIDE tsconfig — RUN them / test them, don't trust tsc for `apps/api/scripts/*`.**
 - `eslint` the touched files explicitly.
@@ -136,7 +157,7 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 4. Before firing: `docs/runbooks/pre-blast-dry-run.md` — incl. **§2 ledger-liveness `SELECT`** (fail-soft `recordCampaignSend` could silently no-op).
 - 🚨 **TWO LAUNCH-GATING ITEMS ARE UNCHECKED UNDER STORIES MARKED `done`** (found 2026-07-30 by the §2a0 gate — both were invisible on the board):
   1. **13-24 Task 5** — `- [ ]` in the story: *operator: confirm Resend Pro live, then `_backfill-registration-autosends.ts --dry-run` → `--apply`*. This IS step 2 of the launch sequence below. Story + board both read `done`; the task is not.
-  2. **13-19 L3** — `- [ ]` *AC3 E2E remains an operator residual*: Task 2 is ticked for the **dev half only**; the real proof (operator re-upload + a public dry-run capturing occupation) was never taken. Story file says `review`, board says `done`, MEMORY tags 13-19 **LAUNCH-GATING**. Resolve the status divergence and take the proof BEFORE the blast.
+  2. ~~**13-19 L3**~~ — ✅ **RESOLVED 2026-07-30, no longer launch-gating.** It had been **discharged transitively by 13-34** a week earlier (same workbook re-uploaded + re-pinned; AC6 dry-run through the pinned form) — Awwal recalled it, adjudication verified it. The real risk was the inverse: 13-34 could have *clobbered* the fix. It did not — operator copy and fixture are byte-identical (`c66bb236…`) and the M1 guard test `public-core-form-relevance.test.ts` passes **6/6** against the Jul-23 copy. Story flipped `review` → `done`, so the board divergence is gone. Residual sliver (2 of 3 labour fields never directly observed; the row was deleted) is **ACCEPTED** with a mechanical trigger: `pre-blast-dry-run.md` §6 now requires all three asserted on the positive-control registration before teardown.
 - **13-24 Task 4 (Dry-run #2) = DONE.** Only Task 5 remains on 13-24 — and see the alert above: it is unchecked while the story reads `done`.
 - The stale `re-engagement-campaign-launch.md` was superseded by 13-24's §2; follow 13-24.
 

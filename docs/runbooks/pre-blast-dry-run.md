@@ -77,6 +77,20 @@ COMMIT;
 - [ ] `--dry-run` count sanity-checked against expectation (and it IS the number, not a stale doc).
 - [ ] Suppression + contact-dedupe confirmed APPLIED (13-24, enforced in code) — the dry-run's `excluded:` line was read, not assumed.
 - [ ] ONE positive-control send/registration proven end-to-end on a controlled inbox.
+- [ ] **All 3 labour fields present in the positive-control registration's `raw_data`** (13-19 L3 — the
+      story this discharges). Before deleting the test row, run:
+      ```sql
+      SELECT raw_data->>'main_occupation'   AS occupation,
+             raw_data->>'employment_status' AS employment,
+             raw_data->>'years_experience'  AS experience
+      FROM submissions WHERE respondent_id = '<RID>';
+      ```
+      All three must be non-null. **Why this is here:** 13-19 stripped the `relevant` gate off those 3
+      questions so they are always asked; the fix is guarded in code
+      (`public-core-form-relevance.test.ts`, 6/6) and the pinned form carries it — but the only live
+      observation to date (13-34's dry-run, 2026-07-23) recorded `main_occupation` alone, and that row was
+      deleted. This closes the last 2 fields on a run you are doing anyway. Capture the output in the story
+      before teardown — §5 deletes the evidence.
 - [ ] Capacity confirmed (Resend Pro / Termii sender-ID).
 - [ ] Monitoring in view (`registration_autosend.*`, Resend dashboard) for the live run.
 - [ ] Test artifacts (if any) cleaned + baseline restored.

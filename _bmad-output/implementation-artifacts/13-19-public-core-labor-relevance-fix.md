@@ -1,6 +1,6 @@
 # Story 13-19: Fix Public Core labor-block relevance (occupation is not being captured)
 
-Status: review
+Status: done
 
 <!-- Authored 2026-07-06 by Bob (SM) via *create-story. EMERGENT + LAUNCH-GATING from the 2026-07-06 AC6 dry-run: a real public registration through the pinned Public Core captured skills but NOT main_occupation/employment_type/years_experience. Root cause = those 3 questions carry a `relevant` condition referencing employment_status/temp_absent — fields that were CUT from the Public Core (the deferred labor-force block). The condition never evaluates true → the questions never render → occupation is silently dropped. Confirmed in prod: the dry-run submission raw_data had skills_possessed but none of occupation/employment_type/years_experience. -->
 
@@ -34,7 +34,28 @@ Adversarial code-review 2026-07-08 (different LLM). 0 High, 2 Medium, 3 Low. No 
 - [x] **[AI-Review][Med] M2 — widen the AC2 orphan sweep.** It only checked `relevant`/`relevance`/`calculation`/`constraint`; XLSForm `${field}` refs can also live in `choice_filter`/`default`/`readonly`/expression-form `required`. Added those columns so a future orphan can't hide where the guard wasn't looking. [public-core-form-relevance.test.ts:AC2]
 - [x] **[AI-Review][Low] L1 — pin the `grp_labor` section gate.** No test asserted the `${age} >= 15` group gate survives; stripping it would ask under-15s for occupation (inverse silent-drop). Added an assertion that the section containing `main_occupation` retains its `showWhen`. [public-core-form-relevance.test.ts:AC3-native]
 - [x] **[AI-Review][Low] L2 — assert warning IDENTITY, not just count.** `warnings.length <= 3` let a new unexpected warning silently swap in. Now every warning must be one of the known deferrals (`business_address`/`apprentice_count`/`skill_list`); still tolerates 13-20 removing the skill_list one. [public-core-form-relevance.test.ts:AC3-validate]
-- [ ] **[AI-Review][Low] L3 — AC3 E2E remains an operator residual.** Task 2 is `[x]` for the dev half only; the real proof (a public dry-run whose `raw_data` carries all 3 labour fields) is still operator-gated. Honestly disclosed already — tracked here so it isn't lost: **re-upload + re-pin `wizard.public_form_id` via the audited UI (13-17) + re-run the AC6 dry-run BEFORE the blast.** [operator/ops]
+- [x] **[AI-Review][Low] L3 — AC3 E2E — re-upload/re-pin DISCHARGED; last 2 labour fields ACCEPTED with a trigger (adjudicated 2026-07-30).** Task 2 is `[x]` for the dev half only; the real proof (a public dry-run whose `raw_data` carries all 3 labour fields) is still operator-gated. Honestly disclosed already — tracked here so it isn't lost: **re-upload + re-pin `wizard.public_form_id` via the audited UI (13-17) + re-run the AC6 dry-run BEFORE the blast.** [operator/ops]
+  - **DISCHARGED TRANSITIVELY BY 13-34** (2026-07-23), which Awwal recalled and adjudication verified:
+    13-34 edited the SAME Public Core workbook (geopoint removal + occupation relabel), the operator
+    re-uploaded BOTH copies and **re-pinned** `wizard.public_form_id` via the audited UI — public-active
+    now serves `019f8ed3` v3.0.0 — and its AC6 dry-run went through that pinned form on the human UI.
+  - **The real risk here was the opposite of a missing tick: 13-34 could have CLOBBERED this fix**, since
+    it edited the same workbook a week later (the stale-carry flavour of
+    `pattern-ship-a-fix-that-never-fires`). It did not. Verified 2026-07-30, re-runnable:
+    `md5sum` shows the operator copy and the fixture byte-identical (`c66bb236…`, 13-34's drift guard
+    held), and the M1 guard test `apps/api/src/services/__tests__/public-core-form-relevance.test.ts`
+    passes **6/6** against that Jul-23 copy — so the `relevant` strip survived into the uploaded form and
+    all 3 labour questions are asked unconditionally.
+  - **What is NOT fully observed, and its trigger.** L3 asked for a dry-run whose `raw_data` carries ALL
+    3 labour fields. 13-34's evidence names only `main_occupation=Tailor`; employment
+    and experience were never recorded and the test row has since been deleted, so it cannot be
+    re-checked. The MECHANISM is proven (above) and the remaining two share one code path with the
+    confirmed field. Per the §2a0 debt gate this is **ACCEPTED**: measurement = guard test 6/6 + one
+    live field captured through the pinned form; owner = Awwal; **reopen trigger = the pre-blast
+    positive-control registration, where `docs/runbooks/pre-blast-dry-run.md` §6 now REQUIRES all three
+    fields to be asserted before teardown.** Folded into a run that is happening anyway — zero extra cost,
+    and the runbook makes the trigger mechanical rather than a promise.
+
 
 ## Dev Notes
 - **This is a form-only fix** (no code) — but it's LAUNCH-GATING: capturing skills without occupation makes the register incomplete for the whole public channel. Do it before the blast, re-pin, and re-run the AC6 dry-run.
