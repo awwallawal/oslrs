@@ -34,7 +34,7 @@ Adversarial code-review 2026-07-08 (different LLM). 0 High, 2 Medium, 3 Low. No 
 - [x] **[AI-Review][Med] M2 — widen the AC2 orphan sweep.** It only checked `relevant`/`relevance`/`calculation`/`constraint`; XLSForm `${field}` refs can also live in `choice_filter`/`default`/`readonly`/expression-form `required`. Added those columns so a future orphan can't hide where the guard wasn't looking. [public-core-form-relevance.test.ts:AC2]
 - [x] **[AI-Review][Low] L1 — pin the `grp_labor` section gate.** No test asserted the `${age} >= 15` group gate survives; stripping it would ask under-15s for occupation (inverse silent-drop). Added an assertion that the section containing `main_occupation` retains its `showWhen`. [public-core-form-relevance.test.ts:AC3-native]
 - [x] **[AI-Review][Low] L2 — assert warning IDENTITY, not just count.** `warnings.length <= 3` let a new unexpected warning silently swap in. Now every warning must be one of the known deferrals (`business_address`/`apprentice_count`/`skill_list`); still tolerates 13-20 removing the skill_list one. [public-core-form-relevance.test.ts:AC3-validate]
-- [x] **[AI-Review][Low] L3 — AC3 E2E — re-upload/re-pin DISCHARGED; last 2 labour fields ACCEPTED with a trigger (adjudicated 2026-07-30).** Task 2 is `[x]` for the dev half only; the real proof (a public dry-run whose `raw_data` carries all 3 labour fields) is still operator-gated. Honestly disclosed already — tracked here so it isn't lost: **re-upload + re-pin `wizard.public_form_id` via the audited UI (13-17) + re-run the AC6 dry-run BEFORE the blast.** [operator/ops]
+- [x] **[AI-Review][Low] L3 — AC3 E2E FULLY DISCHARGED 2026-07-30 (live prod dry-run, all 3 labour fields observed).** Task 2 is `[x]` for the dev half only; the real proof (a public dry-run whose `raw_data` carries all 3 labour fields) is still operator-gated. Honestly disclosed already — tracked here so it isn't lost: **re-upload + re-pin `wizard.public_form_id` via the audited UI (13-17) + re-run the AC6 dry-run BEFORE the blast.** [operator/ops]
   - **DISCHARGED TRANSITIVELY BY 13-34** (2026-07-23), which Awwal recalled and adjudication verified:
     13-34 edited the SAME Public Core workbook (geopoint removal + occupation relabel), the operator
     re-uploaded BOTH copies and **re-pinned** `wizard.public_form_id` via the audited UI — public-active
@@ -46,7 +46,22 @@ Adversarial code-review 2026-07-08 (different LLM). 0 High, 2 Medium, 3 Low. No 
     held), and the M1 guard test `apps/api/src/services/__tests__/public-core-form-relevance.test.ts`
     passes **6/6** against that Jul-23 copy — so the `relevant` strip survived into the uploaded form and
     all 3 labour questions are asked unconditionally.
-  - **What is NOT fully observed, and its trigger.** L3 asked for a dry-run whose `raw_data` carries ALL
+  - ✅ **CLOSED 2026-07-30 — the trigger fired same-day.** Awwal ran a public registration on prod
+    (NIN `90000000012`, ref `OSL-2026-0YD9GM`, respondent `019fb312-6eee-761b-875e-b0b3700d7bf4`) through
+    the pinned form `019f8ed3`. **All three labour fields present in `raw_data`, ungated:**
+    `main_occupation=Tailor`, `employment_type=self_employed`, `years_experience=7_10` — with `age=42`, so
+    the retained `${age} >= 15` group gate (L1) admitted the section correctly. `gps_location` NULL
+    (13-34 invariant holds). Both auto-sends fired (`confirmation_email_sent_at` +
+    `thankyou_referral_sent_at`, 12:49) and `campaign_sends` went 0→1 — so this run ALSO re-proved 13-24
+    M1 ledger-liveness. Test graph deleted afterwards; counts restored to 144/81/0.
+  - ⚠️ **Adjudication error worth recording: the verification SQL asserted the WRONG field name.** It read
+    `employment_status`, which returned NULL and momentarily looked like a 13-19 regression. The pinned
+    form serves **`employment_type`**; `employment_status` is a key from OLDER form versions still present
+    in the corpus. The name had been taken from a `DISTINCT jsonb_object_keys` scan across ALL historical
+    submissions instead of from the currently pinned form — the same 'check an identifier against the
+    thing that DEFINES it' rule this project keeps re-learning (§2a). Runbook corrected with the reason.
+  - **Superseded note (kept for the record):**
+  - **What was NOT fully observed, and its trigger — now discharged by the above.** L3 asked for a dry-run whose `raw_data` carries ALL
     3 labour fields. 13-34's evidence names only `main_occupation=Tailor`; employment
     and experience were never recorded and the test row has since been deleted, so it cannot be
     re-checked. The MECHANISM is proven (above) and the remaining two share one code path with the

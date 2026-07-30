@@ -64,11 +64,26 @@ If your positive control created a TEST registration, remove it and restore the 
 BEGIN;
 DELETE FROM fraud_detections WHERE submission_id IN (SELECT id FROM submissions WHERE respondent_id = '<RID>');
 DELETE FROM marketplace_profiles WHERE respondent_id = '<RID>';
-DELETE FROM magic_link_tokens   WHERE respondent_id = '<RID>';
+DELETE FROM magic_link_tokens    WHERE lower(email) = '<TEST_EMAIL>';   -- BY EMAIL, not RID (see below)
+DELETE FROM wizard_drafts        WHERE lower(email) = '<TEST_EMAIL>';
 DELETE FROM submissions          WHERE respondent_id = '<RID>';
 DELETE FROM respondents          WHERE id = '<RID>';
+DELETE FROM campaign_sends       WHERE lower(email) = '<TEST_EMAIL>';   -- the ledger row from §2
 COMMIT;
 ```
+- ⚠️ **`magic_link_tokens` MUST be deleted by EMAIL.** A wizard-issued token has
+  **`respondent_id = NULL`**, so the `WHERE respondent_id = '<RID>'` form this recipe used until
+  2026-07-30 deleted **0 rows every time** and reported success. Found by the 2026-07-30 dry-run: three
+  unused tokens for the test email had accumulated — one each from the 13-34 (07-23), 13-24 (07-24) and
+  07-30 runs. **The recipe had silently leaked residue on all three dry-runs.** All were expired, so no
+  security exposure, but a `DELETE 0` that looks like a clean teardown is exactly the shape this project
+  calls `pattern-ship-a-fix-that-never-fires` — **read the row counts, don't just check for errors.**
+- ⚠️ `fraud_detections` hangs off `submission_id`, **not** `respondent_id` — hence the subquery on line 1.
+  Getting this wrong aborts the transaction (harmlessly, with `ON_ERROR_STOP=1`).
+- Use `-v ON_ERROR_STOP=1` so a wrong column name rolls the whole thing back instead of half-deleting.
+- Housekeeping, NOT launch-gating (noted 2026-07-30): **27 expired orphan tokens** (`respondent_id IS NULL`,
+  unused) sit in `magic_link_tokens`, oldest 2026-05-19, out of 279 total. **0 live** — no user impact. A
+  reaper cron would be nice post-launch; do not bulk-delete without re-checking the live count first.
 - [ ] **Do NOT delete the user account** if the test authenticated to a real, pre-existing account (check `users.created_at` — if it predates today, it's real; leave it).
 - [ ] **`audit_logs` is append-only** — a DB trigger (`audit_logs_immutable()`) rejects DELETE and will roll back the whole transaction. Do NOT include audit rows in the delete; the 1–2 audit rows referencing the test respondent are harmless historical records (`target_id` has no FK). Leave them.
 - [ ] **Verify restore:** `respondents` + `submissions` counts back to the §0 baseline; the test NIN/email is gone; no orphaned `marketplace_profiles`; the real account intact.
@@ -80,11 +95,15 @@ COMMIT;
 - [ ] **All 3 labour fields present in the positive-control registration's `raw_data`** (13-19 L3 — the
       story this discharges). Before deleting the test row, run:
       ```sql
-      SELECT raw_data->>'main_occupation'   AS occupation,
-             raw_data->>'employment_status' AS employment,
-             raw_data->>'years_experience'  AS experience
+      SELECT raw_data->>'main_occupation'  AS occupation,
+             raw_data->>'employment_type'  AS employment,   -- NOT employment_status
+             raw_data->>'years_experience' AS experience
       FROM submissions WHERE respondent_id = '<RID>';
       ```
+      ⚠️ **The field is `employment_type`.** `employment_status` also appears in the submissions corpus —
+      it is a key from OLDER form versions. This SQL originally asserted it and produced a false NULL on
+      the 2026-07-30 dry-run, briefly looking like a 13-19 regression. Read question names off the
+      **currently pinned form**, never off a `DISTINCT jsonb_object_keys` scan across all history.
       All three must be non-null. **Why this is here:** 13-19 stripped the `relevant` gate off those 3
       questions so they are always asked; the fix is guarded in code
       (`public-core-form-relevance.test.ts`, 6/6) and the pinned form carries it — but the only live
