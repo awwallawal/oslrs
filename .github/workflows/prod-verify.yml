@@ -1,0 +1,140 @@
+name: Prod Verify (read-only)
+
+# WHY THIS EXISTS
+# ---------------
+# The pre-blast gate (docs/runbooks/pre-blast-dry-run.md) has checks that are
+# MANDATORY before firing a send — above all §2's ledger-liveness SELECT, because
+# `recordCampaignSend` is FAIL-SOFT: if the ledger silently stops writing, every
+# blast cohort is un-deduped and the double-send this system exists to prevent
+# ships looking "done".
+#
+# Until now the only way to run those checks was `ssh` over Tailscale. On
+# 2026-07-31 that path failed repeatedly while the SAME box served public HTTPS in
+# 1.9s: Tailscale could not establish a direct connection and was relaying via
+# DERP "sfo" at 386-826ms, and eventually stopped passing traffic entirely
+# (`tailscale ping` → no reply) even though the peer showed Online. A verification
+# step you cannot run on blast day is not a gate.
+#
+# GitHub Actions already SSHes into this VPS on every deploy, over the public
+# path, and has never failed. This job reuses that proven route. It is the
+# FALLBACK, not the replacement: Tailscale remains the interactive tool.
+#
+# READ-ONLY BY CONSTRUCTION, not by discipline
+# --------------------------------------------
+# Every psql call runs with `default_transaction_read_only=on`, so a write is
+# rejected by POSTGRES even if someone later edits a query into this file. That is
+# deliberate: "we only put SELECTs in here" is a promise, and this repo has spent
+# two sessions learning that a guard beats a promise.
+
+on:
+  workflow_dispatch:
+    inputs:
+      control_email:
+        description: 'Optional: a positive-control address to check for ledger/suppression rows (e.g. lawalkolade+radio4@gmail.com)'
+        required: false
+        default: ''
+
+concurrency:
+  group: prod-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Read-only prod verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run the pre-blast read-only checks on the VPS
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          CONTROL_EMAIL: ${{ inputs.control_email }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: CONTROL_EMAIL
+          script: |
+            set -euo pipefail
+            # -c default_transaction_read_only=on : Postgres refuses any write from
+            # this session, so this job cannot mutate prod even by mistake.
+            PSQL="docker exec -e PGOPTIONS=-c\ default_transaction_read_only=on oslsr-postgres psql -U oslsr_user -d oslsr_db -X -q"
+
+            echo "=============================================================="
+            echo "1. DEPLOYED SHA + BASELINE  (pre-blast-dry-run.md §0)"
+            echo "=============================================================="
+            echo "VPS HEAD: $(cd /root/oslrs && git rev-parse --short HEAD)"
+            $PSQL -c "
+              SELECT (SELECT count(*) FROM respondents)     AS respondents,
+                     (SELECT count(*) FROM submissions)     AS submissions,
+                     (SELECT count(*) FROM campaign_sends)  AS campaign_sends,
+                     (SELECT count(*) FROM registry_unified) AS registry_unified;"
+            echo "^^ RE-MEASURE, never 'restore to N' — organic registrations arrive."
+            echo "   Teardown deletes the rows YOU created, BY ID (retro R-5)."
+
+            echo
+            echo "=============================================================="
+            echo "2. WIZARD DRAFT CONTRACT  (Pitfall #46 / Story 13-47)"
+            echo "=============================================================="
+            $PSQL -c "
+              SELECT f.id AS pinned_form,
+                     COUNT(DISTINCT q->>'sectionId') AS sections,
+                     3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
+              FROM questionnaire_forms f,
+                   LATERAL jsonb_array_elements(f.form_schema->'questions') AS q
+              WHERE f.id::text = (SELECT trim(both '\"' from value::text)
+                                  FROM system_settings WHERE key = 'wizard.public_form_id')
+              GROUP BY f.id;"
+            echo "-- draft step distribution: MAX below N means autosave is being rejected --"
+            $PSQL -c "
+              SELECT current_step, count(*) AS drafts
+              FROM wizard_drafts GROUP BY current_step ORDER BY current_step;"
+
+            echo
+            echo "=============================================================="
+            echo "3. LEDGER LIVENESS  (§2 — MANDATORY, recordCampaignSend is FAIL-SOFT)"
+            echo "=============================================================="
+            $PSQL -c "
+              SELECT count(*) AS sends_last_24h, max(sent_at) AS latest
+              FROM campaign_sends WHERE sent_at > now() - interval '24 hours';"
+            $PSQL -c "
+              SELECT category, channel, count(*) FROM campaign_sends
+              GROUP BY 1,2 ORDER BY 3 DESC;"
+
+            echo
+            echo "=============================================================="
+            echo "4. ATTRIBUTION  (13-47 AC8 — assert the READ, not just the write)"
+            echo "=============================================================="
+            $PSQL -c "
+              SELECT COALESCE(raw_data->'campaign_source'->>'channel','(unknown)') AS channel,
+                     count(*)
+              FROM submissions WHERE raw_data->'campaign_source' IS NOT NULL
+              GROUP BY 1 ORDER BY 2 DESC;"
+            echo "-- 0 rows here while a paid channel is running = attribution is dead --"
+
+            echo
+            echo "=============================================================="
+            echo "5. SUPPRESSIONS"
+            echo "=============================================================="
+            $PSQL -c "SELECT reason, count(*) FROM email_suppressions GROUP BY 1 ORDER BY 2 DESC;"
+
+            if [ -n "${CONTROL_EMAIL:-}" ]; then
+              echo
+              echo "=============================================================="
+              echo "6. POSITIVE CONTROL: ${CONTROL_EMAIL}"
+              echo "=============================================================="
+              $PSQL -v email="${CONTROL_EMAIL}" -c "
+                SELECT 'campaign_sends' AS t, count(*)::text AS n FROM campaign_sends WHERE lower(email)=lower(:'email')
+                UNION ALL SELECT 'suppressions', count(*)::text FROM email_suppressions WHERE lower(email)=lower(:'email')
+                UNION ALL SELECT 'magic_link_tokens', count(*)::text FROM magic_link_tokens WHERE lower(email)=lower(:'email')
+                UNION ALL SELECT 'wizard_drafts', count(*)::text FROM wizard_drafts WHERE lower(email)=lower(:'email')
+                UNION ALL SELECT 'users', count(*)::text FROM users WHERE lower(email)=lower(:'email');"
+              echo "-- a NON-ZERO campaign_sends row after a control send is the §2 proof --"
+              echo "-- magic_link_tokens must be cleaned BY EMAIL at teardown: a wizard-issued"
+              echo "   token has respondent_id NULL, so deleting by RID reports DELETE 0 and"
+              echo "   leaves residue (found 2026-07-30, three runs had leaked)."
+            fi
+
+            echo
+            echo "=============================================================="
+            echo "All queries ran with default_transaction_read_only=on."
+            echo "=============================================================="

@@ -1865,6 +1865,19 @@ so it no longer depends on the draft at all.
 
 *Updated: 2026-07-30 — Pitfall #46 added (found while running the Story 13-46 AC9 attribution liveness dry run against prod; root-caused the same session). **A form re-pin changes the wizard's step count, and any server-side step bound is a claim about the form you just replaced.** Numbering: `#45` was the high-water mark; `grep -roiE "pitfall #4[5-9]"` across the whole repo returned only `#45` before minting `#46` (see #45's note on why one convention alone shows the wrong maximum).*
 
+**🔧 THE THING TO RUN (added 2026-07-31).** This pitfall told you the step count can move but gave you
+nothing to execute. It now has a tool: `pnpm --filter @oslsr/api form:diff <outgoing.xlsx> <incoming.xlsx>`
+reports orphaned questions, introduced ones (flagging REQUIRED, which is a resume dead-end), the wizard
+step-count delta with the sections added/removed, and the **silent mis-map class** — a `name` that survives
+but changed `type`, or a choice value that was dropped so an already-stored answer stops validating. It
+exits 1 only on that last class, because orphans and additions are informational while a mis-map is not.
+**Worked example, the one that motivated it:** 291 live drafts had been answered against the MASTER and
+were about to resume into the PUBLIC CORE. `form:diff` reports *strict subset by name and type, 22
+orphans, sections 7 → 6 (N 11 → 10), `grp_household` removed* — which is precisely the cross-form hazard,
+since `currentStep` is a positional index and a draft parked past a removed section lands on a different
+one. (In that instance the `.max(5)` cap had frozen every draft at or before `grp_identity`, which sits at
+the same position in both forms — so the bug that caused the incident also prevented its worst symptom.)
+
 ### Pitfall #47: A CACHED or SKIPPED gate is not a PASSED gate — "green" is not evidence that a check executed
 
 **Symptom**: a pre-push hook returns in under a second — `Tasks: 4 successful, 4 total · Cached: 4 cached ·

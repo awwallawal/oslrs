@@ -27,6 +27,17 @@ This is a **gate that cannot be half-done**: every box below is checked, or you 
       ```
       Then PUT a draft at `currentStep = N` and expect **200**. Also check the standing signal: a spike of
       `registration.draft_rejected` in the API logs means the contract has drifted again.
+      🔧 **Two tools now do this for you (added 2026-07-31) — neither needs Tailscale:**
+      - **Before the re-pin:** `pnpm --filter @oslsr/api form:diff <outgoing.xlsx> <incoming.xlsx>` —
+        reports orphaned/introduced questions, the step-count delta, and the SILENT MIS-MAP class
+        (a name that survives but changed type, or a dropped choice value). Exits 1 on that class.
+        Worked example: Master → Public Core reports *strict subset, 22 orphans, N 11 → 10*.
+      - **Any time:** run the **Prod Verify (read-only)** workflow from the Actions tab
+        (`gh workflow run prod-verify.yml -f control_email=<addr>`). It prints §0's baseline, this
+        draft contract, §2's ledger liveness, the attribution breakdown and suppressions — over the
+        GitHub→VPS SSH path that the deploy job proves working every release, with
+        `default_transaction_read_only=on` so it cannot write. Use it when Tailscale is relaying
+        (or dead), which it was on 2026-07-31 while public HTTPS to the same box answered in 1.9s.
 - [ ] 🔴 **RESUME COMPATIBILITY — if the public form was re-pinned since these drafts were created.**
       The blast invites people to RESUME, and a draft created against the OLD form hydrates into the
       NEW one. 13-47 fixed the step-cap incompatibility; **whether the stored `questionnaireResponses`

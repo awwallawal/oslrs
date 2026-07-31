@@ -13,6 +13,7 @@
     "test:contract": "vitest run --test-name-pattern='Contract'",
     "test:ui": "vitest run --test-name-pattern='UI'",
     "lint": "eslint src scripts && tsx scripts/lint-registry-read-drift.ts",
+    "form:diff": "tsx scripts/form-diff.ts",
     "lint:registry-read": "tsx scripts/lint-registry-read-drift.ts",
     "db:generate": "tsc && drizzle-kit generate",
     "db:migrate": "tsc && drizzle-kit migrate",
