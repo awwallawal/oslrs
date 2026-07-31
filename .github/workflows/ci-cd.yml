@@ -129,6 +129,26 @@ jobs:
             osv-full.sarif
           retention-days: 30
 
+      # ── Registry-read drift guard (Story 13-37) ───────────────────────────
+      # Story 13-33 made ONE canonical respondent-anchored registry read
+      # (registryUnifiedSource). This step fails the deploy-gating job when new
+      # code hand-rolls a respondent⟕submission read instead of composing it —
+      # the drift that once understated the public register by ~45%.
+      #
+      # ⚠️ ORDER MATTERS — THIS STEP MUST STAY ABOVE "Lint". The guard is also
+      # folded into the api package `lint` chain (so pre-commit covers it with no
+      # hook edit). If `Lint` ran first, it would fail on a drift and abort the
+      # job BEFORE this step ever executed — the named red step would be
+      # unreachable and the failure would surface buried in eslint output, which
+      # is precisely what running it explicitly is meant to avoid.
+      # (Found in the 13-37 code review, 2026-07-30.)
+      #
+      # Detector: apps/api/src/lib/registry-read-drift.ts (unit-tested in the
+      # test-api job). Genuine exception: annotate the line with
+      # `// registry-read-drift-ok: <reason>`.
+      - name: Registry-read drift guard (Story 13-37)
+        run: pnpm --filter @oslsr/api lint:registry-read
+
       - name: Lint
         run: pnpm lint
 
