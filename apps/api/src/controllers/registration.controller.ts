@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { submitWizardSchema } from '../validation/registration.schema.js';
+import { submitWizardSchema, type SubmitWizardInput } from '../validation/registration.schema.js';
 import { respondents, submissions, wizardDrafts, type WizardDraftData } from '../db/schema/index.js';
 import { uuidv7 } from 'uuidv7';
 import { AuthService } from '../services/auth.service.js';
@@ -58,7 +58,27 @@ const deferReminderSchema = z.object({
 // + `questionnaireFormVersionId` added explicitly (Step 4 introspection).
 const saveDraftSchema = z.object({
   email: z.string().email('Valid email is required').max(255),
-  currentStep: z.number().int().min(1).max(5).optional(),
+  /**
+   * Wizard step index + 1. **NOT a fixed 5** — the public wizard's step count is
+   * FORM-DRIVEN: `3 head steps (Basics/Contact/Consent) + one step per form
+   * SECTION + 1 review` (`apps/web/.../hooks/useWizardStepCount.ts:20-22`,
+   * mirroring `WizardPage.buildSteps`).
+   *
+   * ⚠️ REGRESSION 2026-07-23 → 2026-07-30 (fixed here). `.max(5)` was correct for
+   * the fixed five-step wizard of Story 9-12 and was never re-derived when steps
+   * became section-driven. On 2026-07-23 the 13-34 re-pin published a **six**-
+   * section public form → N = 10 → **every autosave from step 6 upward 400'd**
+   * with the deliberately generic `WIZARD_DRAFT_INVALID_INPUT` (`:353`, no Zod
+   * field structure), so it surfaced only as a silent local `saveError`:
+   *   - drafts froze at the cap (measured: 232 of 293 at step 4-5, MAX 5, in a
+   *     10-step wizard) — resume silently loses every answer past the cap;
+   *   - Story 13-1's `extras` slot is written on the REVIEW step (serverStep 10),
+   *     so `campaign_source` could never persist → channel attribution was dead
+   *     (0 of 84 submissions carried it).
+   * Bound generously: this is a sanity check on a client-supplied integer, not a
+   * schema contract. Do not re-tighten it to the step count of the day.
+   */
+  currentStep: z.number().int().min(1).max(50).optional(),
   formData: z
     .object({
       // Story 9-18 Part F: given/family are canonical; fullName kept optional
@@ -101,17 +121,36 @@ const saveDraftSchema = z.object({
 // `submitWizardSchema` is imported at the top of this file.
 
 /**
- * Story 13-1 (AC3) — build the `campaign_source` attribution key from a wizard draft's
- * forward-compat `extras` slot. Returns a spreadable partial: `{}` when nothing was captured
- * (so the key is OMITTED from raw_data — AC3.4 degenerate path), else `{ campaign_source }`.
- * Best-effort + total: never throws, so attribution can never block a submit (AC2.2/AC6).
+ * Story 13-1 (AC3) — build the `campaign_source` attribution key. Returns a spreadable partial:
+ * `{}` when nothing was captured (so the key is OMITTED from raw_data — AC3.4 degenerate path),
+ * else `{ campaign_source }`. Best-effort + total: never throws, so attribution can never block a
+ * submit (AC2.2/AC6).
+ *
+ * SOURCES, in precedence order (payload → draft), added 2026-07-30:
+ *   1. `payload` — the validated `campaignSource` from the submit body. Authoritative, and
+ *      independent of the debounced draft. This is the 13-23 pattern applied to attribution.
+ *   2. `extras` — the wizard draft's forward-compat slot. Fallback only: it still serves a client
+ *      that predates the payload field, but sole-sourcing it is what made 13-1 undeliverable.
+ * See `validation/registration.schema.ts` → `campaignSource` for the full incident note.
  */
-export function buildCampaignSource(extras: WizardDraftData['extras']): Record<string, unknown> {
-  if (!extras) return {};
-  const acquisition = extras.acquisition as { channel?: string } | undefined;
-  const utm = extras.utm as Record<string, unknown> | undefined;
-  if (!acquisition?.channel && !utm) return {};
-  return { campaign_source: { channel: acquisition?.channel ?? null, utm: utm ?? {} } };
+export function buildCampaignSource(
+  extras: WizardDraftData['extras'],
+  payload?: SubmitWizardInput['campaignSource'],
+): Record<string, unknown> {
+  const acquisition = extras?.acquisition as { channel?: string } | undefined;
+  const draftUtm = extras?.utm as Record<string, unknown> | undefined;
+
+  // PAYLOAD WINS, per field. The draft remains a fallback (a session resumed
+  // from a pre-2026-07-30 client sends no `campaignSource`), but is never the
+  // SOLE source — that is what made attribution silently undeliverable.
+  const channel = payload?.channel ?? acquisition?.channel ?? null;
+  const utmCandidate = payload?.utm ?? draftUtm;
+  // An empty object is "no UTM", not "a UTM" — otherwise a `{}` would write a
+  // campaign_source row that reports nothing and inflates the attributed count.
+  const utm = utmCandidate && Object.keys(utmCandidate).length > 0 ? utmCandidate : undefined;
+
+  if (!channel && !utm) return {};
+  return { campaign_source: { channel, utm: utm ?? {} } };
 }
 
 // Story 9-28 Path B — supplemental-survey submission. Token redemption
@@ -350,7 +389,25 @@ export class RegistrationController {
     try {
       const validation = saveDraftSchema.safeParse(req.body);
       if (!validation.success) {
-        // Code review L4 (2026-05-11) — generic 400, no Zod field structure.
+        // Code review L4 (2026-05-11) — the RESPONSE stays generic (no Zod field
+        // structure leaks to an unauthenticated caller).
+        //
+        // But log WHICH field rejected, server-side (added 2026-07-30). Twice now
+        // a draft autosave has been silently killed by a schema mismatch that was
+        // indistinguishable from any other bad payload — `prefilledQuestionNames`
+        // (13-23) and `currentStep`'s stale `.max(5)` cap. Both cost a production
+        // incident and a long diagnosis because NOTHING recorded the reason. The
+        // field path is not sensitive; withholding it from our own logs bought no
+        // security and cost two investigations.
+        //
+        // 🔭 This is the signal to watch: a spike of `registration.draft_rejected`
+        // with one repeated `paths` value means a client/schema contract has
+        // drifted again — most likely after a form re-pin changed the step count.
+        logger.warn({
+          event: 'registration.draft_rejected',
+          paths: validation.error.issues.map((i) => i.path.join('.')),
+          codes: validation.error.issues.map((i) => i.code),
+        });
         throw new AppError('WIZARD_DRAFT_INVALID_INPUT', 'Invalid draft payload', 400);
       }
 
@@ -735,7 +792,8 @@ export class RegistrationController {
             // Story 13-1 (AC3) — campaign attribution from the draft's forward-compat
             // extras slot. Spread LAST so it's authoritative (no answer key can clobber it);
             // the helper omits the key entirely when nothing was captured (AC3.4 degenerate path).
-            ...buildCampaignSource(draftFormData.extras),
+            // Payload first (13-23 precedence pattern), draft as fallback.
+            ...buildCampaignSource(draftFormData.extras, data.campaignSource),
           } as Record<string, unknown>,
           gpsLatitude: null,
           gpsLongitude: null,

@@ -520,6 +520,50 @@ describe('PUT /registration/draft', () => {
     expect(res.body.data.id).toBe('draft-pfn');
   });
 
+  it('ACCEPTS a draft at a step BEYOND 5 — the wizard step count is form-driven, not fixed', async () => {
+    // REGRESSION (live 2026-07-23 → 2026-07-30). `currentStep` was capped at
+    // `.max(5)`, correct for Story 9-12's fixed five-step wizard but never
+    // re-derived once steps became `3 head + one per form SECTION + 1 review`.
+    // The 13-34 re-pin published a SIX-section public form → N = 10, so every
+    // autosave from step 6 up 400'd behind the generic WIZARD_DRAFT_INVALID_INPUT:
+    // drafts froze at the cap (232 of 293 measured at step 4-5, MAX 5) and the
+    // 13-1 `extras` slot — written on the REVIEW step — could never persist, so
+    // `campaign_source` was absent from all 84 submissions.
+    // DELIBERATELY NOT pinned to today's N (=10 for the current 6-section form):
+    // hardcoding the step count of the day is the very mistake being fixed. These
+    // cover today's review step, plus headroom for forms with more sections.
+    for (const step of [6, 10, 25]) {
+      mockWizardDraftsFindFirst.mockResolvedValueOnce(null);
+      mockOnConflictReturning.mockResolvedValueOnce([
+        {
+          id: `draft-step${step}`,
+          currentStep: step,
+          lastUpdatedAt: new Date('2026-07-30T20:00:00Z'),
+          expiresAt: new Date('2026-09-29T20:00:00Z'),
+        },
+      ]);
+      const res = await request(buildApp())
+        .put('/registration/draft')
+        .send({
+          email: 'awwal@example.com',
+          currentStep: step,
+          formData: {
+            email: 'awwal@example.com',
+            extras: { acquisition: { channel: 'Radio' }, utm: { ref: 'fresh_fm' } },
+          },
+        });
+      expect(res.status, `step ${step} must be accepted`).toBe(200);
+      expect(res.body.data).toMatchObject({ id: `draft-step${step}`, currentStep: step });
+    }
+  });
+
+  it('still REJECTS an absurd step (the bound is a sanity check, not a contract)', async () => {
+    const res = await request(buildApp())
+      .put('/registration/draft')
+      .send({ email: 'awwal@example.com', currentStep: 9999, formData: { email: 'awwal@example.com' } });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 200 with persisted shape on a clean save (upsert path)', async () => {
     mockWizardDraftsFindFirst.mockResolvedValueOnce(null);
     mockOnConflictReturning.mockResolvedValueOnce([
@@ -901,6 +945,55 @@ describe('POST /registration/wizard', () => {
     const res = await request(buildApp()).post('/registration/wizard').send(validBody({ nin: '12345678919' }));
     expect(res.status).toBe(201); // never blocks the submit (AC2.2/AC3.4)
     expect(capturedSubmissionValues.mock.calls[0][0]).not.toHaveProperty('rawData.campaign_source');
+  });
+
+  it('WIRING — campaign_source lands from the PAYLOAD when the draft is EMPTY (the production case)', async () => {
+    // This is the assertion that would have caught the outage. The unit tests on
+    // `buildCampaignSource` prove the precedence LOGIC; only this proves the
+    // controller actually PASSES the payload to it. The draft below is `{}` —
+    // exactly what production had, because the draft-step cap rejected every
+    // autosave past step 5, so `extras` never persisted for any user.
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    const capturedSubmissionValues = vi.fn();
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = {
+        values: (v: unknown) => {
+          capturedSubmissionValues(v);
+          return Promise.resolve(undefined);
+        },
+      };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () =>
+              Promise.resolve({ createdAt: new Date('2026-07-30T20:00:00Z'), formData: {} }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(
+        validBody({
+          nin: '12345678919',
+          campaignSource: { channel: 'Radio', utm: { ref: 'fresh_fm' } },
+        }),
+      );
+    expect(res.status).toBe(201);
+    expect(capturedSubmissionValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rawData: expect.objectContaining({
+          campaign_source: { channel: 'Radio', utm: { ref: 'fresh_fm' } },
+        }),
+      }),
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────────

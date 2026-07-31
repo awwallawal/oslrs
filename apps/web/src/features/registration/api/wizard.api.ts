@@ -1,5 +1,6 @@
 import { apiClient } from '../../../lib/api-client';
 import type { FlattenedForm } from '../../forms/api/form.api';
+import type { CampaignSourcePayload } from '../lib/attribution';
 
 /**
  * Story 9-12 Task 4.4 / Task 5 — wizard API surface.
@@ -187,6 +188,13 @@ export interface SubmitWizardRequest {
    * debounced best-effort wizard draft (which silently failed to persist it).
    */
   questionnaireFormId?: string;
+  /**
+   * Story 13-1 attribution carried in the payload (2026-07-30) — same rationale
+   * as `questionnaireFormId` above: the wizard draft is debounced best-effort and
+   * must not be the sole carrier. Built by `toCampaignSourcePayload`; omitted
+   * entirely when nothing was captured. Server precedence is payload → draft.
+   */
+  campaignSource?: CampaignSourcePayload;
   authChoice: 'magic-link' | 'password' | 'skip';
 }
 

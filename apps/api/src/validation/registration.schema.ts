@@ -48,6 +48,43 @@ export const submitWizardSchema = z.object({
   // is therefore intentionally not part of the submit payload; if a version
   // column is ever added, mirror this field with a UUID-validated version id.
   questionnaireFormId: z.string().uuid().optional(),
+  /**
+   * Story 13-1 attribution, carried in the PAYLOAD (added 2026-07-30).
+   *
+   * WHY THIS EXISTS — the same lesson as `questionnaireFormId` above, applied to
+   * the field beside it. 13-1 sole-sourced attribution from the wizard draft
+   * (`buildCampaignSource(draftFormData.extras)`), but the draft is a debounced
+   * best-effort copy the browser may never have flushed — the exact reason 13-23
+   * moved the form-id stamp into the payload. Two independent failures followed:
+   *   1. the draft-step cap froze every autosave past step 5, so `extras` could
+   *      NEVER persist (fixed same day in `registration.controller.ts`); and
+   *   2. even uncapped, the acquisition answer is chosen on the REVIEW step and
+   *      the Submit button sits directly beneath it — anyone submitting inside
+   *      the 2s autosave debounce loses their answer with no trace.
+   * Carrying it in the payload makes attribution independent of the draft
+   * entirely. Server precedence is payload → draft (never draft-only).
+   *
+   * BOUNDED, not a free-form blob: the client's `extras` slot is deliberately
+   * `Record<string, unknown>`, and spreading that into `raw_data` would let a
+   * crafted submit write arbitrary keys into the analytics substrate. Only these
+   * validated fields cross the boundary, mirroring `parseUtm`'s allow-list and
+   * its 120-char cap (`apps/web/.../lib/attribution.ts:36-53`).
+   */
+  campaignSource: z
+    .object({
+      channel: z.string().max(64).optional(),
+      utm: z
+        .object({
+          source: z.string().max(120).optional(),
+          medium: z.string().max(120).optional(),
+          campaign: z.string().max(120).optional(),
+          ref: z.string().max(120).optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict()
+    .optional(),
   authChoice: z.enum(['magic-link', 'password', 'skip']).default('magic-link'),
 });
 

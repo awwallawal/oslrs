@@ -20,7 +20,7 @@ import { isSectionStepSkippable } from '../lib/section-relevance';
 import { computePrefill, buildWizardIdentitySignature } from '../lib/wizard-prefill';
 import { unionGeopointNames } from '../../forms/utils/geopoint-suppression';
 import { deriveReviewCompleteness } from '../lib/review-completeness';
-import { parseUtm, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
+import { parseUtm, ATTRIBUTION_ENABLED, toCampaignSourcePayload } from '../lib/attribution'; // Story 13-1
 import {
   parseStepParam,
   clampToReached,
@@ -518,6 +518,16 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
       // and immune to the draft-autosave race that dropped the stamp server-side.
       // Omitted (undefined) when no public form is pinned (Step 4 was empty).
       questionnaireFormId: form?.formId,
+      // Story 13-1 attribution, carried in the PAYLOAD (2026-07-30) — the same
+      // treatment `questionnaireFormId` got directly above, and for the same
+      // reason: the wizard draft is debounced best-effort and must never be the
+      // sole carrier. Sole-sourcing it meant the acquisition answer, chosen on
+      // THIS screen with Submit directly beneath it, was lost by anyone who
+      // clicked inside the 2s debounce — and lost outright while the draft-step
+      // cap was rejecting every autosave past step 5. Server precedence is
+      // payload → draft. Undefined when nothing was captured, so the key is
+      // omitted rather than sent hollow.
+      campaignSource: toCampaignSourcePayload(effectiveFormData.extras),
       authChoice: fd.authChoice ?? ('magic-link' as const),
     };
 
@@ -575,6 +585,11 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
   }, [
     draft.formData,
     effectiveFormData.questionnaireResponses,
+    // 2026-07-30 — MUST be a dependency. `handleSubmit` reads `.extras` to build
+    // `campaignSource`; omitting it lets the callback close over a stale value and
+    // submit attribution the user has since changed. That is the same stale-read
+    // class this story exists to fix, so it is not an exhaustive-deps formality.
+    effectiveFormData.extras,
     form,
     isSubmitting,
     reviewCompleteness,
@@ -644,8 +659,19 @@ export default function WizardPage({ authenticated = false }: { authenticated?: 
             Saving your progress…
           </p>
         ) : draft.saveError ? (
-          <p className="text-xs text-warning-700" data-testid="wizard-autosave-error">
-            Couldn't save your progress just now. We'll keep retrying.
+          // 2026-07-30 — the previous copy read "We'll keep retrying", which was
+          // FALSE: `scheduleSave` only fires on the next formData change, so a
+          // user who stops typing is never retried. Combined with `text-xs` in a
+          // footer, a wizard that had stopped saving entirely (the draft-step cap
+          // rejected every autosave past step 5 for a week) looked completely
+          // normal. Say the true thing, and say it where it cannot be missed.
+          <p
+            role="alert"
+            className="rounded-md border border-warning-300 bg-warning-50 px-3 py-2 text-sm font-medium text-warning-800"
+            data-testid="wizard-autosave-error"
+          >
+            ⚠️ Your progress isn&apos;t being saved. You can keep going, but don&apos;t close this
+            tab — finish and submit in this session.
           </p>
         ) : null
       }
