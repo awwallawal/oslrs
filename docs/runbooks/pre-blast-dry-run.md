@@ -12,6 +12,31 @@ This is a **gate that cannot be half-done**: every box below is checked, or you 
 - [ ] Confirm the correct target: prod DB `oslsr_db` on the VPS (`ssh root@100.93.100.28` → `docker exec oslsr-postgres psql -U oslsr_user -d oslsr_db`). Read-only first.
 - [ ] Record the **baseline counts** you expect to restore to if this is a test: `SELECT count(*) FROM respondents;` + `SELECT count(*) FROM submissions;`. Write them down.
 - [ ] Confirm capacity: for email at volume, **Resend Pro must be active** (free tier = 100/day silently truncates). For SMS, Termii sender-ID approved.
+- [ ] ⚠️ **RE-MEASURE the baseline, do NOT trust a recorded one.** A written-down count silently becomes a
+      DELETION INSTRUCTION once real registrations arrive (2026-07-30: `144/81/0` was stale the moment an
+      organic signup landed). Teardown deletes the rows YOU created, **by id** — never "restore to N".
+- [ ] 🔴 **WIZARD DRAFT CONTRACT — run this if the public form has been re-pinned since the last blast**
+      (Pitfall #46 / Story 13-47). The wizard step count is FORM-DRIVEN (`3 head + one per SECTION + 1
+      review`), and the blast invites people to RESUME drafts. A re-pin that adds sections can push the
+      review step past a server-side bound, so every autosave silently 400s and resume discards answers:
+      ```sql
+      SELECT COUNT(DISTINCT q->>'sectionId') AS sections,
+             3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
+      FROM questionnaire_forms f, LATERAL jsonb_array_elements(f.form_schema->'questions') AS q
+      WHERE f.id = '<currently pinned form id>';
+      ```
+      Then PUT a draft at `currentStep = N` and expect **200**. Also check the standing signal: a spike of
+      `registration.draft_rejected` in the API logs means the contract has drifted again.
+- [ ] 🔴 **RESUME COMPATIBILITY — if the public form was re-pinned since these drafts were created.**
+      The blast invites people to RESUME, and a draft created against the OLD form hydrates into the
+      NEW one. 13-47 fixed the step-cap incompatibility; **whether the stored `questionnaireResponses`
+      keys still map is UNVERIFIED** (13-46 AC11). Resume one real pre-re-pin draft end to end and
+      confirm the answers land on the right questions before firing. A renamed question `name` is
+      silent data loss on resume.
+- [ ] 📻 **If a paid channel is running, verify ATTRIBUTION is live first** (13-46 AC9): one real
+      registration selecting a NON-first channel, arriving with `?ref=`, then assert BOTH the stored
+      `raw_data->'campaign_source'` AND that `getCampaignBreakdown()` returns it. Asserting only the write
+      is how 13-9 shipped a funnel nobody read.
 
 ## 1. Script dry-run (the `--dry-run` pass)
 Every blast script supports `--dry-run` (lists who WOULD be sent; sends nothing). Scripts: `_reengagement-email-blast.ts` (9-27A), `_thankyou-referral-blast.ts` (13-11), `_cohort-a-supplemental-survey-blast.ts` (9-28), `_backfill-registration-autosends.ts` (13-24 welcome). **All four print an `excluded: suppressed=N, contacted-within-Nd=N` line — that output IS the cohort size (13-24 AC5 iii); never quote a count from a doc.**

@@ -80,7 +80,20 @@ Amelia (BMAD dev agent) — claude-opus-4-8[1m], dev-story workflow, 2026-06-27.
 
 ### Review Follow-ups (AI) — code-review 2026-06-27 (AC1 increment)
 - [x] [AI-Review][Med] **M1 — supplemental blast utm tag was INERT** (that path attributes by-construction; `SupplementalSurveyPage` has no parseUtm). FIXED: reverted the supplemental tag; only the reengagement blast (→ main wizard) carries utm. Story claim corrected.
-- [ ] [AI-Review][Low] **L1 — resume autosave-timing** (forwarded utm persists via the 2s autosave; a resume→submit within ~2s could lose it). Known limitation; the robust fix is server-side campaign-on-token — folded into the AC3 next pass.
+- [x] [AI-Review][Low] **L1 — resume autosave-timing** (forwarded utm persists via the 2s autosave; a resume→submit within ~2s could lose it). Known limitation; the robust fix is server-side campaign-on-token — folded into the AC3 next pass.
+  ✅ **CLOSED 2026-07-31 by Story 13-47.** ⚠️ **Read this before filing another `Low` "known limitation".**
+  This finding was **correct, correctly diagnosed, and correctly prescribed** — *"the robust fix is
+  server-side"* — then classified `Low`, left unchecked inside a story marked `done`, and never seen
+  again. It was **rediscovered the hard way on 2026-07-30**, from the other end: a prod dry run showed
+  `campaign_source` on **0 of 84** submissions. The fix shipped in 13-47 is exactly what this line
+  prescribed a month earlier — attribution carried in the **submit payload** with payload→draft
+  precedence, so it no longer rides the debounced draft at all (`registration.controller.ts`
+  `buildCampaignSource(extras, payload)`; web `toCampaignSourcePayload`).
+  **The lesson is not about attribution.** A correct finding parked in an unchecked box inside a
+  `done` story is *indistinguishable from litter* — 299 such boxes exist across 61 done stories
+  (measured 2026-07-31). That invisibility is what handoff §8 **D1** (residual ledger) and **D3**
+  (Story 13-45, the CI guard that fails a `done` story holding an open row) exist to end. This box is
+  the worked example: **it predicted a production defect and could not be seen.**
 - [x] [AI-Review][Low] L2 — don't-clobber first-touch on resume (13-1 AC1.3) — accepted.
 
 ## Senior Developer Review (AI)

@@ -1,6 +1,6 @@
 # Story 13-47: Wizard draft-step cap (prod defect) + attribution durability
 
-Status: review
+Status: done
 
 <!-- EMERGENT 2026-07-30, found while running Story 13-46 AC9's attribution liveness dry run against
      PRODUCTION. The dry run was supposed to be a five-minute confirmation that a shipped feature
@@ -102,7 +102,7 @@ their answer, with no trace. Fixing the cap alone would have left a silent, inte
 8. **AC8 — DISCHARGE-ON-DEPLOY.** Re-run the 13-46 AC9 attribution liveness dry run against prod
    after CI is green and the deploy lands: one registration selecting a non-Radio channel arriving
    with `?ref=`, asserting **both** the stored `campaign_source` and `getCampaignBreakdown()`.
-   ⏳ **OPEN — cannot be verified before deploy.**
+   ✅ **DONE 2026-07-31 (deploy `a7a6cc9`).** WRITE: `{"utm":{"ref":"radio_test_4"},"channel":"Association / cooperative"}` — both independent paths, channel deliberately non-Radio. READ: the REAL `ReportService.getCampaignBreakdown()` executed on the box → `[{"channel":"Association / cooperative","count":1}]`. The read was RUN, not transcribed — asserting only the write is how 13-9 shipped a funnel nobody read.
 
 ## Tasks / Subtasks
 
@@ -128,7 +128,9 @@ their answer, with no trace. Fixing the cap alone would have left a silent, inte
 - [x] **Task 4 — Make the failure loud** (AC: #3, #4)
 - [x] **Task 5 — Guard the class** (AC: #6) — Pitfall #46.
 - [x] **Task 6 — Protect the audience** (AC: #7) — `UPDATE wizard_drafts SET expires_at = expires_at + interval '1 month'` → 292 rows; earliest expiry 2026-07-31 → **2026-08-31**; zero expiring within 7 days.
-- [ ] **Task 7 — DISCHARGE-ON-DEPLOY** (AC: #8) — re-run the dry run once CI is green and deployed.
+- [x] **Task 7 — DISCHARGED 2026-07-31** (AC: #8) — dry run re-run against prod on deploy `a7a6cc9`. Both
+      halves proven; evidence in the `## Residuals` R1 row. Test graph deleted BY ID; prod restored to
+      145/82/1 with 0 orphans and 0 residue.
 
 ## Dev Notes
 
@@ -340,7 +342,8 @@ makes the *current* path safe; only the schema makes the *invariant* true. When 
 
 | ID | Severity | State | Re-runnable evidence | Owner |
 |---|---|---|---|---|
-| **R1** — AC8 / Task 7: re-run the 13-46 AC9 attribution liveness dry run against prod (one registration on a NON-Radio channel, arriving with `?ref=`) asserting BOTH the stored `raw_data->'campaign_source'` AND that `getCampaignBreakdown()` returns it | **High** — asserting only the write is how 13-9 shipped a funnel nobody read; and this story exists because attribution was believed live while being structurally undeliverable | **DISCHARGE-ON-DEPLOY** — blocks `done`, not the commit | Free identities `NIN 90000000014` / `lawalkolade+radio4@gmail.com`. After the deploy lands and the VPS SHA is confirmed: register via the public wizard with `?ref=`, choose a non-Radio channel, then `SELECT raw_data->'campaign_source' FROM submissions …` **and** call `getCampaignBreakdown()`. Tear down **by id** — ⚠️ never "restore to a baseline count" (R-5). | Awwal + the adjudication session that pushes stage 1 |
+| ~~**R1**~~ ✅ **DISCHARGED 2026-07-31** — AC8 / Task 7: re-run the 13-46 AC9 attribution liveness dry run against prod (one registration on a NON-Radio channel, arriving with `?ref=`) asserting BOTH the stored `raw_data->'campaign_source'` AND that `getCampaignBreakdown()` returns it | **High** — asserting only the write is how 13-9 shipped a funnel nobody read; and this story exists because attribution was believed live while being structurally undeliverable | **DISCHARGE-ON-DEPLOY** — blocks `done`, not the commit | Free identities `NIN 90000000014` / `lawalkolade+radio4@gmail.com`. After the deploy lands and the VPS SHA is confirmed: register via the public wizard with `?ref=`, choose a non-Radio channel, then `SELECT raw_data->'campaign_source' FROM submissions …` **and** call `getCampaignBreakdown()`. Tear down **by id** — ⚠️ never "restore to a baseline count" (R-5). | Awwal + the adjudication session that pushes stage 1 |
+| **R1 EVIDENCE (2026-07-31, prod, deploy `a7a6cc9`)** | — | **CLOSED** | Registration `019fb922-83b4-7124-a81e-d74408ba34fb`, ref `OSL-2026-SSSPHZ`, entered at `/register?ref=radio_test_4`, form `019f8ed3`. **WRITE half — both independent paths landed:** `raw_data->'campaign_source'` = `{"utm": {"ref": "radio_test_4"}, "channel": "Association / cooperative"}` — the URL-capture path AND the Review-step answer, the latter deliberately NON-Radio to rule out first-position default. Labour fields also present (`Bricklayer / wage_private / over_10`). **READ half — the real deployed function, not a transcription:** `ReportService.getCampaignBreakdown()` executed on the box against prod → `[{"channel":"Association / cooperative","count":1}]`. `count: 1` across all 83 submissions corroborates the historical 0/84 and proves the pipe works going forward. Asserting only the write is how 13-9 shipped a funnel nobody read — so the read was run, not inferred. Test graph then deleted BY ID. | Claude (adjudication) |
 | **R2** — the 2s autosave debounce still means a RESUMED session's step position can lag by one debounce window | **Low** — cosmetic since attribution no longer rides on the draft and answers travel in the submit payload | **ACCEPTED** | **Measurement:** `SAVE_DEBOUNCE_MS = 2000` with no flush-on-submit (`useWizardDraft.ts:50,149`); the payload path now carries every answer that matters, so the only exposure is a resumed step index. **Reopen trigger:** any report of resume-position drift, or a story that reintroduces a draft-sole-sourced field. | Awwal |
 
 ## Change Log
@@ -348,3 +351,24 @@ makes the *current* path safe; only the schema makes the *invariant* true. When 
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-30 | **Story created and implemented in one session.** Found while running 13-46 AC9's attribution liveness dry run against prod: a seven-day-live defect where `saveDraftSchema`'s `currentStep: .max(5)` — correct for the fixed five-step wizard of 9-12, never re-derived once steps became form-driven — rejected every draft autosave past step 5 after 13-34's 2026-07-23 re-pin published a six-section form (N=10). Measured: 232/293 drafts frozen, `MAX(current_step)=5`, `campaign_source` on 0/84 submissions. Four independent silencers kept it invisible (generic un-logged 400; a client message that falsely promised retries; e2e resume tests that only exercise steps 0-2; submissions succeeding anyway via 13-23's payload precedence). Fixed the cap, moved attribution into the submit payload with payload→draft precedence + a bounded schema, added server-side rejection logging and an honest visible client alert, minted Pitfall #46, and extended all 292 live drafts by a month. Two RED-verifies. AC8 (post-deploy dry run) is the single open residual. | Claude (code-review/adjudication) |
+
+## Closing verdict
+
+<!-- D9 format (handoff §8 item D9), same block as 13-37. Fill it, don't reword it. -->
+
+- **Verdict:** ✅ **CLOSED 2026-07-31 — deployed, all ACs satisfied.** Shipped in two commits so the live
+  production fix stayed independently revertable: `e99ae89` (the defect) and `a7a6cc9` (the invariant).
+- **RED-verify evidence (run, not asserted):** (1) restoring `.max(5)` fails **exactly one** test —
+  *"ACCEPTS a draft at a step BEYOND 5"* — 1 failed / 55 passed, reproducing the dev's claim including that
+  only one test flips; (2) reverting the client sanitiser to the original cast fails **exactly the 6 new
+  hostile-input tests** while all 11 pre-existing stay green; (3) removing `.catch(undefined)` fails
+  **exactly the 6 invariant cases** while the control and 12 others stay green.
+- **Adjudication findings:** AJ-1 (Med, fixed) — `toCampaignSourcePayload` cast unvalidated draft `extras`
+  into a `.strict()` server field, so a malformed draft would have rejected the whole registration.
+  AJ-2 (Med, fixed) — AJ-1 fixed the CALLER, not the INVARIANT: the server still 400'd for any other
+  caller, and this schema is explicitly shared with the 9-61 authenticated-edit path. Raised by an
+  independent review of `e99ae89` and confirmed here.
+- **File-List reconciliation:** stage 1 committed exactly the 9 enumerated files; the follow-up touched 4.
+  No drift, no residue.
+- **Deploy SHA:** ✅ **`e99ae89`** (defect fix) → **`a7a6cc9`** (invariant). Both CI-green on all 10 jobs;
+  prod VPS SHA verified at each step; health 200. AC8's liveness dry run run against `a7a6cc9`.

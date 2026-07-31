@@ -1523,7 +1523,25 @@ After that single clear, the committed `755` takes over and every subsequent dep
 
 **Symptom**: `pnpm --filter @oslsr/api test` (or any whole-suite run) on a loaded dev machine intermittently **worker-crashes** (`exit 0xC0000409` on Windows) and/or reports a handful of `Test timed out` failures — most often in `mfa.service.test.ts`. The SAME suites are green **in isolation** and in **CI** (which runs each package as its own job on a dedicated runner, so it never has mutual contention). Silence ≠ broken tests: it's resource oversubscription.
 
-**Detection**: run the suspect file alone — if it passes (or fails identically alone), the full-run failure is contention, not a logic defect. Check whether the slow tests are bcrypt- or real-DB-bound (they dominate wall-clock).
+**Detection**: run the suspect file alone — if it passes (or fails identically alone), the full-run failure is contention, not a logic defect.
+
+**5th root cause + the escalation lever (added 2026-07-31, Story 13-47 push).** A pre-push can die with a
+**segmentation fault** — `exit -1073741819` / `0xC0000005` (access violation), husky reporting `code 139` —
+rather than a test failure. It is the same contention family as the `0xC0000409` above, but presents
+differently and is easy to misread as a broken commit or a bad network:
+- **Where it lands:** immediately after `src/services/import/parsers/__tests__/pdf-tabular.parser.test.ts`.
+  Parsing the real ITF register through pdfjs is the heaviest allocation in the suite, so it is the first
+  thing to fall over when RAM is tight — expect this specific test to be named in a crash, and do NOT
+  conclude the PDF parser is broken.
+- **Discriminator:** run that file alone. It passed 5/5 in 7 s while the full suite crashed twice in a row.
+- **Escalation lever:** `VITEST_MAX_THREADS=1 git push`. The hook defaults to 2 (`: "${VITEST_MAX_THREADS:=2}"`),
+  and an exported value wins. This CLEARED it — full suite 3351 tests / 251 files green.
+- **Cost, so you can budget it:** **28m39s vs ~11m** — roughly 2.5×. Worth knowing before assuming the
+  push has hung.
+- **NOT the network.** The gate runs entirely locally (vitest + Docker Postgres + an on-disk fixture); a bad
+  connection produces a git *transport* error at the push step, which is never reached because the hook
+  aborts first — and a flaky link would not reproduce deterministically at the same test twice.
+- **Do NOT `--no-verify`.** The gate refusing to push on an inconclusive run is it working. Check whether the slow tests are bcrypt- or real-DB-bound (they dominate wall-clock).
 
 **Four distinct root causes + fixes (1-3 shipped 2026-06-14; #4 added during the 9-55 push, this is the consolidated index):**
 1. **Cross-package suite contention** (Story 9-54 NG2). Plain `pnpm test` = `turbo run test` ran api + web + utils + testing **concurrently on one machine**, oversubscribing CPU + the Postgres pool. **Fix**: `.husky/pre-push` runs `pnpm exec turbo run test --concurrency=1` (each suite gets the whole machine). CI intentionally untouched. Commit `cab7077`.
@@ -1594,6 +1612,75 @@ The tell is a **clean dose-response with worker count** — measured on `fraud-t
 
 ---
 
+### Pitfall #45: A named blocking CI step placed BELOW a broader step that already runs the same command is unreachable — CI step ORDER is a correctness property, not cosmetics
+
+**The rule (checkable, and stated as a rule because prose is not type-checked).**
+
+> **In a single CI job, a named blocking step must not be preceded by any step whose command already
+> executes that same check. If it is, the named step can never run on the failure it exists to report.**
+
+Its mechanical form — assert this, don't write it in a comment:
+
+> For every custom-guard step *G* and every broad umbrella step *U* (`Lint`, `Test`, `Build` — anything
+> that fans out through `turbo`/a package script chain) in the same job: if *U*'s command transitively
+> invokes *G*'s command, then **index(*G*) < index(*U*)**.
+
+**Symptom**: none. That is the whole problem — a green pipeline and a step that has *never* executed on
+a real failure. It presents as "the guard works" right up until the first genuine hit, which then
+surfaces buried in another step's output while the step built to name it is skipped.
+
+**Cause** (Story 13-37, High finding **H1**, 2026-07-30): the registry-read drift guard was wired in
+**two** places, deliberately and correctly — folded into the `apps/api` package `lint` chain (so
+pre-commit and pre-push cover it with no hook edit) **and** as its own named step in `lint-and-build`
+(so a re-fork is a NAMED red step, not a line buried in eslint output). But the named step was placed
+*after* `- name: Lint`, and `Lint` runs `pnpm lint` → turbo → that same api `lint` chain. On a real
+drift, `Lint` exits non-zero, GitHub Actions aborts the job, and the named step never runs. **The
+second wiring's entire stated benefit was structurally unobtainable.** Both wirings were individually
+right; the *order* made one of them dead code. This is
+[[pattern-ship-a-fix-that-never-fires]] at the CI layer — inside the story written to prevent exactly
+that class.
+
+**Detection**: read the job top-to-bottom and ask of each named guard *"does anything above me already
+run this?"*. `pnpm lint` at the repo root fans out through turbo to every package's `lint` script — so
+folding a guard into a package `lint` chain silently makes the root `Lint` step a superset of it.
+Grepping for the guard's own command finds only the named step; you have to expand the umbrella.
+
+**Fix**:
+1. **Move the named step above the umbrella step.** Keep the lint-chain entry — that is what buys local
+   pre-commit/pre-push cover for free. Two wirings is correct; two wirings *in the wrong order* is not.
+   Current shape: `.github/workflows/ci-cd.yml:149` (guard) precedes `:152` (`Lint`).
+2. **Assert the order in a test, not a comment.** 13-37's fix was a `⚠️ ORDER MATTERS` comment in both
+   `ci-cd.yml` and the runner header. That is better than nothing and it is *not sufficient* — it is
+   the same "a comment that describes the hazard" mechanism whose failure is the founding evidence of
+   Story 13-41 (a correct comment sat directly above the broken SQL guard and was copied to a second
+   site; four writings survived review). The durable form is a test that parses
+   `.github/workflows/ci-cd.yml` and asserts each custom-guard step's index within `lint-and-build` is
+   less than `Lint`'s. No YAML parser needed — comparing the line indices of `- name:` entries is
+   enough.
+3. **Group custom guards into one block above the umbrella step**, so adding the next guard inherits
+   the correct position by default instead of relying on the author reading a comment.
+
+**Future consumers — this pitfall has known, named downstream work:**
+- **Story 13-41** (unsafe-SQL-cast CI guard) makes the ordering assertion an **acceptance criterion**
+  (AC6), not a preference, and its test covers the 13-37 step too — so neither guard can silently
+  regress. 13-41 also groups both guards into one "custom lints" block per fix #3.
+- **Handoff §8 D3 / Story 13-45** (the residual-ledger CI guard) will be the **third** consumer: it is
+  another named blocking step in the same job, and it inherits both the ordering rule and the shared
+  `apps/api/src/lib/ci-guard/` toolkit that 13-41 extracts.
+
+**Lesson**: "the step is wired in" and "the step can run" are two different claims, and only the second
+one matters. When a check is deliberately wired in two places, write down *why each placement exists*
+and then verify the order actually lets both fire — a redundant wiring that can never execute is worse
+than one wiring, because it reads like defence in depth.
+
+**Reference**: Story 13-37 adversarial code review, finding H1 (2026-07-30) —
+`_bmad-output/implementation-artifacts/13-37-registry-read-drift-ci-guard.md`. Guard step + the
+`⚠️ ORDER MATTERS` comment: `.github/workflows/ci-cd.yml:138-153`. Detector:
+`apps/api/src/lib/registry-read-drift.ts`; runner: `apps/api/scripts/lint-registry-read-drift.ts`.
+Ordering-as-an-AC: `_bmad-output/implementation-artifacts/13-41-unsafe-sql-cast-ci-guard.md` AC6.
+
+---
+
 *Generated: 2026-02-21*
 *Updated: 2026-04-25 — Parts 7 (Tailscale), 8 (OS patching), and 9 (Pitfalls #16–21) added per SCP-2026-04-22 + Story 9-9 deployment*
 *Updated: 2026-04-27 — Part 6.2 (build off-VPS artifact handoff) + Pitfalls #22–23 added per Wave 0 prep-story (manual pre-flight surfaced #23: silent test-key fallback for VITE_HCAPTCHA_SITE_KEY + VITE_GOOGLE_CLIENT_ID)*
@@ -1617,6 +1704,8 @@ The tell is a **clean dose-response with worker count** — measured on `fraud-t
 *Updated: 2026-07-04 — Pitfall #42 added (stranded-push resolution; commit `13275f1`). **The pre-push gate ran the full suite against the DEV DB (`app_db`), not the guard-enforced test DB — because it inherited root `.env` (`DATABASE_URL=app_db`, `NODE_ENV=development`) and the db-guard NO-OPS outside `NODE_ENV=test`.** Pitfall #39(3) added the guard but only for explicitly-`NODE_ENV=test` runs; the HOOK never set it, so the "always target a scratch DB whose name contains test" rule was discipline the automation itself bypassed. Consequences: (a) `app_db`'s schema silently drifted (an earlier agent kept `app_test` current per convention, but nobody migrated `app_db`) → the push was blocked by 30 `relation "email_events" does not exist`-class failures that were pure Epic-13 schema-drift, not code; (b) the suite polluted the 499k-row dev DB with fixtures — 21 leaked constraint-rejection rows (`Invalid Status Test`/`totally_made_up_status`) that later BROKE `db:push:full:force` (a CHECK can't be applied to a table already violating it). Fix: `.husky/pre-push` now `export NODE_ENV=test` + `DATABASE_URL=…/app_test` before `turbo run test`, so the local gate validates the SAME clean slate CI's `test_db` uses (both provisioned by `db:push:full:force`) and the guard is engaged. **Three sub-lessons:** (1) a test that depends on **ambient DB state** is a latent local↔CI divergence — `me.service.test.ts` (9-61) passed in CI (clean DB, no form pinned → `PUBLIC_FORM_NOT_CONFIGURED` swallowed) but failed on any DB with a real form pinned (`app_db`/prod, which enforces completeness); fix = OWN the fixture (`vi.spyOn(getPublicActiveForm)`), and it MUST be `beforeEach` not `beforeAll` because `vitest.base.ts` sets `restoreMocks:true` which wipes a `beforeAll` spy before the tests run (same root as the 13-13 mockReset pitfall). (2) After any schema change, sync `app_test`: `DATABASE_URL=…/app_test pnpm --filter @oslsr/api db:push:full:force`. (3) **A laptop that SLEEPS mid-pre-push produces fake failures** — a 9h+ `Duration`, `Error: Hook timed out in 15000ms` + `Connection terminated`, but ZERO assertion failures (e.g. `2951 passed | 0 failed`, 2 "file failed" = hook timeouts). That is Pitfall #37's sleep/resume contention, NOT a real failure: re-push with the machine awake (web replays from turbo cache, only the API suite re-runs). Full resolution + local DB map in `local-test-db-parity` memory + the running doc.*
 
 *Updated: 2026-07-20 — Pitfall #43 added (Story 13-2 → 11-2 dependency-inversion, dev-story session). **A story's stated scope is a LIE if its dependency isn't actually built — verify the dependency against the CODEBASE before writing a line, not against the dependency's story status.** `dev-story` was invoked on 13-2 (association importer), whose scope read "add ONE enum value + ONE `import-sources.ts` config block onto the 11-2 import spine." That framing was true ONLY if 11-2 existed — it did NOT: only 11-1 (schema) was built; `import-sources.ts`, the dry-run/confirm/rollback endpoints, the parsers — none existed (the present `import.queue/worker` were the unrelated STAFF importer). A ~10-minute ground-truth check (glob `**/import-sources.ts` → none; grep for `/imports/dry-run` → none) reframed the task from "config tweak" to "stand up the entire 11-2 spine first." The story even carried the tell — an "EFFORT FLAG: the one-enum-one-block framing holds only once 11-2's service exists" — which planning had written but nobody had verified. **Three sub-lessons:** (1) **Before `dev-story` on any story that says "reuse/build-on X", confirm X's concrete artifacts exist in the tree** (glob the files, grep the endpoints) — a dependency being marked `ready-for-dev`/`done-adjacent` in `sprint-status.yaml` is NOT proof it's built. A ready-for-dev story whose substrate is unbuilt silently inflates 1 story into 3-4. (2) This is the PLANNING-side cousin of the [[pattern-ship-a-fix-that-never-fires]] class — a story that can't fire because its substrate is unbuilt, vs a fix that can't fire because its path is bypassed; same "trace it to where it actually executes/exists" discipline. (3) **Real fixtures expose what synthetic ones hide** — the same session's synthetic pdfkit PDF test passed clean, but Awwal's REAL ITF register (`Oyo_shortlisted_artisans.pdf`) surfaced redacted phones + no `respondents.email` column + a title-rows-before-header parser bug; ingest/parser code MUST be proven against a real source artifact, not only a hand-built one. Full narrative: `docs/session-2026-07-20-import-spine-and-email-channel.md` (durable-lesson #1/#2).*
+
+*Updated: 2026-07-30 — Pitfall #45 added (Story 13-37 adversarial code review, finding H1). **CI step ORDER is a correctness property: a named blocking step must not be preceded by a broader step whose command already runs the same check, or the named step is unreachable.** The registry-read drift guard was wired twice on purpose — folded into the `apps/api` package `lint` chain (free pre-commit/pre-push cover) AND as its own named `lint-and-build` step (a NAMED red instead of a line buried in eslint output) — but the named step sat BELOW `- name: Lint`, and `Lint` runs `pnpm lint` → turbo → that same chain. On a real drift the job aborts at `Lint` and the named step never executes, so the second wiring's entire stated benefit was structurally unobtainable. Both wirings were individually correct; the order made one of them dead code. Fixed by moving the step above `Lint` (`ci-cd.yml:149` vs `:152`). **The comment is not the fix** — Story 13-41 makes the ordering an acceptance criterion (AC6) with a test that reads `ci-cd.yml` and asserts every custom-guard step's index is less than `Lint`'s, covering the 13-37 step too; handoff §8 D3 / Story 13-45 will be the third consumer. Numbering note: **`#44` was the previous high-water mark** and `#43` had already been double-assigned once (2026-07-20, renumbered to `#44` during the 13-36 review) because `#26`-`#38` are `### Pitfall #N` headings while `#39`-`#43` live ONLY as footer `*Updated:*` paragraphs — neither convention alone shows the highest number. `#45` was minted only after `grep -n "Pitfall #"` across the WHOLE repo (not just this file) returned no `#45`+.*
 
 ## Part 12: Encrypted Backup Restore (added 2026-05-09 per Story 9-9 AC#5)
 
@@ -1716,3 +1805,93 @@ Most API keys do **not** expire (Resend, Termii) — nothing to monitor. Declare
 Manual fallback checks: certs `openssl x509 -in <path> -noout -enddate`; domains `curl -sL https://rdap.org/domain/<d> | grep expiration`. UAT smoke: `tsx scripts/uat-trigger-critical-alert.ts --metric=expiry`.
 
 *Updated: 2026-06-09 — Part 13 (Expiry Inventory: certs + domain registrations + declared) added per F-024 origin-lock close-out (Story 9-9 #11); monitored by Story 9-50. See `docs/f-024-origin-lock-runbook.md` + `docs/security/findings-register.md` F-024.*
+
+---
+
+### Pitfall #46: A FORM re-pin silently changes the WIZARD's step count — re-verify the draft contract, because a server-side bound is a claim about a form you just replaced
+
+**The rule (checkable).**
+
+> **The public wizard's step count is FORM-DRIVEN — `3 head steps + one step per form SECTION + 1
+> review` (`useWizardStepCount.ts`, mirroring `WizardPage.buildSteps`). Any server-side bound on a
+> step number is therefore a claim about the CURRENTLY PINNED FORM. After every re-upload + re-pin,
+> prove the wizard can still save a draft at its FINAL step before declaring the re-pin done.**
+
+**The incident (2026-07-23 → 2026-07-30, seven days live).** Story 9-12 shipped a fixed five-step
+wizard, and `saveDraftSchema` bounded `currentStep: z.number().int().min(1).max(5)` — correct then.
+The step count later became section-driven, and nobody re-derived the bound. On 2026-07-23 the 13-34
+re-pin published a **six-section** public form → **N = 10** → every draft autosave from step 6 upward
+returned `400 WIZARD_DRAFT_INVALID_INPUT`.
+
+**Why nobody noticed for a week — four independent silencers, each individually defensible:**
+
+1. **The 400 was deliberately generic** (code review L4: no Zod field structure leaked to an
+   unauthenticated caller), so it was indistinguishable from any other bad payload — *and nothing
+   logged the rejected field.* Now fixed: the response stays generic, the **server logs the path**
+   (`registration.draft_rejected`). Withholding it from our own logs bought no security and cost two
+   investigations (13-23 was the first).
+2. **The client swallowed it** into a footer line reading *"We'll keep retrying"* — which was FALSE;
+   `scheduleSave` only re-fires on the next `formData` change. A wizard that had stopped saving
+   entirely looked normal.
+3. **The e2e resume tests stayed green.** `wizard-registration.spec.ts` exercises steps **0, 1, 2** —
+   all inside the cap. The harness that exists specifically to gate autosave-and-resume
+   (`docs/runbooks/e2e-wizard-resume-harness.md`) could not see it.
+4. **Submission still succeeded**, because Story 13-23 had already moved `questionnaireFormId` into
+   the submit payload. Registrations completed; only draft-resume and attribution were dead.
+
+**Blast radius.** 232 of 293 drafts frozen at step 4-5, `MAX(current_step) = 5` in a ten-step wizard
+— resume silently discards every answer past the cap. Story 13-1's `extras` slot is written on the
+REVIEW step, so `campaign_source` could never persist: **0 of 84 submissions** carried attribution,
+making the paid-channel CPA signal permanently unavailable for anything already sent.
+
+**The check to run after any re-pin** (add to the story's re-pin runbook):
+
+```sql
+-- N = 3 + sections + 1 for the newly pinned form; must be <= the schema bound.
+SELECT COUNT(DISTINCT q->>'sectionId') AS sections,
+       3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
+FROM questionnaire_forms f, LATERAL jsonb_array_elements(f.form_schema->'questions') AS q
+WHERE f.id = '<newly pinned form id>';
+```
+then PUT a draft at `currentStep = N` and expect 200 — or simply watch for a
+`registration.draft_rejected` spike, which is now the standing signal.
+
+**Generalisation (the reason this is a numbered pitfall and not a story note).** *A bound is a claim
+about the world. When the world becomes dynamic, the bound is already wrong — it just hasn't been
+contradicted yet.* Audit every `.min()/.max()` written against a value that later became
+configuration. Fixed 2026-07-30: bound raised to a generous sanity check with a "do not re-tighten"
+note, RED-verified regression tests over steps 6/10/25, and attribution moved into the submit payload
+so it no longer depends on the draft at all.
+
+*Updated: 2026-07-30 — Pitfall #46 added (found while running the Story 13-46 AC9 attribution liveness dry run against prod; root-caused the same session). **A form re-pin changes the wizard's step count, and any server-side step bound is a claim about the form you just replaced.** Numbering: `#45` was the high-water mark; `grep -roiE "pitfall #4[5-9]"` across the whole repo returned only `#45` before minting `#46` (see #45's note on why one convention alone shows the wrong maximum).*
+
+### Pitfall #47: A CACHED or SKIPPED gate is not a PASSED gate — "green" is not evidence that a check executed
+
+**Symptom**: a pre-push hook returns in under a second — `Tasks: 4 successful, 4 total · Cached: 4 cached ·
+>>> FULL TURBO` — on a commit that demonstrably changed source in that package. It looks like the strongest
+possible green. It is no evidence at all *about this commit*: turbo replayed a previous result and the suite
+never ran.
+
+**Observed 2026-07-31 (Story 13-37, commit `adbe330`)**: the commit added three files under `apps/api/`
+(`src/lib/registry-read-drift.ts`, its test, and `scripts/lint-registry-read-drift.ts`) and the pre-push
+came back FULL TURBO in **363 ms**. The first genuine execution of the API suite against that commit was
+CI's `test-api` job, not the local hook. (The immediately preceding push, `a7a6cc9`, had run the same suite
+for 28 minutes.)
+
+**Why it matters**: the whole value of the pre-push gate is "this exact tree was exercised before it left
+the machine". A cache hit silently converts that into "some earlier tree was". Treating the fast green as
+verification is how an unrun check becomes a believed one.
+
+**Rule**: when a gate reports CACHED, SKIPPED, or completes implausibly fast, **read what it actually did**
+before treating it as evidence — and say so out loud when reporting status. If the commit must be verified
+locally, force execution (`turbo run test --force`) rather than trusting the replay.
+
+**The family this belongs to.** Same evidentiary defect as **Pitfall #45** (a named CI step below a broader
+one never executes, so it can never go red) and as Story 13-37's own retro R-3: **a step that never runs
+also never goes red.** #45 is the ordering form, #47 the caching form, and both reduce to one rule —
+*a gate's value depends on its having RUN, so verify the run, not the colour.* This is
+`pattern-ship-a-fix-that-never-fires` applied to the verification layer itself.
+
+**Reference**: Story 13-37 close-out (2026-07-31). Numbering: `#46` was the high-water mark;
+`grep -rhoE "Pitfall #[0-9]+"` across `docs/` **and** `_bmad-output/` returned nothing above `#46` before
+minting `#47` (see #45's note on why one convention alone shows the wrong maximum).
