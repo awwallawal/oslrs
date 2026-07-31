@@ -553,6 +553,20 @@ export class RegistrationController {
       }
 
       const data = validation.data;
+
+      // 🔭 STANDING SIGNAL (2026-07-31) — `campaignSource` is `.catch(undefined)`, so a
+      // malformed attribution value is DROPPED rather than rejecting the registration
+      // (AC2.2/AC6: attribution must never block a submit). That is the right trade, but
+      // a silent drop is how Story 13-1 stayed undeliverable for a month, so say when it
+      // happens. A spike here means a client/schema contract has drifted — same watch as
+      // `registration.draft_rejected`.
+      if (req.body?.campaignSource !== undefined && data.campaignSource === undefined) {
+        logger.warn({
+          event: 'registration.campaign_source_dropped',
+          keys: Object.keys((req.body.campaignSource ?? {}) as Record<string, unknown>),
+        });
+      }
+
       const normalisedEmail = data.email.toLowerCase().trim();
       const pendingNin = data.pendingNin === true || !data.nin;
       const ninValue = pendingNin ? null : data.nin ?? null;

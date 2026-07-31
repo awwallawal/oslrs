@@ -84,7 +84,29 @@ export const submitWizardSchema = z.object({
         .optional(),
     })
     .strict()
-    .optional(),
+    .optional()
+    // ⚠️ `.catch(undefined)` ENFORCES THE INVARIANT — do not remove it.
+    //
+    // AC2.2/AC6 state an ABSOLUTE rule: attribution is best-effort and must NEVER
+    // block a submit. `buildCampaignSource` upholds that server-side (total, never
+    // throws) — but validation runs BEFORE it, so a `.strict()` field without a
+    // catch made a malformed attribution value reject the ENTIRE registration.
+    // Measured on zod 3.23.8:
+    //     .strict()          → REJECTS WHOLE SUBMIT (unrecognized_keys)
+    //     .strict().catch()  → SUBMIT OK, attribution dropped
+    //
+    // The client sanitises before sending (`lib/attribution.ts` → `boundedUtm`),
+    // but that fixes the CALLER, not the invariant — and this schema is the single
+    // source of truth for the 9-61 authenticated-edit path too (see the module
+    // docblock), so "never" must not depend on every present and future caller
+    // behaving. Strictness is still doing its job: a malformed value is DISCARDED,
+    // never written, so a crafted submit still cannot put arbitrary keys into
+    // `raw_data`. We simply drop the attribution instead of the registration.
+    //
+    // Not silent: `submitWizard` logs `registration.campaign_source_dropped` when a
+    // value was supplied and did not survive, mirroring `registration.draft_rejected`
+    // — a client/schema contract drift stays visible rather than vanishing.
+    .catch(undefined),
   authChoice: z.enum(['magic-link', 'password', 'skip']).default('magic-link'),
 });
 

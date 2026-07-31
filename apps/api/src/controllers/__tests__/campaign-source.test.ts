@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildCampaignSource } from '../registration.controller.js';
+import { submitWizardSchema } from '../../validation/registration.schema.js';
 
 /**
  * Story 13-1 (AC3 / AC5.1) — the SCP gate assertion: a wizard draft's `extras.{acquisition,utm}`
@@ -86,5 +87,65 @@ describe('buildCampaignSource — payload → draft precedence', () => {
   it('still omits the key when neither source captured anything', () => {
     expect(buildCampaignSource(undefined, undefined)).toEqual({});
     expect(buildCampaignSource({}, {})).toEqual({});
+  });
+});
+
+/**
+ * Adjudication 2026-07-31 — THE INVARIANT, enforced where it is actually guaranteed.
+ *
+ * AC2.2/AC6: attribution is best-effort and must NEVER block a submit. The first fix
+ * sanitised the CLIENT (`lib/attribution.ts`), which stops today's wizard sending a bad
+ * value — but validation still ran before `buildCampaignSource`, so ANY other caller could
+ * 400 an entire registration with a malformed attribution field. `submitWizardSchema` is
+ * explicitly the single source of truth for the 9-61 authenticated-edit path too (see its
+ * module docblock), so "never" must not depend on every caller behaving.
+ *
+ * `.catch(undefined)` makes the field degrade instead of reject. Strictness still does its
+ * real job: the malformed value is DISCARDED, never written, so a crafted submit cannot put
+ * arbitrary keys into `raw_data` — we drop the attribution, not the registration.
+ */
+describe('submitWizardSchema.campaignSource — must never block a submit', () => {
+  const base = {
+    givenName: 'Ada',
+    familyName: 'Lovelace',
+    phone: '+2348000000000',
+    email: 'invariant@example.com',
+    lgaId: 'saki_west',
+    consentMarketplace: true,
+    nin: '90000000099',
+    authChoice: 'magic-link' as const,
+  };
+
+  it('CONTROL — a conforming campaignSource is preserved', () => {
+    const r = submitWizardSchema.safeParse({
+      ...base,
+      campaignSource: { channel: 'Radio', utm: { source: 's', ref: 'r' } },
+    });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.campaignSource).toEqual({
+      channel: 'Radio',
+      utm: { source: 's', ref: 'r' },
+    });
+  });
+
+  it.each([
+    ['a utm key outside the allow-list', { utm: { source: 's', content: 'x' } }],
+    ['an over-long utm value', { utm: { source: 'x'.repeat(200) } }],
+    ['an over-long channel', { channel: 'y'.repeat(100) }],
+    ['a non-string utm value', { utm: { source: 42 } }],
+    ['an unrecognised top-level key', { channel: 'Radio', evil: 'payload' }],
+    ['a wholly wrong type', 'not-an-object'],
+  ])('accepts the submit and DROPS attribution when it carries %s', (_label, campaignSource) => {
+    const r = submitWizardSchema.safeParse({ ...base, campaignSource });
+    // The registration survives...
+    expect(r.success).toBe(true);
+    // ...and the bad value is discarded rather than written.
+    expect(r.success && r.data.campaignSource).toBeUndefined();
+  });
+
+  it('still omits the key entirely when no attribution was sent', () => {
+    const r = submitWizardSchema.safeParse(base);
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.campaignSource).toBeUndefined();
   });
 });

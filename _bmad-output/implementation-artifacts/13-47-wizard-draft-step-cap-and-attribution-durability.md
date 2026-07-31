@@ -304,9 +304,34 @@ commented as needing to move in step with the server schema.
 **RED-verified:** reverting to the cast fails **exactly the 6 new tests**, while the 11 pre-existing
 ones stay green — the blind-spot proof that the original suite could not see this.
 
-**Not changed, flagged only:** the same `extras` looseness means a crafted draft can still 400 *its own*
-submit via a direct API call. That is self-inflicted and carries no cross-user impact, so it is not worth
-tightening the forward-compat slot for.
+### AJ-2 [Med] — FIXED: AJ-1 fixed the CALLER, not the INVARIANT (found by an independent review of `e99ae89`)
+
+⚠️ **A correction to my own AJ-1 fix**, raised by a second review session and confirmed here. Sanitising
+`toCampaignSourcePayload` stops *today's client* sending a malformed value — but AC2.2/AC6 state an
+**absolute** rule, and the server still rejected the whole registration for any other caller:
+`campaignSource` was `.strict()` with no `.catch()`. That matters concretely, not theoretically, because
+`registration.schema.ts`'s own docblock names this schema the **single source of truth for the 9-61
+authenticated-edit path** as well — so a second live caller already shares it. "Never" must not depend on
+every present and future caller behaving.
+
+**FIX:** `.catch(undefined)` on the field. Measured on zod 3.23.8 — `.strict()` → rejects whole submit;
+`.strict().catch()` → submit OK, attribution dropped. Strictness still does its real job: the malformed
+value is **discarded, never written**, so a crafted submit still cannot put arbitrary keys into
+`raw_data`. We drop the attribution, not the registration.
+
+**Not silent** — the drop would otherwise be invisible, which is how 13-1 stayed undeliverable for a
+month. `submitWizard` now logs `registration.campaign_source_dropped` (with the offending top-level keys)
+when a value was supplied and did not survive, mirroring `registration.draft_rejected`. The log sits in the
+controller, not the schema, because the schema module is deliberately dependency-free (its docblock forbids
+pulling in the db layer).
+
+**RED-verified:** removing `.catch(undefined)` fails **exactly the 6 invariant cases** — 5th utm key,
+over-long value, over-long channel, non-string, unrecognised top-level key, wholly-wrong type — while the
+CONTROL and all 12 other tests stay green.
+
+**The transferable lesson:** AJ-1 was a correct finding with an incomplete fix. Sanitising at the boundary
+makes the *current* path safe; only the schema makes the *invariant* true. When a story states an absolute
+("must never"), fix it where it is guaranteed, not where it currently happens to be triggered.
 
 ## Residuals
 
