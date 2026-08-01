@@ -24,12 +24,16 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const SNAP = resolve(process.cwd(), '../../docs/vps-snapshots');
-const IN = resolve(SNAP, 'drafts-raw-2026-08-01.json');
+const IN = resolve(SNAP, 'drafts-rich-2026-08-01.json');
 const OUT = resolve(SNAP, 'draft-triage-2026-08-01.xlsx');
 
 interface Row {
   draft_id: string;
-  contact_email: string;
+  draft_email: string;
+  /** A draft resolves to a respondent by ANY of three routes — see the header note. */
+  match_by_nin: string | null;
+  match_by_magiclink: string | null;
+  match_by_user: string | null;
   current_step: number | null;
   created: string;
   expires: string;
@@ -52,11 +56,27 @@ const rows: Row[] = JSON.parse(readFileSync(IN, 'utf8'));
  * valuable row in this sheet — it means we can now BACKFILL the rich answers behind
  * a record that was created bare.
  */
-const dedupe = JSON.parse(readFileSync(resolve(SNAP, 'dedupe-keys-2026-08-01.json'), 'utf8')) as {
-  all_nins: string[]; the63_nins: string[]; the63_total: number;
+const ids = JSON.parse(readFileSync(resolve(SNAP, 'respondent-ids-2026-08-01.json'), 'utf8')) as {
+  with_submission: string[]; without_submission: string[]; ref_by_id: Record<string, string>;
 };
-const REGISTERED = new Set(dedupe.all_nins.map((n) => String(n).trim()));
-const THE63 = new Set(dedupe.the63_nins.map((n) => String(n).trim()));
+const WITH_SUB = new Set(ids.with_submission);   // the 82 — full records
+const WITHOUT_SUB = new Set(ids.without_submission); // the 63 — absorbed, no submission
+const REF = ids.ref_by_id;
+
+/**
+ * ⚠️ RESOLVE A DRAFT TO A PERSON BY ALL THREE ROUTES, NOT JUST NIN.
+ *
+ * The first cut matched on NIN alone and found 28. Contact data is spread across
+ * FOUR tables (handoff §3c): `users.email`, `magic_link_tokens.email` (the most
+ * complete source — 283 rows / 138 distinct emails), `wizard_drafts.email`, and
+ * `respondents.phone_number`. Matching on all of them resolves 48 — so 20 drafts
+ * that looked like new registrations are people ALREADY in the registry.
+ *
+ * This is the same error that made me report the 63 as "phone-only": assuming a
+ * table instead of enumerating them.
+ */
+const respondentOf = (r: Row): string | null =>
+  r.match_by_nin ?? r.match_by_magiclink ?? r.match_by_user ?? null;
 
 const str = (v: unknown): string =>
   v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
@@ -103,8 +123,10 @@ const built = rows.map((r) => {
   const hasIdentity = !!(firstname && surname);
   const registerable = hasIdentity && !!nin && !!phone && !!lga;
 
-  const alreadyRegistered = !!nin && REGISTERED.has(nin);
-  const isOneOf63 = !!nin && THE63.has(nin);
+  const rid = respondentOf(r);
+  const alreadyRegistered = !!rid && WITH_SUB.has(rid);
+  const isOneOf63 = !!rid && WITHOUT_SUB.has(rid);
+  const existingRef = rid ? (REF[rid] ?? '') : '';
 
   let recommend: string;
   if (alreadyRegistered && !isOneOf63) recommend = 'ALREADY_REGISTERED';
@@ -127,7 +149,8 @@ const built = rows.map((r) => {
   ].filter(Boolean).join('; ') || 'all required fields present';
 
   return { r, firstname, surname, nin, dob, lga, phone, consent, answers, registerable,
-           recommend, why, alreadyRegistered, isOneOf63 };
+           recommend, why, alreadyRegistered, isOneOf63, existingRef,
+           matchRoute: r.match_by_nin ? 'nin' : r.match_by_magiclink ? 'magic_link' : r.match_by_user ? 'user' : '' };
 });
 
 const wb = new ExcelJS.Workbook();
@@ -136,6 +159,7 @@ const ws = wb.addWorksheet('Draft triage', { views: [{ state: 'frozen', xSplit: 
 
 const headers = [
   'DECISION', 'RECOMMENDED', 'WHY', 'answers', 'already_registered', 'one_of_the_63',
+  'existing_OSLRS_no', 'matched_via',
   'first_name', 'surname', 'nin', 'dob', 'lga', 'phone', 'contact_email',
   'consent_basic', 'current_step', 'created', 'expires',
   ...CORE.filter((c) => c !== 'consent_basic'),
@@ -150,7 +174,8 @@ for (const b of built) {
   ws.addRow([
     b.recommend, b.recommend, b.why, b.answers,
     b.alreadyRegistered ? 'YES' : '', b.isOneOf63 ? 'YES' : '',
-    b.firstname, b.surname, b.nin, b.dob, b.lga, b.phone, b.r.contact_email,
+    b.existingRef, b.matchRoute,
+    b.firstname, b.surname, b.nin, b.dob, b.lga, b.phone, b.r.draft_email,
     b.consent, b.r.current_step ?? '', b.r.created, b.r.expires,
     ...CORE.filter((c) => c !== 'consent_basic').map((k) => str(b.r.q?.[k])),
     ...ORPHANS.map((k) => str(b.r.q?.[k])),
@@ -191,7 +216,12 @@ sum.addRow(['consent blank', built.filter((b) => b.consent === '').length]);
 sum.addRow([]);
 sum.addRow(['NIN already a full respondent', built.filter((b) => b.alreadyRegistered && !b.isOneOf63).length]);
 sum.addRow(['Matches one of the 63 (backfillable)', built.filter((b) => b.isOneOf63).length]);
-sum.addRow(['The 63 total (bare records, no submission)', dedupe.the63_total]);
+sum.addRow(['The 63 total (bare records, no submission)', ids.without_submission.length]);
+sum.addRow([]);
+sum.addRow(['Resolved to a respondent VIA NIN', built.filter((b) => b.matchRoute === 'nin').length]);
+sum.addRow(['Resolved VIA magic_link_tokens (missed by NIN-only)', built.filter((b) => b.matchRoute === 'magic_link').length]);
+sum.addRow(['Resolved VIA users.email', built.filter((b) => b.matchRoute === 'user').length]);
+sum.addRow(['Resolved by ANY route', built.filter((b) => b.matchRoute !== '').length]);
 sum.getColumn(1).width = 40;
 sum.getColumn(2).width = 12;
 
