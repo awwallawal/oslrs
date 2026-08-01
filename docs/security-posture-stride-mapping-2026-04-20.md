@@ -19,7 +19,13 @@ OSLRS security was developed across **9 epics and 25+ dedicated security stories
 
 This document retroactively maps those controls onto **STRIDE** (Microsoft's original threat model: Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) to prove end-to-end threat coverage in STRIDE vocabulary.
 
-**Grade: B+ (field-ready).** Code-level A-, infrastructure B-, operational C+. One 30-minute Cloudflare setup closes the largest remaining infrastructure gap and raises the grade to A-.
+> ⚠️ **THIS GRADE IS SUPERSEDED — see `docs/security-posture-reassessment-2026-08-01.md` (A-).**
+> The condition stated below was MET on 2026-06-09 (F-024 origin-lock, Story 9-9 subtask #11), and three
+> further residuals closed since. The STRIDE mapping, attack trees and control inventory in the rest of
+> THIS document remain current and are not restated there — only the grade and the residual register are
+> re-scored. Do not quote the B+ below without the re-assessment.
+
+**Grade (2026-04-20, SUPERSEDED): B+ (field-ready).** Code-level A-, infrastructure B-, operational C+. One 30-minute Cloudflare setup closes the largest remaining infrastructure gap and raises the grade to A-.
 
 ### 1.1 The multi-framework argument
 

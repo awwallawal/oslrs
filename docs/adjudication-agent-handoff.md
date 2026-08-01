@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-07-31 · **Prod deployed SHA:** `adbe330` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-07-31 · **Prod deployed SHA:** `687c86e` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -212,6 +212,29 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
   every re-pin: `SELECT COUNT(DISTINCT q->>'sectionId') FROM questionnaire_forms f, LATERAL jsonb_array_elements(f.form_schema->'questions') q WHERE f.id = '<pin>';`
 - 🗓️ **All 292 live wizard drafts EXTENDED +1 month on 2026-07-30** (earliest expiry `2026-07-31` → **`2026-08-31`**, latest → `2026-09-29`), on Awwal's
   instruction, to buy time to resolve the blast properly. Nothing expires within 7 days. These drafts ARE the Cohort-B resume audience.
+
+## 3b. RELAUNCH READINESS — the one-screen answer (2026-08-01)
+
+**Nothing technical blocks the relaunch. The only gate is commercial: Resend Pro ($20).**
+
+| Layer | State | Evidence |
+|---|---|---|
+| Prod | `687c86e`, health 200 | verified this session |
+| Security posture | **A- (defensible)** | `docs/security-posture-reassessment-2026-08-01.md`; 25/25 findings Fixed |
+| Email deliverability | **sound** — DKIM aligned, SPF aligned via `send.oyoskills.com`, DMARC `p=none` present | live DNS checks 2026-08-01 |
+| Send/dedupe | ledger LIVE, proven writing on the real path | `campaign_sends` 0→1 on a control registration |
+| Attribution | **works end-to-end** | write carried `utm.ref` + a non-Radio channel; the REAL `getCampaignBreakdown()` returned it |
+| Wizard drafts | **unfrozen** — the 7-day `.max(5)` defect is fixed in prod | 13-47; 292 drafts extended to 2026-08-31+ |
+| Draft resume across the form change | **safe** | Public Core is a strict SUBSET of Master (0 absent, 0 type changes); all drafts sit at/before `grp_identity`, identical position in both forms |
+| E2E signal | trustworthy | 8 consecutive greens + a `repeat_each: 3` burn-in |
+| Prod verification | **Tailscale-independent** | `gh workflow run prod-verify.yml [-f control_email=…]`, read-only enforced by Postgres |
+
+**The launch sequence itself is unchanged:** pay Resend Pro → 13-24 Task 5 welcome backfill (~116) →
+5-day gap → fire ALL blasts in ONE session, with `docs/runbooks/pre-blast-dry-run.md` as the gate.
+
+**Do these on blast day, in this order:** (1) `prod-verify` for the baseline + ledger liveness + draft
+contract; (2) `form:diff` if ANY form has been re-pinned since; (3) the §6 final-gate checklist. Tear down
+test rows **BY ID** — never "restore to N", the registry now takes organic traffic.
 
 ## 4. The launch picture — operator-gated, nothing code blocks it
 1. **Pay Resend Pro ($20)** — the one hard gate (232 emails > free 100/day). Also a HARD long-lead **Termii sender-ID** approval for SMS (independent of email).
@@ -427,11 +450,16 @@ is the only assessment that was ever run.
 and the record never updated. It is the exact inverse of the debt problem — and it costs real money,
 because "B+" is what a Ministry stakeholder or a future auditor reads today.
 
-**Recommended (cheap, not launch-gating):** re-run the STRIDE assessment, or at minimum append a dated
-verdict block to the 2026-04-20 doc stating that F-024 closed on 2026-06-09, all 25 register findings
-are Fixed, and the stated A- condition is therefore satisfied. **Do not simply assert "A-"** — that
-would be a claim not re-derived, which is the failure this session has been chasing all day. Score it
-against the same rubric, or state precisely which condition was met and let a reader draw the grade.
+✅ **DONE 2026-08-01 — `docs/security-posture-reassessment-2026-08-01.md`, verdict A- (defensible).**
+Scored against the SAME April rubric so the two are comparable: code-level **A-** (held — 25/25 findings
+Fixed, but raising to A needs a re-test, not a self-review), infrastructure **B- → B+** (F-024 origin-lock
+closed + blocking OSV CI gate + email auth verified), operational **C+ → B** (alerting, ops dashboard,
+emergency runbook, and today's `prod-verify`). Of April's 10 residuals: the P0 and the P1 both CLOSED, one
+P2 closed outright, two partially mitigated, nothing regressed, no new finding opened. The April document
+and the findings register both now POINT FORWARD to it, so the stale B+ cannot be quoted by accident.
+⚠️ **It is a DESK re-score, not a penetration test** — that distinction is stated in its §0 and must be
+preserved when quoting it. An independent black-box re-test is what would justify A; recommended before a
+public/press launch, NOT before the email blast.
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 

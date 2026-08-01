@@ -1,5 +1,7 @@
 # OSLSR Security Findings Register (auditor-facing, in-repo)
 
+> 📊 **Posture grade: A- (2026-08-01)** — `docs/security-posture-reassessment-2026-08-01.md`. All 25 findings below are `Fixed`; that re-assessment is what turns this tally into a grade.
+
 **Purpose:** the single, repo-resident record mapping every external/internal security finding → our disposition + rationale + verification pointer. A future auditor (or a re-test of the same audit) reads **this file** — it does not require the original assessment package (which lives outside the repo and will not travel at BOT transfer).
 
 **🔁 MAINTENANCE RULE (enforced):** every `fix(sec): F-XXX` commit — or any disposition change — updates that finding's row here **in the same change** (flip to `Fixed-in-<hash>`). This register is the assessor's **1:1 retest map**; do not let a fix land without updating its row. (Mirror of the Planning-Artifact-Discipline rule in `project-context.md`.)
