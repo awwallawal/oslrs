@@ -69,6 +69,48 @@ Most are probably un-ticked AC/template checklists (9-12 has 33, 9-9 has 30) —
 real and launch-gating (see §4). Treat a `done` story's unchecked boxes as unverified until read. Triage is
 deferred: §8.
 
+### 2a2. READ A NEW GATE'S OUTPUT ONCE, EVEN WHEN IT IS GREEN
+
+**The rule:** the first time any new gate runs — a CI step, a workflow, a script, a
+verification query — **read what it actually printed**, even if it passed. After that,
+green is enough. The first run is the only moment you learn what "working" is supposed to
+look like, so it is the only moment you can notice it isn't.
+
+**Why this is a rule and not a nicety (2026-08-01).** The `prod-verify` workflow was
+described — by me — as "verified statically: YAML parses, secrets match the deploy job's,
+read-only flag present". All three true. It then failed twice on things static checking
+cannot see:
+
+1. **A shell quoting bug.** `PSQL="docker exec -e PGOPTIONS=-c\ default_..."` — expanding
+   an unquoted variable word-splits on the embedded space, so docker read
+   `default_transaction_read_only=on` as the CONTAINER NAME. `bash -n` passes: the syntax
+   was valid. A shell FUNCTION preserves argument boundaries; a string variable cannot.
+2. **A query that matched nothing — and this one went GREEN.** `form_schema->'questions'`
+   is NULL (questions nest inside `sections`), and `jsonb_array_elements(NULL)` returns
+   ZERO ROWS *without erroring*. psql exited 0, `set -e` had nothing to catch, and the job
+   passed while its most important check measured nothing. **Caught only by reading the
+   output of a PASSING run.** The same broken query had already propagated into
+   `pre-blast-dry-run.md` §0 as a MANDATORY check — it would have run on blast day and
+   printed an empty table that reads like "nothing wrong".
+
+**The family, now at four.** Every one of these is indistinguishable from passing:
+
+| Form | Mechanism |
+|---|---|
+| Pitfall #45 | a named CI step ordered below a broader one **never executes** |
+| Pitfall #47 | a **cached** task replays an older result |
+| §2a2 (here) | a query **matches nothing** and returns success |
+| `pattern-ship-a-fix-that-never-fires` | the fix is on a path that never runs |
+
+**Two mechanical follow-ons, not just vigilance:**
+- **Make emptiness fail.** A check that can return zero rows and stay green is not a check.
+  `prod-verify` now hard-fails on an empty draft-contract result with an explicit *"do not
+  read this as no problem"* message. Prefer a guard over a habit wherever you can write one.
+- **Sanity-check the SHAPE of the first output**, not just its exit code: row counts that
+  are plausible, a number that matches an independent method. The corrected contract query
+  returning `6 sections / N=10` was trustworthy precisely because `form:diff` computes the
+  same 6 from the workbook — two methods, one answer.
+
 ### 2a1. Invisible PAYMENT — the inverse of invisible debt
 
 §2a0 catches debt hiding behind `done`. The mirror case is just as real: **a later story can silently
@@ -366,7 +408,7 @@ this session applied to this list. Nothing here blocks the blast; §4 holds the 
 | D8 | **Cap §7 at the last two sessions**, archiving older arcs to a dated `docs/session-*.md`. | This doc is growing unbounded; `MEMORY.md` already blew its size budget for exactly this reason. | When §7 passes ~10 entries. |
 | D9 | ✅ **WORKED EXAMPLE EXISTS (2026-07-30) — copy the block, don't reword it.** **§2j verdict format** — a fixed closing block (verdict / RED-verify evidence / File-List reconciliation / deploy SHA). First use: `13-37-…-ci-guard.md` → `## Closing verdict`. Note what it does when the story is NOT closed: the verdict line reads *"NOT CLOSED — `review`, closing on push"* with the reason, and **deploy SHA is left explicitly `⏳ PENDING`** with the rule written into the block itself — *until that line carries a real SHA, `Status:` must not read `done`*. A block that can only be filled in at close-out gets filled in from memory; one that is filled in at `review` and carries its own hold condition cannot silently go stale. | 13-36's close-out was hand-synced across five places (story body, Change Log, sprint-status, MEMORY, this doc) and the disproven claim survived in three of them. | ~~Do with D1 — same problem, same fix.~~ **DONE, with D1, on 13-37.** Remaining: add it to the story template, and use it at 13-37's actual push (fill the SHA + discharge R1) so the format is proven through a real close, not only a real hold. |
 | D10 | **Memory file `pattern-unexplained-rate-is-unmeasured`**, alongside `[[pattern-ship-a-fix-that-never-fires]]` and `[[pattern-flaky-test-hiding-a-prod-bug]]`. | The playbook only helps whoever opens it; memory files surface automatically in any future session. | Next memory write. |
-| D11 | ✅ **RESOLVED 2026-07-31 — but NOT the way this row originally proposed.** Tailscale cannot reach the VPS: `tailscale ping` gets no reply while public HTTPS to the SAME box answers in 1.9s. ⚠️ **My original advice here — "get a direct WireGuard path up" — was never measured and is NOT ACHIEVABLE from this network.** `tailscale netcheck` reports **`UDP: false`**, no STUN IPv4, and no DERP latency response, with the gateway on `192.168.8.1` (a mobile router, changing mid-session). Tailscale REQUIRES UDP for a direct connection, so opening UDP 41641 on the VPS would have fixed nothing — a blind prod firewall change, with `ufw` risking SSH lockout, aimed at a mechanism I had not verified. **Same error shape as AJ-1: a plausible fix at the wrong layer.** | **Actual fix, shipped:** the `Prod Verify (read-only)` workflow (`gh workflow run prod-verify.yml`) runs every mandatory pre-blast check over the GitHub→VPS SSH path the deploy job proves working on every release, with `default_transaction_read_only=on` so it cannot write. Tailscale stays the interactive tool when the network allows it; it is no longer on the critical path. For interactive access when UDP is blocked: try a different network, or the DigitalOcean console. |
+| D11 | ✅ **RESOLVED 2026-07-31; DIRECT PATH DIAGNOSED + HALF-FIXED 2026-08-01.** Both ends were finally MEASURED instead of argued about, and they fail for *different* reasons: **client** `tailscale netcheck` → `UDP: false`, no STUN endpoint, no DERP reply (a mobile link — and note netcheck probes Tailscale's OWN servers, so no VPS firewall rule can cause this); **VPS** → `UDP: true`, public endpoint `159.89.146.93:44949`, SFO 3.3ms, i.e. perfectly healthy. So the outage was client-side, BUT Awwal was right that the firewall independently blocked the DIRECT path: `ufw` allowed only OpenSSH/80/443 — **no UDP at all** — while `tailscaled` binds `--port=41641` (pinned in `/etc/default/tailscaled`). ✅ **Fixed the half we control:** `ufw allow 41641/udp` added (additive only; SSH verified alive immediately after). ⚠️ **STILL OPEN — only Awwal can do it:** if the DigitalOcean CLOUD firewall restricts inbound to ~22 IPs, it drops UDP 41641 *before* ufw ever sees it, so a matching inbound rule must be added in the DO control panel. Even then, direct needs a client network that permits UDP. ⚠️ **My original advice in this row — "get a direct WireGuard path up" — was never measured and was NOT achievable as stated;** same error shape as AJ-1, a plausible fix aimed at the wrong layer. | **Verification no longer depends on any of this:** the `Prod Verify (read-only)` workflow runs every mandatory pre-blast check over the GitHub→VPS SSH path. |
 
 **DECIDED — do not reopen:** the **pre-push hook stays as-is**. It has earned its keep, and tuning turbo
 `inputs` to skip the unit suite on e2e-only commits is a convenience win against an under-invalidation risk

@@ -1905,6 +1905,29 @@ also never goes red.** #45 is the ordering form, #47 the caching form, and both 
 *a gate's value depends on its having RUN, so verify the run, not the colour.* This is
 `pattern-ship-a-fix-that-never-fires` applied to the verification layer itself.
 
+**THE FOURTH FORM — a query that MATCHES NOTHING (added 2026-08-01).** Same defect, new
+disguise, and the most dangerous because it survives every guard above. The `prod-verify`
+workflow's wizard draft-contract check read `form_schema->'questions'`, but `form_schema`
+nests questions INSIDE `sections`, so that path is NULL — and `jsonb_array_elements(NULL)`
+returns **zero rows without raising**. psql exited 0, `set -e` had nothing to catch, and the
+job went GREEN while its single most important check measured nothing. The same query had
+already been copied into `pre-blast-dry-run.md` §0 as a MANDATORY pre-send check, where it
+would have printed an empty table on blast day that reads exactly like "nothing wrong".
+
+**Two rules from it:**
+1. **Make emptiness FAIL.** A check that can return zero rows and stay green is not a check.
+   The workflow now hard-fails on an empty result with an explicit *"do not read this as no
+   problem — this check measured nothing"*. A guard beats vigilance.
+2. **Read a new gate's output ONCE, even when green** — the first run is the only time you
+   learn what "working" looks like. Recorded as handoff §2a2. This one was caught **solely**
+   by reading the output of a PASSING run; stopping at `conclusion: success` would have
+   shipped a broken mandatory check into the blast runbook.
+
+**Corroborate the first output against an independent method where you can.** The corrected
+query returning `6 sections / N=10` was trustworthy because `pnpm --filter @oslsr/api
+form:diff` derives the same 6 from the workbook. Two methods, one answer — that is evidence;
+a single green is not.
+
 **Reference**: Story 13-37 close-out (2026-07-31). Numbering: `#46` was the high-water mark;
 `grep -rhoE "Pitfall #[0-9]+"` across `docs/` **and** `_bmad-output/` returned nothing above `#46` before
 minting `#47` (see #45's note on why one convention alone shows the wrong maximum).
