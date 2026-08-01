@@ -236,6 +236,75 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 contract; (2) `form:diff` if ANY form has been re-pinned since; (3) the §6 final-gate checklist. Tear down
 test rows **BY ID** — never "restore to N", the registry now takes organic traffic.
 
+## 3c. 🗺️ THE DATA MAP — where respondent data ACTUALLY lives (2026-08-01)
+
+⚠️ **Read this before any cohort/blast/backfill query. It exists because I got a cohort answer WRONG by
+assuming a table.** I reported "the 63 absorbed respondents are 100% phone-only, zero have email" — because
+I joined `respondents → users` only. **52 of them have emails in `magic_link_tokens`.** Awwal knew the list
+had emails and pushed back; the historical extract `_bmad-output/scratch/contact-lists-2026-05-24/category-2-cohort-a-hemorrhaged.csv`
+proves it (row 1: `OLOWU KAYODE FEMI | olowufemi2020@gmail.com | … | email+phone` — the same person I had
+listed as phone-only). The codebase already documented this: `pending-nin.service.ts` says the email is
+*"resolved via the most recent `magic_link_tokens` row keyed by respondent_id"*.
+
+### Contact data is spread across FOUR tables — a respondent's email may be in ANY of them
+
+| Source | Table.column | Notes |
+|---|---|---|
+| Account | `users.email` (via `respondents.user_id`) | only **81 of 145** respondents have one |
+| **Magic link** | **`magic_link_tokens.email`** (keyed by `respondent_id`) | **283 rows / 138 distinct emails — THE most complete source** |
+| Draft | `wizard_drafts.email` | 292 rows, all with email |
+| Send ledger | `campaign_sends.email`, `email_suppressions.email` | outbound history, not a contact source |
+
+**Corrected reachability: 138 of 145 respondents are reachable BY EMAIL from some source; only 7 are truly
+email-less** (not 64, and not MEMORY's "26 true phone-only" — that figure is stale). **Any cohort query that
+reads only `users.email` will understate email reach by ~57 people and over-order SMS.**
+
+### Live table inventory (rows, 2026-08-01)
+
+`audit_logs` 1692 · `email_events` 414 · **`wizard_drafts` 292** · **`magic_link_tokens` 283** ·
+**`respondents` 145** · `daily_productivity_snapshots` 103 · `users` 83 · **`submissions` 82** ·
+`marketplace_profiles` 73 · `lgas` 33 · `fraud_thresholds` 27 · `user_backup_codes` 16 ·
+`fraud_detections` 10 · `roles` 7 · `email_suppressions` 4 · `system_settings` 2 ·
+`questionnaire_files` 2 · `questionnaire_versions` 2 · `campaign_sends` 1 · `productivity_targets` 1 ·
+`questionnaire_forms` 1.
+
+### Registry composition
+
+**145 = 82 (with a `submissions` row) + 63 (absorbed, NO submission row).** The 63 are the Story 9-28
+"haemorrhaged" cohort pushed straight in. Of them, **12 have a matching `wizard_drafts` row** carrying
+24-34 answers — enrichable, and those drafts also SUPPLY AN EMAIL. The other **51** are listed in
+`docs/vps-snapshots/the-51-unmatched-2026-08-01.csv` (gitignored PII).
+
+### Prior extractions — the provenance of every cohort number
+
+These predate this session and are how the A/B/C cohorts were built. **Check them before re-deriving a cohort.**
+
+| Artifact | Rows | What it is |
+|---|---|---|
+| `_bmad-output/scratch/oslrs-cohorts-2026-05-20/cohort-a-completed.csv` | — | Cohort A, completed |
+| `…/cohort-a-completed-step4-dropped.csv` | — | A, completed but Step-4 data dropped |
+| `…/cohort-b-in-progress.csv` | — | B, in progress |
+| **`…/cohort-b-in-progress-with-q-data.csv`** | **119** | **B WITH questionnaire answers — the ancestor of today's 292-draft dataset** |
+| `_bmad-output/scratch/contact-lists-2026-05-24/category-1-completed.csv` | — | contactable, completed |
+| **`…/category-2-cohort-a-hemorrhaged.csv`** | **62** | **THE 63 — with `email+phone` contactability already computed** |
+| `…/category-3-cohort-b-stalled.csv` | — | B, stalled |
+| `docs/vps-snapshots/2026-05-31/{respondents,submissions}.csv` | — | full table snapshots |
+| `docs/emails-sent-*.csv` | — | send history |
+
+### Pending-NIN ladder — ALREADY BUILT AND ALREADY RUN (Story 9-12)
+
+`pending-nin.service.ts` (`resolveReminderDestination`, 5-branch precedence: email → SMS → supervisor-LGA
+task) driven by a daily cron in `reminder.queue.ts`. `respondents.metadata.reminder_state` records the real
+cadence: **`sent_2d` → `sent_7d` → `sent_14d` → `transitioned_at`**, each with
+`last_destination {type, reason, target}` and `last_dispatch_reason`.
+
+**Measured:** 113 `pending_nin.created` → **78 `promoted` (69% conversion)** → 35
+`transitioned_to_nin_unavailable`. **All 35 current pending-NIN rows have EXHAUSTED the 2d/7d/14d ladder,
+every one dispatched to `primary_email`.** ⚠️ So a fourth generic NIN reminder is not the lever — these
+people have been asked three times. A different framing (OSLRS-number + welcome, or SMS) is needed, or
+accept them as permanently pending. Other useful `metadata` keys on these rows: `questionnaire_data_lost`,
+`recovery_email_eligible`, `lost_at`, `defer_reason_nin`, `reminder_deferred_at`.
+
 ## 4. The launch picture — operator-gated, nothing code blocks it
 1. **Pay Resend Pro ($20)** — the one hard gate (232 emails > free 100/day). Also a HARD long-lead **Termii sender-ID** approval for SMS (independent of email).
 2. **13-24 Task 5** — welcome backfill to ~116 emailable: `_backfill-registration-autosends.ts --dry-run` (read the `excluded:` line) → `--apply --confirm-i-am-not-dry-running --rate-per-minute 10`.
