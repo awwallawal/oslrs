@@ -2,6 +2,23 @@
 
 Status: ready-for-dev
 
+> ⚠️ **RE-MEASURE BEFORE BUILDING (added 2026-08-01).** This story's headline split — *"139 = 76 completed
+> + 55 data_lost + 7 no_submission + 1 pending_nin"* — is **STALE**. The registry is now **145 = 82 with a
+> `submissions` row + 63 absorbed (Story 9-28, no submission)**. Do not inherit the count; re-derive it.
+>
+> **And Story 13-49 will change the taxonomy itself.** Adopting the 292 `wizard_drafts` adds ~142 new
+> respondents, enriches 22 of the 63, and creates 20 more `nin_unavailable` rows — so `data_status` needs a
+> new bucket, **`adopted_from_draft`**, or 142 people land in whatever bucket the query happens to choose
+> and the dashboard mislabels them in exactly the way this story exists to prevent.
+>
+> ✅ **No schema change needed:** 13-49 writes real `respondents` + `submissions` rows, so the
+> `registry_unified` VIEW picks them up by construction. 12-4 only has to widen the taxonomy and re-measure.
+>
+> **Design question this story should settle:** should `wizard_drafts` appear in the unified read as
+> *prospective* rows before adoption? It would make the 292 countable without adopting them — but it turns
+> "registry total" into something softer than "registered people", which is the mislabelling this story was
+> written to end. **Recommendation: NO** — keep drafts in the operator view (13-44's adoption panel).
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 > 🔒 **Taxonomy RESOLUTIONS 2026-07-04 (must implement):** (R1/NIN) Axis-3 top tier from a captured NIN is **`nin_on_file`, NOT `verified`** — there is no offline checksum (see Story 13-15; NINs have no check digit). "Verified" = NIMC-online/member-side only. (R2/DISTINCT) the headline `COUNT(DISTINCT)` key precedence is **NIN → E.164 phone → respondent.id**, with an explicit **`identity_ambiguous`** bucket (no-NIN + no/shared phone); the importer (11-2) must resolve to the SAME key. See taxonomy §Resolutions.
 <!-- Authored 2026-06-16 by Bob (SM) via the create-story workflow as Epic 12 "Dashboard System Refresh" Tier-0 / Track-A foundation. POST-LAUNCH, NON-GATING. This story OWNS THE AGGREGATE over 9-59's row-level data_status atom (registry-data-status.ts, MERGED on main). It does NOT define a new taxonomy — the inversion: 9-59 defines the row-level atom; 12-4 aggregates over it and becomes the single source of truth every analytics surface (12-5/12-6/12-7/12-8) calls. Cite registry-data-status.ts by path+signature; never redefine the statuses. -->

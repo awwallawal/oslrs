@@ -45,3 +45,43 @@ so that **I can watch campaign funnels, answer "why did I get this email?" suppo
 | Date | Change | By |
 |------|--------|-----|
 | 2026-07-24 | Story drafted, EMERGENT from "do we have a campaign_sends UI?" — answer: no, and no campaign admin UI at all (13-9's funnel is built but unwired; 13-24's ledger is dedupe-only). Adds the missing super-admin consumer: campaign funnel + campaign_sends contact log + a ledger-liveness banner (folding in the 13-24 fail-soft M1 concern). POST-LAUNCH, non-gating; reuses getCampaignFunnel + the audit-log UI pattern; PII handled per the Audit Log Viewer. | Bob (SM) |
+
+## SCOPE EXTENSION — adoption panel + consent toggle (added 2026-08-01, Awwal's ruling)
+
+**Why here and not a new story:** 13-44 already owns the super-admin campaign surface, the contact log and
+the ledger-liveness banner. Story **13-49** (draft-adoption programme) needs an operator view of a
+*different* question — not "how did the campaign perform" but "is the adoption programme converting" — and
+minting a second admin story would split one screen across two backlogs. 13-49 EMITS the counts (its AC12);
+this story RENDERS them; 13-42 alerts on the delta.
+
+### AC-A1 — Adoption panel
+
+A panel on the same super-admin view showing, live from the DB (no cached blob):
+
+| Metric | Source |
+|---|---|
+| Adopted (D1) / Enriched (D2) / Adopted-pending (D3) | `respondents.metadata.adopted_by = '13-49'` + `adopted_at` |
+| Invited (D4), and how many have since completed | invite send + subsequent `submissions` row |
+| Excluded (D5) and Ignored (D6) | disposition, for completeness — these must be visibly ZERO-action |
+| Still pending NIN | `status = 'nin_unavailable'`, cross-linked to the 9-12 ladder state |
+| **Registry total, split by data_status** | the 12-4 taxonomy — see the 12-4 note below, its buckets change |
+
+⚠️ **The adoption counters must read the `adopted_by` marker, not a stored total.** That marker is also
+13-49's rollback key (its AC11), so panel and rollback agree by construction.
+
+### AC-A2 — Consent toggle (super-admin, audited, reason-required)
+
+Replaces 13-49's original "hard immutable exclude" with a **controlled** one, per Awwal 2026-08-01:
+
+- **`consent_marketplace = yes` is the actionable state.** Code adopts and displays only on that basis.
+- A super-admin can change a respondent's consent from this screen — because consent legitimately changes
+  (someone says yes by phone, or withdraws later) and there must be a lawful way to record it.
+- ⚠️ **The toggle is NOT a bypass.** It must: (a) require a free-text **reason** (e.g. *"confirmed by phone
+  2026-08-05"*), (b) write an `audit_logs` row naming the actor, the before/after value and the reason,
+  (c) be **per-respondent — never bulk**, and (d) leave 13-49's code guard intact, so an unchanged
+  `consent_basic = no` still cannot be adopted by a script.
+- **Why the reason field is load-bearing, not ceremony:** this is NDPA-regulated consent for a government
+  register. A toggle that changes a consent flag with no record of the person's instruction converts an
+  auditable decision into an unexplained one. The reason IS the evidence.
+- The existing self-service path stays primary — a citizen can already flip their own marketplace consent
+  (`me.controller.ts:45-67`). The admin toggle is for the cases where they told us by another channel.
