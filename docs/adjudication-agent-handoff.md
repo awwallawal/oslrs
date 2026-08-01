@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-07-31 · **Prod deployed SHA:** `687c86e` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-01 · **Prod deployed SHA:** `0beb8bc` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -197,7 +197,23 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 
 ---
 
-## 3. Current state (2026-07-27)
+## 3. Current state (2026-08-01)
+
+- **Prod = `0beb8bc`**, health 200. Registry **145 = 82 (with a `submissions` row) + 63 (absorbed, Story
+  9-28, no submission)**. `campaign_sends` 1. Pinned public form `019f8ed3` (6 sections, wizard N=10).
+- 🗂️ **`wizard_drafts` = 292 rows and it is NOT junk** — 214 carry answers across **37 distinct keys**
+  (names, NINs, occupations, skills, household, business). **Expiry EXTENDED 2026-08-01 to 2026-11-30**
+  (`UPDATE 292`, 13-49 AC1 done) so nothing is lost while the programme is decided.
+- ⚠️ **`registry_unified` is a VIEW (145 rows), NOT a table** — respondent-anchored over
+  `respondents ⟕ submissions`. A unified READ, not a unified store. It does **not** see drafts, the 11-2
+  import spine, or 13-2 association imports.
+- 📊 **Security posture A-** — `docs/security-posture-reassessment-2026-08-01.md` (desk re-score, not a
+  pen-test). 25/25 findings Fixed.
+- 🧰 **Ops tools:** `gh workflow run prod-verify.yml [-f control_email=…]` (read-only, works when Tailscale
+  doesn't) · `pnpm --filter @oslsr/api form:diff <out> <in>` (before ANY re-pin) · `draft:triage`
+  (rebuilds the decision workbook).
+
+### (superseded) Current state as of 2026-07-27
 - **Prod = `830dcf7`**. Everything code-side for the launch send-system + the wizard is deployed + verified.
 - **E2E Tests is now a trustworthy signal** (13-36): green on push AND on a `repeat_each: 3` burn-in. A red there is now a real regression — triage it, never reflexively re-run. Burn-in on demand: `gh workflow run e2e.yml --ref main -f repeat_each=3` (max 7; `workers: 1`, so it tests repetition, NOT concurrency).
 - ⚠️ **The Playwright suite CANNOT go parallel — now enforced by `workers: 1` in `playwright.config.ts`** (probed 2026-07-27, verified against source 2026-07-30). Every spec logs in as the same seeded account per role and the API is **single-session by design** — each login reaps the user's previous refresh token (`token.service.ts`), so parallel workers invalidate each other and any full page load then 401s → `AUTH_LOGOUT` → public home page. Dose-response: workers 1/2/4/6 → **0% / 17% / 42% / 58%** failures. The symptom (test lands on `/`) looks exactly like a product bug and is not one; a real user pressing F5 keeps their session. **Do not raise the worker count to speed up a local run** — that needs per-worker seeded accounts first. Two remedies that made it WORSE, don't retry: raising the assertion timeout (the cause isn't slowness) and re-logging-in after a bounced reload (doubles login volume → trips the locally-active login rate limiter → strands on `/staff/login`).
@@ -212,6 +228,32 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
   every re-pin: `SELECT COUNT(DISTINCT q->>'sectionId') FROM questionnaire_forms f, LATERAL jsonb_array_elements(f.form_schema->'questions') q WHERE f.id = '<pin>';`
 - 🗓️ **All 292 live wizard drafts EXTENDED +1 month on 2026-07-30** (earliest expiry `2026-07-31` → **`2026-08-31`**, latest → `2026-09-29`), on Awwal's
   instruction, to buy time to resolve the blast properly. Nothing expires within 7 days. These drafts ARE the Cohort-B resume audience.
+
+## 3a. ⭐ THE RECOMMENDATION — read this before deciding anything (2026-08-01)
+
+**Pay Resend Pro ($20) → run 13-49 draft adoption → THEN blast → then 12-4.** The ORDER is the
+recommendation; getting it backwards is the expensive mistake.
+
+1. **Resend Pro** gates everything — the ~258 adoption messages AND the blast. Only remaining blocker.
+2. **Adopt BEFORE blasting (Story 13-49).** If you blast first you send *"please register"* to **142 people
+   whose names, NINs, occupations and skills you already hold** — incompetent to the warmest audience you
+   have, and a cold ask converts far worse than *"here is your OSLRS number."* Adoption also shrinks and
+   sharpens the cold audience (26 of the drafts turn out to be already registered).
+3. **Then blast**, with cohorts REBUILT across all four contact sources (§3c). A/B/C predate everything
+   discovered on 2026-08-01.
+4. **Then 12-4**, re-measured — the counts change anyway. Sequence it EARLY in Epic 12: with five ingestion
+   paths now feeding the registry it owns the `data_status` taxonomy that keeps them coherent, which is
+   more foundational than its "dashboard counting" framing suggests.
+
+**Explicitly do NOT now:** touch DMARC (`p=none` cannot hurt deliverability; changing it before launch can
+only add filtering risk) · chase Termii (only **7** people registry-wide are email-less; manual SMS
+templates exist in 13-11 AC6) · open UDP 41641 (settled — the origin-lock is what earned the A-) · start
+the §8 deferred work.
+
+⚠️ **The one cheap risk to close first (13-49 R2):** nobody has confirmed what a returning draft-holder
+actually SEES. The authenticated-EDIT path maps head-step fields only; the anonymous RESUME path was never
+checked. **Resume ONE real draft** — five minutes, and it decides whether the invitation copy says "finish
+in 2 minutes" or "pick up where you left off".
 
 ## 3b. RELAUNCH READINESS — the one-screen answer (2026-08-01)
 
@@ -316,7 +358,25 @@ accept them as permanently pending. Other useful `metadata` keys on these rows: 
 - **13-24 Task 4 (Dry-run #2) = DONE.** Only Task 5 remains on 13-24 — and see the alert above: it is unchecked while the story reads `done`.
 - The stale `re-engagement-campaign-launch.md` was superseded by 13-24's §2; follow 13-24.
 
-## 5. Backlog you'll likely adjudicate next (all POST-LAUNCH, non-gating, ready-for-dev)
+## 5. Backlog you'll likely adjudicate next
+
+**🔥 THE ONE THAT MATTERS — 13-49 (`ready-for-dev`, LAUNCH-SEQUENCED, do BEFORE the blast):** draft-adoption
+programme. 292 abandoned drafts hold 37 answer keys / 214 with answers / 203 consented. Cohorts **D1 adopt
+142 · D2 enrich 22 (of the 63) · D3 adopt-pending 20 (`nin_unavailable`) · D4 invite 74 · D5 exclude 8
+(consent=no) · D6 ignore 26** → **registry 145 → ~307**. AC1 (expiry +3mo) ALREADY DONE. **AC10's
+single-record live dry-run is a BLOCKING gate** — this is a write path against citizen records.
+Two hazards it documents because both fail SILENTLY: identity lives in `questionnaireResponses`, not the
+head-step fields (208 vs 8); and a draft must be resolved to a person by ALL FOUR contact sources (NIN alone
+= 28, all four = 48 → 10 duplicate records prevented).
+
+**13-44** (`ready-for-dev`) — EXTENDED 2026-08-01 with **AC-A1 adoption panel** (reads
+`metadata.adopted_by='13-49'`, which is also the rollback key) and **AC-A2 audited consent toggle**
+(per-respondent, never bulk, REQUIRED reason + `audit_logs` row; the code guard still refuses `consent=no`).
+**12-4** — carries a RE-MEASURE warning: its `139 = 76+55+7+1` is stale vs today's `145 = 82+63`, and 13-49
+adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; the VIEW picks them up).
+**13-46** — AC11 DISCHARGED. **13-41 / 13-42 / 13-43 / 13-45(reserved) / 13-48** — as before, post-launch.
+
+### (previous framing) all POST-LAUNCH, non-gating, ready-for-dev
 - **13-47** — 🔴 **PUSH THIS FIRST. `review`, implemented, and it is a LIVE PRODUCTION DEFECT FIX.** `saveDraftSchema.currentStep: .max(5)` was never
   re-derived when the wizard step count became FORM-DRIVEN (`3 head + one per form SECTION + 1 review`). 13-34’s 2026-07-23 re-pin published a
   **six-section** public form → N=10 → **every draft autosave from step 6 up 400’d for seven days**. Measured: 232/293 drafts frozen at step 4-5
@@ -529,6 +589,34 @@ and the findings register both now POINT FORWARD to it, so the stale B+ cannot b
 ⚠️ **It is a DESK re-score, not a penetration test** — that distinction is stated in its §0 and must be
 preserved when quoting it. An independent black-box re-test is what would justify A; recommended before a
 public/press launch, NOT before the email blast.
+
+## 7d. Session 2026-08-01 — the drafts turned out to hold the registry
+
+13. **A resume-safety question became the biggest finding of the launch.** 13-46 AC11 asked "can 291 old
+    drafts hydrate into the Public Core?" Answer: yes (Public Core is a strict SUBSET of Master — 0 absent,
+    0 type changes) **and nothing is lost** (`...responses` spreads unfiltered into `raw_data`). But the
+    investigation exposed that `wizard_drafts` holds **37 answer keys across 214 drafts** — names, NINs,
+    occupations, skills, household and business data for people who never pressed submit. **Awwal overruled
+    my "invite them to resume" recommendation** and was right: Story 9-28 had already pushed 63 respondents
+    straight in, so adopt-and-inform is established practice, and doing nothing meant deleting the data at
+    expiry. → Story **13-49**.
+14. **I was wrong three times, each corrected by Awwal knowing the data.** (a) I reported the 63 as "100%
+    phone-only" — 52 have emails in `magic_link_tokens`; I had joined `respondents→users` only, while
+    `pending-nin.service.ts` documents the right source in its own docblock. (b) I matched drafts to people
+    by NIN alone (28) instead of all four sources (48) — would have created **10 duplicate registry
+    records**. (c) I said the non-adoptable set was 102; it is 82 (D3's 20 CAN be adopted as pending-NIN).
+    **The rule this earns: before any cohort or contact query, ENUMERATE the tables that could hold the
+    field** — `information_schema.columns WHERE column_name ILIKE '%email%'` takes two seconds. → §3c.
+15. **Two premises worth correcting for morale and planning.** Email outreach WORKS: the 9-12 pending-NIN
+    ladder measured **113 created → 78 promoted = 69%**, every dispatch to `primary_email`. And **Termii is
+    off the critical path** — only **7** people registry-wide are email-less, not 26.
+16. **Security posture re-assessed → A-** (`docs/security-posture-reassessment-2026-08-01.md`), the April
+    B+ superseded and cross-linked both ways. The A- had been EARNED on 2026-06-09 (F-024) and never
+    recorded — §2a1 invisible payment at the scale of the whole posture.
+17. **`prod-verify` shipped and had THREE bugs, all found by running it** — a shell-quoting error `bash -n`
+    passes, a query matching nothing that went GREEN, and an unexecuted conditional branch. Each one
+    sharpened §2a2. **The rule that came out of it: read a run that EXERCISES the branch you care about;
+    "the job passed" cannot distinguish TAKEN from SKIPPED.**
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
