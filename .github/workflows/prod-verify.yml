@@ -55,15 +55,26 @@ jobs:
           envs: CONTROL_EMAIL
           script: |
             set -euo pipefail
-            # -c default_transaction_read_only=on : Postgres refuses any write from
-            # this session, so this job cannot mutate prod even by mistake.
-            PSQL="docker exec -e PGOPTIONS=-c\ default_transaction_read_only=on oslsr-postgres psql -U oslsr_user -d oslsr_db -X -q"
+            # Postgres refuses any write from this session, so this job cannot mutate
+            # prod even by mistake.
+            #
+            # ⚠️ A FUNCTION, not a variable — and that is load-bearing, not style.
+            # The first cut was PSQL="docker exec -e PGOPTIONS=-c\ default_... " and it
+            # FAILED on the first real run: expanding an unquoted variable word-splits on
+            # that embedded space, so docker read `default_transaction_read_only=on` as the
+            # CONTAINER NAME ("No such container"). A shell function preserves argument
+            # boundaries; a string variable cannot. (Found 2026-08-01 by running it — the
+            # YAML parsed, the secrets resolved and the read-only flag was present, i.e.
+            # everything static was green. Pitfall #47: verify the RUN, not the artifact.)
+            psql_ro() {
+              docker exec -e PGOPTIONS='-c default_transaction_read_only=on' oslsr-postgres psql -U oslsr_user -d oslsr_db -X -q "$@"
+            }
 
             echo "=============================================================="
             echo "1. DEPLOYED SHA + BASELINE  (pre-blast-dry-run.md §0)"
             echo "=============================================================="
             echo "VPS HEAD: $(cd /root/oslrs && git rev-parse --short HEAD)"
-            $PSQL -c "
+            psql_ro -c "
               SELECT (SELECT count(*) FROM respondents)     AS respondents,
                      (SELECT count(*) FROM submissions)     AS submissions,
                      (SELECT count(*) FROM campaign_sends)  AS campaign_sends,
@@ -75,7 +86,7 @@ jobs:
             echo "=============================================================="
             echo "2. WIZARD DRAFT CONTRACT  (Pitfall #46 / Story 13-47)"
             echo "=============================================================="
-            $PSQL -c "
+            psql_ro -c "
               SELECT f.id AS pinned_form,
                      COUNT(DISTINCT q->>'sectionId') AS sections,
                      3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
@@ -85,7 +96,7 @@ jobs:
                                   FROM system_settings WHERE key = 'wizard.public_form_id')
               GROUP BY f.id;"
             echo "-- draft step distribution: MAX below N means autosave is being rejected --"
-            $PSQL -c "
+            psql_ro -c "
               SELECT current_step, count(*) AS drafts
               FROM wizard_drafts GROUP BY current_step ORDER BY current_step;"
 
@@ -93,10 +104,10 @@ jobs:
             echo "=============================================================="
             echo "3. LEDGER LIVENESS  (§2 — MANDATORY, recordCampaignSend is FAIL-SOFT)"
             echo "=============================================================="
-            $PSQL -c "
+            psql_ro -c "
               SELECT count(*) AS sends_last_24h, max(sent_at) AS latest
               FROM campaign_sends WHERE sent_at > now() - interval '24 hours';"
-            $PSQL -c "
+            psql_ro -c "
               SELECT category, channel, count(*) FROM campaign_sends
               GROUP BY 1,2 ORDER BY 3 DESC;"
 
@@ -104,7 +115,7 @@ jobs:
             echo "=============================================================="
             echo "4. ATTRIBUTION  (13-47 AC8 — assert the READ, not just the write)"
             echo "=============================================================="
-            $PSQL -c "
+            psql_ro -c "
               SELECT COALESCE(raw_data->'campaign_source'->>'channel','(unknown)') AS channel,
                      count(*)
               FROM submissions WHERE raw_data->'campaign_source' IS NOT NULL
@@ -115,14 +126,14 @@ jobs:
             echo "=============================================================="
             echo "5. SUPPRESSIONS"
             echo "=============================================================="
-            $PSQL -c "SELECT reason, count(*) FROM email_suppressions GROUP BY 1 ORDER BY 2 DESC;"
+            psql_ro -c "SELECT reason, count(*) FROM email_suppressions GROUP BY 1 ORDER BY 2 DESC;"
 
             if [ -n "${CONTROL_EMAIL:-}" ]; then
               echo
               echo "=============================================================="
               echo "6. POSITIVE CONTROL: ${CONTROL_EMAIL}"
               echo "=============================================================="
-              $PSQL -v email="${CONTROL_EMAIL}" -c "
+              psql_ro -v email="${CONTROL_EMAIL}" -c "
                 SELECT 'campaign_sends' AS t, count(*)::text AS n FROM campaign_sends WHERE lower(email)=lower(:'email')
                 UNION ALL SELECT 'suppressions', count(*)::text FROM email_suppressions WHERE lower(email)=lower(:'email')
                 UNION ALL SELECT 'magic_link_tokens', count(*)::text FROM magic_link_tokens WHERE lower(email)=lower(:'email')
