@@ -20,10 +20,17 @@ This is a **gate that cannot be half-done**: every box below is checked, or you 
       review`), and the blast invites people to RESUME drafts. A re-pin that adds sections can push the
       review step past a server-side bound, so every autosave silently 400s and resume discards answers:
       ```sql
-      SELECT COUNT(DISTINCT q->>'sectionId') AS sections,
-             3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
-      FROM questionnaire_forms f, LATERAL jsonb_array_elements(f.form_schema->'questions') AS q
-      WHERE f.id = '<currently pinned form id>';
+      -- ⚠️ `sections`, NOT `questions`. form_schema nests questions INSIDE sections, so
+      -- `form_schema->'questions'` is NULL and jsonb_array_elements(NULL) yields ZERO ROWS
+      -- WITHOUT erroring — the earlier version of this query printed an empty table and
+      -- looked fine. An empty result here means the check MEASURED NOTHING, not that all
+      -- is well. Corrected + verified against prod 2026-08-01 (returns 6 sections, N=10).
+      SELECT f.id AS pinned_form,
+             jsonb_array_length(f.form_schema->'sections') AS sections,
+             3 + jsonb_array_length(f.form_schema->'sections') + 1 AS wizard_steps_N
+      FROM questionnaire_forms f
+      WHERE f.id::text = (SELECT value #>> '{}' FROM system_settings
+                          WHERE key = 'wizard.public_form_id');
       ```
       Then PUT a draft at `currentStep = N` and expect **200**. Also check the standing signal: a spike of
       `registration.draft_rejected` in the API logs means the contract has drifted again.

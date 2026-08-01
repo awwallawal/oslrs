@@ -86,15 +86,32 @@ jobs:
             echo "=============================================================="
             echo "2. WIZARD DRAFT CONTRACT  (Pitfall #46 / Story 13-47)"
             echo "=============================================================="
-            psql_ro -c "
-              SELECT f.id AS pinned_form,
-                     COUNT(DISTINCT q->>'sectionId') AS sections,
-                     3 + COUNT(DISTINCT q->>'sectionId') + 1 AS wizard_steps_N
-              FROM questionnaire_forms f,
-                   LATERAL jsonb_array_elements(f.form_schema->'questions') AS q
-              WHERE f.id::text = (SELECT trim(both '\"' from value::text)
-                                  FROM system_settings WHERE key = 'wizard.public_form_id')
-              GROUP BY f.id;"
+            # ⚠️ `sections`, NOT `questions`. form_schema's top-level keys are
+            # id/title/status/version/SECTIONS/createdAt/choiceLists/calculations —
+            # questions are NESTED INSIDE sections. The first cut read
+            # `form_schema->'questions'`, which is NULL, and `jsonb_array_elements(NULL)`
+            # returns ZERO ROWS rather than erroring: the query "succeeded", printed an
+            # empty table, and this job went GREEN while its most important check
+            # measured nothing (found 2026-08-01 by reading the output of a passing run).
+            # `value #>> '{}'` unwraps the jsonb string without quote-escaping games.
+            #
+            # And because a check that silently returns nothing is the exact failure this
+            # job exists to prevent, ZERO ROWS IS NOW A HARD FAILURE.
+            CONTRACT=$(psql_ro -t -A -F'|' -c "
+              SELECT f.id,
+                     jsonb_array_length(f.form_schema->'sections'),
+                     3 + jsonb_array_length(f.form_schema->'sections') + 1
+              FROM questionnaire_forms f
+              WHERE f.id::text = (SELECT value #>> '{}' FROM system_settings
+                                  WHERE key = 'wizard.public_form_id');")
+            if [ -z "$CONTRACT" ]; then
+              echo "::error::Wizard draft contract returned NO ROWS — the pinned form could not be resolved."
+              echo "::error::Either wizard.public_form_id is unset/stale, or form_schema's shape changed."
+              echo "::error::Do NOT read an empty result as 'no problem' — this check measured nothing."
+              exit 1
+            fi
+            echo "pinned_form | sections | wizard_steps_N"
+            echo "$CONTRACT"
             echo "-- draft step distribution: MAX below N means autosave is being rejected --"
             psql_ro -c "
               SELECT current_step, count(*) AS drafts
