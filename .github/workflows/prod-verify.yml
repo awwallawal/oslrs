@@ -150,12 +150,25 @@ jobs:
               echo "=============================================================="
               echo "6. POSITIVE CONTROL: ${CONTROL_EMAIL}"
               echo "=============================================================="
-              psql_ro -v email="${CONTROL_EMAIL}" -c "
-                SELECT 'campaign_sends' AS t, count(*)::text AS n FROM campaign_sends WHERE lower(email)=lower(:'email')
-                UNION ALL SELECT 'suppressions', count(*)::text FROM email_suppressions WHERE lower(email)=lower(:'email')
-                UNION ALL SELECT 'magic_link_tokens', count(*)::text FROM magic_link_tokens WHERE lower(email)=lower(:'email')
-                UNION ALL SELECT 'wizard_drafts', count(*)::text FROM wizard_drafts WHERE lower(email)=lower(:'email')
-                UNION ALL SELECT 'users', count(*)::text FROM users WHERE lower(email)=lower(:'email');"
+              # ⚠️ NO psql -v / :'email' HERE. psql does NOT interpolate variables in a
+              # `-c` command string — it passes `:'email'` straight to the server, which
+              # answers `ERROR: syntax error at or near ":"`. (Observed on this branch's
+              # FIRST execution, 2026-08-01: two earlier runs were green because neither
+              # supplied control_email, so this code had never run. §2a2.)
+              #
+              # Inlined instead, behind a strict format check — the pattern admits no quote,
+              # semicolon, backslash or whitespace, so the value cannot terminate the string
+              # literal, and the session is read-only regardless.
+              if ! printf '%s' "$CONTROL_EMAIL" | grep -qE '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
+                echo "::error::control_email is not a valid email address: '$CONTROL_EMAIL'"
+                exit 1
+              fi
+              psql_ro -c "
+                SELECT 'campaign_sends' AS t, count(*)::text AS n FROM campaign_sends WHERE lower(email)=lower('$CONTROL_EMAIL')
+                UNION ALL SELECT 'suppressions', count(*)::text FROM email_suppressions WHERE lower(email)=lower('$CONTROL_EMAIL')
+                UNION ALL SELECT 'magic_link_tokens', count(*)::text FROM magic_link_tokens WHERE lower(email)=lower('$CONTROL_EMAIL')
+                UNION ALL SELECT 'wizard_drafts', count(*)::text FROM wizard_drafts WHERE lower(email)=lower('$CONTROL_EMAIL')
+                UNION ALL SELECT 'users', count(*)::text FROM users WHERE lower(email)=lower('$CONTROL_EMAIL');"
               echo "-- a NON-ZERO campaign_sends row after a control send is the §2 proof --"
               echo "-- magic_link_tokens must be cleaned BY EMAIL at teardown: a wizard-issued"
               echo "   token has respondent_id NULL, so deleting by RID reports DELETE 0 and"
