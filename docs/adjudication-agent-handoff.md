@@ -93,6 +93,21 @@ cannot see:
    `pre-blast-dry-run.md` §0 as a MANDATORY check — it would have run on blast day and
    printed an empty table that reads like "nothing wrong".
 
+**SHARPENING (2026-08-01, learned the same day by getting it wrong): reading a GREEN run is not
+enough — you must read a run that EXERCISES THE BRANCH YOU CARE ABOUT.**
+
+`prod-verify` went green twice. Both dispatches omitted the optional `control_email`, so section 6 was
+SKIPPED in both. The first time it actually ran: `ERROR: syntax error at or near ":"` — psql does not
+interpolate `:'email'` in a `-c` string, it hands the literal token to the server. Two greens said
+nothing whatsoever about that code, because **"the job passed" cannot distinguish TAKEN from SKIPPED.**
+
+- **A conditional branch is unverified until its condition is met.** Optional inputs, `if` blocks,
+  error paths, empty-result paths — each is its own first run.
+- **Enumerate the paths and exercise each once.** The default path passing is the *weakest* evidence
+  available: it is the one that would pass anyway.
+- This is the same defect as a green burn-in certifying only the happy path (13-36 retro R-2) and as a
+  fix sitting on a code path nothing calls. Coverage of the artifact is not coverage of its behaviour.
+
 **The family, now at four.** Every one of these is indistinguishable from passing:
 
 | Form | Mechanism |
@@ -389,6 +404,34 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
     pre-push on a commit that added three `apps/api` files).
 
 ---
+
+## 7c. SECURITY POSTURE — the A- is EARNED but never RECORDED (2026-08-01)
+
+**Question asked:** are we still B+, or did we reach the A- we targeted?
+
+**Measured, not recalled:**
+- The only grade statement in the repo is `docs/security-posture-stride-mapping-2026-04-20.md`:
+  *"**Grade: B+ (field-ready).** Code-level A-, infrastructure B-, operational C+. **One 30-minute
+  Cloudflare setup closes the largest remaining infrastructure gap and raises the grade to A-.**"*
+- That named gap is **F-024 — "Origin reachable around Cloudflare"** → `docs/security/findings-register.md`
+  records it **✅ Fixed 2026-06-09** (4-layer: de-point `oyotradeministry.com.ng`, nginx, Cloudflare
+  proxy, DO firewall origin-lock to ~22 Cloudflare ranges). Story **9-9 subtask #11**; runbook
+  `docs/f-024-origin-lock-runbook.md`.
+- **All 25 findings in the register are `✅ Fixed`. Zero open, zero accepted-with-risk.**
+
+**So: the assessment's own stated condition for A- has been met — and NOBODY HAS RE-GRADED.** No
+re-assessment exists after 2026-06-09. The repo's documented grade is still the April B+, because that
+is the only assessment that was ever run.
+
+⚠️ **This is [[§2a1 invisible PAYMENT]] at the level of the whole security posture**: the debt was paid
+and the record never updated. It is the exact inverse of the debt problem — and it costs real money,
+because "B+" is what a Ministry stakeholder or a future auditor reads today.
+
+**Recommended (cheap, not launch-gating):** re-run the STRIDE assessment, or at minimum append a dated
+verdict block to the 2026-04-20 doc stating that F-024 closed on 2026-06-09, all 25 register findings
+are Fixed, and the stated A- condition is therefore satisfied. **Do not simply assert "A-"** — that
+would be a claim not re-derived, which is the failure this session has been chasing all day. Score it
+against the same rubric, or state precisely which condition was met and let a reader draw the grade.
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
