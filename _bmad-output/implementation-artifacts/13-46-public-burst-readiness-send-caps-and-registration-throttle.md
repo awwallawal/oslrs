@@ -745,3 +745,46 @@ launch-adjacent item parked without a trigger becomes invisible debt.
 | 2026-07-30 | **Station-attribution note completed + one citation corrected.** The per-station UTM bullet had closed on the wrong constraint — *"whether a station will read a URL on air"*. The real blocker is that **a listener cannot type a query string**: `oyoskills.com/?ref=fresh_fm` is unsayable on radio. Added the instrument that dissolves it — a **radio-sayable vanity path per station** (`oyoskills.com/fresh` → 302 → `/?ref=fresh`), which `parseUtm` already consumes because it treats a bare `?ref` as first-class (`attribution.ts:47`). It is a **Cloudflare Redirect Rule — no code, no deploy, no story**. With **11 stations** on the buy (`roadmap-to-launch.md:107`) this is the difference between *"radio worked"* and *which of 11 stations* earned the naira, and it is the only station-level instrument that survives a listener who skips the question. Flagged as decide-BEFORE-the-buy: a URL read on air cannot be retrofitted. Also corrected `MagicLinkLandingPage.tsx:293` to its real path (`features/auth/pages/`, not `features/registration/pages/`) — the bare filename pointed readers at the wrong feature directory. | Claude (code-review/adjudication pass) |
 | 2026-07-30 | **Attribution addendum — +Context §9, +AC9, +AC10, +an OPEN DECISION block, +a station-attribution Dev Note, +2 non-goals.** ⚠️ **Corrects a wrong position held earlier in drafting: the "How did you hear about us?" question is NOT missing.** It is live on the Review step (`Step5ReviewAndSave.tsx:229`), the flag is ON (`attribution.ts:12`), **Radio is the first option** (`attribution.ts:15-25`), and the chain is complete end to end — web `extras.acquisition` (`Step5ReviewAndSave.tsx:240-245`) → `buildCampaignSource` (`registration.controller.ts:103-115`) → spread last into `raw_data` (`:735-738`) → `ReportService.getCampaignBreakdown` (`report.service.ts:86-95`). Story 13-1 shipped it. **The real gaps are narrower and different:** (1) the path has **executed zero times on prod** — `campaign_source` present on **0 of 82** submissions — so the pre-jingle gate is a **LIVENESS DRY RUN, not a form change** (new **AC9**, with teardown BY ID because "restore to baseline" is a data-deletion hazard, and with the read side asserted too so it cannot become another built-but-unconsumed `getCampaignFunnel`); (2) `<option value="">Prefer not to say</option>` is the pre-selected FIRST option (`:239,247`), so **"declined" and "ignored" are the same stored value** and the denominator for every channel conclusion is unrecoverable (new **AC10a**, incl. the consequence that an explicit decline moves decliners inside `getCampaignBreakdown`'s `IS NOT NULL` filter at `report.service.ts:93` — a decision to record, not discover); (3) **first-position bias sits on Radio**, the channel we most want to measure (new **AC10b**). Station-level attribution is deliberately absent (`attribution.ts:14`, 13-1 AC2.4) — recorded as a **media-buy** decision with three no-code alternatives, incl. per-station UTM links, which are already wired (`WizardPage.tsx:171`) and attribute **even when the listener never answers the question** (`registration.controller.ts:113`). **Making the question mandatory is an explicit OPEN DECISION for Awwal, NOT an AC** — it reverses a prior review ruling recorded in both files (`Step5ReviewAndSave.tsx:214` "prominence ≠ mandatory"; `attribution.ts:7` "NEITHER ever blocks a submit"), it sits at the most expensive point in the funnel, and forced choice with Radio first manufactures the very signal we are trying to detect. SM recommendation: keep it optional, ship AC10, add one **non-blocking** submit nudge. | Bob (SM) |
 | 2026-07-30 | **Story drafted**, EMERGENT from Awwal's decision to run a radio jingle at the public wizard before the email blasts. Framing: the code does not block the jingle, the CONTROLS are wrong in both directions — an auth-shaped 5/IP/15min limit on an accountless public survey endpoint (harmful under carrier NAT), and NO ceiling at all on the outbound email every registration fires synchronously in-request. 8 ACs / 7 Tasks, ordered by leverage per Awwal's accepted recommendation: cap the send → throttle the address → alert on burst → THEN loosen signup → publish registered-vs-verified → operator WAF gate → measure the turn-away. Status `ready-for-dev`, classified LAUNCH-ADJACENT (not post-launch). **Corrections made against the drafting brief, each verified:** (i) `respondents` has NO email column at all — the address lives in `submissions.raw_data` + `users.email`, and `users.email` IS unique but the wizard inserts `onConflictDoNothing`, so an email unique index is not merely missing but not expressible on the respondent side; (ii) the auto thank-you is **synchronous in-process**, never queued, so a burst is N provider calls on the API event loop; (iii) `NotificationMeter` cannot cap where it sits — `dispatch` calls it AFTER the provider and discards the result — and its fail-open contract is *correct* for transactional mail, so the cap must be category-aware; (iv) `wizardDraftRateLimit` (120/IP/15min) fails FIRST under CGNAT and its own comment states the "~5 wizards per shared NAT" assumption the jingle breaks; (v) a radio-jingle runbook **already exists** (`13-3-cutover-and-failover.md`) alongside `pre-viral-push-checklist.md` and roadmap-to-launch's paid-spend pre-flight gate — this story edits all three and creates none; (vi) 13-3's load test measured a READ endpoint, so its green verdict says nothing about the write path. **Preserved, not reopened:** no wizard captcha (magic link + captcha-gated login is the real gate), Bot Fight Mode OFF (9-20). | Bob (SM) |
+
+## AC11 — DISCHARGED 2026-08-01 (measured on prod, read-only)
+
+**The question:** 291 live drafts were answered against the MASTER; can they safely hydrate into the
+six-section PUBLIC CORE? 13-47 fixed the step-cap incompatibility, but key mapping was untested.
+
+**Static half** (`pnpm --filter @oslsr/api form:diff` over Master → Public Core): Public Core is a
+**strict SUBSET** of Master — 0 questions absent, 0 type changes, 0 dropped choice values; 22 Master-only
+questions; sections 7 → 6 (N 11 → 10, `grp_household` dropped).
+
+**Dynamic half** (prod, read-only):
+
+| Metric | Value |
+|---|---|
+| Drafts / with answers | 292 / **214** |
+| Distinct answer keys stored | 37 |
+| Keys the pinned form still asks | **15 — all map** |
+| Orphan keys | **22** |
+| Drafts holding ≥1 orphan | **206** |
+
+**Verdict: SAFE, and better than safe — no data is lost.**
+1. **Every one of the 15 keys the Public Core asks maps exactly.** Nothing a resuming draft-holder already
+   answered will fail to prefill.
+2. **The 22 orphans are preserved, not dropped.** `WizardPage:513` submits the WHOLE
+   `effectiveFormData.questionnaireResponses`, and `registration.controller.ts` spreads `...responses` into
+   `raw_data` **unfiltered**. So a resumed draft yields a RICHER record than a fresh registration —
+   `marital_status` (203 drafts), `education_level` (200), `disability_status` (200), `household_size`
+   (174), `monthly_income` (97), business + portfolio fields all land in `raw_data` even though the shorter
+   form no longer asks them. The Public Core reduction cost the registry nothing for these 206 people.
+3. **No step-remap hazard.** `current_step` is a positional index, so a draft parked past a removed section
+   would resume on a different one — but `.max(5)` capped every draft at or before `grp_identity`, which
+   sits at the same position in both forms. The bug that caused the incident also prevented its worst
+   symptom.
+
+**Note on design consistency (not a defect):** `questionnaireResponses` is `z.record(z.unknown())` and
+flows into `raw_data` unfiltered, while 13-47 deliberately BOUNDED `campaignSource` with `.strict()` to stop
+arbitrary keys reaching the same place. That asymmetry is correct, not an oversight: the questionnaire slot
+must be form-agnostic because forms change (that is the whole point of the two-form split), whereas
+`campaignSource` has a fixed known shape, so bounding it costs nothing. Worth stating so a future reader
+does not "fix" the inconsistency by tightening the questionnaire path.
+
+**Re-runnable evidence:** the four-part query is in this story's git history; the shape check is
+`gh workflow run prod-verify.yml` §2, and the form comparison is `form:diff`.
