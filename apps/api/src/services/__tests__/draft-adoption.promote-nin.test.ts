@@ -20,25 +20,39 @@ const { mocks } = vi.hoisted(() => ({
   },
 }));
 
+/**
+ * The UPDATE and the audit row share ONE transaction, so the mock has to model `tx` as well as
+ * `db` — see the note in promote-nin.ts. (The first live run wrote 10 promotions and 9 audit
+ * rows: `AuditService.logAction` returns `void` and cannot be awaited, so the last row of the
+ * batch was still in flight when the script exited. `logActionTx` is the awaitable form.)
+ */
+const txLike = {
+  update: () => ({
+    set: (v: Record<string, unknown>) => ({
+      where: () => ({
+        returning: async () => {
+          mocks.updates.push(v);
+          mocks.wheres++;
+          return mocks.returning;
+        },
+      }),
+    }),
+  }),
+};
+
 vi.mock('../../db/index.js', () => ({
   db: {
     query: { respondents: { findFirst: async () => mocks.clash } },
-    update: () => ({
-      set: (v: Record<string, unknown>) => ({
-        where: () => ({
-          returning: async () => {
-            mocks.updates.push(v);
-            mocks.wheres++;
-            return mocks.returning;
-          },
-        }),
-      }),
-    }),
+    transaction: async (fn: (tx: typeof txLike) => Promise<unknown>) => fn(txLike),
   },
 }));
 
 vi.mock('../audit.service.js', () => ({
-  AuditService: { logAction: (p: Record<string, unknown>) => mocks.audits.push(p) },
+  AuditService: {
+    logActionTx: async (_tx: unknown, p: Record<string, unknown>) => {
+      mocks.audits.push(p);
+    },
+  },
   AUDIT_ACTIONS: { PENDING_NIN_PROMOTED: 'pending_nin.promoted' },
   AUDIT_TARGETS: { RESPONDENT: 'respondent' },
 }));
@@ -71,9 +85,21 @@ describe('13-49 AC14 — classifyNinPromotion', () => {
   });
 
   /**
-   * THE OSL-2026-RRCHDX ROW. AC14 names it explicitly: `1589857782` is ten digits, most
-   * plausibly a dropped leading zero. It must be neither padded nor dropped — both are a script
-   * guessing a national identity number on a citizen's behalf.
+   * A 10-DIGIT NIN MUST GO TO A HUMAN. Neither padded nor dropped — both are a script guessing a
+   * national identity number on a citizen's behalf.
+   *
+   * ⚠️ THE WORKED EXAMPLE HERE IS NOT WHAT IT LOOKED LIKE. AC14 (and this comment, before
+   * 2026-08-03) cited `OSL-2026-RRCHDX` / `1589857782` as a live ten-digit row awaiting manual
+   * review. It is not one. `1589857782` is that draft's HEAD-STEP value, and the head step is an
+   * autosave snapshot taken mid-keystroke: the completed questionnaire answer is the same digits
+   * plus the eleventh, `…820`. `resolveDraftIdentity` reads `questionnaireResponses.nin` FIRST
+   * precisely because of this, so the row promoted cleanly on the live run.
+   *
+   * The pattern is systematic, not a one-off — 14 drafts carry both values, and in 12 of them the
+   * head-step string is a strict truncated prefix of the questionnaire one. Anyone reading the
+   * head field first will conclude the register is full of malformed NINs (it is not: 2 drafts,
+   * measured questionnaire-first) and will "fix" data that was never broken. The digits below are
+   * therefore kept as a SHAPE fixture, not as a claim about any real respondent.
    */
   it('routes a 10-digit NIN to MANUAL REVIEW — never pads, never drops', () => {
     const d = classifyNinPromotion(candidate({ draftNin: '1589857782' }));
@@ -252,5 +278,28 @@ describe('13-49 AC14 — promoteRespondentNin', () => {
     expect(result.promoted).toBe(false);
     expect(result.reason).toMatch(/no longer/i);
     expect(mocks.audits).toHaveLength(0);
+  });
+
+  /**
+   * REGRESSION — the first live AC14 run (2026-08-03) promoted 10 respondents and wrote 9 audit
+   * rows. `AuditService.logAction` returns `void`: it starts its own transaction and cannot be
+   * awaited, so in a short-lived SCRIPT the last row of a batch is still in flight at exit. The
+   * loss is always exactly one and always the last, which is why it reads as a miscount rather
+   * than a bug.
+   *
+   * The invariant this pins is not "the audit call happened" — the old code called it too. It is
+   * that a promotion CANNOT SURVIVE an audit failure: the write is now inside the same
+   * transaction, so a failing audit row takes the promotion down with it instead of leaving a
+   * promoted respondent with no trail. Fire-and-forget cannot pass this test at all — it would
+   * swallow the rejection and report `promoted: true`.
+   */
+  it('rolls the promotion back when the audit row cannot be written', async () => {
+    const audit = await import('../audit.service.js');
+    const spy = vi
+      .spyOn(audit.AuditService, 'logActionTx')
+      .mockRejectedValueOnce(new Error('audit_logs unavailable'));
+
+    await expect(run()).rejects.toThrow(/audit_logs unavailable/);
+    spy.mockRestore();
   });
 });

@@ -136,26 +136,59 @@ export async function promoteRespondentNin(args: {
     };
   }
 
-  const updated = await db
-    .update(respondents)
-    .set({
-      nin,
-      status: 'active',
-      metadata: sql`COALESCE(${respondents.metadata}, '{}'::jsonb) || ${JSON.stringify({
-        nin_promoted_by: ADOPTION_MARKER,
-        nin_promoted_at: promotedAt.toISOString(),
-        nin_promoted_from_draft_id: draftId,
-      })}::jsonb`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(respondents.id, respondentId),
-        eq(respondents.status, 'nin_unavailable'),
-        isNull(respondents.nin),
-      ),
-    )
-    .returning({ id: respondents.id });
+  // The promotion and its audit row go in ONE transaction, via `logActionTx`.
+  //
+  // ⚠️ NOT `AuditService.logAction` — that overload returns `void`, i.e. it is fire-and-forget by
+  // design, and a caller CANNOT await it. In a long-lived server that is fine (the process outlives
+  // the write). In a SCRIPT it is not: the first live AC14 run on 2026-08-03 promoted 10
+  // respondents and wrote only 9 audit rows. The nine that landed did so because subsequent
+  // iterations' `await`s yielded the event loop; the tenth — the LAST of the batch, always — was
+  // still in flight when the script exited. A batch job silently loses exactly one audit row per
+  // run, and the one it loses is the last, so the count looks "nearly right" and reads as a
+  // rounding error rather than a bug.
+  //
+  // `logActionTx` returns Promise<void> and joins our transaction, so the audit row is now both
+  // awaited AND atomic with the UPDATE: no promotion can exist without its trail, and a failed
+  // audit write rolls the promotion back rather than leaving a silent hole.
+  const updated = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(respondents)
+      .set({
+        nin,
+        status: 'active',
+        metadata: sql`COALESCE(${respondents.metadata}, '{}'::jsonb) || ${JSON.stringify({
+          nin_promoted_by: ADOPTION_MARKER,
+          nin_promoted_at: promotedAt.toISOString(),
+          nin_promoted_from_draft_id: draftId,
+        })}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(respondents.id, respondentId),
+          eq(respondents.status, 'nin_unavailable'),
+          isNull(respondents.nin),
+        ),
+      )
+      .returning({ id: respondents.id });
+
+    if (rows.length === 0) return rows;
+
+    await AuditService.logActionTx(tx, {
+      actorId: args.actorId ?? null,
+      action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
+      targetResource: AUDIT_TARGETS.RESPONDENT,
+      targetId: respondentId,
+      details: {
+        trigger: 'draft_adoption_ac14',
+        marker: ADOPTION_MARKER,
+        draftId,
+        note: 'NIN recovered from the respondent’s own abandoned draft — no outreach required',
+      },
+    });
+
+    return rows;
+  });
 
   if (updated.length === 0) {
     return {
@@ -167,19 +200,6 @@ export async function promoteRespondentNin(args: {
         'something else promoted it first; left untouched',
     };
   }
-
-  AuditService.logAction({
-    actorId: args.actorId ?? null,
-    action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-    targetResource: AUDIT_TARGETS.RESPONDENT,
-    targetId: respondentId,
-    details: {
-      trigger: 'draft_adoption_ac14',
-      marker: ADOPTION_MARKER,
-      draftId,
-      note: 'NIN recovered from the respondent’s own abandoned draft — no outreach required',
-    },
-  });
 
   return { respondentId, nin, promoted: true };
 }
