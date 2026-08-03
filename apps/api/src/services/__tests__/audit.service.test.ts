@@ -380,6 +380,10 @@ describe('AuditService', () => {
 
     it('should use previous hash from existing records when available', async () => {
       const existingHash = 'abc123def456abc123def456abc123def456abc123def456abc123def456abcd';
+      // TWO execute() calls now: (1) pg_advisory_xact_lock, (2) the tail read. The lock is not
+      // decoration — FOR UPDATE on the tail row does NOT serialise appends (13-49 R12), so it
+      // must come first and the tail row is therefore the SECOND result.
+      mockTxExecute.mockResolvedValueOnce({ rows: [] });
       mockTxExecute.mockResolvedValueOnce({ rows: [{ hash: existingHash }] });
 
       const req = createMockRequest();
@@ -502,7 +506,7 @@ describe('AuditService', () => {
       expect(calledWith.previousHash).toBe(existingHash);
     });
 
-    it('should call tx.execute for hash chain serialization (FOR UPDATE)', async () => {
+    it('takes the chain-wide advisory lock BEFORE reading the tail (13-49 R12)', async () => {
       const tx = createMockTx();
       await AuditService.logPiiAccessTx(
         tx,
@@ -512,7 +516,15 @@ describe('AuditService', () => {
         null,
       );
 
-      expect(tx.execute).toHaveBeenCalledOnce();
+      // This test used to assert `toHaveBeenCalledOnce()` — i.e. it pinned the tail read as the
+      // ONLY statement, which is exactly the behaviour that forked the chain 117 times on prod.
+      // `SELECT … FOR UPDATE` locks the row it FOUND; a concurrent writer blocks, re-reads that
+      // same unchanged row, and never sees the other's INSERT, so both compute the same
+      // previous_hash. Order matters: the lock must be taken FIRST or it serialises nothing.
+      expect(tx.execute).toHaveBeenCalledTimes(2);
+      const [lockCall, tailCall] = tx.execute.mock.calls.map((c) => JSON.stringify(c[0]));
+      expect(lockCall).toContain('pg_advisory_xact_lock');
+      expect(tailCall).toContain('FOR UPDATE');
     });
   });
 

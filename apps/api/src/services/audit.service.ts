@@ -31,6 +31,34 @@ const logger = pino({ name: 'audit-service' });
 /** Genesis hash — seed for the hash chain (Story 6-1, AC5) */
 export const GENESIS_HASH = createHash('sha256').update('OSLRS-AUDIT-GENESIS-2026').digest('hex');
 
+/**
+ * Chain-wide advisory lock key. EVERY audit writer takes this before reading the tail.
+ *
+ * WHY `SELECT … FOR UPDATE` ON THE TAIL WAS NEVER ENOUGH (fixed 2026-08-03, 13-49 R12).
+ * The four writers below already carried the comment "Lock the most recent record to serialize
+ * concurrent hash chain inserts". The intent was right; the mechanism does not deliver it. Under
+ * READ COMMITTED, `SELECT … ORDER BY created_at DESC LIMIT 1 FOR UPDATE` locks the row it FOUND.
+ * A second writer runs the same query, blocks on that row, and when the first COMMITS the second
+ * re-checks *that same row* — still present, still unchanged, so it is returned. The first
+ * writer's newly INSERTED row was never in the second's scan, because an INSERT is not an UPDATE
+ * of the row being locked. Both writers therefore compute the SAME `previous_hash` and the chain
+ * FORKS. Row-level locking cannot serialise "read the end of a table, then append to it"; only a
+ * lock on the CHAIN itself can.
+ *
+ * Measured cost on prod before the fix: 117 forks in 1,706 rows, first on 2026-04-04, which made
+ * `verifyHashChain()` report INVALID continuously. No tampering — 0 self-hash failures — but a
+ * control that reports INVALID in normal operation is a control nobody reads.
+ *
+ * ⚠️ This stops NEW forks. The 117 historical ones are permanent and MUST stay: repairing them
+ * means recomputing stored hashes, which is precisely what the chain exists to make impossible.
+ * Verify with `pnpm --filter @oslsr/api audit:verify-chain` — the tamper signal is
+ * `SELF-HASH failures`, which must be 0; forks are an ordering property of the writer.
+ *
+ * Contention is a non-issue at this volume (~1.7k rows since April) and the lock is
+ * transaction-scoped, so it releases on COMMIT/ROLLBACK without any explicit unlock.
+ */
+export const AUDIT_CHAIN_LOCK = 8151642026;
+
 /** Comprehensive audit action types (Story 6-1, AC7) */
 export const AUDIT_ACTIONS = {
   // PII Access (existing — backward compatible)
@@ -254,7 +282,8 @@ export class AuditService {
 
     // Wrap in transaction for hash chain serialization (Task 3.4)
     db.transaction(async (tx) => {
-      // Lock the most recent record to serialize concurrent hash chain inserts
+      // Serialise on a CHAIN-WIDE lock, not on the tail row — see AUDIT_CHAIN_LOCK.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK})`);
       const prevResult = await tx.execute(
         sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
       );
@@ -301,7 +330,8 @@ export class AuditService {
       : (details ?? null);
     const createdAt = new Date();
 
-    // Lock the most recent record to serialize concurrent hash chain inserts (Task 3.4)
+    // Serialise on a CHAIN-WIDE lock, not on the tail row — see AUDIT_CHAIN_LOCK.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK})`);
     const prevResult = await tx.execute(
       sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
     );
@@ -340,6 +370,7 @@ export class AuditService {
     const createdAt = new Date();
 
     db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK})`);
       const prevResult = await tx.execute(
         sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
       );
@@ -383,6 +414,7 @@ export class AuditService {
     const id = uuidv7();
     const createdAt = new Date();
 
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK})`);
     const prevResult = await tx.execute(
       sql`SELECT hash FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`,
     );
