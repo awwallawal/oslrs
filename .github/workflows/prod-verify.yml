@@ -172,13 +172,30 @@ jobs:
             # batch was still in flight when the script exited. Fixed by moving it into the
             # promotion's own transaction — this line is how we find out if it ever regresses,
             # because the symptom is an off-by-one that looks like a miscount.
-            PARITY=$(psql_ro -t -A -F'|' -c "
-              SELECT (SELECT count(*) FROM respondents WHERE metadata ? 'nin_promoted_by'),
-                     (SELECT count(*) FROM audit_logs WHERE action = 'pending_nin.promoted');")
-            echo "promotions|audit_rows = $PARITY"
-            echo "   ⚠️ known gap: OSL-2026-800KD8 (2026-08-03) has no audit row — the promotion"
-            echo "   itself is evidenced by its metadata marker, which is also the rollback key."
-            echo "   Expect a difference of exactly 1 until that is backfilled or written off."
+            # STRICT EQUALITY, deliberately — not "expect a difference of 1".
+            # The tempting move was to bake the known gap in as an allowance. That would have made
+            # this check permanently skewed, which is how a check dies: readers learn the number is
+            # "supposed" to be off, and the NEXT lost row is absorbed in silence. The gap was
+            # reconciled instead (scripts/reconcile-nin-promotion-audit.ts), so the invariant is
+            # clean and any drift from it is news.
+            ORPHANS=$(psql_ro -t -A -c "
+              SELECT count(*) FROM respondents r
+               WHERE r.metadata ? 'nin_promoted_by'
+                 AND NOT EXISTS (SELECT 1 FROM audit_logs a
+                                  WHERE a.action = 'pending_nin.promoted'
+                                    AND a.target_id = r.id);")
+            psql_ro -c "
+              SELECT (SELECT count(*) FROM respondents WHERE metadata ? 'nin_promoted_by') AS promotions,
+                     (SELECT count(*) FROM audit_logs WHERE action = 'pending_nin.promoted') AS audit_rows;"
+            if [ "$ORPHANS" != "0" ]; then
+              echo "::error::$ORPHANS promoted respondent(s) have NO pending_nin.promoted audit row."
+              echo "::error::A promotion without its trail means the audit write was lost — the exact"
+              echo "::error::defect fixed in promote-nin.ts (R11). Investigate before trusting the counts."
+              echo "::error::Remedy: pnpm --filter @oslsr/api audit:reconcile-promotions   (preview)"
+              echo "::error::        pnpm --filter @oslsr/api audit:reconcile-promotions -- --apply"
+              exit 1
+            fi
+            echo "✅ every promotion has its audit row."
 
             echo "-- registry split: where the programme has moved the totals --"
             psql_ro -c "
