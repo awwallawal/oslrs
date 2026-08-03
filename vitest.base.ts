@@ -70,6 +70,33 @@ if (maxWorkers) {
   );
 }
 
+// Worker pool: FORKS on Windows, THREADS elsewhere (2026-08-03, Pitfall #37 re-diagnosed).
+//
+// ⚠️ `VITEST_MAX_THREADS=1` WAS NEVER THE FIX FOR THE SEGFAULT, and believing it was cost six
+// failed pushes in one day. That variable bounds HOW MANY worker threads run; the crash is a
+// native-addon teardown INSIDE a worker thread, so one thread crashes exactly like eight.
+//
+// Measured 2026-08-03 on Windows:
+//   pdf-tabular.parser.test.ts ALONE ............................. exit 0, clean
+//   full API suite, pool 'threads' (even with VITEST_MAX_THREADS=1)  0xC0000005, 6 of 6 runs,
+//     always IMMEDIATELY AFTER that file's 5 tests pass — a teardown crash, never a failure
+//   full suite, pool 'forks', identical pre-push env ............. 4/4 packages green, exit 0
+//
+// pdfjs-dist leaves the worker in a state the next module load cannot survive; `isolate: true`
+// resets module state but reuses the THREAD. A fork gives each file its own PROCESS, so the
+// damage dies with it.
+//
+// Scoped to win32 deliberately: CI's Linux runners have never shown this and are the gate that
+// actually blocks deploys — flipping their pool on the strength of a Windows-only fault would be
+// changing what CI proves in order to fix a laptop. Override either way with VITEST_POOL=forks|threads.
+const pool = (process.env.VITEST_POOL as 'forks' | 'threads' | undefined)
+  ?? (process.platform === 'win32' ? 'forks' : 'threads');
+console.log(
+  '[Vitest Base] pool:',
+  pool,
+  process.env.VITEST_POOL ? '(VITEST_POOL)' : `(default for ${process.platform})`,
+);
+
 // Debug: Write a marker file to prove config is loaded
 try {
   const markerPath = path.join(workspaceRoot, '.vitest-config-loaded');
@@ -88,7 +115,7 @@ export const baseConfig = defineConfig({
     restoreMocks: true,
     mockReset: true,
     isolate: true,
-    pool: 'threads',
+    pool,
     ...(maxWorkers ? { maxWorkers, minWorkers: 1 } : {}),
     testTimeout: 10000,
     hookTimeout: 15000,

@@ -1519,6 +1519,39 @@ After that single clear, the committed `755` takes over and every subsequent dep
 
 ---
 
+### Pitfall #37b: the `0xC0000005` segfault is a WORKER-THREAD teardown crash — `VITEST_MAX_THREADS` never fixed it (2026-08-03)
+
+**The mitigation this playbook recorded was wrong, and believing it cost six failed pushes in one day.**
+`VITEST_MAX_THREADS=1` bounds HOW MANY worker threads run. The crash is a native-addon teardown *inside*
+a worker thread, so one thread crashes exactly like eight. Every "cleared on retry" was luck, not the cap.
+
+**Signature:** `exited (-1073741819)` / `Segmentation fault` / husky `code 139`, always IMMEDIATELY AFTER
+`pdf-tabular.parser.test.ts` reports its 5 tests PASSING. A teardown crash, never a test failure. It is the
+first file in the API run, so the suite dies at file 1 and the log looks like nothing ran.
+
+**Measured on Windows, 2026-08-03:**
+
+| run | result |
+|---|---|
+| `pdf-tabular.parser.test.ts` alone | exit 0, clean |
+| full API suite, `pool: 'threads'`, even at `VITEST_MAX_THREADS=1` | `0xC0000005` — **6 of 6 runs** |
+| full suite, `pool: 'forks'`, identical pre-push env | **4/4 packages green, exit 0** |
+
+**Cause.** `pdfjs-dist` leaves the worker in a state the next module load cannot survive. `isolate: true`
+resets module state but REUSES THE THREAD; a fork gives each file its own PROCESS, so the damage dies with it.
+
+**Fix (`vitest.base.ts`):** `pool` = `forks` on win32, `threads` elsewhere, overridable with `VITEST_POOL`.
+Scoped to Windows deliberately — CI's Linux runners have never shown this and are the gate that actually
+blocks deploys; flipping their pool for a laptop-only fault would change what CI proves. `VITEST_MAX_THREADS`
+remains valid for its REAL purpose (contention/timeout flakes, #37 proper) — it is simply not a segfault fix.
+
+**Diagnostic rule this re-proves:** run the suspect file ALONE first. Green alone + crash in the suite means
+contention or teardown, and *which* one is decided by whether it dies during the file or after it. And when a
+documented mitigation fails twice, re-diagnose it instead of retrying — a retry that occasionally works will
+keep a wrong explanation alive indefinitely.
+
+---
+
 ### Pitfall #37: Local FULL-suite test flakiness (worker crash + per-test timeouts) is environmental contention, NOT broken tests — four root causes, four fixes
 
 **Symptom**: `pnpm --filter @oslsr/api test` (or any whole-suite run) on a loaded dev machine intermittently **worker-crashes** (`exit 0xC0000409` on Windows) and/or reports a handful of `Test timed out` failures — most often in `mfa.service.test.ts`. The SAME suites are green **in isolation** and in **CI** (which runs each package as its own job on a dedicated runner, so it never has mutual contention). Silence ≠ broken tests: it's resource oversubscription.
