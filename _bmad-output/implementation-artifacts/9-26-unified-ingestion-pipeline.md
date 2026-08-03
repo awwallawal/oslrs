@@ -386,3 +386,45 @@ Verifier confirmed (clean, no fix needed): AC#D3 SQL-string inspection is discri
 ## Cohort A disposition cross-reference
 
 The 63 already-completed wizard respondents whose Step 4 was dropped pre-9-26 are **Cohort A**. Their disposition is tracked in **Story 9-28** (`9-28-cohort-a-step4-recovery-decision.md`). Operator chose Path B (targeted supplemental-survey recovery) on 2026-05-22 with Option 2 wording. The 9-28 implementation (Phase A + Phase B) ships the recovery script + landing page that lets these respondents re-submit their Step 4 answers via a `supplemental_survey` magic-link.
+
+---
+
+## Conformance re-check, 2026-08-03 (Story 13-49 draft-adoption)
+
+**Question asked:** does the 13-49 draft-adoption programme reopen this story, and if not, what does
+"closing it properly" mean now that a new path creates registry records?
+
+**Answer: 9-26 stays `done`. The new path CONFORMS — it reuses the spine rather than forking it.**
+
+- **D1 + D3 (`adoptDraft`)** insert a real `submissions` row with **`processed: false`** and hand it to
+  `SubmissionProcessingService.processSubmission`. `processed: false` is load-bearing: the wizard writes
+  `true` because it creates its respondent inline, and copying that would make `processSubmission` take
+  its already-processed early return and create **nothing** while every row still reported success.
+- **D2 (`enrichExistingRespondent`)** UPDATEs one of the Cohort A bare records, so it cannot change the
+  count either way.
+- **D4/D5/D6** write nothing.
+
+**Measured on prod 2026-08-03 — the invariant's exception set is exactly Cohort A, unchanged:**
+
+```
+respondents with NO submissions row: 63
+  51  active, no markers
+   5  nin_unavailable
+   5  active, NIN-promoted by 13-49 AC14
+   2  metadata NULL
+```
+
+After the full D1–D6 run the arithmetic is **309 respondents / 246 submissions / 63 still bare** — the
+adoption adds 164 respondents and 164 submissions, and D2's 22 enrich rows that are already inside the 63.
+
+**What "closing it properly" turned out to require.** This story's invariant has lived as prose since
+2026-05-19 — *"every respondent has a submissions row (except `imported_*`); new paths follow or document
+the exception"* — and **nothing measured it**. A violation does not raise an error; it presents as
+silently missing analytics, which is precisely how the original defect ("registry shows 1, actual 43")
+stayed hidden. So the closure is a gate, not a paragraph: **`prod-verify.yml` §5b** now asserts that the
+count of respondents lacking a submissions row **never exceeds the 63 baseline**, prints its composition,
+and fails with the remedy pointing at `adopt.ts` as the model to copy.
+
+**63 is a CEILING, not a target** — it can only shrink (if any of those people ever submit), never grow.
+If it grows, some path is creating respondents outside the pipeline. See
+[[feedback_unified_ingestion_pipeline]].

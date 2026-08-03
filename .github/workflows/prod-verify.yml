@@ -227,6 +227,49 @@ jobs:
 
             echo
             echo "=============================================================="
+            echo "5b. STORY 9-26 INVARIANT — every respondent has a submissions row"
+            echo "=============================================================="
+            # 9-26 established this after the registry page showed 1 respondent against an actual
+            # 43: analytics joins through `submissions`, so a respondent without one is INVISIBLE
+            # to every analytics query. The invariant has lived as prose ever since
+            # ([[feedback_unified_ingestion_pipeline]]: "new paths follow or document the
+            # exception"), which means nothing measures it.
+            #
+            # The ONLY sanctioned exception is the Story 9-28 absorbed cohort: 63 respondents
+            # created before submissions were written for wizard registrations. That number is a
+            # CEILING, not a target — it can only shrink (if those people ever submit), never grow.
+            # 13-49 adoption deliberately does NOT add to it: `adoptDraft` (D1 + D3) inserts a real
+            # `submissions` row with `processed: false` and hands it to
+            # SubmissionProcessingService, i.e. it reuses the canonical spine rather than forking
+            # it. D2 enrichment UPDATEs an existing bare record and so cannot change the count.
+            #
+            # If this number GROWS, some new path is creating respondents outside the pipeline —
+            # exactly what 9-26 exists to prevent, and it will present as silently missing
+            # analytics rather than as an error.
+            ORPHAN_RESP=$(psql_ro -t -A -c "
+              SELECT count(*) FROM respondents r
+               WHERE NOT EXISTS (SELECT 1 FROM submissions s WHERE s.respondent_id = r.id);")
+            echo "respondents with NO submissions row: $ORPHAN_RESP  (9-28 baseline ceiling: 63)"
+            psql_ro -c "
+              SELECT r.status,
+                     (r.metadata ? 'adopted_by')      AS from_adoption,
+                     (r.metadata ? 'nin_promoted_by') AS nin_promoted,
+                     count(*)
+                FROM respondents r
+               WHERE NOT EXISTS (SELECT 1 FROM submissions s WHERE s.respondent_id = r.id)
+               GROUP BY 1,2,3 ORDER BY 4 DESC;"
+            if [ "$ORPHAN_RESP" -gt 63 ]; then
+              echo "::error::$ORPHAN_RESP respondents have no submissions row — above the 63 baseline."
+              echo "::error::A new write path is creating respondents OUTSIDE the ingestion pipeline."
+              echo "::error::They will be invisible to all 11 analytics queries (Story 9-26 BUG #2)."
+              echo "::error::Find it: the adoption path (adopt.ts) is the correct model — insert a"
+              echo "::error::submissions row with processed:false and call processSubmission."
+              exit 1
+            fi
+            echo "✅ no respondent has been created outside the ingestion pipeline."
+
+            echo
+            echo "=============================================================="
             echo "6. SUPPRESSIONS"
             echo "=============================================================="
             psql_ro -c "SELECT reason, count(*) FROM email_suppressions GROUP BY 1 ORDER BY 2 DESC;"
