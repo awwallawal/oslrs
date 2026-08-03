@@ -145,19 +145,19 @@ jobs:
             echo "=============================================================="
             echo "-- adopted / enriched, by AC11's rollback marker (NOT a stored total) --"
             psql_ro -c "
-              SELECT r.metadata->>'"'"'adopted_by'"'"'      AS programme,
+              SELECT r.metadata->>'adopted_by'      AS programme,
                      r.status,
                      count(*)                       AS respondents,
-                     min((r.metadata->>'"'"'adopted_at'"'"')::timestamptz)::date AS first,
-                     max((r.metadata->>'"'"'adopted_at'"'"')::timestamptz)::date AS last
+                     min((r.metadata->>'adopted_at')::timestamptz)::date AS first,
+                     max((r.metadata->>'adopted_at')::timestamptz)::date AS last
               FROM respondents r
-              WHERE r.metadata ? '"'"'adopted_by'"'"'
+              WHERE r.metadata ? 'adopted_by'
               GROUP BY 1,2 ORDER BY 3 DESC;"
             echo "-- registry split: where the programme has moved the totals --"
             psql_ro -c "
               SELECT (SELECT count(*) FROM respondents)                                    AS registry_total,
-                     (SELECT count(*) FROM respondents r WHERE r.metadata ? '"'"'adopted_by'"'"') AS from_adoption,
-                     (SELECT count(*) FROM respondents WHERE status = '"'"'nin_unavailable'"'"')  AS pending_nin,
+                     (SELECT count(*) FROM respondents r WHERE r.metadata ? 'adopted_by') AS from_adoption,
+                     (SELECT count(*) FROM respondents WHERE status = 'nin_unavailable')  AS pending_nin,
                      (SELECT count(*) FROM wizard_drafts)                                  AS drafts_remaining,
                      (SELECT min(expires_at)::date FROM wizard_drafts)                      AS earliest_draft_expiry;"
             echo "-- D4 conversion: invited, then actually completed a registration --"
