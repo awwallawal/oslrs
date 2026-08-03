@@ -184,9 +184,18 @@ jobs:
                  AND NOT EXISTS (SELECT 1 FROM audit_logs a
                                   WHERE a.action = 'pending_nin.promoted'
                                     AND a.target_id = r.id);")
+            # ⚠️ DO NOT print total `pending_nin.promoted` rows next to the AC14 count. The first
+            # cut did, and on 2026-08-03 it rendered "10 | 87" — inviting the reading that 77 rows
+            # were missing. They are not related quantities: the 9-12 pending-NIN ladder has been
+            # promoting people and writing the SAME action for months (78 of those 87). The AC14
+            # marker counts only what THIS programme promoted. Compare like with like.
             psql_ro -c "
-              SELECT (SELECT count(*) FROM respondents WHERE metadata ? 'nin_promoted_by') AS promotions,
-                     (SELECT count(*) FROM audit_logs WHERE action = 'pending_nin.promoted') AS audit_rows;"
+              SELECT (SELECT count(*) FROM respondents WHERE metadata ? 'nin_promoted_by')     AS ac14_promotions,
+                     (SELECT count(*) FROM respondents r WHERE r.metadata ? 'nin_promoted_by'
+                        AND EXISTS (SELECT 1 FROM audit_logs a
+                                     WHERE a.action = 'pending_nin.promoted' AND a.target_id = r.id))
+                                                                                                AS ac14_with_audit_row,
+                     (SELECT count(*) FROM audit_logs WHERE action = 'pending_nin.promoted')    AS all_promotions_ever;"
             if [ "$ORPHANS" != "0" ]; then
               echo "::error::$ORPHANS promoted respondent(s) have NO pending_nin.promoted audit row."
               echo "::error::A promotion without its trail means the audit write was lost — the exact"
