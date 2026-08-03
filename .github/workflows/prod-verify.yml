@@ -141,14 +141,47 @@ jobs:
 
             echo
             echo "=============================================================="
-            echo "5. SUPPRESSIONS"
+            echo "5. DRAFT-ADOPTION PROGRAMME (Story 13-49)"
+            echo "=============================================================="
+            echo "-- adopted / enriched, by AC11's rollback marker (NOT a stored total) --"
+            psql_ro -c "
+              SELECT r.metadata->>'"'"'adopted_by'"'"'      AS programme,
+                     r.status,
+                     count(*)                       AS respondents,
+                     min((r.metadata->>'"'"'adopted_at'"'"')::timestamptz)::date AS first,
+                     max((r.metadata->>'"'"'adopted_at'"'"')::timestamptz)::date AS last
+              FROM respondents r
+              WHERE r.metadata ? '"'"'adopted_by'"'"'
+              GROUP BY 1,2 ORDER BY 3 DESC;"
+            echo "-- registry split: where the programme has moved the totals --"
+            psql_ro -c "
+              SELECT (SELECT count(*) FROM respondents)                                    AS registry_total,
+                     (SELECT count(*) FROM respondents r WHERE r.metadata ? '"'"'adopted_by'"'"') AS from_adoption,
+                     (SELECT count(*) FROM respondents WHERE status = '"'"'nin_unavailable'"'"')  AS pending_nin,
+                     (SELECT count(*) FROM wizard_drafts)                                  AS drafts_remaining,
+                     (SELECT min(expires_at)::date FROM wizard_drafts)                      AS earliest_draft_expiry;"
+            echo "-- D4 conversion: invited, then actually completed a registration --"
+            psql_ro -c "
+              SELECT count(*) AS invited_drafts_now_registered
+              FROM wizard_drafts d
+              WHERE EXISTS (
+                SELECT 1 FROM respondents r
+                JOIN magic_link_tokens m ON m.respondent_id = r.id
+                WHERE lower(m.email) = lower(d.email)
+                  AND EXISTS (SELECT 1 FROM submissions s WHERE s.respondent_id = r.id));"
+            echo "⚠️ adoption counts must come from the adopted_by MARKER — it is also 13-49 AC11's"
+            echo "   rollback key, so this panel and a rollback agree by construction."
+
+            echo
+            echo "=============================================================="
+            echo "6. SUPPRESSIONS"
             echo "=============================================================="
             psql_ro -c "SELECT reason, count(*) FROM email_suppressions GROUP BY 1 ORDER BY 2 DESC;"
 
             if [ -n "${CONTROL_EMAIL:-}" ]; then
               echo
               echo "=============================================================="
-              echo "6. POSITIVE CONTROL: ${CONTROL_EMAIL}"
+              echo "7. POSITIVE CONTROL: ${CONTROL_EMAIL}"
               echo "=============================================================="
               # ⚠️ NO psql -v / :'email' HERE. psql does NOT interpolate variables in a
               # `-c` command string — it passes `:'email'` straight to the server, which
