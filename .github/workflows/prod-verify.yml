@@ -153,6 +153,33 @@ jobs:
               FROM respondents r
               WHERE r.metadata ? 'adopted_by'
               GROUP BY 1,2 ORDER BY 3 DESC;"
+            echo "-- AC14 NIN promotions: a DIFFERENT marker, and it needs its own line --"
+            # The panel above groups by `adopted_by` and printed "(0 rows)" on 2026-08-03 while
+            # AC14 had just promoted 10 people, because a promotion is not an adoption: it carries
+            # `nin_promoted_by`. A gate that cannot see an action which actually happened reads as
+            # "nothing happened" — the exact failure mode this file exists to prevent.
+            psql_ro -c "
+              SELECT r.metadata->>'nin_promoted_by' AS programme,
+                     r.status,
+                     count(*)                       AS respondents,
+                     max((r.metadata->>'nin_promoted_at')::timestamptz) AS latest
+              FROM respondents r
+              WHERE r.metadata ? 'nin_promoted_by'
+              GROUP BY 1,2 ORDER BY 3 DESC;"
+            echo "-- R11 REOPEN TRIGGER: every promotion must have an audit row. --"
+            # The first live AC14 run wrote 10 promotions and 9 `pending_nin.promoted` rows: the
+            # audit call was fire-and-forget (`logAction` returns void) and the LAST row of the
+            # batch was still in flight when the script exited. Fixed by moving it into the
+            # promotion's own transaction — this line is how we find out if it ever regresses,
+            # because the symptom is an off-by-one that looks like a miscount.
+            PARITY=$(psql_ro -t -A -F'|' -c "
+              SELECT (SELECT count(*) FROM respondents WHERE metadata ? 'nin_promoted_by'),
+                     (SELECT count(*) FROM audit_logs WHERE action = 'pending_nin.promoted');")
+            echo "promotions|audit_rows = $PARITY"
+            echo "   ⚠️ known gap: OSL-2026-800KD8 (2026-08-03) has no audit row — the promotion"
+            echo "   itself is evidenced by its metadata marker, which is also the rollback key."
+            echo "   Expect a difference of exactly 1 until that is backfilled or written off."
+
             echo "-- registry split: where the programme has moved the totals --"
             psql_ro -c "
               SELECT (SELECT count(*) FROM respondents)                                    AS registry_total,
