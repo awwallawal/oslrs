@@ -145,6 +145,25 @@ export interface RespondentMetadata {
    */
   thankyou_referral_sent_at?: string;
   /**
+   * Story 13-49 — the draft-adoption marker, and the ONLY handle the programme's rollback
+   * has (AC11). Set to the literal `'13-49'` on every respondent this programme creates
+   * (D1/D3) or enriches (D2), so `WHERE metadata->>'adopted_by' = '13-49'` identifies the
+   * entire run. 13-44's adoption panel reads the SAME marker, which is deliberate: the
+   * operator view and the rollback cannot disagree about what was adopted.
+   */
+  adopted_by?: string;
+  /** ISO timestamp of the adoption run that touched this row (Story 13-49 AC11). */
+  adopted_at?: string;
+  /** The `wizard_drafts.id` this record's data came from — the provenance trail. */
+  adopted_from_draft_id?: string;
+  /**
+   * Story 13-49 AC4 — the draft's questionnaire answers, kept verbatim on an ENRICHED
+   * record (D2). Those 22 people are Story 9-28 rows created bare, and the respondents
+   * table has no column for occupation / skills / household / business, so the answers
+   * would otherwise be discarded at the exact moment we finally have them.
+   */
+  adopted_draft_answers?: Record<string, unknown>;
+  /**
    * Story 9-38 — set `true` when the post-submit passwordless `public_user`
    * provisioning threw (non-fatal to the wizard submit, per AC#4). Marks the
    * row for the operator-gated `_backfill-wizard-public-users.ts` recovery so

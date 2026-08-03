@@ -22,6 +22,25 @@
 import ExcelJS from 'exceljs';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+// Story 13-49 Task 1 — the vocabulary and the recommendation rules moved OUT of this
+// script and into a shared module, because the adopt script has to read back exactly
+// what this one writes. Two copies would drift, and a drifted disposition mis-routes a
+// person between "adopt into the register" and "email an invitation".
+import {
+  DRAFT_DECISIONS,
+  recommendDecision,
+} from '../src/services/draft-adoption/decisions.js';
+// ⚠️ CODE REVIEW 2026-08-02 — Task 1 unified the RULES but left the FACT EXTRACTION split, and
+// the two halves disagreed. This script's `pick()` read the head-step field FIRST and had no
+// `fullName` fallback at all; `resolveDraftIdentity` (which is what the ADOPT path actually
+// writes from) reads questionnaire-first, then head-step, then legacy `fullName`. Measured on
+// the 292-row snapshot: this script saw NO NAME for 78 drafts of which 76 carry one in
+// `fd.fullName` (present in 286/292), and the two resolvers disagreed on NIN for 14 rows —
+// every one of those a case where `fd.nin` is a truncated 10 digits and `q.nin` is the correct
+// 11. Sharing the resolver is the only way the sheet an operator triages on and the record the
+// script writes describe the same person.
+import { resolveDraftIdentity } from '../src/services/draft-adoption/payload.js';
+import type { WizardDraftData } from '../src/db/schema/wizard-drafts.js';
 
 const SNAP = resolve(process.cwd(), '../../docs/vps-snapshots');
 const IN = resolve(SNAP, 'drafts-rich-2026-08-01.json');
@@ -81,11 +100,33 @@ const respondentOf = (r: Row): string | null =>
 const str = (v: unknown): string =>
   v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
 
-/** Identity lives in the QUESTIONNAIRE for old drafts and in head-step fields for new ones. */
+/**
+ * Identity lives in the QUESTIONNAIRE for old drafts and in head-step fields for new ones.
+ *
+ * ⚠️ Used only for the DISPLAY columns now. The identity that drives the RECOMMENDATION comes
+ * from `resolveDraftIdentity` via `identityOf` below — see the import note. Leaving two
+ * resolvers for display and policy would re-open the drift this change closed.
+ */
 const pick = (r: Row, qKey: string, fdKey?: string): string => {
   const fromFd = fdKey ? str(r.fd?.[fdKey]).trim() : '';
   return fromFd || str(r.q?.[qKey]).trim();
 };
+
+/**
+ * Re-shape a snapshot row into the `DraftRow` the shared resolver speaks, so this script and
+ * the adopt script derive identity from ONE function. The snapshot splits a draft into `q` and
+ * `fd`; a live `wizard_drafts.form_data` nests the answers under `questionnaireResponses` with
+ * the head-step fields alongside — this reassembles that shape.
+ */
+const identityOf = (r: Row) =>
+  resolveDraftIdentity({
+    id: r.draft_id,
+    email: r.draft_email,
+    formData: {
+      ...(r.fd ?? {}),
+      questionnaireResponses: r.q ?? {},
+    } as WizardDraftData,
+  });
 
 /** ORDER MATTERS — identity first, then the Public Core block, then the 22 Master-only orphans. */
 const CORE = [
@@ -100,14 +141,8 @@ const ORPHANS = [
   'portfolio_url', 'gps_location',
 ];
 
-const DECISIONS = [
-  'PUSH_TO_REGISTRY',   // adopt + OSLRS number + welcome/thankyou/referral + magic link to amend
-  'INVITE_TO_RESUME',   // not complete enough — email a resume link instead
-  'EXCLUDE_CONSENT_NO', // said no; do not process further
-  'EXCLUDE_EMPTY',      // nothing usable
-  'ALREADY_REGISTERED', // NIN already a full respondent — pushing would duplicate
-  'BACKFILL_THE_63',    // matches a Story 9-28 bare record: enrich it, do not re-create
-];
+/** Story 13-49 Task 1 — single source of truth; see `src/services/draft-adoption/decisions.ts`. */
+const DECISIONS: readonly string[] = DRAFT_DECISIONS;
 
 const built = rows.map((r) => {
   const firstname = pick(r, 'firstname', 'givenName');
@@ -119,22 +154,34 @@ const built = rows.map((r) => {
   const consent = str(r.q?.consent_basic).trim().toLowerCase();
   const answers = Object.keys(r.q ?? {}).length;
 
+  // ⚠️ THE RECOMMENDATION IS DERIVED FROM THE SHARED RESOLVER, not from `pick` above — see the
+  // import note. `pick` still feeds the human-readable columns so the operator sees the raw
+  // fields; `id` is what the policy and the eventual write both use.
+  const id = identityOf(r);
+
   // "Registerable" = the fields a respondent row actually needs.
-  const hasIdentity = !!(firstname && surname);
-  const registerable = hasIdentity && !!nin && !!phone && !!lga;
+  const hasIdentity = !!(id.firstName && id.surname);
+  const registerable = hasIdentity && !!id.nin && !!id.phone && !!id.lgaId;
 
   const rid = respondentOf(r);
   const alreadyRegistered = !!rid && WITH_SUB.has(rid);
   const isOneOf63 = !!rid && WITHOUT_SUB.has(rid);
   const existingRef = rid ? (REF[rid] ?? '') : '';
 
-  let recommend: string;
-  if (alreadyRegistered && !isOneOf63) recommend = 'ALREADY_REGISTERED';
-  else if (isOneOf63) recommend = 'BACKFILL_THE_63';
-  else if (consent === 'no') recommend = 'EXCLUDE_CONSENT_NO';
-  else if (answers === 0 && !hasIdentity) recommend = 'EXCLUDE_EMPTY';
-  else if (registerable && consent === 'yes') recommend = 'PUSH_TO_REGISTRY';
-  else recommend = 'INVITE_TO_RESUME';
+  // Story 13-49 Task 1 — the rules now live in the shared module (unit-tested there,
+  // and read back by the adopt script). This script's job is to derive the FACTS from
+  // the extract and render them; it no longer owns the policy.
+  const recommend = recommendDecision({
+    firstName: id.firstName,
+    surname: id.surname,
+    nin: id.nin,
+    lgaId: id.lgaId,
+    phone: id.phone,
+    consentBasic: consent,
+    answerCount: answers,
+    alreadyRegistered,
+    isOneOf63,
+  });
 
   const why = [
     isOneOf63 ? 'ONE OF THE 63 — bare record exists, these answers can backfill it' : '',
