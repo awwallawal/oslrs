@@ -179,6 +179,17 @@ export interface EnrichArgs {
 
 export interface EnrichResult {
   respondentId: string;
+  /**
+   * True when this record was ALREADY enriched by the programme and was left untouched.
+   *
+   * D2 was not idempotent before 2026-08-03: nothing checked the marker, so re-running a sheet
+   * re-ran the UPDATE **and re-sent the confirmation**. The 13-12 thank-you self-gates on its
+   * own send-once marker, but the adoption confirmation goes out as `registration-status` —
+   * transactional, no marker, no ledger row — so a second run put a duplicate in the person's
+   * inbox with nothing recording that it happened. Found while sequencing the D2 ramp: the
+   * completed row had to be excluded from the sheet BY HAND to avoid exactly that.
+   */
+  alreadyDone?: boolean;
   /** Which columns were actually filled — reported in the dry-run so "enriched" is not a claim. */
   filled: string[];
   /**
@@ -256,6 +267,20 @@ export async function enrichExistingRespondent({
   });
   if (!existing) {
     throw new DraftRowError(draft.id, `target respondent ${respondentId} not found`);
+  }
+
+  // IDEMPOTENCE (2026-08-03). A record this programme has already enriched is left ALONE.
+  // Not an error — re-running a sheet is a normal operator action, and the correct response to
+  // "already done" is to do nothing and say so, not to fail the row or repeat the work.
+  // Re-running previously re-sent the adoption confirmation, which carries no send-once marker.
+  const priorMarker = (existing.metadata as Record<string, unknown> | null)?.adopted_by;
+  if (priorMarker !== undefined && priorMarker !== null) {
+    return {
+      respondentId,
+      filled: [],
+      referenceCode: (existing as Record<string, unknown>).referenceCode as string | null,
+      alreadyDone: true,
+    };
   }
 
   const id = resolveDraftIdentity(draft);

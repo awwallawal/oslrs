@@ -303,6 +303,38 @@ describe('13-49 adopt — enrichExistingRespondent (D2)', () => {
     expect(mocks.respondentUpdates).toHaveLength(0);
   });
 
+  /**
+   * IDEMPOTENCE. Re-running a D2 sheet used to re-run the UPDATE **and re-send the adoption
+   * confirmation**, which goes out as `registration-status` — transactional, so it carries no
+   * send-once marker and writes no ledger row. The 13-12 thank-you self-gates; the confirmation
+   * did not. A second run therefore put a duplicate in a real person's inbox with nothing
+   * recording it, which is the double-send this system exists to prevent.
+   *
+   * Found on 2026-08-03 while sequencing the D2 ramp: the one already-enriched row had to be
+   * excluded from the sheet BY HAND. This test is what makes the hand-exclusion unnecessary.
+   */
+  it('leaves an ALREADY-enriched record untouched instead of re-writing and re-sending', async () => {
+    mocks.existingRespondent = {
+      id: 'resp-63',
+      referenceCode: 'OSLRS-2026-ABC123',
+      firstName: null, lastName: null, nin: null, phoneNumber: null, lgaId: null,
+      metadata: { adopted_by: '13-49', adopted_at: '2026-08-03T19:55:05.000Z' },
+    };
+
+    const result = await enrichExistingRespondent({
+      draft,
+      respondentId: 'resp-63',
+      adoptedAt: ADOPTED_AT,
+    });
+
+    expect(result.alreadyDone).toBe(true);
+    expect(result.filled).toEqual([]);
+    // Their existing code still comes back — the caller needs it to report the row.
+    expect(result.referenceCode).toBe('OSLRS-2026-ABC123');
+    // The load-bearing assertion: NO write happened. Delete the guard and this fails.
+    expect(mocks.respondentUpdates).toHaveLength(0);
+  });
+
   it('refuses when the target respondent does not exist', async () => {
     mocks.existingRespondent = null;
     await expect(run()).rejects.toThrow(/resp-63/);

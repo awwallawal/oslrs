@@ -57,7 +57,8 @@ import { filterMarketingCohort } from '../src/services/campaign-contact.service.
 // The adopted-person message set lives in the service layer (type-checked category literals,
 // and suppression applied where the other auto-sends apply it) — see `draft-adoption/send.ts`.
 import { sendAdoptionMessages } from '../src/services/draft-adoption/send.js';
-import { cohortOf, type DraftCohort, type DraftDecision } from '../src/services/draft-adoption/decisions.js';
+import { cohortOf, type DraftCohort, type DraftDecision, isDraftDecision, DRAFT_DECISIONS,
+} from '../src/services/draft-adoption/decisions.js';
 import { parseDecisionRows, reconcileDraftIds, type RawDecisionRow } from '../src/services/draft-adoption/sheet.js';
 import {
   adoptDraft,
@@ -98,6 +99,7 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'sheet',
   'explain',
   'promote-nins',
+  'only',
   'help',
 ]);
 
@@ -111,6 +113,19 @@ export interface Args {
   explainDraftId: string | null;
   /** AC14 — run the free NIN promotions instead of the adoption programme. */
   promoteNins: boolean;
+  /**
+   * Restrict this run to one or more DECISION values (comma-separated). Null = every decision.
+   *
+   * WHY THIS EXISTS. The ramp is sequenced by cohort — D2's 16 enrichments, then D3's 24, then
+   * D1's 139 in tranches — and `--max` cannot express that: it caps rows ACTED ON in sheet
+   * order, and `writePlans` interleaves D1/D3/D2, so `--max 16` acts on a MIX. Before this flag
+   * the only way to isolate a cohort was to hand-doctor a copy of the workbook, setting every
+   * other row to an inert decision. That works (the error direction is strictly less action)
+   * but it leaves a file on disk that LOOKS like the triage sheet and is not — and picking the
+   * inert value is itself a trap: `INVITE_TO_RESUME` and `EXCLUDE_EMPTY` share the contact
+   * cohort, so choosing either would have MAILED 200+ people instead of doing nothing.
+   */
+  only: ReadonlySet<DraftDecision> | null;
   help: boolean;
 }
 
@@ -179,6 +194,22 @@ export function parseArgs(argv: string[]): Args {
     );
   }
 
+  const onlyRaw = flags.only;
+  let only: ReadonlySet<DraftDecision> | null = null;
+  if (typeof onlyRaw === 'string') {
+    const wanted = onlyRaw.split(',').map((v) => v.trim().toUpperCase()).filter(Boolean);
+    const bad = wanted.filter((v) => !isDraftDecision(v));
+    if (bad.length > 0) {
+      throw new Error(
+        `--only got unrecognised decision(s): ${bad.join(', ')}. Valid: ${DRAFT_DECISIONS.join(', ')}`,
+      );
+    }
+    if (wanted.length === 0) throw new Error('--only was passed with no decision value');
+    only = new Set(wanted as DraftDecision[]);
+  } else if (onlyRaw === true) {
+    throw new Error('--only needs a value, e.g. --only BACKFILL_THE_63');
+  }
+
   return {
     dryRun,
     apply,
@@ -188,6 +219,7 @@ export function parseArgs(argv: string[]): Args {
     sheetPath: typeof sheetRaw === 'string' ? sheetRaw : DEFAULT_SHEET,
     explainDraftId: typeof explainRaw === 'string' ? explainRaw : null,
     promoteNins: flags['promote-nins'] === true,
+    only,
     help: flags.help === true,
   };
 }
@@ -234,6 +266,12 @@ Story 13-49 — draft-adoption programme (D1–D6).
   --sheet <path>                   Override the triage workbook path.
   --promote-nins                   AC14 mode: promote nin_unavailable respondents whose NIN is
                                    already sitting in their own draft. No outreach, no sheet.
+  --only D1,D2,...                 Restrict the run to one or more DECISION values, e.g.
+                                   --only BACKFILL_THE_63 or --only PUSH_TO_REGISTRY,PUSH_PENDING_NIN.
+                                   The cohort tally still prints the WHOLE sheet, then states
+                                   what is in scope. Use this to sequence the ramp by cohort —
+                                   --max cannot, because it caps rows in sheet order and the
+                                   write loop interleaves D1/D3/D2.
   --help                           Show this help.
 
 --dry-run and --apply are mutually exclusive and passing both is an error, not a preview.
@@ -291,6 +329,8 @@ interface Counters {
   ignoredAlreadyRegistered: number;
   suppressedSkipped: number;
   recentlyContactedSkipped: number;
+  /** Rows this programme had already completed — left untouched, nothing re-sent. */
+  alreadyDoneSkipped: number;
   /**
    * ⚠️ ADDED BY CODE REVIEW 2026-08-02. Drafts sharing an email are dropped by
    * `filterMarketingCohort`'s intra-run dedupe; the count was being discarded, so they vanished
@@ -364,6 +404,26 @@ async function main(): Promise<void> {
     console.log(`  ${String(n).padStart(4)}  ${cohortOf(decision)}  ${decision}`);
   }
   console.log(`  ${String(plans.length).padStart(4)}  TOTAL`);
+
+  // ── 3b. --only: narrow the run to named cohorts, AFTER printing the whole sheet ─────────
+  //
+  // The tally above always reflects the FULL sheet, so a filtered run can never be mistaken
+  // for a complete one: you see what exists, then you see what this run will touch. Rows
+  // outside the filter are dropped from `plans` entirely, so they are neither validated nor
+  // acted on — they simply are not part of this run.
+  if (args.only) {
+    const wanted = args.only;
+    const before = plans.length;
+    const kept = plans.filter((p) => wanted.has(p.decision));
+    plans.length = 0;
+    plans.push(...kept);
+    console.log(`
+--only ${[...wanted].join(', ')} → ${plans.length} of ${before} row(s) in scope.`);
+    if (plans.length === 0) {
+      console.log('Nothing matches the filter. Nothing to do.');
+      return;
+    }
+  }
 
   // ── 4. Validate EVERY acting row before writing ANY of them (AC2 fail-closed) ──────────
   //
@@ -446,6 +506,7 @@ async function main(): Promise<void> {
     duplicateEmailSkipped: 0,
     adoptedNotTold: 0,
     inviteRefusedConsent: 0,
+    alreadyDoneSkipped: 0,
     failed: 0,
   };
 
@@ -483,6 +544,14 @@ async function main(): Promise<void> {
           respondentId,
           adoptedAt,
         });
+        // Already enriched by a previous run: not acted on, not counted as work, NOT re-sent.
+        // `acted` is rolled back so the row does not consume an --max slot it never used.
+        if (result.alreadyDone) {
+          counters.alreadyDoneSkipped++;
+          acted--;
+          logger.info({ event: 'draft_adoption.enrich_skipped_already_done', draftId: p.draft.id });
+          continue;
+        }
         counters.enriched++;
         logger.info({ event: 'draft_adoption.enriched', draftId: p.draft.id, filled: result.filled });
 
