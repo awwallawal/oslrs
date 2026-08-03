@@ -335,12 +335,31 @@ test.describe('Supervisor Messaging — inbox load race (13-36 regression)', () 
     // "Target page … closed" — as an UNHANDLED rejection that Playwright reports as
     // a phantom second error against this or the NEXT test (review AI-6). The real
     // error is still surfaced by the `await navigation` at the end.
-    navigation.catch(() => {});
+    // KEEP the rejection reason. The handler used to discard it, which meant that ANY failure
+    // inside `gotoMessages` — a bounced login, a clobbered navigation, a dead link — surfaced as
+    // "Loading messages not found", i.e. as a claim about the skeleton. Observed 2026-08-03: this
+    // test failed once in 11 local runs with exactly that message while the actual cause was
+    // upstream and unrecoverable from the output. The assertion below is only meaningful if the
+    // navigation is still in flight; if it already rejected, say so instead.
+    let navError: unknown;
+    navigation.catch((err: unknown) => {
+      navError = err;
+    });
 
     try {
       // (1) The race is real: skeleton up, no broadcast button in the DOM.
       await expect(page.getByLabel('Loading messages')).toBeVisible();
       await expect(page.getByRole('button', { name: /send broadcast/i })).toHaveCount(0);
+    } catch (err) {
+      if (navError !== undefined) {
+        throw new Error(
+          'The skeleton assertion failed, but the REAL failure is upstream: gotoMessages() ' +
+            'already rejected, so the page never reached /messages and no skeleton could exist.\n' +
+            `Navigation error: ${navError instanceof Error ? navError.message : String(navError)}\n` +
+            `Skeleton assertion: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`,
+        );
+      }
+      throw err;
     } finally {
       // Always release, even if (1) failed — a held route would otherwise keep the
       // nav pending through teardown.

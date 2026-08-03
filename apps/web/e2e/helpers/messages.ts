@@ -240,15 +240,44 @@ export async function expectInboxReady(page: Page, traffic?: InboxTraffic): Prom
     // Name the diagnosis ONLY when the evidence identifies it; otherwise say so and
     // hand over the raw observations. A wrong confident answer here is worse than
     // none — it is what sent this story's earlier skips down the wrong path.
+    // A LOST SESSION LEAVES FINGERPRINTS. It cannot be inferred from the URL alone, and this
+    // branch used to do exactly that: any off-/messages URL was reported as "this is a LOST
+    // SESSION", naming `token.service.ts:146` and blaming "a parallel worker logging in as the
+    // SAME seeded account". On 2026-08-03 that message was emitted by a run whose own log said
+    // `Running 57 tests using 1 worker`, with `Auth-refresh traffic seen: (none)` printed three
+    // lines above the verdict. The real cause was a post-login redirect clobbering the nav.
+    //
+    // The cost of a confident wrong answer is not zero: it is read as the conclusion, and the
+    // investigation starts at the wrong end. So the session hypothesis now requires session
+    // EVIDENCE — a rejected refresh, or a bounce to a public/auth route.
+    const authRejected = authSeen.some((line) => line.includes('401'));
+    const bouncedToPublic = /\/(staff\/login|login)\b/.test(url) || /localhost:\d+\/?$/.test(url);
+    const onRoleDashboard = /\/dashboard\/[a-z-]+/.test(url);
+
     let verdict: string;
-    if (!onMessages) {
+    if (!onMessages && (authRejected || bouncedToPublic)) {
       verdict =
-        `DIAGNOSIS: the page is no longer on /messages (it is at ${url}).\n` +
-        '  The inbox anchors cannot exist here — this is a LOST SESSION, not a slow query.\n' +
-        '  Most likely the boot /auth/refresh was rejected: this API is single-session by design\n' +
-        '  (token.service.ts:146 reaps the previous refresh token on every login), so a parallel\n' +
-        '  worker logging in as the SAME seeded account invalidates this one. Do not reload or\n' +
-        "  re-navigate an authed page inside this suite — see this file's header note.";
+        `DIAGNOSIS: LOST SESSION — the page bounced to ${url}` +
+        (authRejected ? ' after a 401 on /auth/refresh.\n' : '.\n') +
+        '  This API is single-session by design (token.service.ts:146 reaps the previous refresh\n' +
+        '  token on every login), so a parallel worker logging in as the SAME seeded account\n' +
+        '  invalidates this one. Do not reload or re-navigate an authed page inside this suite —\n' +
+        "  see this file's header note.";
+    } else if (!onMessages && onRoleDashboard) {
+      verdict =
+        `DIAGNOSIS: THE NAVIGATION WAS CLOBBERED — the page is on the role dashboard (${url})\n` +
+        '  with no rejected auth traffic, so the session is FINE. Something navigated after we\n' +
+        '  arrived: the known cause is `DashboardRedirect`, which lands on /dashboard and then\n' +
+        '  fires `<Navigate to={getDashboardRoute(role)} replace />` from an effect once auth\n' +
+        '  resolves. A caller that treats the intermediate /dashboard URL as "logged in" races\n' +
+        '  that redirect, and it wins — replacing whatever page we had just opened.\n' +
+        '  `staffLogin` waits for the settled role URL to prevent this; check any OTHER path\n' +
+        '  into this page that does not, before suspecting the product.';
+    } else if (!onMessages) {
+      verdict =
+        `DIAGNOSIS: UNRESOLVED — the page is at ${url}, which is neither /messages, nor a public\n` +
+        '  bounce, nor a role dashboard, and no auth rejection was seen. Do NOT assume a lost\n' +
+        '  session: capture this output and open a story.';
     } else if (pending.some((p) => p === 'auth/refresh')) {
       verdict =
         'DIAGNOSIS: a /auth/refresh request is STILL IN FLIGHT and never settled.\n' +

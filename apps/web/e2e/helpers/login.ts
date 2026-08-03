@@ -67,6 +67,27 @@ export async function staffLogin(page: Page, role: StaffRole): Promise<void> {
     page.getByRole('button', { name: /sign in/i }).click(),
   ]);
 
+  // ⚠️ LOGIN IS NOT FINISHED WHEN THE URL SAYS `/dashboard`. It finishes one redirect later.
+  //
+  // Login lands on `/dashboard`, which renders `DashboardRedirect` — a component that shows a
+  // skeleton while `isLoading`, then issues `<Navigate to={getDashboardRoute(role)} replace />`
+  // from an effect once the user resolves. The regex above matches the INTERMEDIATE `/dashboard`,
+  // so `staffLogin` used to return with that redirect still pending.
+  //
+  // What that cost (CI run 30811306532, 2026-08-03): the caller clicked a nav link, reached
+  // `/dashboard/supervisor/messages`, and the still-pending redirect effect then REPLACED the
+  // location with `/dashboard/supervisor`. The target page unmounted before its query could fire,
+  // so the failure looked like "the inbox never loaded" and the helper's diagnostic blamed a lost
+  // session — while the run log said `1 worker` and reported no auth traffic at all. A settled
+  // URL is the difference between a 1.3s pass and a 21s timeout with a false explanation.
+  //
+  // Every entry in `roleRouteMap` is `/dashboard/<slug>` (sidebarConfig.ts:64), so "a segment
+  // exists after /dashboard" is a universal redirect-settled signal. If we already landed on a
+  // role dashboard this resolves immediately.
+  if (!page.url().includes('/auth/mfa-challenge')) {
+    await page.waitForURL(/\/dashboard\/[a-z-]+/);
+  }
+
   if (page.url().includes('/auth/mfa-challenge')) {
     throw new Error(
       `E2E precondition failed: "${email}" has MFA enrolled, so staff login stops at the TOTP ` +
