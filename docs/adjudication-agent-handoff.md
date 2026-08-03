@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-01 · **Prod deployed SHA:** `0beb8bc` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-03 · **Prod deployed SHA:** `d1196a5` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -191,6 +191,27 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 - Connect: `ssh -o ConnectTimeout=25 root@100.93.100.28` → `docker exec oslsr-postgres psql -U oslsr_user -d oslsr_db -t -A -c "..."`.
 - **Dry-run of a public registration** (proves auto-sends + ledger): give a free test NIN (`^\d{11}$`, e.g. `90000000011` — verify free first), human registers, then verify: respondent markers (`metadata->>'confirmation_email_sent_at'` + `thankyou_referral_sent_at`), the submission's form + `raw_data->>'main_occupation'`, and `campaign_sends` rows for the email (ledger-liveness).
 - **Cleanup (child-first, ONE txn, `-v ON_ERROR_STOP=1`):** `fraud_detections` (**by `submission_id`** — it has no `respondent_id`) → `marketplace_profiles` → `magic_link_tokens` (**by EMAIL** — a wizard-issued token has `respondent_id = NULL`, so the RID form deletes 0 rows and still looks clean; it silently leaked residue on three consecutive dry-runs before this was caught on 2026-07-30) → `wizard_drafts` (by email) → `submissions` → `respondents` for the RID, plus the test `campaign_sends` row (by email). **Read the `DELETE n` counts — a `DELETE 0` is a failed teardown, not a clean one.** Full annotated recipe: `docs/runbooks/pre-blast-dry-run.md` §5. **Do NOT delete the `users` account** (check `created_at` — real accounts predate today). **`audit_logs` is APPEND-ONLY** (a DB trigger `audit_logs_immutable()` rejects DELETE and rolls back the whole txn — leave the audit rows). Verify counts restore (baseline captured BEFORE the test).
+
+### 2j. A `void`-returning helper LOSES THE LAST ITEM OF EVERY BATCH (new 2026-08-03)
+- **Signature:** a batch job reports N successes and the side-effect table has N−1 rows, always missing the LAST one. It reads as a miscount, which is why it survives.
+- **Mechanism:** `AuditService.logAction` is declared `: void` — it opens its own transaction and never returns the promise, *and* it ends in `.catch(err => logger.warn(...))`. A caller **cannot** await it and never learns it failed. In a long-lived server the process outlives the write, so it is harmless. In a **script** it is not: items 1..N−1 flush only as a side effect of the *next* iteration's `await` yielding the event loop, and item N is still in flight when `process.exit()` tears down the pool. **Structural, not probabilistic — a batch of N always loses exactly row N.**
+- **Fix:** use the awaitable sibling (`logActionTx(tx, …)`) inside the operation's OWN transaction. That also buys atomicity — a failed audit write rolls the operation back instead of leaving a mutation with no trail.
+- **Generalise:** grep for `void`-returning fire-and-forget helpers called from `scripts/`. The API's fire-and-forget contract is a SERVER assumption; scripts violate it by exiting.
+- **RED-verify it:** neuter to `void AuditService.logActionTx(...)` — the regression test must resolve `promoted: true` instead of rejecting. If it still passes, the test is asserting the call happened, not that the trail survives.
+
+### 2k. CLASSIFY before you escalate — and before you dismiss (new 2026-08-03)
+- A verifier that returns ONE boolean over MULTIPLE invariants cannot be acted on. `verifyHashChain` enforces (a) **self-hash** — ordering-independent, the real tamper signal — and (b) **link order** under `ORDER BY created_at, id`, which is ordering-DEPENDENT and *not guaranteed*: `createdAt` is stamped in JS before the txn opens, and `SELECT … FOR UPDATE` does not serialise two writers under READ COMMITTED (the second re-reads the same locked row; the other's INSERT was never in its scan), so both store the same `previous_hash` and the chain forks.
+- **Prod, 2026-08-03: `INVALID`, but 0 self-hash failures / 117 forks / 0 gaps.** No tampering — the linear order never existed. A naive `lag()` SQL proxy reports the same 117 and would have been read as corruption.
+- **Rule:** when a check fails, first ask *which invariant* failed, then whether the failing one is even well-defined. Escalating a concurrency artifact as tampering and dismissing real tampering as "that known ordering thing" are the same mistake. Tool: `pnpm --filter @oslsr/api audit:verify-chain`.
+
+### 2l. A DIAGNOSTIC IS A CLAIM — gate it on evidence (new 2026-08-03)
+- `expectInboxReady` printed "this is a **LOST SESSION** … a parallel worker logging in as the SAME seeded account" in a run whose own log read `Running 57 tests using 1 worker`, three lines below its own `Auth-refresh traffic seen: (none)`. The real cause was a post-login redirect clobbering the navigation. **A confident wrong answer is worse than none: it is read as the conclusion and the investigation starts at the wrong end.**
+- Same shape one layer down: the test discarded `gotoMessages`' rejection (`navigation.catch(() => {})`), so *any* upstream failure surfaced as "Loading messages not found" — a claim about the skeleton.
+- **Rule:** a helper may only NAME a cause when its own captured evidence identifies it; otherwise print the observations and say UNRESOLVED. Apply the same test to your own report to Awwal.
+
+### 2m. "Logged in" ≠ settled — wait for the SECOND redirect (new 2026-08-03)
+- `staffLogin` matched `/dashboard` and returned while `DashboardRedirect` still had a pending `<Navigate to={getDashboardRoute(role)} replace />` in an effect. The caller navigated, then that effect **replaced** the location — the target page unmounted before its query fired, so there was no traffic of ANY kind to diagnose from.
+- Every `roleRouteMap` value is `/dashboard/<slug>`, so waiting for a segment after `/dashboard` is a universal settled-signal. **Generalise: any auth flow with a role-landing redirect has this trap.**
 
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
@@ -617,6 +638,47 @@ public/press launch, NOT before the email blast.
     passes, a query matching nothing that went GREEN, and an unexecuted conditional branch. Each one
     sharpened §2a2. **The rule that came out of it: read a run that EXERCISES the branch you care about;
     "the job passed" cannot distinguish TAKEN from SKIPPED.**
+
+## 7e. Session 2026-08-03 — AC14 executed; three defects found by VERIFYING, not by testing
+
+**What shipped:** 13-49 AC14 promotions ran live (**10 promoted, `nin_unavailable` 35 → 25**), the E2E red was
+root-caused and fixed, the lost audit row was reconciled, and a chain classifier was added. Prod `d1196a5`.
+Registry **145** (120 active / 25 pending-NIN), `from_adoption` still **0** — the D1–D6 adoption has NOT run yet.
+
+**Every finding this session came from reading output, not from a failing test.**
+
+1. **The story's own numbers were wrong, and so were mine.** AC14/R9 predicted *9 promotable + 1 manual review*
+   and named `OSL-2026-RRCHDX` (`1589857782`, ten digits) as the carve-out. It promoted cleanly. That value is
+   the draft's **head-step** field — an autosave snapshot caught mid-keystroke — while the questionnaire holds
+   the full eleven digits. `resolveDraftIdentity` reads questionnaire-first for exactly this reason.
+   **Systematic: 14 drafts carry both, in 12 the head string is a strict truncated prefix, and malformed-NIN
+   counts are 2 questionnaire-first vs 15 head-first.** Anyone auditing the head field "finds" 13 broken NINs
+   that were never broken. → §2k, and [[nin-validation-mod11-invalid]].
+2. **The dry-run's `blocked: 0` was an UNEVALUATED zero** — the clash guard lives in the write path, so preview
+   never ran it. Checked all 10 NINs against `respondents` independently before applying (0 held by others; 28
+   drafts overall DO carry a NIN already in the register). §2a2 in its purest form.
+3. **10 promotions, 9 audit rows** — the last of the batch, every time. → the new §2j.
+
+**Then the fix for (3) produced its own lesson.** Verifying the backfill had not corrupted anything, a `lag()`
+SQL proxy reported **117 broken links in 1,706 rows**. It was not corruption: 0 self-hash failures, 117
+concurrency forks, 0 gaps — and the prod chain has read INVALID since **2026-04-04**, four months before this
+story. Now residual **R12** + security residual **#11**. → the new §2k.
+
+**On the backfill decision (Awwal deferred to me, then I reversed my own advice).** I first argued for leaving
+the hole documented. Wrong. `audit_logs` is hash-chained and `logActionTx` stamps `createdAt = now()` linking to
+the current tail, so **back-dating was never available** — the real choice was a forward-dated entry that says
+what it is, or silence. A ledger corrects by adjunct entry, never by erasure. The decisive argument was
+Awwal's: leaving it would have forced the standing check to carry *"expect a difference of exactly 1, forever"*
+— a permanently skewed baseline that teaches readers to ignore it and silently absorbs the NEXT lost row.
+
+**Process notes.** A backgrounded `git push` piped to `tail` reported **exit 0 while the push had failed** (the
+pipe swallowed git's status) — never trust a piped exit code on a gate. Pre-push segfaulted twice
+(`0xC0000005`, Pitfall #37) even WITH `VITEST_MAX_THREADS=1`, which is weaker than MEMORY.md claims; it passed
+on retry (17m / 7m). Tailscale degraded to unusable mid-session — which is exactly why `prod-verify.yml` exists.
+
+**Still open before the blast:** the D1–D6 adoption itself (R1 live leg), R12 needs a story, and the 13-45 stub.
+
+---
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
