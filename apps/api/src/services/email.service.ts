@@ -112,7 +112,30 @@ export class EmailService {
     // stays a thin transport that forwards whatever headers it's handed. Returns undefined (→ no
     // headers) for transactional / ops mail.
     const headers = buildListUnsubscribeHeaders(category, data.to);
-    const result = await this.getProvider().send({ ...data, campaignId, headers });
+
+    /**
+     * ATTRIBUTION TAG — default to the category so NO send is untagged (2026-08-04).
+     *
+     * `campaignId` was doing two unrelated jobs and only one of them is real. It is the tag
+     * Resend echoes on webhook events, which is how `email_events.campaign_id` attributes a
+     * delivery or a bounce. It was ALSO acting as an implicit "this is marketing" flag, purely
+     * by convention: transactional callers passed nothing. That second job does not exist —
+     * the ledger write below gates on `isMarketingCategory(category)`, never on `campaignId` —
+     * so tagging transactional mail changes nothing about dedupe, suppression or
+     * `campaign_sends`, and buys attribution for free.
+     *
+     * What it cost to leave untagged: on 2026-08-04, seven citizens were sent a correction
+     * email after the adoption duplicate incident. Those sends carry no tag, so if one had
+     * bounced we would have learned it only from the suppression list, with no way back to the
+     * send. Bounce/complaint reconciliation is named as "a later task" a few lines below; this
+     * is the piece that makes it possible at all.
+     *
+     * Every `NotificationCategory` is kebab-case and satisfies the provider's
+     * `^[A-Za-z0-9_-]+$` tag rule (`resend.provider.ts:21`), so the default can never be
+     * silently dropped as an invalid tag. An explicit campaignId still wins.
+     */
+    const attributionTag = campaignId ?? category;
+    const result = await this.getProvider().send({ ...data, campaignId: attributionTag, headers });
     if (result.success) {
       // Count only real sends; bounce/complaint reconciliation is a later task.
       await NotificationMeter.recordEmailSend({
