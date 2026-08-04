@@ -1,20 +1,27 @@
 /**
- * One-off: tell two people which registration number is theirs.
+ * One-off: tell six people which registration number is theirs.
  *
  * WHY THIS EXISTS
  * ---------------
- * On 2026-08-04 the 13-49 D3 run adopted two drafts at 06:22. Both of those people then
- * completed their own registration 13-19 minutes later (06:35 and 06:41), and because a
- * pending-NIN record has no NIN, `findOrCreateRespondent`'s dedupe is skipped
- * (`submission-processing.service.ts:454`) — so each ended up with TWO records and TWO
- * numbers. Awwal's ruling: keep the person's own registration, roll back ours, and write to
- * them only because the number they were told has changed.
+ * On 2026-08-04 the 13-49 adoption runs collided with people registering LIVE. Dedupe fires on
+ * the INCOMING submission's NIN (`submission-processing.service.ts:454`), so a self-registration
+ * taken through the no-NIN path cannot be matched against an existing record no matter what we
+ * already hold — and each collision produced TWO records and TWO numbers.
+ *
+ * Rate: 5 of 21 D3 adoptees (24%) self-registered within 90 minutes of our email, against 1 of
+ * 138 for D1 (0.7%). D3's copy is why — it tells a `pending_nin_capture` person their record is
+ * "active" and invites them to "add what is missing".
+ *
+ * Awwal's ruling, per case: keep whichever record serves the person better, and write to them
+ * only because the number they were told has changed. For five that meant keeping their own
+ * registration; for HB95YE it meant keeping ours, because his self-registration was the
+ * pending-NIN one and ours already carried the NIN from his own draft.
  *
  * The copy deliberately does NOT explain the mechanism, assign fault, or use the word
  * duplicate. These are citizens who did nothing wrong and whose only visible experience is
  * "two emails, two numbers". It leads with the number that is now theirs and closes the loop.
  *
- * SCOPE IS HARD-CODED ON PURPOSE. Two reference codes, listed below. A script that could be
+ * SCOPE IS HARD-CODED ON PURPOSE. Six reference codes, listed below. A script that could be
  * pointed at a cohort by flag is a script that can mail 300 people by accident; this one
  * cannot address anybody it was not written to address.
  *
@@ -31,7 +38,23 @@ import { respondents } from '../src/db/schema/respondents.js';
 import { submissions } from '../src/db/schema/submissions.js';
 import { EmailService } from '../src/services/email.service.js';
 
-const TARGETS = ['OSL-2026-VXBGBM', 'OSL-2026-MJC87E'] as const;
+/**
+ * Every person left holding a number that no longer resolves.
+ *
+ * The first two and the next three are cases where we kept THEIR self-registration and rolled
+ * ours back. HB95YE is the opposite: Jeremiah self-registered via the no-NIN path 14 minutes
+ * after we adopted him WITH his NIN, so his own record was the LESS complete one — Awwal's
+ * ruling was to keep ours and remove the pending duplicate, leaving him active rather than in
+ * the 9-12 chase ladder. Same email either way: lead with the number that is now his.
+ */
+const TARGETS = [
+  'OSL-2026-VXBGBM', // theirs kept  (already sent 2026-08-04T08:42)
+  'OSL-2026-MJC87E', // theirs kept  (already sent 2026-08-04T08:42)
+  'OSL-2026-Y9D37K', // theirs kept
+  'OSL-2026-DZFFYN', // theirs kept
+  'OSL-2026-TQM9XE', // theirs kept
+  'OSL-2026-HB95YE', // OURS kept — his self-registration was the pending one
+] as const;
 
 const apply = process.argv.includes('--apply');
 
@@ -41,7 +64,7 @@ function body(firstName: string, code: string): { subject: string; html: string;
     `${greeting},\n\n` +
     `You recently completed your registration on the Oyo State Skilled Labour Registry. ` +
     `Your registration number is ${code}.\n\n` +
-    `You may have received an earlier email from us with a different number. ` +
+    `You may have received another email from us with a different number. ` +
     `Please disregard that one. Nothing has been lost, and no action is needed from you.\n\n` +
     `You can check your registration any time at https://oyoskills.com/check-registration\n\n` +
     `Oyo State Skilled Labour Registry`;
@@ -49,7 +72,7 @@ function body(firstName: string, code: string): { subject: string; html: string;
     `<p>${greeting},</p>` +
     `<p>You recently completed your registration on the Oyo State Skilled Labour Registry. ` +
     `Your registration number is <strong>${code}</strong>.</p>` +
-    `<p>You may have received an earlier email from us with a different number. ` +
+    `<p>You may have received another email from us with a different number. ` +
     `Please disregard that one. Nothing has been lost, and no action is needed from you.</p>` +
     `<p>You can check your registration any time at ` +
     `<a href="https://oyoskills.com/check-registration">oyoskills.com/check-registration</a>.</p>` +
