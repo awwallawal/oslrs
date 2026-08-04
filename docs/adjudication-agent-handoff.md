@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-04 · **Prod deployed SHA:** `5c9541e` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-04 (late) · **Prod deployed SHA:** `8fed472` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -228,6 +228,13 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 ### 2p. A VERIFICATION THAT READS THE INPUT INSTEAD OF THE SYSTEM PROVES NOTHING (new 2026-08-04)
 - R8 closed on "164 adopting rows recommended, **0 rejected**". The real pre-flight then rejected **6**. The simulation read the SHEET's consent column; the enforcer reads the **live draft** (AC7 is explicit that it must). A simulation that consults the same artefact the operator edited is testing the artefact, not the system.
 - Sibling of §2a2. When a check reports zero, ask *what did it actually query* — the dry-run's `blocked: 0` was likewise an UNEVALUATED zero, because the clash guard lives in the write path.
+
+### 2q. MATCHING PEOPLE: names are not fields, and a GET must never mutate (new 2026-08-04)
+- **Exact `first_name`+`last_name` equality is not identity.** It caught **zero** of four real collisions: `Muheebat Yusuf`→`Yusuf Muheebat Yetunde`, `Mukaheel Ajibola`→`AJIBOLA MUKAHEEL BABATUNDE`, `Monsurat Akadiri`→`Akadiri Monsurat Omolade`, `Omowumi Michael`→`Omowumi Ayomide Michael`. **Surname-first is a normal Nigerian convention** and middle names come and go. Match on **token overlap ≥2 + same phone**. Two, not one — a parent and child share a phone and a surname, and merging two people is far worse than a duplicate.
+- **Derive the threshold from the data, not from taste.** Run the candidate rule read-only over the WHOLE table first: all 14 duplicate-phone pairs scored ≥2, and distinct-people-sharing-a-phone scored **zero**. That measurement is the justification; the unit test (mocked `db.execute` cannot evaluate token SQL) only pins the query shape.
+- **A "click the button that matches your card" email is a trap.** Gmail, Microsoft Defender Safe Links and corporate gateways **PREFETCH every URL** to scan it. A one-click confirm gets clicked by a robot, and with two candidate buttons the scanner picks whichever it fetches first — writing a national identity number chosen by an antivirus product. **GET must never mutate:** the link opens a page, the write happens on an explicit POST. Also never list the candidate values — shown two near-identical numbers a person picks the familiar-looking one, and the whole problem is that one is wrong.
+- **A WRONG identifier is worse than a missing one.** A typo'd NIN is a well-formed 11-digit number that may be **another citizen's real NIN**. Clear it, preserve the prior value in metadata, and ask the holder (`nin:reconfirm`). `duplicate_nins = 0` stayed true throughout this incident — an integrity check can be perfectly green while the data is wrong.
+- **Before merging two statuses, find out who WRITES them.** `pending_nin_capture` and `nin_unavailable` look identical to a citizen; `nin_unavailable` is written by the reminder ladder when it gives up. Merging would have restarted reminders for 25 people we deliberately stopped emailing.
 
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
@@ -728,9 +735,18 @@ segfault fix — 6 failed pushes on a mitigation that could not work (Pitfall #3
 brace-expansion (an *incomplete-fix* advisory bypassing the patch taken 9 days earlier) and
 postcss/ip-address/socket.io-parser, where ip-address needed the HIGHEST of three fixed versions.
 
-**Still open:** R13's dedupe class · `campaignId` attribution (one line in `dispatch()`; today's 7
-correction emails are untagged, so a bounce would not trace back) · R12's endpoint semantics · the 70 D4
-invitations, never run.
+**Later the same day — the bleed continued and the first fix was too narrow.** Four MORE collisions formed
+within hours; R13's exact name equality caught **none** of them (see §2q). Widened to token-overlap ≥2 +
+same phone, verified read-only across all 14 duplicate pairs in the registry with zero false merges. Final
+tally **7 pairs**, resolved per-case by Awwal. One (`CB7E9Y`/`3XQ32H`) was two NINs differing by a single
+digit — `duplicate_nins = 0` was true the whole time, so no integrity check could have seen it; new
+`nin:reconfirm` tool asks the holder instead of guessing. Proposed merging the two no-NIN statuses and
+**measured first**: `nin_unavailable` is written by the ladder when it gives up, so merging would have
+re-spammed 25 people. Kept separate.
+
+**Still open:** the 70 D4 invitations (never run) · R12's endpoint semantics · new-draft expiry defaults to
+2026-09-03, not the extended window · `nin:reconfirm` not yet executed for `3XQ32H` · corrections owed to
+Monsurat (`V0NEGT`) and Mukaheel (`3XQ32H`).
 
 **Operational note for the next ramp:** `earliest_draft_expiry` now reads 2026-09-03, not 2026-11-30 —
 the 3-month extension applied to the existing 292 and is NOT the default for new drafts.
