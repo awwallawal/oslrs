@@ -14,7 +14,7 @@
  * consent-gated marketplace extraction. Every one of those is a thing this story would
  * otherwise have to re-implement and get subtly wrong on 162 real people.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { respondents } from '../../db/schema/respondents.js';
@@ -33,6 +33,21 @@ import type { DraftDecision } from './decisions.js';
 
 export interface AdoptResult {
   respondentId: string;
+  /**
+   * True when this DRAFT was already adopted by the programme and was left untouched.
+   *
+   * ⚠️ THE D3 COHORT HAD NO PROTECTION AT ALL. `submission-processing.service.ts:481` dedupes
+   * on NIN alone, and :454 spells out that when the NIN is undefined "the dedup checks are
+   * skipped and a pending_nin_capture" respondent is created. D3 rows have no NIN BY
+   * DEFINITION, so re-processing an already-adopted D3 draft would mint a SECOND respondent
+   * with a SECOND OSLRS number and send another confirmation, with nothing to catch it.
+   * D1 rows carry a NIN and are caught by that dedupe; D3's 24 were the exposed cohort.
+   *
+   * Found 2026-08-04, immediately after shipping the equivalent guard for D2 — the first fix
+   * addressed the cohort in front of us rather than the class. The marker
+   * `adopted_from_draft_id` is written by every adopting path, so it is the right key.
+   */
+  alreadyDone?: boolean;
   submissionId: string;
   submissionUid: string;
   /** Minted by the canonical path — the number AC9's confirmation leads with. */
@@ -70,6 +85,24 @@ export async function adoptDraft({
   questionnaireFormId,
   adoptedAt,
 }: AdoptArgs): Promise<AdoptResult> {
+  // IDEMPOTENCE (2026-08-04). A draft this programme has already adopted is left ALONE.
+  // Checked BEFORE any validation or write, and keyed on the adoption marker rather than on
+  // NIN, because the cohort that needs it most (D3) has no NIN to key on.
+  const priorAdoption = await db.query.respondents.findFirst({
+    where: sql`${respondents.metadata}->>'adopted_from_draft_id' = ${draft.id}`,
+    columns: { id: true, referenceCode: true },
+  });
+  if (priorAdoption) {
+    return {
+      respondentId: priorAdoption.id,
+      submissionId: '',
+      submissionUid: '',
+      referenceCode: priorAdoption.referenceCode ?? null,
+      email: '',
+      alreadyDone: true,
+    };
+  }
+
   // Consent + decision-vs-data contradictions are settled here, before anything is written.
   const rawData = buildAdoptionRawData({ draft, decision, adoptedAt });
 

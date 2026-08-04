@@ -20,6 +20,7 @@ const { mocks } = vi.hoisted(() => ({
     respondentUpdates: [] as Record<string, unknown>[],
     respondentInserts: [] as Record<string, unknown>[],
     existingRespondent: null as Record<string, unknown> | null,
+    priorAdoption: null as Record<string, unknown> | null,
   },
 }));
 
@@ -51,7 +52,19 @@ vi.mock('../../db/index.js', () => {
       insert,
       update,
       query: {
-        respondents: { findFirst: async () => mocks.existingRespondent },
+        // TWO different lookups hit this mock and they must not be conflated:
+        //   adoptDraft's prior-adoption guard  → columns { id, referenceCode }
+        //   stampRespondentMarker's re-read     → columns { metadata, referenceCode }
+        //   enrichExistingRespondent's lookup   → no columns at all
+        // `metadata` is the discriminator: only the marker re-read asks for it.
+        // Answering both with the same object made every adoptDraft test short-circuit as
+        // "already adopted" the moment the guard landed.
+        respondents: {
+          findFirst: async (args?: { columns?: Record<string, boolean> }) =>
+            args?.columns && !args.columns.metadata
+              ? mocks.priorAdoption
+              : mocks.existingRespondent,
+        },
       },
     },
   };
@@ -92,6 +105,7 @@ beforeEach(() => {
   mocks.respondentUpdates.length = 0;
   mocks.respondentInserts.length = 0;
   mocks.existingRespondent = { id: 'resp-1', referenceCode: 'OSLRS-2026-ABC123', metadata: {} };
+  mocks.priorAdoption = null;
   mocks.processSubmission.mockReset();
   mocks.processSubmission.mockResolvedValue({ action: 'processed', respondentId: 'resp-1' });
 });
@@ -215,6 +229,36 @@ describe('13-49 adopt — adoptDraft (D1/D3)', () => {
     mocks.processSubmission.mockResolvedValue({ action: 'skipped' });
     await expect(run()).rejects.toThrow(/respondent/i);
     expect(mocks.respondentUpdates).toHaveLength(0);
+  });
+});
+
+describe('13-49 adopt — adoptDraft idempotence (D1/D3)', () => {
+  /**
+   * D3 HAD NO PROTECTION AT ALL. `submission-processing.service.ts:481` dedupes on NIN alone,
+   * and :454 states that when the NIN is undefined the dedup checks are SKIPPED and a
+   * `pending_nin_capture` respondent is created. D3 rows have no NIN by definition, so
+   * re-processing an already-adopted D3 draft minted a SECOND respondent with a SECOND OSLRS
+   * number and sent another confirmation — a duplicate citizen record, uncaught.
+   *
+   * D1 rows carry a NIN and are caught by that dedupe, which is exactly why this was easy to
+   * miss: the cohort with 139 rows was safe and the cohort with 24 was not.
+   */
+  it('refuses to re-adopt a draft the programme has already adopted', async () => {
+    mocks.priorAdoption = { id: 'resp-prior', referenceCode: 'OSL-2026-QQ1XK5' };
+
+    const result = await adoptDraft({
+      draft,
+      decision: 'PUSH_PENDING_NIN',
+      questionnaireFormId: 'form-1',
+      adoptedAt: ADOPTED_AT,
+    });
+
+    expect(result.alreadyDone).toBe(true);
+    expect(result.respondentId).toBe('resp-prior');
+    expect(result.referenceCode).toBe('OSL-2026-QQ1XK5');
+    // The load-bearing assertions: no submission inserted, no processing, so no second record.
+    expect(mocks.insertedSubmissions).toHaveLength(0);
+    expect(mocks.processSubmission).not.toHaveBeenCalled();
   });
 });
 

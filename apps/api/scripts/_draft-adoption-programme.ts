@@ -582,6 +582,15 @@ async function main(): Promise<void> {
         questionnaireFormId: formId,
         adoptedAt,
       });
+      // Already adopted by a previous run: nothing written, nothing sent, no --max slot used.
+      // Without this a re-run of a D3 sheet mints a SECOND respondent — NIN dedupe cannot see
+      // these rows because they have no NIN.
+      if (result.alreadyDone) {
+        counters.alreadyDoneSkipped++;
+        acted--;
+        logger.info({ event: 'draft_adoption.adopt_skipped_already_done', draftId: p.draft.id });
+        continue;
+      }
       if (p.decision === 'PUSH_PENDING_NIN') counters.adoptedPendingNin++;
       else counters.adopted++;
 
