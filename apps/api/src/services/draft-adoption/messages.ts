@@ -57,6 +57,22 @@ const button = (href: string, label: string): string =>
 export interface AdoptionConfirmationArgs {
   firstName: string;
   referenceCode: string;
+  /**
+   * D3: the record was created as `pending_nin_capture`, NOT `active`.
+   *
+   * ⚠️ THIS FLAG EXISTS BECAUSE THE ONE-SIZE COPY CAUSED REAL DUPLICATE RECORDS.
+   * Until 2026-08-04 D1 and D3 received identical text, which told every recipient
+   * "Your record is active" and offered "Review or update my details — check that nothing is
+   * wrong, or add what is missing". For a D3 person the first claim is FALSE (their record is
+   * pending their NIN) and the second is an invitation to go and supply it. Doing so starts a
+   * fresh registration, and because dedupe fires on the INCOMING submission's NIN
+   * (`submission-processing.service.ts:454`) a no-NIN self-registration matches nothing — so
+   * they end up with a second record and a second number.
+   *
+   * Measured: 5 of 21 D3 adoptees (24%) self-registered within 90 minutes of this email,
+   * against 1 of 138 for D1 (0.7%). Six people had to be written to and five records deleted.
+   */
+  pendingNin?: boolean;
 }
 
 /**
@@ -65,7 +81,11 @@ export interface AdoptionConfirmationArgs {
  * rather than work. The thank-you/referral arrives separately from the existing 13-12
  * evergreen auto-send, so this message stays one idea long.
  */
-export function buildAdoptionConfirmationEmail({ firstName, referenceCode }: AdoptionConfirmationArgs): {
+export function buildAdoptionConfirmationEmail({
+  firstName,
+  referenceCode,
+  pendingNin = false,
+}: AdoptionConfirmationArgs): {
   subject: string;
   text: string;
   html: string;
@@ -75,7 +95,20 @@ export function buildAdoptionConfirmationEmail({ firstName, referenceCode }: Ado
 
   const subject = `Your Oyo State Skilled Labour Register number is ${referenceCode}`;
 
-  const text = `Hi ${name},
+  const text = pendingNin
+    ? `Hi ${name},
+
+Your Oyo State Skilled Labour Register number is ${referenceCode}.
+
+We had your registration details on file and have created your entry, so you do NOT need to
+register again.
+
+To finish your record we still need your National Identification Number (NIN). We will send
+you a separate message with a secure link to add it — there is nothing you need to do now.
+
+If you believe this record is not yours, write to ${SUPPORT_EMAIL} and we will remove it.
+`
+    : `Hi ${name},
 
 Your Oyo State Skilled Labour Register number is ${referenceCode}.
 
@@ -96,7 +129,18 @@ If you believe this record is not yours, write to ${SUPPORT_EMAIL} and we will r
     <p style="font-size:24px;font-weight:bold;color:${BRAND};letter-spacing:1px;margin:8px 0 20px;">
       ${escapeHtml(referenceCode)}
     </p>
+    ${
+      pendingNin
+        ? `<p style="font-size:15px;">
+      We had your registration details on file and have created your entry, so you do
+      <strong>not</strong> need to register again.
+    </p>
     <p style="font-size:15px;">
+      To finish your record we still need your National Identification Number (NIN). We will
+      send you a separate message with a secure link to add it &mdash; there is nothing you
+      need to do now.
+    </p>`
+        : `<p style="font-size:15px;">
       We had your registration details on file and have completed your entry, so there is
       nothing you need to do. Your record is active.
     </p>
@@ -104,7 +148,8 @@ If you believe this record is not yours, write to ${SUPPORT_EMAIL} and we will r
     <p style="font-size:14px;color:#555;">
       Check that nothing is wrong, or add what is missing. You will be asked to confirm your
       email address, and we will send you a secure link.
-    </p>
+    </p>`
+    }
     <p style="font-size:13px;color:#777;">
       If you believe this record is not yours, write to
       <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a> and we

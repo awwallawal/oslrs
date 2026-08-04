@@ -32,6 +32,12 @@ export interface SendAdoptionArgs {
   firstName: string;
   /** The minted OSLRS number. Without it there is no confirmation to send. */
   referenceCode: string | null;
+  /**
+   * D3 — the record is `pending_nin_capture`, so the confirmation must NOT claim it is active
+   * nor invite them to "add what is missing". See AdoptionConfirmationArgs.pendingNin: that
+   * invitation produced a 24% duplicate rate on the D3 cohort.
+   */
+  pendingNin?: boolean;
 }
 
 export type AdoptionSendOutcome =
@@ -55,13 +61,14 @@ export async function sendAdoptionMessages({
   email,
   firstName,
   referenceCode,
+  pendingNin = false,
 }: SendAdoptionArgs): Promise<AdoptionSendOutcome> {
   if (!referenceCode) return { sent: false, reason: 'no_reference_code' };
 
   const suppressed = await getSuppressedEmails([email]);
   if (suppressed.has(email.trim().toLowerCase())) return { sent: false, reason: 'suppressed' };
 
-  const mail = buildAdoptionConfirmationEmail({ firstName, referenceCode });
+  const mail = buildAdoptionConfirmationEmail({ firstName, referenceCode, pendingNin });
   const result = await EmailService.sendGenericEmail(
     { to: email, ...mail },
     'registration-status',

@@ -607,6 +607,7 @@ async function main(): Promise<void> {
       // gap deliberately does not — see `draft-adoption/send.ts`.
       await deliverAdoptionMessages({
         counters,
+        pendingNin: p.decision === 'PUSH_PENDING_NIN',
         draft: p.draft,
         respondentId: result.respondentId,
         email: result.email,
@@ -718,14 +719,17 @@ async function deliverAdoptionMessages(args: {
   email: string;
   referenceCode: string | null;
   delayMs: number;
+  /** D3 rows get the pending-NIN copy; see AdoptionConfirmationArgs.pendingNin. */
+  pendingNin: boolean;
 }): Promise<void> {
-  const { counters, draft, respondentId, email, referenceCode, delayMs } = args;
+  const { counters, draft, respondentId, email, referenceCode, delayMs, pendingNin } = args;
 
   const outcome = await sendAdoptionMessages({
     respondentId,
     email,
     firstName: resolveDraftIdentity(draft).firstName,
     referenceCode,
+    pendingNin,
   });
 
   if (outcome.sent) {

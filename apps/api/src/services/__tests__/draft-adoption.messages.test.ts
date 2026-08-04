@@ -45,6 +45,61 @@ describe('13-49 messages — adoption confirmation (AC9)', () => {
     expect(url).toMatch(/\/check-registration$/);
   });
 
+  /**
+   * THE D3 COPY. Until 2026-08-04 D1 and D3 got the SAME text, which told everyone "Your record
+   * is active" and offered "add what is missing". For a `pending_nin_capture` person the first
+   * is false and the second is an invitation to go and supply the NIN — which starts a fresh
+   * registration, and because dedupe fires on the INCOMING submission's NIN a no-NIN
+   * self-registration matches nothing. Result: a second record and a second number.
+   *
+   * Measured on live data: 5 of 21 D3 adoptees (24%) self-registered within 90 minutes of the
+   * email, against 1 of 138 for D1 (0.7%). Six people had to be written to and five records
+   * deleted. These assertions are the reason that cannot silently come back.
+   */
+  describe('pending-NIN variant (D3)', () => {
+    const pending = () =>
+      buildAdoptionConfirmationEmail({
+        firstName: 'Adebayo',
+        referenceCode: 'OSLRS-2026-ABC123',
+        pendingNin: true,
+      });
+
+    it('NEVER claims the record is active — it is pending_nin_capture', () => {
+      const { text, html } = pending();
+      expect(text).not.toMatch(/record is active/i);
+      expect(html).not.toMatch(/record is active/i);
+    });
+
+    it('does NOT invite them to add what is missing — that invitation minted duplicates', () => {
+      const { text, html } = pending();
+      expect(text).not.toMatch(/add what is missing/i);
+      expect(html).not.toMatch(/add what is missing/i);
+      // No check-registration link either: every route back into a form is a route to a
+      // second record for someone with no NIN to dedupe against.
+      expect(text).not.toContain(buildCheckRegistrationUrl());
+      expect(html).not.toContain(buildCheckRegistrationUrl());
+    });
+
+    it('tells them plainly not to register again, and that the NIN is what is outstanding', () => {
+      const { text } = pending();
+      expect(text).toMatch(/not\s+need to\s+register again/i);
+      expect(text).toMatch(/National Identification Number|NIN/);
+      expect(text).toMatch(/nothing you need to do now/i);
+    });
+
+    it('still leads with their number — they are registered, just not complete', () => {
+      const { subject, text } = pending();
+      expect(subject).toMatch(/OSLRS-2026-ABC123/);
+      expect(text).toMatch(/OSLRS-2026-ABC123/);
+    });
+
+    it('leaves the D1 copy untouched — active people still get the review route', () => {
+      const { text } = built();
+      expect(text).toMatch(/record is active/i);
+      expect(text).toContain(buildCheckRegistrationUrl());
+    });
+  });
+
   it('greets by first name and falls back to a neutral greeting', () => {
     expect(built().text).toMatch(/Adebayo/);
     expect(
