@@ -19,6 +19,7 @@
     "audit:reconcile-promotions": "tsx scripts/reconcile-nin-promotion-audit.ts",
     "audit:verify-chain": "tsx scripts/verify-audit-chain.ts",
     "adoption:number-correction": "tsx scripts/_adoption-number-correction.ts",
+    "nin:reconfirm": "tsx scripts/nin-reconfirm.ts",
     "lint:registry-read": "tsx scripts/lint-registry-read-drift.ts",
     "db:generate": "tsc && drizzle-kit generate",
     "db:migrate": "tsc && drizzle-kit migrate",
