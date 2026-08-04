@@ -138,11 +138,47 @@ describe('13-49 messages — D4 invitation (AC6)', () => {
    */
   it('says FINISH and states what to have ready — never "pick up where you left off"', () => {
     const { text } = built();
-    expect(text).toMatch(/two minutes|2 minutes/i);
+    expect(text).toMatch(/five minutes/i);
     expect(text).toMatch(/NIN/);
     expect(text).toMatch(/LGA/);
     expect(text).toMatch(/trade or occupation/i);
     expect(text).not.toMatch(/where you left off|pick up where/i);
+  });
+
+  /**
+   * COPY REVIEW 2026-08-04. Three of these assert sentences that were previously PRESENT and
+   * NOT TRUE for this cohort. Each is pinned because the D3 copy taught what an untrue sentence
+   * costs: it told pending-NIN people their record was "active" and invited them to "add what is
+   * missing", and 24% of them acted on it and got a duplicate record.
+   */
+  describe('claims that must stay true for this cohort', () => {
+    it('does NOT promise two minutes — 77 drafts have ZERO answers and face all 10 steps', () => {
+      const { text, html } = built();
+      expect(text).not.toMatch(/two minutes|2 minutes/i);
+      expect(html).not.toMatch(/two minutes|2 minutes/i);
+    });
+
+    it('does NOT make the NIN a requirement — the pending-NIN path exists to remove that friction', () => {
+      const { text, html } = built();
+      // "You'll need your NIN" put back the exact gate the product decision removed.
+      expect(text).not.toMatch(/need your NIN|need your <strong>NIN/i);
+      expect(html).not.toMatch(/need your NIN|need your <strong>NIN/i);
+      // It must still SAY NIN — offered, not demanded.
+      expect(text).toMatch(/add it later/i);
+    });
+
+    it('makes NO promise to delete their details — there is no purge job', () => {
+      const { text, html } = built();
+      // registration.controller.ts:868 deletes a draft on COMPLETION only; nothing acts on
+      // expires_at. Promising removal to 76 people is a data-protection claim we do not keep.
+      expect(text).not.toMatch(/will be removed|details will be deleted/i);
+      expect(html).not.toMatch(/will be removed|details will be deleted/i);
+    });
+
+    it('does not promise marketplace listing outright — it is consent-gated', () => {
+      const { text } = built();
+      expect(text).toMatch(/if you choose/i);
+    });
   });
 
   it('NEVER contains an OSLRS number — no record exists to number', () => {

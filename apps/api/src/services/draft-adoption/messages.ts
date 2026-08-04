@@ -2,7 +2,7 @@
  * Story 13-49 AC6 + AC9 — the programme's two pieces of copy.
  *
  * The split is the story's central idea: an ADOPTED person is TOLD something ("here is your
- * OSLRS number, we already had your details"), a D4 person is ASKED something ("two minutes
+ * OSLRS number, we already had your details"), a D4 person is ASKED something ("five minutes
  * to finish"). Sending the wrong one to the wrong cohort is exactly the incompetence the
  * whole programme exists to avoid — and for 67 of the 74 D4 rows there is no name and
  * therefore no record and no number that could be sent.
@@ -193,6 +193,33 @@ export const RESUME_LINK_VALID_HOURS = 72;
  * a dead link with no explanation and no way back. Both facts are now in the message: the link
  * is short, the registration is not, and there is a stated route to a fresh one.
  */
+/**
+ * COPY REVIEW 2026-08-04 — four claims changed, three of which were not true for this cohort.
+ *
+ * 1. "about two minutes" → "about five minutes". **77 drafts hold ZERO questionnaire answers**
+ *    and the contact cohort is 76 people, so these are not near-complete registrations: with R2
+ *    (identity does not prefill on resume) they face the whole form, N = 10 steps on the pinned
+ *    form. Two minutes was an overpromise made to the very people who already abandoned once.
+ *
+ * 2. "You'll need your NIN" → NIN made explicitly OPTIONAL. This contradicted the product
+ *    decision it sits inside: the NIN gate was removed deliberately "so as not to serve as a
+ *    registration friction", and the entire 9-12 pending-NIN ladder exists to chase it later.
+ *    Telling someone they need their card is how you lose them at the doorstep of a form that
+ *    would have accepted them without it.
+ *
+ * 3. "your details will be removed when the registration expires" → DELETED. **There is no purge
+ *    job.** The only `DELETE FROM wizard_drafts` fires when someone COMPLETES registration
+ *    (registration.controller.ts:868); nothing acts on `expires_at`. It was a data-protection
+ *    promise the system does not keep, and it would have gone to 76 people. Currently invisible
+ *    because expiry was extended to 2026-09-03+, so the first breach would have been silent.
+ *
+ * 4. "be listed for skills programmes" → "can be listed … if you choose". Marketplace listing is
+ *    consent-gated; not everyone who completes will appear.
+ *
+ * The test that produced these: is every sentence TRUE for THIS cohort, and does any of it invite
+ * an action the system cannot absorb? (§2n/§2q — the D3 copy failed exactly that test and gave
+ * 24% of its cohort a duplicate record.)
+ */
 export function buildInvitationEmail({
   firstName,
   resumeUrl,
@@ -219,15 +246,16 @@ still held.
 Continue my registration:
 ${resumeUrl}
 
-It takes about two minutes. You'll need your NIN, your LGA, and your trade or occupation.
-Once complete you'll receive your OSLRS number and be listed for skills programmes and
-opportunities.
+It takes about five minutes. You'll need your LGA and your trade or occupation. If you have
+your NIN to hand you can add it — if not, register anyway and add it later.
+
+Once complete you'll receive your OSLRS number, and you can be listed for skills programmes
+and opportunities if you choose.
 
 For your security this link works for ${window}. Your registration itself stays open for
 longer — if the link has expired, write to ${SUPPORT_EMAIL} and we will send you a new one.
 
-If you'd prefer not to continue, no action is needed and your details will be removed when
-the registration expires.
+If you'd prefer not to continue, no action is needed.
 `;
 
   const html = shell(`
@@ -243,9 +271,10 @@ the registration expires.
     </p>
     ${button(resumeUrl, 'Continue my registration')}
     <p style="font-size:14px;color:#555;">
-      It takes about two minutes. You'll need your <strong>NIN</strong>, your <strong>LGA</strong>,
-      and your <strong>trade or occupation</strong>. Once complete you'll receive your OSLRS
-      number and be listed for skills programmes and opportunities.
+      It takes about five minutes. You'll need your <strong>LGA</strong> and your
+      <strong>trade or occupation</strong>. If you have your <strong>NIN</strong> to hand you can
+      add it &mdash; if not, register anyway and add it later. Once complete you'll receive your
+      OSLRS number, and you can be listed for skills programmes and opportunities if you choose.
     </p>
     <p style="font-size:14px;color:#555;">
       For your security this link works for <strong>${escapeHtml(window)}</strong>. Your
@@ -254,8 +283,7 @@ the registration expires.
       send you a new one.
     </p>
     <p style="font-size:13px;color:#777;">
-      If you'd prefer not to continue, no action is needed and your details will be removed
-      when the registration expires.
+      If you'd prefer not to continue, no action is needed.
     </p>
   `);
 
