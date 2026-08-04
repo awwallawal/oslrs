@@ -1161,14 +1161,64 @@ describe('SubmissionProcessingService', () => {
       expect(mockDbExecute).not.toHaveBeenCalled();
     });
 
-    it('does NOT attempt merge when no NIN supplied (pending-NIN insert path)', async () => {
+    /**
+     * CHANGED 2026-08-04 (R13). This asserted `mockDbExecute` was NEVER called without a NIN —
+     * i.e. it pinned "a no-NIN submission is deduped against nothing at all", which is the gap
+     * that gave 7 citizens two records and two reference codes on 2026-08-04.
+     *
+     * The invariant it MEANT to protect still holds and is asserted properly below: no NIN means
+     * no promotion to `active`. What changed is that a no-NIN submission now looks for an
+     * existing record by name + phone first.
+     */
+    it('does not PROMOTE without a NIN, but does look for an existing identity match (R13)', async () => {
       const result = await SubmissionProcessingService.findOrCreateRespondent(
         { ...baseData, nin: undefined },
         'public',
         'public-user-A',
       );
 
-      // No execute — merge logic only runs when NIN is present.
+      // The identity lookup runs — and it is a SELECT, never the promoting UPDATE.
+      expect(mockDbExecute).toHaveBeenCalledTimes(1);
+      const issued = JSON.stringify(mockDbExecute.mock.calls[0]?.[0] ?? {});
+      expect(issued).not.toMatch(/UPDATE/i);
+      // Nothing matched (default mock → rows: []), so a fresh pending row is still created.
+      expect(result._isNew).toBe(true);
+    });
+
+    /**
+     * R13 — the fix itself. A person re-submitting their own details WITHOUT a NIN attaches to
+     * the record we already hold instead of minting a second one. Not a rejection: the NIN branch
+     * throws NIN_DUPLICATE because that is an identity conflict a human must see; this is the
+     * same person with less information, and silently attaching is the correct outcome.
+     */
+    it('ATTACHES a no-NIN submission to an existing record matched on name + phone', async () => {
+      mockInsertRespondent.mockClear();
+      mockDbExecute.mockResolvedValueOnce({
+        rows: [{ id: 'existing-resp-77', reference_code: 'OSL-2026-EXIST1', status: 'active' }],
+      });
+
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, nin: undefined },
+        'public',
+        'public-user-A',
+      );
+
+      expect(result.id).toBe('existing-resp-77');
+      expect(result._isNew).toBe(false);
+      expect(result.referenceCode).toBe('OSL-2026-EXIST1');
+      // The load-bearing assertion: NO second respondent was created.
+      expect(mockInsertRespondent).not.toHaveBeenCalled();
+    });
+
+    it('falls through to a fresh insert when an identity field is missing — never a loose match', async () => {
+      mockInsertRespondent.mockClear();
+      const result = await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, nin: undefined, phoneNumber: undefined },
+        'public',
+        'public-user-A',
+      );
+
+      // All three fields are required. Better one duplicate than a wrong-person merge.
       expect(mockDbExecute).not.toHaveBeenCalled();
       expect(result._isNew).toBe(true);
     });

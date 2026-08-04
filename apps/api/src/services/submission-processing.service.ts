@@ -522,6 +522,67 @@ export class SubmissionProcessingService {
       }
     }
 
+    /**
+     * R13 — THE MIRROR OF THE RACE-RESOLUTION MERGE, AND THE GAP THAT DUPLICATED 7 CITIZENS.
+     *
+     * The FR21 branch above only runs `if (data.nin)`. A submission arriving WITHOUT a NIN was
+     * therefore deduped against nothing at all, no matter how complete a record we already held
+     * for that person — the docblock's "the dedup checks are skipped" is doing more work than it
+     * looks. On 2026-08-04 the 13-49 adoption programme created records for 174 people and 7 of
+     * them then registered again through the no-NIN path within 90 minutes, each minting a
+     * SECOND respondent with a SECOND reference code. Five had to be deleted and seven people
+     * written to.
+     *
+     * `tryRaceResolutionMerge` already solved the opposite direction (NIN arrives later for a
+     * pending row) and its identity key is the precedent reused here verbatim: strict equality
+     * on lower(first_name) + lower(last_name) + phone_number, ALL THREE REQUIRED. A missing or
+     * mistyped field falls through to a fresh insert, which is the documented trade — "better
+     * one duplicate than a wrong-person merge", and a supervisor can reconcile via Story 9-11.
+     *
+     * Deliberately NOT a rejection. The NIN branch throws NIN_DUPLICATE because a duplicate NIN
+     * is an identity conflict a human must see. This is a person re-submitting their own details
+     * with less information than we already have: attaching the submission to their existing
+     * record is the correct, silent outcome. Nothing on the existing row is overwritten — an
+     * incoming row with no NIN has nothing to add, and clobbering an `active` record with
+     * pending-shaped data is the one thing worse than a duplicate.
+     *
+     * `rolled_back` rows are excluded: they are soft-deleted and must not adopt new submissions.
+     */
+    if (!data.nin && canonical.firstName && canonical.lastName && canonical.phoneNumber) {
+      const existingByIdentity = await db.execute(sql`
+        SELECT "id", "reference_code", "status" FROM "respondents"
+        WHERE lower("first_name") = lower(${canonical.firstName})
+          AND lower("last_name") = lower(${canonical.lastName})
+          AND "phone_number" = ${canonical.phoneNumber}
+          AND "status" <> 'rolled_back'
+        ORDER BY "created_at" ASC
+        LIMIT 1
+      `);
+      const match = (existingByIdentity as unknown as {
+        rows: Array<{ id: string; reference_code: string | null; status: RespondentStatus }>;
+      }).rows?.[0];
+
+      if (match) {
+        logger.info(
+          {
+            event: 'submission_processing.no_nin_identity_match',
+            respondentId: match.id,
+            referenceCode: match.reference_code,
+            existingStatus: match.status,
+            source,
+          },
+          'A no-NIN submission matched an existing respondent on name + phone — attaching ' +
+            'instead of creating a second record (R13)',
+        );
+        return {
+          id: match.id,
+          _isNew: false,
+          referenceCode: match.reference_code ?? undefined,
+          status: match.status,
+        };
+      }
+    }
+
     // Status reflects the lifecycle stage of this row: NIN-carrying rows are
     // 'active' immediately; rows without NIN start in 'pending_nin_capture'
     // and graduate to 'active' once the respondent completes registration via
