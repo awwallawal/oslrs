@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-03 · **Prod deployed SHA:** `d1196a5` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-04 · **Prod deployed SHA:** `5c9541e` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -212,6 +212,22 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 ### 2m. "Logged in" ≠ settled — wait for the SECOND redirect (new 2026-08-03)
 - `staffLogin` matched `/dashboard` and returned while `DashboardRedirect` still had a pending `<Navigate to={getDashboardRoute(role)} replace />` in an effect. The caller navigated, then that effect **replaced** the location — the target page unmounted before its query fired, so there was no traffic of ANY kind to diagnose from.
 - Every `roleRouteMap` value is `/dashboard/<slug>`, so waiting for a segment after `/dashboard` is a universal settled-signal. **Generalise: any auth flow with a role-landing redirect has this trap.**
+
+### 2n. ⭐ A BATCH JOB AGAINST A LIVE SYSTEM RACES THE PEOPLE IN IT (new 2026-08-04)
+- **The dry-run passed every one of the five defects found on 2026-08-04.** None was findable by preview, because each needed *other humans using the product at the same time*. Treat "dry-run clean" as necessary and nowhere near sufficient for a run that writes to citizen records.
+- **The incident:** 13-49 adopted 174 people; **7 ended up with two records and two numbers.** `findOrCreateRespondent` dedupes on the **INCOMING** submission's NIN (`submission-processing.service.ts:454` — with no NIN, "the dedup checks are skipped"). A self-registration through the no-NIN path therefore matches NOTHING, however complete the record we already hold. Rate: **24% of the D3 (pending-NIN) cohort within 90 minutes**, vs 1.4% of D1.
+- **COPY IS A CAUSE, NOT A COMMENT.** D1 and D3 got identical text saying "Your record is active" (false for D3) and "add what is missing" — an invitation to do the one thing that duplicates them. Before sending anything to a cohort, ask: *is every sentence true for THIS cohort, and does any of it invite an action the system cannot absorb?*
+- **The table moves under you.** `wizard_drafts` went 292 → 286 mid-session (completing a registration deletes the draft); `reconcileDraftIds` demands a bijection, so it aborted runs three times. **Reconcile per run**, and re-measure baselines — never "restore to N".
+- **Sequence by cohort, gate each on ONE record**, even when an earlier cohort passed: D2's enrichment, D3's pending-NIN and D1's adoption are different write paths and each failed differently.
+
+### 2o. FIX THE CLASS, NOT THE COHORT IN FRONT OF YOU (new 2026-08-04)
+- I shipped an idempotence guard for D2's enrichment, deployed it, and moved on. It was the *cohort* fix. `adoptDraft` (D1/D3) still had none — and **D3 was the exposed one**, because its rows have no NIN for dedupe to catch. A re-run would have minted a second record with a second number.
+- The tell was inverted attention: the cohort with 139 rows was safe; the cohort with 24 was not. **When you fix a guard, immediately grep for its siblings** and ask which caller is *least* protected, not which is largest.
+- Same shape as R8 (recommender vs enforcer) and R11 (D2 audit row vs every other batch writer). This project's most expensive defects are consistently "fixed one instance of a class".
+
+### 2p. A VERIFICATION THAT READS THE INPUT INSTEAD OF THE SYSTEM PROVES NOTHING (new 2026-08-04)
+- R8 closed on "164 adopting rows recommended, **0 rejected**". The real pre-flight then rejected **6**. The simulation read the SHEET's consent column; the enforcer reads the **live draft** (AC7 is explicit that it must). A simulation that consults the same artefact the operator edited is testing the artefact, not the system.
+- Sibling of §2a2. When a check reports zero, ask *what did it actually query* — the dry-run's `blocked: 0` was likewise an UNEVALUATED zero, because the clash guard lives in the write path.
 
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
@@ -677,6 +693,47 @@ pipe swallowed git's status) — never trust a piped exit code on a gate. Pre-pu
 on retry (17m / 7m). Tailscale degraded to unusable mid-session — which is exactly why `prod-verify.yml` exists.
 
 **Still open before the blast:** the D1–D6 adoption itself (R1 live leg), R12 needs a story, and the 13-45 stub.
+
+---
+
+## 7f. Session 2026-08-04 — the programme ran, and live users pushed back
+
+**13-49 IS EXECUTED. Registry 145 → 309** (263 active / 21 pending-NIN); 174 people adopted or enriched
+(D1 139 · D2 16 · D3 19); 292 drafts triaged; **0 duplicate NINs, 0 missing reference codes, 9-26 ceiling
+still 63**. R1 closed on evidence. Prod `5c9541e`.
+
+**The headline is not the number, it is the 7 duplicate citizen records it cost.** See §2n. Dedupe fires
+on the INCOMING submission's NIN, so a no-NIN self-registration matches nothing we hold; 24% of the D3
+cohort registered again within 90 minutes because the confirmation told them their pending record was
+"active" and invited them to "add what is missing". All 7 resolved per Awwal's per-case ruling — keep
+whichever record serves the person, delete the other child-first, and write to them ONLY because the
+number changed — and all 7 mailed with copy that names no fault. **The class is mitigated, not closed:
+nothing yet stops the next no-NIN self-registration from duplicating an existing record (R13).**
+
+**Corrections I had to make to my own claims, in order:**
+1. "D1 is protected by NIN dedupe" — **half true.** Dedupe reads the incoming NIN, not what we hold, so a
+   person returning via the no-NIN path bypasses it. Two D1 records duplicated that way.
+2. "The confirmation never sent" (D2 verification) — **wrong.** `campaign_sends` records MARKETING
+   categories only; the confirmation is transactional. Two designed absences read as one defect because I
+   checked the table before checking its specification.
+3. "`acf4302` is live" — **it was not.** The OSV gate had blocked it; I asserted a deploy without checking.
+4. "Past the API suite, into the web tests" — **misread.** Turbo interleaves package output; the API suite
+   had not started.
+
+**Also shipped:** `--only` cohort filter (the ramp could not be sequenced without it — `--max` counts in
+sheet order across interleaved cohorts, and hand-doctoring a sheet is one wrong cell from mailing 200
+people, because `INVITE_TO_RESUME`/`EXCLUDE_EMPTY` share the CONTACT cohort). Two idempotence guards
+(§2o). D3 copy fix (R14). `pool: 'forks'` on Windows after proving `VITEST_MAX_THREADS` was never the
+segfault fix — 6 failed pushes on a mitigation that could not work (Pitfall #37b). Two OSV waves:
+brace-expansion (an *incomplete-fix* advisory bypassing the patch taken 9 days earlier) and
+postcss/ip-address/socket.io-parser, where ip-address needed the HIGHEST of three fixed versions.
+
+**Still open:** R13's dedupe class · `campaignId` attribution (one line in `dispatch()`; today's 7
+correction emails are untagged, so a bounce would not trace back) · R12's endpoint semantics · the 70 D4
+invitations, never run.
+
+**Operational note for the next ramp:** `earliest_draft_expiry` now reads 2026-09-03, not 2026-11-30 —
+the 3-month extension applied to the existing 292 and is NOT the default for new drafts.
 
 ---
 

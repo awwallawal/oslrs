@@ -1,5 +1,5 @@
 /**
- * One-off: tell six people which registration number is theirs.
+ * One-off: tell seven people which registration number is theirs.
  *
  * WHY THIS EXISTS
  * ---------------
@@ -21,7 +21,7 @@
  * duplicate. These are citizens who did nothing wrong and whose only visible experience is
  * "two emails, two numbers". It leads with the number that is now theirs and closes the loop.
  *
- * SCOPE IS HARD-CODED ON PURPOSE. Six reference codes, listed below. A script that could be
+ * SCOPE IS HARD-CODED ON PURPOSE. Seven reference codes, listed below. A script that could be
  * pointed at a cohort by flag is a script that can mail 300 people by accident; this one
  * cannot address anybody it was not written to address.
  *
@@ -54,6 +54,7 @@ const TARGETS = [
   'OSL-2026-DZFFYN', // theirs kept
   'OSL-2026-TQM9XE', // theirs kept
   'OSL-2026-HB95YE', // OURS kept — his self-registration was the pending one
+  'OSL-2026-1MWWXX', // OURS kept — same shape as HB95YE (2026-08-04 09:17 vs their 09:36)
 ] as const;
 
 const apply = process.argv.includes('--apply');
