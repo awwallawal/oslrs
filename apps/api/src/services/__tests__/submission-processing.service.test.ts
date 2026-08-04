@@ -1210,6 +1210,33 @@ describe('SubmissionProcessingService', () => {
       expect(mockInsertRespondent).not.toHaveBeenCalled();
     });
 
+    /**
+     * The matching itself is SQL (token-set intersection), which a mocked `db.execute` cannot
+     * evaluate — so this only pins the query SHAPE against accidental reversion to exact
+     * first+last equality. The real validation was run READ-ONLY against live prod, and it is
+     * the reason the threshold is 2:
+     *
+     *   all 4 same-day collisions        → 2 shared tokens, same phone → caught
+     *   ALL 14 duplicate-phone pairs in the registry → >= 2 shared tokens
+     *   distinct people sharing a phone  → ZERO across the whole dataset
+     *
+     * i.e. this guard would have prevented every duplicate pair the registry has ever had,
+     * including the 9 that predate this programme, with no false merge.
+     */
+    it('matches on TOKEN OVERLAP, not exact first+last equality (reversed names are the norm)', async () => {
+      await SubmissionProcessingService.findOrCreateRespondent(
+        { ...baseData, nin: undefined },
+        'public',
+        'public-user-A',
+      );
+
+      const issued = JSON.stringify(mockDbExecute.mock.calls[0]?.[0] ?? {});
+      expect(issued).toMatch(/INTERSECT/i);
+      expect(issued).toMatch(/string_to_array/i);
+      // Exact-equality on the name columns is what this replaced — it caught none of the four.
+      expect(issued).not.toMatch(/lower\("first_name"\)\s*=/i);
+    });
+
     it('falls through to a fresh insert when an identity field is missing — never a loose match', async () => {
       mockInsertRespondent.mockClear();
       const result = await SubmissionProcessingService.findOrCreateRespondent(
