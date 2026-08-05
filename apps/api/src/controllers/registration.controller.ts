@@ -167,6 +167,17 @@ const submitSupplementalSurveySchema = z.object({
 // .questionnaireFormId`) in audit + analytics queries.
 const SUPPLEMENTAL_SURVEY_FORM_ID = 'supplemental-survey';
 
+/**
+ * How long a saved draft stays RESUMABLE. Raised 30 → 90 days on 2026-08-05.
+ *
+ * Not a retention period — nothing deletes drafts (see the note on `saveDraft`). This is purely
+ * how long the "continue where you left off" link keeps working, and 30 days was too short for
+ * the way this register is actually used: the 13-49 cohort sat untouched from May to August and
+ * was still worth 174 registrations. A person invited back in month two should not find their own
+ * data locked away from them while we keep it.
+ */
+export const DRAFT_RESUME_WINDOW_DAYS = 90;
+
 export class RegistrationController {
   /**
    * POST /api/v1/registration/complete-nin
@@ -377,8 +388,19 @@ export class RegistrationController {
    *
    * Story 9-12 Task 4.4 — server-side wizard draft auto-save. Upsert by email.
    * UNAUTHENTICATED: the wizard is pre-account, so the natural identifier is
-   * the email entered on Step 2. Drafts expire 30 days after creation (cleanup
-   * sweep on the `idx_wizard_drafts_expires_at` index).
+   * the email entered on Step 2.
+   *
+   * ⚠️ `expires_at` GOVERNS ACCESS, NOT RETENTION — corrected 2026-08-05. This docblock used to
+   * say drafts "expire 30 days after creation (cleanup sweep on the
+   * `idx_wizard_drafts_expires_at` index)". **There is no sweep.** The only
+   * `DELETE FROM wizard_drafts` in the codebase fires when someone COMPLETES registration
+   * (see `completeRegistration` below); nothing has ever acted on `expires_at`. The index was
+   * built for a job that was never written, and the comment described it as though it had been.
+   *
+   * The retention decision (Awwal, 2026-08-05) is to KEEP draft data indefinitely: Story 13-49
+   * proved these rows are the registry's missing half — 292 abandoned drafts became 174
+   * registrations and took the register from 145 to 301. A 30-day sweep would have deleted that
+   * months before anyone knew its worth. So the timestamp is a RESUME WINDOW, and only that.
    *
    * Returns 200 always (no enumeration leak). If the input fails Zod
    * validation, returns 400 with structured issues. Rate limiting deferred
@@ -415,7 +437,7 @@ export class RegistrationController {
       const normalisedEmail = email.toLowerCase().trim();
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const expiresAt = new Date(now.getTime() + DRAFT_RESUME_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
       // Pull existing draft to merge `formData` (autosave is incremental — the
       // client only sends the slice it changed). Avoids clobbering prior step
