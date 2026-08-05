@@ -174,6 +174,8 @@ export const AUDIT_ACTIONS = {
   // on its own. Actor IS the subject.
   RESPONDENT_SELF_EDITED: 'respondent.self_edited',
   RESPONDENT_SELF_NIN_COMPLETED: 'respondent.self_nin_completed',
+  /** Two records for one person collapsed into one (duplicate merge, 2026-08). */
+  RESPONDENT_MERGED: 'respondent.merged',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
