@@ -39,6 +39,44 @@ This is a **proving + runbook** story, not a code-build story [Source: _bmad-out
 3. The submissions are verified on prod (the actual home box), not on staging/dev — the gate is about the prod path specifically (today: one ever) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:25].
 4. Test/smoke submissions are **identifiable and reversible** — they are tagged/recorded so they can be excluded from launch metrics or cleaned up (do not pollute the real registry count with smoke data; if retained, they are flagged).
 
+### AC1b — ⚠️ EXERCISE A SHARED-PHONE HOUSEHOLD (ADDED 2026-08-05, adjudication)
+
+**Why this AC exists.** Story 13-49 shipped an identity guard on 2026-08-04 (R13/R17) after the
+draft-adoption programme gave **7 citizens duplicate records**: `findOrCreateRespondent` deduped
+only on the INCOMING submission's NIN, so a no-NIN registration matched nothing
+(`submission-processing.service.ts:454`). The fix matches on **same phone + ≥2 shared name tokens
+in any order** (surname-first is normal here, middle names come and go).
+
+**The enumerator path shares that code.** `findOrCreateRespondent` takes a `RespondentSource`;
+`ROLE_TO_SOURCE` maps the submitting role, but the dedupe is the SAME function for public,
+enumerator and clerk. So the guard is already live in the field path.
+
+**The threshold was tuned on the WRONG data distribution, and that is the risk this AC catches.**
+It was validated read-only against the live registry — 14 duplicate-phone pairs, and **zero**
+cases of two distinct people sharing a phone. But that registry is almost entirely SELF
+registration: one person, one handset. **Field enumeration is not.** An enumerator walks a
+household and registers four people on one phone. A mother `Fatima Bello` and daughter
+`Fatima Aisha Bello` share a phone and two name tokens — and the guard would silently ATTACH the
+daughter's submission to the mother's record. That is not a duplicate prevented; it is **two
+citizens merged into one**, and it fails silently: no error, no duplicate, just a household that
+ends up with fewer records than people.
+
+**Requirements:**
+1. At least **two of the 5–10 smoke submissions MUST be different people in the same household
+   sharing one phone number**, with overlapping names (a shared surname at minimum).
+2. Verify **two distinct respondent rows** result — not one. The failure mode is a MISSING row, so
+   assert the count; a passing pipeline with one row looks identical to success.
+3. If they merge, the guard must be **exempted or strengthened for enumerator-sourced
+   submissions** before field deployment. Recommended: exempt when `submitterId` is present — an
+   enumerator is physically with the person, and if they say this is a new individual they have
+   better evidence than any string comparison. The guard exists to catch someone re-registering
+   THEMSELVES; it should not overrule a human standing in the room. A stronger signal (DOB match,
+   or ≥3 shared tokens) is the fallback if exemption is judged too broad.
+
+**Do not treat this as hypothetical.** Every defect in the 13-49 programme passed its dry-run and
+appeared only on live execution against real people. This is the same shape: correct in test,
+wrong in a compound with a shared handset.
+
 ### AC2 — The 4-point pre-flight go/no-go checklist codified as a runbook (NET-NEW)
 1. A runbook codifies the **4-point pre-flight gate** verbatim [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:45-49]: (1) prod happy-path self-serve verified; (2) ≥5 enumerator prod submissions; (3) attribution live + verified (13-1); (4) load-test green + fallback deployed (13-3). Each item has an explicit **how-to-verify** step and a green/red box.
 2. The runbook states the **decision rule**: ALL FOUR green → fire radio/paid social; ANY red → hold spend (radio is movable 24–48h, so the gate has teeth) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:43,49].
@@ -49,6 +87,10 @@ This is a **proving + runbook** story, not a code-build story [Source: _bmad-out
 
 ## Tasks / Subtasks
 
+- [ ] **Task 1b — Shared-phone household case (AC1b)** — register ≥2 different people in one
+      household on ONE phone with overlapping names; assert **two** respondent rows, not one.
+      If they merge, exempt or strengthen the R13 identity guard for enumerator-sourced
+      submissions BEFORE field deployment.
 - [ ] **Task 1 — Exercise 5–10 real enumerator submissions on prod (AC1)**
   - [ ] Confirm/establish a real enumerator assigned via `team_assignments` (supervisor → enumerator → LGA, active row) [Source: apps/api/src/db/schema/team-assignments.ts:21-54].
   - [ ] Capture + submit 5–10 forms through the live `EnumeratorHome` [Source: apps/web/src/features/dashboard/pages/EnumeratorHome.tsx] on PROD (AC1.3).
