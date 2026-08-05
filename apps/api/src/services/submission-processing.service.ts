@@ -16,6 +16,7 @@ import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
 import type { RespondentMetadata, RespondentSource, RespondentStatus } from '../db/schema/respondents.js';
+import { findRespondentByIdentity } from './respondent-identity.js';
 import {
   normaliseFullName,
   normaliseNigerianPhone,
@@ -549,63 +550,21 @@ export class SubmissionProcessingService {
      * `rolled_back` rows are excluded: they are soft-deleted and must not adopt new submissions.
      */
     if (!data.nin && canonical.firstName && canonical.lastName && canonical.phoneNumber) {
-      /**
-       * TOKEN-SET match, not exact-field equality (widened 2026-08-04, same day it shipped).
-       *
-       * The first cut required lower(first_name) AND lower(last_name) to match exactly. Four
-       * MORE duplicates formed within hours and it would have caught NONE of them, because
-       * people do not re-enter their name the way a form previously stored it:
-       *
-       *   ours "Muheebat Yusuf"  vs theirs "Yusuf Muheebat Yetunde"   (order reversed)
-       *   ours "Monsurat Akadiri" vs theirs "Akadiri Monsurat Omolade" (order reversed + middle)
-       *   ours "Mukaheel Ajibola" vs theirs "AJIBOLA MUKAHEEL BABATUNDE"
-       *   ours "Omowumi Michael"  vs theirs "Omowumi Ayomide Michael"  (middle name added)
-       *
-       * Surname-first is a normal Nigerian convention, and a middle name is remembered or
-       * omitted at will. Exact first+last equality encodes an assumption about form-filling
-       * that real people do not honour.
-       *
-       * So: same phone AND at least TWO shared name tokens, in any order. Two is the threshold
-       * because ONE is unsafe on a shared handset — a parent and child can share a phone and a
-       * surname, and matching them would merge two different people, which is far worse than a
-       * duplicate. All four cases above share exactly two.
-       */
-      const existingByIdentity = await db.execute(sql`
-        WITH incoming AS (
-          SELECT ARRAY(
-            SELECT t FROM unnest(
-              string_to_array(lower(${`${canonical.firstName} ${canonical.lastName}`}), ' ')
-            ) AS t WHERE t <> ''
-          ) AS tokens
-        )
-        SELECT r."id", r."reference_code", r."status"
-        FROM "respondents" r, incoming i
-        WHERE r."phone_number" = ${canonical.phoneNumber}
-          AND r."status" <> 'rolled_back'
-          AND (
-            SELECT count(*) FROM (
-              SELECT unnest(ARRAY(
-                SELECT t FROM unnest(
-                  string_to_array(lower(coalesce(r."first_name",'') || ' ' || coalesce(r."last_name",'')), ' ')
-                ) AS t WHERE t <> ''
-              ))
-              INTERSECT
-              SELECT unnest(i.tokens)
-            ) shared
-          ) >= 2
-        ORDER BY r."created_at" ASC
-        LIMIT 1
-      `);
-      const match = (existingByIdentity as unknown as {
-        rows: Array<{ id: string; reference_code: string | null; status: RespondentStatus }>;
-      }).rows?.[0];
+      // Shared with the public wizard — see services/respondent-identity.ts. It lived HERE only
+      // and the wizard bypasses this function entirely, so the guard never ran on the path that
+      // produced every duplicate this register has had (R21).
+      const match = await findRespondentByIdentity(db, {
+        firstName: canonical.firstName,
+        lastName: canonical.lastName,
+        phoneNumber: canonical.phoneNumber,
+      });
 
       if (match) {
         logger.info(
           {
             event: 'submission_processing.no_nin_identity_match',
             respondentId: match.id,
-            referenceCode: match.reference_code,
+            referenceCode: match.referenceCode,
             existingStatus: match.status,
             source,
           },
@@ -615,8 +574,8 @@ export class SubmissionProcessingService {
         return {
           id: match.id,
           _isNew: false,
-          referenceCode: match.reference_code ?? undefined,
-          status: match.status,
+          referenceCode: match.referenceCode ?? undefined,
+          status: match.status as RespondentStatus,
         };
       }
     }

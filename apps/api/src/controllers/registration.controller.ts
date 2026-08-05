@@ -17,6 +17,7 @@ import {
 import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
+import { findRespondentByIdentity } from '../services/respondent-identity.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
@@ -730,7 +731,7 @@ export class RegistrationController {
       // `submissions` table) and so `questionnaireResponses` + `gender` +
       // `authChoice` + `email` are persisted to `submissions.raw_data` rather
       // than silently dropped (the pre-9-26 bug surfaced 2026-05-19).
-      const { respondent, submissionId, submissionUid, formIdSource } = await db.transaction(async (tx) => {
+      const { respondent, submissionId, submissionUid, formIdSource, effectiveReferenceCode, attachedToExisting } = await db.transaction(async (tx) => {
         // Story 9-26 Part A — fetch the draft BEFORE we delete it, so we can
         // pull `questionnaireFormId` (Step 4 introspection-stamped) and
         // `createdAt` (for completion_time_seconds — fraud-engine signal).
@@ -753,7 +754,50 @@ export class RegistrationController {
           ? Math.floor((Date.now() - draft.createdAt.getTime()) / 1000)
           : null;
 
-        const insertRows = await tx
+        /**
+         * R21 — THE IDENTITY GUARD, ON THE PATH IT WAS ALWAYS FOR.
+         *
+         * R13/R17 put this check in `findOrCreateRespondent`. **This function never calls it** — it
+         * inserts below, directly, and deliberately bypasses `processSubmission` (see the note on
+         * the submissions insert). So a guard built to stop self-registration duplicates never ran
+         * on self-registration, and the only signal was an attach-counter reading zero — which is
+         * indistinguishable from "nothing needed attaching". It took a live duplicate to notice:
+         * `Segun Adewale / Akingbade` re-registered as `Akingbade / Segun Adewale`, same phone,
+         * three shared name tokens, and a second record was created.
+         *
+         * ONLY for the no-NIN case. A NIN-carrying row is already deduped by FR21's unique index
+         * and the explicit checks above; this covers the case they cannot see, which is the case
+         * that produced every duplicate this register has had.
+         *
+         * ATTACH, never overwrite. The person is re-submitting with LESS information than we hold
+         * (no NIN), so their existing record wins on every field. And the reference code returned
+         * to them must be the EXISTING one — telling someone a freshly minted number that belongs
+         * to no record is worse than the duplicate it replaces.
+         */
+        const identityMatch = ninValue === null
+          ? await findRespondentByIdentity(tx, {
+              firstName,
+              lastName,
+              phoneNumber: data.phone,
+            })
+          : null;
+
+        if (identityMatch) {
+          logger.info(
+            {
+              event: 'registration.attached_to_existing_identity',
+              respondentId: identityMatch.id,
+              referenceCode: identityMatch.referenceCode,
+              existingStatus: identityMatch.status,
+            },
+            'A no-NIN wizard registration matched an existing respondent on phone + name tokens — ' +
+              'attaching the submission instead of creating a second record (R21)',
+          );
+        }
+
+        const insertRows = identityMatch
+          ? [{ id: identityMatch.id, status: identityMatch.status as typeof status }]
+          : await tx
           .insert(respondents)
           .values({
             nin: ninValue,
@@ -775,6 +819,9 @@ export class RegistrationController {
             status: respondents.status,
           });
         const row = insertRows[0];
+        // On an attach the minted code was never written — the person must be told the number that
+        // actually exists on their record.
+        const effectiveReferenceCode = identityMatch?.referenceCode ?? referenceCode;
 
         // Story 9-26 Part A — write the canonical submissions row alongside.
         // `processed: true` + `processedAt: now()` because wizard data is
@@ -894,6 +941,9 @@ export class RegistrationController {
           submissionId: newSubmissionId,
           submissionUid: newSubmissionUid,
           formIdSource,
+          // R21: on an attach these differ from the minted code / fresh-insert assumption.
+          effectiveReferenceCode,
+          attachedToExisting: identityMatch !== null,
         };
       });
 
@@ -942,17 +992,22 @@ export class RegistrationController {
       // shared post-submission entrypoint the queue path uses, so a future
       // side-effect can't be silently missed again. Fire-and-forget + fail-soft
       // (`.catch`): a comms/queue failure must never sink a completed registration
-      // (9-26 lesson). The wizard row is always a fresh insert (isNew:true) with a
-      // minted reference code; the thank-you self-gates on source='public' (all
+      // (9-26 lesson). ⚠️ This used to say "the wizard row is always a fresh insert (isNew:true)
+      // with a minted reference code" — R21 made that false: a no-NIN re-registration ATTACHES to
+      // the existing record, so both the code and isNew now come from the transaction; the thank-you self-gates on source='public' (all
       // wizard regs are); marketplace self-gates on consent_marketplace. GPS is
       // null for the public wizard, so the shared fraud gate is a no-op (AC4).
       void SubmissionProcessingService.runPostSubmissionSideEffects({
         respondentId: respondent.id,
         submissionId,
         email: normalisedEmail,
-        referenceCode,
+        // R21 — the code that EXISTS on their record, not the one minted and discarded.
+        referenceCode: effectiveReferenceCode,
         status: respondent.status,
-        isNew: true,
+        // R21 — `isNew: true` was hard-coded on the assumption (stated in the note above, now
+        // false) that a wizard row is always a fresh insert. An attach must not be announced as a
+        // brand-new registration: `isNew` gates the 9-58 "welcome, you're registered" confirmation.
+        isNew: !attachedToExisting,
         consentMarketplace: data.consentMarketplace,
         gps: null,
       }).catch((sideEffectErr) => {
@@ -1119,7 +1174,13 @@ export class RegistrationController {
           // Story 9-58 — human-friendly application reference (OSL-YYYY-XXXXXX),
           // shown on the success screen + accepted by the public status check
           // and the 9-56 staff search.
-          referenceCode,
+          //
+          // R21 — the EFFECTIVE code. On a no-NIN re-registration the submission attaches to the
+          // person's existing record and the freshly minted code is never written, so returning
+          // `referenceCode` here would print a number on the success screen that resolves to
+          // nothing — and `/check-registration` would then fail for the person we just told to
+          // use it.
+          referenceCode: effectiveReferenceCode,
           status: respondent.status,
           pendingNin,
           // Frontend uses this to decide next step:
