@@ -54,6 +54,12 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ['OSL-2026-PP0F59', 'OSL-2026-NYZNA1'],
   ['OSL-2026-PYFF1P', 'OSL-2026-7GYMJD'],
   ['OSL-2026-XVQQ6X', 'OSL-2026-WVT8PC'],
+  // Added 2026-08-05: formed AFTER the first eleven were merged, and it is the duplicate that
+  // exposed R21 — the R13 guard was never running on the public wizard. `Segun Adewale /
+  // Akingbade` (05-19, active, with NIN) re-registered as `Akingbade / Segun Adewale` (08-05,
+  // pending, no NIN): same phone, three shared name tokens. Merged rather than deleted so the
+  // answers from today's submission survive on the surviving record.
+  ['OSL-2026-MGKS01', 'OSL-2026-Q09HFP'],
 ];
 
 const apply = process.argv.includes('--apply');
