@@ -96,7 +96,12 @@ export async function findRespondentByIdentity(
     LIMIT 1
   `);
 
-  const row = (result as { rows?: Array<{ id: string; reference_code: string | null; status: string }> })
-    .rows?.[0];
+  // Optional-chain the RESULT itself, not just `.rows`. A driver or a test double that returns
+  // undefined must yield "no match", never a TypeError — this runs inside the public registration
+  // transaction, and an exception here is a citizen turned away (see the fail-open note at the
+  // call site).
+  const row = (result as
+    | { rows?: Array<{ id: string; reference_code: string | null; status: string }> }
+    | undefined)?.rows?.[0];
   return row ? { id: row.id, referenceCode: row.reference_code, status: row.status } : null;
 }

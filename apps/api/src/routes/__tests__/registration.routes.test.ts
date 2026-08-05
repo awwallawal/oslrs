@@ -274,7 +274,12 @@ beforeEach(() => {
       insert: () => buildInsertChain(),
       update: () => buildUpdateChain(),
       delete: () => buildDeleteChain(),
-      execute: vi.fn(),
+      // R21 — must return a REAL shape: the wizard's identity guard calls tx.execute and reads
+      // `.rows`. A bare vi.fn() returns undefined, which made every wizard test 500. The guard is
+      // fail-open so it would now pass silently WITHOUT RUNNING — and a test that passes because
+      // the code under test never executed is the exact trap that let R21 ship. `{ rows: [] }`
+      // means "queried, no match", so the guard is genuinely exercised on the happy path.
+      execute: vi.fn().mockResolvedValue({ rows: [] }),
     };
     return cb(tx);
   });

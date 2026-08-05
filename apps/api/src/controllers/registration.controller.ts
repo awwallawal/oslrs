@@ -774,13 +774,38 @@ export class RegistrationController {
          * to them must be the EXISTING one — telling someone a freshly minted number that belongs
          * to no record is worse than the duplicate it replaces.
          */
-        const identityMatch = ninValue === null
-          ? await findRespondentByIdentity(tx, {
+        /**
+         * FAIL-OPEN, DELIBERATELY. If this lookup throws, we create the record.
+         *
+         * The first cut let the error propagate and the pre-push gate caught it: every wizard test
+         * returned **500 instead of 201**. That was a mocked transaction lacking `.execute`, but the
+         * lesson is bigger than the mock — a duplicate-PREVENTION check had been given the power to
+         * refuse a citizen's registration outright. That trade is backwards. A duplicate is
+         * detectable (`prod-verify` §5c) and repairable (`merge:duplicates`); a 500 on the public
+         * registration endpoint is a person turned away, and they may not come back.
+         *
+         * Same principle as the post-submission side-effects a few lines below: instrumentation and
+         * hygiene must never sink a completed registration (the 9-26 lesson).
+         */
+        let identityMatch: Awaited<ReturnType<typeof findRespondentByIdentity>> = null;
+        if (ninValue === null) {
+          try {
+            identityMatch = await findRespondentByIdentity(tx, {
               firstName,
               lastName,
               phoneNumber: data.phone,
-            })
-          : null;
+            });
+          } catch (identityErr) {
+            logger.error(
+              {
+                event: 'registration.identity_check_failed',
+                err: identityErr instanceof Error ? identityErr.message : String(identityErr),
+              },
+              'R21 identity check failed — proceeding with a fresh insert. A duplicate is ' +
+                'repairable; refusing the registration is not.',
+            );
+          }
+        }
 
         if (identityMatch) {
           logger.info(
