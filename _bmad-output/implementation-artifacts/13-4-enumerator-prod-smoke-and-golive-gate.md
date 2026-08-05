@@ -77,43 +77,45 @@ ends up with fewer records than people.
 appeared only on live execution against real people. This is the same shape: correct in test,
 wrong in a compound with a shared handset.
 
-### AC1d — ⛔ BLOCKER: enumerators cannot collect an email, so no OSLRS number can be sent
+### AC1d — Email + SMS channels for the enumerator path (RETRACTED then CORRECTED, 2026-08-05)
 
-**Verified on prod 2026-08-05, not assumed.** Awwal's requirement — *"the emails that would be
-collected by the Enumerators, I need us to be able to send them their registration numbers"* —
-cannot be met today, and the reason is upstream of any code:
+⚠️ **THIS AC PREVIOUSLY CLAIMED A BLOCKER THAT DOES NOT EXIST.** It stated that neither published
+form asks for an email. **That was wrong, and the error was mine:** the query read `q->>'key'`
+while a question object's identifier is `q->>'name'` (`{id, name, type, label, required}`). Reading
+a property that does not exist returned NULL for every form, and NULL was read as "no such
+question". Left visible rather than deleted, because acting on it would have meant **re-publishing
+and re-pinning a form for no reason — the exact operation that froze 232 public drafts in July
+(Pitfall #46).** A wrong finding that triggers a risky change is worse than no finding.
 
-| checked | result |
-|---|---|
-| The single enumerator submission ever made (2026-04-20) | **no `email`, no `email_address`, no mail-ish key at all** |
-| `OSLSR Labour & Skills Registry Survey` (Master, published) | **no email question** |
-| `OSLSR Public Core (self-serve)` (published) | **no email question** |
+**VERIFIED CORRECTLY (prod, 2026-08-05):**
 
-**Neither published form asks for an email.** The public wizard gets one from its OWN Step 2 — a
-wizard-level field that is not part of `form_schema` — and `registration.controller.ts` threads it
-into `rawData.email`. Enumerators submit through `FormController.submitForm`, which carries **form
-answers only**. There is no email to carry.
+| form | sections | questions | pinned to wizard | contact questions |
+|---|---|---|---|---|
+| OSLSR Labour & Skills Registry Survey (**Master**) | 8 | 47 | no | **`email` (optional)**, `phone_number` (required), `guardian_phone` (required) |
+| OSLSR Public Core (self-serve) | 6 | 25 | **yes** | **`email` (optional)**, `phone_number` (required), `guardian_phone` (required) |
 
-**The send machinery is NOT the problem and needs no change.**
-`submission-processing.service.ts:299` reads `rawData['email'] ?? rawData['email_address']` and
-passes it to `runPostSubmissionSideEffects` **without branching on source**. The moment an
-enumerator submission carries one of those keys, the 9-58 confirmation with the OSLRS number fires
-by itself.
+**Master is a strict superset**: all 25 Public Core questions appear in Master's 47
+(`in_public_not_in_master = 0`). Awwal's description was accurate.
+
+**So the requirement is ALREADY MET and needs no form change.** `email` is optional — exactly the
+no-friction shape Awwal specified — and it is keyed `email`, which is precisely what
+`submission-processing.service.ts:299` reads (`rawData['email'] ?? rawData['email_address']`,
+source-agnostic). An enumerator who fills it triggers the 9-58 confirmation carrying the OSLRS
+number, with no code and no form change. The one historic enumerator submission (2026-04-20) has no
+email key simply because the field is optional and was left blank.
 
 **Requirements:**
-1. Add an **email question to the enumerator form**, keyed exactly `email` (or `email_address`) —
-   any other key and the confirmation silently never fires, with no error to notice. This is a
-   FORM change (re-publish + re-pin), not a code change.
-2. ⚠️ **Re-pinning a form changes the wizard step count** (Pitfall #46 / Story 13-47 — step count
-   is form-driven, `N = 3 head + one per section + 1 review`). Run `pnpm --filter @oslsr/api
-   form:diff` before re-pinning and check the step delta, or in-flight public drafts freeze exactly
-   as 232 of them did in July.
-3. Make the email **optional**, not required. A NIN is already optional by deliberate product
-   decision (to remove registration friction); a mandatory email would reintroduce that friction in
-   the field, where a respondent may simply not have one.
-4. The smoke MUST include at least one submission **with** a captured email, and verify the
-   confirmation actually arrives — a passing pipeline proves the row was written, not that anyone
-   was told their number.
+1. At least one smoke submission MUST fill `email` with an address the operator controls, and the
+   OSLRS-number email MUST be confirmed as **received** — a green pipeline proves a row was
+   written, not that anyone was told their number.
+2. At least one MUST leave `email` blank, and must still succeed. Optional means optional; if a
+   blank email breaks ingestion, field work stalls on a field nobody needs.
+3. ⚠️ **SMS IS NOT AVAILABLE.** `phone_number` is captured and required, so the data is there —
+   but Termii is **blocked on KYC** (`lib/fallback-lead.ts:7`) and the provider is a no-op that
+   rejects. "We collect phones so we can SMS them" is true about the DATA and false about the
+   CHANNEL until Story 9-27 Part B lands. **Email is the only working channel today**, which is
+   why (1) matters: for a respondent with no email, nothing reaches them at all, and the operator
+   phone list (`sms:outreach-list`, handoff §7g) is the manual fallback.
 
 ### AC1c — TEST-DATA PROTOCOL (ADDED 2026-08-05, adjudication)
 
@@ -167,9 +169,9 @@ to the public path.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1d — Add an optional `email` question to the enumerator form (AC1d)** — key exactly
-      `email`; run `form:diff` and check the step delta BEFORE re-pinning; then prove the OSLRS
-      number email actually arrives for a real captured address.
+- [ ] **Task 1d — Prove both email branches (AC1d)** — one smoke submission WITH `email` (confirm
+      the OSLRS-number email is RECEIVED, not merely sent) and one WITHOUT (must still succeed).
+      No form change is needed; `email` already exists and is optional on both forms.
 - [ ] **Task 1c — Test-data protocol (AC1c)** — distinct phones + unrelated names (except the
       AC1b pair); `+tag` emails you control; a reserved name/NIN prefix agreed BEFORE the first
       submission; baseline captured before and re-measured after teardown; child-first teardown
