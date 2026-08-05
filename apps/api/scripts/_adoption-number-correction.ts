@@ -35,8 +35,8 @@
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/respondents.js';
-import { submissions } from '../src/db/schema/submissions.js';
 import { EmailService } from '../src/services/email.service.js';
+import { resolveRespondentContactEmail } from '../src/services/respondent-contact.service.js';
 
 /**
  * Every person left holding a number that no longer resolves.
@@ -116,13 +116,14 @@ async function main(): Promise<void> {
       continue;
     }
 
-    // Their OWN registration carries the contact address; that is where this must go.
-    const sub = await db.query.submissions.findFirst({ where: eq(submissions.respondentId, r.id) });
-    const email = ((sub?.rawData as Record<string, unknown> | null)?.email as string | undefined)?.trim();
-    if (!email) {
-      console.log(`  ❌ ${r.referenceCode} — no email on their submission; skipping`);
+    // Canonical lookup (submission → token → user). Reading `submissions` alone would silently
+    // skip the 45 people reachable only via magic_link_tokens — see respondent-contact.service.ts.
+    const contact = await resolveRespondentContactEmail(r.id);
+    if (!contact) {
+      console.log(`  ⚠️ ${r.referenceCode} — no email anywhere; needs phone outreach (sms:outreach-list)`);
       continue;
     }
+    const email = contact.email;
 
     const mail = body(r.firstName ?? '', r.referenceCode ?? '');
     if (!apply) {

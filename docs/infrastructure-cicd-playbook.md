@@ -1519,6 +1519,31 @@ After that single clear, the committed `755` takes over and every subsequent dep
 
 ---
 
+### Pitfall #48: `submissions.raw_data->>'email'` is NOT where everyone's email lives (2026-08-05)
+
+**Three defects in one day, three different files, one assumption.** Not every respondent has a
+submissions row — the Story 9-28 absorbed cohort has none, which is the documented Story 9-26
+exception (`prod-verify.yml` §5b gates the number).
+
+**Measured on prod: 45 respondents are reachable ONLY via `magic_link_tokens`.** A caller reading
+submissions alone skips them silently: no error, no exception, just people never contacted.
+
+**The dangerous form is clear-then-ask.** `nin:reconfirm` clears an untrusted NIN and emails a
+link to supply a new one. Run against someone unreachable, the clear succeeds and the ask never
+happens — the person ends up **worse off than before the script touched them**. Resolve contact
+FIRST; only then decide whether to mutate.
+
+**Fix:** `resolveRespondentContactEmail()` in `src/services/respondent-contact.service.ts` —
+submission → magic-link token → user account, in that priority. Its inverse
+`listRespondentsWithoutEmail()` backs `pnpm --filter @oslsr/api sms:outreach-list`. A `null`
+return is a real answer (phone-only records exist), not a failure to swallow.
+
+**Generalises:** when a shape is documented as "the exception", assume code will forget it. Put
+the correct read behind ONE named function so the narrow version stops being the easy one to
+write — the same move as the registry-read drift guard (13-37).
+
+---
+
 ### Pitfall #37b: the `0xC0000005` segfault is a WORKER-THREAD teardown crash — `VITEST_MAX_THREADS` never fixed it (2026-08-03)
 
 **The mitigation this playbook recorded was wrong, and believing it cost six failed pushes in one day.**

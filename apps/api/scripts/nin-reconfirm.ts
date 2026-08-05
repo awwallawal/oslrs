@@ -38,11 +38,11 @@
  *
  * IDEMPOTENT: stamps `metadata.nin_reconfirm_requested_at`; a stamped record is skipped.
  */
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/respondents.js';
-import { submissions } from '../src/db/schema/submissions.js';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
+import { resolveRespondentContactEmail } from '../src/services/respondent-contact.service.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 
 /** Hard-coded scope. A script that takes a cohort by flag is one that can clear 300 NINs. */
@@ -83,35 +83,22 @@ async function main(): Promise<void> {
       continue;
     }
 
-    /**
-     * TWO SOURCES, because a submission is not where everyone's email lives.
-     *
-     * The Story 9-28 absorbed cohort has NO submissions row at all (that is the whole 9-26
-     * exception), so reading `submissions.raw_data->>'email'` alone cannot reach them. Measured
-     * 2026-08-05: **45 respondents are reachable ONLY via `magic_link_tokens`** — a wizard-issued
-     * token carries the address the person actually typed. `pending-nin.service.ts` already reads
-     * that source; this script was the narrower one and skipped people it could have reached.
-     */
-    const sub = await db.query.submissions.findFirst({ where: eq(submissions.respondentId, r.id) });
-    let email = ((sub?.rawData as Record<string, unknown> | null)?.email as string | undefined)?.trim();
-    if (!email) {
-      const viaToken = await db.execute(
-        sql`SELECT email FROM magic_link_tokens WHERE respondent_id = ${r.id} AND email IS NOT NULL
-            ORDER BY created_at DESC LIMIT 1`,
-      );
-      email = ((viaToken as unknown as { rows: Array<{ email: string }> }).rows[0]?.email ?? '').trim() || undefined;
-    }
-    if (!email) {
-      // Genuinely unreachable by email — phone only. Do NOT clear the NIN in this case: clearing
-      // it without a route to replace it leaves the person strictly worse off, sitting pending
-      // forever with no way to be asked. Leave the record as-is and escalate to a human.
+    // THE canonical lookup — submission → magic-link token → user account. Never read one
+    // table directly: not every respondent has a submissions row (the 9-26 exception), and that
+    // single assumption produced three defects in one day. See respondent-contact.service.ts.
+    const contact = await resolveRespondentContactEmail(r.id);
+    if (!contact) {
+      // Genuinely unreachable by email. Do NOT clear the NIN: clear-then-ask is only honest if
+      // the asking can happen, and clearing without a route to replace leaves them sitting
+      // pending forever with no way to be asked. Escalate to the phone list instead.
       console.log(
-        `  ⚠️ ${r.referenceCode} — NO email anywhere (submission, token or user). Phone: ` +
-          `${r.phoneNumber ?? '(none)'} — NIN left INTACT; needs a call, not a clear.`,
+        `  ⚠️ ${r.referenceCode} — NO email anywhere. Phone: ${r.phoneNumber ?? '(none)'} — ` +
+          `NIN left INTACT; pick this up via \`pnpm --filter @oslsr/api sms:outreach-list\`.`,
       );
       process.exitCode = 1;
       continue;
     }
+    const email = contact.email;
 
     if (!apply) {
       console.log(

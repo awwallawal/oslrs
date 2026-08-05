@@ -243,6 +243,14 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 - **Rule:** when a heuristic crosses into a new ingestion source, cohort or channel, re-ask *what population was this measured on, and is the new one shaped the same?* Then make the smoke test exercise the NEW shape, not the old one. Handed to 13-4 as AC1b.
 - **Corollary — a human beats a string comparison.** An enumerator is physically with the person. A dedupe heuristic exists to catch someone re-registering THEMSELVES; it should not overrule an operator standing in the room. Prefer exempting `submitterId`-bearing submissions over tightening the threshold for everyone.
 
+### 2s. ⭐ THE 9-26 BLIND SPOT: not every respondent has a submissions row (new 2026-08-05)
+- **It bit THREE times in one day**, in three different files, always the same way: someone reads `submissions.raw_data->>'email'` as *the* source of a person's address. It is not. The Story 9-28 absorbed cohort has **no submissions row at all** — that IS the 9-26 exception, and `prod-verify.yml` §5b gates the count.
+- **Measured on prod: 45 respondents are reachable ONLY via `magic_link_tokens`.** Any caller reading submissions alone silently skips them — no error, just people quietly never contacted.
+- **Worse than skipping: a destructive step you cannot follow through.** `nin:reconfirm` clears a NIN and then asks for a new one. Against someone unreachable, the clear succeeds and the ask never happens, leaving them strictly WORSE off than before. **Clear-then-ask is only honest if the asking can happen — resolve the contact FIRST, then decide whether to touch the record.**
+- **The fix is a canonical primitive, not a doc line.** `resolveRespondentContactEmail(respondentId)` in `src/services/respondent-contact.service.ts` checks submission → magic-link token → user account in that order. New code calls it instead of reaching into a table. `listRespondentsWithoutEmail()` is its inverse and backs `pnpm --filter @oslsr/api sms:outreach-list`.
+- **`null` is a real answer.** Some records are phone-only (at least one confirmed). Treat it as "reach them another way", never as a failure to swallow.
+- ⚠️ **13-4 inherits this.** Enumerator-created respondents will have submissions, but clerk/import paths and anything touching the absorbed cohort will not. Assume the shape exists.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
