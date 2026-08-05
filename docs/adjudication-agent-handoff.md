@@ -784,8 +784,36 @@ earlier, simply because nobody was due. Idle is not the same as working, and **R
 SELECT status, count(*) FILTER (WHERE metadata->'reminder_state' ? 'd2') AS sent_2d, count(*)
 FROM respondents WHERE status IN ('pending_nin_capture','nin_unavailable') GROUP BY 1;
 ```
-Expect `sent_2d` to jump from 0 to ~21 after 10:00 WAT on 06-08. If it stays 0, the repeatable job
-is not registered — check `scheduleDailyReminders()` ran at boot.
+Expect `sent_2d` to jump from 0 to **~21** after 10:00 WAT on 06-08 — but read that number
+carefully, because two things will distort it:
+
+**(1) Count only the D3 cohort, not today's arrivals.** The milestone is anchored on
+`created_at` (`reminderEpoch()` → `metadata.reminder_state.deferred_at` if set, else
+`row.createdAt`). The ~21 due tomorrow are the rows created **2026-08-04**. Anyone who accepts a
+D4 invitation today and registers WITHOUT a NIN becomes `pending_nin_capture` with a `created_at`
+of **08-05**, so their d2 falls on **08-07** — correct behaviour, but it means a bigger number
+tomorrow is not "more reminders", it is a different cohort leaking in. Scope the check:
+
+```sql
+SELECT count(*) FILTER (WHERE metadata->'reminder_state' ? 'sent_2d') AS sent_2d, count(*) AS cohort
+FROM respondents
+WHERE status IN ('pending_nin_capture','nin_unavailable') AND created_at::date = '2026-08-04';
+```
+
+**(2) `OSL-2026-J622R1` will NOT be reminded — it will be RETIRED, and that is not a bug.**
+`nin:reconfirm` demoted it to `pending_nin_capture` on 08-05, but demotion does not reset
+`created_at`, which is **2026-05-20**. `TRANSITION_DAYS = 30` and the transition is **terminal**,
+so the first sweep that sees it will flip it straight to `nin_unavailable` and log
+`PENDING_NIN_TRANSITIONED` **without ever sending a reminder**.
+
+That is acceptable *only because* he was already asked directly by `nin:reconfirm` with his own
+magic link. But it means **nothing will follow up if he ignores it** — the ladder considers him
+retired. If a follow-up is wanted, set `metadata.reminder_state.deferred_at = now()` on that row
+to re-anchor his clock; the worker reads that in preference to `created_at`. Same applies to any
+future `nin:reconfirm` target whose record is older than 30 days.
+
+If `sent_2d` stays 0 across the whole 08-04 cohort, the repeatable job is not registered — check
+`scheduleDailyReminders()` ran at boot.
 
 ### B. SMS / phone outreach — 12 people with NO email anywhere
 
