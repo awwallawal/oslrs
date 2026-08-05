@@ -77,6 +77,48 @@ ends up with fewer records than people.
 appeared only on live execution against real people. This is the same shape: correct in test,
 wrong in a compound with a shared handset.
 
+### AC1c — TEST-DATA PROTOCOL (ADDED 2026-08-05, adjudication)
+
+These 5–10 submissions land on **prod**, on a register that is **live and moving** (305 respondents
+and rising; 4 arrived during a single hour today). Five things will bite in ways that look like
+enumerator bugs but are not.
+
+**1. R13 WILL SILENTLY MERGE YOUR TEST PEOPLE.** The identity guard attaches a no-NIN submission to
+an existing record when the **phone matches AND ≥2 name tokens overlap**. Test data is usually made
+the exact wrong way — same handset, similar names — so you will create 5 people and find 3. **No
+error, no duplicate, just fewer rows than you entered.** Give each test person a **distinct phone
+and unrelated names**… except for the ONE pair required by AC1b, which must share a phone
+deliberately and assert TWO rows result.
+
+**2. REAL EMAILS SEND. Immediately.** Prod holds the real Resend key; the 9-63 dev-credential
+isolation does not apply here. Any captured email fires the 9-58 confirmation carrying the OSLRS
+number (`submission-processing.service.ts:299` reads `rawData['email'] ?? rawData['email_address']`
+and does **not** branch on source). Use `+tag` addresses you control — that is also how you prove
+the registration-number email actually arrives, which is one of the things this story exists to
+verify. ⚠️ **If the enumerator form stores the address under any other key, the confirmation
+silently never fires.** Check the key name before concluding email is broken.
+
+**3. TAG THE ROWS BEFORE CREATING THEM.** AC1.4 already requires identifiable and reversible. A
+reserved name prefix or NIN block makes teardown a `WHERE` clause instead of archaeology. Deciding
+this afterwards is how smoke data ends up in a launch metric.
+
+**4. TEARDOWN IS CHILD-FIRST, AND ONE STEP IS EASY TO MISS.**
+`fraud_detections` (by **`submission_id`** — it has no `respondent_id`) → `marketplace_profiles` →
+`magic_link_tokens` (**by EMAIL** — a wizard-issued token has `respondent_id = NULL`, so deleting by
+respondent reports success and removes nothing; it leaked on three consecutive dry-runs before this
+was caught) → `submissions` → `respondents`. **Read the `DELETE n` counts: a `DELETE 0` is a failed
+teardown, not a clean one.** Full recipe: `docs/runbooks/pre-blast-dry-run.md` §5.
+
+**5. RE-MEASURE, NEVER "RESTORE TO N".** The register moves under you. Capture the baseline
+immediately before you start and again after teardown; expect organic arrivals in between rather
+than treating them as leftovers. `prod-verify`'s 9-26 ceiling (56) and duplicate-pair checks will
+move too.
+
+**Form note.** The OSLRS **Master** form has more sections than the pinned public form, so step
+count and `_pendingNin` behaviour differ from the public wizard (step count is form-driven —
+Pitfall #46). Record which form each test submission used, or the results will not be comparable
+to the public path.
+
 ### AC2 — The 4-point pre-flight go/no-go checklist codified as a runbook (NET-NEW)
 1. A runbook codifies the **4-point pre-flight gate** verbatim [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:45-49]: (1) prod happy-path self-serve verified; (2) ≥5 enumerator prod submissions; (3) attribution live + verified (13-1); (4) load-test green + fallback deployed (13-3). Each item has an explicit **how-to-verify** step and a green/red box.
 2. The runbook states the **decision rule**: ALL FOUR green → fire radio/paid social; ANY red → hold spend (radio is movable 24–48h, so the gate has teeth) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:43,49].
@@ -87,6 +129,10 @@ wrong in a compound with a shared handset.
 
 ## Tasks / Subtasks
 
+- [ ] **Task 1c — Test-data protocol (AC1c)** — distinct phones + unrelated names (except the
+      AC1b pair); `+tag` emails you control; a reserved name/NIN prefix agreed BEFORE the first
+      submission; baseline captured before and re-measured after teardown; child-first teardown
+      with the `DELETE n` counts read.
 - [ ] **Task 1b — Shared-phone household case (AC1b)** — register ≥2 different people in one
       household on ONE phone with overlapping names; assert **two** respondent rows, not one.
       If they merge, exempt or strengthen the R13 identity guard for enumerator-sourced
