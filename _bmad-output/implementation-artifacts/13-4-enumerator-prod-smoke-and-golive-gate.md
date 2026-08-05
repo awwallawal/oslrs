@@ -77,6 +77,44 @@ ends up with fewer records than people.
 appeared only on live execution against real people. This is the same shape: correct in test,
 wrong in a compound with a shared handset.
 
+### AC1d — ⛔ BLOCKER: enumerators cannot collect an email, so no OSLRS number can be sent
+
+**Verified on prod 2026-08-05, not assumed.** Awwal's requirement — *"the emails that would be
+collected by the Enumerators, I need us to be able to send them their registration numbers"* —
+cannot be met today, and the reason is upstream of any code:
+
+| checked | result |
+|---|---|
+| The single enumerator submission ever made (2026-04-20) | **no `email`, no `email_address`, no mail-ish key at all** |
+| `OSLSR Labour & Skills Registry Survey` (Master, published) | **no email question** |
+| `OSLSR Public Core (self-serve)` (published) | **no email question** |
+
+**Neither published form asks for an email.** The public wizard gets one from its OWN Step 2 — a
+wizard-level field that is not part of `form_schema` — and `registration.controller.ts` threads it
+into `rawData.email`. Enumerators submit through `FormController.submitForm`, which carries **form
+answers only**. There is no email to carry.
+
+**The send machinery is NOT the problem and needs no change.**
+`submission-processing.service.ts:299` reads `rawData['email'] ?? rawData['email_address']` and
+passes it to `runPostSubmissionSideEffects` **without branching on source**. The moment an
+enumerator submission carries one of those keys, the 9-58 confirmation with the OSLRS number fires
+by itself.
+
+**Requirements:**
+1. Add an **email question to the enumerator form**, keyed exactly `email` (or `email_address`) —
+   any other key and the confirmation silently never fires, with no error to notice. This is a
+   FORM change (re-publish + re-pin), not a code change.
+2. ⚠️ **Re-pinning a form changes the wizard step count** (Pitfall #46 / Story 13-47 — step count
+   is form-driven, `N = 3 head + one per section + 1 review`). Run `pnpm --filter @oslsr/api
+   form:diff` before re-pinning and check the step delta, or in-flight public drafts freeze exactly
+   as 232 of them did in July.
+3. Make the email **optional**, not required. A NIN is already optional by deliberate product
+   decision (to remove registration friction); a mandatory email would reintroduce that friction in
+   the field, where a respondent may simply not have one.
+4. The smoke MUST include at least one submission **with** a captured email, and verify the
+   confirmation actually arrives — a passing pipeline proves the row was written, not that anyone
+   was told their number.
+
 ### AC1c — TEST-DATA PROTOCOL (ADDED 2026-08-05, adjudication)
 
 These 5–10 submissions land on **prod**, on a register that is **live and moving** (305 respondents
@@ -129,6 +167,9 @@ to the public path.
 
 ## Tasks / Subtasks
 
+- [ ] **Task 1d — Add an optional `email` question to the enumerator form (AC1d)** — key exactly
+      `email`; run `form:diff` and check the step delta BEFORE re-pinning; then prove the OSLRS
+      number email actually arrives for a real captured address.
 - [ ] **Task 1c — Test-data protocol (AC1c)** — distinct phones + unrelated names (except the
       AC1b pair); `+tag` emails you control; a reserved name/NIN prefix agreed BEFORE the first
       submission; baseline captured before and re-measured after teardown; child-first teardown

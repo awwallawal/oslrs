@@ -225,21 +225,31 @@ jobs:
             # AND they acted (an email-matched submission now exists). Matching on the SUBMISSION
             # email is deliberate — it is the address the person typed when they registered, and it
             # works whether or not any later token was ever bound to them.
+            # PER CAMPAIGN **and** overall. A single all-time number is unreadable: `invited`
+            # counts every wizard_resume token ever issued (115 as of 2026-08-05, of which only 75
+            # were the D4 campaign), so an all-time rate silently blends a two-hour-old cohort
+            # with one from June. Grouping by invite DATE keeps each campaign honest and still
+            # totals to everything.
             psql_ro -c "
               WITH invited AS (
-                SELECT DISTINCT lower(m.email) AS email, min(m.created_at) AS first_invited_at
-                  FROM magic_link_tokens m
-                 WHERE m.purpose = 'wizard_resume'
-                 GROUP BY 1)
-              SELECT count(*)                                                        AS invited,
-                     count(*) FILTER (WHERE EXISTS (
-                       SELECT 1 FROM submissions s
-                        WHERE lower(s.raw_data->>'email') = i.email))                 AS converted,
-                     count(*) FILTER (WHERE EXISTS (
-                       SELECT 1 FROM submissions s
-                        WHERE lower(s.raw_data->>'email') = i.email
-                          AND s.submitted_at > i.first_invited_at))                   AS converted_after_invite
-              FROM invited i;"
+                SELECT lower(m.email) AS email, min(m.created_at) AS first_invited_at
+                  FROM magic_link_tokens m WHERE m.purpose = 'wizard_resume' GROUP BY 1),
+              scored AS (
+                SELECT i.first_invited_at::date AS invited_on,
+                       EXISTS (SELECT 1 FROM submissions s
+                                WHERE lower(s.raw_data->>'email') = i.email
+                                  AND s.submitted_at > i.first_invited_at) AS converted_after
+                  FROM invited i)
+              SELECT invited_on, count(*) AS invited,
+                     count(*) FILTER (WHERE converted_after) AS converted_after_invite,
+                     round(100.0 * count(*) FILTER (WHERE converted_after) / count(*), 1) AS pct
+                FROM scored GROUP BY invited_on
+              UNION ALL
+              SELECT NULL, count(*), count(*) FILTER (WHERE converted_after),
+                     round(100.0 * count(*) FILTER (WHERE converted_after) / count(*), 1)
+                FROM scored
+              ORDER BY invited_on NULLS LAST;"
+            echo "-- last row (invited_on = NULL) is the all-time total across every campaign. --"
             echo "-- 'converted_after_invite' is the honest one: registered AFTER we asked. --"
             echo "   'converted' includes people who were already registered when invited.
             echo "⚠️ adoption counts must come from the adopted_by MARKER — it is also 13-49 AC11's"
