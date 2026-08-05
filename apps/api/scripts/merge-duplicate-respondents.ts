@@ -97,22 +97,39 @@ async function load(code: string): Promise<Side | null> {
   };
 }
 
-/** 1) more submissions · 2) has a NIN · 3) older. Printed so the choice is reviewable. */
+/**
+ * 1) OLDER wins · 2) has a NIN · 3) more submissions. Printed so the choice is reviewable.
+ *
+ * ⚠️ REORDERED 2026-08-05. "More submissions" was rule 1, and it was the wrong criterion — it
+ * looks like it protects data and does not. **Submissions are RE-POINTED to the survivor either
+ * way**, and NULL columns are filled from the loser, so every answer and the NIN survive whichever
+ * record wins. The only thing that actually differs is WHICH REFERENCE CODE LIVES.
+ *
+ * That makes age the criterion that matters: the older code is the one already in the wild — in a
+ * confirmation email, on a screenshot, written down. Preferring the newer record silently voids a
+ * number someone has been holding for months. It surfaced on `MGKS01`/`Q09HFP`, where the old rule
+ * chose a code issued four hours earlier over one held since 19 May.
+ *
+ * Honest note on the first eleven merges (already applied under the old order): 5 of them chose the
+ * NEWER record on "more submissions". The DATA outcome was equivalent — nothing was lost — but the
+ * surviving code was the later one in those five. Not worth undoing; recorded so the history reads
+ * correctly.
+ */
 function chooseSurvivor(a: Side, b: Side): { keep: Side; drop: Side; why: string } {
-  if (a.subs !== b.subs) {
-    return a.subs > b.subs
-      ? { keep: a, drop: b, why: `more submissions (${a.subs} vs ${b.subs})` }
-      : { keep: b, drop: a, why: `more submissions (${b.subs} vs ${a.subs})` };
+  if (a.createdAt.getTime() !== b.createdAt.getTime()) {
+    return a.createdAt < b.createdAt
+      ? { keep: a, drop: b, why: 'older record — its reference code is the one already in the wild' }
+      : { keep: b, drop: a, why: 'older record — its reference code is the one already in the wild' };
   }
   const aNin = a.nin !== null, bNin = b.nin !== null;
   if (aNin !== bNin) {
     return aNin
-      ? { keep: a, drop: b, why: 'holds a NIN' }
-      : { keep: b, drop: a, why: 'holds a NIN' };
+      ? { keep: a, drop: b, why: 'same age; holds a NIN' }
+      : { keep: b, drop: a, why: 'same age; holds a NIN' };
   }
-  return a.createdAt <= b.createdAt
-    ? { keep: a, drop: b, why: 'older record' }
-    : { keep: b, drop: a, why: 'older record' };
+  return a.subs >= b.subs
+    ? { keep: a, drop: b, why: `same age; more submissions (${a.subs} vs ${b.subs})` }
+    : { keep: b, drop: a, why: `same age; more submissions (${b.subs} vs ${a.subs})` };
 }
 
 async function main(): Promise<void> {
