@@ -115,6 +115,49 @@ async function main(): Promise<void> {
   console.log(`Duplicate respondent merge — ${apply ? '🔴 LIVE' : '🟢 PREVIEW'}   (${PAIRS.length} pairs)`);
   console.log('='.repeat(86));
 
+  /**
+   * DRIFT GUARD — the hard-coded list above is a SNAPSHOT of a LIVE table, and this project has
+   * already been bitten by exactly that: the triage sheet had to be reconciled against
+   * `wizard_drafts` FOUR times in one session because people kept registering underneath it
+   * (13-49 R15). A merge is destructive, so it re-derives the pairs from live data and refuses
+   * to run if reality has moved.
+   *
+   * Same identity key as the R13 dedupe guard and the prod-verify §5c check: same phone plus at
+   * least two shared name tokens in any order.
+   */
+  const live = await db.execute(sql`
+    WITH pairs AS (
+      SELECT a.reference_code AS rec_a, b.reference_code AS rec_b,
+             (SELECT count(*) FROM (
+                SELECT unnest(ARRAY(SELECT t FROM unnest(string_to_array(lower(coalesce(a.first_name,'')||' '||coalesce(a.last_name,'')),' ')) AS t WHERE t<>''))
+                INTERSECT
+                SELECT unnest(ARRAY(SELECT t FROM unnest(string_to_array(lower(coalesce(b.first_name,'')||' '||coalesce(b.last_name,'')),' ')) AS t WHERE t<>''))
+             ) x) AS tok
+      FROM respondents a JOIN respondents b
+        ON a.phone_number = b.phone_number AND a.id < b.id
+       AND a.status <> 'rolled_back' AND b.status <> 'rolled_back')
+    SELECT rec_a, rec_b FROM pairs WHERE tok >= 2
+  `);
+  const liveRows = (live as unknown as { rows: Array<{ rec_a: string; rec_b: string }> }).rows ?? [];
+  const key = (x: string, y: string) => [x, y].sort().join('|');
+  const liveSet = new Set(liveRows.map((r) => key(r.rec_a, r.rec_b)));
+  const listSet = new Set(PAIRS.map(([x, y]) => key(x, y)));
+
+  const appeared = [...liveSet].filter((k) => !listSet.has(k));
+  const vanished = [...listSet].filter((k) => !liveSet.has(k));
+
+  console.log(`  drift check: ${liveSet.size} live pair(s) vs ${listSet.size} scripted`);
+  if (appeared.length || vanished.length) {
+    for (const k of appeared) console.log(`     ➕ NEW live duplicate not in this script: ${k.replace('|', ' / ')}`);
+    for (const k of vanished) console.log(`     ➖ scripted pair no longer a live duplicate: ${k.replace('|', ' / ')}`);
+    console.log('');
+    console.log('  ❌ The table has moved since this list was written. A merge DELETES a record,');
+    console.log('     so it will not run against a stale plan. Re-derive the pairs and re-review.');
+    process.exitCode = 1;
+    return;
+  }
+  console.log('  ✅ no drift — the scripted pairs match live data exactly');
+
   let merged = 0, skipped = 0;
 
   for (const [ca, cb] of PAIRS) {
