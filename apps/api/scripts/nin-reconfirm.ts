@@ -46,7 +46,16 @@ import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
 
 /** Hard-coded scope. A script that takes a cohort by flag is one that can clear 300 NINs. */
-const TARGETS = ['OSL-2026-3XQ32H'] as const;
+const TARGETS = [
+  'OSL-2026-3XQ32H', // Mukaheel — asked 2026-08-04
+  // The two PRE-EXISTING conflicting-NIN people, carried since MAY 2026 and invisible to every
+  // check we had: `duplicate_nins` counts one NIN on two people, never one person on two NINs.
+  // Their duplicate records were merged first (2026-08-05) so the survivor is unambiguous —
+  // asking someone to confirm a NIN on a record you are about to delete would be worse than
+  // asking nothing.
+  'OSL-2026-J622R1', // Sunday Joseph Omodun
+  'OSL-2026-NNJFJS', // Timothy Timilehin Elujide
+] as const;
 
 const apply = process.argv.includes('--apply');
 
