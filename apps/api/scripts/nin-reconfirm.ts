@@ -38,7 +38,7 @@
  *
  * IDEMPOTENT: stamps `metadata.nin_reconfirm_requested_at`; a stamped record is skipped.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/respondents.js';
 import { submissions } from '../src/db/schema/submissions.js';
@@ -83,10 +83,32 @@ async function main(): Promise<void> {
       continue;
     }
 
+    /**
+     * TWO SOURCES, because a submission is not where everyone's email lives.
+     *
+     * The Story 9-28 absorbed cohort has NO submissions row at all (that is the whole 9-26
+     * exception), so reading `submissions.raw_data->>'email'` alone cannot reach them. Measured
+     * 2026-08-05: **45 respondents are reachable ONLY via `magic_link_tokens`** — a wizard-issued
+     * token carries the address the person actually typed. `pending-nin.service.ts` already reads
+     * that source; this script was the narrower one and skipped people it could have reached.
+     */
     const sub = await db.query.submissions.findFirst({ where: eq(submissions.respondentId, r.id) });
-    const email = ((sub?.rawData as Record<string, unknown> | null)?.email as string | undefined)?.trim();
+    let email = ((sub?.rawData as Record<string, unknown> | null)?.email as string | undefined)?.trim();
     if (!email) {
-      console.log(`  ❌ ${r.referenceCode} — no contact email on their submission; skipping`);
+      const viaToken = await db.execute(
+        sql`SELECT email FROM magic_link_tokens WHERE respondent_id = ${r.id} AND email IS NOT NULL
+            ORDER BY created_at DESC LIMIT 1`,
+      );
+      email = ((viaToken as unknown as { rows: Array<{ email: string }> }).rows[0]?.email ?? '').trim() || undefined;
+    }
+    if (!email) {
+      // Genuinely unreachable by email — phone only. Do NOT clear the NIN in this case: clearing
+      // it without a route to replace it leaves the person strictly worse off, sitting pending
+      // forever with no way to be asked. Leave the record as-is and escalate to a human.
+      console.log(
+        `  ⚠️ ${r.referenceCode} — NO email anywhere (submission, token or user). Phone: ` +
+          `${r.phoneNumber ?? '(none)'} — NIN left INTACT; needs a call, not a clear.`,
+      );
       process.exitCode = 1;
       continue;
     }
