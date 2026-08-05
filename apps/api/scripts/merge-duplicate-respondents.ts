@@ -144,12 +144,26 @@ async function main(): Promise<void> {
   const listSet = new Set(PAIRS.map(([x, y]) => key(x, y)));
 
   const appeared = [...liveSet].filter((k) => !listSet.has(k));
-  const vanished = [...listSet].filter((k) => !liveSet.has(k));
 
-  console.log(`  drift check: ${liveSet.size} live pair(s) vs ${listSet.size} scripted`);
+  /**
+   * A scripted pair missing from the live set is NOT automatically drift. If one side no longer
+   * exists, this script already merged it — a resumed run after a partial failure must not be
+   * blocked by its own previous success. Only a pair whose BOTH sides still exist, yet no longer
+   * matches, means the data moved underneath us.
+   */
+  const stillBoth = await Promise.all(
+    PAIRS.map(async ([x, y]) => ({ k: key(x, y), both: (await load(x)) !== null && (await load(y)) !== null })),
+  );
+  const vanished = stillBoth
+    .filter((p) => !liveSet.has(p.k) && p.both)
+    .map((p) => p.k);
+  const alreadyMerged = stillBoth.filter((p) => !liveSet.has(p.k) && !p.both).length;
+
+  console.log(`  drift check: ${liveSet.size} live pair(s) vs ${listSet.size} scripted` +
+              (alreadyMerged ? ` · ${alreadyMerged} already merged by a previous run` : ''));
   if (appeared.length || vanished.length) {
     for (const k of appeared) console.log(`     ➕ NEW live duplicate not in this script: ${k.replace('|', ' / ')}`);
-    for (const k of vanished) console.log(`     ➖ scripted pair no longer a live duplicate: ${k.replace('|', ' / ')}`);
+    for (const k of vanished) console.log(`     ➖ both sides still exist but no longer match: ${k.replace('|', ' / ')}`);
     console.log('');
     console.log('  ❌ The table has moved since this list was written. A merge DELETES a record,');
     console.log('     so it will not run against a stale plan. Re-derive the pairs and re-review.');
@@ -186,6 +200,22 @@ async function main(): Promise<void> {
     if (!apply) continue;
 
     await db.transaction(async (tx) => {
+      /**
+       * ⚠️ ORDER IS LOAD-BEARING: the loser is DELETED BEFORE the survivor inherits its NIN.
+       *
+       * The first cut updated the survivor first and died on the live run —
+       * `23505 respondents_nin_unique_when_present, Key (nin)=(40503035523) already exists`.
+       * Of course it did: the loser still held that NIN at that moment, and a partial unique
+       * index is checked per-statement, not at COMMIT. Four pairs had already merged cleanly
+       * because none of them needed to carry a NIN across; the fifth was the first that did.
+       *
+       * Submissions are re-pointed BEFORE the delete so nothing is ever orphaned, then the loser
+       * goes, then the survivor takes the NIN into the space just vacated.
+       */
+      await tx.update(submissions).set({ respondentId: keep.id }).where(eq(submissions.respondentId, drop.id));
+      await tx.execute(sql`DELETE FROM marketplace_profiles WHERE respondent_id = ${drop.id}`);
+      await tx.delete(respondents).where(eq(respondents.id, drop.id));
+
       if (fills.length) {
         const set: Record<string, unknown> = {};
         for (const f of fills) set[f] = drop.row[f];
@@ -194,10 +224,6 @@ async function main(): Promise<void> {
         set.updatedAt = new Date();
         await tx.update(respondents).set(set).where(eq(respondents.id, keep.id));
       }
-
-      await tx.update(submissions).set({ respondentId: keep.id }).where(eq(submissions.respondentId, drop.id));
-      await tx.execute(sql`DELETE FROM marketplace_profiles WHERE respondent_id = ${drop.id}`);
-      await tx.delete(respondents).where(eq(respondents.id, drop.id));
 
       await AuditService.logActionTx(tx, {
         actorId: null,
