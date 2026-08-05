@@ -144,10 +144,24 @@ this afterwards is how smoke data ends up in a launch metric.
 
 **4. TEARDOWN IS CHILD-FIRST, AND ONE STEP IS EASY TO MISS.**
 `fraud_detections` (by **`submission_id`** — it has no `respondent_id`) → `marketplace_profiles` →
-`magic_link_tokens` (**by EMAIL** — a wizard-issued token has `respondent_id = NULL`, so deleting by
-respondent reports success and removes nothing; it leaked on three consecutive dry-runs before this
-was caught) → `submissions` → `respondents`. **Read the `DELETE n` counts: a `DELETE 0` is a failed
-teardown, not a clean one.** Full recipe: `docs/runbooks/pre-blast-dry-run.md` §5.
+`magic_link_tokens` (**by EMAIL *OR* `respondent_id`** — see the correction below) → `submissions` →
+**`respondents`** → **`users`**. **Read the `DELETE n` counts: a `DELETE 0` is a failed teardown, not
+a clean one.** Full recipe: `docs/runbooks/pre-blast-dry-run.md` §5.
+
+⚠️ **TWO CORRECTIONS FROM RUNNING THIS FOR REAL (R21 verification, 2026-08-05):**
+
+- **`users` was missing from the chain entirely.** The wizard mints **one user row per email**, so a
+  two-pass test left 2 orphan accounts after respondents and submissions were gone. Delete users
+  LAST — `respondents.user_id` references them, so the FK blocks it until the respondent is gone.
+- **The "`respondent_id` is always NULL on a wizard token" claim above is not universally true.**
+  Both tokens in this run carried a real `respondent_id`. Delete on **`email ILIKE … OR
+  respondent_id = …`** rather than trusting either key alone; the original note was written from one
+  observation and generalised too far.
+
+🚫 **`audit_logs` IS EXEMPT — NEVER DELETE FROM IT.** It is hash-chained and append-only: removing
+rows forks the chain (see [[audit-chain-invalid-is-ordering-not-tampering]]) to erase the legitimate
+record that a test happened. Test rows in the audit trail are correct and should stay. The R21 run
+left 7; they remain.
 
 **5. RE-MEASURE, NEVER "RESTORE TO N".** The register moves under you. Capture the baseline
 immediately before you start and again after teardown; expect organic arrivals in between rather

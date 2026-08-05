@@ -912,6 +912,25 @@ export class RegistrationController {
           processedAt: now,
         });
 
+        /**
+         * R22 — this row must say whether a respondent was actually CREATED.
+         *
+         * Found by the R21 live verification (2026-08-05): the attach path emitted
+         * `pending_nin.created` for a respondent created on 19 May. The action name asserts a
+         * creation that did not happen, and nothing in `details` contradicted it.
+         *
+         * No live consumer double-counts today — the pending-NIN reminder ladder reads
+         * `respondents` (`reminder.worker.ts:261`), not audit rows, so nobody gets two reminders,
+         * and that was CHECKED rather than assumed. But **13-44 is the story that builds
+         * audit-derived campaign counts**, and R21 attaches now happen for real, so an
+         * indistinguishable attach would land as a phantom registration in the first metric that
+         * reads this table.
+         *
+         * Minimal and honest: flag it in `details` so any consumer can filter. Deliberately NOT a
+         * new action key — inventing taxonomy against zero consumers is how the audit-target drift
+         * in [[feedback_audit_target_unification]] started. 13-44 owns that call when it has a real
+         * query to satisfy.
+         */
         await AuditService.logActionTx(tx, {
           actorId: null,
           action: pendingNin
@@ -925,6 +944,10 @@ export class RegistrationController {
             lgaId: lgaSlug,
             ninProvided: !!ninValue,
             pendingNin,
+            // R22 — false on a genuine creation, true when R21 attached this submission to a
+            // respondent that already existed. A counter that ignores this over-reports.
+            attachedToExisting: !!identityMatch,
+            existingReferenceCode: identityMatch?.referenceCode ?? null,
             // Story 9-26 — submissionUid for cross-table forensic trace.
             submissionUid: newSubmissionUid,
           },
