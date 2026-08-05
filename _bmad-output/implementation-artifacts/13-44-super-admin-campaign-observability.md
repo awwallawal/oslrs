@@ -69,6 +69,47 @@ A panel on the same super-admin view showing, live from the DB (no cached blob):
 ⚠️ **The adoption counters must read the `adopted_by` marker, not a stored total.** That marker is also
 13-49's rollback key (its AC11), so panel and rollback agree by construction.
 
+### AC-A3 — Separate the registration channels in the funnel (added 2026-08-05, adjudication)
+
+**Awwal's question: will this track enumerator registrations the way it tracks the public wizard?
+Partly — and the gap is fixable in one line, in the SEND, not in this UI.**
+
+Where enumerator confirmations do and do not land today:
+
+| panel | source | enumerator confirmations visible? |
+|---|---|---|
+| AC1 campaigns list + funnel | `email_events` ∪ `campaign_sends` | **YES** — as `registration-status` |
+| AC2 contact log | `campaign_sends` | **NO** — marketing categories only |
+| AC3 ledger-liveness banner | `campaign_sends` | **NO** — same reason |
+
+They appear at all only because of the 2026-08-05 attribution fix: `dispatch()` now tags every send
+`campaignId ?? category`, so transactional mail is no longer untagged in `email_events`. Before that
+they were invisible to any funnel.
+
+**But they arrive as ONE undifferentiated bucket.** Public-wizard, enumerator and 13-49 adoption
+confirmations all share the `registration-status` category, so the funnel reads "N registration
+emails, M delivered" with no way to say which channel produced them. For a launch where field
+enumeration and self-serve are separately funded decisions, an aggregate is the one number nobody
+can act on.
+
+`campaign_sends` excluding them is CORRECT and should not change: you are not "already contacted"
+by a registration confirmation, and widening that table would corrupt blast dedupe.
+
+**Requirements:**
+1. Pass a source-specific campaign id at the confirmation call site — `registration-status:public`,
+   `registration-status:enumerator`, `registration-status:adoption` — rather than letting it default
+   to the bare category. `dispatch()` already prefers an explicit `campaignId`, so this is a call-site
+   change; **no change to this UI is needed** and the funnel separates for free.
+   ⚠️ Tag values must satisf`^[A-Za-z0-9_-]+$` (`resend.provider.ts:21`) or the provider sends
+   **untagged** — a colon is NOT in that set, so use `registration-status-enumerator`. An invalid tag
+   fails SILENTLY, which is exactly how this was invisible in the first place.
+2. The AC1 campaigns list should render these as distinct rows, and the funnel's `converted` column
+   should be shown as **n/a for transactional tags** — `getCampaignFunnel` computes conversion from
+   `submissions.campaign_source.utm.campaign` (paid/UTM attribution). A registration confirmation has
+   no UTM campaign, so a `0%` conversion figure there would be a measurement artefact reported as a
+   business result.
+3. Do NOT add enumerator sends to `campaign_sends` to make them appear — see above.
+
 ### AC-A2 — Consent toggle (super-admin, audited, reason-required)
 
 Replaces 13-49's original "hard immutable exclude" with a **controlled** one, per Awwal 2026-08-01:
