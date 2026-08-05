@@ -23,6 +23,81 @@ so that **the 22P02 exposure and the dashboard-edit write-path become self-monit
 5. **AC5 — MarkdownV2-safe + trim-safe.** The new line(s) go through `escapeMarkdownV2` for all dynamic content and compose from already-escaped pieces (parity with the existing sections), and survive the whole-line trim path without leaving an unbalanced `*bold*`/escape.
 6. **AC6 — Tests.** Unit tests over the pure formatter + the recommendation logic: new-sentinel-value → yellow; known-set volume growth → silent; invocation>0 ∧ rows==0 → yellow; both-zero → silent; both-nonzero → silent; section-unavailable (null) → placeholder, no throw. Follows the `ops-digest.worker.test.ts` convention (pure `formatDigest`/helpers, no Redis).
 
+### AC7 — ⛔ THE EMAIL RED IS A PAGE SIZE, NOT A QUOTA (ADDED 2026-08-05, adjudication)
+
+**The digest fired a red on 2026-08-05 18:00 UTC that cannot mean what it says:**
+
+```
+🔴 Email: 100+/100 today, 93 delivered, 2 bounced
+🔴 Resend usage at 100/100 today — UPGRADE Resend to Pro tier now;
+   magic-link emails will silently fail when the limit hits.
+```
+
+**One constant is doing two unrelated jobs.** `RESEND_FREE_TIER_DAILY` is used as the API **page
+size** (`operations.service.ts:208` — `resend.emails.list({ limit: RESEND_FREE_TIER_DAILY })`) *and*
+as the **quota denominator** (`ops-digest.worker.ts:135` — `todayCount / RESEND_FREE_TIER_DAILY`).
+`todayCount` is filtered out of that single page, so **it can never exceed 100 by construction.**
+
+Consequences, in order of how much they matter:
+
+1. **The metric is pinned at its own alarm threshold.** Any day we send ≥100 emails, the page fills,
+   `todayCount` saturates, and the digest reads `100+/100` — **identically whether we sent 101 or
+   10,000.** It has no headroom left to warn with. It will now fire every busy day, and the first
+   thing a daily red teaches an operator is to stop reading it.
+2. **`delivered`/`bounced` are undercounts from the same partial page.** The digest said *93
+   delivered*; our own Resend-webhook table says **127 delivered, 134 sent, 2 bounced** for the same
+   day. The digest under-reported delivery by 34.
+3. **The recommendation is asserted, not measured.** *"magic-link emails will silently fail"* did
+   not happen — 134 sends went out and 127 delivered. Nothing failed. The text states a consequence
+   the code never checked for.
+
+**Fix:**
+1. **Split the constant.** `RESEND_LIST_PAGE_SIZE` (an API mechanic) and `RESEND_DAILY_QUOTA` (a
+   billing fact) are not the same number and must never again be the same symbol.
+2. **Paginate, or stop claiming a total.** Either follow the cursor until the day is fully counted,
+   or drop the `x/y` framing and render the honest thing: *"≥100 sent today (page limit reached)"*.
+   ⚠️ `truncated` ALREADY EXISTS and is already rendered as the `+` in `100+`. The information was
+   present and the alarm was computed as though it were not — a red built on a number the same
+   function had already flagged as a lower bound.
+3. **Source the day's count from `email_events` instead.** We ingest Resend webhooks into our own
+   table; it gave the true 134/127/2 in one query, with no page limit and no API call.
+4. ⚠️ **Confirm the actual plan before wiring any quota number.** Nobody has verified we are on the
+   free tier. 134 sends landed in a day, which a 100/day cap would not permit — so the denominator
+   this alarm has been using is probably wrong in the first place. **Measure the plan; do not infer
+   it from a constant someone named `FREE_TIER`.**
+
+### AC8 — The deliverability red misdirects (ADDED 2026-08-05, adjudication)
+
+Same digest: *"🔴 Resend deliverability — 2 bounced. Inspect at resend.com/logs and check DNS
+DKIM/SPF."*
+
+**DKIM/SPF were fine — 127 messages delivered that same day.** A signing/DNS fault does not deliver
+127 and bounce 2. The recommendation is boilerplate attached to a bounce counter, and it points the
+operator at infrastructure when **every bounce on file is a recipient-side address problem**:
+
+| suppressed address | what it actually is |
+|---|---|
+| `asirusakirat@gmail.come` | typo — `.come` |
+| `fatomidejumoke@mail.com` | likely meant `gmail.com` |
+| `wahab akeem olaide <aqeemakolade@gmail.com>` | **a display-name string used as the address** |
+| `julietiyabodeodiba@gmail.com`, `jambestojeke@gmail.com`, `ola4ct@outlook.com` | plausibly dead |
+
+**The bounce alert should say which addresses, and whether they are malformed or merely dead** —
+those need opposite responses. A malformed one is our bug; a dead one is the person's.
+
+**And it should say who we have just gone silent on.** Every bounce writes an `email_suppressions`
+row, so the register loses a contact channel permanently and no digest line mentions it. Three
+suppressed people are **in the register with working phone numbers** — `OSL-2026-DQNPTQ`,
+`OSL-2026-TYZ3AH`, `OSL-2026-51CNVZ` — and three more are D4 invitees whose invitation never
+arrived. **A suppression is a person we can no longer reach; it deserves a digest line of its own,
+naming them, so they can be moved to the SMS list.**
+
+⚠️ **One-off worth not generalising from:** the malformed row is the ONLY one — `wizard_drafts`,
+`submissions` and `campaign_sends` all hold **0** name-wrapped addresses, so this is not systemic
+capture corruption. Note also that suppression keyed on the *malformed* string, so the clean address
+`aqeemakolade@gmail.com` was never suppressed and that person (`OSL-2026-WKM3FC`, active) is still
+reachable. **A suppression list keyed on an unnormalised address both over- and under-blocks.**
+
 ## Tasks / Subtasks
 - [ ] **Task 1 — snapshot section** (AC1) — `OperationsService`: add the `dataIntegrity` gather (2–3 COUNT queries), typed in `@oslsr/types` alongside the other snapshot section types; fail-open wrapper.
 - [ ] **Task 2 — formatter + recommendation** (AC2, AC3, AC4, AC5) — `formatDataIntegrityLines()` (pure, exported for test) + the conditional recommendation push in `runOpsDigest`/the recommendation builder; MarkdownV2-escaped; document the known-safe sentinel set as a shared constant (reuse 13-41's if it lands first).
