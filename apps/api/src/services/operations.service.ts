@@ -24,7 +24,9 @@ import { Resend } from 'resend';
 import {
   OPS_THRESHOLDS as T,
   opsStatusLevel,
-  RESEND_FREE_TIER_DAILY,
+  RESEND_LIST_PAGE_SIZE,
+  RESEND_MONTHLY_QUOTA,
+  RESEND_DAILY_SUSTAINABLE,
   type OpsSystemHealth,
   type OpsTrafficSnapshot,
   type OpsResendStatus,
@@ -205,7 +207,7 @@ export async function getResendStatus(): Promise<OpsResendStatus | null> {
   if (!process.env.RESEND_API_KEY) return null;
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const list = await resend.emails.list({ limit: RESEND_FREE_TIER_DAILY });
+    const list = await resend.emails.list({ limit: RESEND_LIST_PAGE_SIZE });
     if (list.error) {
       logger.warn({ event: 'operations.resend_api_error', error: list.error.message });
       return null;
@@ -223,7 +225,7 @@ export async function getResendStatus(): Promise<OpsResendStatus | null> {
     // Resend's list API caps at 100 rows/page; a full page means our counts are
     // a LOWER BOUND (there may be more sends — e.g. on a cohort-blast day). Flag
     // it so the UI/digest render "100+" instead of a misleading exact count.
-    const truncated = emails.length >= RESEND_FREE_TIER_DAILY;
+    const truncated = emails.length >= RESEND_LIST_PAGE_SIZE;
     return {
       recentCount: recent.length,
       delivered: recent.filter((e) => e.last_event === 'delivered').length,
@@ -311,9 +313,12 @@ export async function getQueueHealth(): Promise<OpsQueueHealth | null> {
  * surfaces emit identical wording (AC#B5 / AC#C2).
  */
 export function buildRecommendations(
-  parts: Pick<OpsDashboardSnapshot, 'system' | 'traffic' | 'resend' | 'queue'>,
+  parts: Pick<
+    OpsDashboardSnapshot,
+    'system' | 'traffic' | 'resend' | 'queue' | 'notificationUsage'
+  >,
 ): OpsRecommendation[] {
-  const { system: sys, traffic, resend, queue } = parts;
+  const { system: sys, traffic, resend, queue, notificationUsage: usage } = parts;
   const recs: OpsRecommendation[] = [];
 
   if (traffic && traffic.step4StallPct >= T.step4StallPctRed) {
@@ -330,17 +335,52 @@ export function buildRecommendations(
     });
   }
 
-  if (resend && resend.todayCount >= (RESEND_FREE_TIER_DAILY * T.resendDailyPctRed) / 100) {
+  /**
+   * Quota alarm — reads the INTERNAL METER, never `resend.todayCount`.
+   *
+   * `resend.todayCount` is filtered out of a single 100-row API page and cannot
+   * exceed 100 (see RESEND_LIST_PAGE_SIZE). It is a lower bound and useless as
+   * an alarm input; the meter is the send chokepoint and is uncapped. On the day
+   * this was found the digest reported "100+/100" while the meter — already
+   * printed two lines below it — read 132.
+   *
+   * Monthly, because Pro has no daily cap. Daily is handled separately as a RATE
+   * anomaly, not a quota.
+   */
+  const monthEmail = usage?.thisMonth.email.total ?? null;
+  const monthPct = monthEmail === null ? null : Math.round((monthEmail / RESEND_MONTHLY_QUOTA) * 100);
+  if (monthPct !== null && monthEmail !== null && monthPct >= T.resendMonthlyPctRed) {
     recs.push({
       severity: 'red',
       key: 'resend-usage',
-      text: `Resend usage at ${resend.todayCount}/100 today — UPGRADE Resend to Pro tier ($20/mo, 50k/mo) now; magic-link emails will silently fail when the limit hits.`,
+      text: `Resend monthly usage ${monthEmail}/${RESEND_MONTHLY_QUOTA} (${monthPct}%) — at this level sends WILL start failing before month end. Raise the plan or hold non-essential blasts.`,
     });
-  } else if (resend && resend.todayCount >= (RESEND_FREE_TIER_DAILY * T.resendDailyPctYellow) / 100) {
+  } else if (monthPct !== null && monthEmail !== null && monthPct >= T.resendMonthlyPctYellow) {
     recs.push({
       severity: 'yellow',
       key: 'resend-usage',
-      text: `Resend usage trending — ${resend.todayCount}/100 today. Plan the Pro upgrade in the next 24-48h.`,
+      text: `Resend monthly usage ${monthEmail}/${RESEND_MONTHLY_QUOTA} (${monthPct}%) — enough headroom today, but plan the remaining blasts against what is left.`,
+    });
+  }
+
+  /**
+   * Daily RATE anomaly — deliberately not a quota line. Pro has no daily cap, so
+   * the only useful daily question is "would today's pace exhaust the month?".
+   * Expressed in multiples of the sustainable rate so it stays meaningful if the
+   * plan changes.
+   */
+  const todayEmail = usage?.today.email.total ?? null;
+  if (todayEmail !== null && todayEmail >= RESEND_DAILY_SUSTAINABLE * T.resendDailyRateRedX) {
+    recs.push({
+      severity: 'red',
+      key: 'resend-daily-rate',
+      text: `${todayEmail} emails sent today — ${T.resendDailyRateRedX}x the sustainable daily rate (${RESEND_DAILY_SUSTAINABLE}/day). Check for a runaway loop before it eats the month.`,
+    });
+  } else if (todayEmail !== null && todayEmail >= RESEND_DAILY_SUSTAINABLE * T.resendDailyRateYellowX) {
+    recs.push({
+      severity: 'yellow',
+      key: 'resend-daily-rate',
+      text: `${todayEmail} emails sent today — at or above the pace that consumes the monthly quota (${RESEND_DAILY_SUSTAINABLE}/day). Fine for a blast day; not fine as a baseline.`,
     });
   }
 
@@ -438,7 +478,7 @@ export class OperationsService {
       queue,
       notificationUsage,
       expiries,
-      recommendations: buildRecommendations({ system, traffic, resend, queue }),
+      recommendations: buildRecommendations({ system, traffic, resend, queue, notificationUsage }),
     };
 
     cached = { at: Date.now(), snapshot };

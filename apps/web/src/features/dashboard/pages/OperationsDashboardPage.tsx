@@ -14,7 +14,7 @@ import { RefreshCw } from 'lucide-react';
 import {
   OPS_THRESHOLDS as T,
   opsStatusLevel,
-  RESEND_FREE_TIER_DAILY,
+  RESEND_MONTHLY_QUOTA,
   type OpsStatusLevel,
   type OpsSystemHealth,
   type OpsTrafficSnapshot,
@@ -153,20 +153,32 @@ function AdoptionCard({ traffic }: { traffic: OpsTrafficSnapshot | null }) {
   );
 }
 
-function EmailCard({ resend }: { resend: OpsResendStatus | null }) {
-  const dailyPct = resend ? Math.round((resend.todayCount / RESEND_FREE_TIER_DAILY) * 100) : 0;
+function EmailCard({
+  resend,
+  usage,
+}: {
+  resend: OpsResendStatus | null;
+  usage?: NotificationUsage | null;
+}) {
+  // Quota comes from the METER (uncapped send chokepoint). `resend.todayCount`
+  // is filtered out of ONE 100-row API page and cannot exceed it, so it is a
+  // lower bound and must not drive the dot. See RESEND_LIST_PAGE_SIZE.
+  const monthEmail = usage?.thisMonth.email.total ?? null;
+  const monthPct = monthEmail === null ? 0 : Math.round((monthEmail / RESEND_MONTHLY_QUOTA) * 100);
   const dot = resend
     ? worstLevel(
-        opsStatusLevel(dailyPct, T.resendDailyPctYellow, T.resendDailyPctRed),
+        opsStatusLevel(monthPct, T.resendMonthlyPctYellow, T.resendMonthlyPctRed),
         opsStatusLevel(resend.bounced + resend.complained, 1, 5),
       )
     : 'green';
-  const todayLabel = resend ? `${resend.todayCount}${resend.truncated ? '+' : ''}/${RESEND_FREE_TIER_DAILY}` : '';
   return (
     <Card title="Email deliverability" testId="ops-card-email" dot={<StatusDot level={dot} testId="ops-email-dot" />}>
       {resend ? (
         <div>
-          <Row label={`Today (free tier ${RESEND_FREE_TIER_DAILY}/day)`} value={`${todayLabel} (${dailyPct}%)`} />
+          <Row
+            label={`This month (Resend Pro ${RESEND_MONTHLY_QUOTA}/mo)`}
+            value={monthEmail === null ? 'meter unavailable' : `${monthEmail}/${RESEND_MONTHLY_QUOTA} (${monthPct}%)`}
+          />
           <Row
             label="Since launch"
             value={`${resend.recentCount} sent · ${resend.delivered} delivered · ${resend.bounced} bounced · ${resend.complained} complained`}
@@ -409,7 +421,7 @@ export default function OperationsDashboardPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SystemCard sys={data.system} />
             <AdoptionCard traffic={data.traffic} />
-            <EmailCard resend={data.resend} />
+            <EmailCard resend={data.resend} usage={data.notificationUsage} />
             <QueueCard queue={data.queue} />
             <NotificationUsageCard usage={data.notificationUsage} />
             <ExpiriesCard expiries={data.expiries} />

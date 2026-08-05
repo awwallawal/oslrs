@@ -29,8 +29,14 @@ export const OPS_THRESHOLDS = {
   ramUsedPctRed: 85,
   cpuLoad1mYellow: 0.5,
   cpuLoad1mRed: 0.8,
-  resendDailyPctYellow: 50, // % of free-tier 100/day
-  resendDailyPctRed: 80,
+  // % of the MONTHLY Resend quota. Monthly is the only real ceiling on the Pro
+  // plan — there is no daily cap to alarm against (see RESEND_MONTHLY_QUOTA).
+  resendMonthlyPctYellow: 70,
+  resendMonthlyPctRed: 90,
+  // Daily is an ANOMALY signal, not a quota: multiples of the sustainable daily
+  // rate. 1x means "today's pace, sustained, would exhaust the month".
+  resendDailyRateYellowX: 1,
+  resendDailyRateRedX: 3,
   pm2RestartPer24hYellow: 2,
   pm2RestartPer24hRed: 5,
   queueFailedYellow: 1,
@@ -42,11 +48,44 @@ export const OPS_THRESHOLDS = {
 export type OpsThresholds = typeof OPS_THRESHOLDS;
 
 /**
- * Resend free-tier daily send ceiling. Single source of truth shared by the
- * service (recommendation thresholds), the CLI/UI percentage display, and the
- * Telegram digest so a tier change updates every surface at once.
+ * ⚠️ THESE WERE ONE CONSTANT UNTIL 2026-08-05, AND THAT WAS THE BUG.
+ *
+ * `RESEND_FREE_TIER_DAILY = 100` was used as BOTH the Resend list-API page size
+ * and the quota denominator. `todayCount` was filtered out of that single page,
+ * so it could never exceed 100 **by construction** — meaning the digest read
+ * `100+/100` identically whether we had sent 101 emails or 10,000, and pinned
+ * itself at its own red threshold on every busy day.
+ *
+ * It was also the wrong ceiling entirely: we are on **Resend Pro** ($20/mo,
+ * 50,000/month), not the free tier. The alarm was firing at **0.2% of actual
+ * capacity**, and its remediation text recommended upgrading to the plan we
+ * already pay for.
+ *
+ * Keep these two apart forever. One is an API mechanic; the other is a billing
+ * fact. They are not the same number and must never share a symbol again.
  */
-export const RESEND_FREE_TIER_DAILY = 100;
+
+/** Resend's list endpoint returns at most 100 rows/page. An API mechanic. */
+export const RESEND_LIST_PAGE_SIZE = 100;
+
+/**
+ * Resend **Pro** plan ceiling — 50,000 emails/month (confirmed by Awwal,
+ * 2026-08-05). A billing fact: update it when the plan changes, never to make a
+ * chart fit.
+ *
+ * Pro has **no daily cap** — the free tier's 100/day is what we outgrew (it was
+ * exhausted once by prod keys leaking into local dev, which is what Story 9-63
+ * AC0's credential isolation exists to prevent). So the ONLY real ceiling to
+ * alarm against is monthly.
+ */
+export const RESEND_MONTHLY_QUOTA = 50_000;
+
+/**
+ * The daily send rate that exactly consumes the monthly quota (~1,666/day).
+ * Not a limit — a yardstick, so a daily figure can be read as "would this pace
+ * blow the month?" instead of against a cap that does not exist.
+ */
+export const RESEND_DAILY_SUSTAINABLE = Math.floor(RESEND_MONTHLY_QUOTA / 30);
 
 /** Status tiers, lowest → highest severity. */
 export type OpsStatusLevel = 'green' | 'yellow' | 'red';

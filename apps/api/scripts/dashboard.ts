@@ -27,7 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   OPS_THRESHOLDS as T,
   opsStatusLevel,
-  RESEND_FREE_TIER_DAILY,
+  RESEND_MONTHLY_QUOTA,
   type OpsStatusLevel,
   type OpsSystemHealth,
   type OpsTrafficSnapshot,
@@ -226,12 +226,18 @@ function render(
   // Resend
   console.log(c.bold('  Email deliverability') + c.gray('  ·  Resend API'));
   if (resend) {
-    const dailyPct = Math.round((resend.todayCount / RESEND_FREE_TIER_DAILY) * 100);
-    const dailyIcon = statusIcon(dailyPct, T.resendDailyPctYellow, T.resendDailyPctRed);
+    // Quota from the METER (uncapped). `resend.todayCount` is one 100-row page
+    // and cannot exceed it — it is a lower bound, never an alarm input.
+    const monthEmail = notificationUsage?.thisMonth.email.total ?? null;
+    const monthPct = monthEmail === null ? 0 : Math.round((monthEmail / RESEND_MONTHLY_QUOTA) * 100);
+    const monthIcon = statusIcon(monthPct, T.resendMonthlyPctYellow, T.resendMonthlyPctRed);
     const bounceIcon = statusIcon(resend.bounced + resend.complained, 1, 5);
-    const todayLabel = `${resend.todayCount}${resend.truncated ? '+' : ''}/${RESEND_FREE_TIER_DAILY}`;
-    console.log(`    ${dailyIcon} Today (Resend free tier ${RESEND_FREE_TIER_DAILY}/day)  ${todayLabel} (${dailyPct}%)`);
-    console.log(`    ${bounceIcon} Since launch    ${resend.recentCount} sent  ${c.green(`${resend.delivered} delivered`)} ${resend.bounced ? c.red(`${resend.bounced} bounced`) : ''} ${resend.complained ? c.red(`${resend.complained} complained`) : ''}`);
+    console.log(
+      monthEmail === null
+        ? `    ⚪ This month   meter unavailable`
+        : `    ${monthIcon} This month (Resend Pro ${RESEND_MONTHLY_QUOTA}/mo)  ${monthEmail}/${RESEND_MONTHLY_QUOTA} (${monthPct}%)`,
+    );
+    console.log(`    ${bounceIcon} Since launch    ${resend.recentCount}${resend.truncated ? '+' : ''} sent  ${c.green(`${resend.delivered} delivered`)} ${resend.bounced ? c.red(`${resend.bounced} bounced`) : ''} ${resend.complained ? c.red(`${resend.complained} complained`) : ''}`);
     console.log(c.gray('    Last 5 sends:'));
     for (const e of resend.last5) {
       const eventColor = e.event === 'delivered' ? c.green : (e.event === 'bounced' ? c.red : c.yellow);

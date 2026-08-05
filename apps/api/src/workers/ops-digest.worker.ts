@@ -22,7 +22,7 @@ import { sendTelegramMessage, isAlertSendEnabled } from '../services/alerting/te
 import { AuditService, AUDIT_ACTIONS } from '../services/audit.service.js';
 import { NotificationAbuseService, type AbuseFinding } from '../services/notification-abuse.service.js';
 import {
-  RESEND_FREE_TIER_DAILY,
+  RESEND_MONTHLY_QUOTA,
   type OpsDashboardSnapshot,
   type NotificationUsage,
 } from '@oslsr/types';
@@ -129,15 +129,27 @@ export function formatDigest(
     lines.push('⚪ *Adoption*: section unavailable');
   }
 
-  // Email
-  if (snapshot.resend) {
-    const r = snapshot.resend;
-    const dailyPct = Math.round((r.todayCount / RESEND_FREE_TIER_DAILY) * 100);
-    const glyph = tierGlyph(dailyPct, T.resendDailyPctYellow, T.resendDailyPctRed);
-    const todayLabel = `${r.todayCount}${r.truncated ? '+' : ''}/${RESEND_FREE_TIER_DAILY}`;
+  // Email — quota from the METER (uncapped), delivery from Resend (page-limited).
+  // These are two different sources on purpose and the line says which is which:
+  // `resend.todayCount` cannot exceed the 100-row page and must never drive the
+  // glyph. See the comment on RESEND_LIST_PAGE_SIZE.
+  const monthEmail = snapshot.notificationUsage?.thisMonth.email.total ?? null;
+  if (monthEmail !== null) {
+    const monthPct = Math.round((monthEmail / RESEND_MONTHLY_QUOTA) * 100);
+    const glyph = tierGlyph(monthPct, T.resendMonthlyPctYellow, T.resendMonthlyPctRed);
+    const delivery = snapshot.resend
+      ? `, ${snapshot.resend.delivered}${snapshot.resend.truncated ? '+' : ''} delivered, ${snapshot.resend.bounced}${snapshot.resend.truncated ? '+' : ''} bounced`
+      : '';
     lines.push(
-      `${glyph} *Email*: ${escapeMarkdownV2(`${todayLabel} today, ${r.delivered} delivered, ${r.bounced} bounced`)}`,
+      `${glyph} *Email*: ${escapeMarkdownV2(
+        `${monthEmail}/${RESEND_MONTHLY_QUOTA} this month (${monthPct}%)${delivery}`,
+      )}`,
     );
+    if (snapshot.resend?.truncated) {
+      lines.push(
+        `   ${escapeMarkdownV2('delivery figures are a lower bound — Resend list API returns one 100-row page')}`,
+      );
+    }
   } else {
     lines.push('⚪ *Email*: section unavailable');
   }

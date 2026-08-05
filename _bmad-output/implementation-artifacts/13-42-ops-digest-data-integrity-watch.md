@@ -23,7 +23,7 @@ so that **the 22P02 exposure and the dashboard-edit write-path become self-monit
 5. **AC5 — MarkdownV2-safe + trim-safe.** The new line(s) go through `escapeMarkdownV2` for all dynamic content and compose from already-escaped pieces (parity with the existing sections), and survive the whole-line trim path without leaving an unbalanced `*bold*`/escape.
 6. **AC6 — Tests.** Unit tests over the pure formatter + the recommendation logic: new-sentinel-value → yellow; known-set volume growth → silent; invocation>0 ∧ rows==0 → yellow; both-zero → silent; both-nonzero → silent; section-unavailable (null) → placeholder, no throw. Follows the `ops-digest.worker.test.ts` convention (pure `formatDigest`/helpers, no Redis).
 
-### AC7 — ⛔ THE EMAIL RED IS A PAGE SIZE, NOT A QUOTA (ADDED 2026-08-05, adjudication)
+### AC7 — ✅ HOTFIXED 2026-08-05 (out of band, before this story) — THE EMAIL RED WAS A PAGE SIZE, NOT A QUOTA
 
 **The digest fired a red on 2026-08-05 18:00 UTC that cannot mean what it says:**
 
@@ -61,10 +61,48 @@ Consequences, in order of how much they matter:
    function had already flagged as a lower bound.
 3. **Source the day's count from `email_events` instead.** We ingest Resend webhooks into our own
    table; it gave the true 134/127/2 in one query, with no page limit and no API call.
-4. ⚠️ **Confirm the actual plan before wiring any quota number.** Nobody has verified we are on the
-   free tier. 134 sends landed in a day, which a 100/day cap would not permit — so the denominator
-   this alarm has been using is probably wrong in the first place. **Measure the plan; do not infer
-   it from a constant someone named `FREE_TIER`.**
+4. ⚠️ **Confirm the actual plan before wiring any quota number.**
+
+---
+
+#### ✅ WHAT SHIPPED (hotfix, 2026-08-05 — do not redo)
+
+**Awwal confirmed the plan: Resend Pro, $20/mo, 50,000/month.** So the alarm had been firing at
+**0.2% of actual capacity**, and its remediation text told the operator to *"UPGRADE Resend to Pro
+tier ($20/mo, 50k/mo)"* — **the plan we already pay for.** (History: the free tier's 100/day was
+exhausted once by prod keys leaking into local dev. That is the incident Story 9-63 AC0's credential
+isolation exists to prevent, and it is why the constant was named `FREE_TIER` in the first place —
+the name outlived the fact.)
+
+- **Constant split** — `RESEND_LIST_PAGE_SIZE` (API mechanic) and `RESEND_MONTHLY_QUOTA = 50_000`
+  (billing fact), plus `RESEND_DAILY_SUSTAINABLE` (~1,666/day) as a yardstick. The docstring records
+  why they must never share a symbol again.
+- **The alarm reads the METER, not the page.** `notificationUsage.thisMonth.email.total` —
+  uncapped, and described in its own docstring as *"the source of truth — every send flows through
+  the meter chokepoint."* **It was already in the same snapshot, and already printed two lines below
+  the wrong number in every digest.** The right value was on screen the whole time.
+- **Monthly quota (70/90%) is the alarm; daily is a RATE anomaly** at 1×/3× the sustainable rate —
+  because Pro has no daily cap, so the only sensible daily question is *"would today's pace exhaust
+  the month?"*
+- All four surfaces updated together: digest worker, `dashboard.ts` CLI, the web Operations
+  dashboard, and `buildRecommendations`. Delivery figures still come from Resend and are now
+  explicitly labelled a lower bound when the page is truncated.
+
+**Test note.** The replaced test (`todayCount: 85 → red`) had been **green for months while
+encoding the defect** — a clean instance of [[pattern-test-that-passes-over-a-hole]]. The new
+regression test asserts a saturated truncated page with tiny real usage produces **no** alarm, and
+was **RED-verified**: wiring the alarm back to `resend.todayCount` fails it.
+
+#### ⚠️ STILL OPEN FOR THIS STORY
+
+- **The blast scripts keep their own `RESEND_FREE_TIER_DAILY_LIMIT = 100`** (`_reengagement-email-blast.ts`,
+  `_thankyou-referral-blast.ts`, `_cohort-a-supplemental-survey-blast.ts`, `_recover-abandoned-wizard-drafts.ts`).
+  **Deliberately left alone** — they are conservative confirm-gates on outbound blasts, and an
+  over-cautious gate is the safe failure direction. But they are now wrong by a factor of 500 and
+  make an operator confirm past a limit that does not exist. Fold them into the same constants.
+- **Nothing warns as the monthly quota is approached across a month.** The new alarm fires at 70%,
+  which on a 50,000 plan is 35,000 emails — fine, but untested against real blast volume.
+- **AC8 below (the deliverability line) was NOT hotfixed** and is full story scope.
 
 ### AC8 — The deliverability red misdirects (ADDED 2026-08-05, adjudication)
 

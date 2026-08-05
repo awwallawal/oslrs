@@ -11,7 +11,13 @@ import type {
   OpsTrafficSnapshot,
   OpsResendStatus,
   OpsQueueHealth,
+  NotificationUsage,
+  NotificationChannelUsage,
 } from '@oslsr/types';
+
+/** Minimal meter channel fixture — only `total` drives the quota maths. */
+const chan = (total: number): NotificationChannelUsage =>
+  ({ total, bounced: 0, complained: 0, byCategory: [] }) as NotificationChannelUsage;
 
 const { mockQuery, mockQueueStats, mockFailedSamples } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -162,12 +168,12 @@ describe('buildRecommendations — metric → story binding', () => {
   };
 
   it('returns empty array when everything is healthy', () => {
-    expect(buildRecommendations({ system: baseSys, traffic: null, resend: null, queue: null })).toEqual([]);
+    expect(buildRecommendations({ system: baseSys, traffic: null, resend: null, queue: null, notificationUsage: null })).toEqual([]);
   });
 
   it('flags Story 9-17 critical-path at red Step-4 stall', () => {
     const traffic = { step4StallPct: 63, totalDrafts: 100 } as OpsTrafficSnapshot;
-    const recs = buildRecommendations({ system: null, traffic, resend: null, queue: null });
+    const recs = buildRecommendations({ system: null, traffic, resend: null, queue: null, notificationUsage: null });
     const stall = recs.find((r) => r.key === 'step4-stall');
     expect(stall?.severity).toBe('red');
     expect(stall?.text).toContain('9-17');
@@ -175,22 +181,77 @@ describe('buildRecommendations — metric → story binding', () => {
 
   it('uses yellow advisory wording at mid Step-4 stall', () => {
     const traffic = { step4StallPct: 35, totalDrafts: 100 } as OpsTrafficSnapshot;
-    const stall = buildRecommendations({ system: null, traffic, resend: null, queue: null })
+    const stall = buildRecommendations({ system: null, traffic, resend: null, queue: null, notificationUsage: null })
       .find((r) => r.key === 'step4-stall');
     expect(stall?.severity).toBe('yellow');
   });
 
-  it('flags Resend Pro upgrade at red daily usage', () => {
-    const resend = { todayCount: 85 } as OpsResendStatus;
-    const rec = buildRecommendations({ system: null, traffic: null, resend, queue: null })
-      .find((r) => r.key === 'resend-usage');
+  /**
+   * These four replace a test that asserted `todayCount: 85 -> red`. That test was
+   * GREEN for months and was encoding the defect: `resend.todayCount` is filtered out
+   * of ONE 100-row API page and cannot exceed 100, so the alarm it drove pinned itself
+   * at its own red threshold on every busy day. The quota now comes from the meter.
+   */
+  const usage = (todayEmail: number, monthEmail: number): NotificationUsage => ({
+    date: '2026-08-05',
+    month: '2026-08',
+    today: { email: chan(todayEmail), sms: chan(0) },
+    thisMonth: { email: chan(monthEmail), sms: chan(0) },
+  });
+
+  it('reds on MONTHLY quota, read from the meter', () => {
+    const rec = buildRecommendations({
+      system: null, traffic: null, resend: null, queue: null,
+      notificationUsage: usage(10, 46_000), // 92% of 50k
+    }).find((r) => r.key === 'resend-usage');
     expect(rec?.severity).toBe('red');
-    expect(rec?.text).toContain('Pro tier');
+    expect(rec?.text).toContain('46000/50000');
+  });
+
+  it('yellows with headroom left, and never recommends a plan we already pay for', () => {
+    const rec = buildRecommendations({
+      system: null, traffic: null, resend: null, queue: null,
+      notificationUsage: usage(10, 37_000), // 74%
+    }).find((r) => r.key === 'resend-usage');
+    expect(rec?.severity).toBe('yellow');
+    // The old text told the operator to "UPGRADE Resend to Pro tier" — which we are
+    // already on. An alarm that recommends a purchase already made is noise.
+    expect(rec?.text).not.toMatch(/upgrade/i);
+  });
+
+  /**
+   * ⛔ THE REGRESSION THIS FILE EXISTS FOR. A saturated, truncated page must produce
+   * NO quota alarm when real usage is low. If `resend.todayCount` is ever wired back
+   * into the alarm, this is the test that fails.
+   */
+  it('does NOT alarm on a saturated 100-row page when real usage is tiny', () => {
+    const resend = { todayCount: 100, truncated: true, bounced: 0, complained: 0 } as OpsResendStatus;
+    const recs = buildRecommendations({
+      system: null, traffic: null, resend, queue: null,
+      notificationUsage: usage(132, 900), // the real 2026-08-05 numbers: 1.8% of quota
+    });
+    expect(recs.find((r) => r.key === 'resend-usage')).toBeUndefined();
+    expect(recs.find((r) => r.key === 'resend-daily-rate')).toBeUndefined();
+  });
+
+  it('flags a daily RATE anomaly — a pace that would eat the month', () => {
+    const rec = buildRecommendations({
+      system: null, traffic: null, resend: null, queue: null,
+      notificationUsage: usage(5_200, 6_000), // > 3x the ~1666/day sustainable rate
+    }).find((r) => r.key === 'resend-daily-rate');
+    expect(rec?.severity).toBe('red');
+    expect(rec?.text).toContain('runaway');
+  });
+
+  it('stays silent when the meter is unavailable — no meter, no false red', () => {
+    const resend = { todayCount: 100, truncated: true } as OpsResendStatus;
+    const recs = buildRecommendations({ system: null, traffic: null, resend, queue: null, notificationUsage: null });
+    expect(recs.find((r) => r.key === 'resend-usage')).toBeUndefined();
   });
 
   it('flags queue failures', () => {
     const queue = { failed: 7 } as OpsQueueHealth;
-    const rec = buildRecommendations({ system: null, traffic: null, resend: null, queue })
+    const rec = buildRecommendations({ system: null, traffic: null, resend: null, queue, notificationUsage: null })
       .find((r) => r.key === 'queue-failed');
     expect(rec?.severity).toBe('red');
   });
