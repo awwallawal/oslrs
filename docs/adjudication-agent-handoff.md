@@ -768,6 +768,68 @@ the 3-month extension applied to the existing 292 and is NOT the default for new
 
 ---
 
+## 7g. ☎️ OPEN OPERATOR ACTIONS — SMS list + the ladder check (2026-08-05)
+
+### A. Verify the 9-12 pending-NIN ladder fires — **2026-08-06, 10:00 WAT**
+
+Cron is `0 9 * * *` (09:00 UTC / 10:00 WAT), milestones **2/7/14 days anchored on `created_at`**.
+The D3 cohort was created **2026-08-04 ~06:22 UTC**, so **d2 falls on 2026-08-06** and the sweep at
+09:00 UTC that morning is the first firing. Nothing was due on 05-08 — that is correct, not a fault.
+
+**Why this needs checking rather than assuming:** the ladder last fired **2026-06-18**, seven weeks
+earlier, simply because nobody was due. Idle is not the same as working, and **R10's whole premise
+("adopt them, then just ask for the NIN") depends on it**. Verify with:
+
+```sql
+SELECT status, count(*) FILTER (WHERE metadata->'reminder_state' ? 'd2') AS sent_2d, count(*)
+FROM respondents WHERE status IN ('pending_nin_capture','nin_unavailable') GROUP BY 1;
+```
+Expect `sent_2d` to jump from 0 to ~21 after 10:00 WAT on 06-08. If it stays 0, the repeatable job
+is not registered — check `scheduleDailyReminders()` ran at boot.
+
+### B. SMS / phone outreach — 12 people with NO email anywhere
+
+Regenerate any time with `pnpm --filter @oslsr/api sms:outreach-list`. **These 12 have been
+invisible to every email campaign this project has ever run** — the blasts, the thank-yous, the
+adoption confirmations — silently skipped, no error, no count (Pitfall #48 / §2s). All are
+`active` and hold a NIN, so this is a contactability gap, not a data gap.
+
+**Message A — the 4 the programme adopted but could not tell** (they do not know their number):
+
+| # | phone | copy-paste message |
+|---|---|---|
+| 1 | `+2349125966415` | Hello Fatima. Oyo State Skilled Labour Register: we already had your details on file and have completed your entry. Your registration number is OSL-2026-4RRPPA. Nothing further is needed. |
+| 2 | `+2347077663392` | Hello Johnson. Oyo State Skilled Labour Register: we already had your details on file and have completed your entry. Your registration number is OSL-2026-F3DRE5. Nothing further is needed. |
+| 3 | `+2347032289867` | Hello Abdulgani. Oyo State Skilled Labour Register: we already had your details on file and have completed your entry. Your registration number is OSL-2026-JN6GGX. Nothing further is needed. |
+| 4 | `+2348062131790` | Hello Hikmat. Oyo State Skilled Labour Register: we already had your details on file and have completed your entry. Your registration number is OSL-2026-Q7AS9A. Nothing further is needed. |
+
+**Message B — the 7 who registered themselves but have no email on file** (they may never have
+been told their number, since every confirmation goes by email):
+
+| # | phone | copy-paste message |
+|---|---|---|
+| 5 | `+2348035709104` | Hello Funke. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-ME0X08. Please keep it safe. |
+| 6 | `+2349033145626` | Hello Babatunde. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-NBRGPD. Please keep it safe. |
+| 7 | `+2347068100376` | Hello Bose. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-Y3Y265. Please keep it safe. |
+| 8 | `+2348105592264` | Hello Elizabeth. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-0D55D1. Please keep it safe. |
+| 9 | `+2348032770375` | Hello Babatunde. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-1YQC28. Please keep it safe. |
+| 10 | `+2348134912471` | Hello Bunkunmi. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-V72Y77. Please keep it safe. |
+| 11 | `+2348062711254` | Hello Lukeman. Oyo State Skilled Labour Register: your registration is active. Your registration number is OSL-2026-99Y46Z. Please keep it safe. |
+
+**Message C — Timothy Elujide, `+2347033406538` — needs a CALL, not a text:**
+
+> Hello Timothy. Oyo State Skilled Labour Register: your registration number is OSL-2026-NNJFJS.
+> We need to confirm one detail on your record — we will call you shortly. Thank you.
+
+⚠️ **Do NOT ask him to text his NIN back.** He is one of two people who have carried **two
+different NINs since May 2026** (`10E5VB`/`J622R1` was the other, already asked by email). His two
+values differ and only he can say which is right — but a NIN sent over SMS is a national identity
+number in plain text on an insecure channel and in your message history. **Confirm it verbally,
+then set it via the super-admin path.** His NIN is deliberately left INTACT until then: clearing
+it without a route to replace it would leave him worse off than doing nothing.
+
+---
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
