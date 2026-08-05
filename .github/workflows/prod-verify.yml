@@ -213,15 +213,35 @@ jobs:
                      (SELECT count(*) FROM respondents WHERE status = 'nin_unavailable')  AS pending_nin,
                      (SELECT count(*) FROM wizard_drafts)                                  AS drafts_remaining,
                      (SELECT min(expires_at)::date FROM wizard_drafts)                      AS earliest_draft_expiry;"
-            echo "-- D4 conversion: invited, then actually completed a registration --"
+            echo "-- D4 conversion: INVITED (a wizard_resume link was issued) → then registered --"
+            # ⚠️ REWRITTEN 2026-08-05. The first version joined magic_link_tokens to respondents on
+            # respondent_id and counted anyone matching. Two faults, both under-counting:
+            #   1. A `wizard_resume` token is issued BEFORE the person exists, so respondent_id is
+            #      NULL (verified on the 75 tokens sent this day) — the join excluded every actual
+            #      invitee.
+            #   2. It never asked whether we had INVITED the draft at all, so it measured "drafts
+            #      whose owner happens to be registered" — which includes people we never contacted.
+            # Conversion needs BOTH halves: we asked (a wizard_resume token exists for that email)
+            # AND they acted (an email-matched submission now exists). Matching on the SUBMISSION
+            # email is deliberate — it is the address the person typed when they registered, and it
+            # works whether or not any later token was ever bound to them.
             psql_ro -c "
-              SELECT count(*) AS invited_drafts_now_registered
-              FROM wizard_drafts d
-              WHERE EXISTS (
-                SELECT 1 FROM respondents r
-                JOIN magic_link_tokens m ON m.respondent_id = r.id
-                WHERE lower(m.email) = lower(d.email)
-                  AND EXISTS (SELECT 1 FROM submissions s WHERE s.respondent_id = r.id));"
+              WITH invited AS (
+                SELECT DISTINCT lower(m.email) AS email, min(m.created_at) AS first_invited_at
+                  FROM magic_link_tokens m
+                 WHERE m.purpose = 'wizard_resume'
+                 GROUP BY 1)
+              SELECT count(*)                                                        AS invited,
+                     count(*) FILTER (WHERE EXISTS (
+                       SELECT 1 FROM submissions s
+                        WHERE lower(s.raw_data->>'email') = i.email))                 AS converted,
+                     count(*) FILTER (WHERE EXISTS (
+                       SELECT 1 FROM submissions s
+                        WHERE lower(s.raw_data->>'email') = i.email
+                          AND s.submitted_at > i.first_invited_at))                   AS converted_after_invite
+              FROM invited i;"
+            echo "-- 'converted_after_invite' is the honest one: registered AFTER we asked. --"
+            echo "   'converted' includes people who were already registered when invited.
             echo "⚠️ adoption counts must come from the adopted_by MARKER — it is also 13-49 AC11's"
             echo "   rollback key, so this panel and a rollback agree by construction."
 
