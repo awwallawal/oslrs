@@ -117,6 +117,21 @@ health 200, 10 workers up, no pause flag).
 **under-sending is invisible and over-sending is caught by the provider's own quota.** RED-verified —
 reverting the default to `'free'` fails two tests.
 
+#### 🌐 BROWSER-SAFETY NOTE (the pre-push build caught this, nothing else did)
+
+`@oslsr/types` is bundled into the web app, and `ops-thresholds.ts` derives its quota constants at
+**module load**. A `process.env` default parameter in `resolveEmailTier()` therefore ran *in the
+browser, at import time*, and would have crashed the Operations dashboard. `tsc -p apps/api` passed,
+vitest passed, `tsc -p apps/web` passed — **only the pre-push vite BUILD failed** (TS2591). That
+step's comment says it exists to "catch vite/browser-bundle errors tsc+vitest miss"; it did exactly
+that. Note the second lesson: `typeof process !== 'undefined'` is NOT enough — the bare identifier
+still trips TS2591 without `@types/node`. Reach through `globalThis`.
+
+⚠️ **Follow-up (small, real):** in a browser there is no `EMAIL_TIER`, so the web card shows the
+DEFAULT plan's ceiling rather than the configured one. Correct today (we are on the default), wrong
+the day the plan changes. **The authoritative tier should travel in the ops snapshot** rather than
+be re-derived client-side.
+
 #### ⚠️ STILL OPEN FOR THIS STORY
 
 - ~~The blast scripts keep their own `RESEND_FREE_TIER_DAILY_LIMIT = 100`.~~ ✅ **DONE 2026-08-05** —

@@ -390,8 +390,23 @@ export interface EmailTierLimits {
  * is caught by Resend's own quota, whereas under-sending is invisible.
  * If the plan is ever downgraded, set `EMAIL_TIER=free` explicitly.
  */
-export function resolveEmailTier(env: Record<string, string | undefined> = process.env): EmailTier {
-  const raw = (env.EMAIL_TIER ?? '').trim().toLowerCase();
+export function resolveEmailTier(env?: Record<string, string | undefined>): EmailTier {
+  // ⚠️ BROWSER-SAFE, DELIBERATELY. `@oslsr/types` is bundled into the web app, and
+  // `ops-thresholds.ts` derives its quota constants from this at MODULE LOAD — so a
+  // bare `process.env` default crashes the Operations dashboard at import time, in
+  // the browser, before any code calls this. The pre-push web build caught it
+  // (TS2591); `tsc -p apps/api` and vitest both passed, because neither bundles.
+  //
+  // In a browser there is no EMAIL_TIER, so this returns the default. The web UI
+  // therefore shows the DEFAULT plan's ceiling, not necessarily the configured one —
+  // fine today (we are on the default), and noted in 13-42 as a follow-up: the
+  // authoritative tier should travel in the ops snapshot rather than be re-derived
+  // client-side.
+  // Reach through `globalThis`, never the bare `process` identifier: the web
+  // tsconfig has no @types/node, so even `typeof process` is a TS2591 error there.
+  const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
+  const source = env ?? g.process?.env ?? {};
+  const raw = (source.EMAIL_TIER ?? '').trim().toLowerCase();
   return raw === 'free' || raw === 'pro' || raw === 'scale' ? raw : 'pro';
 }
 
