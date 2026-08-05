@@ -93,13 +93,37 @@ encoding the defect** — a clean instance of [[pattern-test-that-passes-over-a-
 regression test asserts a saturated truncated page with tiny real usage produces **no** alarm, and
 was **RED-verified**: wiring the alarm back to `resend.todayCount` fails it.
 
+#### 🔴 THE SAME ROOT CAUSE WAS ALREADY CAUSING A LIVE OUTAGE (found 2026-08-05, fixed same day)
+
+Chasing "why is the blast guard still 100?" found the fourth copy — and the fourth copy was
+**enforcing**, not reporting:
+
+```
+email.budget.daily_limit_reached  tier:"free"  dailyCount:140  dailyLimit:100
+email.digest.flush_skipped        reason:"budget_exhausted"
+```
+
+**`EMAIL_TIER` was never set on prod.** `EmailBudgetService` read
+`process.env.EMAIL_TIER || 'free'` and enforced the free tier's 100/day against an account on Pro.
+The email digest flush had already been skipped twice, and the next worker job would have called
+`pauseEmailQueue()` — which latches and needs manual clearing. **Staff invitations run through that
+queue, so creating an enumerator account would have silently failed.**
+
+Fixed: `EMAIL_TIER=pro` set on prod + restart (verified `.env` clean, dotenv resolves `"pro"`,
+health 200, 10 workers up, no pause flag).
+
+**The default direction is the durable lesson.** `resolveEmailTier()` now defaults to **`pro`**, not
+`free`: an unset variable must not silently become the most restrictive setting, because
+**under-sending is invisible and over-sending is caught by the provider's own quota.** RED-verified —
+reverting the default to `'free'` fails two tests.
+
 #### ⚠️ STILL OPEN FOR THIS STORY
 
-- **The blast scripts keep their own `RESEND_FREE_TIER_DAILY_LIMIT = 100`** (`_reengagement-email-blast.ts`,
-  `_thankyou-referral-blast.ts`, `_cohort-a-supplemental-survey-blast.ts`, `_recover-abandoned-wizard-drafts.ts`).
-  **Deliberately left alone** — they are conservative confirm-gates on outbound blasts, and an
-  over-cautious gate is the safe failure direction. But they are now wrong by a factor of 500 and
-  make an operator confirm past a limit that does not exist. Fold them into the same constants.
+- ~~The blast scripts keep their own `RESEND_FREE_TIER_DAILY_LIMIT = 100`.~~ ✅ **DONE 2026-08-05** —
+  all four now derive from the active tier. The gate was also split into the two different jobs it
+  had been conflating: a **HARD limit** (only real on `free`, where 100/day REFUSES mail) and a
+  **CONFIRM line** ("you are about to email this many real people"), which is about blast size, not
+  billing, and stays useful on every tier.
 - **Nothing warns as the monthly quota is approached across a month.** The new alarm fires at 70%,
   which on a 50,000 plan is 35,000 emails — fine, but untested against real blast volume.
 - **AC8 below (the deliverability line) was NOT hotfixed** and is full story scope.

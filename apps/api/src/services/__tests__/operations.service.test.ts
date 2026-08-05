@@ -243,6 +243,25 @@ describe('buildRecommendations — metric → story binding', () => {
     expect(rec?.text).toContain('runaway');
   });
 
+  /**
+   * Awwal's ladder, 2026-08-05: 500 yellow / 1500 red. Boundaries are pinned because
+   * the whole point is firing EARLY enough to triage — a first cut used 1x/3x the
+   * sustainable rate (1666/5000) and 5000/day means the month is gone in ten days.
+   */
+  it.each([
+    [499, undefined],
+    [500, 'yellow'],
+    [1499, 'yellow'],
+    [1500, 'red'],
+    [4000, 'red'],
+  ])('daily volume %i -> %s', (todayEmail, severity) => {
+    const rec = buildRecommendations({
+      system: null, traffic: null, resend: null, queue: null,
+      notificationUsage: usage(todayEmail as number, 1000),
+    }).find((r) => r.key === 'resend-daily-rate');
+    expect(rec?.severity).toBe(severity);
+  });
+
   it('stays silent when the meter is unavailable — no meter, no false red', () => {
     const resend = { todayCount: 100, truncated: true } as OpsResendStatus;
     const recs = buildRecommendations({ system: null, traffic: null, resend, queue: null, notificationUsage: null });

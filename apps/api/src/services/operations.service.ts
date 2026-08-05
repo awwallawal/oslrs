@@ -27,6 +27,8 @@ import {
   RESEND_LIST_PAGE_SIZE,
   RESEND_MONTHLY_QUOTA,
   RESEND_DAILY_SUSTAINABLE,
+  RESEND_DAILY_LIMIT,
+  resolveEmailTier,
   type OpsSystemHealth,
   type OpsTrafficSnapshot,
   type OpsResendStatus,
@@ -364,23 +366,35 @@ export function buildRecommendations(
   }
 
   /**
-   * Daily RATE anomaly — deliberately not a quota line. Pro has no daily cap, so
-   * the only useful daily question is "would today's pace exhaust the month?".
-   * Expressed in multiples of the sustainable rate so it stays meaningful if the
-   * plan changes.
+   * Daily volume ladder (Awwal, 2026-08-05) — 500 yellow / 1500 red.
+   *
+   * Deliberately earlier than the arithmetic: the sustainable rate is ~1,666/day, and
+   * a first cut alarmed at 1x and 3x that. 3x is useless for triage — at 5,000/day the
+   * month is gone in ten days and you learn about it on day one. 1,500 fires while
+   * there is still a month left to protect.
+   *
+   * On the FREE tier the daily limit is real (100/day) and exceeding it drops mail, so
+   * the ladder is bypassed and the hard limit is reported instead — the situation is
+   * not "unusual volume", it is "mail is being refused".
    */
   const todayEmail = usage?.today.email.total ?? null;
-  if (todayEmail !== null && todayEmail >= RESEND_DAILY_SUSTAINABLE * T.resendDailyRateRedX) {
+  if (todayEmail !== null && Number.isFinite(RESEND_DAILY_LIMIT) && todayEmail >= RESEND_DAILY_LIMIT) {
     recs.push({
       severity: 'red',
       key: 'resend-daily-rate',
-      text: `${todayEmail} emails sent today — ${T.resendDailyRateRedX}x the sustainable daily rate (${RESEND_DAILY_SUSTAINABLE}/day). Check for a runaway loop before it eats the month.`,
+      text: `${todayEmail} emails today vs a HARD daily cap of ${RESEND_DAILY_LIMIT} on the '${resolveEmailTier()}' tier — sends past the cap are being REFUSED, not queued. Check EMAIL_TIER is correct for the plan actually being paid for.`,
     });
-  } else if (todayEmail !== null && todayEmail >= RESEND_DAILY_SUSTAINABLE * T.resendDailyRateYellowX) {
+  } else if (todayEmail !== null && todayEmail >= T.resendDailyRed) {
+    recs.push({
+      severity: 'red',
+      key: 'resend-daily-rate',
+      text: `${todayEmail} emails sent today — past ${T.resendDailyRed}/day, which is close to the ${RESEND_DAILY_SUSTAINABLE}/day that exactly consumes the monthly quota. Sustained, this exhausts the month; check for a runaway loop or an unplanned blast.`,
+    });
+  } else if (todayEmail !== null && todayEmail >= T.resendDailyYellow) {
     recs.push({
       severity: 'yellow',
       key: 'resend-daily-rate',
-      text: `${todayEmail} emails sent today — at or above the pace that consumes the monthly quota (${RESEND_DAILY_SUSTAINABLE}/day). Fine for a blast day; not fine as a baseline.`,
+      text: `${todayEmail} emails sent today — above the ${T.resendDailyYellow}/day watch line. Normal for a blast or a heavy field day; worth a look if it was neither.`,
     });
   }
 

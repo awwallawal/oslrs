@@ -1,32 +1,16 @@
 import { Redis } from 'ioredis';
 import pino from 'pino';
-import type { EmailTier, BudgetCheckResult, EmailBudgetStatus } from '@oslsr/types';
+import { EMAIL_TIER_LIMITS, type EmailTier, type BudgetCheckResult, type EmailBudgetStatus } from '@oslsr/types';
 
 const logger = pino({ name: 'email-budget-service' });
 
 /**
- * Resend pricing tier limits
- * Source: https://resend.com/pricing (Verified 2026-01-25)
+ * Tier limits come from `@oslsr/types` — the single source of truth (see the
+ * comment on EMAIL_TIER_LIMITS). This file used to carry its own copy; it
+ * disagreed with three others, and on 2026-08-05 that disagreement skipped a
+ * prod email-digest flush.
  */
-const TIER_LIMITS = {
-  free: {
-    dailyLimit: 100,
-    monthlyLimit: 3000,
-    hasOverage: false,
-  },
-  pro: {
-    dailyLimit: Infinity, // No daily limit
-    monthlyLimit: 50000,
-    hasOverage: true,
-    overageCostPerThousand: 90, // $0.90 = 90 cents per 1000 emails
-  },
-  scale: {
-    dailyLimit: Infinity, // No daily limit
-    monthlyLimit: 100000,
-    hasOverage: true,
-    overageCostPerThousand: 90, // $0.90 = 90 cents per 1000 emails
-  },
-} as const;
+const TIER_LIMITS = EMAIL_TIER_LIMITS;
 
 /**
  * Warning threshold percentage (80%)
@@ -83,7 +67,10 @@ export class EmailBudgetService {
 
   constructor(
     redis: Redis,
-    tier: EmailTier = 'free',
+    // ⚠️ NOT 'free'. An unset EMAIL_TIER silently becoming the most restrictive
+    // tier is exactly what blocked mail on 2026-08-05. Callers pass
+    // `resolveEmailTier()`; this default only guards a direct construction.
+    tier: EmailTier = 'pro',
     overageBudgetCents: number = 3000 // $30.00 default
   ) {
     this.redis = redis;
@@ -297,7 +284,7 @@ export class EmailBudgetService {
         // Calculate overage: $0.90 per 1000 = 0.09 cents per email
         const overageEmails = monthlyCount - tierConfig.monthlyLimit;
         const overageCostCents = Math.ceil(
-          (overageEmails * (tierConfig.overageCostPerThousand || 90)) / 1000
+          (overageEmails * (tierConfig.overageCostPerThousandCents || 90)) / 1000
         );
 
         await this.redis.set(
@@ -463,7 +450,7 @@ export class EmailBudgetService {
 
     const remainingBudgetCents = this.overageBudgetCents - overageCostCents;
     const remainingOverageEmails = Math.floor(
-      (remainingBudgetCents * 1000) / (tierConfig.overageCostPerThousand || 90)
+      (remainingBudgetCents * 1000) / (tierConfig.overageCostPerThousandCents || 90)
     );
 
     if (count < tierConfig.monthlyLimit) {

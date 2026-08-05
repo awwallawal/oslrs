@@ -41,6 +41,7 @@
  *   1 — config error, prerequisite failure, or any per-send failure during live.
  */
 import os from 'node:os';
+import { resolveEmailTier, getEmailTierLimits, OPS_THRESHOLDS } from '@oslsr/types';
 import { and, gt, sql } from 'drizzle-orm';
 import pino from 'pino';
 import { db } from '../src/db/index.js';
@@ -56,8 +57,23 @@ const SUPPORT_EMAIL = 'support@oyoskills.com';
 
 // Resend Free is 100/day. At/above the threshold the operator must confirm
 // Resend Pro is live (Story 9-20 Part A).
-const RESEND_FREE_TIER_DAILY_LIMIT = 100;
-const RESEND_PRO_CONFIRM_THRESHOLD = 80;
+/**
+ * Blast-size gate — derived from the ACTIVE tier, 2026-08-05. It used to be a bare
+ * `100`, a fourth hardcoded copy of the free-tier cap; on Pro that made an operator
+ * confirm past a limit that does not exist, while giving no protection at all against
+ * a genuinely oversized blast.
+ *
+ * Two different jobs, kept separate:
+ *   - HARD limit: only meaningful on `free`, where exceeding 100/day REFUSES mail.
+ *   - CONFIRM line: a human gate on "you are about to email this many real people",
+ *     which is about blast size, not billing. It stays useful on every tier.
+ */
+const TIER = resolveEmailTier();
+const TIER_LIMITS_ACTIVE = getEmailTierLimits(TIER);
+const RESEND_HARD_DAILY_LIMIT = TIER_LIMITS_ACTIVE.dailyLimit; // Infinity on pro/scale
+const BLAST_CONFIRM_THRESHOLD = Number.isFinite(RESEND_HARD_DAILY_LIMIT)
+  ? Math.floor(RESEND_HARD_DAILY_LIMIT * 0.8) // free: confirm before the real cliff
+  : OPS_THRESHOLDS.resendDailyYellow;          // pro/scale: confirm on blast SIZE (500)
 
 export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'dry-run',
@@ -77,7 +93,7 @@ questionnaire answers (post-9-26, completing them persists those answers).
 Options:
   --dry-run                         Mandatory first invocation; prints masked cohort, no sends
   --confirm-i-am-not-dry-running    Required for live run (deliberately ugly)
-  --confirm-resend-pro-active       Required when cohort size >= ${RESEND_PRO_CONFIRM_THRESHOLD}
+  --confirm-resend-pro-active       Required when cohort size >= ${BLAST_CONFIRM_THRESHOLD}
   --rate-per-minute <N>             Maximum sends per minute (default 10) — cap, not target
   --since <YYYY-MM-DD>              Drafts created on or after this date (UTC midnight)
   --max-recipients <N>              Safety cap (default 200)
@@ -312,15 +328,15 @@ async function main() {
     logger.warn({ event: 'recover_drafts.cap_hit', maxRecipients: args.maxRecipients });
   }
 
-  if (!args.dryRun && cohort.length >= RESEND_PRO_CONFIRM_THRESHOLD && !args.confirmResendPro) {
+  if (!args.dryRun && cohort.length >= BLAST_CONFIRM_THRESHOLD && !args.confirmResendPro) {
     logger.error({
       event: 'recover_drafts.resend_pro_not_confirmed',
       cohortCount: cohort.length,
-      freeTierLimit: RESEND_FREE_TIER_DAILY_LIMIT,
+      tier: TIER, hardDailyLimit: RESEND_HARD_DAILY_LIMIT,
     });
     console.error(
       `ERROR: cohort size ${cohort.length} is at or above the Resend Pro confirm threshold ` +
-        `(${RESEND_PRO_CONFIRM_THRESHOLD}). Free tier daily cap is ${RESEND_FREE_TIER_DAILY_LIMIT}. ` +
+        `(${BLAST_CONFIRM_THRESHOLD}) on the '${TIER}' tier. ` +
         `Story 9-20 Part A (Resend Pro) MUST be active. Pass --confirm-resend-pro-active to proceed.`,
     );
     process.exit(1);

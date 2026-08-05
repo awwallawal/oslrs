@@ -19,6 +19,7 @@
 
 /** Threshold tiers. Each metric has a yellow (warn) and red (critical) edge. */
 import type { MonitoredExpiry } from './monitoring.js'; // Story 9-50
+import { getEmailTierLimits } from './email.js';
 
 export const OPS_THRESHOLDS = {
   step4StallPctYellow: 30,
@@ -29,14 +30,26 @@ export const OPS_THRESHOLDS = {
   ramUsedPctRed: 85,
   cpuLoad1mYellow: 0.5,
   cpuLoad1mRed: 0.8,
-  // % of the MONTHLY Resend quota. Monthly is the only real ceiling on the Pro
-  // plan — there is no daily cap to alarm against (see RESEND_MONTHLY_QUOTA).
+  // % of the MONTHLY quota of the ACTIVE tier. Monthly is the only real ceiling
+  // on Pro — there is no daily cap to alarm against.
   resendMonthlyPctYellow: 70,
   resendMonthlyPctRed: 90,
-  // Daily is an ANOMALY signal, not a quota: multiples of the sustainable daily
-  // rate. 1x means "today's pace, sustained, would exhaust the month".
-  resendDailyRateYellowX: 1,
-  resendDailyRateRedX: 3,
+  /**
+   * Daily volume ladder — Awwal's, 2026-08-05, and deliberately EARLIER than the
+   * arithmetic would suggest.
+   *
+   * The sustainable rate is ~1,666/day (50k ÷ 30). A first cut alarmed at 1× and 3×
+   * that, but 3× is useless for triage: at 5,000/day the month is gone in ten days
+   * and you find out on day one of ten. 500 is "an unusual day, go look"; 1,500 sits
+   * just under the sustainable rate, so it fires while there is still a month left
+   * to protect.
+   *
+   * This matters more from here on: the enumerator pathway puts field registrations
+   * into the same email channel, so daily volume grows with fieldwork rather than
+   * with blasts.
+   */
+  resendDailyYellow: 500,
+  resendDailyRed: 1500,
   pm2RestartPer24hYellow: 2,
   pm2RestartPer24hRed: 5,
   queueFailedYellow: 1,
@@ -50,41 +63,34 @@ export type OpsThresholds = typeof OPS_THRESHOLDS;
 /**
  * ⚠️ THESE WERE ONE CONSTANT UNTIL 2026-08-05, AND THAT WAS THE BUG.
  *
- * `RESEND_FREE_TIER_DAILY = 100` was used as BOTH the Resend list-API page size
- * and the quota denominator. `todayCount` was filtered out of that single page,
- * so it could never exceed 100 **by construction** — meaning the digest read
- * `100+/100` identically whether we had sent 101 emails or 10,000, and pinned
- * itself at its own red threshold on every busy day.
+ * `RESEND_FREE_TIER_DAILY = 100` was used as BOTH the Resend list-API page size and
+ * the quota denominator. `todayCount` was filtered out of that single page, so it
+ * could never exceed 100 **by construction** — the digest read `100+/100` identically
+ * whether we had sent 101 emails or 10,000, pinning itself at its own red threshold
+ * on every busy day.
  *
- * It was also the wrong ceiling entirely: we are on **Resend Pro** ($20/mo,
- * 50,000/month), not the free tier. The alarm was firing at **0.2% of actual
- * capacity**, and its remediation text recommended upgrading to the plan we
- * already pay for.
+ * It was also the wrong ceiling: the account is on **Pro**, so the alarm fired at
+ * 0.2% of capacity and its remediation text recommended buying the plan we already
+ * pay for.
  *
- * Keep these two apart forever. One is an API mechanic; the other is a billing
- * fact. They are not the same number and must never share a symbol again.
+ * Keep these apart forever. One is an API mechanic; the other is a billing fact.
  */
 
 /** Resend's list endpoint returns at most 100 rows/page. An API mechanic. */
 export const RESEND_LIST_PAGE_SIZE = 100;
 
 /**
- * Resend **Pro** plan ceiling — 50,000 emails/month (confirmed by Awwal,
- * 2026-08-05). A billing fact: update it when the plan changes, never to make a
- * chart fit.
- *
- * Pro has **no daily cap** — the free tier's 100/day is what we outgrew (it was
- * exhausted once by prod keys leaking into local dev, which is what Story 9-63
- * AC0's credential isolation exists to prevent). So the ONLY real ceiling to
- * alarm against is monthly.
+ * Monthly ceiling for the ACTIVE tier — derived, never hardcoded.
+ * The tier table lives in `./email.js` and is the single source of truth.
  */
-export const RESEND_MONTHLY_QUOTA = 50_000;
+export const RESEND_MONTHLY_QUOTA = getEmailTierLimits().monthlyLimit;
 
 /**
- * The daily send rate that exactly consumes the monthly quota (~1,666/day).
- * Not a limit — a yardstick, so a daily figure can be read as "would this pace
- * blow the month?" instead of against a cap that does not exist.
+ * Daily cap for the ACTIVE tier — `Infinity` on Pro/Scale, 100 on free.
+ * A finite value here means the tier really does cut off daily.
  */
+export const RESEND_DAILY_LIMIT = getEmailTierLimits().dailyLimit;
+
 export const RESEND_DAILY_SUSTAINABLE = Math.floor(RESEND_MONTHLY_QUOTA / 30);
 
 /** Status tiers, lowest → highest severity. */

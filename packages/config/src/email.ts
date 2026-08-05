@@ -8,33 +8,12 @@
 import { z } from 'zod';
 
 /**
- * Resend pricing tier limits
+ * ⛔ REMOVED 2026-08-05 — this was a FOURTH copy of the Resend tier table with
+ * ZERO consumers, silently disagreeing with the one that actually enforces.
+ * The canonical table is `EMAIL_TIER_LIMITS` in `@oslsr/types` (`email.ts`).
+ * Do not reintroduce one here: dead config that looks authoritative is worse
+ * than no config, because the next reader trusts it.
  */
-export const EMAIL_TIER_LIMITS = {
-  free: {
-    name: 'Free',
-    monthlyPrice: 0,
-    dailyLimit: 100,
-    monthlyLimit: 3000,
-    hasOverage: false,
-  },
-  pro: {
-    name: 'Pro',
-    monthlyPrice: 2000, // $20.00 in cents
-    dailyLimit: Infinity,
-    monthlyLimit: 50000,
-    hasOverage: true,
-    overageCostPerThousand: 90, // $0.90 = 90 cents per 1000 emails
-  },
-  scale: {
-    name: 'Scale',
-    monthlyPrice: 9000, // $90.00 in cents
-    dailyLimit: Infinity,
-    monthlyLimit: 100000,
-    hasOverage: true,
-    overageCostPerThousand: 90, // $0.90 = 90 cents per 1000 emails
-  },
-} as const;
 
 /**
  * Warning threshold percentage (80%)

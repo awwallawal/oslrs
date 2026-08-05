@@ -5,7 +5,7 @@ import { StaffService } from '../services/staff.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { EmailService } from '../services/email.service.js';
 import { queueStaffInvitationEmail } from '../queues/email.queue.js';
-import type { EmailTier } from '@oslsr/types';
+import { resolveEmailTier } from '@oslsr/types';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -20,7 +20,7 @@ const logger = pino({ name: 'import-worker' });
 const connection = createRedisConnection();
 
 // Email budget service for tracking limits
-const emailTier = (process.env.EMAIL_TIER || 'free') as EmailTier;
+const emailTier = resolveEmailTier(); // canonical; defaults to `pro`, never silently to `free`
 const overageBudget = parseInt(process.env.EMAIL_MONTHLY_OVERAGE_BUDGET || '3000', 10);
 const budgetService = new EmailBudgetService(connection, emailTier, overageBudget);
 

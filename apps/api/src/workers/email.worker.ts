@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `VerificationEmailData`
 // removed from imports alongside the retired hybrid Magic-Link/OTP flow.
-import type { EmailJob, StaffInvitationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailTier, EmailJobType } from '@oslsr/types';
+import type { EmailJob, StaffInvitationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailJobType } from '@oslsr/types';
+import { resolveEmailTier } from '@oslsr/types';
 import { EMAIL_TYPE_PRIORITY } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
@@ -23,7 +24,7 @@ const logger = pino({ name: 'email-worker' });
 const connection = createRedisConnection();
 
 // Budget service for tracking email sends
-const emailTier = (process.env.EMAIL_TIER || 'free') as EmailTier;
+const emailTier = resolveEmailTier(); // canonical; defaults to `pro`, never silently to `free`
 const overageBudget = parseInt(process.env.EMAIL_MONTHLY_OVERAGE_BUDGET || '3000', 10);
 const budgetService = new EmailBudgetService(connection, emailTier, overageBudget);
 

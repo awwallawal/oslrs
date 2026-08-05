@@ -322,6 +322,85 @@ export type EmailJob = StaffInvitationJob | PasswordResetJob | PaymentNotificati
 export type EmailTier = 'free' | 'pro' | 'scale';
 
 /**
+ * ⛔ THE CANONICAL RESEND TIER TABLE. THE ONLY ONE. (2026-08-05)
+ *
+ * This existed in FOUR places that disagreed, and the disagreement caused a real
+ * prod incident on 2026-08-05:
+ *
+ *   1. `email-budget.service.ts` TIER_LIMITS — **live and ENFORCING**
+ *   2. `packages/config/src/email.ts` EMAIL_TIER_LIMITS — **dead, zero consumers**
+ *   3. `ops-thresholds.ts` RESEND_FREE_TIER_DAILY — doubling as an API page size
+ *   4. four blast scripts, each with a local `RESEND_FREE_TIER_DAILY_LIMIT = 100`
+ *
+ * `EMAIL_TIER` was never set on prod, so the ENFORCER defaulted to `free` (100/day)
+ * while the account is on **Pro**. At 140 sends the guard tripped and the email
+ * digest flush was skipped — `email.budget.daily_limit_reached tier:"free"
+ * dailyCount:140 dailyLimit:100`. The next worker job would have paused the queue
+ * outright, and staff/enumerator invitations run through that queue.
+ *
+ * Adding a fifth copy is how this recurs. Import from here.
+ */
+export const EMAIL_TIER_LIMITS = {
+  free: {
+    name: 'Free',
+    monthlyPriceCents: 0,
+    /** The free tier really does cut off daily. This is the one tier where it bites. */
+    dailyLimit: 100,
+    monthlyLimit: 3_000,
+    hasOverage: false,
+    overageCostPerThousandCents: 0,
+  },
+  pro: {
+    name: 'Pro',
+    monthlyPriceCents: 2_000,
+    /** No daily cap on Pro — monthly is the only real ceiling. */
+    dailyLimit: Number.POSITIVE_INFINITY,
+    monthlyLimit: 50_000,
+    hasOverage: true,
+    overageCostPerThousandCents: 90,
+  },
+  scale: {
+    name: 'Scale',
+    monthlyPriceCents: 9_000,
+    dailyLimit: Number.POSITIVE_INFINITY,
+    monthlyLimit: 100_000,
+    hasOverage: true,
+    overageCostPerThousandCents: 90,
+  },
+} as const satisfies Record<EmailTier, EmailTierLimits>;
+
+export interface EmailTierLimits {
+  name: string;
+  monthlyPriceCents: number;
+  dailyLimit: number;
+  monthlyLimit: number;
+  hasOverage: boolean;
+  overageCostPerThousandCents: number;
+}
+
+/**
+ * Resolve the ACTIVE tier from the environment — the one place that reads
+ * `EMAIL_TIER`, so the enforcer, the digest and the blast scripts can never again
+ * believe different things.
+ *
+ * ⚠️ **Defaults to `pro`, not `free`.** The old `|| 'free'` default is precisely what
+ * caused the incident: an unset variable silently became the most restrictive tier
+ * and started blocking mail. Defaulting to the plan we actually pay for makes an
+ * unset variable *permissive* rather than *silently destructive* — and over-sending
+ * is caught by Resend's own quota, whereas under-sending is invisible.
+ * If the plan is ever downgraded, set `EMAIL_TIER=free` explicitly.
+ */
+export function resolveEmailTier(env: Record<string, string | undefined> = process.env): EmailTier {
+  const raw = (env.EMAIL_TIER ?? '').trim().toLowerCase();
+  return raw === 'free' || raw === 'pro' || raw === 'scale' ? raw : 'pro';
+}
+
+/** Limits for the active tier (or an explicit one). */
+export function getEmailTierLimits(tier: EmailTier = resolveEmailTier()): EmailTierLimits {
+  return EMAIL_TIER_LIMITS[tier];
+}
+
+/**
  * Email provider type
  */
 export type EmailProviderType = 'resend' | 'mock';
