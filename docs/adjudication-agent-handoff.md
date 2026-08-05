@@ -895,6 +895,33 @@ it without a route to replace it would leave him worse off than doing nothing.
 
 ---
 
+## 7h. 🔁 NEXT UP — 13-50: `/check-registration` mints a dead-end link (2026-08-05)
+
+**Not launch-gating, but it degrades with every day of engagement**, which is the opposite of most
+backlog items.
+
+`registration-status.service.ts:293` issues a **`wizard_resume`** magic link to anyone who looks up
+their status by email. For an ADOPTED person that link is a trap: resume → refill the wizard →
+submit → **409 `NIN_DUPLICATE`**. And R4's ruling pointed the adoption confirmation at
+`/check-registration`, so 174 adopted people were sent to the one surface that hands out the bad
+link. The code comment already concedes the gap — *"lands on the authenticated status home (9-40)
+when shipped; today it degrades gracefully"* — but for an adopted person it does not degrade
+gracefully, it degrades into an error.
+
+**Fix:** don't issue `wizard_resume` when the respondent's registration is already complete; issue
+the status/login link instead. That is 9-40's surface, so 13-50 is either a thin slice of it or a
+guard in front of it.
+
+**Two findings worth keeping independently of the fix:**
+- **`wizard_resume` mints are NOT audited.** 86 were created on 2026-08-05 and `magic_link.issued`
+  shows only `login` and `pending_nin_complete`. A whole token purpose is invisible to the audit
+  trail — found only because the stock kept moving while being counted.
+- **Stock vs flow.** 38 tokens were expired on Awwal's instruction (2026-08-05) and that was the
+  right immediate call, but it is a stopgap: the producer is still running. **The tell was the
+  number moving between two measurements taken an hour apart.** A remediation aimed at a stock
+  should always be asked "what produces these?" before it is called done — sibling of
+  [[pattern-ship-a-fix-that-never-fires]], where the fix runs but the condition regenerates.
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
