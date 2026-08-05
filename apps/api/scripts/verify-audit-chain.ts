@@ -23,9 +23,7 @@
  *   pnpm --filter @oslsr/api audit:verify-chain
  *   pnpm --filter @oslsr/api audit:verify-chain -- --limit 500     (spot-check the tail)
  */
-import { sql } from 'drizzle-orm';
-import { db } from '../src/db/index.js';
-import { AuditService, GENESIS_HASH } from '../src/services/audit.service.js';
+import { AuditService } from '../src/services/audit.service.js';
 
 const limitArg = process.argv.indexOf('--limit');
 const limit = limitArg !== -1 ? Number(process.argv[limitArg + 1]) : undefined;
@@ -52,16 +50,6 @@ const limit = limitArg !== -1 ? Number(process.argv[limitArg + 1]) : undefined;
  * A previous_hash matching NOTHING is a gap — a deleted or unwritten predecessor. Reporting
  * those three as one word would repeat the mistake this session has been unpicking all day.
  */
-interface Row {
-  id: string;
-  action: string;
-  actor_id: string | null;
-  created_at: string;
-  details: unknown;
-  hash: string;
-  previous_hash: string | null;
-}
-
 async function main(): Promise<void> {
   const result = await AuditService.verifyHashChain(limit ? { limit } : undefined);
 
@@ -83,39 +71,8 @@ async function main(): Promise<void> {
   console.log('');
   console.log('  CLASSIFYING — a single "INVALID" cannot tell tampering from concurrency.');
 
-  const rows = (
-    await db.execute(sql`
-      SELECT id, action, actor_id, created_at, details, hash, previous_hash
-        FROM audit_logs ORDER BY created_at ASC, id ASC
-    `)
-  ).rows as unknown as Row[];
-
-  const allHashes = new Set(rows.map((r) => r.hash));
-  let selfHashFailures = 0;
-  let linkForks = 0;
-  let linkGaps = 0;
-  let firstSelfHashFailure: { id: string; created_at: string } | null = null;
-  let prevHash: string | null = null;
-
-  for (const r of rows) {
-    const expected = AuditService.computeHash(
-      r.id,
-      r.action,
-      r.actor_id,
-      new Date(r.created_at),
-      r.details,
-      r.previous_hash ?? GENESIS_HASH,
-    );
-    if (r.hash !== expected) {
-      selfHashFailures++;
-      firstSelfHashFailure ??= { id: r.id, created_at: r.created_at };
-    }
-    if (prevHash !== null && r.previous_hash !== prevHash) {
-      if (r.previous_hash !== null && allHashes.has(r.previous_hash)) linkForks++;
-      else linkGaps++;
-    }
-    prevHash = r.hash;
-  }
+  const c = await AuditService.classifyChainFailure();
+  const { selfHashFailures, linkForks, linkGaps, firstSelfHashFailure } = c;
 
   console.log('');
   console.log(`  SELF-HASH failures (TAMPER SIGNAL) : ${selfHashFailures}`);

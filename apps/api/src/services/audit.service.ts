@@ -439,6 +439,81 @@ export class AuditService {
   }
 
   /**
+   * Classify WHY the chain reports invalid — tampering, or merely ordering.
+   *
+   * `verifyHashChain` enforces two different invariants and collapses them into one boolean,
+   * which is the right shape for a gate and the wrong shape for a human. The two mean opposite
+   * things:
+   *
+   *   SELF-HASH  hash === computeHash(id, action, actor, createdAt, details, stored previous_hash)
+   *              Ordering-INDEPENDENT. A failure means the ROW does not match its own hash: it was
+   *              altered after write, or something bypassed AuditService (seed scripts, raw SQL).
+   *              **This is the tamper signal.**
+   *
+   *   LINK       previous_hash === the preceding row's hash under ORDER BY created_at, id
+   *              Ordering-DEPENDENT, and that order is not guaranteed. `createdAt` is stamped in
+   *              JS before the transaction opens, and before AUDIT_CHAIN_LOCK existed two writers
+   *              could read the same tail and store the same previous_hash — forking the chain
+   *              with nothing tampered.
+   *
+   * Prod on 2026-08-03: INVALID, but **0 self-hash failures, 117 forks, 0 gaps**, first fork
+   * 2026-04-04. Nothing was altered; the linear order simply never existed. Those 117 are
+   * PERMANENT — repairing them means recomputing stored hashes, which is exactly what the chain
+   * exists to make impossible — so this endpoint will keep reporting `valid: false` forever, and
+   * without this breakdown that reads as "the audit log is compromised".
+   *
+   * A fork (previous_hash matches SOME row's hash) is concurrency; a gap (matches nothing) means a
+   * predecessor is missing. Reporting all three as one word is how a concurrency artefact gets
+   * escalated as tampering — or worse, how real tampering gets waved away as "that known thing".
+   */
+  static async classifyChainFailure(): Promise<{
+    selfHashFailures: number;
+    linkForks: number;
+    linkGaps: number;
+    firstSelfHashFailure: { id: string; createdAt: string } | null;
+    interpretation: string;
+  }> {
+    const rows = (
+      await db.execute(sql`
+        SELECT id, action, actor_id, created_at, details, hash, previous_hash
+          FROM audit_logs ORDER BY created_at ASC, id ASC
+      `)
+    ).rows as unknown as Array<{
+      id: string; action: string; actor_id: string | null; created_at: string;
+      details: unknown; hash: string; previous_hash: string | null;
+    }>;
+
+    const allHashes = new Set(rows.map((r) => r.hash));
+    let selfHashFailures = 0, linkForks = 0, linkGaps = 0;
+    let firstSelfHashFailure: { id: string; createdAt: string } | null = null;
+    let prevHash: string | null = null;
+
+    for (const r of rows) {
+      const expected = AuditService.computeHash(
+        r.id, r.action, r.actor_id, new Date(r.created_at), r.details, r.previous_hash ?? GENESIS_HASH,
+      );
+      if (r.hash !== expected) {
+        selfHashFailures++;
+        firstSelfHashFailure ??= { id: r.id, createdAt: r.created_at };
+      }
+      if (prevHash !== null && r.previous_hash !== prevHash) {
+        if (r.previous_hash !== null && allHashes.has(r.previous_hash)) linkForks++;
+        else linkGaps++;
+      }
+      prevHash = r.hash;
+    }
+
+    const interpretation =
+      selfHashFailures > 0
+        ? `TAMPER SIGNAL: ${selfHashFailures} row(s) do not match their own hash. Investigate the writer; do NOT recompute hashes to "repair" it.`
+        : linkForks > 0 || linkGaps > 0
+          ? `No tampering: every row matches its own hash. ${linkForks} fork(s) and ${linkGaps} gap(s) are ordering artefacts of concurrent writers, not evidence of alteration.`
+          : 'Chain is fully consistent.';
+
+    return { selfHashFailures, linkForks, linkGaps, firstSelfHashFailure, interpretation };
+  }
+
+  /**
    * Verify the integrity of the audit log hash chain (Task 4.1).
    * Walks records in chronological order, recomputes each hash, and compares
    * against stored values. Detects any tampered or modified records.

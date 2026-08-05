@@ -17,6 +17,24 @@ const verifyQuerySchema = z.object({
 
 const BACKGROUND_THRESHOLD = 10_000;
 
+/**
+ * A bare `valid: false` is unactionable, and on this system it is also PERMANENT.
+ *
+ * Prod has carried 117 concurrency forks since 2026-04-04 with **zero** rows failing their own
+ * hash — nothing tampered, but the linear order the verifier assumes never existed, and those
+ * forks cannot be repaired without recomputing stored hashes (precisely what the chain exists to
+ * prevent). So this endpoint would report INVALID forever, and an auditor reading one boolean
+ * would reasonably conclude the audit log is compromised.
+ *
+ * Whenever the chain is not valid, attach the breakdown that says which invariant broke:
+ * self-hash failures are the tamper signal; forks and gaps are properties of the writer.
+ * (13-49 R12.)
+ */
+async function withClassification<T extends { valid: boolean | null }>(result: T) {
+  if (result.valid !== false) return result;
+  return { ...result, classification: await AuditService.classifyChainFailure() };
+}
+
 export class AuditController {
   /**
    * GET /api/v1/audit-logs/verify-chain
@@ -50,13 +68,13 @@ export class AuditController {
         }
 
         const result = await AuditService.verifyHashChain();
-        res.status(200).json({ data: result });
+        res.status(200).json({ data: await withClassification(result) });
         return;
       }
 
       // Spot-check mode (default)
       const result = await AuditService.verifyHashChain({ limit: query.limit });
-      res.status(200).json({ data: result });
+      res.status(200).json({ data: await withClassification(result) });
     } catch (err) {
       next(err);
     }
