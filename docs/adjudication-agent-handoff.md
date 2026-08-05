@@ -261,6 +261,33 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 - **For a zero from a guard or a counter, ask "did this code run?" before "was there nothing to do?"** A counter that was never incremented and a counter that legitimately counted nothing look identical. Prove execution: a log line, an audit row, a deliberate negative test.
 - Sibling of §2a2 (a cached gate is not a passed gate) and §2p (a verification that reads the input proves nothing). Same family: **absence of evidence read as evidence of absence.**
 
+### 2u. A tie-break rule must break the tie on the thing that ACTUALLY differs
+*Added 2026-08-05, from the duplicate-merge survivor rule.*
+
+`merge-duplicate-respondents.ts` picked its survivor by **1) more submissions · 2) has a NIN · 3) older**.
+That ordering reads as data-protective and protects nothing. The merge **re-points submissions onto
+the survivor** and **fills the survivor's NULL columns from the loser** — so every answer and the NIN
+arrive either way, whichever record wins. Rules 1 and 2 were sorting on properties the merge itself
+equalises seconds later.
+
+**The one thing a merge genuinely destroys is a reference code.** That is the citizen-visible
+identifier — in a confirmation email, on a screenshot, written on paper — and only one survives. So
+the criterion that matters is **age**: the older code is the one already in the wild. Reordered to
+**older → NIN → submissions**, with the tail two kept only as same-timestamp tiebreaks.
+
+It surfaced on `MGKS01`/`Q09HFP`: the old rule chose a code minted four hours earlier over one the
+person had held since 19 May, because the new record happened to carry the submission.
+
+- **The general move: for each candidate rule, ask "if I get this wrong, what is unrecoverable?"**
+  Sort by irreversibility, not by which field looks most substantial. A rule that ranks on something
+  the operation normalises anyway is decoration with the authority of logic.
+- **And when a rule changes, re-derive what the OLD one already did.** I told Awwal the new order
+  would have produced identical outcomes on the eleven completed merges. It would not have: **5 of
+  11 had chosen the NEWER record.** The data outcome was equivalent, but the surviving code was the
+  later one in those five. The claim was plausible, cheap to check, and I asserted it before
+  checking — §2p's shape exactly. The correction is now in the function's own docstring so the
+  history reads accurately rather than flatteringly.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
