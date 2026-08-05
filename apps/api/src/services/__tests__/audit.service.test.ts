@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 54 total action types across all categories', () => {
+    it('should have 57 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -201,8 +201,12 @@ describe('AuditService', () => {
       // Story 11-2 (secondary-data import batches) added 2:
       //   IMPORT_BATCH_CREATED ('import_batch.created'),
       //   IMPORT_BATCH_ROLLED_BACK ('import_batch.rolled_back') → 56.
+      // Story 13-49 duplicate-merge (2026-08-05) added 1:
+      //   RESPONDENT_MERGED ('respondent.merged') → 57. Two records for one person collapsed
+      //   into one; the audit row is the only place the removed reference code survives, since
+      //   the respondent row itself is deleted.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(56);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(57);
     });
   });
 
