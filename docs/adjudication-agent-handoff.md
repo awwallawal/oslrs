@@ -251,6 +251,16 @@ Every load-bearing fix must have a test that FAILS without it. Prove it:
 - **`null` is a real answer.** Some records are phone-only (at least one confirmed). Treat it as "reach them another way", never as a failure to swallow.
 - ⚠️ **13-4 inherits this.** Enumerator-created respondents will have submissions, but clerk/import paths and anything touching the absorbed cohort will not. Assume the shape exists.
 
+### 2t. ⭐ AN EMPTY RESULT IS NOT A NEGATIVE RESULT (new 2026-08-05)
+- **Four times in one session** a zero/blank was read as an answer when the question had been asked wrongly:
+  1. `q->>'key'` on a form question — the property is **`name`**. NULL for every form read as "no form has an email question". Nearly triggered a needless form re-pin (the operation that froze 232 drafts in July).
+  2. `visibleIf`/`condition`/`showIf` on a section — the property is **`showWhen`**. Read as "guardian_phone is unconditionally required".
+  3. `campaign_sends` had no row for a confirmation — because that table records **marketing only**. Read as "the email never sent".
+  4. `no_nin_identity_match` attaches = **0** — read as "nothing needed attaching". It meant **the guard never executes on that path** (R21).
+- **The rule: before filtering on a field name, print one whole object and look at it.** `SELECT jsonb_pretty(q) … LIMIT 1` settled cases 1 and 2 in seconds after minutes of wrong conclusions. Reading a property that does not exist returns NULL, and **NULL is indistinguishable from absence**.
+- **For a zero from a guard or a counter, ask "did this code run?" before "was there nothing to do?"** A counter that was never incremented and a counter that legitimately counted nothing look identical. Prove execution: a log line, an audit row, a deliberate negative test.
+- Sibling of §2a2 (a cached gate is not a passed gate) and §2p (a verification that reads the input proves nothing). Same family: **absence of evidence read as evidence of absence.**
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
