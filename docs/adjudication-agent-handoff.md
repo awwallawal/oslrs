@@ -895,6 +895,76 @@ it without a route to replace it would leave him worse off than doing nothing.
 
 ---
 
+## 7i. Session 2026-08-05 — R21 proven, and three monitors caught lying
+
+**The register moved 301 → 308 today on 7 real self-registrations (5 of them D4 conversions), and
+13-49 closed.** But the durable lesson of the day is narrower and repeats four times:
+
+> **Every number that looked like a measurement today was, at least once, a measurement of
+> something else.** A stock that was a flow. A quota that was a page size. A cohort date that was a
+> day off. A conversion denominator that included confirmations.
+
+### What shipped
+| | |
+|---|---|
+| **R21** | The identity guard never ran on the public wizard. Fixed, and **VERIFIED LIVE** — not on deploy. |
+| **R22** | The attach path audited a creation that never happened. Found BY the R21 verification. |
+| **Survivor rule** | Merges now keep the **older** record: submissions are re-pointed and NULLs filled either way, so the only thing a merge destroys is a reference code — and the older one is the one already in citizens' hands. |
+| **CodeQL v3→v4** | Both GitHub annotations cleared. |
+| **13-49** | `done`. Every residual terminal, with an owner and a reopen trigger. |
+| **38 tokens expired** | Dead-end `wizard_resume` links, on Awwal's instruction. **Stopgap — the producer is still running (13-50).** |
+| **Digest email alarm** | Alarmed at **0.2% of capacity** against a page size. Now reads the meter's monthly total. |
+
+### How R21 was actually closed (the shape to copy)
+A two-pass **synthetic** registration, not a real citizen's record. Seed, then re-register the same
+phone **surname-first**, no NIN either time, **different email**, different browsers.
+
+- **Different email was the load-bearing choice.** With a shared one, an attach could have come from
+  the draft/email path and proved nothing about the guard. Different email ⇒ phone + name tokens
+  were the only link ⇒ the attach can only be R21.
+- **Three observables, and only one of them counts.** Same reference code on screen; one respondent
+  row carrying two submissions; and `registration.attached_to_existing_identity` **in the log**.
+  Only the third proves the code *executed* — R21 exists precisely because a guard that never runs
+  produces an outcome that looks identical to one that runs and finds nothing.
+- Teardown child-first; register verified back to its exact prior count; `audit_logs` left alone
+  (hash-chained). **`users` was missing from the documented recipe** — the wizard mints one per
+  email. 13-4 AC1c corrected.
+
+### The four measurement failures, because the shape recurs
+1. **A stock that was a flow.** 37 dead-end tokens → sized a mitigation against 37 → the same query
+   returned **39 an hour later**. 86 were minted that day. The producer (`/check-registration`) was
+   only found because *the number moved between two measurements*. → 13-50.
+2. **A quota that was a page size.** `RESEND_FREE_TIER_DAILY` was BOTH the API page limit and the
+   alarm denominator, so `todayCount` could never exceed 100 **by construction** — the digest read
+   `100+/100` whether we sent 101 or 10,000. **And the true number was already printed two lines
+   below it.** We are on Pro (50k/mo), so it alarmed at 0.2% of capacity and recommended buying the
+   plan we own.
+3. **A cohort date a day off.** The D4 invitations went out **08-05 08:04**, not 08-04 — yesterday's
+   165 rows were the adoption programme. The ladder check is the **08-05** cohort.
+4. **A denominator that included the wrong sends.** `campaign_sends` on 08-04 returned 165 because
+   it counts confirmations too. Scoped to `campaign_id='draft-invite-2026-08'`: **75 invited, 5
+   converted (6.7%)**.
+
+### A test can be green for months while encoding the bug
+The digest's test asserted `todayCount: 85 → red` — the exact defective behaviour, passing
+continuously. Sibling of [[pattern-test-that-passes-over-a-hole]], but worse: that pattern is a test
+that never exercises the guard; **this is a test that pins the guard in its broken position.** When
+fixing a defect, read the test that covered it — if it passes unchanged, one of the two is wrong.
+
+### Also worth knowing
+- **`wizard_resume` mints are not audited at all** (86 in one day; `magic_link.issued` records only
+  `login` and `pending_nin_complete`). An entire token purpose invisible to the audit trail, found
+  by accident. Two purposes have now been found unaudited by accident; **nobody has swept the rest**
+  → 13-50 AC2.3.
+- **A bounce silently costs a contact channel.** Every bounce writes `email_suppressions`; three
+  suppressed people are in the register with working phones, three more are D4 invitees whose
+  invitation never arrived. No digest line mentions it → 13-42 AC8.
+- **Suppression keys on the raw address.** One row is `wahab akeem olaide <aqeemakolade@gmail.com>` —
+  the clean address was never suppressed, so it both over- and under-blocks. Not systemic: 0
+  name-wrapped addresses in drafts/submissions/campaign_sends.
+- **Root `tsc` is not `apps/web`'s `tsc`.** Root passed; the web package's own config failed. Same
+  trap as running web vitest from the root — only the package's own config speaks for it.
+
 ## 7h. 🔁 NEXT UP — 13-50: `/check-registration` mints a dead-end link (2026-08-05)
 
 **Not launch-gating, but it degrades with every day of engagement**, which is the opposite of most
