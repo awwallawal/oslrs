@@ -1,6 +1,6 @@
 # Story 13.4: Enumerator Prod Smoke & Go-Live Gate — Exercise the Field Path on Prod + Codify the 4-Point Pre-Flight Checklist
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 🚦 PRE-SPEND gate item #2. REUSE not build — the enumerator path is fully wired. NET-NEW = exercise 5-10 real submissions on prod (today: ONE ever) + codify the 4-point go/no-go runbook. -->
@@ -200,13 +200,95 @@ to the public path.
   - [ ] Verify each flows `submitForm → queueSubmissionForIngestion → submission-processing.service` [Source: apps/api/src/controllers/form.controller.ts:121,177] and lands a respondent row (`source = enumerator`) + submissions row (AC1.2).
   - [ ] Tag/record the smoke submissions so they're identifiable + reversible (excludable from launch metrics) (AC1.4).
 
-- [ ] **Task 2 — Codify the 4-point go/no-go runbook (AC2)**
-  - [ ] Write the runbook with the 4 gate items verbatim, each with a how-to-verify step + green/red box (AC2.1) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:45-49].
-  - [ ] State the decision rule (all green → fire; any red → hold; radio movable 24–48h) (AC2.2).
-  - [ ] Cross-link to `docs/runbooks/pre-launch-operator-runbook.md`; do not fork the launch process (AC2.3).
+- [x] **Task 2 — Codify the 4-point go/no-go runbook (AC2)**
+  - [x] Write the runbook with the 4 gate items verbatim, each with a how-to-verify step + green/red box (AC2.1) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:45-49].
+  - [x] State the decision rule (all green → fire; any red → hold; radio movable 24–48h) (AC2.2).
+  - [x] Cross-link to `docs/runbooks/pre-launch-operator-runbook.md`; do not fork the launch process (AC2.3).
 
 - [ ] **Task 3 — Record the gate verdict (AC3)**
   - [ ] Record the "enumerator path proven on prod" verdict (≥5 verified submissions, with the submission/respondent IDs) as gate item #2 (AC3.1) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:98].
+
+### Review Follow-ups (AI)
+
+BMAD adversarial code-review, 2026-08-06 (pre-commit, on the uncommitted tree). 10 findings, all
+fixed in the same pass at Awwal's direction. Listed critical → low; each carries the evidence that
+it is closed.
+
+- [x] **[AI-Review][High] H1 — the household procedure never exercised the guard it exists to prove.**
+      The R13 branch is gated on `!data.nin` (`submission-processing.service.ts:566`), but §C said only
+      "register two people on one phone" while §B.3 pushed the operator toward the `7000000001x` NIN
+      sentinel. With NINs the exemption never executes, `§A query 4` returns 2 regardless, and gate
+      item 2 flips GREEN having tested nothing — [[pattern-test-that-passes-over-a-hole]] at the
+      procedure level, in the story that cites that pattern. §C step 3 (the log check, the only
+      positive proof the branch ran) was also marked *"Optionally"*.
+      **Fixed:** §C gains a 🛑 *LEAVE THE NIN BLANK ON BOTH* block explaining why, step 3 is now
+      MANDATORY with "no log line → item 2 is RED", §B.3 carries a pointer that the NIN sentinel
+      does not apply to the §C pair, and §F records the blank-NIN confirmation as its own checkbox.
+      [docs/runbooks/enumerator-prod-smoke-and-golive-gate.md §B.3, §C, §F]
+
+- [x] **[AI-Review][High] H2 — the AC1b fix relocated the merge hazard one hop downstream.**
+      Allowing a household its own row per person makes "N respondents share this phone" the expected
+      shape of field data. `registration-status.service.ts` resolved a phone lookup with
+      `ORDER BY created_at DESC LIMIT 1` and `handleRequest` then minted a `wizard_resume` magic link
+      **bound to that respondentId** — so a mother checking status on the family handset would have
+      been handed a session that resumes, and completes the NIN on, her daughter's record. The exact
+      two-citizens-merged failure AC1b prevents, moved downstream. Not mentioned in the story, the
+      runbook or any residual.
+      **Fixed:** `resolveRespondent` now selects `LIMIT 2`, excludes `rolled_back`, groups the email
+      branch by respondent (so one person's three submissions are one match), and returns `null` when
+      more than one living respondent matches — the caller's neutral public response is unchanged.
+      Emits `registration_status.identifier_ambiguous` (class + count only, no PII, per AC8). +4 tests.
+      [apps/api/src/services/registration-status.service.ts:129-210]
+
+- [x] **[AI-Review][High] H3 — the AC1b assertion query was wrong in both directions.**
+      `§A query 4` matched `phone_number = '<HOUSEHOLD_PHONE>'`, but phones are stored canonicalised
+      by `normaliseNigerianPhone`, so pasting `08012345678` against a stored `+2348012345678` returns
+      0 and reads **RED on a working fix**. And with no `rolled_back` filter and no time window, a
+      phone reused from an earlier dry-run returns 2 and reads **GREEN having proved nothing**.
+      **Fixed:** matches on the last 10 digits after stripping non-digits, excludes `rolled_back`,
+      bounded by `<SMOKE_START_TS>`. [runbook §A query 4]
+
+- [x] **[AI-Review][Med] M1 — the counterfactual log was untested.** The test literally named
+      *"…so the counterfactual is measurable"* asserted only that `mockDbExecute` ran and the SQL
+      contained `INTERSECT`; there was no logger spy in the file, so deleting the entire `logger.info`
+      block left all 4 tests green. That event string is the runbook's §A query 5 evidence command and
+      the sole denominator for residuals R6/R7.
+      **Fixed:** the `pino` mock's `info` is now a captured spy; +2 tests assert the event fires with
+      `wouldHaveMergedInto`/`source`/`submitterId`, and that it does *not* fire when there was nothing
+      to merge into. **RED-verified:** renaming the event string fails the new test (1 failed), then
+      passes again on restore. [submission-processing.service.test.ts:1332-1390]
+
+- [x] **[AI-Review][Med] M2 — `clerk` was added beyond the AC on a rationale that does not hold.**
+      AC1b.3 scopes the remedy to *enumerator-sourced* submissions; the docblock justified the set with
+      "a human standing in the room", which is false of a `data_entry_clerk` keying paper in an office.
+      **Fixed — membership kept, rationale corrected.** What decides it is the *shape of the data*, not
+      a witness: a clerk keys a stack of paper collected from a compound, carrying the same shared
+      handset and surnames. The accepted cost (double-keyed paper now mints a duplicate R13 used to
+      absorb) is stated explicitly and is recoverable via 9-11. [submission-processing.service.ts:72-102]
+
+- [x] **[AI-Review][Med] M3 — the exemption-evidence command showed nothing.** `pm2 logs oslsr-api |
+      grep …` tails from now; the event has already fired by the time the operator looks. Every other
+      runbook here uses `--lines N --nostream`. **Fixed:** `--lines 2000 --nostream`, with a note on why.
+
+- [x] **[AI-Review][Med] M4 — nothing detected the duplicates the exemption now creates.** R6 accepted
+      "nobody reads the meter", but the exemption is unconditional for staff sources: every field
+      near-match silently mints a second row, traced only by an INFO line with no digest or counter.
+      That is 13-49's cost class at 33-LGA scale, and "revisit at 13-42" arrives after the data.
+      **Fixed:** new `§A query 6` groups shared-handset enumerator/clerk rows with their members and
+      statuses — expected for households, suspect when names match — run at teardown and weekly once
+      field work starts. Residual R6 re-scoped from "no surface" to "manual watch, query exists".
+
+- [x] **[AI-Review][Low] L1 — AC2.1 asks for a green/red box per gate item**; the table gave one ⬜ per
+      row, leaving "unchecked" ambiguous between *not run* and *red*. **Fixed:** every row is now
+      `⬜ GREEN ⬜ RED`, with an explicit note that neither-ticked means NOT RUN and holds spend anyway.
+
+- [x] **[AI-Review][Low] L2 — §F's evidence table had 5 rows** while AC1/§D allow 5–10, so an operator
+      doing 8 had nowhere to record 6–8. **Fixed:** 10 rows, plus a `NIN?` column (H1 needs it visible).
+
+- [x] **[AI-Review][Low] L3 — `Deploy SHA: PENDING` makes R2 unrunnable today.** R2 reads "if it
+      returns 1 the fix did not reach prod" — guaranteed until this ships. **Fixed:** the runbook opens
+      with a deploy PRECONDITION (check the running SHA against the story's Deploy SHA before §C), and
+      §F records the prod SHA at smoke time.
 
 ## Dev Notes
 
@@ -241,8 +323,211 @@ to the public path.
 - [Source: docs/runbooks/pre-launch-operator-runbook.md] — the ordered runway (cross-link target)
 - [Source: _bmad-output/implementation-artifacts/sprint-status.yaml#13-4-enumerator-prod-smoke-and-golive-gate] — scope note (REUSE; net-new = 5-10 prod submissions + 4-point checklist)
 
+## Dev Agent Record
+
+### Session 2026-08-06 (Amelia, dev-story) — dev half complete, execution half is operator-gated
+
+**The shape of this story:** its Dev Notes state outright that *"the 5–10 prod submissions are an
+operator (Awwal, Tailscale) action. This story delivers the procedure + the runbook + the
+verdict-recording."* So Tasks 1 / 1b / 1c / 1d cannot be closed by a dev agent — they close when the
+operator runs the smoke. Task 2 is fully dev-owned and is done. What follows is what actually
+shipped, and what is genuinely still open.
+
+#### 1. AC1b's conditional turned out to be unconditional — the guard DID merge, and it is now fixed
+
+AC1b said *"if they merge, exempt or strengthen the R13 guard."* That did not need the prod smoke to
+answer. `submission-processing.service.ts:552` ran the identity guard on **every** no-NIN submission
+with no branch on `source` or `submitterId`, so a household on one shared phone with two overlapping
+name tokens merged deterministically.
+
+**RED-verify (AC1b.3, per [[pattern-test-that-passes-over-a-hole]]):** wrote the household test
+FIRST against unmodified code and it failed exactly as predicted —
+`AssertionError: expected false to be true` on `result._isNew`, i.e. `Fatima Aisha Bello` was
+attached to `Fatima Bello`'s record. Two citizens merged into one, silently, no error, no duplicate.
+Then implemented the exemption; 77/77 green.
+
+**The fix, and the one subtlety that matters:** the exemption keys on **`source`**, NOT on
+`submitterId` presence as AC1b.3 suggested. `determineSubmitterRole` maps an authenticated
+`public_user` to source `public` *while still carrying a submitterId* — so "exempt when submitterId
+is present" would have exempted the public self-registration path, which is precisely the path R13
+exists to guard and which produced the 7 duplicates on 2026-08-04. `STAFF_CAPTURED_SOURCES` is
+`{enumerator, clerk}` only, and a regression test pins that `public` still attaches.
+
+**The lookup still RUNS on staff-captured rows; only the attach is skipped.** Deliberate: R21's
+lesson was that a guard which never executes is indistinguishable from one that finds nothing — the
+only evidence either way was a counter reading zero. The exemption therefore emits
+`submission_processing.identity_match_exempted_staff_capture` with `wouldHaveMergedInto`, which is
+the denominator needed to judge AC1b.3's fallback (DOB match / ≥3 tokens) if the exemption is ever
+thought too broad.
+
+#### 2. Runbook (Task 2 / AC2) — `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md`
+
+4-point gate verbatim with a how-to-verify + green/red box each (AC2.1), the decision rule with the
+24–48h radio lever (AC2.2), and cross-linked **both ways** with `pre-launch-operator-runbook.md`
+without forking it (AC2.3) — the header table gains a spend-gate row explaining why it is a
+cross-cut rather than another ordered step, and Step 9 (field + social) points at it. It also
+carries AC1c's protocol (§B), AC1b's procedure (§C), AC1d's email branches (§E), and AC3's evidence
+table (§F).
+
+#### 3. Two AC1c claims corrected against the code rather than copied forward
+
+AC1c's teardown chain was written from a single wizard run and generalised. Verified:
+
+- **`users` does not belong in the enumerator teardown chain at all.** The user row is minted by
+  `auth.service.ts` passwordless provisioning (the 9-38 wizard path); `submission-processing.service.ts`
+  never inserts into `users`. The runbook now states the chain is **path-dependent** and flags the
+  FK ordering (`respondents.user_id`) only where it applies.
+- **`magic_link_tokens` on `respondent_id` OR `email`** — kept, as AC1c's own correction says. Note
+  `apps/api/scripts/_enumerator-path-smoke-test.ts` deletes on `respondent_id` alone; that is
+  *correct for that script* (synthetic enumerator rows, no email-keyed tokens) and left alone rather
+  than "fixed" into noise.
+
+#### 4. REUSE check on the existing script
+
+`_enumerator-path-smoke-test.ts` already exists (23KB) and does synthetic submissions + verification
++ idempotent teardown. It was **not** rewritten or duplicated. It cannot close gate item 2 because
+it POSTs straight at the API with a signed JWT and so bypasses the browser, while AC1.1 requires
+capture through the live `EnumeratorHome`. The runbook §D says exactly this: *rehearse with the
+script, certify with the UI.*
+
+### Session 2026-08-06 (BMAD adversarial code-review) — 10 findings, all fixed
+
+Run pre-commit on the uncommitted tree, per [[feedback_review_before_commit]]. **Story File List
+matched `git status` exactly — 0 discrepancies — and no task marked `[x]` was found undone**, which
+is rare enough to say out loud. Task 2 verified genuinely complete. The findings were about what the
+fix *implies*, not about false claims. Full list with evidence: **Tasks/Subtasks → Review Follow-ups
+(AI)**. The two worth reading in the story body:
+
+**H2 — the fix moved the hazard rather than removing it.** AC1b's whole point is that a household
+enumerated on one handset must yield one row per person. The direct consequence is that a phone
+number stops identifying a person — and `registration-status.service.ts` was still resolving a phone
+lookup with `ORDER BY created_at DESC LIMIT 1`, then minting a `wizard_resume` magic link bound to
+whichever row won. A mother checking her status on the family phone would have received a link into
+her daughter's record, with NIN-completion attached. Nothing merged in the database; the merge simply
+happened in the citizen's session instead.
+
+`resolveRespondent` now refuses an identifier that matches more than one living respondent, and says
+nothing more than it says on a miss (the public response was already constant, so no enumeration
+signal changes). Refusing is strictly better than confidently answering about the wrong person, and
+the reference code — unique, printed by 9-58, read out at capture — still resolves. **That last part
+is a field-procedure dependency, not just code:** enumerators must read the reference code back to
+every person they register, or a shared-handset household has no working way in. Runbook §C carries
+it and §F verifies it during the smoke. New residual **R8**.
+
+**M1 — the counterfactual measurement was itself a test that passed over a hole.** The test named
+*"…so the counterfactual is measurable"* asserted the identity QUERY ran and nothing about whether
+the answer was recorded: no logger spy existed in the file, so deleting the entire `logger.info`
+block left all four AC1b tests green. Given that the event string is what the runbook greps prod for
+and what both R6 and R7 are to be judged on, it is a contract, not debug noise. Now spied and pinned,
+and RED-verified the same way the original fix was: renaming the event fails the test, restoring it
+passes.
+
+The rest: H1/H3 made the operator procedure actually exercise the guard (a NIN-bearing household pair
+skips the branch entirely and still returns 2 — GREEN having tested nothing), M2 corrected the
+`clerk` rationale without changing the membership, M3/M4/L1–L3 tightened the runbook's evidence
+commands and boxes.
+
+### Validation run
+
+| Check | Result |
+|---|---|
+| `pnpm --filter @oslsr/api exec tsc --noEmit` | clean |
+| `pnpm --filter @oslsr/api lint` (eslint + registry-read guard + story-residual guard) | clean — 364 files scanned no drift; 306 stories, no done-with-open-residuals |
+| Full API regression (`NODE_ENV=test`, `app_test`) — **post-review** | **259 files / 3564 passed, 0 failed**, 7 skipped, 1 todo |
+| Full API regression — dev half, pre-review | 259 files / 3558 passed, 0 failed |
+| New tests | 4 (13-4 AC1b) + 6 (review M1 ×2, H2 ×4) = **10**, all RED-verified against the unfixed code |
+
+Web package untouched — no `apps/web` changes in this story, so the web suite was not run.
+
+### Residuals
+
+Per the §2a0 debt gate. **Every open row here is operator execution on prod; none is dev work.**
+
+| ID | Sev | State | What | Evidence to close |
+|---|---|---|---|---|
+| R1 | High | **OPEN — operator** | AC1.1–1.3: 5–10 real submissions through `EnumeratorHome` on prod (today: one ever) | Runbook §F table populated with respondent/submission IDs; `§A query 2` shows `source='enumerator'`, `processed=true` for each |
+| R2 | High | **OPEN — operator** | AC1b execution: the shared-phone household pair | `§A query 4` returns **2**. Code fix already shipped + RED-verified, so this CONFIRMS rather than discovers. If it returns 1, the fix did not reach prod → hold gate item 2 |
+| R3 | Med | **OPEN — operator** | AC1d: both email branches, with the OSLRS-number email confirmed **received** | Runbook §F "confirmation email received at" filled |
+| R4 | Med | **OPEN — operator** | AC1.4 / AC1c: rows tagged before creation, teardown run child-first with `DELETE n` counts read, baseline re-measured | §F teardown checkbox + before/after baselines |
+| R5 | High | **OPEN — operator** | AC3: gate item #2 verdict recorded with evidence | §F verdict flipped GREEN with the ID list |
+| R6 | Low | **ACCEPTED — manual watch** | The exemption's cost side has no automated alarm: `identity_match_exempted_staff_capture` still has no digest line | Re-scoped by review M4 from "no surface at all" to "manual watch with a query that exists": `§A query 6` lists shared-handset enumerator/clerk groups. Run at teardown and weekly once field work starts. Automate at 13-42 if field volume makes the rate interesting |
+| R7 | Low | **ACCEPTED** | AC1b.3's fallback (DOB match / ≥3 shared tokens) not implemented | Exemption was AC1b.3's stated first choice; the fallback is only warranted if R6's counter shows the exemption is too broad. Cannot be judged before field data exists |
+| R8 | Med | **OPEN — operator (field procedure)** | Review H2: a shared-handset household can no longer be resolved by phone — the status check now refuses an ambiguous identifier rather than answering about the wrong person. **Enumerators must read the OSLRS reference code back to every registrant, and it must go on the slip**, or those citizens have no working way to check status or resume | Runbook §C's field-consequence note actioned in the enumerator briefing; §F's two status-check boxes ticked during the smoke (shared phone → neutral + no email; reference code → email arrives) |
+| R9 | Low | **OPEN — dev, post-launch** | Review H2 changed public status-check resolution for ALL sources, not just enumerator rows. The ~14 pre-existing duplicate-phone pairs in the live registry will now get the neutral response instead of the newest match — correct, but it is a silent behaviour change for people already registered | Watch `registration_status.identifier_ambiguous` after deploy. If the rate is material, the fix is a disambiguation prompt ("we found more than one — enter your reference code"), not a return to guessing. Candidate for its own story |
+
+### Closing verdict
+
+**NOT CLOSED — `in-progress`.** Task 2 is complete, the AC1b code defect is fixed and verified, and
+the code-review's 10 findings are all fixed pre-commit. Tasks 1 / 1b / 1c / 1d and AC3 still require
+the operator to run the smoke on prod. Per §2a0, `Status:` must not read `done` (or `review`, since
+the ACs are not satisfiable by review of code alone) while R1–R5, R8 and R9 are OPEN.
+
+**Deploy SHA:** ⏳ PENDING — not yet committed or pushed. **This is a hard precondition for the
+smoke, not bookkeeping:** §C run against a box that predates this deploy returns 1 and proves the
+old bug. The runbook opens with a SHA check for exactly that reason.
+
+## File List
+
+**Modified**
+- `apps/api/src/services/submission-processing.service.ts` — `STAFF_CAPTURED_SOURCES` constant + the AC1b exemption branch in `findOrCreateRespondent` (lookup still runs; attach skipped; counterfactual logged). *Review M2: the `clerk` rationale rewritten — it is the data shape, not a witness in the room*
+- `apps/api/src/services/registration-status.service.ts` — **review H2**: `resolveRespondent` refuses an identifier matching >1 living respondent (phone + email branches `LIMIT 2`, `rolled_back` excluded, email branch grouped by respondent) and emits `registration_status.identifier_ambiguous`. Stops a shared-handset household member being handed a magic link into a relative's record
+- `apps/api/src/services/__tests__/registration-status.service.test.ts` — **review H2**: +4 tests (shared phone refused, shared email refused, ambiguity event carries count but never the identifier per AC8, unique phone still dispatches) + a captured `pino` mock
+- `apps/api/src/services/respondent-identity.ts` — docblock only: the "⚠️ NOT FOR THE ENUMERATOR PATH AS-IS" warning it carried pointed at this story; replaced with the resolved state + why the exemption lives in the caller
+- `apps/api/src/services/__tests__/submission-processing.service.test.ts` — +4 tests (`13-4 AC1b` describe): enumerator + clerk household cases, the measurable-counterfactual pin, and the public-path regression pin. *Review M1: `pino.info` is now a captured spy and +2 tests assert the counterfactual event actually fires (and only when there was something to merge into) — RED-verified by renaming the event*
+- `docs/runbooks/pre-launch-operator-runbook.md` — spend-gate row in the header table + the two-gates note; Step 9 cross-link (AC2.3)
+- `_bmad-output/implementation-artifacts/13-4-enumerator-prod-smoke-and-golive-gate.md` — this file (Task 2 checkboxes, Dev Agent Record, Residuals, File List, Change Log)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `13-4` ready-for-dev → in-progress
+
+**Added**
+- `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` — the 4-point go/no-go gate runbook (AC2), incl. the AC1c test-data protocol, AC1b household procedure, AC1d email branches, and the AC3 verdict record. *Review H1/H3/M3/M4/L1–L3: the §C household pair must be captured with NIN blank (a NIN-bearing pair skips the guard and still returns 2), the §A query 4 assertion matches on the last 10 digits and is bounded, the exemption-log check is mandatory and uses `--nostream`, a new query 6 watches shared-handset groups, GREEN/RED boxes on all four items, §F extended to 10 rows + the deploy precondition*
+
+**Deleted** — none.
+
 ## Change Log
 
 | Date | Change |
 |------|--------|
+| 2026-08-06 | **BMAD adversarial code-review — 10 findings (3 High, 4 Med, 3 Low), ALL FIXED pre-commit.** File List matched git exactly and no `[x]` task was found undone; the findings were about what the AC1b fix *implies*. **H2 (High): the fix moved the merge hazard downstream rather than removing it.** Giving a household one row per person means a phone stops identifying a person — and `registration-status.service.ts` still resolved a phone lookup `ORDER BY created_at DESC LIMIT 1` and minted a `wizard_resume` magic link bound to the winner, so a mother checking status on the family handset would have got a link into her daughter's record with NIN-completion attached. `resolveRespondent` now refuses an identifier matching >1 living respondent (neutral public response unchanged) and logs `registration_status.identifier_ambiguous` with class+count only. Field dependency → **R8**: enumerators must read the reference code back, since it is now the only identifier a shared-handset household can use. **H1/H3 (High): the operator procedure could not have exercised the guard.** The R13 branch is gated on `!data.nin`, but §C never said to leave the NIN blank and §B.3 pushed toward a NIN sentinel — a NIN-bearing pair skips the branch and `§A query 4` returns 2 anyway, flipping gate item 2 GREEN having tested nothing. And query 4 itself matched a raw typed phone against canonicalised storage (RED on a working fix) with no `rolled_back` filter or time window (GREEN on a reused phone). Both fixed; the exemption-log check is now MANDATORY, not "optionally". **M1 (Med): the counterfactual test passed over a hole** — it asserted the identity query ran, never that the answer was logged; with no logger spy in the file, deleting the whole `logger.info` block left all 4 AC1b tests green, while that event string is what the runbook greps and what R6/R7 are judged on. Now spied, pinned, and RED-verified by renaming the event. **M2:** `clerk` kept in the exemption but its "a human in the room" rationale corrected — it is the data shape (paper from a compound carries the same shared handset) and the double-keying cost is stated. **M4:** new `§A query 6` gives the exemption's cost side a manual watch; R6 re-scoped. **L1–L3:** GREEN/RED boxes on all four gate items, §F extended to 10 rows + `NIN?` column, deploy-SHA precondition added. +6 tests (10 total for this story). tsc 0, eslint 0, full API regression **3564 passed / 0 failed**. Status stays `in-progress` — R1–R5, R8, R9 open. |
+| 2026-08-06 | **Dev half executed (Amelia, dev-story). Task 2 DONE; Tasks 1/1b/1c/1d remain operator-gated.** (1) **AC1b defect fixed — and it was NOT hypothetical:** a RED test proved the R13 identity guard merged a shared-phone household member into an existing record on the enumerator path. `submission-processing.service.ts` now exempts `STAFF_CAPTURED_SOURCES` (`enumerator`/`clerk`) from the attach while still running the lookup, emitting `identity_match_exempted_staff_capture` so the counterfactual stays measurable. Exemption keys on **source, not `submitterId`** — an authenticated `public_user` carries a submitterId and must still merge (that is the 2026-08-04 7-duplicate path). +4 tests. (2) **AC2 runbook shipped:** `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` — 4-point gate verbatim w/ how-to-verify + green/red boxes, the 24–48h decision rule, AC1c protocol, AC1b/AC1d procedures, AC3 evidence table; cross-linked both ways with `pre-launch-operator-runbook.md` (header spend-gate row + Step 9), not forked. (3) **Two AC1c claims corrected against the code:** `users` is minted only by the wizard's `auth.service.ts` provisioning, NOT the enumerator path, so the teardown chain is path-dependent. (4) REUSE honoured — `_enumerator-path-smoke-test.ts` not duplicated; documented as rehearsal-not-certification since it bypasses the browser. tsc 0, eslint 0, full API regression 3558 passed / 0 failed. Status stays `in-progress`: R1–R5 are operator residuals. |
 | 2026-06-25 | Story authored by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 3 ACs (5–10 real enumerator submissions end-to-end on prod; codify the 4-point pre-flight go/no-go checklist as a runbook; record the gate item #2 verdict). REUSE the fully-wired enumerator path — net-new = the prod smoke + the runbook, NO code change to the field flow. Status → ready-for-dev. 🚦 PRE-SPEND gate item #2. |
+
+## Adjudication verdict — 2026-08-06
+
+**CODE ACCEPTED. STORY CORRECTLY STAYS `in-progress`** — its central deliverable, a prod smoke of
+5–10 real enumerator submissions, has not run. Tasks 1 / 1b / 1c / 1d / 3 are unchecked and must
+stay that way until it does. The code-review findings (H1–H3, M1–M4, L1) are all addressed, and M2 —
+where the `clerk` rationale was wrong but the membership right — is the kind of self-correction that
+makes the rest of the file trustworthy.
+
+**Independently verified (not taken on report):**
+| check | result |
+|---|---|
+| `tsc -p apps/api` | clean |
+| `eslint src` | clean |
+| the two changed suites | **95 passed** |
+| AC1b exemption **RED-verified** — neutered `STAFF_CAPTURED_SOURCES.has(source)` | **3 tests fail** ✅ |
+| H2 ambiguity refusal **RED-verified** — neutered `rows.length > 1` | **2 tests fail** ✅ |
+| `ROLE_TO_SOURCE` really yields `enumerator`/`clerk` | confirmed — the exemption CAN fire |
+
+The counterfactual log (`identity_match_exempted_staff_capture`) is the right instinct: it keeps the
+lookup running so "how often would this have merged?" stays answerable. That is R21's lesson applied
+before it was needed rather than after.
+
+### Two residuals found in adjudication — neither blocks the smoke
+
+| ID | Finding | Sev | State |
+|---|---|---|---|
+| **R1** | **The `?? 'enumerator'` fallback now grants merge-exemption to every UNMAPPED role.** `determineSubmitterRole` ends `ROLE_TO_SOURCE[role.name] ?? 'enumerator'`. Prod holds four roles absent from that map — `super_admin` (**2 users**), `government_official`, `supervisor`, `verification_assessor` — so each is now silently exempt from the R13 merge *and* written to `respondents.source` as `'enumerator'`, which is a data lie independent of the merge. The default is pre-existing; **this story gave it a new consequence.** Direction is defensible (everyone hitting the fallback is staff), which is why it is not a blocker — but it is silent, and `source` is read by analytics. Fix: map every role explicitly and make the fallback `'public'` (the conservative direction — merge rather than exempt) or throw. | Med | ✅ **CLOSED 2026-08-06 — fixed before the smoke.** All seven prod roles now map explicitly; the only non-staff role is `public_user`, every other role is `clerk` (accurate label + staff-captured for the exemption). An UNMAPPED role no longer resolves silently: it logs `submission_processing.unmapped_role` at **ERROR** and returns `clerk` — safe on both axes, since a duplicate is recoverable and a wrong-person merge is not. Pinned by an `it.each` over all seven roles. ⛔ **An existing test was asserting the DEFECT** (`should return "enumerator" for unmapped roles`) and had been green throughout — rewritten, with the history kept in its docblock. |
+| **R2** | **The SQL `LIMIT 2` that feeds the H2 guard is covered by NO test.** The suite mocks `db.execute`, so the mock returns whatever rows the test supplies and the `LIMIT` in the query string is invisible to it. If that value regressed to `LIMIT 1` — which is exactly what it was before this story — `rows.length > 1` could never be true, **the ambiguity guard would silently never fire on prod, and all 95 tests would stay green.** Found by accident: my first RED-verify attempt neutered the SQL and nothing failed, which looked like a test-over-a-hole and was actually proof the SQL layer is untested. The JS guard is well covered; the query that feeds it is not. Fix: an integration test against the real DB with two respondents on one phone, or assert the `LIMIT` in the issued SQL the way `respondent-identity.test.ts` asserts `INTERSECT`. | Med | ✅ **CLOSED 2026-08-06 — fixed before the smoke.** Two tests now pin the SQL shape the mock cannot evaluate: the phone and email lookups must issue `LIMIT 2` (the guard needs a second row to detect ambiguity at all) and must filter `rolled_back`; the reference-code lookup stays `LIMIT 1` because it is genuinely unique. **RED-verified by regressing all three to `LIMIT 1` — the pre-story value — which now fails.** Same move as `respondent-identity.test.ts` asserting `INTERSECT`. |
+
+### The smoke is now unblocked (it was not, yesterday)
+
+Creating the enumerator account sends a staff invitation through the **email worker queue**, and
+until 2026-08-05 that queue was about to auto-pause: `EMAIL_TIER` was unset, `EmailBudgetService`
+enforced the free tier's 100/day against a Pro account, and the invitation would have failed
+silently. `EMAIL_TIER=pro` is set and verified at runtime (`email.service.initialized tier=pro`).
+**Run the smoke; the invitation will arrive.**
+
+⚠️ **Carry into the smoke:** AC1c's teardown recipe was corrected on 2026-08-06 — `users` was missing
+from the chain entirely (the wizard mints one per email; delete LAST, the `respondents` FK blocks it)
+and `audit_logs` is EXEMPT because it is hash-chained.

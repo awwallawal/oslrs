@@ -130,6 +130,27 @@ export class RegistrationStatusService {
    * Resolve a registrant by the auto-detected identifier. Returns null on no
    * match (no existence signal escapes this method — the caller's response is
    * constant either way).
+   *
+   * ⚠️ AN AMBIGUOUS IDENTIFIER RESOLVES TO NOTHING (13-4 code review H2, 2026-08-06)
+   * --------------------------------------------------------------------------------
+   * `phone` and `email` are NOT unique keys on `respondents`, and as of 13-4 AC1b they are
+   * deliberately not even close to unique. The enumerator/clerk exemption in
+   * `submission-processing.service.ts` exists so that a household enumerated on ONE handset
+   * yields one row PER PERSON instead of silently collapsing into one — which means "four
+   * respondents share this phone" is now the EXPECTED shape of field data, not an anomaly.
+   *
+   * This method used to answer that with `ORDER BY created_at DESC LIMIT 1`: pick the newest and
+   * say nothing. `handleRequest` then issues a `wizard_resume` magic link **bound to that
+   * respondentId**, so a mother checking her status on the family handset would have been handed
+   * a session that resumes — and can complete the NIN on — her daughter's record. That is the
+   * exact two-citizens-merged failure AC1b was written to prevent, moved one hop downstream.
+   *
+   * So: when an identifier matches MORE THAN ONE living respondent we return null and let the
+   * caller emit its constant neutral response. Refusing is strictly better than confidently
+   * answering about the wrong person, and there is a working alternative that IS unique — the
+   * reference code, which 9-58 prints for every registrant and the enumerator reads out at
+   * capture. `rolled_back` rows are excluded from the count for the same reason
+   * `findRespondentByIdentity` excludes them: they are soft-deleted and must not resolve.
    */
   static async resolveRespondent(
     identifier: string,
@@ -144,6 +165,7 @@ export class RegistrationStatusService {
     }> = [];
 
     if (identifierClass === 'reference_code') {
+      // The one genuinely unique identifier — no ambiguity check needed.
       const result = (await db.execute(sql`
         SELECT id, status, reference_code, phone_number
         FROM "respondents"
@@ -152,13 +174,18 @@ export class RegistrationStatusService {
       `)) as { rows: typeof rows };
       rows = result.rows;
     } else if (identifierClass === 'email') {
+      // GROUP BY the respondent, not the submission: one person with three submissions under
+      // the same address is ONE match, not three. LIMIT 2 is all the ambiguity check needs.
       const result = (await db.execute(sql`
-        SELECT r.id, r.status, r.reference_code, r.phone_number
+        SELECT r.id, r.status, r.reference_code, r.phone_number,
+               max(s.submitted_at) AS last_submitted_at
         FROM "respondents" r
         JOIN "submissions" s ON s.respondent_id = r.id
         WHERE lower(s.raw_data->>'email') = ${trimmed.toLowerCase()}
-        ORDER BY s.submitted_at DESC
-        LIMIT 1
+          AND r."status" <> 'rolled_back'
+        GROUP BY r.id, r.status, r.reference_code, r.phone_number
+        ORDER BY last_submitted_at DESC
+        LIMIT 2
       `)) as { rows: typeof rows };
       rows = result.rows;
     } else {
@@ -168,13 +195,31 @@ export class RegistrationStatusService {
         SELECT id, status, reference_code, phone_number
         FROM "respondents"
         WHERE "phone_number" = ${normalised}
+          AND "status" <> 'rolled_back'
         ORDER BY "created_at" DESC
-        LIMIT 1
+        LIMIT 2
       `)) as { rows: typeof rows };
       rows = result.rows;
     }
 
     if (rows.length === 0) return null;
+
+    if (rows.length > 1) {
+      // Class + count only — never the raw identifier (AC8). This is also the operator's signal
+      // that shared-handset households are arriving from the field: a rising count here is the
+      // cue to give enumerators the "read the reference code back to them" instruction.
+      logger.info(
+        {
+          event: 'registration_status.identifier_ambiguous',
+          identifierClass,
+          matchCount: rows.length,
+        },
+        'Identifier matched more than one respondent — refusing to guess. Responding as if no ' +
+          'match; the registrant must use their reference code (13-4 review H2).',
+      );
+      return null;
+    }
+
     return {
       id: rows[0].id,
       status: rows[0].status,

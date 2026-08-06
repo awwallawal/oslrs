@@ -117,11 +117,19 @@ vi.mock('uuidv7', () => ({
   uuidv7: () => 'mock-uuid-v7-001',
 }));
 
+// 13-4 review M1 — `info` is a CAPTURED spy, not an anonymous one. The AC1b exemption's only
+// artefact is a log line, the runbook greps prod for that exact event string, and residuals
+// R6/R7 are both "judge it on the counterfactual counter" — so the event name and its payload
+// are behaviour here, not debug noise, and must be pinned like any other contract.
+const mockLoggerInfo = vi.fn();
+// 13-4 R1 — `error` is captured for the same reason `info` is: the unmapped-role signal IS the
+// behaviour. Silence is what let four roles be mislabelled and exempted without anyone deciding it.
+const mockLoggerError = vi.fn();
 vi.mock('pino', () => ({
   default: () => ({
-    info: vi.fn(),
+    info: (...args: unknown[]) => mockLoggerInfo(...args),
     warn: vi.fn(),
-    error: vi.fn(),
+    error: (...args: unknown[]) => mockLoggerError(...args),
     debug: vi.fn(),
   }),
 }));
@@ -203,6 +211,13 @@ function mockClerkRole() {
   mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-clerk' }); // determineSubmitterRole
   mockFindFirstUser.mockResolvedValueOnce(null); // cross-table NIN check (no staff match)
   mockFindFirstRole.mockResolvedValue({ name: 'data_entry_clerk' });
+}
+
+/** 13-4 R1 — an arbitrary role name, to exercise the unmapped-role path. */
+function mockRoleNamed(name: string) {
+  mockFindFirstUser.mockResolvedValueOnce({ roleId: 'role-x' }); // determineSubmitterRole
+  mockFindFirstUser.mockResolvedValueOnce(null); // cross-table NIN check
+  mockFindFirstRole.mockResolvedValue({ name });
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -896,12 +911,27 @@ describe('SubmissionProcessingService', () => {
       expect(result).toBe('public');
     });
 
-    it('should return "enumerator" for unmapped roles (supervisor, super_admin)', async () => {
+    /**
+     * ⛔ THIS TEST USED TO ASSERT THE DEFECT, AND WAS GREEN THE WHOLE TIME.
+     *
+     * It read `should return "enumerator" for unmapped roles (supervisor, super_admin)` and
+     * expected `'enumerator'` — faithfully pinning `?? 'enumerator'` in place. Harmless while
+     * `source` was only a label; the moment 13-4 AC1b made `source` decide the identity-merge
+     * exemption, this test was actively defending a bug that silently exempted `super_admin`
+     * (2 real users), `government_official`, `supervisor` and `verification_assessor`.
+     *
+     * `supervisor` is now MAPPED, so it is no longer the unmapped case at all — the genuinely
+     * unmapped path is covered in the R1 block at the end of this file. Kept here, rewritten,
+     * so the history is legible: when a fix leaves its covering test green, one of the two is
+     * wrong. Third instance of this shape (see the ops-digest `todayCount: 85 -> red` test).
+     */
+    it('maps supervisor to clerk — it is a STAFF role, not a field enumerator', async () => {
       mockFindFirstUser.mockResolvedValue({ roleId: 'role-admin' });
       mockFindFirstRole.mockResolvedValue({ name: 'supervisor' });
 
       const result = await SubmissionProcessingService.determineSubmitterRole('user-admin');
-      expect(result).toBe('enumerator');
+      expect(result).toBe('clerk');
+      expect(result).not.toBe('enumerator');
     });
   });
 
@@ -1250,6 +1280,147 @@ describe('SubmissionProcessingService', () => {
       expect(result._isNew).toBe(true);
     });
 
+    /**
+     * ── Story 13-4 AC1b — A HOUSEHOLD SHARES A HANDSET ────────────────────────
+     *
+     * The R13 guard above was tuned on SELF-registration data: 14 duplicate-phone pairs in the
+     * live registry, and ZERO cases of two distinct people sharing a phone. That distribution is
+     * one-person-one-handset, and it does not survive contact with field enumeration.
+     *
+     * An enumerator walks a compound and registers four people on ONE phone. A mother
+     * `Fatima Bello` and her daughter `Fatima Aisha Bello` share that phone and two name tokens,
+     * so the guard scores them a match and ATTACHES the daughter to the mother's record. That is
+     * not a duplicate prevented — it is two citizens merged into one, and it fails SILENTLY: no
+     * error, no duplicate, just a household that ends up with fewer records than it has people.
+     *
+     * The exemption keys on the SOURCE, not on `submitterId` alone. `determineSubmitterRole` maps
+     * an authenticated `public_user` to source `public` while still carrying a submitterId, and a
+     * public user re-registering themselves is exactly what R13 exists to catch. Only
+     * `enumerator` / `clerk` mean a STAFF MEMBER captured this on someone else's behalf — and a
+     * human standing in the room has better evidence than a string comparison.
+     */
+    describe('13-4 AC1b — staff-captured sources are exempt from the R13 identity merge', () => {
+      const householdMatch = {
+        rows: [{ id: 'mother-resp-01', reference_code: 'OSL-2026-MOTHER', status: 'active' }],
+      };
+
+      // The failure mode is a MISSING row, so assert the count. A pipeline that returns one row
+      // looks identical to success unless the assertion is on `_isNew` + the insert.
+      for (const source of ['enumerator', 'clerk'] as const) {
+        it(`creates a SECOND record for a ${source}-captured household member on a shared phone`, async () => {
+          mockFindFirstRespondent.mockResolvedValue(null);
+          mockFindFirstUser.mockResolvedValue(null);
+          mockDbExecute.mockResolvedValueOnce(householdMatch);
+
+          const result = await SubmissionProcessingService.findOrCreateRespondent(
+            { ...baseData, nin: undefined, firstName: 'Fatima Aisha', lastName: 'Bello' },
+            source,
+            'enumerator-A',
+          );
+
+          expect(result._isNew).toBe(true);
+          expect(result.id).not.toBe('mother-resp-01');
+          expect(mockInsertRespondent).toHaveBeenCalled();
+        });
+      }
+
+      /**
+       * The exemption must not become a BLIND SPOT. R21's whole lesson was that a guard which
+       * never ran looked identical to a guard that found nothing — the only evidence was a
+       * counter reading zero. So the lookup still RUNS on staff-captured rows; it just does not
+       * attach. That is what makes "how often would this have merged?" answerable, which is the
+       * measurement AC1b.3's fallback (DOB match / >=3 tokens) would have to be judged on.
+       */
+      it('STILL RUNS the identity lookup on a staff-captured row, so the counterfactual is measurable', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute.mockResolvedValueOnce(householdMatch);
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, nin: undefined },
+          'enumerator',
+          'enumerator-A',
+        );
+
+        expect(mockDbExecute).toHaveBeenCalledTimes(1);
+        const issued = JSON.stringify(mockDbExecute.mock.calls[0]?.[0] ?? {});
+        expect(issued).toMatch(/INTERSECT/i);
+      });
+
+      /**
+       * ...AND THE MEASUREMENT ACTUALLY GETS EMITTED (code review M1).
+       *
+       * The test above proves the QUERY ran. It says nothing about whether anyone recorded the
+       * answer — delete the whole `logger.info` block and it still passes, which is the exact
+       * shape of [[pattern-test-that-passes-over-a-hole]] this story cites elsewhere. The event
+       * string is not incidental: `enumerator-prod-smoke-and-golive-gate.md` §A query 5 greps
+       * prod for it by name, and residuals R6/R7 are both "decide it on this counter". A rename
+       * would silently empty the operator's evidence command and both residuals' denominator.
+       */
+      it('EMITS the counterfactual with the record it would have merged into', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute.mockResolvedValueOnce(householdMatch);
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, nin: undefined, firstName: 'Fatima Aisha', lastName: 'Bello' },
+          'enumerator',
+          'enumerator-A',
+        );
+
+        const exempted = mockLoggerInfo.mock.calls.find(
+          (c) =>
+            (c[0] as { event?: string })?.event ===
+            'submission_processing.identity_match_exempted_staff_capture',
+        );
+        expect(exempted).toBeDefined();
+        // `wouldHaveMergedInto` IS the denominator — a log line that fired without naming the
+        // record it spared would answer "how often" but never "was it right to".
+        expect(exempted?.[0]).toMatchObject({
+          wouldHaveMergedInto: 'mother-resp-01',
+          source: 'enumerator',
+          submitterId: 'enumerator-A',
+        });
+      });
+
+      it('does NOT emit the counterfactual when there was nothing to merge into', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute.mockResolvedValueOnce({ rows: [] });
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, nin: undefined },
+          'enumerator',
+          'enumerator-A',
+        );
+
+        const events = mockLoggerInfo.mock.calls.map((c) => (c[0] as { event?: string })?.event);
+        expect(events).not.toContain(
+          'submission_processing.identity_match_exempted_staff_capture',
+        );
+      });
+
+      /**
+       * The regression that matters most. The exemption is narrow by construction: if it ever
+       * widens to cover `public`, the 7-duplicate defect of 2026-08-04 comes straight back.
+       */
+      it('does NOT exempt the public path — a self-registration still attaches (R13 regression)', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute.mockResolvedValueOnce(householdMatch);
+
+        const result = await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, nin: undefined },
+          'public',
+          'public-user-A',
+        );
+
+        expect(result.id).toBe('mother-resp-01');
+        expect(result._isNew).toBe(false);
+        expect(mockInsertRespondent).not.toHaveBeenCalled();
+      });
+    });
+
     it('returns the original pending row id on a successful merge (preserves submitter credit)', async () => {
       mockFindFirstRespondent.mockResolvedValue(null);
       mockFindFirstUser.mockResolvedValue(null);
@@ -1538,4 +1709,45 @@ describe('SubmissionProcessingService', () => {
       ).rejects.toThrow('redis down');
     });
   });
+
+  /**
+   * 13-4 R1 (adjudication, 2026-08-06). `source` stopped being a mere label when AC1b made it
+   * decide the identity-merge exemption. The map held 3 of the 7 roles on prod and fell back to
+   * `?? 'enumerator'`, so `super_admin` (2 real users), `government_official`, `supervisor` and
+   * `verification_assessor` were silently exempted AND written to `respondents.source` as field
+   * captures. These pin every role explicitly so adding one to the DB without updating the map
+   * is loud rather than silent.
+   */
+  describe('13-4 R1 — every prod role maps explicitly; unmapped is LOUD', () => {
+    it.each([
+      ['public_user', 'public'],
+      ['enumerator', 'enumerator'],
+      ['data_entry_clerk', 'clerk'],
+      ['super_admin', 'clerk'],
+      ['government_official', 'clerk'],
+      ['supervisor', 'clerk'],
+      ['verification_assessor', 'clerk'],
+    ])('role %s -> source %s', async (roleName, expected) => {
+      mockRoleNamed(roleName as string);
+      await expect(SubmissionProcessingService.determineSubmitterRole('user-1')).resolves.toBe(expected);
+    });
+
+    it('NEVER silently calls an unknown role an enumerator — logs ERROR and uses clerk', async () => {
+      mockRoleNamed('some_future_role');
+      const got = await SubmissionProcessingService.determineSubmitterRole('user-1');
+
+      // `clerk` on both axes: nearer the truth as a label than 'enumerator' (which asserts
+      // fieldwork), and staff-captured, so the merge is SKIPPED — the safe direction, because a
+      // duplicate is recoverable and a wrong-person merge is not.
+      expect(got).toBe('clerk');
+      expect(got).not.toBe('enumerator');
+
+      const err = mockLoggerError.mock.calls.find(
+        (c) => c[0]?.event === 'submission_processing.unmapped_role',
+      );
+      expect(err).toBeDefined();
+      expect(err![0].roleName).toBe('some_future_role');
+    });
+  });
+
 });

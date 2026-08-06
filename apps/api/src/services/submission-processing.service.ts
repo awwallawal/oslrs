@@ -62,12 +62,65 @@ export const RESPONDENT_FIELD_MAP: Record<string, string> = {
   'consent_enriched': 'consentEnriched',
 };
 
-/** Maps user role names to respondent source types */
+/**
+ * Maps user role names to respondent source types. **EVERY role in the `roles` table must appear
+ * here** — see the fallback in `determineSubmitterRole`.
+ *
+ * 13-4 R1 (adjudication, 2026-08-06): this map held three of the seven roles that exist on prod,
+ * and the fallback was `?? 'enumerator'`. That was harmless while `source` was only a label. It
+ * stopped being harmless the moment AC1b made `source` decide **whether the identity merge is
+ * skipped** — `super_admin` (2 real users), `government_official`, `supervisor` and
+ * `verification_assessor` were all silently exempted, and all four were being written to
+ * `respondents.source` as `'enumerator'`, which analytics reads as field capture.
+ *
+ * The rule that resolves it: **the only role that is not staff is `public_user`.** Anyone else
+ * holding a role is submitting on someone else's behalf, which is clerk-shaped data entry — a
+ * stack of forms from one compound, sharing a handset and surnames. So they map to `clerk`:
+ * accurate as a label, and correct for the merge exemption.
+ */
 const ROLE_TO_SOURCE: Record<string, RespondentSource> = {
+  'public_user': 'public',
   'enumerator': 'enumerator',
   'data_entry_clerk': 'clerk',
-  'public_user': 'public',
+  // Staff who may key a submission on someone's behalf. Not field enumerators, but the DATA has
+  // the same shape (see STAFF_CAPTURED_SOURCES), which is what the exemption turns on.
+  'super_admin': 'clerk',
+  'government_official': 'clerk',
+  'supervisor': 'clerk',
+  'verification_assessor': 'clerk',
 };
+
+/**
+ * Story 13-4 AC1b — sources where a STAFF MEMBER captured the submission on someone else's
+ * behalf, and is therefore exempt from the R13 no-NIN identity merge (see the guard below).
+ *
+ * ⚠️ BRANCH ON SOURCE, NEVER ON `submitterId` ALONE. An authenticated `public_user` carries a
+ * submitterId too (`determineSubmitterRole` maps it to source `public`), and a public user
+ * re-registering themselves is precisely the case R13 exists to catch. Widening this to "any
+ * submitterId" reinstates the defect that gave 7 citizens two records on 2026-08-04.
+ *
+ * WHY `clerk` IS IN HERE WHEN AC1b ONLY NAMED `enumerator` (code review M2, 2026-08-06)
+ * -------------------------------------------------------------------------------------
+ * The first draft justified the set with "a human is standing in the room", which is TRUE of an
+ * enumerator and FALSE of a `data_entry_clerk` keying paper forms in an office. The rationale was
+ * wrong; the membership is still right, for a different reason.
+ *
+ * What actually decides this is the SHAPE OF THE DATA, not the presence of a witness. The R13
+ * threshold assumes one-person-one-handset — the distribution of SELF registration. A clerk keys a
+ * stack of paper forms collected from a compound, and that stack carries the same shared handset
+ * and the same shared surnames as the enumerator's tablet does. Merging two citizens is the worse
+ * error in both channels; only `public` (a person submitting for themselves, where a name+phone
+ * repeat really does mean a repeat) keeps the merge.
+ *
+ * The cost is accepted with eyes open: a clerk who double-keys the SAME paper form now mints a
+ * duplicate that R13 used to absorb. That is the documented trade ("better one duplicate than a
+ * wrong-person merge"), it is recoverable via Story 9-11 reconciliation, and it is no longer
+ * invisible — every skipped merge emits `identity_match_exempted_staff_capture` below.
+ */
+const STAFF_CAPTURED_SOURCES: ReadonlySet<RespondentSource> = new Set<RespondentSource>([
+  'enumerator',
+  'clerk',
+]);
 
 /**
  * Permanent processing error — should NOT be retried by BullMQ.
@@ -324,7 +377,8 @@ export class SubmissionProcessingService {
   /**
    * Determine the respondent source type from the submitter's user role.
    * Maps role names to respondent source: enumerator→'enumerator', data_entry_clerk→'clerk',
-   * public_user→'public'. Unknown/missing submitter defaults to 'public'.
+   * public_user→'public', all other staff roles→'clerk'. No submitter / no user / no role
+   * → 'public'. An UNMAPPED role name logs an ERROR and falls back to 'clerk' (13-4 R1).
    */
   static async determineSubmitterRole(submitterId: string | null): Promise<RespondentSource> {
     if (!submitterId) return 'public';
@@ -344,7 +398,33 @@ export class SubmissionProcessingService {
 
       if (!role) return 'public';
 
-      return ROLE_TO_SOURCE[role.name] ?? 'enumerator';
+      const mapped = ROLE_TO_SOURCE[role.name];
+      if (mapped) return mapped;
+
+      /**
+       * 13-4 R1 — an UNMAPPED role means a role was added to the database without updating
+       * ROLE_TO_SOURCE. That is a code change waiting to happen, so it is logged at ERROR, not
+       * swallowed: the previous silent `?? 'enumerator'` is exactly how four roles came to be
+       * mislabelled and exempted without anyone deciding it.
+       *
+       * The fallback is `clerk`, chosen on the two axes separately:
+       *   - LABEL: the holder has a role, so they are staff; `clerk` is nearer the truth than
+       *     `enumerator` (which asserts fieldwork) or `public` (which asserts self-registration).
+       *   - MERGE: `clerk` is staff-captured, so the merge is SKIPPED. That is the safe direction —
+       *     the standing trade is "better one duplicate than two citizens collapsed into one",
+       *     and a duplicate is recoverable while a wrong-person merge is not.
+       */
+      logger.error(
+        {
+          event: 'submission_processing.unmapped_role',
+          roleName: role.name,
+          submitterId,
+        },
+        'Role is not in ROLE_TO_SOURCE — defaulting to `clerk` (staff-captured, merge skipped). ' +
+          'Add it to the map: `source` is written to respondents and now also decides the ' +
+          'R13 identity-merge exemption (13-4 R1).',
+      );
+      return 'clerk';
     } catch (error) {
       logger.warn({
         event: 'submission_processing.role_lookup_failed',
@@ -559,7 +639,31 @@ export class SubmissionProcessingService {
         phoneNumber: canonical.phoneNumber,
       });
 
-      if (match) {
+      if (match && STAFF_CAPTURED_SOURCES.has(source)) {
+        /**
+         * 13-4 AC1b — DO NOT ATTACH, BUT DO RECORD THAT WE WOULD HAVE.
+         *
+         * The lookup deliberately still ran. R21's lesson was that a guard which never executes
+         * is indistinguishable from a guard that finds nothing — the only evidence either way was
+         * a counter reading zero. This log line is the denominator: it makes "how often would a
+         * staff-captured row have merged?" answerable, which is the measurement AC1b.3's fallback
+         * (DOB match, or >=3 shared tokens) would have to be judged on if the exemption is ever
+         * judged too broad.
+         */
+        logger.info(
+          {
+            event: 'submission_processing.identity_match_exempted_staff_capture',
+            wouldHaveMergedInto: match.id,
+            referenceCode: match.referenceCode,
+            existingStatus: match.status,
+            source,
+            submitterId: submitterId ?? null,
+          },
+          'A no-NIN staff-captured submission matched an existing respondent on name + phone, ' +
+            'but was NOT attached — a household shares a handset and the enumerator is in the ' +
+            'room (13-4 AC1b). Creating a distinct record.',
+        );
+      } else if (match) {
         logger.info(
           {
             event: 'submission_processing.no_nin_identity_match',

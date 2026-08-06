@@ -30,6 +30,17 @@ vi.mock('../audit.service.js', () => ({
 vi.mock('../../lib/redis.js', () => ({
   getRedisClient: () => mockRedisClient,
 }));
+// 13-4 review H2 — the ambiguity refusal is an OPS SIGNAL as well as a behaviour, so the event
+// name is pinned rather than left to drift away from whatever the operator greps for.
+const mockLoggerInfo = vi.fn();
+vi.mock('pino', () => ({
+  default: () => ({
+    info: (...args: unknown[]) => mockLoggerInfo(...args),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
 
 const {
   classifyIdentifier,
@@ -134,6 +145,124 @@ describe('RegistrationStatusService.handleRequest', () => {
       identifierClass: 'reference_code',
       dispatched: false,
       throttled: false,
+    });
+  });
+
+  /**
+   * ── 13-4 code review H2 — A SHARED HANDSET MUST NOT RESOLVE TO SOMEBODY ELSE ──────────────
+   *
+   * 13-4 AC1b deliberately stopped the ingestion pipeline from collapsing a household captured
+   * on one phone into a single respondent. The direct consequence is that "N respondents share
+   * this phone" became the EXPECTED shape of enumerator data — and this service used to answer
+   * such a lookup with `ORDER BY created_at DESC LIMIT 1` and then mint a `wizard_resume` magic
+   * link bound to that id. A mother checking her status on the family handset would have been
+   * handed a link into her daughter's record, with the NIN-completion flow attached to it.
+   *
+   * Refusing is strictly better than confidently answering about the wrong person: the neutral
+   * public response is unchanged, and the reference code remains a unique way in.
+   */
+  describe('13-4 H2 — an ambiguous identifier resolves to nothing', () => {
+    it('refuses a phone shared by a household instead of picking the newest row', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [
+          { id: 'daughter-r', status: 'pending_nin_capture', reference_code: 'OSL-2026-DAUGHT' },
+          { id: 'mother-r', status: 'active', reference_code: 'OSL-2026-MOTHER' },
+        ],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: '08012345678', ...ctx });
+
+      // The whole point: NO token bound to an arbitrary household member, and no email telling
+      // one person about another person's registration.
+      expect(mockIssueToken).not.toHaveBeenCalled();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(mockLogAction.mock.calls[0][0].details).toEqual({
+        identifierClass: 'phone',
+        dispatched: false,
+        throttled: false,
+      });
+    });
+
+    it('refuses a shared email the same way', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [
+          { id: 'son-r', status: 'active', reference_code: 'OSL-2026-SONNNN' },
+          { id: 'father-r', status: 'active', reference_code: 'OSL-2026-FATHER' },
+        ],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'household@example.com', ...ctx });
+
+      expect(mockIssueToken).not.toHaveBeenCalled();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    /**
+     * 13-4 R2 (adjudication, 2026-08-06) — THE QUERY THAT FEEDS THE GUARD IS ALSO LOAD-BEARING.
+     *
+     * Every test above mocks `db.execute`, so the mock returns whatever rows it likes and the
+     * `LIMIT` in the SQL string is invisible to all of them. **If that value regressed to
+     * `LIMIT 1` — which is exactly what it was before this story — the second row could never
+     * arrive, `rows.length > 1` could never be true, the ambiguity guard would silently never
+     * fire on prod, and all of these tests would stay green.**
+     *
+     * Found by accident during adjudication: neutering the SQL failed nothing, which looked like
+     * a test passing over a hole and was really proof the SQL layer had no cover at all. Same
+     * move as `respondent-identity.test.ts` asserting `INTERSECT` — pin the shape of the query,
+     * because a mock cannot evaluate it.
+     */
+    it('issues a query that can RETURN a second row — LIMIT must not be 1', async () => {
+      for (const identifier of ['08012345678', 'household@example.com']) {
+        mockExecute.mockReset();
+        mockExecute.mockResolvedValueOnce({ rows: [] });
+        await RegistrationStatusService.handleRequest({ identifier, ...ctx });
+
+        const issued = JSON.stringify(mockExecute.mock.calls[0]?.[0] ?? {});
+        // The guard needs at least two rows to detect ambiguity at all.
+        expect(issued).toMatch(/LIMIT\s+2/i);
+        // Soft-deleted rows must not resolve, and must not inflate the ambiguity count either.
+        expect(issued).toMatch(/rolled_back/);
+      }
+    });
+
+    /** A reference code IS unique, so it is exempt from the ambiguity check by design. */
+    it('leaves the unique reference-code lookup on LIMIT 1', async () => {
+      mockExecute.mockReset();
+      mockExecute.mockResolvedValueOnce({ rows: [] });
+      await RegistrationStatusService.handleRequest({ identifier: 'OSL-2026-ABC123', ...ctx });
+      const issued = JSON.stringify(mockExecute.mock.calls[0]?.[0] ?? {});
+      expect(issued).toMatch(/LIMIT\s+1/i);
+    });
+
+    it('emits the ambiguity event with the count but NEVER the identifier (AC8)', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [
+          { id: 'a', status: 'active', reference_code: null },
+          { id: 'b', status: 'active', reference_code: null },
+        ],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: '08012345678', ...ctx });
+
+      const ambiguous = mockLoggerInfo.mock.calls.find(
+        (c) => (c[0] as { event?: string })?.event === 'registration_status.identifier_ambiguous',
+      );
+      expect(ambiguous).toBeDefined();
+      expect(ambiguous?.[0]).toMatchObject({ identifierClass: 'phone', matchCount: 2 });
+      expect(JSON.stringify(ambiguous?.[0])).not.toContain('08012345678');
+    });
+
+    it('a UNIQUE phone still resolves and dispatches — the refusal is not a blanket block', async () => {
+      mockExecute
+        .mockResolvedValueOnce({ rows: [{ id: 'only-r', status: 'active', reference_code: 'OSL-2026-ONLYYY' }] })
+        .mockResolvedValueOnce({ rows: [{ email: 'solo@example.com' }] });
+
+      await RegistrationStatusService.handleRequest({ identifier: '08012345678', ...ctx });
+
+      expect(mockIssueToken).toHaveBeenCalledWith(
+        expect.objectContaining({ respondentId: 'only-r' }),
+      );
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
     });
   });
 

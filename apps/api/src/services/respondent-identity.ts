@@ -25,11 +25,19 @@
  * different people is far worse than a duplicate. Validated read-only over the whole registry —
  * every duplicate-phone pair scored ≥2, and **no** pair of genuinely distinct people did.
  *
- * ⚠️ NOT FOR THE ENUMERATOR PATH AS-IS. That threshold was measured on self-registration data —
- * one person, one handset. Field enumeration inverts it (a household on one phone), so 13-4 AC1b
- * requires a shared-phone household in the prod smoke and exempting or strengthening this for
- * `submitterId`-bearing submissions if it merges them. An enumerator standing in the room has
- * better evidence than a string comparison.
+ * ⚠️ THE THRESHOLD IS ONLY VALID FOR SELF-REGISTRATION DATA — one person, one handset. Field
+ * enumeration inverts it: an enumerator walks a compound and registers a whole household on ONE
+ * phone, where a shared surname plus one shared given name is ordinary rather than suspicious.
+ *
+ * ✅ RESOLVED 2026-08-06 (13-4 AC1b), and it was NOT hypothetical — a RED test proved the live
+ * code merged `Fatima Aisha Bello` into `Fatima Bello` on a shared phone. The CALLER now exempts
+ * staff-captured sources: `submission-processing.service.ts` skips the attach for
+ * `enumerator`/`clerk` while still running this query, so the counterfactual stays measurable
+ * (`submission_processing.identity_match_exempted_staff_capture`).
+ *
+ * The exemption lives in the caller, not here, because this function answers only "does the
+ * register already hold this person?" — whether that answer should MERGE anything depends on who
+ * was in the room, which is the caller's knowledge.
  */
 import { sql } from 'drizzle-orm';
 
