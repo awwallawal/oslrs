@@ -5,7 +5,7 @@
  * Story 3.3 AC1, AC4, AC8, AC9: Full queue UI with live submission list.
  */
 
-import { Upload, RotateCcw, Inbox, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, RotateCcw, Inbox, CheckCircle, Clock, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type SubmissionQueueItem } from '../../../lib/offline-db';
 import { Card, CardContent } from '../../../components/ui/card';
@@ -52,6 +52,9 @@ export default function EnumeratorSyncPage() {
     [userId],
   ) ?? [];
 
+  // Rejected outright by the server — retry is meaningless here, discard is the only exit (13-4).
+  const permanentItems = items.filter((i) => i.permanentFailure);
+
   // Look up form names from cache
   const formSchemas = useLiveQuery(() => db.formSchemaCache.toArray()) ?? [];
   const formNameMap = new Map(
@@ -95,6 +98,32 @@ export default function EnumeratorSyncPage() {
               <RotateCcw className="w-4 h-4" />
             )}
             {syncingCount > 0 ? 'Retrying...' : 'Retry Failed'}
+          </button>
+        )}
+        {/*
+          13-4 — a PERMANENTLY rejected submission cannot be retried into success, so offering only
+          "Retry Failed" left the operator pressing a button that could never work (and which, until
+          today, re-armed the item on every press). Discard is the honest action for these, and it
+          is the only escape an enumerator has: there is no browser console on a field phone.
+        */}
+        {permanentItems.length > 0 && (
+          <button
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Discard ${permanentItems.length} submission(s) the server permanently rejected? ` +
+                    'They were never saved, and retrying cannot make them succeed. ' +
+                    'Each respondent will need to be registered again.',
+                )
+              ) {
+                permanentItems.forEach((i) => void syncManager.discard(i.id));
+              }
+            }}
+            data-testid="discard-permanent-button"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-error-600 hover:bg-error-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Discard {permanentItems.length} rejected
           </button>
         )}
       </div>

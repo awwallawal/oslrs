@@ -23,6 +23,17 @@ export interface SubmissionQueueItem {
   createdAt: string;
   error: string | null; // Last error message
   /**
+   * 13-4 (2026-08-06) — TRUE when the server rejected this permanently and retrying can never
+   * succeed (a 4xx that is not a timeout/rate-limit). Before this existed, `NIN_DUPLICATE` was
+   * the ONLY error treated as terminal, so a 422 like
+   * `Submission is missing required answer(s): employment_status` retried forever — and
+   * `retryFailed()` reset `retryCount` to 0, so the operator's own Retry press kept it alive.
+   * The only way out was the browser console. Undefined on older rows (treated as retryable).
+   */
+  permanentFailure?: boolean;
+  /** HTTP status of the last failure, when the error came from the API. */
+  failureStatus?: number;
+  /**
    * Story 9-58 (AC5.2) — human-friendly reference code captured from the
    * `submitSurvey` response on a successful sync, so the completion screen can
    * read it back to the field officer. Undefined until synced (and on offline /

@@ -36,6 +36,52 @@ function setupWhereMock(
   });
 }
 
+import { isPermanentFailure } from '../sync-manager';
+import { ApiError } from '../../lib/api-client';
+
+/**
+ * 13-4 (2026-08-06) — found by a REAL prod smoke, not by review.
+ *
+ * An enumerator submitted a form missing `employment_status`. The server returned a 422 that could
+ * never succeed on resend. The queue treated it as retryable, because the ONLY error classed as
+ * permanent was the string `NIN_DUPLICATE` — and `retryFailed()` resets `retryCount` to 0, so every
+ * press of the operator's own "Retry Failed" button re-armed it. The banner never cleared, and the
+ * only escape was the browser console. **A field enumerator does not have one.**
+ *
+ * Classify on the HTTP STATUS, not the message: a message is prose that changes when someone edits
+ * a string; the status is the contract.
+ */
+describe('isPermanentFailure — 13-4', () => {
+  it('treats a 4xx the server will always reject as PERMANENT', () => {
+    // The exact shape that stuck: 422 INCOMPLETE_SUBMISSION.
+    expect(isPermanentFailure(new ApiError('Submission is missing required answer(s): employment_status', 422)).permanent).toBe(true);
+    expect(isPermanentFailure(new ApiError('bad request', 400)).permanent).toBe(true);
+    expect(isPermanentFailure(new ApiError('gone', 404)).permanent).toBe(true);
+    expect(isPermanentFailure(new ApiError('duplicate', 409)).permanent).toBe(true);
+  });
+
+  it('keeps genuinely retryable client errors retryable', () => {
+    // 408/429 explicitly mean "try again"; 401/403 can change after a token refresh or re-login.
+    for (const status of [408, 429, 401, 403]) {
+      expect(isPermanentFailure(new ApiError('x', status)).permanent).toBe(false);
+    }
+  });
+
+  it('keeps network/offline failures retryable — the condition this queue exists for', () => {
+    expect(isPermanentFailure(new Error('Failed to fetch')).permanent).toBe(false);
+    expect(isPermanentFailure(new ApiError('server exploded', 500)).permanent).toBe(false);
+    expect(isPermanentFailure(undefined).permanent).toBe(false);
+  });
+
+  it('still honours the legacy NIN_DUPLICATE string (discovered by polling, carries no status)', () => {
+    expect(isPermanentFailure(new Error('NIN_DUPLICATE')).permanent).toBe(true);
+  });
+
+  it('reports the status so the UI can explain WHY retry is not offered', () => {
+    expect(isPermanentFailure(new ApiError('x', 422)).status).toBe(422);
+  });
+});
+
 describe('SyncManager', () => {
   let manager: SyncManager;
 

@@ -491,6 +491,78 @@ old bug. The runbook opens with a SHA check for exactly that reason.
 | 2026-08-06 | **Dev half executed (Amelia, dev-story). Task 2 DONE; Tasks 1/1b/1c/1d remain operator-gated.** (1) **AC1b defect fixed — and it was NOT hypothetical:** a RED test proved the R13 identity guard merged a shared-phone household member into an existing record on the enumerator path. `submission-processing.service.ts` now exempts `STAFF_CAPTURED_SOURCES` (`enumerator`/`clerk`) from the attach while still running the lookup, emitting `identity_match_exempted_staff_capture` so the counterfactual stays measurable. Exemption keys on **source, not `submitterId`** — an authenticated `public_user` carries a submitterId and must still merge (that is the 2026-08-04 7-duplicate path). +4 tests. (2) **AC2 runbook shipped:** `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` — 4-point gate verbatim w/ how-to-verify + green/red boxes, the 24–48h decision rule, AC1c protocol, AC1b/AC1d procedures, AC3 evidence table; cross-linked both ways with `pre-launch-operator-runbook.md` (header spend-gate row + Step 9), not forked. (3) **Two AC1c claims corrected against the code:** `users` is minted only by the wizard's `auth.service.ts` provisioning, NOT the enumerator path, so the teardown chain is path-dependent. (4) REUSE honoured — `_enumerator-path-smoke-test.ts` not duplicated; documented as rehearsal-not-certification since it bypasses the browser. tsc 0, eslint 0, full API regression 3558 passed / 0 failed. Status stays `in-progress`: R1–R5 are operator residuals. |
 | 2026-06-25 | Story authored by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 3 ACs (5–10 real enumerator submissions end-to-end on prod; codify the 4-point pre-flight go/no-go checklist as a runbook; record the gate item #2 verdict). REUSE the fully-wired enumerator path — net-new = the prod smoke + the runbook, NO code change to the field flow. Status → ready-for-dev. 🚦 PRE-SPEND gate item #2. |
 
+### AC4 — AN ENUMERATOR MUST BE ABLE TO ABANDON WORK (ADDED 2026-08-06, found BY the smoke)
+
+The smoke stopped on submission #1. The form was submitted missing `employment_status`, the server
+returned a 422 that can never succeed on resend, and the item **could not be cleared from the UI at
+all** — "Retry Failed" was pressed repeatedly and each press made it worse.
+
+**Root cause:** `sync-manager.ts` classed exactly ONE error as permanent —
+`item.error?.includes('NIN_DUPLICATE')`. Everything else was assumed retryable, and `retryFailed()`
+resets `retryCount` to 0, so **the operator's own Retry button re-armed a submission that could never
+succeed.** `MAX_RETRIES = 3` would have parked it quietly; the manual retry is what kept it alive.
+The only escape was `indexedDB` in a browser console. **A field enumerator does not have one.**
+
+✅ **AC4.1 + AC4.2 HOTFIXED 2026-08-06** (Awwal's instruction, before the smoke resumes):
+- `isPermanentFailure()` classifies on **HTTP status, not message string** — a message is prose that
+  changes when someone edits it; the status is the contract. 4xx is permanent EXCEPT 408/429
+  ("try again" by definition) and 401/403 (a token refresh legitimately changes the outcome).
+  Network/offline/5xx stay retryable — that is the condition this queue exists for.
+- `permanentFailure` + `failureStatus` persist on the queue row; `retryFailed()` and `syncAll()`
+  both skip permanent rows, and the row is parked at `MAX_RETRIES` so any counter-only check stops
+  too.
+- **A `Discard N rejected` action** on the Sync Status page, because classification alone just parks
+  the item in the banner forever, which is not better. Hard delete: the server never accepted the
+  row, so there is no counterpart to reconcile. **RED-verified** — reverting the classifier to the
+  pre-fix behaviour fails the 422 test.
+
+#### ⬜ AC4.3 — STILL TO BUILD: discard an IN-PROGRESS form (Awwal's original request)
+
+> *"a button the Enumerator can click at any time to discard a form they are filling, in which case
+> the respondent declined to continue … and the half-filled form will be causing issues as it would
+> be partly saved and prevents a new full registration."*
+
+This is the field reality the queue fix does not cover: an interview that **ends mid-way** — the
+respondent declines, it is the wrong person, a name was mis-keyed.
+
+1. A **Discard** control on `FormFillerPage` (and `ClerkDataEntryPage`), available at ANY step, not
+   only the last.
+2. It must clear **the local draft AND its provisional reference code** (`_referenceCode`,
+   `FormFillerPage.tsx:128`). Leaving the code behind is how the next respondent inherits someone
+   else's number.
+3. Confirm before discarding, and say plainly that the answers are gone — this is destructive and
+   irreversible by design, which is the point.
+4. ⚠️ **Discard must NOT create a submission.** No queue row, no server call, nothing to sync. An
+   abandoned interview is not a registration.
+5. Record that it happened — a count of discards per enumerator is a supervision signal (a high
+   rate may mean a script problem, not a refusal problem). Local counter is enough; no PII.
+
+#### ⬜ AC4.4 — A PROVISIONAL REFERENCE CODE THAT NEVER SYNCS IS A PROMISE TO A CITIZEN
+
+`FormFillerPage.tsx:128` mints the code **in the browser** so the enumerator can read it back on the
+spot — correct offline-first design, and it is honoured when the submission syncs. **But when sync
+fails permanently, nobody tells the enumerator the number they gave out is void.**
+
+In this smoke that number was `OSL-2026-N8D4YX`. It exists nowhere on the server. In the field,
+Fatima would be holding a registration number for a registration that does not exist, and would
+discover it only when she tried to use it.
+
+1. A permanently-failed queue row must surface its provisional code and state that **it was never
+   issued**.
+2. The discard confirmation must name the code, so the enumerator knows to tell the respondent.
+3. Consider withholding the code from the completion screen until the row reaches `synced` when the
+   device is **online** — offline capture still needs it immediately, but an online failure is
+   knowable within seconds and there is no reason to promise first and check later.
+
+#### ⬜ AC4.5 — The client accepted a submission the server always rejects
+
+`employment_status` is required in Section 4, the client let the form through, and the server 422'd
+it. The required-gate and `validateSubmissionCompleteness` disagree. **Find out whether Section 4
+rendered at all** — it is gated on `showWhen: age >= 15`, `age` is a computed field, and the server
+recomputes it authoritatively. If the client hid the section because its own `age` was unset while
+the server demanded the answers, that is a client/server divergence that will hit **every** field
+submission, not a one-off.
+
 ## Adjudication verdict — 2026-08-06
 
 **CODE ACCEPTED. STORY CORRECTLY STAYS `in-progress`** — its central deliverable, a prod smoke of

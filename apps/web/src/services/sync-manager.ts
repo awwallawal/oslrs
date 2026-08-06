@@ -1,5 +1,6 @@
 import { db } from '../lib/offline-db';
 import { submitSurvey, fetchSubmissionStatuses } from '../features/forms/api/submission.api';
+import { ApiError } from '../lib/api-client';
 
 const BACKOFF_BASE = 1000;
 const BACKOFF_MAX = 8000;
@@ -10,6 +11,35 @@ const POLL_DELAYS = [5_000, 15_000, 30_000]; // 5s, 15s, 30s escalating
 
 function getRetryDelay(retryCount: number): number {
   return Math.min(BACKOFF_BASE * Math.pow(2, retryCount), BACKOFF_MAX);
+}
+
+/**
+ * Is this failure PERMANENT — i.e. will an identical retry always fail?
+ *
+ * 13-4, 2026-08-06. This used to be a single string test, `error.includes('NIN_DUPLICATE')`, and
+ * everything else was assumed retryable. A real prod smoke hit
+ * `Submission is missing required answer(s): employment_status` — a 422 that can never succeed —
+ * and it retried forever. Worse, `retryFailed()` resets `retryCount` to 0, so each press of the
+ * operator's own "Retry Failed" button re-armed it. The only escape was the browser console, which
+ * a field enumerator does not have.
+ *
+ * Classify on the HTTP STATUS, not the message. A message is prose that changes when someone edits
+ * a string; the status is the contract. 4xx means "this request is wrong" and resending it
+ * unchanged cannot help — EXCEPT 408 and 429, which are explicitly "try again", and 401/403, where
+ * a token refresh or re-login legitimately changes the outcome.
+ *
+ * Anything without a status (network drop, timeout, offline) stays retryable — that is the ordinary
+ * field condition this queue exists for.
+ */
+export function isPermanentFailure(err: unknown): { permanent: boolean; status?: number } {
+  if (err instanceof ApiError) {
+    const s = err.status;
+    const retryableClientErrors = s === 408 || s === 429 || s === 401 || s === 403;
+    return { permanent: s >= 400 && s < 500 && !retryableClientErrors, status: s };
+  }
+  // Legacy rows + the ingestion-time NIN_DUPLICATE discovered by polling, which never had a status.
+  if (err instanceof Error && err.message.includes('NIN_DUPLICATE')) return { permanent: true };
+  return { permanent: false };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -67,7 +97,9 @@ export class SyncManager {
       .toArray();
 
     for (const item of failedItems) {
-      if (item.error?.includes('NIN_DUPLICATE')) continue;
+      // Permanently rejected rows are NOT re-armed. Resetting retryCount on an error that can
+      // never succeed is what turned one bad submission into an unclearable banner.
+      if (item.permanentFailure || item.error?.includes('NIN_DUPLICATE')) continue;
       await db.submissionQueue.update(item.id, {
         status: 'pending',
         retryCount: 0,
@@ -76,6 +108,23 @@ export class SyncManager {
     }
 
     return this.syncAll();
+  }
+
+  /**
+   * Remove a queue item the operator has decided to abandon.
+   *
+   * 13-4, 2026-08-06. The classification fix above stops a permanently-rejected submission from
+   * retrying — but on its own that just parks it in the banner forever, which is not better. An
+   * enumerator in the field has no browser console; without this the only escape from ONE bad
+   * submission was clearing site data, which would take every unsynced survey with it.
+   *
+   * Deliberately NOT restricted to permanent failures at the service layer — the caller decides,
+   * and the UI only offers it where discarding is the right answer. Deliberately a hard delete: a
+   * row the server never accepted has no server-side counterpart to reconcile, and keeping
+   * tombstones in a device-local queue would be hoarding, not audit.
+   */
+  async discard(id: string): Promise<void> {
+    await db.submissionQueue.delete(id);
   }
 
   async syncAll(): Promise<void> {
@@ -109,7 +158,7 @@ export class SyncManager {
       for (const item of failedItems) {
         if (!this._userId) break; // Mid-batch guard: user logged out
         if (item.retryCount >= MAX_RETRIES) continue;
-        if (item.error?.includes('NIN_DUPLICATE')) continue;
+        if (item.permanentFailure || item.error?.includes('NIN_DUPLICATE')) continue;
 
         // Check backoff delay
         if (item.lastAttempt) {
@@ -180,10 +229,14 @@ export class SyncManager {
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const { permanent, status } = isPermanentFailure(err);
       await db.submissionQueue.update(id, {
         status: 'failed',
         error: errorMessage,
-        retryCount: retryCount + 1,
+        // Park it at MAX_RETRIES too, so any code path that only checks the counter also stops.
+        retryCount: permanent ? MAX_RETRIES : retryCount + 1,
+        permanentFailure: permanent,
+        failureStatus: status,
         lastAttempt: now,
       });
       return false;
