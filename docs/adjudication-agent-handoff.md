@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-04 (late) · **Prod deployed SHA:** `8fed472` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-06 · **Prod deployed SHA:** `0a923b9` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -293,7 +293,33 @@ person had held since 19 May, because the new record happened to carry the submi
 
 ---
 
-## 3. Current state (2026-08-01)
+## 3. Current state (2026-08-06) — READ THIS ONE; §3-old below is superseded
+
+**Prod `0a923b9`, health 200. Register 310.** Integrity clean at last check: 0 duplicate NINs,
+0 orphaned submissions, 0 missing reference codes, 0 duplicate identity pairs, 0 dead-end
+`wizard_resume` tokens.
+
+- **13-49 is `done`** (registry 145 → 310). R21 — the identity guard that never ran on the public
+  wizard — is fixed and **verified live by an observed attach**, not by a deploy. Every residual
+  carries a terminal state with an owner and a reopen trigger.
+- **`EMAIL_TIER=pro` is now set on prod.** It had never been set, so `EmailBudgetService` enforced
+  the FREE tier's 100/day against a Pro account and had already skipped email-digest flushes. The
+  tier table is now single-source in `@oslsr/types`; `resolveEmailTier()` defaults to **`pro`**.
+- **The ops digest was reframed** — quota reads the meter (not a 100-row page), the daily ladder is
+  500/1500, and the Adoption line is split into Register / In-flight / retained.
+- **Awwal develops + code-reviews in a SEPARATE CLI and brings the uncommitted tree here for
+  adjudication.** A clean tree means nothing is in flight (§0/§1).
+
+### What is genuinely open
+| | |
+|---|---|
+| **13-50** | `/check-registration` mints dead-end links; `wizard_resume` unaudited; **AC4/AC5** phantom drafts. Not launch-gating but degrades WITH engagement. |
+| **13-42** | AC7 hotfixed; **AC8** (bounce line misdirects at DKIM/SPF) + AC1-6 remain. |
+| **13-4** | Enumerator pathway — Awwal's next. AC1b (shared-phone household) is load-bearing now that R21 proved the guard attaches. |
+| **9-27** | `in-progress`, Parts B-F = SMS/WhatsApp, blocked on Termii by Awwal's own call. **Do not close it.** |
+| Operator | 12-person SMS list (§7g) + 6 suppressed people. Ladder cohort is **08-05**, denominator **71 not 75** (4 phantoms). |
+
+## 3-old. Current state (2026-08-01) — superseded by §3 above
 
 - **Prod = `0beb8bc`**, health 200. Registry **145 = 82 (with a `submissions` row) + 63 (absorbed, Story
   9-28, no submission)**. `campaign_sends` 1. Pinned public form `019f8ed3` (6 sections, wizard N=10).

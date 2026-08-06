@@ -17,6 +17,14 @@
 | **Capacity ready** (9-20) | ⏳ finalize | Step 2 |
 | **Blast infra** (Resend Pro + Termii) | ⏳ operator | Steps 3–4 |
 | **Wizard one-pass — no two-pass loop** (13-29 AC6) | ⏳ **MANUAL DRY-RUN** | Step 5b |
+| **🚦 4-point SPEND gate** (13-4) — incl. enumerator path proven on prod | ⏳ **OPERATOR** | `enumerator-prod-smoke-and-golive-gate.md` |
+
+> **Two different gates, deliberately.** The table above is *"may we fire the blasts?"* — the email
+> sends, which are cheap and reversible. `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` is
+> *"may we BUY MEDIA?"* — radio and paid social, which are neither. Its four points span this
+> runbook (self-serve happy path = Step 5b) and stories 13-1 and 13-3, so it is a cross-cut over the
+> ordered steps below, not another step in them. **Enumerators go to field only after its gate item
+> 2 is green** — see Step 9.
 
 ---
 
@@ -86,6 +94,7 @@
 
 ### Step 9 — Field + social
 - Enumerators → field; marketing/social push — only after a blasted user who logs in meets the coherent journey (verified).
+- **🚦 SPEND GATE (13-4) — all four points green before any media is bought:** `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md`. Gate item 2 (the enumerator path proven on prod — 5–10 real submissions through `EnumeratorHome`, today: **one ever**) is the one that specifically gates sending enumerators to field. Any red → hold the spend; radio is movable on 24–48h notice.
 
 ---
 
