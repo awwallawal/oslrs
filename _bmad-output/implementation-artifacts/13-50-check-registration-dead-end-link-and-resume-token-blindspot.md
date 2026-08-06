@@ -91,6 +91,68 @@ audited, "86 today" would have been on the first screen instead of the fifth.
 2. **REOPEN TRIGGER:** any `NIN_DUPLICATE` in the audit log from an adopted person. Currently **0** —
    the exposure has never actually been realised, which is why this is not launch-gating.
 
+### AC4 — A half-typed email must not become a person
+
+**Found 2026-08-06 by four bounces inside 100 seconds** — which is the tell: four people do not
+independently mistype `.com`.
+
+```
+yusuffasiat@gmail.co          dayoariremako88@gmail.co
+ogunbonadamola@gmail.co       aladechristianahtosin@gmail.co
+```
+
+**`wizard_drafts` is keyed on `email`, and the wizard autosaves while the user is still typing.** So a
+half-entered address gets its own row. Each of those four has TWO drafts — the `.co` and the `.com` —
+and the `.co` one is a **phantom person**.
+
+This is the known mid-keystroke-autosave trap ([[draft-nin-questionnaire-first]], where `form_data.nin`
+is a partial snapshot) with the failure moved somewhere much worse: **there the half-typed value is
+just bad data in a field; here it is the PRIMARY KEY, so it manufactures a person who never existed.**
+
+What it cost, measured:
+- **All 4 phantoms were invited in D4** — mail sent to addresses that cannot receive it.
+- **All 4 belong to people who were ALREADY in the register.** We invited four registered citizens to
+  register, at addresses they do not have.
+- The D4 denominator is **71 real invitees, not 75** → conversion is **5/71 = 7.0%**, not 6.7%.
+- Suppression keyed the `.co` strings, so their real `.com` addresses are untouched. No lasting harm
+  to those four — this is a data-hygiene and metrics defect, not a citizen-facing one.
+
+Exactly **4** exist repo-wide; none outside D4. Contained, and worth fixing before the next blast.
+
+1. **Do not persist a draft under an email that is still being typed.** Debounce is not enough — the
+   row is created on the first autosave. Options, in the order I would try them: only key a draft
+   once the address passes the same validation Step 2 already applies at Continue; or key drafts on a
+   stable client-side id with `email` as an ordinary column.
+2. ⚠️ **Do not "fix" this by deleting the phantoms and calling it done.** The producer is still
+   running — same trap as R5, where 38 tokens were expired while `/check-registration` kept minting
+   more. Clear the 4 AND close the path that makes them.
+3. **RED-verify:** simulate the autosave sequence `a@gmail.c` → `a@gmail.co` → `a@gmail.com` and
+   assert **one** draft row results, not three.
+
+### AC5 — A pre-blast phantom sweep, because the detector is one query
+
+Any cohort assembled from `wizard_drafts` inherits AC4's phantoms. The blast scripts already have a
+`--dry-run`; this belongs in it as a **blocking pre-flight**, not a report nobody reads.
+
+```sql
+-- a draft email that is a strict PREFIX of another draft email = abandoned mid-typing
+SELECT a.email AS phantom, b.email AS real_address
+FROM wizard_drafts a
+JOIN wizard_drafts b ON b.email LIKE a.email || '%' AND b.email <> a.email;
+```
+
+1. Every blast script runs this over its cohort and **excludes** matches, printing what it dropped.
+2. ⚠️ **`log()` the exclusions.** A silent filter reads as "everyone was contacted" — the failure
+   mode in [[pattern-test-that-passes-over-a-hole]] applied to operations rather than tests.
+3. **Also exclude drafts whose owner is already registered.** Three of the four phantoms were, and
+   that check is independently useful: D4 should never have invited a registered person at all.
+4. Reconcile the cohort count against `campaign_sends` after the run —
+   [[pattern-batch-job-races-live-users]] already requires this per run; phantoms are a second reason.
+
+⚠️ **This changes the D4 conversion baseline.** Any conversion figure quoted before this sweep used
+75; the honest denominator is 71. Fix the metric wherever it is computed, or the improvement from
+excluding phantoms will look like a conversion lift that never happened.
+
 ## Out of scope
 
 - **9-40's authenticated status home.** This story routes to whatever exists today; it does not
