@@ -144,6 +144,17 @@ export const AUDIT_ACTIONS = {
   // name-canonicalization backfill (swaps first_name/last_name on existing
   // surname-first respondent rows after the given/family split).
   OPERATOR_RESPONDENT_NAME_CANONICALIZED: 'operator.respondent_name_canonicalized',
+  /**
+   * 13-4 (2026-08-06) — an operator corrected a MISTYPED contact email and lifted the bounce
+   * suppression it caused. Distinct from RESPONDENT_SELF_UPDATED: the respondent did not ask for
+   * this and cannot be reached to confirm it, which is exactly why it must be traceable.
+   *
+   * The correction itself is small; the reason for the action key is not. A bounced address
+   * silently costs a citizen their place in the pending-NIN ladder — the reminders keep sending
+   * into a void and the ladder eventually retires them as if they had declined. Editing that
+   * record is a real intervention in someone's registration, so it leaves a row.
+   */
+  OPERATOR_RESPONDENT_EMAIL_CORRECTED: 'operator.respondent_email_corrected',
   // Story 9-55 — NDPA evidentiary record of a captured parent/guardian consent
   // for an under-15 (minor) registrant, with the ILO Art.6 apprenticeship
   // attestation. Written via the hash-chain log within the submit transaction
