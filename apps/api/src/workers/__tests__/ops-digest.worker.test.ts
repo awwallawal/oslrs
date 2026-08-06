@@ -64,7 +64,8 @@ function healthySnapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboar
     },
     traffic: {
       totalRespondents: 20, respondentsActive: 12, respondentsPending: 3,
-      totalDrafts: 100, draftsLast24h: 5, funnel: [], step4StallPct: 10,
+      totalDrafts: 100, draftsLive: 20, draftsRetained: 80,
+      draftsLast24h: 5, funnel: [], step4StallPct: 10, step4LiveDrafts: 2,
       magicLinksIssued: 40, magicLinksConsumed: 30, topAuditActions: [],
     },
     resend: { recentCount: 10, delivered: 9, bounced: 0, complained: 0, todayCount: 5, last5: [] },
@@ -109,10 +110,27 @@ describe('formatDigest', () => {
     const msg = formatDigest(healthySnapshot());
     expect(msg).toContain('OSLRS Ops Digest');
     expect(msg).toContain('*System*');
-    expect(msg).toContain('*Adoption*');
+    // Was '*Adoption*: 278 drafts, 307 done, Step-4 stall 32%'. Split in two because they
+    // are two different facts: the register only goes up, in-flight moves both ways.
+    expect(msg).toContain('*Register*');
+    expect(msg).toContain('flight*');
     expect(msg).toContain('*Email*');
     expect(msg).toContain('*Queue*');
     expect(msg).toContain('All metrics healthy');
+  });
+
+  /**
+   * 13-49 retained 167 adopted drafts and 164 expired ones. A digest that prints the raw
+   * total reads as a backlog of abandoned people; the retained rows must be NAMED as
+   * retained, and the stall figure must exclude them.
+   */
+  it('reports live and retained drafts separately, never a bare total', () => {
+    const msg = formatDigest(healthySnapshot());
+    expect(msg).toContain('20 live draft');
+    expect(msg).toContain('80 retained');
+    expect(msg).toMatch(/kept by policy/);
+    // The raw total must not appear as the in-flight figure.
+    expect(msg).not.toMatch(/100 live draft/);
   });
 
   it('renders section-unavailable for null sections', () => {

@@ -147,9 +147,29 @@ export async function getTraffic(): Promise<OpsTrafficSnapshot | null> {
       ),
       pool.query(`SELECT count(*) AS total FROM wizard_drafts WHERE created_at >= $1`, [LAUNCH_DATE]),
       pool.query(`SELECT count(*) AS total FROM wizard_drafts WHERE created_at >= $1`, [now24hAgo]),
+      /**
+       * 13-49 CHANGED WHAT A DRAFT MEANS, and this query had not caught up.
+       *
+       * Before the adoption programme a `wizard_drafts` row meant "someone started and
+       * did not finish". Now 167 rows are ADOPTED (their person is in the register and
+       * the draft is retained under the keep-forever ruling) and 164 have expired. Of
+       * the 88 rows sitting at step 4, **58 belong to people who are already
+       * registered** — counting them as stalled reports success as failure.
+       *
+       * So the funnel splits every draft by whether its owner is in the register and
+       * whether the draft is still live. `live` is the only honest stall denominator.
+       */
       pool.query(
-        `SELECT current_step::int AS step, count(*)::int AS drafts
-        FROM wizard_drafts WHERE created_at >= $1
+        `SELECT d.current_step::int AS step,
+                count(*)::int AS drafts,
+                count(*) FILTER (
+                  WHERE d.expires_at > now() AND NOT EXISTS (
+                    SELECT 1 FROM submissions s
+                    JOIN respondents r ON r.id = s.respondent_id
+                    WHERE lower(s.raw_data->>'email') = lower(d.email)
+                      AND r.status <> 'rolled_back')
+                )::int AS live
+        FROM wizard_drafts d WHERE d.created_at >= $1
         GROUP BY 1 ORDER BY 1`,
         [LAUNCH_DATE],
       ),
@@ -178,21 +198,26 @@ export async function getTraffic(): Promise<OpsTrafficSnapshot | null> {
       });
 
     const totalDrafts = parseInt(drafts.rows[0]?.total ?? '0', 10);
-    const step4Drafts =
-      funnel.rows.find((r: { step: number; drafts: number }) => r.step === 4)?.drafts ?? 0;
-    const step4StallPct = totalDrafts > 0 ? Math.round((step4Drafts / totalDrafts) * 100) : 0;
+    type FunnelRow = { step: number; drafts: number; live: number };
+    const funnelRows = funnel.rows as FunnelRow[];
+    const draftsLive = funnelRows.reduce((acc, r) => acc + (r.live ?? 0), 0);
+    const draftsRetained = Math.max(0, totalDrafts - draftsLive);
+    const step4LiveDrafts = funnelRows.find((r) => r.step === 4)?.live ?? 0;
+    // Denominator is LIVE drafts. Using totalDrafts folded 167 adopted people and 164
+    // expired rows into a "stall" figure, which is how a solved problem keeps alarming.
+    const step4StallPct = draftsLive > 0 ? Math.round((step4LiveDrafts / draftsLive) * 100) : 0;
 
     return {
       totalRespondents: parseInt(resp.rows[0]?.total ?? '0', 10),
       respondentsActive: parseInt(resp.rows[0]?.active ?? '0', 10),
       respondentsPending: parseInt(resp.rows[0]?.pending ?? '0', 10),
       totalDrafts,
+      draftsLive,
+      draftsRetained,
       draftsLast24h: parseInt(drafts24h.rows[0]?.total ?? '0', 10),
-      funnel: funnel.rows.map((r: { step: number; drafts: number }) => ({
-        step: r.step,
-        drafts: r.drafts,
-      })),
+      funnel: funnelRows.map((r) => ({ step: r.step, drafts: r.drafts })),
       step4StallPct,
+      step4LiveDrafts,
       magicLinksIssued: parseInt(ml.rows[0]?.issued ?? '0', 10),
       magicLinksConsumed: parseInt(ml.rows[0]?.consumed ?? '0', 10),
       topAuditActions,
@@ -323,17 +348,36 @@ export function buildRecommendations(
   const { system: sys, traffic, resend, queue, notificationUsage: usage } = parts;
   const recs: OpsRecommendation[] = [];
 
-  if (traffic && traffic.step4StallPct >= T.step4StallPctRed) {
+  /**
+   * ⚠️ THE OLD TEXT NAMED A STORY THAT HAD SHIPPED — for two months.
+   *
+   * It read: "flagging Story 9-17 Part B as next-up ... while 9-17 is in dev."
+   * 9-17 went `done` on 2026-06-10, and its Part B (Pattern C field dedup) had already
+   * been ABSORBED INTO 9-18 on 2026-06-03. So the digest was routing the operator to a
+   * closed story for work that lived somewhere else.
+   *
+   * Third instance of one class in a single day, alongside "UPGRADE to Pro" (already
+   * bought) and the free-tier daily cap (wrong plan). **A monitor that hardcodes a
+   * remediation goes stale silently, because nothing fails when the advice rots.**
+   * State the CONDITION, which stays true; keep the story pointer in one obvious
+   * constant so re-pointing is a one-line edit rather than an archaeology exercise.
+   *
+   * Guard against a small denominator: a stall % over 3 live drafts is noise, so the
+   * absolute count has to clear a floor before this says anything at all.
+   */
+  const STEP4_OWNER_STORY = '9-18 (Pattern C wizard field dedup, absorbed from 9-17 Part B)';
+  const STEP4_MIN_LIVE = 10;
+  if (traffic && traffic.draftsLive >= STEP4_MIN_LIVE && traffic.step4StallPct >= T.step4StallPctRed) {
     recs.push({
       severity: 'red',
       key: 'step4-stall',
-      text: `Step-4 stall ${traffic.step4StallPct}% — Story 9-17 Part B (Pattern C field dedup) is critical-path. Authored questions duplicate work in Step 4; dedup eliminates the friction.`,
+      text: `Step-4 stall ${traffic.step4StallPct}% — ${traffic.step4LiveDrafts} of ${traffic.draftsLive} LIVE drafts are parked at the questionnaire step. Step 4 re-asks what steps 1-2 already collected; ${STEP4_OWNER_STORY} owns the dedup.`,
     });
-  } else if (traffic && traffic.step4StallPct >= T.step4StallPctYellow) {
+  } else if (traffic && traffic.draftsLive >= STEP4_MIN_LIVE && traffic.step4StallPct >= T.step4StallPctYellow) {
     recs.push({
       severity: 'yellow',
       key: 'step4-stall',
-      text: `Step-4 stall ${traffic.step4StallPct}% — flagging Story 9-17 Part B as next-up. Add internal section-progress pill to Step 4 (1-2 day quick-win) while 9-17 is in dev.`,
+      text: `Step-4 stall ${traffic.step4StallPct}% (${traffic.step4LiveDrafts}/${traffic.draftsLive} live drafts). Watch it; ${STEP4_OWNER_STORY} owns the fix. Retained drafts are excluded from this figure.`,
     });
   }
 

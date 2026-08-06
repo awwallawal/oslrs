@@ -98,7 +98,9 @@ function trafficRows() {
     { rows: [{ total: '20', active: '12', pending: '3' }] },
     { rows: [{ total: '100' }] },
     { rows: [{ total: '5' }] },
-    { rows: [{ step: 4, drafts: 63 }, { step: 1, drafts: 20 }] },
+    // `live` = owner not yet registered AND draft unexpired. 13-49 made this the only
+    // honest stall denominator: most step-4 rows belong to people who already finished.
+    { rows: [{ step: 4, drafts: 63, live: 12 }, { step: 1, drafts: 20, live: 8 }] },
     { rows: [{ issued: '40', consumed: '30' }] },
     { rows: [{ action: 'auth.login', events: 50 }] },
   ];
@@ -117,7 +119,13 @@ describe('getTraffic', () => {
     const traffic = await getTraffic();
     expect(traffic).not.toBeNull();
     expect(traffic!.totalDrafts).toBe(100);
-    expect(traffic!.step4StallPct).toBe(63); // 63 / 100
+    // 12 live at step 4 out of 20 live overall = 60%. NOT 63/100: the old denominator
+    // counted adopted + expired drafts, so people who had FINISHED were reported as
+    // stalled (58 of 88 real step-4 rows on prod, 2026-08-05).
+    expect(traffic!.draftsLive).toBe(20);
+    expect(traffic!.draftsRetained).toBe(80);
+    expect(traffic!.step4LiveDrafts).toBe(12);
+    expect(traffic!.step4StallPct).toBe(60);
     expect(traffic!.totalRespondents).toBe(20);
     expect(traffic!.magicLinksIssued).toBe(40);
   });
@@ -171,19 +179,33 @@ describe('buildRecommendations — metric → story binding', () => {
     expect(buildRecommendations({ system: baseSys, traffic: null, resend: null, queue: null, notificationUsage: null })).toEqual([]);
   });
 
-  it('flags Story 9-17 critical-path at red Step-4 stall', () => {
-    const traffic = { step4StallPct: 63, totalDrafts: 100 } as OpsTrafficSnapshot;
-    const recs = buildRecommendations({ system: null, traffic, resend: null, queue: null, notificationUsage: null });
-    const stall = recs.find((r) => r.key === 'step4-stall');
+  const traffic = (step4StallPct: number, draftsLive: number) =>
+    ({ step4StallPct, draftsLive, step4LiveDrafts: Math.round((step4StallPct / 100) * draftsLive), totalDrafts: 300 }) as OpsTrafficSnapshot;
+
+  it('flags Step-4 stall at red, naming the story that ACTUALLY owns it', () => {
+    const stall = buildRecommendations({ system: null, traffic: traffic(63, 40), resend: null, queue: null, notificationUsage: null })
+      .find((r) => r.key === 'step4-stall');
     expect(stall?.severity).toBe('red');
-    expect(stall?.text).toContain('9-17');
+    // 9-17 went `done` on 2026-06-10 and its Part B moved to 9-18 on 06-03. The digest
+    // kept routing operators to the closed story for two months. Pin the live owner.
+    expect(stall?.text).toContain('9-18');
+    expect(stall?.text).not.toMatch(/9-17 Part B as next-up|while 9-17 is in dev/);
   });
 
   it('uses yellow advisory wording at mid Step-4 stall', () => {
-    const traffic = { step4StallPct: 35, totalDrafts: 100 } as OpsTrafficSnapshot;
-    const stall = buildRecommendations({ system: null, traffic, resend: null, queue: null, notificationUsage: null })
+    const stall = buildRecommendations({ system: null, traffic: traffic(35, 40), resend: null, queue: null, notificationUsage: null })
       .find((r) => r.key === 'step4-stall');
     expect(stall?.severity).toBe('yellow');
+  });
+
+  /**
+   * A percentage over a handful of drafts is noise. Once retained drafts are excluded
+   * the denominator can legitimately fall to single digits, and 2-of-3 would otherwise
+   * page someone at 67%.
+   */
+  it('stays silent when the live denominator is too small to mean anything', () => {
+    const recs = buildRecommendations({ system: null, traffic: traffic(67, 3), resend: null, queue: null, notificationUsage: null });
+    expect(recs.find((r) => r.key === 'step4-stall')).toBeUndefined();
   });
 
   /**
@@ -286,7 +308,7 @@ describe('getDashboardSnapshot — orchestration + 30s cache', () => {
     const snap = await OperationsService.getDashboardSnapshot();
     expect(snap.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(snap.system).toBeNull(); // exec mocked to error → graceful null
-    expect(snap.traffic?.step4StallPct).toBe(63);
+    expect(snap.traffic?.step4StallPct).toBe(60); // live denominator (12/20), not 63/100
     expect(snap.queue).not.toBeNull();
     // Story 9-63 (AC3) — meter usage section is gathered (empty shape from the stub).
     expect(snap.notificationUsage).toEqual({

@@ -151,10 +151,22 @@ export interface OpsTrafficSnapshot {
   totalRespondents: number;
   respondentsActive: number;
   respondentsPending: number;
+  /** EVERY wizard_draft row since launch — includes drafts kept by policy. */
   totalDrafts: number;
+  /**
+   * Drafts belonging to someone NOT yet in the register, and not expired: the only
+   * population for which "stalled in the wizard" is a true statement.
+   * Story 13-49 changed what a draft means — see the digest comment.
+   */
+  draftsLive: number;
+  /** Drafts RETAINED by policy: the person registered, or the draft expired. Not a backlog. */
+  draftsRetained: number;
   draftsLast24h: number;
   funnel: OpsFunnelStep[];
+  /** % of LIVE drafts sitting at step 4 — denominator is `draftsLive`, never `totalDrafts`. */
   step4StallPct: number;
+  /** Absolute count behind the %, so a small denominator cannot dramatise. */
+  step4LiveDrafts: number;
   magicLinksIssued: number;
   magicLinksConsumed: number;
   topAuditActions: OpsAuditAction[];

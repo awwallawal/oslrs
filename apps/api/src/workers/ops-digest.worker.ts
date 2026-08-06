@@ -120,13 +120,37 @@ export function formatDigest(
 
   // Adoption
   if (snapshot.traffic) {
-    const t = snapshot.traffic;
-    const glyph = tierGlyph(t.step4StallPct, T.step4StallPctYellow, T.step4StallPctRed);
+    const tr = snapshot.traffic;
+    /**
+     * REFRAMED 2026-08-05. This line used to read
+     *   "🟡 Adoption: 278 drafts (24h 4), 307 done, Step-4 stall 32%"
+     * and every number in it was answering a question nobody was asking any more.
+     *
+     * 13-49 sorted the drafts into buckets: 167 ADOPTED (their person is in the
+     * register; the row is retained under the keep-forever ruling) and 164 expired.
+     * "278 drafts" therefore read as a backlog of 278 abandoned people when the real
+     * in-flight number was 79 — and 58 of the 88 rows "stalled at step 4" belonged to
+     * people who had already finished. **A solved problem was still alarming.**
+     *
+     * Two separate facts now, because they are separate:
+     *   REGISTER  — the outcome, which only goes up.
+     *   IN-FLIGHT — people actually mid-wizard, with retained rows named as retained
+     *               so a large total never again reads as failure.
+     */
+    const stallGlyph = tierGlyph(tr.step4StallPct, T.step4StallPctYellow, T.step4StallPctRed);
     lines.push(
-      `${glyph} *Adoption*: ${escapeMarkdownV2(`${t.totalDrafts} drafts (24h ${t.draftsLast24h}), ${t.totalRespondents} done, Step-4 stall ${t.step4StallPct}%`)}`,
+      `🟢 *Register*: ${escapeMarkdownV2(`${tr.totalRespondents} registered (${tr.respondentsActive} active, ${tr.respondentsPending} pending NIN)`)}`,
+    );
+    lines.push(
+      `${stallGlyph} *In flight*: ${escapeMarkdownV2(
+        `${tr.draftsLive} live draft(s), ${tr.step4LiveDrafts} at step 4 (${tr.step4StallPct}%) · +${tr.draftsLast24h} new in 24h`,
+      )}`,
+    );
+    lines.push(
+      `   ${escapeMarkdownV2(`${tr.draftsRetained} retained (already registered, or expired) — kept by policy, not a backlog`)}`,
     );
   } else {
-    lines.push('⚪ *Adoption*: section unavailable');
+    lines.push('⚪ *Register*: section unavailable');
   }
 
   // Email — quota from the METER (uncapped), delivery from Resend (page-limited).
