@@ -537,6 +537,33 @@ respondent declines, it is the wrong person, a name was mis-keyed.
 5. Record that it happened — a count of discards per enumerator is a supervision signal (a high
    rate may mean a script problem, not a refusal problem). Local counter is enough; no PII.
 
+#### 🔴 AC4.3b — RESTORE TO DRAFT, NOT JUST DISCARD (found 2026-08-06, and it corrects AC4.2)
+
+**On submit the draft is DELETED** (`useDraftPersistence.ts:224`), on the stated grounds that *"queue
+item has all data needed for sync"*. True — **while the queue item exists.**
+
+Which means the Discard action shipped in AC4.2 deletes **the only remaining copy of the interview**.
+Confirmed empirically: after the failed submission's queue row was removed, the drafts store returned
+`NO DRAFTS`. Every answer that enumerator collected is gone, and the respondent must be interviewed
+again from scratch.
+
+That is the wrong primary action, and I built it. For the failure that actually occurred — one
+required field missing — the right response is obvious once stated: **reopen it, fill the field,
+resubmit.** Nobody should re-interview a citizen because a form was one answer short.
+
+1. **`Restore to draft`** is the PRIMARY action on a permanently-failed row: rehydrate
+   `payload → drafts`, reusing the same id and its `_referenceCode`, and drop the queue row. The
+   enumerator lands back in the form at the first unanswered required question.
+2. **`Discard`** stays, demoted to secondary, with the confirmation stating plainly that the answers
+   are destroyed and the respondent must be re-registered.
+3. ⚠️ **Restore must re-run the completeness check locally first** and say what is missing, so the
+   enumerator is not returned to a form that will fail identically. The 422's `missing[]` is already
+   in the error message — parse it and jump straight there.
+4. Reconsider deleting the draft at submit at all. Keeping it until the queue row reaches `synced`
+   costs a little device storage and removes this entire failure class. The current ordering comment
+   shows the author was already thinking about crash-safety — this is the same concern, one step
+   later in the lifecycle.
+
 #### ⬜ AC4.4 — A PROVISIONAL REFERENCE CODE THAT NEVER SYNCS IS A PROMISE TO A CITIZEN
 
 `FormFillerPage.tsx:128` mints the code **in the browser** so the enumerator can read it back on the
@@ -557,11 +584,33 @@ discover it only when she tried to use it.
 #### ⬜ AC4.5 — The client accepted a submission the server always rejects
 
 `employment_status` is required in Section 4, the client let the form through, and the server 422'd
-it. The required-gate and `validateSubmissionCompleteness` disagree. **Find out whether Section 4
-rendered at all** — it is gated on `showWhen: age >= 15`, `age` is a computed field, and the server
-recomputes it authoritatively. If the client hid the section because its own `age` was unset while
-the server demanded the answers, that is a client/server divergence that will hit **every** field
-submission, not a one-off.
+it. The required-gate and `validateSubmissionCompleteness` disagree.
+
+**❌ MY FIRST HYPOTHESIS WAS WRONG, AND MEASURING IT TOOK ONE QUERY.** I proposed that the Master
+form lacked the `age` calculation, so the client hid Section 4 while the server demanded its
+answers. **Both forms carry an identical calculation** —
+`int((today() - ${dob}) div 365.25)` — and the public wizard runs the same expression daily without
+issue. Recorded rather than quietly deleted, because the *shape* of the guess was reasonable and the
+next person will have it too.
+
+**What is actually established:**
+- The client evaluates skip-logic against `withCalculatedFields(formData, calculations, new Date())`
+  (`FormRenderer.tsx:239`), so `age` IS computed client-side.
+- Advancing is gated per-question by `trigger(currentQuestion.name)`, so a required *visible*
+  question cannot be skipped with Next.
+- Therefore Section 4 was almost certainly **never visible** — which points at `age` failing to
+  evaluate at the moment visibility was decided, most plausibly a `dob` value/format that
+  `withCalculatedFields` cannot parse on this surface.
+
+**The evidence needed is on the device, not the server** — the failed queue row holds the entire
+payload. Before discarding a permanently-failed row, dump `payload` and check: is `dob` present,
+what format is it in, and is `employment_status` absent entirely (section never rendered) versus
+present-but-empty (rendered and skipped)? Those two answers point at completely different bugs.
+
+⚠️ **This is why AC4.4's "discard" must not be the FIRST thing an operator reaches for** — the
+payload is the only diagnostic evidence a field failure ever produces, and discarding destroys it.
+Worth considering whether discard should log the payload shape (field names only, no values) before
+deleting.
 
 ## Adjudication verdict — 2026-08-06
 
