@@ -40,9 +40,11 @@ function snapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboardSnapsh
     },
     traffic: {
       totalRespondents: 20, respondentsActive: 12, respondentsPending: 3,
-      totalDrafts: 100, draftsLast24h: 5,
+      totalDrafts: 100, draftsLive: 20, draftsRetained: 80, draftsLast24h: 5,
       funnel: [{ step: 1, drafts: 20 }, { step: 4, drafts: 63 }],
-      step4StallPct: 63, magicLinksIssued: 40, magicLinksConsumed: 30, topAuditActions: [],
+      // 12 of 20 LIVE drafts, not 63 of 100 total — the total counts adopted + expired.
+      step4StallPct: 60, step4LiveDrafts: 12,
+      magicLinksIssued: 40, magicLinksConsumed: 30, topAuditActions: [],
     },
     resend: { recentCount: 10, delivered: 9, bounced: 0, complained: 0, todayCount: 5, last5: [] },
     queue: { waiting: 0, active: 0, completed: 10, failed: 0, delayed: 0, failedSamples: [] },

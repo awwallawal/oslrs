@@ -123,21 +123,34 @@ function AdoptionCard({ traffic }: { traffic: OpsTrafficSnapshot | null }) {
   const dot = traffic
     ? opsStatusLevel(traffic.step4StallPct, T.step4StallPctYellow, T.step4StallPctRed)
     : 'green';
-  const completePct =
-    traffic && traffic.totalDrafts > 0
-      ? Math.round((traffic.totalRespondents / traffic.totalDrafts) * 100)
-      : 0;
+  /**
+   * "Completion rate" was `totalRespondents / totalDrafts` — a ratio whose DENOMINATOR
+   * CONTAINS THE NUMERATOR. After 13-49, 167 of the drafts belong to people who are in
+   * the register, so those people were counted on both sides; on 2026-08-05 it read
+   * 308/277 = 111%. Removed rather than patched: there is no honest single ratio here,
+   * because a retained draft is not a failed registration. The live/retained split
+   * below says the true thing without inventing a percentage.
+   */
   return (
-    <Card title="Adoption + funnel" testId="ops-card-adoption" dot={<StatusDot level={dot} testId="ops-adoption-dot" />}>
+    <Card title="Register + funnel" testId="ops-card-adoption" dot={<StatusDot level={dot} testId="ops-adoption-dot" />}>
       {traffic ? (
         <div>
-          <Row label="Total drafts (last 24h)" value={`${traffic.totalDrafts} (${traffic.draftsLast24h})`} />
           <Row
-            label="Completed registrations"
+            label="In register"
             value={`${traffic.totalRespondents} (active ${traffic.respondentsActive}, pending-NIN ${traffic.respondentsPending})`}
           />
-          <Row label="Completion rate" value={`${completePct}%`} />
-          <Row label="Step-4 stall" value={`${traffic.step4StallPct}% of live drafts`} />
+          <Row
+            label="Live drafts (new in 24h)"
+            value={`${traffic.draftsLive} (${traffic.draftsLast24h})`}
+          />
+          <Row
+            label="Retained drafts"
+            value={`${traffic.draftsRetained} — already registered or expired, kept by policy`}
+          />
+          <Row
+            label="Step-4 stall"
+            value={`${traffic.step4LiveDrafts} of ${traffic.draftsLive} live drafts (${traffic.step4StallPct}%)`}
+          />
           <Row label="Magic-links" value={`${traffic.magicLinksIssued} issued · ${traffic.magicLinksConsumed} consumed`} />
           <div className="mt-2">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Funnel</p>
