@@ -56,7 +56,9 @@ export default function ClerkDataEntryPage() {
       if (!form) {
         return { values, errors: {} };
       }
-      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen);
+      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen, undefined, {
+        calculations: form.calculations,
+      });
       return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
     },
     [form]
@@ -151,8 +153,11 @@ export default function ClerkDataEntryPage() {
   // Skip logic: get visible questions
   const allQuestions = useMemo(() => form?.questions ?? [], [form?.questions]);
   const visibleQuestions = useMemo(
-    () => getVisibleQuestions(allQuestions, formData, form?.sectionShowWhen),
-    [allQuestions, formData, form?.sectionShowWhen]
+    () =>
+      getVisibleQuestions(allQuestions, formData, form?.sectionShowWhen, undefined, {
+        calculations: form?.calculations,
+      }),
+    [allQuestions, formData, form?.sectionShowWhen, form?.calculations]
   );
 
   // Group visible questions by section

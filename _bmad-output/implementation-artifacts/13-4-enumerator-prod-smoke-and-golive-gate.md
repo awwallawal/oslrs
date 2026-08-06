@@ -564,6 +564,47 @@ resubmit.** Nobody should re-interview a citizen because a form was one answer s
    shows the author was already thinking about crash-safety — this is the same concern, one step
    later in the lifecycle.
 
+#### 🔴 AC4.6 — ✅ THE ACTUAL ROOT CAUSE: THE ENUMERATOR FORM NEVER COMPUTED `age` (FIXED 2026-08-06)
+
+**This is what stopped the smoke, and it is a go-live blocker, not a smoke annoyance.**
+
+```
+FormRenderer.tsx        (public wizard):  withCalculatedFields × 3
+FormFillerPage.tsx      (ENUMERATOR):     withCalculatedFields × 0
+ClerkDataEntryPage.tsx  (CLERK):          withCalculatedFields × 0
+```
+
+A gate like `age >= 15` reads a field **nobody answers** — `age` is derived from `dob` by the form's
+`calculations`. Story 9-54 taught `FormRenderer` to evaluate those first, but the enumerator and
+clerk pages carry their **own copy of the navigation logic** and never got it. They passed RAW
+answers, so `age` was absent, `Number(undefined)` is `NaN`, and **both** `age >= 15` and `age < 15`
+returned false.
+
+**Consequence, on every enumerator and clerk submission:**
+- **Labour Force Participation was silently skipped** — the entire purpose of a labour registry.
+- **The under-15 guardian-consent section was silently skipped** — a child-protection control (9-55).
+- The server, which computes `age` correctly, then rejected the submission **422** — which until the
+  same day's AC4.2 hotfix was an unclearable poison pill.
+
+**THE DIAGNOSTIC THAT MATTERED, recorded because I missed it for four hypotheses:** `age >= 15` and
+`age < 15` are **mutually exclusive — one must always be true.** Both sections vanishing could only
+ever mean the operand did not exist. I chased the form schema, the date format, the service worker
+and a stale bundle first; each died in one measurement. **The symptom named the cause from the
+start.**
+
+✅ **FIXED — and deliberately not by patching the two pages.** The derivation moved INTO
+`skipLogic.ts`: `getVisibleQuestions` / `getNextVisibleIndex` / `getPrevVisibleIndex` now take
+`{ calculations }` and evaluate them themselves. Leaving it to callers is precisely what let two of
+three surfaces drift for months; the function that needs the value now computes it, so a fourth
+surface cannot reintroduce this. All 8 enumerator/clerk call sites updated.
+
+**RED-verified.** Reverting the derivation yields `opened: +0` — the prod defect, reproduced. The
+regression test asserts the invariant rather than the symptom: *a valid DOB must open **exactly one**
+of the two gates, never zero.* A test documenting the pre-fix behaviour is kept alongside it so the
+cost of omitting `calculations` stays legible.
+
+⚠️ **REOPEN TRIGGER:** any submission rejected for a missing answer in an age-gated section.
+
 #### ⬜ AC4.4 — A PROVISIONAL REFERENCE CODE THAT NEVER SYNCS IS A PROMISE TO A CITIZEN
 
 `FormFillerPage.tsx:128` mints the code **in the browser** so the enumerator can read it back on the

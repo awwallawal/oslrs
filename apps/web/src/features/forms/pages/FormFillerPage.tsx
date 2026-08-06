@@ -8,6 +8,9 @@ import { QuestionRenderer } from '../components/QuestionRenderer';
 import { ProgressBar } from '../components/ProgressBar';
 import { PreviewBanner } from '../components/PreviewBanner';
 import { PendingNinPrompt } from '../components/PendingNinPrompt';
+// 13-4 (2026-08-06): every skipLogic call here MUST pass `calculations`. `age` is DERIVED
+// from `dob`, and it gates both Labour Force Participation and the under-15 guardian-consent
+// section. Without it BOTH gates read NaN and BOTH sections silently vanish.
 import {
   getVisibleQuestions,
   getNextVisibleIndex,
@@ -54,7 +57,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       if (!form) {
         return { values, errors: {} };
       }
-      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen);
+      const visible = getVisibleQuestions(form.questions, values, form.sectionShowWhen, undefined, {
+        calculations: form.calculations,
+      });
       return zodResolver(getCachedDynamicFormSchema(visible))(values, context, options);
     },
     [form]
@@ -157,7 +162,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     if (!form) return [];
     // Preview mode: show ALL questions (inputs are disabled, so skip logic can't be triggered)
     if (isPreview) return form.questions;
-    return getVisibleQuestions(form.questions, formData, form.sectionShowWhen);
+    return getVisibleQuestions(form.questions, formData, form.sectionShowWhen, undefined, {
+      calculations: form.calculations,
+    });
   }, [form, formData, isPreview]);
 
   // Current question from the FULL array
@@ -247,7 +254,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // Use full-array index for navigation
     const nextIdx = isPreview
       ? (currentIndex + 1 < form.questions.length ? currentIndex + 1 : -1)
-      : getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
+      : getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen, undefined, {
+          calculations: form.calculations,
+        });
     if (nextIdx === -1) {
       // End of form — complete draft and trigger sync
       if (!isPreview) {
@@ -303,6 +312,8 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         currentIndex,
         next,
         form.sectionShowWhen,
+        undefined,
+        { calculations: form.calculations },
       );
       if (nextIdx === -1) {
         // NIN was the final visible question — complete + sync.
@@ -333,7 +344,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // Use full-array index for navigation
     const prevIdx = isPreview
       ? (currentIndex > 0 ? currentIndex - 1 : -1)
-      : getPrevVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen);
+      : getPrevVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen, undefined, {
+          calculations: form.calculations,
+        });
     if (prevIdx === -1) return;
 
     setSlideDirection('right');
@@ -350,7 +363,11 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   const hasNextQuestion = useMemo(() => {
     if (!form) return false;
     if (isPreview) return currentIndex + 1 < form.questions.length;
-    return getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen) !== -1;
+    return (
+      getNextVisibleIndex(form.questions, currentIndex, formData, form.sectionShowWhen, undefined, {
+        calculations: form.calculations,
+      }) !== -1
+    );
   }, [form, currentIndex, formData, isPreview]);
 
   // Loading state
