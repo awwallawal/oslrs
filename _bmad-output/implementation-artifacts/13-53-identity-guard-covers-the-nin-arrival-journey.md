@@ -380,7 +380,7 @@ the final commit and none of it has to be re-derived later.
 | T2 | Unify the THREE promote-to-active paths | backlog | refactor |
 | T3 | Promote the negative control from a claim to a re-runnable flag | this script | ~20 lines |
 | T4 | Put the at-risk cohort on the ops digest | 13-44 | small |
-| T5 | Wizard vs queue pass DIFFERENT inputs to the same matcher — **unverified** | needs a check first | unknown |
+| T5 | Wizard vs queue pass DIFFERENT inputs to the same matcher | ✅ **ANSWERED in adjudication — NOT a defect** | none |
 
 ### T1 — This is the same bug for the third time, and the third time it was fixed by hand
 
@@ -435,7 +435,36 @@ anyone that on a Tuesday three weeks from now. Nobody greps a log they have stop
 The pair (cohort size ↑ · promote count flat) belongs on the ops digest, which makes it 13-44 work.
 It is the difference between evidence we go and look for, and evidence that comes to us.
 
-### T5 — ⚠️ NOTICED BUT NOT VERIFIED — do not action this without checking it first
+### T5 — ✅ ANSWERED 2026-08-07 (adjudication): NOT a defect, and the question was worth asking
+
+**Checked, because "unverified" is a state adjudication should end, not inherit.**
+
+| path | transformation |
+|---|---|
+| wizard (`registration.controller.ts:702`) | `trim()` + collapse whitespace |
+| queue (`normaliseFullName`) | `trim()` + collapse whitespace **+ title-case per space/hyphen part** |
+
+`normaliseFullName` adds **no characters, removes none, and alters no spacing or hyphenation beyond
+what the wizard already does** — the sole difference is CASE. The matcher lowercases both the
+incoming string and the stored one (`string_to_array(lower(…), ' ')`), so that difference cannot
+survive to the comparison.
+
+Verified empirically rather than by reading, on the shapes most likely to break it — leading/multiple
+spaces, ALL CAPS, hyphenated names, diacritics, apostrophes:
+
+```
+["  BASHIRU   YUSUFF ","TITILOPE"] → ["bashiru","yusuff","titilope"]   identical
+["ade-bola","OGUN-JIMOH"]          → ["ade-bola","ogun-jimoh"]         identical
+["Fátimà","O'Brien"]               → ["fátimà","o'brien"]              identical
+```
+
+Token arrays identical on every case. **No action required.**
+
+⚠️ **The review was right to record it and right not to action it.** It was written at the strength
+of the evidence actually gathered (none), which is exactly what let adjudication close it in ten
+minutes instead of leaving a vague worry in the backlog. That is the behaviour to keep.
+
+**Original note, preserved:**
 
 The public wizard passes RAW trimmed `givenName` / `familyName` to `findRespondentByIdentity`
 (`registration.controller.ts` ~`:702`). The queue path passes `canonical.*` out of

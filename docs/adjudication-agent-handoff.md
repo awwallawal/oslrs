@@ -302,6 +302,10 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
   submissions. The prod smoke confirmed AC1b **by log line, not row count**, and **found five
   defects code review had missed** — see §7j.
 - **13-49, 13-52 also closed.** **13-50, 13-51, 13-53 raised.**
+- 📄 **ENUMERATOR FIELD BRIEFING — `docs/runbooks/enumerator-field-briefing.md`** (printable). This
+  is where 13-4 R8 is discharged: it tells enumerators not to read out a number before one exists,
+  where to get it afterwards (Sync Status), and that a shared-handset registrant's OSLRS number is
+  the ONLY way back to their record. **Give it to every enumerator before their first field day.**
 - **⚠️ ONE NON-CODE ITEM BLOCKS A REAL FIELD DAY (13-4 R8):** an enumerator captured OFFLINE now
   has no reference code at the interview (AC4.4) AND a shared-handset registrant cannot retrieve by
   phone (H2). Closes by FIELD PROCEDURE — the slip is written later from the Sync Status list — and

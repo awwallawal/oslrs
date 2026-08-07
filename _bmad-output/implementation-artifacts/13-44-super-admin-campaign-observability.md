@@ -22,6 +22,32 @@ so that **I can watch campaign funnels, answer "why did I get this email?" suppo
 4. **AC4 — PII handling for the contact-log email column.** Email is PII: mask by default in the list (reuse the app's `maskEmail` helper) with an explicit, audited reveal (reuse the reveal-purpose pattern if applicable), OR render full only within the super-admin-audited context — follow whatever the Audit Log Viewer already does for PII so this is consistent, not a new precedent. The VIEW access itself is audit-logged (`AUDIT_ACTIONS`), parity with 9-11.
 5. **AC5 — No new heavy dependency; reuse.** No new registry read, no new worker. Reuse `getCampaignFunnel` as-is (do not reimplement), the audit-log table/filter pattern, and existing admin nav. Web tsc + eslint + full suite green; API tsc + eslint + route/controller tests green; `NODE_ENV=production` web build green.
 
+
+### AC-T4 — the at-risk cohort is a denominator nobody watches (from 13-53, 2026-08-07)
+
+**21 people are `pending_nin_capture` with no NIN today, and every one is a candidate for a
+duplicate the moment they find it.** 13-53 fixed the seam that turned that moment into a second
+record; nothing yet tells us the fix is still firing.
+
+**The signal is a PAIR, and neither half works alone:**
+- `pending_nin_capture AND nin IS NULL` — the at-risk cohort size
+- count of `promoted_existing_identity_on_nin_arrival` — the guard actually firing
+
+**Cohort climbing while promotes stay flat is the guard not running.** Either number alone is
+unreadable: the cohort rises and falls with normal registration, and a zero promote count is
+indistinguishable from "nobody has come back yet" — which is R21's trap exactly.
+
+⚠️ **13-53's R2 verification is a manual `pm2 logs | grep`.** Nobody greps a log they have stopped
+thinking about, and this needs watching for months, not days. **This AC is the difference between
+evidence we go and look for and evidence that comes to us.**
+
+1. Both numbers on the ops digest, as a pair, on one line.
+2. Alert only on the DIVERGENCE (cohort up, promotes flat over a window) — not on either level.
+   A raw cohort count would fire on a good day, which is how a monitor teaches people to ignore it.
+3. ⚠️ The promote count has **no table behind it** — it is a pino line. Either count it from logs or
+   give the promote an audit row. Do not quietly ship a metric that reads zero because nothing
+   populates it (see 13-42 AC7: an alarm computed from a value that could not move).
+
 ## Tasks / Subtasks
 - [ ] **Task 1 (AC1)** — controller + routes for campaigns-list + funnel (super-admin guard); wire `ReportService.getCampaignFunnel`; a small `listCampaigns()` service query. Route-registration + auth-guard tests.
 - [ ] **Task 2 (AC2)** — `campaign_sends` contact-log service query (scoped/paginated/filterable) + endpoint + tests.
