@@ -662,11 +662,29 @@ re-interview a citizen because a form was one answer short.**
 AC4.4 removed a wrong number. **On its own that is incomplete work** — it left the enumerator with
 nothing to give the respondent. Awwal caught it immediately: *"how do they get it across?"*
 
-**Measured, because the answer differs by cohort:**
-| | | |
-|---|---|---|
-| **259 (82%)** | have an email | **automatic** — the 9-58 confirmation carries the number, no enumerator action. The smoke proved this end-to-end: `+smoke3`/`+smoke5` both show `sent` AND `delivered`. |
-| **56 (18%)** | have no email | the enumerator **must relay it**, so they need somewhere to read it from |
+**⚠️ CORRECTED 2026-08-07 — my first figure here (82% / 18%) MIXED THE TWO PATHWAYS and Awwal
+caught it.** That split was register-wide, and the register is ~entirely public-wizard rows. Split
+by source:
+
+| source | total | with email | without |
+|---|---|---|---|
+| `public` | 314 | 259 (82%) | 55 |
+| `enumerator` | **1** | **0** | 1 |
+
+**There is no enumerator history to compute a rate from — one row — and I quoted a rate anyway.**
+
+The structural difference points the OPPOSITE way from what I implied. `email` is `required: false`
+on **both** form schemas, but the **public wizard enforces it client-side at Step 2** ("Email is
+required"); **the enumerator form does not.** In the field, with respondents who frequently have no
+email at all, **the must-relay share is plausibly the MAJORITY, not a fifth.**
+
+Consequences worth stating plainly:
+- **The Sync Status display is the PRIMARY delivery mechanism for the enumerator path**, not a
+  fallback for a minority. It should be treated and tested as such.
+- **SMS (9-27 Part B, blocked on Termii) is more important than the earlier note implied** — for a
+  no-email respondent it is the only automatic channel that exists.
+- The real enumerator email-capture rate is **unknown until the pathway is used**. It should be
+  measured after the first real field day, not assumed.
 
 **FIX:** the Sync Status page now shows, per entry:
 - **the respondent's name** (from the payload) — so a row is identifiable BEFORE it syncs, when no
@@ -679,7 +697,7 @@ nothing to give the respondent. Awwal caught it immediately: *"how do they get i
 ⚠️ **The code is shown ONLY on a synced row — the same rule as the completion screen.** Printing the
 provisional value here would reintroduce the exact defect AC4.4 just removed, one screen over.
 
-**Remaining gap, and it is the 18%:** an enumerator must remember to come back to this page. Nothing
+**Remaining gap, and it is larger than the 18% I first claimed:** an enumerator must remember to come back to this page. Nothing
 prompts them. Worth considering a "N entries synced since you last looked — 3 need a number passed
 on" nudge, and SMS once Termii is resolved (9-27 Part B) so the 56 get theirs the way the 259 do.
 
