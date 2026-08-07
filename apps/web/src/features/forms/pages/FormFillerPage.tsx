@@ -613,6 +613,51 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
               : 'Continue'}
           </button>
         </div>
+        {/*
+          13-4 AC4.3 — abandon an interview that ended mid-way. Available at EVERY step, not just
+          the first: a respondent can decline at any point, and "you must finish a form nobody wants"
+          is not a real option in front of a person who has withdrawn consent.
+
+          Deliberately understated styling — this destroys data and must never be a mis-tap next to
+          Continue. It sits BELOW the navigation, not beside it.
+        */}
+        {!isPreview && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={async () => {
+                const who = [allAnswersRef.current.firstname, allAnswersRef.current.surname]
+                  .filter((v) => typeof v === 'string' && v)
+                  .join(' ')
+                  .trim();
+                if (
+                  !window.confirm(
+                    'Discard this interview' +
+                      (who ? ' with ' + who : '') +
+                      '? Every answer entered so far is deleted and cannot be recovered. ' +
+                      'Nothing is submitted and no registration number is issued. ' +
+                      'Use this when the respondent has declined to continue.',
+                  )
+                ) {
+                  return;
+                }
+                await draft.discardDraft();
+                // Reset the in-memory form too, or the next respondent inherits these answers.
+                reset({});
+                allAnswersRef.current = {};
+                setFormData({});
+                setCurrentIndex(0);
+                setReferenceCode(null);
+                setReferenceConfirmed(false);
+                navigate('/enumerator');
+              }}
+              className="text-sm text-gray-500 underline underline-offset-2 hover:text-error-600 transition-colors"
+              data-testid="discard-interview-btn"
+            >
+              Discard this interview
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

@@ -106,6 +106,29 @@ export default function EnumeratorSyncPage() {
           today, re-armed the item on every press). Discard is the honest action for these, and it
           is the only escape an enumerator has: there is no browser console on a field phone.
         */}
+        {/*
+          13-4 AC4.3b — RESTORE is the primary action on a rejected entry; Discard is the fallback.
+          The draft is deleted at submit, so discarding a failed row destroys the only copy of the
+          interview and the respondent must be seen again. For the failure that actually happened —
+          one missing required answer — reopening and fixing it is obviously right.
+        */}
+        {permanentItems.length > 0 && (
+          <button
+            onClick={async () => {
+              const n = permanentItems.length;
+              if (!window.confirm(
+                'Reopen ' + n + ' rejected entry(ies) as drafts so the missing answers can be ' +
+                'filled in and resubmitted? Nothing is lost.',
+              )) return;
+              for (const i of permanentItems) await syncManager.restoreToDraft(i.id);
+            }}
+            data-testid="restore-permanent-button"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Reopen {permanentItems.length} rejected
+          </button>
+        )}
         {permanentItems.length > 0 && (
           <button
             onClick={() => {
@@ -113,14 +136,15 @@ export default function EnumeratorSyncPage() {
                 window.confirm(
                   `Discard ${permanentItems.length} submission(s) the server permanently rejected? ` +
                     'They were never saved, and retrying cannot make them succeed. ' +
-                    'Each respondent will need to be registered again.',
+                    'THIS DELETES THE ONLY COPY OF THE INTERVIEW — each respondent must be seen ' +
+                    'again from scratch. Prefer "Reopen" unless the entry is genuinely unwanted.',
                 )
               ) {
                 permanentItems.forEach((i) => void syncManager.discard(i.id));
               }
             }}
             data-testid="discard-permanent-button"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-error-600 hover:bg-error-700 text-white text-sm font-semibold rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-error-300 text-error-700 hover:bg-error-50 text-sm font-medium rounded-lg transition-colors"
           >
             <Trash2 className="w-4 h-4" />
             Discard {permanentItems.length} rejected

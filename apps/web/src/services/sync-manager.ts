@@ -127,6 +127,50 @@ export class SyncManager {
     await db.submissionQueue.delete(id);
   }
 
+  /**
+   * 13-4 AC4.3b — put a permanently-rejected entry BACK into the drafts list so it can be fixed
+   * and resubmitted, instead of only being thrown away.
+   *
+   * This corrects the Discard-only design shipped hours earlier. `useDraftPersistence` DELETES the
+   * draft at submit, on the reasoning that "the queue item has all data needed for sync" — true
+   * only while the queue item exists. Discard therefore destroyed **the only remaining copy of the
+   * interview**, confirmed empirically: after the first failed row was removed, the drafts store
+   * returned NO DRAFTS.
+   *
+   * For the failure that actually occurred — one required answer missing — the right response is
+   * obvious once stated: reopen it, fill the field, resubmit. **Nobody should re-interview a
+   * citizen because a form was one answer short.**
+   *
+   * Reuses the SAME id, so the restored draft keeps its `_referenceCode` and its identity across
+   * the queue and the drafts table.
+   */
+  async restoreToDraft(id: string): Promise<boolean> {
+    const item = await db.submissionQueue.get(id);
+    if (!item) return false;
+
+    const raw = (item.payload?.rawData ?? item.payload ?? {}) as Record<string, unknown>;
+    const now = new Date().toISOString();
+
+    await db.drafts.put({
+      id: item.id,
+      formId: item.formId,
+      formVersion: String((item.payload?.formVersion as string | undefined) ?? '1'),
+      responses: raw,
+      // Land on the first question; the operator is looking for one missing answer and the
+      // completeness error names it. Jumping blind into the middle is worse than starting over.
+      questionPosition: 0,
+      status: 'in-progress',
+      userId: item.userId,
+      createdAt: item.createdAt,
+      updatedAt: now,
+    });
+
+    // Drop the queue row LAST: if the put above throws, the entry is still queued and recoverable
+    // rather than lost between two tables.
+    await db.submissionQueue.delete(id);
+    return true;
+  }
+
   async syncAll(): Promise<void> {
     if (this._syncing) return;
     if (!navigator.onLine) return;

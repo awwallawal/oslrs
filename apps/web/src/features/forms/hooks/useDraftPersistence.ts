@@ -18,6 +18,8 @@ interface UseDraftPersistenceReturn {
   resumeData: { formData: Record<string, unknown>; questionPosition: number } | null;
   saveDraft: () => Promise<void>;
   completeDraft: () => Promise<void>;
+  /** 13-4 AC4.3 — abandon an interview: deletes the draft, submits nothing. */
+  discardDraft: () => Promise<void>;
   resetForNewEntry: () => void;
   loading: boolean;
 }
@@ -227,6 +229,37 @@ export function useDraftPersistence({
     }
   }, [formId, formVersion, formData, currentIndex, enabled, userId, formStartedAt]);
 
+  /**
+   * 13-4 AC4.3 — abandon an interview that ended mid-way.
+   *
+   * The field reality this exists for: the respondent declines partway, it turns out to be the
+   * wrong person, or a name was mis-keyed early and the whole entry is wrong. Before this, the only
+   * exits were finishing a form nobody wanted or leaving a half-filled draft behind — and that
+   * draft then blocked the next respondent, because the surface resumes rather than starts fresh.
+   *
+   * ⚠️ DELETES THE DRAFT ROW ENTIRELY — including its provisional `_referenceCode`. Leaving the
+   * code behind is how the NEXT respondent would inherit someone else's number.
+   *
+   * ⚠️ CREATES NO SUBMISSION AND NO QUEUE ROW. An abandoned interview is not a registration; it
+   * must leave nothing for the sync manager to find. That is the whole difference between this and
+   * `completeDraft`.
+   *
+   * Irreversible by design: the answers are gone. The caller confirms with the operator first.
+   */
+  const discardDraft = useCallback(async () => {
+    const id = draftIdRef.current;
+    draftIdRef.current = null;
+    setDraftId(null);
+    setResumeData(null);
+    if (!id) return;
+    try {
+      await db.drafts.delete(id);
+    } catch {
+      // Best-effort: the in-memory state is already cleared, so the operator can carry on with
+      // the next respondent regardless. A stranded row is recoverable; a blocked enumerator is not.
+    }
+  }, []);
+
   const resetForNewEntry = useCallback(() => {
     draftIdRef.current = null;
     setDraftId(null);
@@ -239,6 +272,7 @@ export function useDraftPersistence({
     loading,
     saveDraft,
     completeDraft,
+    discardDraft,
     resetForNewEntry,
   };
 }

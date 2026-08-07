@@ -516,7 +516,7 @@ The only escape was `indexedDB` in a browser console. **A field enumerator does 
   row, so there is no counterpart to reconcile. **RED-verified** — reverting the classifier to the
   pre-fix behaviour fails the 422 test.
 
-#### ⬜ AC4.3 — STILL TO BUILD: discard an IN-PROGRESS form (Awwal's original request)
+#### ✅ AC4.3 — BUILT 2026-08-07: discard an IN-PROGRESS form (Awwal's original request)
 
 > *"a button the Enumerator can click at any time to discard a form they are filling, in which case
 > the respondent declined to continue … and the half-filled form will be causing issues as it would
@@ -537,7 +537,7 @@ respondent declines, it is the wrong person, a name was mis-keyed.
 5. Record that it happened — a count of discards per enumerator is a supervision signal (a high
    rate may mean a script problem, not a refusal problem). Local counter is enough; no PII.
 
-#### 🔴 AC4.3b — RESTORE TO DRAFT, NOT JUST DISCARD (found 2026-08-06, and it corrects AC4.2)
+#### ✅ AC4.3b — BUILT 2026-08-07: RESTORE TO DRAFT, NOT JUST DISCARD (corrects AC4.2)
 
 **On submit the draft is DELETED** (`useDraftPersistence.ts:224`), on the stated grounds that *"queue
 item has all data needed for sync"*. True — **while the queue item exists.**
@@ -630,6 +630,32 @@ screen** while unconfirmed, so a future re-render of the provisional value elsew
 out until the entry syncs. That is a real reduction in offline capability, and it is the right one —
 the alternative is a number that cannot be true. `/check-registration` retrieves it by phone or
 email afterwards, and that path is named in the on-screen copy.
+
+#### ✅ AC4.3 / AC4.3b — WHAT SHIPPED (2026-08-07)
+
+**AC4.3 — "Discard this interview"** on `FormFillerPage`, available at **every step**. A respondent
+can withdraw at any point, and "you must finish a form nobody wants" is not a real option in front
+of someone who has just declined.
+- Deletes the draft row **including its provisional `_referenceCode`** — leaving the code behind is
+  how the next respondent inherits someone else's number.
+- **Creates no submission and no queue row.** An abandoned interview is not a registration; it must
+  leave nothing for the sync manager to find. That is the entire difference from `completeDraft`.
+- Also resets the in-memory form, or the next respondent inherits the previous answers.
+- Deliberately understated: a plain underlined link *below* the navigation, never a button beside
+  Continue. It destroys data and must not be a mis-tap.
+
+**AC4.3b — "Reopen N rejected"** is now the PRIMARY action on a permanently-failed entry, with
+Discard demoted to an outline button and a blunter warning (*"THIS DELETES THE ONLY COPY OF THE
+INTERVIEW"*).
+- `restoreToDraft()` rehydrates `payload → drafts` under the **same id**, so the entry keeps its
+  `_referenceCode` and its identity across both tables.
+- The queue row is dropped **last** — if the draft write throws, the entry stays queued and
+  recoverable rather than lost between two tables. Pinned by a test.
+
+**Why this ordering matters more than it looks:** the draft is deleted at submit, so before AC4.3b
+the only exit from a rejected entry was destroying it. For the failure that actually occurred — one
+missing required answer — reopening and filling it in is obviously right. **Nobody should
+re-interview a citizen because a form was one answer short.**
 
 #### ✅ AC4.4b — WHERE THE ENUMERATOR GETS THE NUMBER INSTEAD (added 2026-08-07, Awwal's catch)
 

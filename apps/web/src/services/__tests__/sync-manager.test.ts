@@ -5,11 +5,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockWhere = vi.hoisted(() => vi.fn());
 
+// 13-4 AC4.3b — restoreToDraft moves a row between TWO tables, so both are stubbed.
+const mockQueueGet = vi.hoisted(() => vi.fn());
+const mockQueueDelete = vi.hoisted(() => vi.fn());
+const mockDraftsPut = vi.hoisted(() => vi.fn());
+const mockDraftsGet = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/offline-db', () => ({
   db: {
     submissionQueue: {
       where: mockWhere,
       update: mockUpdate,
+      get: mockQueueGet,
+      delete: mockQueueDelete,
+    },
+    drafts: {
+      put: mockDraftsPut,
+      get: mockDraftsGet,
     },
   },
 }));
@@ -79,6 +90,56 @@ describe('isPermanentFailure — 13-4', () => {
 
   it('reports the status so the UI can explain WHY retry is not offered', () => {
     expect(isPermanentFailure(new ApiError('x', 422)).status).toBe(422);
+  });
+});
+
+/**
+ * 13-4 AC4.3b — restore-to-draft. Corrects the Discard-only design shipped hours earlier.
+ *
+ * `useDraftPersistence` DELETES the draft at submit ("the queue item has all data needed for
+ * sync") — true only while the queue item exists. So Discard destroyed the ONLY remaining copy of
+ * an interview, confirmed empirically: after the first failed row was removed, the drafts store
+ * returned NO DRAFTS. Nobody should re-interview a citizen because a form was one answer short.
+ */
+describe('SyncManager.restoreToDraft — 13-4 AC4.3b', () => {
+  beforeEach(() => {
+    mockQueueGet.mockReset();
+    mockQueueDelete.mockReset().mockResolvedValue(undefined);
+    mockDraftsPut.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('rehydrates the payload into drafts, keeping the SAME id so the reference code survives', async () => {
+    mockQueueGet.mockResolvedValue({
+      id: 'sub-1', formId: 'form-1', userId: 'u1', createdAt: '2026-08-07T09:00:00.000Z',
+      status: 'failed', retryCount: 3, error: 'missing employment_status', permanentFailure: true,
+      payload: { rawData: { _referenceCode: 'OSL-2026-KEEPME', surname: 'Bello', firstname: 'Fatima' } },
+    });
+
+    await expect(new SyncManager().restoreToDraft('sub-1')).resolves.toBe(true);
+
+    const draft = mockDraftsPut.mock.calls[0]![0];
+    expect(draft.id).toBe('sub-1');                       // same id => same identity
+    expect(draft.status).toBe('in-progress');
+    expect(draft.responses._referenceCode).toBe('OSL-2026-KEEPME'); // the code survives
+    expect(draft.responses.surname).toBe('Bello');
+    expect(draft.questionPosition).toBe(0);
+    // Queue row dropped LAST, and only after the draft is written.
+    expect(mockQueueDelete).toHaveBeenCalledWith('sub-1');
+  });
+
+  it('returns false for an unknown id rather than creating an empty draft', async () => {
+    mockQueueGet.mockResolvedValue(undefined);
+    await expect(new SyncManager().restoreToDraft('nope')).resolves.toBe(false);
+    expect(mockDraftsPut).not.toHaveBeenCalled();
+    expect(mockQueueDelete).not.toHaveBeenCalled();
+  });
+
+  /** Order is load-bearing: a throw on put must leave the entry QUEUED, not lost between tables. */
+  it('does NOT drop the queue row if writing the draft fails', async () => {
+    mockQueueGet.mockResolvedValue({ id: 'sub-2', formId: 'f', userId: 'u', createdAt: 'x', payload: {} });
+    mockDraftsPut.mockRejectedValue(new Error('quota exceeded'));
+    await expect(new SyncManager().restoreToDraft('sub-2')).rejects.toThrow('quota exceeded');
+    expect(mockQueueDelete).not.toHaveBeenCalled();
   });
 });
 
