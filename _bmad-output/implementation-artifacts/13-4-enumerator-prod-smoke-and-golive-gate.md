@@ -605,7 +605,31 @@ cost of omitting `calculations` stays legible.
 
 ⚠️ **REOPEN TRIGGER:** any submission rejected for a missing answer in an age-gated section.
 
-#### ⬜ AC4.4 — A PROVISIONAL REFERENCE CODE THAT NEVER SYNCS IS A PROMISE TO A CITIZEN
+#### 🔴 AC4.4 — DEMONSTRATED LIVE 2026-08-07: THE ENUMERATOR IS SHOWN A NUMBER THE REGISTER NEVER STORES
+
+**No longer a theory. It happened in the smoke, on submission #1.**
+
+```
+shown to the enumerator :  OSL-2026-DVJ0QW      (minted client-side, read from the draft)
+stored in the register  :  OSL-2026-RGDANN
+DVJ0QW in respondents   :  0 rows — it exists NOWHERE
+```
+
+The submission even carries `_referenceCode = OSL-2026-RGDANN`, so the provisional code was
+**discarded and overwritten** rather than honoured. `reconcileReferenceCode` exists to repaint the
+UI after sync, but the operator had already read the pre-sync value — which is precisely the moment
+an enumerator says the number out loud to the person in front of them.
+
+**In the field this is a registration number given to a citizen that will never match anything.**
+They discover it at the counter, weeks later, with no way to prove what they were told.
+
+⚠️ **This changes the severity of the original AC4.4 note.** It was written as "when sync
+permanently fails, nobody tells the enumerator the number is void". The smoke shows worse: **the
+code diverges even on a SUCCESSFUL sync.** Sync failure is not required.
+
+Original analysis (still valid, now a subset):
+
+
 
 `FormFillerPage.tsx:128` mints the code **in the browser** so the enumerator can read it back on the
 spot — correct offline-first design, and it is honoured when the submission syncs. **But when sync
@@ -652,6 +676,13 @@ present-but-empty (rendered and skipped)? Those two answers point at completely 
 payload is the only diagnostic evidence a field failure ever produces, and discarding destroys it.
 Worth considering whether discard should log the payload shape (field names only, no values) before
 deleting.
+
+### Residuals raised by the smoke itself (2026-08-07)
+
+| ID | Finding | Sev | State |
+|---|---|---|---|
+| **R3** | **R21 only covers the NO-NIN case, and the gap is the COMMON citizen journey.** A real pair on prod, both `source=public`: `OSL-2026-56C9PG` (BASHIRU / YUSUFF TITILOPE, **no NIN**, 15:22) and `OSL-2026-W1PS38` (YUSUFF / BASHIRU, **NIN 44873253629**, 17:38 — *after* R21 deployed). Same phone, 2 shared name tokens. R21 did not attach because **the incoming submission had a NIN**, and the guard runs only when `ninValue === null`. The NIN-side dedupe cannot help either: it matches on NIN equality, and the first record has none. **So a person who registers without their NIN and returns with it gets two records — which is exactly what the pending-NIN cohort is being ASKED to do.** 23 people are pending today; the 9-12 ladder link updates in place, but anyone who instead re-registers from the front page duplicates. Not hypothetical: it already happened to a citizen. → handed to **13-53**. **Operational:** `56C9PG`/`W1PS38` need merging now (`merge:duplicates`, older-wins keeps 56C9PG). | **High** | **OPEN — handed to 13-53** |
+| **R4** | ✅ **Smoke confirmed AC1b by EVIDENCE, not inference.** `identity_match_exempted_staff_capture` logged `would have merged into: OSL-2026-RGDANN, source: enumerator` — the guard ran, found the household member, and declined. Three rows survived one handset. Recorded because the row count ALONE would have looked identical had the guard never executed, which is the R21 trap. An accidental mistyped phone on #3 supplied a free negative control: same handset, only ONE shared name token, correctly not even considered. | — | ✅ **CLOSED — AC1b passed** |
 
 ## Adjudication verdict — 2026-08-06
 
