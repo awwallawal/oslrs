@@ -175,10 +175,84 @@ capture corruption. Note also that suppression keyed on the *malformed* string, 
 `aqeemakolade@gmail.com` was never suppressed and that person (`OSL-2026-WKM3FC`, active) is still
 reachable. **A suppression list keyed on an unnormalised address both over- and under-blocks.**
 
+### AC9 — NOBODY IS READING THE API'S OWN ERROR STREAM (ADDED 2026-08-07, adjudication)
+
+**This story watches metrics. It does not watch the process's own stderr — and that is where the
+last security defect sat, in plain text, for four days.**
+
+On 2026-08-07, while adding swap to the VPS, a routine "did the services survive?" check found nine
+copies of this in `/root/.pm2/logs/oslsr-api-error.log`:
+
+```
+ValidationError: Custom keyGenerator appears to use request IP without calling the
+ipKeyGenerator helper function for IPv6 addresses. This could allow IPv6 users to bypass limits.
+    at .../middleware/registration-rate-limit.ts   code: 'ERR_ERL_KEY_GEN_IPV6'
+```
+
+It was real: the per-email registration limiter keyed its IP fallback on the raw address, so an IPv6
+client could rotate its own low bits for unlimited buckets — **a bypass of a public-endpoint control
+we had added four days earlier for a citizen who could not finish registering.** Fixed in `077e129`.
+
+**Everything that was supposed to catch it did not.** Not the adversarial code review. Not tsc, not
+eslint, not 3603 tests. Not the ops digest. The process printed it **on every single boot**, into a
+file with no reader, and it surfaced only because an unrelated ops task made someone open the log.
+
+⚠️ **The finding was luck, and luck is not a control.** That is the whole reason for this AC.
+
+#### AC9.1 — Capture at the SOURCE, not from a pm2 file path
+
+1. Install a recorder at process start that captures **`console.error`/`console.warn` and
+   `process.on('warning')`** into a de-duplicated in-memory set, and persist it where the digest can
+   read it. The defect above was a **dependency calling `console.error`** — pino never saw it, so a
+   logger-only watch would have missed it entirely.
+2. ⚠️ **The interceptor MUST forward to the original.** A wrapper that captures and forgets to
+   re-emit turns "nobody reads the log" into "there is no log" — strictly worse than today.
+3. ⚠️ **Install it before anything else imports.** The rate-limit error fired during module import
+   of the middleware; a recorder installed after route wiring would not have seen it. Anything that
+   can kill the process before the recorder is up remains out of reach — say so in the code rather
+   than implying full coverage.
+4. Reading pm2's log file is the fallback, not the design: it hardcodes a path, breaks outside pm2,
+   and cannot distinguish the current boot from every boot before it.
+
+#### AC9.2 — Fire on a NEW SIGNATURE, never on volume (the AC2 rule, applied to errors)
+
+1. **Nine copies of one error is ONE signal, not nine.** Collapse to a stable signature: the error
+   `code` when present (`ERR_ERL_KEY_GEN_IPV6`), else the message's first line with volatile parts
+   (numbers, paths, UUIDs, timestamps) stripped.
+2. Yellow **only** when a signature appears that is not in a known-acknowledged set. Repeat
+   occurrences of a known signature are silent.
+3. **The acknowledged set is an explicit allowlist with a REASON per entry** — same rule as 13-54
+   AC1.3. *An entry without a reason is a hole with a comment.*
+4. ⚠️ **AN UNSTABLE SIGNATURE IS WORSE THAN NO WATCH.** If normalisation leaves a timestamp or a pid
+   in the key, every boot mints a "new" signature, the digest yellows daily, and the operator learns
+   to ignore it — the alarm-fatigue death this story's Dev Notes already name as the thing to avoid.
+   **Test the normaliser against two real boots of the same error and assert ONE key.**
+
+#### AC9.3 — Startup errors are the high-value window
+
+1. Report separately on errors captured between process start and `server_start`. A boot-time error
+   is deterministic, reproducible, and repeats forever — exactly the shape that rots unread.
+2. Silent-when-healthy is preserved (AC4): no new signature → no recommendation.
+
+#### AC9.4 — RED-verify against the real incident
+
+1. **We have a genuine historical trigger, so use it instead of a synthetic one:** restore the raw
+   `req.ip` fallback in `registration-rate-limit.ts`, boot, and assert the digest yellows with the
+   `ERR_ERL_KEY_GEN_IPV6` signature. Restore by hand.
+2. **A watch that has never been observed firing is a watch nobody knows works** — and this story
+   already carries one test (AC7's) that was *green for months while encoding the defect*.
+
+#### Note on scope
+
+This is bundled here rather than raised standalone because it is the same sentence as the rest of
+13-42: **turn a thing we happened to look at once into a standing signal that cannot cry wolf.** The
+difference is the input — the API's own error stream instead of a COUNT query.
+
 ## Tasks / Subtasks
 - [ ] **Task 1 — snapshot section** (AC1) — `OperationsService`: add the `dataIntegrity` gather (2–3 COUNT queries), typed in `@oslsr/types` alongside the other snapshot section types; fail-open wrapper.
 - [ ] **Task 2 — formatter + recommendation** (AC2, AC3, AC4, AC5) — `formatDataIntegrityLines()` (pure, exported for test) + the conditional recommendation push in `runOpsDigest`/the recommendation builder; MarkdownV2-escaped; document the known-safe sentinel set as a shared constant (reuse 13-41's if it lands first).
 - [ ] **Task 3 — tests** (AC6) — extend `ops-digest.worker.test.ts` with the AC6 cases.
+- [ ] **Task 5 — error-stream watch** (AC9) — startup-ordered `console.error`/`console.warn`/`process.on('warning')` recorder that FORWARDS to the original; stable signature normaliser (test two real boots of one error → one key); reasoned allowlist; digest line + new-signature-only recommendation; RED-verify by restoring the raw `req.ip` fallback and observing the yellow.
 - [ ] **Task 4 — validate** — API suite + tsc + eslint; a manual `runOpsDigest()` dry-run against a seeded snapshot proving the silent/buzz branches.
 
 ## Dev Notes
@@ -204,4 +278,5 @@ The same trace found the 9-40 path (`PUT /me/registration` → `updateMarketplac
 ## Change Log
 | Date | Change | By |
 |------|--------|-----|
+| 2026-08-07 | **AC9 added at adjudication** — the digest watches metrics but not the API's own stderr, and that is where an IPv6 rate-limiter bypass (`ERR_ERL_KEY_GEN_IPV6`) sat unread for four days, printed on every boot, missed by review + tsc + eslint + 3603 tests. Found only as a side effect of adding swap to the VPS. Specced to the story's existing discipline: capture at the source (a dependency's `console.error`, which pino never sees), collapse to a STABLE signature, fire only on a NEW one, reasoned allowlist, and RED-verify against the real historical trigger. Bundled here rather than raised standalone because it is the same sentence as the rest of 13-42. | Adjudication |
 | 2026-07-23 | Story drafted, EMERGENT from the 13-34 adjudication trace. Turns two one-off July prod checks (sentinel population for the 22P02 class + self-edit path liveness) into standing ops-digest signals, each shaped to fire ONLY on the real defect delta (a NEW sentinel value; writes lost despite invocation) rather than on blast-expected volume or benign no-traffic. POST-LAUNCH, non-gating, observability-only; sibling of 13-41 (read-side). 6 ACs / 4 Tasks. Related 9-40 consent-submission asymmetry noted out-of-scope. | Bob (SM) |

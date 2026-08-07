@@ -377,7 +377,7 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
 | **13-50** | `/check-registration` mints dead-end links (244 sends/month); `wizard_resume` unaudited; phantom drafts. |
 | **13-51** | Operator contact-correction UI; validate email at capture so we stop manufacturing bounces. |
 | **13-52** | Deploy resilience shipped; its TESTS were not written. |
-| **13-42** | AC7 hotfixed; AC8 (bounce line misdirects) + AC1-6 remain. |
+| **13-42** | AC7 hotfixed; **AC8** (bounce line misdirects) + **AC9** (nobody reads the API's stderr — the IPv6 bypass sat there 4 days) + AC1-6 remain. |
 | Operator | SMS list (§7g, minus Sakirat — reachable again). Confirm the Resend plan. R8 briefing. |
 
 ## 3-old2. Current state (2026-08-06) — superseded by §3 above
@@ -401,7 +401,7 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
 | | |
 |---|---|
 | **13-50** | `/check-registration` mints dead-end links; `wizard_resume` unaudited; **AC4/AC5** phantom drafts. Not launch-gating but degrades WITH engagement. |
-| **13-42** | AC7 hotfixed; **AC8** (bounce line misdirects at DKIM/SPF) + AC1-6 remain. |
+| **13-42** | AC7 hotfixed; **AC8** (bounce line misdirects at DKIM/SPF) + **AC9** (the API's stderr has no reader) + AC1-6 remain. |
 | **13-4** | Enumerator pathway — Awwal's next. AC1b (shared-phone household) is load-bearing now that R21 proved the guard attaches. |
 | **9-27** | `in-progress`, Parts B-F = SMS/WhatsApp, blocked on Termii by Awwal's own call. **Do not close it.** |
 | Operator | 12-person SMS list (§7g) + 6 suppressed people. Ladder cohort is **08-05**, denominator **71 not 75** (4 phantoms). |
@@ -1042,10 +1042,16 @@ down here: *the finding was luck, and luck is not a control.*
   "a fresh boot added ZERO", not the weaker "the log looks fine".
 - Traced to the **call site** in the deployed source, not the import — §2b's whole point.
 
-⚠️ **The open question this leaves:** `pm2 logs --err` is not surfaced anywhere. 13-42's ops digest
-watches metrics, not the API's own error stream. **An error the process prints on every single boot
-went unread for four days.** Worth a story — a boot-time error-log check is cheap, and this one was
-a security hole in a public endpoint.
+✅ **RAISED, not left as a note: 13-42 AC9 + Task 5.** The digest watches metrics, not the API's own
+stderr — so an error the process printed on **every single boot** went unread for four days, and it
+was a bypass of a public-endpoint control. AC9 is specced to 13-42's own discipline rather than as a
+generic log grep: capture at the SOURCE (`console.error`/`console.warn` + `process.on('warning')`,
+because the offender was a **dependency's** `console.error` that pino never sees), forward to the
+original so the watch cannot become the outage, install before other imports, collapse to a **stable
+signature** (nine copies = one signal), and yellow only on a signature outside a **reasoned**
+allowlist. ⚠️ Its own worst failure mode is called out in the AC: **an unstable signature mints a
+"new" error every boot, the digest yellows daily, and the operator stops reading it** — the exact
+alarm-fatigue death 13-42's Dev Notes exist to prevent. RED-verify uses the real historical trigger.
 
 ## 7j. Session 2026-08-07 — the smoke earned its keep, six times over
 
