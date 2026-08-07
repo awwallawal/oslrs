@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CompletionConfetti } from '../../../components/CompletionConfetti';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { WizardLayout } from '../../../layouts/WizardLayout';
@@ -787,6 +788,16 @@ function CompletionScreen({
 }) {
   return (
     <div className="space-y-4 text-center" data-testid="wizard-complete">
+      {/*
+        ⚠️ THE CONFETTI BELONGS HERE, NOT ON RegistrationCompletePage.
+        I put it there first and it never fired, because the wizard NEVER NAVIGATES to that route —
+        it renders this inline CompletionScreen instead. Third instance today of the same trap: two
+        implementations of one concept, and the change landed on the one the traffic does not take
+        (FormRenderer vs FormFillerPage for calculated fields; skipLogic callers; now this).
+        **Before wiring anything to a "completion screen", check which one the user actually
+        reaches.**
+      */}
+      <CompletionConfetti />
       <div className="text-6xl" aria-hidden="true">
         ✓
       </div>

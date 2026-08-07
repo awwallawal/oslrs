@@ -42,6 +42,11 @@ export default function RegistrationCompletePage() {
         nothing back. Marking that is warm, and it is the moment they are most likely to tell
         someone else to register. Decorative only, and silent under prefers-reduced-motion.
         The ENUMERATOR surface deliberately gets a quiet ripple instead — see CompletionRipple.
+
+        ⚠️ This page is NOT the wizard's completion screen. The wizard renders its own inline
+        CompletionScreen (WizardPage.tsx) and never navigates here; this route is reached by the
+        pending-NIN completion link. Confetti lives in BOTH places on purpose — putting it only
+        here is why the first attempt never fired.
       */}
       <CompletionConfetti />
       <div className="min-h-screen bg-neutral-50 flex flex-col">
