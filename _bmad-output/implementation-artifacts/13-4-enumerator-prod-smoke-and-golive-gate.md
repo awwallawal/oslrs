@@ -1,6 +1,6 @@
 # Story 13.4: Enumerator Prod Smoke & Go-Live Gate — Exercise the Field Path on Prod + Codify the 4-Point Pre-Flight Checklist
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-25 by Bob (SM) via canonical *create-story, per SCP-2026-06-25-launch-campaign (Epic 13). 🚦 PRE-SPEND gate item #2. REUSE not build — the enumerator path is fully wired. NET-NEW = exercise 5-10 real submissions on prod (today: ONE ever) + codify the 4-point go/no-go runbook. -->
@@ -183,18 +183,18 @@ to the public path.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1d — Prove both email branches (AC1d)** — one smoke submission WITH `email` (confirm
+- [x] **Task 1d — Prove both email branches (AC1d)** — one smoke submission WITH `email` (confirm
       the OSLRS-number email is RECEIVED, not merely sent) and one WITHOUT (must still succeed).
       No form change is needed; `email` already exists and is optional on both forms.
-- [ ] **Task 1c — Test-data protocol (AC1c)** — distinct phones + unrelated names (except the
+- [x] **Task 1c — Test-data protocol (AC1c)** — distinct phones + unrelated names (except the
       AC1b pair); `+tag` emails you control; a reserved name/NIN prefix agreed BEFORE the first
       submission; baseline captured before and re-measured after teardown; child-first teardown
       with the `DELETE n` counts read.
-- [ ] **Task 1b — Shared-phone household case (AC1b)** — register ≥2 different people in one
+- [x] **Task 1b — Shared-phone household case (AC1b)** — register ≥2 different people in one
       household on ONE phone with overlapping names; assert **two** respondent rows, not one.
       If they merge, exempt or strengthen the R13 identity guard for enumerator-sourced
       submissions BEFORE field deployment.
-- [ ] **Task 1 — Exercise 5–10 real enumerator submissions on prod (AC1)**
+- [x] **Task 1 — Exercise 5–10 real enumerator submissions on prod (AC1)**
   - [ ] Confirm/establish a real enumerator assigned via `team_assignments` (supervisor → enumerator → LGA, active row) [Source: apps/api/src/db/schema/team-assignments.ts:21-54].
   - [ ] Capture + submit 5–10 forms through the live `EnumeratorHome` [Source: apps/web/src/features/dashboard/pages/EnumeratorHome.tsx] on PROD (AC1.3).
   - [ ] Verify each flows `submitForm → queueSubmissionForIngestion → submission-processing.service` [Source: apps/api/src/controllers/form.controller.ts:121,177] and lands a respondent row (`source = enumerator`) + submissions row (AC1.2).
@@ -205,7 +205,7 @@ to the public path.
   - [x] State the decision rule (all green → fire; any red → hold; radio movable 24–48h) (AC2.2).
   - [x] Cross-link to `docs/runbooks/pre-launch-operator-runbook.md`; do not fork the launch process (AC2.3).
 
-- [ ] **Task 3 — Record the gate verdict (AC3)**
+- [x] **Task 3 — Record the gate verdict (AC3)**
   - [ ] Record the "enumerator path proven on prod" verdict (≥5 verified submissions, with the submission/respondent IDs) as gate item #2 (AC3.1) [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-06-25-launch-campaign.md:98].
 
 ### Review Follow-ups (AI)
@@ -445,15 +445,37 @@ Per the §2a0 debt gate. **Every open row here is operator execution on prod; no
 
 | ID | Sev | State | What | Evidence to close |
 |---|---|---|---|---|
-| R1 | High | **OPEN — operator** | AC1.1–1.3: 5–10 real submissions through `EnumeratorHome` on prod (today: one ever) | Runbook §F table populated with respondent/submission IDs; `§A query 2` shows `source='enumerator'`, `processed=true` for each |
-| R2 | High | **OPEN — operator** | AC1b execution: the shared-phone household pair | `§A query 4` returns **2**. Code fix already shipped + RED-verified, so this CONFIRMS rather than discovers. If it returns 1, the fix did not reach prod → hold gate item 2 |
-| R3 | Med | **OPEN — operator** | AC1d: both email branches, with the OSLRS-number email confirmed **received** | Runbook §F "confirmation email received at" filled |
-| R4 | Med | **OPEN — operator** | AC1.4 / AC1c: rows tagged before creation, teardown run child-first with `DELETE n` counts read, baseline re-measured | §F teardown checkbox + before/after baselines |
-| R5 | High | **OPEN — operator** | AC3: gate item #2 verdict recorded with evidence | §F verdict flipped GREEN with the ID list |
+| R1 | High | ✅ **CLOSED 2026-08-07 — SMOKE RUN** · 6 submissions on prod, ALL `source='enumerator'`: `RGDANN`, `1YKYVQ`, `J651YV`, `Q1KPQQ`, `0DS3S9`, `CZGZDF`. `CZGZDF` came back `active` with NIN `99990000006`; the other five `pending_nin_capture` as designed. | AC1.1–1.3: 5–10 real submissions through `EnumeratorHome` on prod (today: one ever) | Runbook §F table populated with respondent/submission IDs; `§A query 2` shows `source='enumerator'`, `processed=true` for each |
+| R2 | High | ✅ **CLOSED 2026-08-07 — CONFIRMED, AND BY THE RIGHT EVIDENCE.** The shared phone `+2348000000201` returned **3** rows, not 1. But the count is not the proof — a guard that never executed produces an identical count. The proof is the log line: `identity_match_exempted_staff_capture … would have merged into: OSL-2026-RGDANN, source: enumerator` — the guard RAN, FOUND the household member, and DECLINED. A mistyped phone on #3 also gave a free negative control: same handset, only ONE shared name token, correctly not even considered. | AC1b execution: the shared-phone household pair | `§A query 4` returns **2**. Code fix already shipped + RED-verified, so this CONFIRMS rather than discovers. If it returns 1, the fix did not reach prod → hold gate item 2 |
+| R3 | Med | ✅ **CLOSED 2026-08-07** · Both branches exercised: `J651YV` WITH `lawalkolade+smoke3@…`, `Q1KPQQ` with none. `email_events` shows **`sent` AND `delivered`** for both smoke addresses — provider-confirmed delivery to the mailbox. ⚠️ **Visual confirmation in the inbox was not obtained**; delivery is evidenced by webhook, which is stronger than recollection but is not the same as someone reading it. Noted rather than glossed. | AC1d: both email branches, with the OSLRS-number email confirmed **received** | Runbook §F "confirmation email received at" filled |
+| R4 | Med | ✅ **CLOSED 2026-08-07** · Rows tagged `Zsmoketest` BEFORE creation, so teardown was a `WHERE` clause rather than archaeology. Child-first with counts read: `fraud_detections` 6 · `marketplace_profiles` 6 · `magic_link_tokens` 0 · `submissions` 6 · `respondents` 6 · `users` 0. Baseline re-measured: register back to **316**, 0 orphans, 0 dup NINs, 0 missing reference codes. `audit_logs` deliberately untouched (hash-chained). | AC1.4 / AC1c: rows tagged before creation, teardown run child-first with `DELETE n` counts read, baseline re-measured | §F teardown checkbox + before/after baselines |
+| R5 | High | ✅ **CLOSED 2026-08-07** · Verdict recorded below (§ Go-live gate verdict). Gate item #2 **GREEN** on the evidence in R1–R4. | AC3: gate item #2 verdict recorded with evidence | §F verdict flipped GREEN with the ID list |
 | R6 | Low | **ACCEPTED — manual watch** | The exemption's cost side has no automated alarm: `identity_match_exempted_staff_capture` still has no digest line | Re-scoped by review M4 from "no surface at all" to "manual watch with a query that exists": `§A query 6` lists shared-handset enumerator/clerk groups. Run at teardown and weekly once field work starts. Automate at 13-42 if field volume makes the rate interesting |
 | R7 | Low | **ACCEPTED** | AC1b.3's fallback (DOB match / ≥3 shared tokens) not implemented | Exemption was AC1b.3's stated first choice; the fallback is only warranted if R6's counter shows the exemption is too broad. Cannot be judged before field data exists |
-| R8 | Med | **OPEN — operator (field procedure)** | Review H2: a shared-handset household can no longer be resolved by phone — the status check now refuses an ambiguous identifier rather than answering about the wrong person. **Enumerators must read the OSLRS reference code back to every registrant, and it must go on the slip**, or those citizens have no working way to check status or resume | Runbook §C's field-consequence note actioned in the enumerator briefing; §F's two status-check boxes ticked during the smoke (shared phone → neutral + no email; reference code → email arrives) |
-| R9 | Low | **OPEN — dev, post-launch** | Review H2 changed public status-check resolution for ALL sources, not just enumerator rows. The ~14 pre-existing duplicate-phone pairs in the live registry will now get the neutral response instead of the newest match — correct, but it is a silent behaviour change for people already registered | Watch `registration_status.identifier_ambiguous` after deploy. If the rate is material, the fix is a disambiguation prompt ("we found more than one — enter your reference code"), not a return to guessing. Candidate for its own story |
+| R8 | **High** (was Med) | ⚠️ **ACCEPTED 2026-08-07 — WITH A TENSION AC4.4 CREATED, STATED PLAINLY** · REOPEN TRIGGER: any shared-handset registrant who cannot retrieve their record | Review H2: a shared-handset household can no longer be resolved by phone — the status check now refuses an ambiguous identifier rather than answering about the wrong person. **Enumerators must read the OSLRS reference code back to every registrant, and it must go on the slip**, or those citizens have no working way to check status or resume 
+
+⚠️ **RAISED Med → High on 2026-08-07, because AC4.4 made it harder to satisfy, not easier.** This
+residual says *"enumerators must read the OSLRS reference code back to every registrant"*. AC4.4
+then stopped the completion screen showing a code until the server confirms it — **so offline, or on
+a slow link, there is no code to read back at the moment the respondent is still standing there.**
+
+Both changes are individually right: refusing to guess between two people on one handset is correct,
+and showing a number that can never be stored is indefensible. **Together they leave a real gap for
+a shared-handset registrant captured offline** — no code at the interview, and no phone-based
+retrieval afterwards.
+
+**What closes it, and none of it is code:**
+1. **The paper slip must carry the code, written at the point the Sync Status page shows it** — not
+   at the interview. That is a change to the field procedure, and the runbook must say so.
+2. **AC4.4b's Sync Status list is the mechanism** — respondent name beside the issued number, so an
+   enumerator can complete slips after syncing.
+3. **SMS (9-27 Part B, blocked on Termii) removes the problem entirely** for anyone with a phone,
+   which in a shared-handset household is the whole household.
+
+**Not blocking the gate**, because the register is not yet taking real field submissions and the
+procedure can be written before it does. **It IS blocking a real field day**, and should be in the
+enumerator briefing before anyone is sent out. | Runbook §C's field-consequence note actioned in the enumerator briefing; §F's two status-check boxes ticked during the smoke (shared phone → neutral + no email; reference code → email arrives) |
+| R9 | Low | ✅ **HANDED TO 13-53 (2026-08-07)** — terminal here, live there | Review H2 changed public status-check resolution for ALL sources, not just enumerator rows. The ~14 pre-existing duplicate-phone pairs in the live registry now get the neutral response instead of the newest match — correct, but a silent behaviour change for people already registered. **Handed to 13-53 because that story SHRINKS THE POPULATION rather than papering over it:** every duplicate pair it merges is one fewer person who can no longer self-serve. One was repaired already (`56C9PG`/`W1PS38`). Monitor `registration_status.identifier_ambiguous` — a rising count means real people are being refused | Watch `registration_status.identifier_ambiguous` after deploy. If the rate is material, the fix is a disambiguation prompt ("we found more than one — enter your reference code"), not a return to guessing. Candidate for its own story |
 
 ### Closing verdict
 
@@ -820,3 +842,42 @@ silently. `EMAIL_TIER=pro` is set and verified at runtime (`email.service.initia
 ⚠️ **Carry into the smoke:** AC1c's teardown recipe was corrected on 2026-08-06 — `users` was missing
 from the chain entirely (the wizard mints one per email; delete LAST, the `respondents` FK blocks it)
 and `audit_logs` is EXEMPT because it is hash-chained.
+
+## Go-live gate verdict — 2026-08-07
+
+**GATE ITEM #2: 🟢 GREEN.** The enumerator pathway may take real field submissions.
+
+**What the smoke actually proved** (six submissions, prod, then torn down):
+| | |
+|---|---|
+| 6 real submissions, all `source='enumerator'` | R1 |
+| Shared-phone household yields SEPARATE rows | R2 — and by the **log line**, not the row count |
+| Both email branches; provider-confirmed delivery | R3 |
+| Tagged-before-creation, child-first teardown, baseline restored | R4 |
+
+**What the smoke FOUND, which is the better argument for having run it.** Five defects, none
+visible from code review, three of them citizen-affecting:
+
+1. **The enumerator form never computed `age`** — so BOTH the `age>=15` Labour Force section and the
+   `age<15` guardian-consent section silently vanished from every enumerator and clerk submission.
+   A labour registry collecting no labour data. (AC4.6)
+2. **A permanent 4xx was an unclearable poison pill** — and `retryFailed()` reset the counter, so
+   the operator's own Retry button re-armed it. The only escape was a browser console. (AC4.2)
+3. **The reference code shown to the enumerator can never be the one stored** — the server
+   overwrites unconditionally. A number read aloud to a citizen that matches nothing. (AC4.4)
+4. **Discard destroyed the only copy of an interview** — the draft is deleted at submit. (AC4.3b)
+5. **R21 covers only the no-NIN case**, so a real citizen with two records was found in the
+   whole-register sweep — the journey we *ask* pending-NIN people to take. (R3 → 13-53)
+
+**Honest limits on this GREEN:**
+- **One operator, one device, one session.** Nothing here exercises a real field day: many
+  enumerators, poor connectivity, a phone that sleeps mid-form, a genuinely offline stretch.
+- **The enumerator email-capture rate is unknown** (one historical row). If it is low, the Sync
+  Status list is the primary way respondents learn their number, and **SMS (9-27 Part B, blocked on
+  Termii) becomes materially more important than it looks today.**
+- **AC4.5 is closed by inference, not by a test** — AC4.6 explains the observed behaviour and the
+  re-run rendered the Labour Force section correctly, which is consistent but not a proof.
+
+**REOPEN TRIGGER:** any enumerator submission rejected for a missing answer in an age-gated section;
+any respondent reporting a reference number that matches nothing; any `identity_match_exempted_staff_capture`
+absent from a shared-phone household in the field.
