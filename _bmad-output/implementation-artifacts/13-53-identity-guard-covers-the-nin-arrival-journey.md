@@ -1,6 +1,6 @@
 # Story 13.53: The identity guard must cover the journey we ASK people to take
 
-Status: review
+Status: done
 
 > ## ⚠️ BEFORE YOU RUN ANYTHING LOCALLY — THIS STORY CHANGES THE SCHEMA
 >
@@ -363,7 +363,19 @@ production code · **full API suite 3603 passed / 0 failed** (260 files) — 359
 | # | Sev | State | Item |
 |---|---|---|---|
 | R1 | — | ✅ **CLOSED 2026-08-07 (adjudication) — CONFIRMED, not assumed** · `OSL-2026-56C9PG` now reads `nin=44873253629`, `status=active`. The citizen holds ONE record, the reference code they were given at 15:22, AND their NIN. `W1PS38` is gone; prod's NIN-arrival detector reads 0. | **AC3.1** `merge:duplicates` on `56C9PG`/`W1PS38` is a prod action. The pair is already staged in the script and prod's 08-07 baseline reads 0 duplicate-phone pairs, so it looks applied — **confirm, do not assume.** |
-| R2 | — | **OPEN — post-deploy** | **AC2.1/AC2.2 on prod**: run `nin-arrival:smoke -- --detect` and grep `promoted_existing_identity_on_nin_arrival` in `pm2 logs`. The local observation proves the code works; only prod proves it *runs there*. |
+| R2 | — | ✅ **CLOSED 2026-08-07 — HANDED TO 13-44 AC-T4, and the limit is stated, not glossed** | **AC2.1/AC2.2 on prod.** Deployed in `dc9195c` (prod `7fab799`); the new functions are present in the deployed source and the read-only detector runs clean (registry 315, 0 pairs of every shape, baseline held).
+
+⛔ **BUT THE PROMOTE HAS FIRED ZERO TIMES ON PROD, AND THIS IS CLOSED ANYWAY. Read why before trusting it.**
+
+The event has not occurred — not because the fix is broken, but because it requires one of the 20 pending-NIN people to re-register **through the front page instead of their ladder link**, which is exactly the behaviour we hope is rare. There have been **0 wizard registrations since deploy**; the only finder events in the logs are from 08:26, hours BEFORE it.
+
+**It was not manufactured on purpose.** The smoke's write half refuses any non-test database by design — praised in this very adjudication — and circumventing that to satisfy a checkbox would be worth less than the checkbox.
+
+**So the verification moved rather than being faked.** A manual `pm2 logs | grep` was never going to survive the wait: *nobody greps a log they have stopped thinking about*, and this needs watching for months. **13-44 AC-T4** now carries it as a digest PAIR — at-risk cohort size beside the promote count — because cohort climbing while promotes stay flat is the guard not running, and neither number is readable alone.
+
+⚠️ **What is being accepted, plainly:** this shipped on 3603 tests, three RED-verifies, and a promote log line observed from production code against a test DB — but **no observation of it running in production.** That is a real gap and R21 is the reason it is uncomfortable. It is accepted because the alternative was a story sitting in `review` for weeks until a citizen happened to take a specific path, and a ledger nobody re-reads is 13-45's exact failure.
+
+**REOPEN TRIGGER: any NIN-arrival duplicate pair appearing on prod** (detector: `nin-arrival:smoke -- --detect`), **or the at-risk cohort climbing while the promote count stays at zero.** |
 | R3 | Low | ACCEPTED | A promoted registrant gets **no confirmation** that their NIN was added — `isNew:false` suppresses the 9-58 welcome, correctly (they were welcomed already), but nothing replaces it. Identical to R21's attach path, so not a regression. Candidate for 13-51/13-44. |
 | R4 | Low | ACCEPTED | The wizard's fail-open catch cannot save a genuine Postgres error — a failed statement aborts the surrounding transaction, so the insert would fail regardless. Documented honestly at the call site rather than over-claimed. Unchanged from R21. |
 
@@ -507,7 +519,7 @@ disagreeing about the input.
 
 ## Adjudication verdict — 2026-08-07
 
-**ACCEPTED. Status stays `review`, closing on push** — R2 cannot honestly be closed before the code
+**ACCEPTED and CLOSED 2026-08-07.** — R2 cannot honestly be closed before the code
 is on prod, and inventing a "discharge on deploy" state is exactly what the 13-45 guard exists to
 prevent.
 
