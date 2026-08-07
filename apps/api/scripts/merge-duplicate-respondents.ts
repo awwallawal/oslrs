@@ -43,6 +43,16 @@ import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audi
 
 /** The 11 same-person pairs found by phone + >=2 shared name tokens (prod, 2026-08-05). */
 const PAIRS: ReadonlyArray<readonly [string, string]> = [
+  // 13-53 / 13-4 R3 (2026-08-07) — the NIN-ARRIVAL seam, found by the enumerator smoke's
+  // whole-register duplicate sweep. 56C9PG registered WITHOUT a NIN at 15:22 and W1PS38 came back
+  // WITH one at 17:38 — two hours later, and AFTER R21 shipped. R21 skipped it because the
+  // incoming submission HAD a NIN (the guard runs only when ninValue === null), and the NIN-side
+  // dedupe could not help because the first record has no NIN to match on.
+  //
+  // NOT a NIN conflict: only one side holds a NIN, so there is nothing to reconfirm. Older-wins
+  // keeps 56C9PG — the number the citizen has had since 15:22 — and the NULL-fill carries the NIN
+  // across, so they finish with one record, their original code, AND their NIN.
+  ['OSL-2026-56C9PG', 'OSL-2026-W1PS38'],
   ['OSL-2026-10E5VB', 'OSL-2026-J622R1'], // NIN conflict → reconfirm after
   ['OSL-2026-NNJFJS', 'OSL-2026-YC86Z9'], // NIN conflict → reconfirm after
   ['OSL-2026-4T12TQ', 'OSL-2026-WJFFY1'],

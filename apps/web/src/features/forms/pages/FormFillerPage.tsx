@@ -143,7 +143,17 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   // reaches 'synced'); the provisional stays labelled until a later session.
   const reconcileReferenceCode = useCallback(async (submissionId: string | null) => {
     if (!submissionId) return;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    /*
+     * 13-4 AC4.4 — poll with BACKOFF for ~2 minutes, not 3 seconds.
+     *
+     * This used to try 6 times at 500ms and then stop. On a slow field connection the sync
+     * routinely outlives 3 seconds, so it gave up and left the screen showing an unconfirmed
+     * state permanently — with no further attempt and nothing to tell the operator that the
+     * number had, by then, actually been issued. Waiting longer costs nothing: the loop is idle
+     * between polls and the screen is already showing an honest "not issued yet".
+     */
+    const delays = [500, 500, 1000, 1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000];
+    for (const delay of delays) {
       try {
         const item = await offlineDb.submissionQueue.get(submissionId);
         if (item?.status === 'synced' && item.referenceCode) {
@@ -151,10 +161,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           setReferenceConfirmed(true);
           return;
         }
+        // A permanently rejected row will never produce a code — stop rather than poll for two
+        // minutes at something that cannot arrive (13-4 AC4.2 classification).
+        if (item?.permanentFailure) return;
       } catch {
-        // Dexie read failure — keep the provisional; non-critical.
+        // Dexie read failure — non-critical; the screen already says "not issued yet".
       }
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, delay));
     }
   }, []);
 
@@ -421,24 +434,38 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
                 SERVER-authoritative code and drop the provisional label. */}
             <div className="rounded-lg bg-gray-50 px-4 py-3" data-testid="completion-reference">
               <p className="text-xs uppercase tracking-wide text-gray-500">Application reference</p>
-              {referenceCode ? (
-                <>
-                  <p
-                    className="font-mono text-lg font-semibold text-gray-900 select-all"
-                    data-testid="completion-reference-code"
-                  >
-                    {referenceCode}
-                  </p>
-                  {!referenceConfirmed && (
-                    <p className="mt-1 text-xs text-amber-600" data-testid="completion-reference-provisional">
-                      Provisional reference — confirmed once this syncs. The respondent can
-                      always retrieve it via their email/phone at /check-registration.
-                    </p>
-                  )}
-                </>
+              {/*
+                13-4 AC4.4 (2026-08-07) — SHOW THE CODE ONLY WHEN THE SERVER HAS CONFIRMED IT.
+                Previously the provisional code was rendered here in full, with an amber caveat
+                underneath. That was not a small presentation flaw: `form.controller.ts:172` mints
+                server-side and OVERWRITES `_referenceCode` on EVERY submission, unconditionally.
+                So the provisional value is not "usually right", or "right when sync succeeds" —
+                it is GUARANTEED never to be the code we store.
+
+                Demonstrated in the 13-4 prod smoke: the enumerator was shown OSL-2026-DVJ0QW; the
+                register holds OSL-2026-RGDANN; DVJ0QW exists in zero rows. An enumerator reads
+                that number aloud to the person in front of them, and it will never match anything
+                — discovered at a counter weeks later, with no way to prove what they were told.
+
+                A caveat in small amber type under a large mono number does not stop that: the
+                number IS the answer to "what is my registration number?", and the enumerator has
+                already said it. So we no longer print a number that cannot be true. Offline, the
+                honest answer is "not yet" — and `/check-registration` (named in the copy below)
+                retrieves it by phone or email once it syncs.
+              */}
+              {referenceCode && referenceConfirmed ? (
+                <p
+                  className="font-mono text-lg font-semibold text-gray-900 select-all"
+                  data-testid="completion-reference-code"
+                >
+                  {referenceCode}
+                </p>
               ) : (
                 <p className="text-sm text-gray-500" data-testid="completion-reference-pending">
-                  The reference will appear here once this entry uploads.
+                  Not issued yet — this entry has not finished uploading.{' '}
+                  <strong>Do not give a reference number to the respondent yet.</strong> Once it
+                  uploads, the number appears here, and they can always retrieve it by phone or
+                  email at /check-registration.
                 </p>
               )}
             </div>

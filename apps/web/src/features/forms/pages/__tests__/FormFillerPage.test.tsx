@@ -246,6 +246,53 @@ describe('FormFillerPage', () => {
     });
   });
 
+  /**
+   * 13-4 AC4.4 (2026-08-07) — demonstrated on prod, not theorised.
+   *
+   * `form.controller.ts:172` mints server-side and OVERWRITES `_referenceCode` on EVERY
+   * submission, unconditionally. The client's provisional code is therefore GUARANTEED never to be
+   * the stored one — in the smoke the enumerator was shown OSL-2026-DVJ0QW while the register holds
+   * OSL-2026-RGDANN, which exists in zero rows.
+   *
+   * An enumerator reads that number aloud to the person in front of them. A caveat in small type
+   * under a large mono code does not stop it, because the code IS the answer to "what is my
+   * registration number?". So an unconfirmed code must not be rendered at all.
+   */
+  it('AC4.4 — never shows a reference code before the server confirms it', async () => {
+    mockHookReturn = {
+      data: {
+        ...mockForm,
+        questions: [
+          { id: 'q1', type: 'text', name: 'name', label: 'Name', required: false,
+            sectionId: 's1', sectionTitle: 'Section 1' },
+        ],
+        sectionShowWhen: {},
+      },
+      isLoading: false,
+      error: null,
+    };
+
+    renderPage();
+    fireEvent.click(screen.getByTestId('continue-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
+    });
+
+    // The unconfirmed state must show the honest placeholder, NOT a number.
+    expect(screen.getByTestId('completion-reference-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-reference-code')).not.toBeInTheDocument();
+
+    // And it must tell the operator what to do, since "no number" is otherwise ambiguous.
+    expect(screen.getByTestId('completion-reference-pending').textContent).toMatch(
+      /do not give a reference number/i,
+    );
+
+    // Load-bearing: no OSL-style code may appear anywhere on the completion screen while
+    // unconfirmed. Guards against a future re-render of the provisional value elsewhere.
+    expect(screen.getByTestId('completion-screen').textContent ?? '').not.toMatch(/OSL-\d{4}-[A-Z0-9]{6}/);
+  });
+
   it('shows loading skeleton when data is loading', () => {
     mockHookReturn = {
       data: undefined,

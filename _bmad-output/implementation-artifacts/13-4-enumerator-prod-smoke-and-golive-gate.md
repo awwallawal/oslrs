@@ -605,7 +605,33 @@ cost of omitting `calculations` stays legible.
 
 ⚠️ **REOPEN TRIGGER:** any submission rejected for a missing answer in an age-gated section.
 
-#### 🔴 AC4.4 — DEMONSTRATED LIVE 2026-08-07: THE ENUMERATOR IS SHOWN A NUMBER THE REGISTER NEVER STORES
+#### ✅ AC4.4 — FIXED 2026-08-07 (was: THE ENUMERATOR IS SHOWN A NUMBER THE REGISTER NEVER STORES)
+
+**FIX:** the completion screen no longer renders an unconfirmed reference code at all. Until the
+queue row reports `synced` with a server code, it shows *"Not issued yet — this entry has not
+finished uploading. **Do not give a reference number to the respondent yet.**"*
+
+**The fact that settled the design:** `form.controller.ts:172` mints server-side and OVERWRITES
+`_referenceCode` on EVERY submission, unconditionally. The provisional code is therefore not
+"usually right" or "right when sync succeeds" — **it is guaranteed never to be the stored code.** A
+caveat in small amber type under a large mono number cannot fix that, because the number IS the
+answer to "what is my registration number?" and the operator has already read it aloud.
+
+Also fixed alongside: reconciliation polled 6 × 500ms and then **gave up after 3 seconds**, leaving
+the screen permanently unconfirmed on any slower-than-3s field connection with no further attempt.
+Now backs off over ~2 minutes, and stops early on a `permanentFailure` row (AC4.2) rather than
+polling for a code that can never arrive.
+
+**RED-verified:** restoring the old render (show the code regardless of confirmation) fails the new
+test. The test also asserts that **no `OSL-2026-XXXXXX` string appears anywhere on the completion
+screen** while unconfirmed, so a future re-render of the provisional value elsewhere is caught too.
+
+⚠️ **Deliberate trade, stated plainly:** an enumerator working offline now gets NO number to read
+out until the entry syncs. That is a real reduction in offline capability, and it is the right one —
+the alternative is a number that cannot be true. `/check-registration` retrieves it by phone or
+email afterwards, and that path is named in the on-screen copy.
+
+Original analysis (still valid, now a subset):
 
 **No longer a theory. It happened in the smoke, on submission #1.**
 
