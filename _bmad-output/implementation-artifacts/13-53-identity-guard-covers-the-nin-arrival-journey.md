@@ -63,6 +63,43 @@ natural thing they could do.
 2. ⚠️ **Sweep for others before assuming this is the only one.** The detector is one query: same
    phone, ≥2 shared name tokens, one row with a NIN and one without.
 
+## ⛔ ADJUDICATION NOTE — READ BEFORE WRITING THE VERIFICATION
+
+**Pre-fix baseline, captured on prod 2026-08-07 BEFORE any work starts** (it cannot be
+reconstructed afterwards):
+
+| metric | value |
+|---|---|
+| `registry_unified` | **315** |
+| `pending_nin_capture` with no NIN — the at-risk cohort | **21** |
+| NIN-arrival duplicate pairs | **0** |
+| all duplicate-phone pairs (≥2 shared tokens) | **0** |
+| `registration_status.identifier_ambiguous` events | **0** |
+
+**EVERY COUNT IS ALREADY ZERO. So "0 duplicates after the fix" proves nothing whatsoever** — it was
+0 before. AC2.1 as originally written ("re-run the detector, no new pairs appear") is unfalsifiable
+against this baseline, and would pass identically if the code were never deployed.
+
+This is the R21 trap verbatim: *a guard whose only evidence is the absence of duplicates cannot be
+distinguished from a guard that never runs.* It cost a live duplicate to notice last time.
+
+**So AC2.2 is not a nice-to-have — it is the ONLY thing that can close this story.** The
+promote-in-place log line must exist and must be OBSERVED firing, exactly as
+`identity_match_exempted_staff_capture` closed 13-4 AC1b where the row count could not.
+
+**What adjudication will ask for:**
+1. **A RED-verify** — neuter the new branch, show the test failing, restore by hand.
+2. **The log line, observed** — from a deliberate two-pass registration (register with no NIN, then
+   return with one, same phone, ≥2 shared name tokens) showing promote-in-place and the ORIGINAL
+   reference code returned. A synthetic pair, torn down after; never a real citizen's record.
+3. **Proof the staff-capture exemption still holds** — an `enumerator`-sourced NIN-bearing
+   submission must NOT promote into a NIN-less household member. 13-4 AC1b's household case
+   regressing would be a worse outcome than the bug this story fixes.
+4. **Proof it refuses a genuine conflict** — two rows both holding DIFFERENT NINs must never merge.
+5. The baseline above re-measured, so any MOVEMENT is attributable.
+
+⚠️ **Do not close this on "the counts are still zero".**
+
 ## Notes
 
 - Sibling of 13-49 R21 and the same defect shape: **a guard placed on one path while the traffic

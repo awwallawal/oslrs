@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-06 · **Prod deployed SHA:** `0a923b9` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-07 · **Prod deployed SHA:** `78d54bf` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -293,7 +293,33 @@ person had held since 19 May, because the new record happened to carry the submi
 
 ---
 
-## 3. Current state (2026-08-06) — READ THIS ONE; §3-old below is superseded
+## 3. Current state (2026-08-07) — READ THIS ONE
+
+**Prod `78d54bf`, health 200. Register 315.** Integrity clean: 0 duplicate NINs, 0 orphaned
+submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wizard_resume` tokens.
+
+- **13-4 CLOSED 2026-08-07 — gate item #2 GREEN.** The enumerator pathway may take real field
+  submissions. The prod smoke confirmed AC1b **by log line, not row count**, and **found five
+  defects code review had missed** — see §7j.
+- **13-49, 13-52 also closed.** **13-50, 13-51, 13-53 raised.**
+- **⚠️ ONE NON-CODE ITEM BLOCKS A REAL FIELD DAY (13-4 R8):** an enumerator captured OFFLINE now
+  has no reference code at the interview (AC4.4) AND a shared-handset registrant cannot retrieve by
+  phone (H2). Closes by FIELD PROCEDURE — the slip is written later from the Sync Status list — and
+  by SMS. **It must be in the enumerator briefing before anyone is sent out.**
+- **Awwal develops + code-reviews in a SEPARATE CLI and brings the uncommitted tree here.** A clean
+  tree means nothing is in flight (§0/§1).
+
+### Next up
+| | |
+|---|---|
+| **13-53** | NEXT FOR ADJUDICATION. The NIN-arrival seam. ⛔ **Its pre-fix baseline is ALL ZEROS**, so "no duplicates" proves nothing — the story carries an adjudication note saying the log line is the only thing that can close it. |
+| **13-50** | `/check-registration` mints dead-end links (244 sends/month); `wizard_resume` unaudited; phantom drafts. |
+| **13-51** | Operator contact-correction UI; validate email at capture so we stop manufacturing bounces. |
+| **13-52** | Deploy resilience shipped; its TESTS were not written. |
+| **13-42** | AC7 hotfixed; AC8 (bounce line misdirects) + AC1-6 remain. |
+| Operator | SMS list (§7g, minus Sakirat — reachable again). Confirm the Resend plan. R8 briefing. |
+
+## 3-old2. Current state (2026-08-06) — superseded by §3 above
 
 **Prod `0a923b9`, health 200. Register 310.** Integrity clean at last check: 0 duplicate NINs,
 0 orphaned submissions, 0 missing reference codes, 0 duplicate identity pairs, 0 dead-end
@@ -920,6 +946,50 @@ then set it via the super-admin path.** His NIN is deliberately left INTACT unti
 it without a route to replace it would leave him worse off than doing nothing.
 
 ---
+
+## 7j. Session 2026-08-07 — the smoke earned its keep, six times over
+
+**13-4 closed, gate item #2 GREEN.** But the value was not the confirmation — it was that a smoke of
+six synthetic submissions **found five defects that code review, tsc, and 2800 unit tests had all
+passed**, three of them citizen-affecting.
+
+| # | defect | why review could not see it |
+|---|---|---|
+| 1 | **The enumerator/clerk forms never computed calculated fields**, so BOTH the `age>=15` Labour Force AND the `age<15` guardian sections silently vanished from every submission | The code was correct in `FormRenderer`. The enumerator uses a *different* component. |
+| 2 | A permanent 4xx was an **unclearable poison pill**; `retryFailed()` reset the counter, so the operator's own Retry re-armed it | Needs a real 422 from a real server to observe |
+| 3 | **The reference code shown to the enumerator can never be the stored one** — the server overwrites unconditionally | The screen carried an amber "provisional" caveat, so it *looked* handled |
+| 4 | **Discard destroyed the only copy of an interview** — the draft is deleted at submit | Only visible once you delete a real queue row and look |
+| 5 | R21 covers **only the no-NIN case**, so a real citizen had two records | Found by sweeping the WHOLE register, not just the test rows |
+
+### THE PATTERN OF THE DAY, in six guises
+**A change landing on one implementation while the traffic takes another.**
+R21's guard on the path the wizard bypasses · `FormRenderer` vs `FormFillerPage` for calculated
+fields · the skipLogic callers · confetti on a completion page the wizard never renders · a Tailwind
+class that was never generated · my own `payload.rawData` assumption when the producer emits
+`payload.responses`.
+
+**Every one looked correct in the source.** What caught them was the *built output*, the *live log*,
+or the *running system*. **Before wiring anything to "the X screen", check which X the user
+actually reaches.**
+
+### Two tests that were green while defending a bug
+- the ops digest's `todayCount: 85 -> red` (§7i)
+- `restoreToDraft`'s fixture, which I wrote from **my assumption about the payload shape** rather
+  than from the producer — so it asserted the bug and passed
+
+**A fixture invented rather than copied from the producer is a test of your beliefs, not the code.**
+
+### Guards that caught what review did not
+The audit-action count tripwire · the **navigate-target drift guard** (`/enumerator` does not exist;
+it would have 404'd an enumerator the instant they discarded an interview) · the **pre-push vite
+build** (twice) · the **story-residual guard**, which refused to let me flip 13-4 to `done` over two
+residuals I had not read — one of which (R8) my own AC4.4 fix had made *worse*.
+
+### Also shipped
+`EMAIL_TIER=pro` (the enforcer was refusing sends at a free-tier 100/day) · the digest reframe ·
+deploy resilience, client + nginx · the pdfjs OSV acceptance with evidence · audited
+contact-correction tooling · completion animations, with the codebase's first
+`prefers-reduced-motion` handling.
 
 ## 7i. Session 2026-08-05 — R21 proven, and three monitors caught lying
 
