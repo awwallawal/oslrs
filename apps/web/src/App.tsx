@@ -1,4 +1,8 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
+// `lazy` here is the DEPLOY-SAFE wrapper, not React's. Aliased so all 99 route definitions below
+// are covered without edit, and so a route added later cannot forget it. See the file's docblock:
+// the deploy replaces the docroot wholesale, so an open tab's chunk hashes 404 after every deploy.
+import { lazyWithRecovery as lazy } from './lib/lazy-with-recovery';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
