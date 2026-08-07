@@ -65,3 +65,36 @@ Severities are the **assessor's calibrated** ratings (subagent "High"s downgrade
 
 ---
 _Maintained by: SM/dev per the maintenance rule above · R2 register authored 2026-06-07 (Bob/SM) from `…/security-assessment/FINDINGS-REGISTER.md` + findings/ folder._
+
+---
+
+## GHSA-hq66-cqwq-w95j — pdfjs-dist 5.6.205 (2026-08-07) — ACCEPTED, evidenced
+
+**"Arbitrary JavaScript execution upon opening a malicious PDF."** Newly disclosed against an
+UNCHANGED dependency; blocked a deploy carrying an unrelated fix.
+
+**Disposition: accepted-risk in `osv-scanner.toml`, with defence-in-depth applied.**
+
+- **Not patchable here.** Fix is `pdfjs-dist@6.2.108`; 6.x requires **Node 22** and CI + the VPS run
+  **Node 20**, so the bump hard-fails `pnpm install` on deploy — the very reason we are pinned
+  (Story 11-2).
+- **Vulnerable path is unreachable, verified in the installed library rather than assumed.** The
+  advisory's own workaround is "set `enableScripting` to false", but in pdfjs 5.x that is **not a
+  `getDocument` option** — every use of it lives in the ANNOTATION/WIDGET layer (the browser
+  viewer's interactive rendering). Our sole consumer
+  (`apps/api/src/services/import/parsers/pdf-tabular.parser.ts`) calls `getDocument` and reads
+  positioned text runs: no `getAnnotations`, no `render()`, no annotation layer. The code that
+  executes document script is never constructed.
+- **Reachability additionally requires an authenticated STAFF upload** via admin import. Not public.
+- **Defence-in-depth that is real:** `isEvalSupported: false` (a genuine `DocumentInitParameters`
+  option, default `true`) is set at the call site, stopping pdf.js compiling PDF function
+  expressions via `eval`. ⚠️ **KEEP IT across pdfjs upgrades — this acceptance is only honest while
+  that line exists**, the same standing rule as the react-router `safe-redirect` mitigation.
+
+⚠️ **Worth recording as a near-miss:** the advisory's suggested fix was applied first and TypeScript
+rejected the property. Casting past that error would have produced a comforting line that did
+nothing, plus a register entry citing it as the mitigation — **a hole documented as closed.** Reading
+the library instead of silencing the compiler is what caught it.
+
+**RE-REVIEW** when Node 22 lands (then bump to `>=6.2.108` and delete the ignore), if a PDF ever
+reaches pdfjs from an unauthenticated path, or if we begin rendering PDFs client-side.
