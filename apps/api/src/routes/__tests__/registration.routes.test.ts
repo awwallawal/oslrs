@@ -82,6 +82,10 @@ vi.mock('../../middleware/wizard-draft-rate-limit.js', () => ({
 }));
 vi.mock('../../middleware/registration-rate-limit.js', () => ({
   registrationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // 2026-08-07 — the per-EMAIL limiter. A mock that omits an export the module now has fails at
+  // import time, which is the mock doing its job: it forces this file to stay in step with the
+  // middleware's real surface rather than silently testing a stale shape.
+  registrationEmailRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   activationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 

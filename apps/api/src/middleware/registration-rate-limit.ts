@@ -18,9 +18,29 @@ const getRedisClient = () => {
 const shouldSkipRateLimit = () => isTestMode();
 
 /**
- * Rate limiter for registration attempts
- * - 5 registrations per 15 minutes per IP
- * - Prevents mass account creation
+ * Rate limiter for the PUBLIC WIZARD SUBMIT.
+ *
+ * ⚠️ RAISED 5 → 50 ON 2026-08-07 BECAUSE THE OLD LIMIT WAS TURNING CITIZENS AWAY.
+ *
+ * A registrant emailed to say he could not finish. He had completed all ten steps; the final submit
+ * returned "Too many registration attempts". Retained logs showed **36 blocks across 5 IPs — 27 of
+ * them on 2026-08-05, the morning we sent 75 re-engagement invitations.** We drove people to
+ * register and then refused them for responding.
+ *
+ * The blocked addresses were `102.88.*`, `102.89.*`, `102.90.*`, `197.211.*` — Nigerian mobile
+ * carrier ranges. **Carriers here use CGNAT: thousands of subscribers share one public IP.** So
+ * "5 per IP" was never "5 attempts by one person"; it was **5 PEOPLE on one carrier gateway per
+ * quarter hour** — and identically one cybercafé, one office, or one supervised registration drive
+ * where everybody is on the venue's wifi. It bit hardest in exactly the situation we most want to
+ * succeed.
+ *
+ * WHY NOT REMOVE IT. This is an unauthenticated public endpoint that writes to a government
+ * register. With no limit a script could fabricate thousands of records, and **the register's
+ * credibility IS the product** — that failure is far worse than a delayed registration.
+ *
+ * SO THE AXIS CHANGED, NOT THE PRINCIPLE. Abuse is one actor creating MANY records; CGNAT makes IP
+ * a poor proxy for "one actor" while the submitted `email` is a good one. The IP ceiling stays as a
+ * crude flood-stop set well above any real venue; the per-email limiter below is the real control.
  */
 export const registrationRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
@@ -28,8 +48,9 @@ export const registrationRateLimit = rateLimit({
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
     prefix: 'rl:register:',
   }),
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 registrations per 15 minutes per IP
+  windowMs: 15 * 60 * 1000,
+  // 50/15min: comfortably above any real venue or carrier gateway, still a hard stop on a script.
+  max: 50,
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -38,6 +59,53 @@ export const registrationRateLimit = rateLimit({
   handler: (req, res, next, options) => {
     logger.warn({
       event: 'registration.rate_limit_exceeded',
+      ip: req.ip,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      attempts: (req as any).rateLimit?.current,
+    });
+    res.status(429).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: isTestMode() ? false : { xForwardedForHeader: false },
+  skip: shouldSkipRateLimit,
+});
+
+/**
+ * Per-EMAIL limiter — the control that actually matches the threat.
+ *
+ * Abuse is one actor minting many records. CGNAT makes IP a poor proxy for "one actor"; the email on
+ * the submission is a good one. 3 per 15 minutes lets a genuine person retry a failed submit twice —
+ * which matters, because a 422 on an incomplete form ALSO consumes an attempt — while stopping a
+ * script cycling one address.
+ *
+ * ⚠️ Falls back to the IP when no email is present, so a payload that omits it cannot bypass the
+ * limiter entirely. Keyed on the LOWERCASED, TRIMMED address: `A@x.com` and `a@x.com ` must not be
+ * two buckets, or the limit is trivially evaded with a space.
+ */
+export const registrationEmailRateLimit = rateLimit({
+  store: isTestMode() ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+    prefix: 'rl:register:email:',
+  }),
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req) => {
+    const email = (req.body as { email?: unknown } | undefined)?.email;
+    if (typeof email === 'string' && email.trim()) return `e:${email.trim().toLowerCase()}`;
+    return `ip:${req.ip ?? 'unknown'}`;
+  },
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message:
+      'We have already received several attempts for this email in the last few minutes. ' +
+      'Please wait a moment and try again — your answers are saved.',
+  },
+  handler: (req, res, next, options) => {
+    logger.warn({
+      event: 'registration.email_rate_limit_exceeded',
       ip: req.ip,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { RegistrationController } from '../controllers/registration.controller.js';
 import { magicLinkRateLimit } from '../middleware/magic-link-rate-limit.js';
-import { registrationRateLimit } from '../middleware/registration-rate-limit.js';
+import { registrationRateLimit, registrationEmailRateLimit } from '../middleware/registration-rate-limit.js';
 import { wizardDraftRateLimit } from '../middleware/wizard-draft-rate-limit.js';
 
 /**
@@ -48,7 +48,9 @@ router.get('/draft', wizardDraftRateLimit, RegistrationController.getDraft);
 // Code review H1 (2026-05-11) — restore the legacy `/auth/public/register`
 // rate-limit discipline (5/IP/15min). Captcha integration deferred to
 // follow-up (requires frontend hCaptcha widget on Step 5 of the wizard).
-router.post('/wizard', registrationRateLimit, RegistrationController.submitWizard);
+// 2026-08-07: the IP limit is now a crude flood-stop (50/15min, CGNAT-tolerant); the per-EMAIL
+// limiter is the real abuse control. Order matters — the cheap IP check runs first.
+router.post('/wizard', registrationRateLimit, registrationEmailRateLimit, RegistrationController.submitWizard);
 
 // Story 9-28 Path B — Cohort A supplemental-survey submission. Magic-link
 // token (purpose=supplemental_survey) authorizes a Step 4-only write for an
