@@ -148,7 +148,15 @@ export class SyncManager {
     const item = await db.submissionQueue.get(id);
     if (!item) return false;
 
-    const raw = (item.payload?.rawData ?? item.payload ?? {}) as Record<string, unknown>;
+    /**
+     * ⚠️ `payload.responses` — NOT `payload.rawData`. `useDraftPersistence` queues
+     * `{ responses, formVersion, submittedAt, gps* }`. Reading `rawData` here returned undefined
+     * and fell back to the WHOLE payload, so a restored draft would have received
+     * `{responses, formVersion, submittedAt}` AS its answers — corrupting the entry it was meant
+     * to rescue. The unit test missed it because its fixture was written from my assumption about
+     * the shape rather than from the producer; it confirmed the bug instead of catching it.
+     */
+    const raw = (item.payload?.responses ?? {}) as Record<string, unknown>;
     const now = new Date().toISOString();
 
     await db.drafts.put({

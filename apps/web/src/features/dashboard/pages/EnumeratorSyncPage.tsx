@@ -181,7 +181,14 @@ export default function EnumeratorSyncPage() {
              * is no code yet — "which of today's twelve is still stuck?" is unanswerable against a
              * list of identical form names and timestamps.
              */
-            const raw = (item.payload?.rawData ?? item.payload ?? {}) as Record<string, unknown>;
+            /**
+             * ⚠️ `payload.responses` — NOT `payload.rawData`. `useDraftPersistence` queues
+             * `{ responses, formVersion, submittedAt, gps* }`; there is no `rawData` key on the
+             * CLIENT payload (that name belongs to the server-side submission row). Reading the
+             * wrong key silently yielded `undefined`, so the name never rendered and every row
+             * fell back to the form title — which is what Awwal saw.
+             */
+            const raw = (item.payload?.responses ?? {}) as Record<string, unknown>;
             const person = [raw.firstname, raw.surname].filter((v) => typeof v === 'string' && v).join(' ').trim();
             return (
               <Card key={item.id} data-testid="queue-item">
@@ -201,9 +208,9 @@ export default function EnumeratorSyncPage() {
                           className="font-mono text-sm font-semibold text-primary-700 mt-0.5 select-all"
                           data-testid="queue-item-reference"
                         >
-                          {item.referenceCode}
-                          <span className="ml-2 font-sans text-xs font-normal text-neutral-500">
-                            give this to the respondent
+                          {item.referenceCode}{' '}
+                          <span className="font-sans text-xs font-normal text-neutral-500">
+                            — give this to the respondent
                           </span>
                         </p>
                       ) : (

@@ -112,7 +112,14 @@ describe('SyncManager.restoreToDraft — 13-4 AC4.3b', () => {
     mockQueueGet.mockResolvedValue({
       id: 'sub-1', formId: 'form-1', userId: 'u1', createdAt: '2026-08-07T09:00:00.000Z',
       status: 'failed', retryCount: 3, error: 'missing employment_status', permanentFailure: true,
-      payload: { rawData: { _referenceCode: 'OSL-2026-KEEPME', surname: 'Bello', firstname: 'Fatima' } },
+      // Shape copied from the PRODUCER (useDraftPersistence: { responses, formVersion, ... }),
+      // not invented. The previous fixture used a `rawData` key that the client never emits, so it
+      // validated the bug rather than the behaviour.
+      payload: {
+        responses: { _referenceCode: 'OSL-2026-KEEPME', surname: 'Bello', firstname: 'Fatima' },
+        formVersion: '3',
+        submittedAt: '2026-08-07T09:00:00.000Z',
+      },
     });
 
     await expect(new SyncManager().restoreToDraft('sub-1')).resolves.toBe(true);
@@ -123,6 +130,11 @@ describe('SyncManager.restoreToDraft — 13-4 AC4.3b', () => {
     expect(draft.responses._referenceCode).toBe('OSL-2026-KEEPME'); // the code survives
     expect(draft.responses.surname).toBe('Bello');
     expect(draft.questionPosition).toBe(0);
+    expect(draft.formVersion).toBe('3');
+    // Load-bearing: the ENVELOPE must not leak into the answers. Reading the wrong payload key
+    // produced exactly that, and it is invisible unless asserted.
+    expect(draft.responses.responses).toBeUndefined();
+    expect(draft.responses.formVersion).toBeUndefined();
     // Queue row dropped LAST, and only after the draft is written.
     expect(mockQueueDelete).toHaveBeenCalledWith('sub-1');
   });
