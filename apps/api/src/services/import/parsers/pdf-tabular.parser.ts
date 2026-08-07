@@ -57,6 +57,32 @@ export async function extractPdfItems(
 
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
+    /**
+     * 🔒 GHSA-hq66-cqwq-w95j (CVSS 4.0 high) — "Arbitrary JavaScript execution upon opening a
+     * malicious PDF". Blocked the prod OSV gate on 2026-08-07 against an UNCHANGED dependency.
+     *
+     * ⚠️ THE OBVIOUS FIX IS A NO-OP HERE, AND I NEARLY SHIPPED IT. The advisory's workaround is
+     * "set `enableScripting` to false" — but in pdfjs 5.x that is **not a `getDocument` option at
+     * all**. Every use of it in `pdf.mjs` sits in the ANNOTATION/WIDGET layer (`Action`,
+     * `Mouse Up`/`Mouse Down`, datetime widgets), i.e. the browser viewer's interactive rendering.
+     * TypeScript rejected the property, which is what prompted reading the library instead of
+     * casting past it.
+     *
+     * **This parser never renders annotations.** It extracts positioned text runs and nothing
+     * else — no `getAnnotations`, no `render()`, no annotation layer. The vulnerable code path is
+     * unreachable from here, which is why the finding is accepted in `osv-scanner.toml` rather
+     * than "mitigated" by a line that does nothing.
+     *
+     * The upstream fix is `pdfjs-dist@6.2.108`; 6.x requires **Node 22** and CI + the VPS run
+     * **Node 20**, so a bump hard-fails `pnpm install` on deploy (Story 11-2).
+     *
+     * `isEvalSupported: false` IS a real `DocumentInitParameters` option (default `true`) and is
+     * kept as genuine defence-in-depth: it stops pdf.js compiling PDF function expressions via
+     * `eval`. Costs us only a little speed on colour/function-heavy PDFs, which we do not care
+     * about for text extraction. **KEEP IT** — same standing rule as the react-router
+     * safe-redirect mitigation.
+     */
+    isEvalSupported: false,
     // Node-safe: don't fetch remote fonts (main-thread, no worker).
     useSystemFonts: true,
     // Local font + CMap data so text extraction works on Node 20 pdfjs (5.x) —
