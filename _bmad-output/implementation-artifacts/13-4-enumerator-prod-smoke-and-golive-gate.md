@@ -631,6 +631,32 @@ out until the entry syncs. That is a real reduction in offline capability, and i
 the alternative is a number that cannot be true. `/check-registration` retrieves it by phone or
 email afterwards, and that path is named in the on-screen copy.
 
+#### ✅ AC4.4b — WHERE THE ENUMERATOR GETS THE NUMBER INSTEAD (added 2026-08-07, Awwal's catch)
+
+AC4.4 removed a wrong number. **On its own that is incomplete work** — it left the enumerator with
+nothing to give the respondent. Awwal caught it immediately: *"how do they get it across?"*
+
+**Measured, because the answer differs by cohort:**
+| | | |
+|---|---|---|
+| **259 (82%)** | have an email | **automatic** — the 9-58 confirmation carries the number, no enumerator action. The smoke proved this end-to-end: `+smoke3`/`+smoke5` both show `sent` AND `delivered`. |
+| **56 (18%)** | have no email | the enumerator **must relay it**, so they need somewhere to read it from |
+
+**FIX:** the Sync Status page now shows, per entry:
+- **the respondent's name** (from the payload) — so a row is identifiable BEFORE it syncs, when no
+  code exists yet. "Which of today's twelve is still stuck?" is unanswerable against a list of
+  identical form names and timestamps.
+- **the issued reference code** once the row reaches `synced`, marked *"give this to the
+  respondent"*, and `select-all` for copying into an SMS.
+- **"No number yet — not uploaded"** otherwise, in amber.
+
+⚠️ **The code is shown ONLY on a synced row — the same rule as the completion screen.** Printing the
+provisional value here would reintroduce the exact defect AC4.4 just removed, one screen over.
+
+**Remaining gap, and it is the 18%:** an enumerator must remember to come back to this page. Nothing
+prompts them. Worth considering a "N entries synced since you last looked — 3 need a number passed
+on" nudge, and SMS once Termii is resolved (9-27 Part B) so the 56 get theirs the way the 259 do.
+
 Original analysis (still valid, now a subset):
 
 **No longer a theory. It happened in the smoke, on submission #1.**

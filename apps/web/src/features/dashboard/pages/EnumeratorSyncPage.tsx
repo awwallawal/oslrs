@@ -144,15 +144,51 @@ export default function EnumeratorSyncPage() {
             const cfg = statusConfig[item.status];
             const Icon = cfg.icon;
             const formName = formNameMap.get(item.formId) ?? `Form ${item.formId.slice(0, 8)}`;
+            /**
+             * 13-4 AC4.4b (2026-08-07) — WHO this entry is, and WHAT number they were given.
+             *
+             * AC4.4 stopped the completion screen showing a provisional code, because the server
+             * overwrites it unconditionally and it can never be the stored value. That removed a
+             * wrong number without providing the right one — Awwal caught the gap: **if the
+             * enumerator cannot read a number out at the end of the interview, they need somewhere
+             * to get it afterwards.** This is that place.
+             *
+             * The name comes from the payload so a row is identifiable BEFORE it syncs, when there
+             * is no code yet — "which of today's twelve is still stuck?" is unanswerable against a
+             * list of identical form names and timestamps.
+             */
+            const raw = (item.payload?.rawData ?? item.payload ?? {}) as Record<string, unknown>;
+            const person = [raw.firstname, raw.surname].filter((v) => typeof v === 'string' && v).join(' ').trim();
             return (
               <Card key={item.id} data-testid="queue-item">
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-neutral-900 truncate">
-                        {formName}
+                        {person || formName}
                       </p>
+                      {/*
+                        The reference code is shown ONLY on a synced row — the same rule as the
+                        completion screen. An unsynced row has no server code, and printing the
+                        provisional one here would reintroduce exactly the defect AC4.4 removed.
+                      */}
+                      {item.status === 'synced' && item.referenceCode ? (
+                        <p
+                          className="font-mono text-sm font-semibold text-primary-700 mt-0.5 select-all"
+                          data-testid="queue-item-reference"
+                        >
+                          {item.referenceCode}
+                          <span className="ml-2 font-sans text-xs font-normal text-neutral-500">
+                            give this to the respondent
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-600 mt-0.5" data-testid="queue-item-reference-pending">
+                          No number yet — not uploaded
+                        </p>
+                      )}
                       <p className="text-xs text-neutral-500 mt-0.5">
+                        {person ? `${formName} · ` : ''}
                         {formatTime(item.createdAt)}
                         {item.retryCount > 0 && (
                           <span className="ml-2">
