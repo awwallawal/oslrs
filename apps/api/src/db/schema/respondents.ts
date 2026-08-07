@@ -260,6 +260,18 @@ export const respondents = pgTable('respondents', {
   idxRespondentsImportBatch: index('idx_respondents_import_batch').on(table.importBatchId),
   // Story 9-38 — fast respondent-by-account lookup (read-model + 9-32 consumers).
   idxRespondentsUserId: index('idx_respondents_user_id').on(table.userId),
+  // Story 13-53 (review M2) — BTREE on phone_number, for equality.
+  //
+  // The identity guard's token-INTERSECT lookup (`services/respondent-identity.ts`) is anchored on
+  // `phone_number = $1`, and it now runs on BOTH ingestion directions: R21 put it on the no-NIN
+  // path, 13-53 put it on the NIN path. Every registration therefore hits it. The only index that
+  // covered this column was the GIN trigram from `migrate-registry-search-indexes-init.ts`, which
+  // serves ILIKE/similarity and CANNOT serve `=` — so the anchor was a sequential scan, twice per
+  // registration once the staff-exempt counterfactual is counted. Cheap at today's few hundred
+  // rows; it is the public registration hot path at launch scale.
+  //
+  // Also serves `registration-status.service.ts`'s phone lookup and the duplicate-phone detector.
+  idxRespondentsPhoneNumber: index('idx_respondents_phone_number').on(table.phoneNumber),
   // Story 9-56: GIN trigram indexes on first_name / last_name / phone_number / nin
   // (idx_respondents_*_trgm) power the scale-safe registry search Phase-1
   // resolution (ILIKE/LIKE → BitmapOr index scans). Drizzle cannot express GIN

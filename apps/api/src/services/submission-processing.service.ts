@@ -16,7 +16,10 @@ import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
 import type { RespondentMetadata, RespondentSource, RespondentStatus } from '../db/schema/respondents.js';
-import { findRespondentByIdentity } from './respondent-identity.js';
+import {
+  findRespondentByIdentity,
+  promoteRespondentWithArrivingNin,
+} from './respondent-identity.js';
 import {
   normaliseFullName,
   normaliseNigerianPhone,
@@ -116,6 +119,11 @@ const ROLE_TO_SOURCE: Record<string, RespondentSource> = {
  * duplicate that R13 used to absorb. That is the documented trade ("better one duplicate than a
  * wrong-person merge"), it is recoverable via Story 9-11 reconciliation, and it is no longer
  * invisible — every skipped merge emits `identity_match_exempted_staff_capture` below.
+ *
+ * 13-53 — THIS SET NOW GOVERNS BOTH DIRECTIONS. It began as an exemption from the no-NIN attach;
+ * it now also exempts the NIN-ARRIVAL promote, because the reason is identical and does not depend
+ * on which side carries the NIN: a shared handset plus a shared surname is ordinary in a compound,
+ * and collapsing two household members into one record is the worse error either way.
  */
 const STAFF_CAPTURED_SOURCES: ReadonlySet<RespondentSource> = new Set<RespondentSource>([
   'enumerator',
@@ -601,6 +609,123 @@ export class SubmissionProcessingService {
       if (promoted) {
         return { id: promoted.id, _isNew: false };
       }
+
+      /**
+       * 13-53 — THE SAME SEAM, ON THIS PATH.
+       *
+       * `tryRaceResolutionMerge` above already handles "NIN arrives later", but only on STRICT
+       * equality of lower(first)+lower(last)+phone. That is the identity key R13 tried FIRST and
+       * abandoned: it caught NONE of four real collisions, because surname-first is normal here
+       * and middle names come and go. So a strict miss is not evidence that we do not hold this
+       * person — `Bashiru / Yusuff Titilope` returning as `Yusuff / Bashiru` misses it and mints a
+       * second record, which is exactly what happened on the wizard.
+       *
+       * Same lookup, same NIN-less restriction, same promote — and the same staff-capture
+       * exemption, which matters MORE here than anywhere: this path is where enumerators and
+       * clerks land, and 13-4 AC1b exists because a household shares a handset and a surname.
+       * Regressing that would be a worse outcome than the bug this fixes.
+       */
+      if (canonical.firstName && canonical.lastName && canonical.phoneNumber) {
+        const ninlessSelf = await findRespondentByIdentity(
+          db,
+          {
+            firstName: canonical.firstName,
+            lastName: canonical.lastName,
+            phoneNumber: canonical.phoneNumber,
+          },
+          { requireNoNin: true },
+        );
+
+        if (ninlessSelf && STAFF_CAPTURED_SOURCES.has(source)) {
+          // The lookup ran deliberately even though the answer is "do not merge" — see the
+          // no-NIN sibling below. The counterfactual is the denominator that makes the exemption
+          // reviewable instead of an article of faith.
+          logger.info(
+            {
+              event: 'submission_processing.identity_match_exempted_staff_capture',
+              // 13-53 — the exemption now has two triggers. Same event name so the 13-4 runbook
+              // grep still finds both, `trigger` so they stay separately countable.
+              trigger: 'nin_arrival',
+              wouldHaveMergedInto: ninlessSelf.id,
+              referenceCode: ninlessSelf.referenceCode,
+              existingStatus: ninlessSelf.status,
+              source,
+              submitterId: submitterId ?? null,
+            },
+            'A NIN-bearing staff-captured submission matched an existing NIN-LESS respondent on ' +
+              'name + phone, but was NOT promoted — a household shares a handset (13-4 AC1b). ' +
+              'Creating a distinct record.',
+          );
+        } else if (ninlessSelf) {
+          const promotedByIdentity = await promoteRespondentWithArrivingNin(db, {
+            respondentId: ninlessSelf.id,
+            nin: data.nin,
+            // Review H2 — the sibling merge below folds guardian consent into the promoted row
+            // (9-55 M1, added because a promote path was dropping it). This is the same promote
+            // on a fuzzier key; dropping it here would reproduce the bug that fix closed.
+            guardian: data.guardian ?? null,
+            // Review M1 — only minted when the held record actually lacks a code, so the normal
+            // path costs nothing. Without it a promoted respondent can end up with no reference
+            // code at all and the caller echoes `undefined`.
+            fallbackReferenceCode:
+              ninlessSelf.referenceCode ??
+              data.referenceCode ??
+              (await ReferenceCodeService.generateUnique(db)),
+            // Review L3 — NULL-fill only; COALESCE cannot overwrite what the record already holds.
+            // The LGA goes through the SAME canonicaliser the insert below uses (`:813`) — filling
+            // a blank with a raw client string would poison the row the fresh-insert path protects.
+            dateOfBirth: canonical.dateOfBirth ?? null,
+            lgaId: (await canonicalizeLgaId(data.lgaId)) ?? null,
+          });
+          if (promotedByIdentity) {
+            logger.info(
+              {
+                event: 'submission_processing.promoted_existing_identity_on_nin_arrival',
+                respondentId: promotedByIdentity.id,
+                referenceCode: promotedByIdentity.referenceCode,
+                promotedStatus: promotedByIdentity.status,
+                source,
+              },
+              'A NIN-bearing submission matched an existing NIN-LESS respondent on phone + name ' +
+                'tokens — filling the NIN in place and keeping the ORIGINAL reference code ' +
+                'instead of creating a second record (13-53)',
+            );
+            AuditService.logAction({
+              actorId: submitterId ?? null,
+              action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
+              targetResource: AUDIT_TARGETS.RESPONDENT,
+              targetId: promotedByIdentity.id,
+              details: { trigger: 'nin_arrival_identity_match', source },
+            });
+            /**
+             * Review H2 — the 9-55 AC5 evidentiary record, on THIS promote too.
+             *
+             * `tryRaceResolutionMerge` writes it (`:1000`) and the fresh-insert path writes it
+             * (`:872`); the first cut of this branch wrote it nowhere, so an under-15 whose NIN
+             * arrived on a fuzzy match would have had their guardian consent persisted to the row
+             * (above) with NO audit record of the capture. AWAITED and loudly-failing, exactly as
+             * its siblings are — a missing consent record must be detectable.
+             */
+            if (data.guardian) {
+              await this.writeGuardianConsentAudit({
+                respondentId: promotedByIdentity.id,
+                guardian: data.guardian,
+                source,
+                submitterId,
+                trigger: 'nin_arrival_identity_match',
+              });
+            }
+            return {
+              id: promotedByIdentity.id,
+              _isNew: false,
+              referenceCode: promotedByIdentity.referenceCode ?? undefined,
+              status: promotedByIdentity.status as RespondentStatus,
+            };
+          }
+          // Lost the race (the row gained a NIN between read and write) — fall through to a fresh
+          // insert, exactly as the strict merge above does.
+        }
+      }
     }
 
     /**
@@ -653,6 +778,8 @@ export class SubmissionProcessingService {
         logger.info(
           {
             event: 'submission_processing.identity_match_exempted_staff_capture',
+            // 13-53 — the sibling trigger. See the `nin_arrival` case above.
+            trigger: 'no_nin',
             wouldHaveMergedInto: match.id,
             referenceCode: match.referenceCode,
             existingStatus: match.status,

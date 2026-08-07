@@ -122,3 +122,11 @@ zzzzzzzzzz.txt
 
 # Ad-hoc launch/marketing research scratch at repo root — not project source
 viral_launch_find.txt
+
+# Phone/desktop screenshots dropped into the tree while triaging (they land in
+# docs/decisions/ most often). Ignored by NAME PATTERN, not by directory: docs/
+# is allowed to carry deliberate images, and blanket-ignoring *.png there would
+# silently swallow a diagram someone meant to commit.
+Screenshot_*.png
+Screenshot?20*.png
+screenshot-*.png

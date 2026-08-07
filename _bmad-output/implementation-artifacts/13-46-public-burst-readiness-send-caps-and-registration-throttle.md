@@ -480,6 +480,51 @@ rate without taxing the funnel at its most expensive moment.
       or accepting the loss with the audience told. **Do not discover this from a support message.**
     - This is a GATE on the blast, not on the jingle.
 
+### 🔴 AC-RL — THE REGISTRATION THROTTLE WAS ALREADY TURNING CITIZENS AWAY (hotfixed 2026-08-07)
+
+**Not a hypothesis this story needed to model — it had already happened, before the radio jingle.**
+
+A registrant emailed to say he could not finish. He had completed **all ten steps**; the final
+submit returned *"Too many registration attempts."* `POST /registration/wizard` was limited to
+**5 per IP per 15 minutes**.
+
+Retained logs: **36 blocks across 5 IPs — 27 of them on 2026-08-05**, the morning 75 re-engagement
+invitations went out. **We drove people to register and then refused them for responding.**
+
+The blocked ranges — `102.88.*`, `102.89.*`, `102.90.*`, `197.211.*` — are Nigerian mobile carriers,
+and **carriers here use CGNAT: thousands of subscribers share one public IP.** So "5 per IP" was
+never "5 attempts by one person". It was **5 PEOPLE per carrier gateway per quarter hour** — and
+identically one cybercafé, one office, or one supervised registration drive where everyone is on the
+venue's wifi. **It bit hardest in exactly the situation this story exists to protect.**
+
+⚠️ **36 is a FLOOR, not a total.** It counts only what survived log rotation, and behind CGNAT one
+IP can be many different citizens. **The number of people turned away is unknown and unknowable.**
+
+**Shipped:**
+1. IP limiter **5 → 50** per 15 min — a crude flood-stop, set well above any real venue.
+2. **NEW per-email limiter, 3 per 15 min**, keyed on the lowercased/trimmed address, falling back to
+   IP when no email is present so a payload omitting it cannot bypass the limiter.
+3. Route test mock updated — a mock missing a new export fails at import, which caught a real break.
+
+**Why not simply remove it.** Unauthenticated endpoint writing to a government register; with no
+limit a script could fabricate thousands of records, and **the register's credibility IS the
+product**. The AXIS was wrong, not the principle: abuse is one actor creating MANY records, and
+CGNAT makes IP a poor proxy for "one actor" while the submitted email is a good one.
+
+**Operator follow-through (decisions taken, recorded so they are not re-litigated):**
+- **NO D4 re-blast.** 4 people were stranded, not 71. A re-blast mails citizens who already
+  registered and citizens who deliberately declined — spam, and it burns the only channel we have.
+- **YES to telling those four**, briefly, in the tone *"a technical issue on our side… it's fixed,
+  your answers are saved"*. An organisation that notices, fixes and says so reads as MORE competent
+  — especially in government service, where the baseline expectation is being ignored.
+- `raheemjamiu166@gmail.com` — resume link sent + **delivered** 2026-08-07 18:32, 17 answers intact
+  at step 10. ⬜ **Three still to send** (`sadiqabdulmajid9009`, `owolabibunkunmielizabeth`,
+  `molasun813`) — held for Awwal's approval of citizen-facing copy.
+
+⬜ **STILL OPEN, and it belongs to this story's burst premise:** the VPS has **no swap** (2GB total).
+A memory spike does not degrade — it invokes the OOM killer. **A radio jingle is precisely the shape
+that tests all three at once**: a traffic burst, into a throttle, on a box with no swap.
+
 ## Tasks / Subtasks
 
 - [ ] **Task 1 — Cap the send** (AC: #1, #8)

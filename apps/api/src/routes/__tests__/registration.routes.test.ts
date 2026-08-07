@@ -721,6 +721,180 @@ describe('POST /registration/wizard', () => {
     expect(res.body.code).toBe('WIZARD_SUBMIT_INVALID_INPUT');
   });
 
+  /**
+   * 13-53 — THE SEAM, AT THE ROUTE LEVEL.
+   *
+   * Someone registers without their NIN, comes back with it, and re-enters their name the way
+   * people actually do (surname first). FR21 cannot see them — it matches NIN equality and the
+   * record it needs has no NIN. R21 cannot see them either — it ran only when the INCOMING row had
+   * no NIN. Before this story that minted a second record and a second reference code; the live
+   * pair `56C9PG`/`W1PS38` is exactly this test, on a real citizen.
+   *
+   * ⚠️ RED-VERIFY TARGET. Delete the `else` branch in the controller's identity block and these
+   * three must fail. If they still pass, they are testing the mock, not the guard.
+   */
+  describe('13-53 — a NIN arriving for someone we already hold', () => {
+    /**
+     * `execute` is the seam's only observable: call 1 is the NIN-less identity lookup, call 2 the
+     * promote UPDATE. Driving them by call order (not by inspecting the SQL) keeps the test honest
+     * about WHAT HAPPENED rather than about how it was written.
+     */
+    function txWithIdentity(opts: {
+      lookupRows: unknown[];
+      promoteRows: unknown[];
+      respondentInsert?: () => Promise<unknown>;
+    }) {
+      const insert = vi.fn();
+      const execute = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: opts.lookupRows })
+        .mockResolvedValueOnce({ rows: opts.promoteRows })
+        // Any further call (the audit chain's own reads) must not starve.
+        .mockResolvedValue({ rows: [] });
+      mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+        insert
+          .mockReturnValueOnce({
+            values: () => ({
+              returning: () =>
+                opts.respondentInsert?.() ??
+                Promise.resolve([{ id: 'resp-FRESH-INSERT', status: 'active' }]),
+            }),
+          })
+          .mockReturnValueOnce({ values: () => Promise.resolve(undefined) });
+        const tx = {
+          query: { wizardDrafts: { findFirst: () => Promise.resolve(null) } },
+          insert,
+          delete: () => ({ where: () => Promise.resolve() }),
+          execute,
+        };
+        return cb(tx);
+      });
+      return { insert, execute };
+    }
+
+    it('promotes in place and returns the ORIGINAL reference code — never a second record', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null); // NIN matches nothing (FR21 passes)
+      const { insert } = txWithIdentity({
+        lookupRows: [
+          { id: 'resp-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'pending_nin_capture' },
+        ],
+        promoteRows: [
+          { id: 'resp-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'active' },
+        ],
+      });
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        // Surname-first on the return visit — the ordering R13 abandoned exact-equality over.
+        .send(validBody({ nin: '12345678901', givenName: 'Yusuff', familyName: 'Bashiru' }));
+
+      expect(res.status).toBe(201);
+      expect(res.body.data).toMatchObject({
+        respondentId: 'resp-56C9PG',
+        // The number that has been in the citizen's hands since their first visit. A freshly
+        // minted code here resolves to nothing and breaks /check-registration for them.
+        referenceCode: 'OSL-2026-56C9PG',
+        status: 'active',
+      });
+      // ONE insert — the submissions row. The respondents insert must NOT have happened.
+      expect(insert).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Review M1 — THE PHANTOM CODE.
+     *
+     * A promote performs NO INSERT, so the code minted before the transaction was never written to
+     * any row. When the matched record has no code of its own, echoing the minted one hands the
+     * citizen a number that resolves to nothing — `/check-registration` finds no such record. The
+     * promote must PERSIST it (COALESCE, so a code the person already holds is never renamed) and
+     * the response must echo what the row now actually contains.
+     */
+    it('persists the minted code when the held record has none — never echoes an unwritten one', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+      const { execute } = txWithIdentity({
+        lookupRows: [{ id: 'resp-NOCODE', reference_code: null, status: 'pending_nin_capture' }],
+        // RETURNING reflects the row AFTER the COALESCE fill — this is what Postgres gives back.
+        promoteRows: [{ id: 'resp-NOCODE', reference_code: 'OSL-2026-MINTED', status: 'active' }],
+      });
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678901', givenName: 'Yusuff', familyName: 'Bashiru' }));
+
+      expect(res.status).toBe(201);
+      expect(res.body.data).toMatchObject({
+        respondentId: 'resp-NOCODE',
+        referenceCode: 'OSL-2026-MINTED',
+      });
+      // The promote UPDATE (call 2) carries the fill. Delete the `fallbackReferenceCode` argument
+      // and this is the assertion that goes red — the response above would still be green, because
+      // the mock's RETURNING hands back a code either way.
+      const promoteSql = JSON.stringify(execute.mock.calls[1]?.[0] ?? {});
+      expect(promoteSql).toMatch(/reference_code/);
+      expect(promoteSql).toMatch(/COALESCE/i);
+    });
+
+    it('announces no new registration — isNew false, so the welcome email does not re-fire', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+      txWithIdentity({
+        lookupRows: [
+          { id: 'resp-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'pending_nin_capture' },
+        ],
+        promoteRows: [
+          { id: 'resp-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'active' },
+        ],
+      });
+
+      await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678901', givenName: 'Yusuff', familyName: 'Bashiru' }));
+
+      expect(mockRunPostSubmissionSideEffects).toHaveBeenCalledWith(
+        expect.objectContaining({
+          respondentId: 'resp-56C9PG',
+          referenceCode: 'OSL-2026-56C9PG',
+          isNew: false,
+        }),
+      );
+    });
+
+    /**
+     * AC1.3 — the refusal. The lookup is restricted to NIN-less rows, so a record already holding
+     * a DIFFERENT NIN is never a candidate; and even if a caller passed its id, the UPDATE's own
+     * `nin IS NULL` predicate returns zero rows. Modelled here as the promote failing: the
+     * registration must fall through to a fresh insert, NOT silently merge two identities.
+     */
+    it('refuses a genuine conflict — a row holding a different NIN is not merged into', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+      const { insert, execute } = txWithIdentity({
+        lookupRows: [
+          { id: 'resp-OTHER', reference_code: 'OSL-2026-OTHER1', status: 'active' },
+        ],
+        promoteRows: [], // UPDATE ... AND "nin" IS NULL matched nothing
+      });
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678901', givenName: 'Yusuff', familyName: 'Bashiru' }));
+
+      expect(res.status).toBe(201);
+      // A fresh record, its own code — two citizens are never collapsed on a NIN disagreement.
+      expect(res.body.data.respondentId).toBe('resp-FRESH-INSERT');
+      expect(res.body.data.referenceCode).not.toBe('OSL-2026-OTHER1');
+      expect(insert).toHaveBeenCalledTimes(2); // respondents + submissions
+      /**
+       * ⚠️ THIS ASSERTION IS THE WHOLE TEST.
+       *
+       * Without it this passes with the guard DELETED — a branch that never runs also declines to
+       * merge, and the safe outcome looks identical either way. Caught by the RED-verify
+       * (2026-08-07): the other two tests went red when the branch was neutered and this one did
+       * not. Two `execute` calls means the lookup ran AND the promote was attempted and refused,
+       * which is the behaviour under test rather than its absence.
+       */
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('returns 400 INVALID_INPUT on missing required field (givenName)', async () => {
     const body = validBody();
     delete (body as Record<string, unknown>).givenName;

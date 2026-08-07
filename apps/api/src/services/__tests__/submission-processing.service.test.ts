@@ -1473,6 +1473,254 @@ describe('SubmissionProcessingService', () => {
         }),
       );
     });
+
+    /**
+     * ── Story 13-53 — THE STRICT MERGE'S BLIND SPOT ──────────────────────────
+     *
+     * `tryRaceResolutionMerge` handles "the NIN arrived later", but only on STRICT equality of
+     * lower(first)+lower(last)+phone. That is the key R13 tried FIRST and abandoned: it caught
+     * NONE of four real collisions, because surname-first is normal here and middle names come and
+     * go. So a strict miss is not evidence that we do not already hold this person.
+     *
+     * Call order for a NIN-carrying submission is the fixture here:
+     *   1. the strict merge UPDATE   2. the NIN-less token lookup   3. the promote UPDATE
+     */
+    describe('13-53 — a NIN arriving for someone held WITHOUT one', () => {
+      const ninlessSelf = {
+        rows: [{ id: 'pending-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'pending_nin_capture' }],
+      };
+      const promoted = {
+        rows: [{ id: 'pending-56C9PG', reference_code: 'OSL-2026-56C9PG', status: 'active' }],
+      };
+
+      /**
+       * AC1.4 — THE REGRESSION THAT WOULD BE WORSE THAN THE BUG.
+       *
+       * 13-4 AC1b exempts staff capture because an enumerator registers a whole compound on one
+       * handset. Nothing about that changes when the incoming row happens to carry a NIN: merging
+       * a NIN-bearing household member into their NIN-less relative is the same two-citizens-into-
+       * one failure, and it would land silently.
+       */
+      for (const source of ['enumerator', 'clerk'] as const) {
+        it(`does NOT promote a ${source}-captured NIN into a NIN-less household member`, async () => {
+          mockFindFirstRespondent.mockResolvedValue(null);
+          mockFindFirstUser.mockResolvedValue(null);
+          mockDbExecute
+            .mockResolvedValueOnce({ rows: [] })   // strict merge misses
+            .mockResolvedValueOnce(ninlessSelf)    // token lookup finds the relative
+            .mockResolvedValue({ rows: [] });
+
+          const result = await SubmissionProcessingService.findOrCreateRespondent(
+            { ...baseData, firstName: 'Fatima Aisha', lastName: 'Bello' },
+            source,
+            'enumerator-A',
+          );
+
+          expect(result.id).not.toBe('pending-56C9PG');
+          expect(result._isNew).toBe(true);
+          expect(mockInsertRespondent).toHaveBeenCalled();
+          // Exactly two — the lookup RAN (so the counterfactual is measurable) and the promote
+          // was never attempted. A third call would mean the exemption did not hold.
+          expect(mockDbExecute).toHaveBeenCalledTimes(2);
+        });
+      }
+
+      /**
+       * ...and the exemption is RECORDED, on the event name the 13-4 runbook greps for. Delete the
+       * logger block and the test above still passes — that is
+       * [[pattern-test-that-passes-over-a-hole]], and it is why this assertion is separate.
+       */
+      it('emits the counterfactual with trigger `nin_arrival`, on the 13-4 event name', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce(ninlessSelf)
+          .mockResolvedValue({ rows: [] });
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Fatima Aisha', lastName: 'Bello' },
+          'enumerator',
+          'enumerator-A',
+        );
+
+        const exempted = mockLoggerInfo.mock.calls.find(
+          (c) =>
+            (c[0] as { event?: string })?.event ===
+              'submission_processing.identity_match_exempted_staff_capture' &&
+            (c[0] as { trigger?: string })?.trigger === 'nin_arrival',
+        );
+        expect(exempted?.[0]).toMatchObject({
+          wouldHaveMergedInto: 'pending-56C9PG',
+          source: 'enumerator',
+        });
+      });
+
+      it('DOES promote on the public path, keeping the original reference code', async () => {
+        const { AuditService } = await import('../audit.service.js');
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce(ninlessSelf)
+          .mockResolvedValueOnce(promoted);
+
+        const result = await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Yusuff', lastName: 'Bashiru' },
+          'public',
+          undefined,
+        );
+
+        expect(result).toMatchObject({
+          id: 'pending-56C9PG',
+          _isNew: false,
+          referenceCode: 'OSL-2026-56C9PG',
+          status: 'active',
+        });
+        expect(mockInsertRespondent).not.toHaveBeenCalled();
+        expect(AuditService.logAction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'pending_nin.promoted',
+            targetId: 'pending-56C9PG',
+            details: expect.objectContaining({ trigger: 'nin_arrival_identity_match' }),
+          }),
+        );
+      });
+
+      it('AC2.2 — emits the promote log line; without it the fix is unfalsifiable', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce(ninlessSelf)
+          .mockResolvedValueOnce(promoted);
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Yusuff', lastName: 'Bashiru' },
+          'public',
+          undefined,
+        );
+
+        const line = mockLoggerInfo.mock.calls.find(
+          (c) =>
+            (c[0] as { event?: string })?.event ===
+            'submission_processing.promoted_existing_identity_on_nin_arrival',
+        );
+        expect(line?.[0]).toMatchObject({
+          respondentId: 'pending-56C9PG',
+          referenceCode: 'OSL-2026-56C9PG',
+        });
+      });
+
+      /**
+       * ── Review H2 — THE 9-55 CONSENT RECORD, ON THIS PROMOTE TOO ──────────────────────────
+       *
+       * `tryRaceResolutionMerge` folds the guardian into the promoted row AND writes
+       * MINOR_GUARDIAN_CONSENT_CAPTURED — that pairing WAS the 9-55 M1 review fix, added precisely
+       * because a promote path was dropping an under-15's consent. The first cut of the 13-53
+       * branch reproduced the bug that fix closed: same promote, fuzzier key, no consent record.
+       *
+       * The test above (`DOES promote…`) passes with the guardian handling deleted, because the
+       * promote itself still works — [[pattern-test-that-passes-over-a-hole]]. Hence this one.
+       */
+      it('carries an under-15 guardian consent through the promote — row AND audit', async () => {
+        const { AuditService } = await import('../audit.service.js');
+        const guardian = {
+          name: 'Adunni Okafor',
+          relationship: 'parent',
+          phone: '08031234567',
+          consent: 'yes',
+          isSupervisedApprentice: 'yes',
+        };
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce(ninlessSelf)
+          .mockResolvedValueOnce(promoted);
+
+        await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Yusuff', lastName: 'Bashiru', guardian },
+          'public',
+          undefined,
+        );
+
+        // 1. The consent is written to the ROW, in the promote's own UPDATE (JSONB `||`, so
+        //    defer_reason_nin / reminder_state survive alongside it).
+        const promoteSql = JSON.stringify(mockDbExecute.mock.calls[2]?.[0] ?? {});
+        expect(promoteSql).toMatch(/metadata/);
+        expect(promoteSql).toMatch(/Adunni Okafor/);
+
+        // 2. …and the NDPA evidentiary audit records the capture, keyed to THIS trigger so the
+        //    three promote routes stay separately countable.
+        expect(AuditService.logAction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'minor.guardian_consent_captured',
+            targetId: 'pending-56C9PG',
+            details: expect.objectContaining({ trigger: 'nin_arrival_identity_match' }),
+          }),
+        );
+      });
+
+      /**
+       * Review M1 — a promote performs NO INSERT, so a matched row with no reference code would
+       * leave the caller echoing `undefined` (queue) or a minted-but-never-written code (wizard).
+       * Handing someone a number that resolves to no record is the harm this story opens with.
+       */
+      it('persists a reference code when the matched row has none', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce({
+            rows: [{ id: 'pending-56C9PG', reference_code: null, status: 'pending_nin_capture' }],
+          })
+          .mockResolvedValueOnce(promoted);
+
+        const result = await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Yusuff', lastName: 'Bashiru' },
+          'public',
+          undefined,
+        );
+
+        // COALESCE, so it can only fill the blank — never rename a code someone already holds.
+        const promoteSql = JSON.stringify(mockDbExecute.mock.calls[2]?.[0] ?? {});
+        expect(promoteSql).toMatch(/reference_code/);
+        expect(promoteSql).toMatch(/COALESCE/i);
+        expect(result.referenceCode).toBeTruthy();
+      });
+
+      /**
+       * AC1.3 in its concurrency guise. The row gained a NIN between the read and the write, so
+       * the `nin IS NULL` predicate matched nothing. Falling through to an insert is the correct
+       * loser-branch: one repairable duplicate beats overwriting a NIN that arrived first.
+       */
+      it('falls through to a fresh insert when the promote loses the race', async () => {
+        mockFindFirstRespondent.mockResolvedValue(null);
+        mockFindFirstUser.mockResolvedValue(null);
+        mockDbExecute
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce(ninlessSelf)
+          .mockResolvedValueOnce({ rows: [] }) // UPDATE ... AND "nin" IS NULL → 0 rows
+          .mockResolvedValue({ rows: [] });
+
+        const result = await SubmissionProcessingService.findOrCreateRespondent(
+          { ...baseData, firstName: 'Yusuff', lastName: 'Bashiru' },
+          'public',
+          undefined,
+        );
+
+        expect(result._isNew).toBe(true);
+        expect(mockInsertRespondent).toHaveBeenCalled();
+        /**
+         * ⚠️ THE LOAD-BEARING LINE. Without it this passes with the whole block DELETED — code
+         * that never runs also "falls through to an insert". Caught by the RED-verify
+         * (2026-08-07), where five siblings went red and this one did not. Three calls means the
+         * strict merge missed, the token lookup ran, and the promote was attempted and lost.
+         */
+        expect(mockDbExecute).toHaveBeenCalledTimes(3);
+      });
+    });
   });
 
   // Story 9-55 (M2 review fix) — the async-path consent audit is AWAITED and its

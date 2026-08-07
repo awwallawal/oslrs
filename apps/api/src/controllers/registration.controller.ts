@@ -17,7 +17,10 @@ import {
 import type { MinorGuardianResult } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.service.js';
 import { ReferenceCodeService } from '../services/reference-code.service.js';
-import { findRespondentByIdentity } from '../services/respondent-identity.js';
+import {
+  findRespondentByIdentity,
+  promoteRespondentWithArrivingNin,
+} from '../services/respondent-identity.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
@@ -787,24 +790,87 @@ export class RegistrationController {
          * Same principle as the post-submission side-effects a few lines below: instrumentation and
          * hygiene must never sink a completed registration (the 9-26 lesson).
          */
+        /**
+         * 13-53 — AND THE OTHER HALF OF THE SAME JOURNEY.
+         *
+         * The `ninValue === null` condition above is correct and incomplete. It covers the person
+         * who registers again with no NIN; it does NOT cover the person who registered WITHOUT one
+         * and came back WITH it — and that is the journey the entire pending-NIN design asks
+         * people to take ("register now, add your NIN later"). The FR21 collision check a few
+         * dozen lines up cannot see them either: it matches on NIN EQUALITY, and the record it
+         * needs to find is precisely the one with no NIN to match against.
+         *
+         * Two mechanisms, a seam between them, and the seam is a whole journey. It produced
+         * `OSL-2026-56C9PG` (no NIN, 15:22) / `OSL-2026-W1PS38` (NIN, 17:38) on a real citizen,
+         * two hours apart, AFTER R21 deployed.
+         *
+         * NIN-LESS ROWS ONLY (AC1.3). If both rows hold a NIN and they differ, that is a genuine
+         * identity conflict for a human (13-49's `same-person-different-NIN` class) — never a
+         * silent merge. The restriction is enforced twice: in the lookup, and again in the
+         * UPDATE's own `nin IS NULL` predicate.
+         *
+         * PROMOTE, don't attach. Unlike the no-NIN direction, this submission knows something the
+         * record does not, so the NIN is filled in place — and the person keeps the reference code
+         * they have been holding since their first visit.
+         */
         let identityMatch: Awaited<ReturnType<typeof findRespondentByIdentity>> = null;
-        if (ninValue === null) {
-          try {
+        let ninArrivalPromotion: Awaited<ReturnType<typeof promoteRespondentWithArrivingNin>> = null;
+        try {
+          if (ninValue === null) {
             identityMatch = await findRespondentByIdentity(tx, {
               firstName,
               lastName,
               phoneNumber: data.phone,
             });
-          } catch (identityErr) {
-            logger.error(
-              {
-                event: 'registration.identity_check_failed',
-                err: identityErr instanceof Error ? identityErr.message : String(identityErr),
-              },
-              'R21 identity check failed — proceeding with a fresh insert. A duplicate is ' +
-                'repairable; refusing the registration is not.',
+          } else {
+            const ninlessSelf = await findRespondentByIdentity(
+              tx,
+              { firstName, lastName, phoneNumber: data.phone },
+              { requireNoNin: true },
             );
+            if (ninlessSelf) {
+              // Null here means the row gained a NIN between the read and the write (concurrent
+              // arrival, or the 9-12 ladder link landing at the same moment). Falling through to a
+              // fresh insert is the safe loser-branch — the same trade `tryRaceResolutionMerge`
+              // makes.
+              ninArrivalPromotion = await promoteRespondentWithArrivingNin(tx, {
+                respondentId: ninlessSelf.id,
+                nin: ninValue,
+                // Review H2 — a promote SKIPS the insert below, and `metadata.guardian` only ever
+                // existed in that insert's values. Without this, an under-15 returning with their
+                // NIN loses the 9-55 consent record while the audit a few dozen lines down still
+                // swears it was captured. `tryRaceResolutionMerge` folds it in for exactly this
+                // reason (9-55 M1); this path must not re-open the hole.
+                guardian: minorResult.guardian ?? null,
+                // Review M1 — no insert ran, so the minted code was never written. If the held
+                // record has no code of its own, persist this one rather than echoing a number
+                // that resolves to no row.
+                fallbackReferenceCode: referenceCode,
+                // Review L3 — NULL-fill only. A full registration can know a DOB/LGA the held
+                // record does not; COALESCE means it can never overwrite one it does.
+                dateOfBirth: data.dateOfBirth ?? null,
+                lgaId: lgaSlug,
+              });
+            }
           }
+        } catch (identityErr) {
+          /**
+           * FAIL-OPEN, with an honest scope. This catch covers a driver/shape failure — the class
+           * that actually bit R21, where a transaction double lacking `.execute` turned every
+           * wizard test into a 500. A genuine Postgres error aborts the surrounding transaction,
+           * so the insert below would fail regardless; the catch cannot and does not pretend
+           * otherwise. What it guarantees is that a duplicate-PREVENTION check never becomes the
+           * reason a citizen is turned away when the database itself is fine.
+           */
+          logger.error(
+            {
+              event: 'registration.identity_check_failed',
+              ninProvided: ninValue !== null,
+              err: identityErr instanceof Error ? identityErr.message : String(identityErr),
+            },
+            'Identity check failed — proceeding with a fresh insert. A duplicate is ' +
+              'repairable; refusing the registration is not.',
+          );
         }
 
         if (identityMatch) {
@@ -820,8 +886,35 @@ export class RegistrationController {
           );
         }
 
-        const insertRows = identityMatch
-          ? [{ id: identityMatch.id, status: identityMatch.status as typeof status }]
+        /**
+         * 13-53 AC2.2 — THE ONLY THING THAT CAN CLOSE THIS STORY.
+         *
+         * Every count in the pre-fix baseline was already zero, so "no duplicates after the fix"
+         * is unfalsifiable: it would read identically if this code were never deployed. R21 taught
+         * that at the cost of a live duplicate — a guard whose only evidence is an absence cannot
+         * be distinguished from a guard that never runs. This line is the presence.
+         */
+        if (ninArrivalPromotion) {
+          logger.info(
+            {
+              event: 'registration.promoted_existing_identity_on_nin_arrival',
+              respondentId: ninArrivalPromotion.id,
+              referenceCode: ninArrivalPromotion.referenceCode,
+              promotedStatus: ninArrivalPromotion.status,
+              source: 'public',
+            },
+            'A NIN-bearing wizard registration matched an existing NIN-LESS respondent on phone + ' +
+              'name tokens — filling the NIN in place and returning the ORIGINAL reference code ' +
+              'instead of creating a second record (13-53)',
+          );
+        }
+
+        // Either direction resolves to "we already hold this person" — one variable from here on,
+        // so no downstream consumer can handle one case and silently miss the other.
+        const existingRespondent = identityMatch ?? ninArrivalPromotion;
+
+        const insertRows = existingRespondent
+          ? [{ id: existingRespondent.id, status: existingRespondent.status as typeof status }]
           : await tx
           .insert(respondents)
           .values({
@@ -844,9 +937,11 @@ export class RegistrationController {
             status: respondents.status,
           });
         const row = insertRows[0];
-        // On an attach the minted code was never written — the person must be told the number that
-        // actually exists on their record.
-        const effectiveReferenceCode = identityMatch?.referenceCode ?? referenceCode;
+        // On an attach OR a promote the minted code was never written — the person must be told
+        // the number that actually exists on their record. 13-53 makes this load-bearing in the
+        // other direction too: telling someone a NEW code for a record they have held since their
+        // first visit is exactly the harm `56C9PG` suffered.
+        const effectiveReferenceCode = existingRespondent?.referenceCode ?? referenceCode;
 
         // Story 9-26 Part A — write the canonical submissions row alongside.
         // `processed: true` + `processedAt: now()` because wizard data is
@@ -946,14 +1041,49 @@ export class RegistrationController {
             pendingNin,
             // R22 — false on a genuine creation, true when R21 attached this submission to a
             // respondent that already existed. A counter that ignores this over-reports.
-            attachedToExisting: !!identityMatch,
-            existingReferenceCode: identityMatch?.referenceCode ?? null,
+            //
+            // 13-53 widened it to `existingRespondent`, which is the R22 lesson landing a second
+            // time: a NIN-arrival promote is just as much "not a creation" as an attach, and this
+            // flag reading `false` for it would put a phantom registration into the first metric
+            // that reads this table (13-44 builds exactly that).
+            attachedToExisting: !!existingRespondent,
+            // Distinguishes the two shapes for anyone counting them separately.
+            promotedOnNinArrival: !!ninArrivalPromotion,
+            existingReferenceCode: existingRespondent?.referenceCode ?? null,
             // Story 9-26 — submissionUid for cross-table forensic trace.
             submissionUid: newSubmissionUid,
           },
           ipAddress: req.ip || 'unknown',
           userAgent: req.get('user-agent') || 'unknown',
         });
+
+        /**
+         * 13-53 — the promote gets the SAME audit action the other two promote paths write
+         * (`magic_link_complete_nin` above, `race_resolution_merge` in the queue service), keyed
+         * by `trigger`. Deliberately not a new action: three routes to the same state should be
+         * one action with three triggers, or the audit-target drift in
+         * [[feedback_audit_target_unification]] starts over.
+         *
+         * Inside the transaction via `logActionTx` — if the audit write fails, the promote rolls
+         * back with it, and a NIN silently attached to a citizen's record with no evidentiary
+         * trail is precisely what NDPA forensics cannot have.
+         */
+        if (ninArrivalPromotion) {
+          await AuditService.logActionTx(tx, {
+            actorId: null,
+            action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
+            targetResource: AUDIT_TARGETS.RESPONDENT,
+            targetId: ninArrivalPromotion.id,
+            details: {
+              trigger: 'nin_arrival_identity_match',
+              email: normalisedEmail,
+              referenceCode: ninArrivalPromotion.referenceCode,
+              submissionUid: newSubmissionUid,
+            },
+            ipAddress: req.ip || 'unknown',
+            userAgent: req.get('user-agent') || 'unknown',
+          });
+        }
 
         // Story 9-55 AC5 — NDPA evidentiary record of the captured guardian
         // consent, written inside the SAME transaction (hash-chain integrity:
@@ -991,7 +1121,11 @@ export class RegistrationController {
           formIdSource,
           // R21: on an attach these differ from the minted code / fresh-insert assumption.
           effectiveReferenceCode,
-          attachedToExisting: identityMatch !== null,
+          // 13-53 — a promote is "we already held this person" just as much as an attach is. This
+          // gates `isNew`, which gates the 9-58 "welcome, you're registered" confirmation: someone
+          // returning with their NIN was welcomed months ago, and re-welcoming them announces a
+          // registration that did not happen.
+          attachedToExisting: existingRespondent !== null,
         };
       });
 
