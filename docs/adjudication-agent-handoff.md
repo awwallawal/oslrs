@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-07 · **Prod deployed SHA:** `78d54bf` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-07 (late) · **Prod deployed SHA:** `077e129` · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -288,6 +288,34 @@ person had held since 19 May, because the new record happened to carry the submi
   checking — §2p's shape exactly. The correction is now in the function's own docstring so the
   history reads accurately rather than flatteringly.
 
+### 2v. A DEPENDENCY'S WARNING CAN BE A SOURCE-TEXT GREP — read its implementation before trusting it
+*Added 2026-08-07, from the IPv6 bypass in the per-email registration limiter.*
+
+express-rate-limit logged `ERR_ERL_KEY_GEN_IPV6` once per boot — nine lines in the prod error log —
+against our custom `keyGenerator`. The warning was RIGHT: the IP fallback keyed the raw address, and
+an IPv6 subscriber holds a whole prefix, so rotating their own low bits mints a fresh bucket every
+request and the limit never binds.
+
+**But the check is `keyGenerator.toString()` grepped for `req.ip` without `ipKeyGenerator`.** So
+destructuring the argument — `({ body, ip }) =>` instead of `req.ip` — silences it while the bypass
+stays wide open. **"The warning stopped" would have been a green light over an open hole**
+([[pattern-test-that-passes-over-a-hole]], this time handed to us by a dependency).
+
+- **Read a validator's implementation before letting it stand in for a test.** Ours lives in
+  `dist/index.mjs`; it took one `grep` to learn it was a lint on *spelling*, not on behaviour.
+- **The real proof was behavioural**: extract the key logic into an exported pure function, then
+  assert two IPv6 addresses in one `/56` collapse to ONE key. RED-verify killed 4 of 12 tests when
+  the helper call was removed, and the failure message WAS the bug.
+- ⭐ **A guard test needs BOTH directions.** I also asserted that genuinely different prefixes stay
+  APART — because a "fix" that lumped every caller into one bucket would have satisfied the collapse
+  assertion just as happily. **One-directional guard tests pin one failure mode and licence the
+  opposite one.**
+- **Then trace it to where it EXECUTES**: on prod I grepped the deployed source for the CALL SITE,
+  not the import — import-plus-comments would have satisfied a naive `grep ipKeyGenerator`.
+- **Verifying "the warning is gone" needs a baseline.** The nine historical lines stay in the file
+  forever. Snapshot the count BEFORE deploy; the proof is a fresh boot adding **zero** to it, since
+  it previously logged once per boot.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -295,7 +323,7 @@ person had held since 19 May, because the new record happened to carry the submi
 
 ## 3. Current state (2026-08-07) — READ THIS ONE
 
-**Prod `7fab799` (13-53 + the rate-limiter fix), health 200. Register 315.** Integrity clean: 0 duplicate NINs, 0 orphaned
+**Prod `077e129`, health 200. Register 315.** 🆕 **The VPS finally has SWAP (2026-08-07) — it had NONE.** Integrity clean: 0 duplicate NINs, 0 orphaned
 submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wizard_resume` tokens.
 
 - **13-4 CLOSED 2026-08-07 — gate item #2 GREEN.** The enumerator pathway may take real field
@@ -322,6 +350,22 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
   has no reference code at the interview (AC4.4) AND a shared-handset registrant cannot retrieve by
   phone (H2). Closes by FIELD PROCEDURE — the slip is written later from the Sync Status list — and
   by SMS. **It must be in the enumerator briefing before anyone is sent out.**
+- 💾 **SWAP ADDED 2026-08-07 — the box ran on 1967MB RAM with ZERO swap until this date.** 2GB
+  `/swapfile`, `dd`-created (**not** `fallocate`, which can leave unwritten extents that `swapon`
+  refuses as "holes"), fstab `sw,nofail` so a missing swapfile can never block boot, and persistence
+  **proven** by `swapoff` then `swapon -a` rather than assumed. `vm.swappiness=10` in
+  `/etc/sysctl.d/99-oslsr-swap.conf` — the default 60 pages out a live-but-idle API process and
+  surfaces as latency; swap here is a safety net for burst/leak, **not** routine paging.
+  ⚠️ **Swap does not make 2GB into 4GB.** Swap sitting in steady USE rather than held at 0 is the
+  signal to RESIZE the droplet, not to add more swap. Detail: [[infra-vps-operational-state]].
+- 🔐 **IPv6 bypass in the per-email registration limiter — FIXED `077e129`, verified on prod.** The
+  limiter shipped four days earlier keyed its IP fallback on the raw address; an IPv6 client could
+  rotate its own low bits for unlimited buckets. Found in the pm2 error log while adding swap, **not
+  by a test and not by review.** Advisory, never fatal (`unstable_restarts: 0`), exposure narrow
+  (fallback path only, and Nigerian mobile is overwhelmingly IPv4 CGNAT) — but a hole in the control
+  we added for a citizen who could not finish registering. **The library's own warning was NOT
+  treated as the test — see §2v, it is a `toString()` grep.** 12 tests, RED-verified 4/12, full API
+  suite 3615. Prod proof: fresh boot added **zero** new warnings to the baseline of 9.
 - **Awwal develops + code-reviews in a SEPARATE CLI and brings the uncommitted tree here.** A clean
   tree means nothing is in flight (§0/§1).
 
@@ -963,6 +1007,45 @@ then set it via the super-admin path.** His NIN is deliberately left INTACT unti
 it without a route to replace it would leave him worse off than doing nothing.
 
 ---
+
+## 7k. Session 2026-08-07 (late) — 13-53 closed on a stated gap; a defect found by reading a log
+
+Three things, and the order matters — the third was found only because of the second.
+
+**1. 13-53 closed `done`, with R2 handed over rather than performed.** R2 wanted a prod
+`pm2 logs | grep` of `promoted_existing_identity_on_nin_arrival`. That evidence does not exist: the
+promote needs one of the 20 pending-NIN people to re-register through the front page instead of
+their ladder link, and there had been **zero wizard registrations since deploy** — the only finder
+events in the log predated it by twelve hours. **It was not manufactured**: the smoke's write half
+refuses non-test DBs by design, and breaking a guard to satisfy its own checkbox is worth less than
+the checkbox. So the watch moved to **13-44 AC-T4** as a digest PAIR (at-risk cohort size beside
+promote count), because a manual grep was never going to survive months of waiting. The story, the
+commit, and §3 all say in plain words that this shipped with **no observation of it running in
+production**. New pattern: [[pattern-verification-that-cannot-run-yet]].
+
+**2. Swap added to the VPS** — see §3. It had none, on a 2GB box, with a radio jingle pending.
+
+**3. ⭐ And adding swap is how the IPv6 bypass was found.** Checking whether services survived the
+swap work meant reading `pm2 logs`, and the error log held nine copies of `ERR_ERL_KEY_GEN_IPV6`
+pointing at `registration-rate-limit.ts` — **my own code, shipped four days earlier in `16b02ee`.**
+The per-email limiter's IP fallback keyed the raw address, so an IPv6 client could rotate its own
+low bits for unlimited buckets.
+
+**Nothing was watching that log.** It was not in the digest, no test covered it, the adversarial
+review had not caught it, and every boot re-logged it into a file nobody opened. It surfaced as a
+side effect of an unrelated ops task — which is the uncomfortable part, and the reason it is written
+down here: *the finding was luck, and luck is not a control.*
+
+- The fix and its discipline are §2v: **the library's warning is a `toString()` grep and silencing
+  it proves nothing**; the proof is a behavioural test in both directions, RED-verified 4/12.
+- Prod verification used a **pre-deploy baseline** (9 warnings, 36 log lines) so the claim could be
+  "a fresh boot added ZERO", not the weaker "the log looks fine".
+- Traced to the **call site** in the deployed source, not the import — §2b's whole point.
+
+⚠️ **The open question this leaves:** `pm2 logs --err` is not surfaced anywhere. 13-42's ops digest
+watches metrics, not the API's own error stream. **An error the process prints on every single boot
+went unread for four days.** Worth a story — a boot-time error-log check is cheap, and this one was
+a security hole in a public endpoint.
 
 ## 7j. Session 2026-08-07 — the smoke earned its keep, six times over
 
