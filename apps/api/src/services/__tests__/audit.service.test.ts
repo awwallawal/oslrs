@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 57 total action types across all categories', () => {
+    it('should have 58 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -205,8 +205,26 @@ describe('AuditService', () => {
       //   RESPONDENT_MERGED ('respondent.merged') → 57. Two records for one person collapsed
       //   into one; the audit row is the only place the removed reference code survives, since
       //   the respondent row itself is deleted.
+      // Story 13-4 (2026-08-06) added 1:
+      //   OPERATOR_RESPONDENT_EMAIL_CORRECTED ('operator.respondent_email_corrected') → 58.
+      //   An operator fixed a MISTYPED contact address and lifted the bounce suppression it
+      //   caused. Deliberately distinct from RESPONDENT_SELF_UPDATED: the respondent did not ask
+      //   for it and could not be reached to confirm it, which is exactly why it must be traced.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(57);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(58);
+    });
+
+    /**
+     * The count above is a deliberate tripwire — it makes adding an action a conscious act. But a
+     * count alone cannot say WHAT is wrong, and it passes happily while two keys share one action
+     * string, which is the failure that actually corrupts an audit trail: rows from two different
+     * operations become indistinguishable after the fact, and no count would ever notice.
+     */
+    it('every action maps to a DISTINCT string — a collision silently merges two event types', () => {
+      const values = Object.values(AUDIT_ACTIONS);
+      const dupes = values.filter((v, i) => values.indexOf(v) !== i);
+      expect(dupes).toEqual([]);
+      expect(new Set(values).size).toBe(Object.keys(AUDIT_ACTIONS).length);
     });
   });
 
