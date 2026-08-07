@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
@@ -83,6 +83,29 @@ export const registrationRateLimit = rateLimit({
  * limiter entirely. Keyed on the LOWERCASED, TRIMMED address: `A@x.com` and `a@x.com ` must not be
  * two buckets, or the limit is trivially evaded with a space.
  */
+
+/**
+ * The key logic, extracted so it can be TESTED — the reason it is a separate exported function.
+ *
+ * ⚠️ FIXED 2026-08-07. The IP fallback previously used the raw address, which meant an IPv6 client
+ * could bypass the limiter entirely: a single subscriber is normally handed a whole prefix, so
+ * rotating the low bits of their own address mints a fresh bucket every request. `ipKeyGenerator`
+ * collapses an IPv6 address to its `/56` prefix and passes IPv4 (and any non-IP string, like our
+ * `'unknown'`) straight through.
+ *
+ * ⚠️ **The library's own warning is NOT what makes this correct, and must not be trusted as proof.**
+ * `ERR_ERL_KEY_GEN_IPV6` is a `toString()` grep over the keyGenerator source looking for `req.ip`
+ * without `ipKeyGenerator` — so merely NAMING the helper, or writing the property access in a way
+ * the regex misses, silences it while changing nothing. That is
+ * [[pattern-test-that-passes-over-a-hole]] handed to us by a dependency. **The proof is the unit
+ * test asserting two addresses in one /56 collapse to ONE key**; delete the `ipKeyGenerator` call
+ * and that test fails, which is the only property worth having.
+ */
+export function buildRegistrationEmailRateLimitKey(email: unknown, ip: string | undefined): string {
+  if (typeof email === 'string' && email.trim()) return `e:${email.trim().toLowerCase()}`;
+  return `ip:${ipKeyGenerator(ip ?? 'unknown')}`;
+}
+
 export const registrationEmailRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
@@ -91,11 +114,11 @@ export const registrationEmailRateLimit = rateLimit({
   }),
   windowMs: 15 * 60 * 1000,
   max: 3,
-  keyGenerator: (req) => {
-    const email = (req.body as { email?: unknown } | undefined)?.email;
-    if (typeof email === 'string' && email.trim()) return `e:${email.trim().toLowerCase()}`;
-    return `ip:${req.ip ?? 'unknown'}`;
-  },
+  // Destructured, not `req.ip` — see the note on the builder. The library's validator greps this
+  // function's SOURCE TEXT, so where the property access is written changes whether it warns. That
+  // makes the warning a lint on spelling, not on behaviour; the unit test is the real guard.
+  keyGenerator: ({ body, ip }) =>
+    buildRegistrationEmailRateLimitKey((body as { email?: unknown } | undefined)?.email, ip),
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
