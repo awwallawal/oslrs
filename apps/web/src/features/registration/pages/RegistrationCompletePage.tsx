@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom';
+import { CompletionConfetti } from '../../../components/CompletionConfetti';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
@@ -36,6 +37,13 @@ export default function RegistrationCompletePage() {
         description: 'Unable to load this page. Please try again.',
       }}
     >
+      {/*
+        A citizen has just given ten minutes to a government service that historically gives
+        nothing back. Marking that is warm, and it is the moment they are most likely to tell
+        someone else to register. Decorative only, and silent under prefers-reduced-motion.
+        The ENUMERATOR surface deliberately gets a quiet ripple instead — see CompletionRipple.
+      */}
+      <CompletionConfetti />
       <div className="min-h-screen bg-neutral-50 flex flex-col">
         {/* Back to Homepage */}
         <div className="p-4 sm:p-6">

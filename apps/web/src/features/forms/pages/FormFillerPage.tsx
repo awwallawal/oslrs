@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { CompletionRipple } from '../../../components/CompletionRipple';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Controller, useForm, type ResolverOptions } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -408,7 +409,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   // Completion screen
   if (completed) {
     return (
-      <div className="max-w-[400px] mx-auto p-6 text-center space-y-4" data-testid="completion-screen">
+      <div className="relative max-w-[400px] mx-auto p-6 text-center space-y-4" data-testid="completion-screen">
         {isPreview ? (
           <>
             <div className="text-6xl animate-bounce">✓</div>
@@ -424,6 +425,14 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           </>
         ) : (
           <>
+            {/*
+              A quiet outward ripple behind the checkmark — "recorded", not "celebrated". The
+              PUBLIC wizard gets confetti; this surface deliberately does not. An enumerator
+              completes 20-40 of these a day in front of a respondent who may have just disclosed
+              unemployment or a disability, and celebration there is noise at best. See
+              CompletionRipple for the full reasoning.
+            */}
+            <CompletionRipple />
             <div className="text-6xl animate-scale-in">
               ✓
             </div>

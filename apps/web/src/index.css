@@ -261,3 +261,32 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * 13-4 / public-wizard completion animations (2026-08-07).
+ *
+ * `ripple-out` drives CompletionRipple: a ring expands from the checkmark and fades, reading as
+ * "recorded" rather than "celebrated". Kept in CSS rather than canvas so it costs nothing on the
+ * low-end Android phones enumerators actually carry.
+ *
+ * The media query is belt-and-braces: both components already return null under
+ * prefers-reduced-motion, but a CSS-level stop means any FUTURE use of these classes inherits the
+ * accessibility behaviour without the author having to remember. Motion can genuinely nauseate
+ * people with vestibular disorders, and this is a public service they cannot opt out of using.
+ */
+@keyframes ripple-out {
+  0%   { transform: scale(0.35); opacity: 0.55; }
+  70%  { opacity: 0.12; }
+  100% { transform: scale(2.6);  opacity: 0; }
+}
+
+.animate-ripple-out {
+  animation: ripple-out 2.7s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ripple-out {
+    animation: none;
+    opacity: 0;
+  }
+}
