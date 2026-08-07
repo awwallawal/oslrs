@@ -649,7 +649,11 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
                 setCurrentIndex(0);
                 setReferenceCode(null);
                 setReferenceConfirmed(false);
-                navigate('/enumerator');
+                // /dashboard/enumerator, NOT /enumerator — the enumerator routes are nested under
+                // `dashboard` (App.tsx:1062). The bare path would have dropped the operator on the
+                // 404 page immediately after discarding, which is the worst possible moment for it.
+                // Caught by the navigate-target drift guard, not by review.
+                navigate('/dashboard/enumerator');
               }}
               className="text-sm text-gray-500 underline underline-offset-2 hover:text-error-600 transition-colors"
               data-testid="discard-interview-btn"
