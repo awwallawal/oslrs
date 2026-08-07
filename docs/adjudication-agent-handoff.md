@@ -295,13 +295,25 @@ person had held since 19 May, because the new record happened to carry the submi
 
 ## 3. Current state (2026-08-07) — READ THIS ONE
 
-**Prod `78d54bf`, health 200. Register 315.** Integrity clean: 0 duplicate NINs, 0 orphaned
+**Prod `7fab799` (13-53 + the rate-limiter fix), health 200. Register 315.** Integrity clean: 0 duplicate NINs, 0 orphaned
 submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wizard_resume` tokens.
 
 - **13-4 CLOSED 2026-08-07 — gate item #2 GREEN.** The enumerator pathway may take real field
   submissions. The prod smoke confirmed AC1b **by log line, not row count**, and **found five
   defects code review had missed** — see §7j.
-- **13-49, 13-52 also closed.** **13-50, 13-51, 13-53 raised.**
+- **13-53 CLOSED 2026-08-07 — but read HOW, because it is the unusual one.** The NIN-arrival seam
+  is fixed and deployed. It ships on 3603 tests, THREE RED-verifies, and a promote log line observed
+  from production code — **and on ZERO observations of it running in production.** R2 asked for a
+  prod `pm2 logs | grep` and that evidence does not exist: the event needs one of the 20 pending-NIN
+  people to re-register via the front page instead of their ladder link, and there have been no
+  wizard registrations since deploy. **It was not manufactured** — the smoke's write half refuses
+  non-test DBs by design, and breaking a guard to tick a box is worth less than the box. The watch
+  moved to **13-44 AC-T4** as a digest PAIR (at-risk cohort size beside promote count), because a
+  manual grep was never going to survive months. **REOPEN on any NIN-arrival duplicate pair on prod,
+  or the cohort climbing while promotes stay at zero.**
+- **13-49, 13-52 also closed.** **13-50, 13-51, 13-54, 13-55 raised** — 13-54 (un-guarded respondent
+  write → CI guard, bundling T3's re-runnable negative control) and 13-55 (three promote-to-active
+  paths, three rules) both came out of 13-53's review.
 - 📄 **ENUMERATOR FIELD BRIEFING — `docs/runbooks/enumerator-field-briefing.md`** (printable). This
   is where 13-4 R8 is discharged: it tells enumerators not to read out a number before one exists,
   where to get it afterwards (Sync Status), and that a shared-handset registrant's OSLRS number is
@@ -316,7 +328,8 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
 ### Next up
 | | |
 |---|---|
-| **13-53** | NEXT FOR ADJUDICATION. The NIN-arrival seam. ⛔ **Its pre-fix baseline is ALL ZEROS**, so "no duplicates" proves nothing — the story carries an adjudication note saying the log line is the only thing that can close it. |
+| **13-54** | ⭐ HIGHEST-EVIDENCE BACKLOG ITEM. The same bug — a respondent written outside the identity chokepoint — has now been hand-fixed THREE times (R13, R21, 13-53), each time protecting one more caller. Twice it cost a named citizen two records. CI guard + the re-runnable negative control. |
+| **13-55** | Sequence AFTER 13-54: unify the three promote-to-active paths. One code path, explicit parameters, **not** one policy. |
 | **13-50** | `/check-registration` mints dead-end links (244 sends/month); `wizard_resume` unaudited; phantom drafts. |
 | **13-51** | Operator contact-correction UI; validate email at capture so we stop manufacturing bounces. |
 | **13-52** | Deploy resilience shipped; its TESTS were not written. |
