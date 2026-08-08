@@ -565,6 +565,10 @@ the YAML saying the step exists — the same ruling Awwal made on 13-37.
 4. **The negative control mocks one export.** It proves the promote is load-bearing on the
    `findOrCreateRespondent` path. It does not exercise `registration.controller.ts:836`, the second
    caller of the same chokepoint — that asymmetry is 13-55's territory.
+5. **Rule 1 over-matches by design (review R-H1).** Any identifier CONTAINING `respondents` is
+   flagged, so a genuinely different table named e.g. `respondentsArchive` would red. That is the
+   deliberate direction: a false red is cleared by an allowlist entry or an inline reason and someone
+   reads it, whereas the false GREEN this replaces was the finding.
 6. ⚠️ **THE ALLOWLIST IS PER-FILE, SO THE GUARD WOULD NOT HAVE CAUGHT R21 OR 13-53.**
    *(Added at adjudication 2026-08-08 — the one gap the story's own limits section had missed.)*
    AC1.3 mandates a path allowlist, and a path allowlist exempts a whole file. Both historical
@@ -584,11 +588,6 @@ the YAML saying the step exists — the same ruling Awwal made on 13-37.
    ⚠️ **Do NOT "fix" this with line-level pinning** — a line number in an allowlist rots on the next
    edit and fails OPEN, which is worse than the gap. The real answer is fewer sanctioned creators,
    i.e. **Story 13-55**, and this is an argument for sequencing it sooner rather than a defect here.
-
-5. **Rule 1 over-matches by design (review R-H1).** Any identifier CONTAINING `respondents` is
-   flagged, so a genuinely different table named e.g. `respondentsArchive` would red. That is the
-   deliberate direction: a false red is cleared by an allowlist entry or an inline reason and someone
-   reads it, whereas the false GREEN this replaces was the finding.
 
 ## File List
 
