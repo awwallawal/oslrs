@@ -1,6 +1,6 @@
 # Story 13.54: Make an un-guarded respondent write impossible
 
-Status: review
+Status: done
 
 <!-- EMERGENT 2026-08-07 from the 13-53 adversarial review (T1) + adjudication (T3). Raised because
 the same defect has now been fixed by hand three times, and each fix protected one more caller
@@ -542,10 +542,11 @@ That is precisely how H1 survived a review that was hunting for holes.
 
 | # | item | state | evidence / trigger |
 |---|---|---|---|
-| **R1** | **AC1.5 — the guard must be proven to fail IN CI, not only locally** | ⏳ **DISCHARGE-ON-PUSH** | Locally it exits 1 on all three canaries. Only a push exercises the named CI step **and its ordering above `Lint`** — and per §2a2 "the job passed" cannot distinguish TAKEN from SKIPPED, so the ordering specifically needs a real run. Same shape 13-37 carried, for the same reason. **Discharge:** after push, confirm `lint-and-build` green AND that "Respondent-write drift guard (Story 13-54)" appears as its own executed step ABOVE "Lint" in `gh run view <id> --json jobs`. **`done` is forbidden until that is read.** |
+| **R1** | **AC1.5 — the guard must be proven to fail IN CI, not only locally** | ✅ **CLOSED 2026-08-08 — READ, not inferred** | Locally it exits 1 on all three canaries. Only a push exercises the named CI step **and its ordering above `Lint`** — and per §2a2 "the job passed" cannot distinguish TAKEN from SKIPPED, so the ordering specifically needs a real run. Same shape 13-37 carried, for the same reason. **DISCHARGED on run `31250755637`** (commit `c3e7cc0`): the job's step list reads `11 success Registry-read drift guard (Story 13-37)` · **`12 success Respondent-write drift guard (Story 13-54)`** · `13 success Lint`. So the step EXECUTED (a `success` conclusion, not `skipped`) and its ORDERING above `Lint` is proven on a real run rather than read off the YAML — which was the entire point, per §2a2: a green job cannot distinguish TAKEN from SKIPPED. E2E green on the same SHA. |
 
-⚠️ **This story stays `review`, not `done`.** R1 is open, and 13-45's guard exists to stop exactly
-that flip. Status goes to `review` deliberately — the same ruling Awwal made on 13-37.
+✅ **R1 closed 2026-08-08 on read evidence; status flipped to `done` in the same commit.** It was
+held at `review` through the push precisely so the flip would rest on the step list rather than on
+the YAML saying the step exists — the same ruling Awwal made on 13-37.
 
 ## Known limits (stated, not discovered later)
 
