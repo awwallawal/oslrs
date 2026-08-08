@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-07 (late) · **Prod deployed SHA:** `077e129` · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-08 · **Prod deployed SHA:** `077e129` (code); `main` ahead by docs-only commits · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -316,6 +316,31 @@ stays wide open. **"The warning stopped" would have been a green light over an o
   forever. Snapshot the count BEFORE deploy; the proof is a fresh boot adding **zero** to it, since
   it previously logged once per boot.
 
+### 2w. ⭐ A RECORD ABOUT THE WORK IS NOT THE WORK — check the artifact, every time
+*Added 2026-08-08. FOUR instances in a single day, which is what makes it a pattern and not a slip.*
+
+| the record said | the artifact said |
+|---|---|
+| 13-54's title: *"make an un-guarded respondent **write** impossible"* | the guard checks **creation** (D4 — caught by the author, and the reason D4 exists) |
+| sprint-status: `13-53: review` **with a `✅ CLOSED` comment appended to the same line** | my scripted flip did `.replace("backlog", …)` on a line that read `review` — a no-op, while the script `print`ed success unconditionally |
+| the story: *full suite **3646 passed***, re-verified under R-M1 | **3662** — R-M1's own correction had been applied from a pre-review run, before +16 tests |
+| the adjudication: *"written up as known limit **#6**"* | it WAS written up — but inserted 5th, and markdown renumbers, so the reference resolved to a **different limit** |
+
+None of these were lies and none were laziness. Each is a claim that was TRUE WHEN WRITTEN and quietly
+stopped being true, or a claim written from an assumption about the artifact's state.
+
+- **The cheapest possible defence: read the thing back.** Every one of the four cost seconds to catch
+  and would have cost a future reader far more. `grep` the line you just edited; `git show HEAD:<file>`
+  rather than trusting your own edit landed.
+- ⚠️ **A scripted edit MUST assert its match.** `assert old in s` before `s.replace(...)`, and never
+  `print("done")` outside the branch that did it. I applied that discipline to the story-file edits in
+  the very same script and skipped it for the one-line yaml — which is the one that broke.
+- **A recorded measurement should carry the commit it was measured at.** "3646" was correct at some
+  SHA and wrong at HEAD; with the SHA attached, staleness is visible instead of inferred.
+- **Sibling of [[pattern-ship-a-fix-that-never-fires]]**, moved up a level: there the FIX does not
+  execute; here the RECORD of the fix drifts from it. Both are found the same way — by looking at what
+  is actually there rather than what should be.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -372,8 +397,8 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
 ### Next up
 | | |
 |---|---|
-| **13-54** | ⭐ HIGHEST-EVIDENCE BACKLOG ITEM. The same bug — a respondent written outside the identity chokepoint — has now been hand-fixed THREE times (R13, R21, 13-53), each time protecting one more caller. Twice it cost a named citizen two records. CI guard + the re-runnable negative control. |
-| **13-55** | Sequence AFTER 13-54: unify the three promote-to-active paths. One code path, explicit parameters, **not** one policy. |
+| **13-55** | ⭐ **NOW THE TOP ITEM — promoted at 13-54's close, and 13-54 is the argument for it.** Unify the three promote-to-active paths: one code path, explicit parameters, **not** one policy. 13-54's known limit #6 is why this moved up — its allowlist is PER-FILE, so it would NOT have caught R21 or 13-53 (both created inside files now allow-listed). A guard cannot fix that; **fewer sanctioned creators** can, and that is this story. |
+| ~~13-54~~ | ✅ **DONE 2026-08-08.** CI guard live (step 12, above `Lint`, seen executing on a real run) + the negative control now running on every push instead of as a sentence in Completion Notes. |
 | **13-50** | `/check-registration` mints dead-end links (244 sends/month); `wizard_resume` unaudited; phantom drafts. |
 | **13-51** | Operator contact-correction UI; validate email at capture so we stop manufacturing bounces. |
 | **13-52** | Deploy resilience shipped; its TESTS were not written. |
@@ -1007,6 +1032,39 @@ then set it via the super-admin path.** His NIN is deliberately left INTACT unti
 it without a route to replace it would leave him worse off than doing nothing.
 
 ---
+
+## 7l. Session 2026-08-08 — 13-54 shipped, and a lesson about records
+
+**13-54 closed the day it was scaffolded.** The CI guard is live and the negative control now runs on
+every push rather than existing as a sentence describing something a person did once. R1 was
+discharged by **reading the step list** — `12 success Respondent-write drift guard` sitting above
+`13 success Lint` — not by the job badge, because §2a2's point is that a green job cannot distinguish
+TAKEN from SKIPPED.
+
+**The adjudication found two things the review had not.**
+
+1. **Known limit #6 — the allowlist is PER-FILE, so this guard would not have caught R21 or 13-53.**
+   Both created respondents inside files that are now allow-listed. What it prevents is a FIFTH file
+   becoming an ingestion path — genuinely the historical pattern — but that boundary was unstated,
+   and it is the same species of overclaim D4 exists to prevent. **This is why 13-55 moved to the top
+   of the queue:** a guard cannot close it; fewer sanctioned creators can.
+2. **A pre-existing test race, found by RUNNING the suite instead of reading its recorded result.**
+   `user.profile.test.ts:264` read the globally-latest `user.profile_updated` audit row with no actor
+   filter, raced by two other files that PATCH the same endpoint. Chased to a deterministic 1-in-2
+   repro rather than waved off as a flake. The test existed to show that an unscoped read is wrong and
+   was itself vulnerable to that bug from a third party.
+
+**⚠️ The durable lesson is §2w, and it cost four separate corrections in one day** — a stale suite
+figure, a board flip that silently no-op'd (mine), a title that promised more than the guard checked,
+and a `#6` cross-reference that resolved to a different item. **A record about the work is not the
+work.** Read the artifact back.
+
+**On the two-CLI workflow.** Three times today the dev CLI reported state that did not match `HEAD` —
+"there is no #6" (it was committed), the 3646 figure (stale), and "never run on a Linux runner" (R1
+was already discharged). Not carelessness: it reports from its own working memory while adjudication
+keeps pushing commits it cannot see. **Cheap fix, worth adopting: the handoff should carry a SHA
+("developed and code-reviewed at `<sha>`, tree clean"), and a returning dev should `git fetch` before
+commenting on a file's contents.** That single convention kills the whole class.
 
 ## 7k. Session 2026-08-07 (late) — 13-53 closed on a stated gap; a defect found by reading a log
 
