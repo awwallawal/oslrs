@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles, auditLogs } from '../db/schema/index.js';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
 
@@ -254,10 +254,25 @@ describe('User Profile Integration', () => {
 
       await waitFor(() => findLatestFor(otherUserId), "the interloper's audit row");
 
-      // (3) The pre-fix read — globally latest, no actor filter — now belongs to
-      // the OTHER user. This is exactly the state that reddened the old assertion.
+      // (3) The pre-fix read — latest with no ACTOR filter — now belongs to the
+      // OTHER user. This is exactly the state that reddened the old assertion.
+      //
+      // ⚠️ Scoped to the two actors THIS test created (2026-08-08). It used to be
+      // a truly global read, and was therefore vulnerable to the very bug it
+      // documents: `require-fresh-reauth.test.ts` and `security.reauth-routes.test.ts`
+      // also PATCH /users/profile, and in a parallel run either could land a row
+      // between (2) and (3) and win the `ORDER BY created_at DESC LIMIT 1`.
+      // Reproduced 1-in-2 running those three files together; it fails as a
+      // mystery ("expected <uuid> to be <uuid>") rather than as a finding.
+      //
+      // The narrowing does not soften the assertion — the point is that WITHOUT
+      // an actor filter the interloper's row outranks ours, and among these two
+      // actors that is still exactly what is being proved.
       const globalLatest = await db.query.auditLogs.findMany({
-        where: eq(auditLogs.action, 'user.profile_updated'),
+        where: and(
+          eq(auditLogs.action, 'user.profile_updated'),
+          inArray(auditLogs.actorId, [userId, otherUserId]),
+        ),
         orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
         limit: 1,
       });

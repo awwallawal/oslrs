@@ -149,6 +149,30 @@ jobs:
       - name: Registry-read drift guard (Story 13-37)
         run: pnpm --filter @oslsr/api lint:registry-read
 
+      # ── Respondent-write drift guard (Story 13-54) ────────────────────────
+      # Fails the deploy-gating job when a respondent is CREATED outside the
+      # sanctioned chokepoint. The same defect was fixed by hand three times —
+      # R13, then R21 (13-49), then 13-53 — each fix protecting one more caller
+      # rather than the class. Twice it was found only by a whole-register sweep
+      # AFTER a real citizen was already holding two records and two reference
+      # numbers, eight weeks apart. Neither was caught by review, tests or types.
+      #
+      # ⚠️ ORDER MATTERS — THIS STEP MUST STAY ABOVE "Lint", for the same reason
+      # the registry-read guard above does (Pitfall #45). The guard is also
+      # folded into the api package `lint` chain for pre-commit cover; if `Lint`
+      # ran first it would fail there and abort the job BEFORE this named step
+      # executed, burying the failure in eslint output.
+      #
+      # ⚠️ SCOPE: creation only. `update(respondents)` spans 12 files and is
+      # owned by Story 13-55 — a green here says nothing about a promote.
+      #
+      # Detector: apps/api/src/lib/respondent-write-drift.ts (unit-tested in the
+      # test-api job). Genuine exception: annotate the line with
+      # `// respondent-write-drift-ok: <reason>`, or add the file to ALLOWLIST
+      # WITH a reason.
+      - name: Respondent-write drift guard (Story 13-54)
+        run: pnpm --filter @oslsr/api lint:respondent-write
+
       - name: Lint
         run: pnpm lint
 

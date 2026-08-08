@@ -296,6 +296,15 @@ async function main(): Promise<void> {
     console.log('    --detect     read-only detector + baseline metrics (safe on prod)');
     console.log('    --two-pass   synthetic two-pass registration (test DB only; writes)');
     console.log('');
+    // Story 13-54 AC3 originally specified `--negative-control` HERE. It cannot live in a tsx
+    // script: ESM namespace exports are read-only bindings, so the promote cannot be neutered
+    // in-process ("Cannot assign to read only property … of object '[object Module]'"). It was
+    // built in vitest instead, which controls module resolution — and now runs on every push
+    // rather than when someone remembers to type a flag. Signposted so the flag named in the
+    // story does not read as missing.
+    console.log('  The NEGATIVE CONTROL is not a flag here — it runs in CI on every push:');
+    console.log('    apps/api/src/services/__tests__/nin-arrival-negative-control.integration.test.ts');
+    console.log('');
     process.exitCode = 1;
     return;
   }
