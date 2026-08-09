@@ -18,7 +18,7 @@
  *   2. Else an in-progress wizard draft keyed by the user's email → `draft`.
  *   3. Else `none`.
  */
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 import { AppError } from '@oslsr/utils';
@@ -26,6 +26,7 @@ import type { MinorGuardianResult } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { respondents, wizardDrafts, submissions, lgas, type WizardDraftData } from '../db/schema/index.js';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
+import { promoteRespondentToActive } from './respondent-identity.js';
 import { NativeFormService } from './native-form.service.js';
 import { canonicalizeLgaId } from './lga-canonical.service.js';
 import {
@@ -622,13 +623,36 @@ export class MeService {
 
     try {
     await db.transaction(async (tx) => {
-      // Status-filtered UPDATE so a concurrent promotion can't double-apply.
-      const rows = await tx
-        .update(respondents)
-        .set({ nin: args.nin, status: 'active', updatedAt: new Date() })
-        .where(and(eq(respondents.id, r.id), eq(respondents.status, 'pending_nin_capture')))
-        .returning({ id: respondents.id });
-      if (rows.length === 0) {
+      /**
+       * 13-55 — routed through THE shared promote, which also closes a defect this path had been
+       * carrying silently since 9-61.
+       *
+       * ⚠️ THIS ROUTE WAS INVISIBLE TO EVERY PROMOTE COUNT WE HAVE. It wrote
+       * `RESPONDENT_SELF_NIN_COMPLETED` and nothing else, while the other four wrote
+       * `PENDING_NIN_PROMOTED` — so `reconcile-nin-promotion-audit.ts` and 13-44's promote digest,
+       * which both filter on the latter, could never see a respondent who completed their NIN from
+       * their own dashboard. Every one of those promotes read as zero, and a zero that means "the
+       * query cannot see this" is indistinguishable from a zero that means "it did not happen"
+       * ([[pattern-monitor-measuring-something-else]]).
+       *
+       * It now writes BOTH, in one transaction. `PENDING_NIN_PROMOTED` makes the counts true;
+       * `RESPONDENT_SELF_NIN_COMPLETED` is KEPT because 9-61 shipped it and may have consumers —
+       * retiring an audit action is a data decision for its own story, not a side effect of a
+       * refactor.
+       *
+       * It also gains the `nin IS NULL` predicate (AC3.2), which this path never had: it filtered
+       * on status alone and trusted the unwritten invariant "pending implies no NIN".
+       */
+      const promoted = await promoteRespondentToActive(tx, {
+        respondentId: r.id,
+        nin: args.nin,
+        trigger: 'authenticated_dashboard_nin',
+        allowedStatuses: ['pending_nin_capture'],
+        actorId: args.userId,
+        ipAddress: args.ipAddress,
+        userAgent: args.userAgent,
+      });
+      if (!promoted) {
         throw new AppError('NIN_ALREADY_COMPLETED', 'Your NIN was already completed.', 409);
       }
       await AuditService.logActionTx(tx, {

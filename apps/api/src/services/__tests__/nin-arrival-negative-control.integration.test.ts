@@ -28,7 +28,7 @@
  * make bypasses impossible. Ruled out on principle, not cost.
  *
  * ── The three constraints this file is built to satisfy ─────────────────────
- * 1. Integration against the REAL test DB. Only `promoteRespondentWithArrivingNin`
+ * 1. Integration against the REAL test DB. Only `promoteRespondentToActive`
  *    is mocked — the ingestion path (`findOrCreateRespondent`), the identity
  *    finder and Postgres all stay real.
  * 2. ⚠️ ASSERT ON ROWS, NEVER ON MOCK CALLS. The property under test is "remove
@@ -61,12 +61,26 @@ import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { respondents } from '../../db/schema/respondents.js';
 
+/**
+ * ── TARGET CHANGED 2026-08-08 (Story 13-55) ─────────────────────────────────
+ * This used to neuter `promoteRespondentWithArrivingNin`. 13-55 consolidated the
+ * five hand-written promotes behind `promoteRespondentToActive`, and production
+ * now calls THAT — so mocking the primitive stopped neutering anything: the
+ * shared entry calls the primitive through an intra-module binding, which an ESM
+ * namespace mock cannot intercept.
+ *
+ * ⚠️ WORTH RECORDING: this file FAILED when 13-55 moved the seam. It did not
+ * quietly keep passing while controlling nothing — which is the failure mode a
+ * negative control is most vulnerable to, and the one that would have made it
+ * worthless. It fails closed. The target below is the sanctioned entry point,
+ * i.e. the thing whose removal actually reintroduces the 13-53 defect.
+ */
 vi.mock('../respondent-identity.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../respondent-identity.js')>();
-  return { ...actual, promoteRespondentWithArrivingNin: vi.fn(actual.promoteRespondentWithArrivingNin) };
+  return { ...actual, promoteRespondentToActive: vi.fn(actual.promoteRespondentToActive) };
 });
 
-const { promoteRespondentWithArrivingNin } = await import('../respondent-identity.js');
+const { promoteRespondentToActive } = await import('../respondent-identity.js');
 const { SubmissionProcessingService } = await import('../submission-processing.service.js');
 const actualIdentity =
   await vi.importActual<typeof import('../respondent-identity.js')>('../respondent-identity.js');
@@ -155,8 +169,8 @@ afterAll(async () => {
 
 /** Run the journey with the real promote in place. */
 async function runGuarded(phoneNumber: string): Promise<Array<{ id: string; referenceCode: string | null }>> {
-  vi.mocked(promoteRespondentWithArrivingNin).mockImplementation(
-    actualIdentity.promoteRespondentWithArrivingNin,
+  vi.mocked(promoteRespondentToActive).mockImplementation(
+    actualIdentity.promoteRespondentToActive,
   );
   await twoPassJourney(phoneNumber, nin());
   return rowsOnPhone(phoneNumber);
@@ -168,7 +182,7 @@ async function runGuarded(phoneNumber: string): Promise<Array<{ id: string; refe
  * precisely what happened to OSL-2026-56C9PG / OSL-2026-W1PS38 on 2026-08-07.
  */
 async function runNeutered(phoneNumber: string): Promise<Array<{ id: string; referenceCode: string | null }>> {
-  vi.mocked(promoteRespondentWithArrivingNin).mockResolvedValue(null);
+  vi.mocked(promoteRespondentToActive).mockResolvedValue(null);
   await twoPassJourney(phoneNumber, nin());
   return rowsOnPhone(phoneNumber);
 }
@@ -178,8 +192,8 @@ describe('NIN-arrival seam — negative control (13-54 AC3)', () => {
     const phoneNumber = phone();
     const guardedNin = nin();
 
-    vi.mocked(promoteRespondentWithArrivingNin).mockImplementation(
-      actualIdentity.promoteRespondentWithArrivingNin,
+    vi.mocked(promoteRespondentToActive).mockImplementation(
+      actualIdentity.promoteRespondentToActive,
     );
 
     await twoPassJourney(phoneNumber, guardedNin);

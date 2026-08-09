@@ -17,8 +17,8 @@ let respondentsStore: Record<string, Record<string, unknown>> = {};
 
 const mockQueueFraudDetection = vi.fn();
 
-vi.mock('../../db/index.js', () => ({
-  db: {
+vi.mock('../../db/index.js', () => {
+  const db: Record<string, unknown> = {
     query: {
       submissions: {
         findFirst: vi.fn(({ where }: { where?: unknown }) => {
@@ -96,8 +96,16 @@ vi.mock('../../db/index.js', () => ({
     // Inline closure so it survives `vi.resetAllMocks()` in beforeEach (which
     // would otherwise wipe a `vi.fn()` mockResolvedValue back to undefined).
     execute: () => Promise.resolve({ rows: [] }),
-  },
-}));
+  };
+  /**
+   * Story 13-55 — the race-resolution merge now runs inside `db.transaction(...)` so its
+   * `pending_nin.promoted` audit row is written by the same transaction that fills the NIN
+   * (previously the UPDATE ran on bare `db` and the audit was an un-awaitable `logAction`).
+   * The callback receives the SAME object, so `tx.execute` keeps the behaviour above.
+   */
+  db.transaction = async (cb: (tx: unknown) => Promise<unknown>) => cb(db);
+  return { db };
+});
 
 // AuditService is fire-and-forget (Story 9-12 PENDING_NIN_CREATED / PENDING_NIN_PROMOTED)
 // and would otherwise try to write the audit hash chain. Stub it.

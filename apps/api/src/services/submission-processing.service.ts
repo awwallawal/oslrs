@@ -18,7 +18,7 @@ import type { NativeFormSchema, Section, Question } from '@oslsr/types';
 import type { RespondentMetadata, RespondentSource, RespondentStatus } from '../db/schema/respondents.js';
 import {
   findRespondentByIdentity,
-  promoteRespondentWithArrivingNin,
+  promoteRespondentToActive,
 } from './respondent-identity.js';
 import {
   normaliseFullName,
@@ -657,26 +657,52 @@ export class SubmissionProcessingService {
               'Creating a distinct record.',
           );
         } else if (ninlessSelf) {
-          const promotedByIdentity = await promoteRespondentWithArrivingNin(db, {
-            respondentId: ninlessSelf.id,
-            nin: data.nin,
-            // Review H2 — the sibling merge below folds guardian consent into the promoted row
-            // (9-55 M1, added because a promote path was dropping it). This is the same promote
-            // on a fuzzier key; dropping it here would reproduce the bug that fix closed.
-            guardian: data.guardian ?? null,
-            // Review M1 — only minted when the held record actually lacks a code, so the normal
-            // path costs nothing. Without it a promoted respondent can end up with no reference
-            // code at all and the caller echoes `undefined`.
-            fallbackReferenceCode:
-              ninlessSelf.referenceCode ??
-              data.referenceCode ??
-              (await ReferenceCodeService.generateUnique(db)),
-            // Review L3 — NULL-fill only; COALESCE cannot overwrite what the record already holds.
-            // The LGA goes through the SAME canonicaliser the insert below uses (`:813`) — filling
-            // a blank with a raw client string would poison the row the fresh-insert path protects.
-            dateOfBirth: canonical.dateOfBirth ?? null,
-            lgaId: (await canonicalizeLgaId(data.lgaId)) ?? null,
-          });
+          /**
+           * 13-55 — the promote and its audit row are now ONE call inside ONE transaction.
+           *
+           * Before, the UPDATE ran on bare `db` and the audit was a fire-and-forget
+           * `AuditService.logAction` immediately after it: a `void`-returning call that cannot be
+           * awaited, so the promote could commit with its evidentiary row still in flight. The
+           * 13-49 AC14 batch proved that is not theoretical — 10 promotions, 9 audit rows.
+           *
+           * ⚠️ KEEPS `nin_arrival_identity_match`. The wizard took the new `nin_arrival_wizard`
+           * label instead, because THIS path's rows already exist on production and renaming a
+           * trigger orphans every historical row that carries it.
+           */
+          // Resolved BEFORE the transaction opens. Both are independent reads, and doing them
+          // inside would hold the promote's transaction open across unrelated round-trips.
+          // Review M1 — only minted when the held record actually lacks a code, so the normal
+          // path costs nothing. Without it a promoted respondent can end up with no reference
+          // code at all and the caller echoes `undefined`.
+          const promoteReferenceCode =
+            ninlessSelf.referenceCode ??
+            data.referenceCode ??
+            (await ReferenceCodeService.generateUnique(db));
+          // Review L3 — the LGA goes through the SAME canonicaliser the insert below uses
+          // (`:813`); filling a blank with a raw client string would poison the row the
+          // fresh-insert path protects.
+          const promoteLgaId = (await canonicalizeLgaId(data.lgaId)) ?? null;
+          // Captured out here because TypeScript's narrowing of `data.nin` (a mutable property)
+          // does not survive into the transaction callback below.
+          const arrivingNin = data.nin;
+
+          const promotedByIdentity = await db.transaction(async (tx) =>
+            promoteRespondentToActive(tx, {
+              respondentId: ninlessSelf.id,
+              nin: arrivingNin,
+              trigger: 'nin_arrival_identity_match',
+              actorId: submitterId ?? null,
+              auditDetails: { source },
+              // Review H2 — the sibling merge below folds guardian consent into the promoted row
+              // (9-55 M1, added because a promote path was dropping it). This is the same promote
+              // on a fuzzier key; dropping it here would reproduce the bug that fix closed.
+              guardian: data.guardian ?? null,
+              fallbackReferenceCode: promoteReferenceCode,
+              // NULL-fill only; COALESCE cannot overwrite what the record already holds.
+              dateOfBirth: canonical.dateOfBirth ?? null,
+              lgaId: promoteLgaId,
+            }),
+          );
           if (promotedByIdentity) {
             logger.info(
               {
@@ -690,13 +716,9 @@ export class SubmissionProcessingService {
                 'tokens — filling the NIN in place and keeping the ORIGINAL reference code ' +
                 'instead of creating a second record (13-53)',
             );
-            AuditService.logAction({
-              actorId: submitterId ?? null,
-              action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-              targetResource: AUDIT_TARGETS.RESPONDENT,
-              targetId: promotedByIdentity.id,
-              details: { trigger: 'nin_arrival_identity_match', source },
-            });
+            // 13-55 — the PENDING_NIN_PROMOTED row used to be written here with the un-awaitable
+            // `logAction`. It is now written by the promote itself, inside the promote's own
+            // transaction, so it cannot be lost.
             /**
              * Review H2 — the 9-55 AC5 evidentiary record, on THIS promote too.
              *
@@ -980,53 +1002,60 @@ export class SubmissionProcessingService {
       return null;
     }
 
-    // Story 9-55 (M1 review fix) — when the promoted submission carries captured
-    // guardian consent (under-15 registrant), fold it into the existing row's
-    // metadata as part of the same atomic UPDATE so the merge path persists the
-    // consent record exactly like the fresh-insert path. JSONB `||` preserves
-    // any sibling metadata keys (e.g. defer_reason_nin) while setting `guardian`.
-    const guardianMetadataSet = guardian
-      ? sql`,
-        "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ guardian })}::jsonb`
-      : sql``;
+    /**
+     * 13-55 — MATCH, THEN PROMOTE THROUGH THE SHARED IMPLEMENTATION.
+     *
+     * This was one statement: an `UPDATE … WHERE id = (SELECT … LIMIT 1)` that matched and promoted
+     * together. It is now a locked SELECT followed by `promoteRespondentToActive`, inside one
+     * transaction, and the concurrency guarantee is UNCHANGED-OR-STRONGER:
+     *
+     *   • `FOR UPDATE` takes a row lock, so a second arrival BLOCKS on the same candidate rather
+     *     than racing it. The old form relied on the UPDATE's own re-assertion of
+     *     `status/nin IS NULL` to make the loser see zero rows; that re-assertion is still there,
+     *     inside the shared promote, so the loser branch is preserved exactly.
+     *   • The identity key is UNTOUCHED — STRICT `lower(first)+lower(last)+phone`. 13-53 explains
+     *     at `:616-627` why the fuzzy key sits BESIDE this one rather than replacing it, and
+     *     loosening this to the token key would merge a household on a shared handset.
+     *
+     * What it gains: the `PENDING_NIN_PROMOTED` row is written by the same transaction that fills
+     * the NIN. Before, this path had NO transaction at all and its audit was a fire-and-forget
+     * `logAction` — the widest instance of the gap 13-55 exists to close.
+     */
+    const promotedId = await db.transaction(async (tx) => {
+      const found = await tx.execute(sql`
+        SELECT "id" FROM "respondents"
+        WHERE "status" = 'pending_nin_capture'
+          AND "nin" IS NULL
+          AND lower("first_name") = lower(${firstName})
+          AND lower("last_name") = lower(${lastName})
+          AND "phone_number" = ${phoneNumber}
+        LIMIT 1
+        FOR UPDATE
+      `);
+      const candidateId = (found as unknown as { rows?: Array<{ id: string }> } | undefined)
+        ?.rows?.[0]?.id;
+      if (!candidateId) return null;
 
-    // Atomic match-and-promote. The UPDATE itself enforces the
-    // status/nin-IS-NULL guard so concurrent attempts cannot both succeed.
-    const result = await db.execute(sql`
-      UPDATE "respondents"
-      SET
-        "nin" = ${nin},
-        "status" = 'active',
-        "updated_at" = now()${guardianMetadataSet}
-      WHERE
-        "id" = (
-          SELECT "id" FROM "respondents"
-          WHERE "status" = 'pending_nin_capture'
-            AND "nin" IS NULL
-            AND lower("first_name") = lower(${firstName})
-            AND lower("last_name") = lower(${lastName})
-            AND "phone_number" = ${phoneNumber}
-          LIMIT 1
-        )
-        AND "status" = 'pending_nin_capture'
-        AND "nin" IS NULL
-      RETURNING "id"
-    `);
+      const promoted = await promoteRespondentToActive(tx, {
+        respondentId: candidateId,
+        nin,
+        trigger: 'race_resolution_merge',
+        // Narrower than the NIN-arrival default, and deliberately so: this route's whole premise
+        // is "a row that is still waiting for its NIN". `nin_unavailable` / `active` belong to the
+        // arrival journey, not to this one.
+        allowedStatuses: ['pending_nin_capture'],
+        actorId: submitterId ?? null,
+        auditDetails: { source },
+        // Story 9-55 (M1) — fold captured guardian consent into the promoted row in the SAME
+        // statement, so the merge path persists it exactly like the fresh-insert path.
+        guardian: guardian ?? null,
+      });
+      return promoted?.id ?? null;
+    });
 
-    const rows = (result as unknown as { rows: Array<{ id: string }> }).rows;
-    if (!rows || rows.length === 0) {
+    if (!promotedId) {
       return null;
     }
-
-    const promotedId = rows[0].id;
-
-    AuditService.logAction({
-      actorId: submitterId ?? null,
-      action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-      targetResource: AUDIT_TARGETS.RESPONDENT,
-      targetId: promotedId,
-      details: { trigger: 'race_resolution_merge' },
-    });
 
     // Story 9-55 (M1 review fix) — write the NDPA consent audit on the merge
     // path too, so a minor whose NIN-completion promotes an existing pending row

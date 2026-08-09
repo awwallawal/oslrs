@@ -390,8 +390,23 @@ describe('POST /registration/complete-nin', () => {
     mockRespondentsFindFirst.mockResolvedValueOnce(null);
     mockConsumeTokenTx.mockResolvedValueOnce({ id: 'tok-4' });
     mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      /**
+       * 13-55 (AC2.3) — the promote moved from `tx.update(...).returning()` onto the shared
+       * `promoteRespondentToActive`, which issues ONE raw `tx.execute(sql UPDATE … RETURNING …)`.
+       * The double models the new call shape; `update` is kept because nothing else in this
+       * transaction uses it and removing it would be an unrelated change.
+       */
       const tx = {
-        execute: vi.fn(),
+        execute: vi.fn().mockResolvedValue({
+          rows: [
+            {
+              id: 'resp-pending',
+              reference_code: 'OSL-2026-PEND01',
+              status: 'active',
+              source: 'public',
+            },
+          ],
+        }),
         update: () => ({
           set: () => ({
             where: () => ({
@@ -411,10 +426,18 @@ describe('POST /registration/complete-nin', () => {
       source: 'public',
       alreadyPromoted: false,
     });
-    expect(mockLogAction).toHaveBeenCalledWith(
+    /**
+     * 13-55 (AC3.1) — `logActionTx`, not `logAction`. This route's audit row used to be written
+     * AFTER the transaction committed, by a `void`-returning call nobody could await: the promote
+     * could land and the evidentiary row never arrive. Asserting the transactional form is what
+     * makes "no promote without its audit" a property of the code rather than a hope.
+     */
+    expect(mockLogActionTx).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         action: 'pending_nin.promoted',
         targetId: 'resp-pending',
+        details: expect.objectContaining({ trigger: 'magic_link_complete_nin' }),
       }),
     );
   });

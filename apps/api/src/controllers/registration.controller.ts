@@ -19,7 +19,7 @@ import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../services/audit.se
 import { ReferenceCodeService } from '../services/reference-code.service.js';
 import {
   findRespondentByIdentity,
-  promoteRespondentWithArrivingNin,
+  promoteRespondentToActive,
 } from '../services/respondent-identity.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
@@ -246,25 +246,39 @@ export class RegistrationController {
           purpose: 'pending_nin_complete',
         });
 
-        // Phase 3 — promote the respondent row. UPDATE filters on the
-        // pending-NIN status so a concurrent promotion (e.g., race-resolution
-        // merge) cannot double-promote.
-        const updatedRows = await tx
-          .update(respondents)
-          .set({
-            nin,
-            status: 'active',
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(respondents.id, peeked.respondentId!),
-              eq(respondents.status, 'pending_nin_capture'),
-            ),
-          )
-          .returning({ id: respondents.id, source: respondents.source });
+        /**
+         * Phase 3 — promote via THE shared promote (13-55).
+         *
+         * This path used to carry its own `tx.update(respondents)`, one of five hand-written
+         * promotes that had drifted apart. Two things it gains by moving here, neither of which it
+         * had before:
+         *
+         *   • `nin IS NULL` in the UPDATE (AC3.2). This path filtered on STATUS alone and relied
+         *     on the unwritten invariant "pending_nin_capture implies no NIN". The invariant holds
+         *     today and was enforced nowhere, so a stale token pointing at a row that had since
+         *     gained a NIN could have overwritten a national identity number. Now the database
+         *     refuses it.
+         *   • The audit row is written INSIDE this transaction (AC3.1). It was a fire-and-forget
+         *     `AuditService.logAction` after the transaction had already committed — a `void` call
+         *     that cannot be awaited, so a promote could exist with no evidentiary trail.
+         *
+         * `allowedStatuses` stays at `pending_nin_capture` ALONE — deliberately narrower than the
+         * NIN-arrival default. A magic-link token is strong evidence, but this route exists to
+         * complete the 9-12 ladder, and widening it to `nin_unavailable` / `active` would let a
+         * stale link touch rows the ladder never issued it for. Caller knowledge, kept.
+         */
+        const promotedRow = await promoteRespondentToActive(tx, {
+          respondentId: peeked.respondentId!,
+          nin,
+          trigger: 'magic_link_complete_nin',
+          allowedStatuses: ['pending_nin_capture'],
+          actorId: peeked.userId ?? null,
+          auditDetails: { tokenId: peeked.id, email: peeked.email },
+          ipAddress: req.ip || 'unknown',
+          userAgent: req.get('user-agent') || 'unknown',
+        });
 
-        return { updatedRows };
+        return { updatedRows: promotedRow ? [promotedRow] : [] };
       });
 
       if (result.updatedRows.length === 0) {
@@ -281,19 +295,9 @@ export class RegistrationController {
         });
       }
 
-      AuditService.logAction({
-        actorId: peeked.userId ?? null,
-        action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-        targetResource: AUDIT_TARGETS.RESPONDENT,
-        targetId: peeked.respondentId,
-        details: {
-          trigger: 'magic_link_complete_nin',
-          tokenId: peeked.id,
-          email: peeked.email,
-        },
-        ipAddress: req.ip || 'unknown',
-        userAgent: req.get('user-agent') || 'unknown',
-      });
+      // 13-55 — the PENDING_NIN_PROMOTED row is now written by `promoteRespondentToActive` inside
+      // the transaction above. It used to be written HERE, after the commit, with the
+      // un-awaitable `logAction`: a promote could succeed and its audit row never land.
 
       return res.status(200).json({
         status: 'ok',
@@ -813,8 +817,24 @@ export class RegistrationController {
          * record does not, so the NIN is filled in place — and the person keeps the reference code
          * they have been holding since their first visit.
          */
+        /**
+         * Story 9-26 Part A — the canonical submissions row's identifiers.
+         *
+         * 13-55 hoisted these above the identity block. They are two `uuidv7()` calls with no
+         * dependencies, and the promote's audit row (now written inside `promoteRespondentToActive`
+         * rather than a hundred lines below) needs `submissionUid` in its details — the audit and
+         * the promote have to be in one call for the promote to be un-loseable, so the id it cites
+         * must exist by then.
+         *
+         * Story 13-27 — `newSubmissionId` is pre-generated for the same reason it always was: the
+         * marketplace worker loads the submission by its `id`, NOT by `submission_uid`, and this
+         * avoids a `.returning()` round-trip.
+         */
+        const newSubmissionUid = uuidv7();
+        const newSubmissionId = uuidv7();
+
         let identityMatch: Awaited<ReturnType<typeof findRespondentByIdentity>> = null;
-        let ninArrivalPromotion: Awaited<ReturnType<typeof promoteRespondentWithArrivingNin>> = null;
+        let ninArrivalPromotion: Awaited<ReturnType<typeof promoteRespondentToActive>> = null;
         try {
           if (ninValue === null) {
             identityMatch = await findRespondentByIdentity(tx, {
@@ -833,9 +853,27 @@ export class RegistrationController {
               // arrival, or the 9-12 ladder link landing at the same moment). Falling through to a
               // fresh insert is the safe loser-branch — the same trade `tryRaceResolutionMerge`
               // makes.
-              ninArrivalPromotion = await promoteRespondentWithArrivingNin(tx, {
+              ninArrivalPromotion = await promoteRespondentToActive(tx, {
                 respondentId: ninlessSelf.id,
                 nin: ninValue,
+                /**
+                 * 13-55 — the audit is written by the promote itself, in THIS transaction, so a
+                 * NIN cannot attach to a citizen's record without its evidentiary row. It used to
+                 * be a separate `logActionTx` a hundred lines below; that was already atomic, but
+                 * it was atomic by the good luck of sitting inside the same `db.transaction` — a
+                 * later edit moving either one would have separated them silently.
+                 *
+                 * ⚠️ `nin_arrival_wizard`, NOT `nin_arrival_identity_match`. Both this path and the
+                 * queue path wrote the latter, from different code, so the audit trail could not
+                 * say which route promoted someone — the one thing 13-53 required it always say.
+                 * The QUEUE keeps the old label because its rows already exist on prod; the wizard
+                 * takes the new one because it is the newer of the two writers.
+                 */
+                trigger: 'nin_arrival_wizard',
+                actorId: null,
+                auditDetails: { email: normalisedEmail, submissionUid: newSubmissionUid },
+                ipAddress: req.ip || 'unknown',
+                userAgent: req.get('user-agent') || 'unknown',
                 // Review H2 — a promote SKIPS the insert below, and `metadata.guardian` only ever
                 // existed in that insert's values. Without this, an under-15 returning with their
                 // NIN loses the 9-55 consent record while the audit a few dozen lines down still
@@ -943,18 +981,6 @@ export class RegistrationController {
         // first visit is exactly the harm `56C9PG` suffered.
         const effectiveReferenceCode = existingRespondent?.referenceCode ?? referenceCode;
 
-        // Story 9-26 Part A — write the canonical submissions row alongside.
-        // `processed: true` + `processedAt: now()` because wizard data is
-        // self-attested + canonical; bypass the submission-processing queue
-        // (no fraud-detection / normalisation enrichment needed). Source
-        // `'public'` matches the wizard's identity provenance + the
-        // analytics service's source filter.
-        const newSubmissionUid = uuidv7();
-        // Story 13-27 — pre-generate the submission PK (UUIDv7, the project's
-        // client-side id pattern) so the post-submission side-effects entrypoint
-        // can reference it: the marketplace worker loads the submission by its
-        // `id`, NOT by `submission_uid`. Avoids a `.returning()` round-trip.
-        const newSubmissionId = uuidv7();
         const now = new Date();
         await tx.insert(submissions).values({
           id: newSubmissionId,
@@ -1058,32 +1084,13 @@ export class RegistrationController {
         });
 
         /**
-         * 13-53 — the promote gets the SAME audit action the other two promote paths write
-         * (`magic_link_complete_nin` above, `race_resolution_merge` in the queue service), keyed
-         * by `trigger`. Deliberately not a new action: three routes to the same state should be
-         * one action with three triggers, or the audit-target drift in
-         * [[feedback_audit_target_unification]] starts over.
-         *
-         * Inside the transaction via `logActionTx` — if the audit write fails, the promote rolls
-         * back with it, and a NIN silently attached to a citizen's record with no evidentiary
-         * trail is precisely what NDPA forensics cannot have.
+         * 13-53's promote audit USED TO BE WRITTEN HERE — 13-55 moved it into
+         * `promoteRespondentToActive` itself (`:836`), so the promote and its evidentiary row are
+         * one call rather than two statements a hundred lines apart that merely happened to share
+         * a transaction. Same action, same transaction, same guarantees; the trigger changed from
+         * `nin_arrival_identity_match` to `nin_arrival_wizard` because the queue path was writing
+         * the identical label from different code.
          */
-        if (ninArrivalPromotion) {
-          await AuditService.logActionTx(tx, {
-            actorId: null,
-            action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-            targetResource: AUDIT_TARGETS.RESPONDENT,
-            targetId: ninArrivalPromotion.id,
-            details: {
-              trigger: 'nin_arrival_identity_match',
-              email: normalisedEmail,
-              referenceCode: ninArrivalPromotion.referenceCode,
-              submissionUid: newSubmissionUid,
-            },
-            ipAddress: req.ip || 'unknown',
-            userAgent: req.get('user-agent') || 'unknown',
-          });
-        }
 
         // Story 9-55 AC5 — NDPA evidentiary record of the captured guardian
         // consent, written inside the SAME transaction (hash-chain integrity:

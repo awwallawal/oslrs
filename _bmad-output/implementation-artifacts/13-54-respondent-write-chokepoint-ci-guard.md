@@ -553,6 +553,21 @@ the YAML saying the step exists — the same ruling Awwal made on 13-37.
 1. **Creation only.** `update(respondents)` spans 12 files and is unguarded — Story 13-55. Said in
    the module header, the CI comment, the failure message and the success line, because the story's
    own title promises more than the guard checks.
+
+   ⚠️ **AMENDED 2026-08-08 by Story 13-55 — THE COUNT WAS RIGHT AND THE SPELLING WAS NOT.**
+   13-55 measured both forms on the same tree. `.update(respondents)` matched **14** files — 12
+   excluding this guard's own two, so the figure above is confirmed. But **6 further files write
+   respondents through raw `UPDATE "respondents"`**, and two of them were
+   `services/respondent-identity.ts` and `services/submission-processing.service.ts` — i.e. **two
+   of the five promote-to-active paths were the raw spelling.**
+
+   So an update-guard built by mirroring this one's `.update(respondents)` detector would have been
+   blind to the exact writes 13-55 existed to consolidate: green, and wrong, in the way limit #6
+   warns about. **Any future update-guard MUST match both spellings.** 13-55's
+   `respondent-promotion-census.test.ts` does, and is the working reference.
+
+   Post-13-55 the production `.update(respondents)` count is **13** (11 excluding this guard's two):
+   `draft-adoption/promote-nin.ts` left the list when it moved onto the shared promote.
 2. **The escape-hatch lookback is 3 lines, and stops at the first line of code.** An annotation
    further above a call — or separated from it by a statement — is not honoured. It fails LOUD (the
    guard reds) rather than letting a write through, which is the safe direction. *(Amended by review
@@ -565,6 +580,16 @@ the YAML saying the step exists — the same ruling Awwal made on 13-37.
 4. **The negative control mocks one export.** It proves the promote is load-bearing on the
    `findOrCreateRespondent` path. It does not exercise `registration.controller.ts:836`, the second
    caller of the same chokepoint — that asymmetry is 13-55's territory.
+
+   ⚠️ **STILL OPEN after 13-55 — its close-out claimed this limit was discharged, and the 13-55 code
+   review (2026-08-09, finding M3) withdrew that.** 13-55 retargeted the control at the new shared
+   entry `promoteRespondentToActive` (it had failed LOUDLY when production moved, which is the right
+   failure mode), and both callers now do route through one promote. But the file still drives
+   `SubmissionProcessingService` and nothing else, so `registration.controller.ts:836` remains
+   un-exercised. **Sharing an implementation is a SOURCE fact — proven by 13-55's census test — not a
+   journey any test walks**, and this limit asks for the journey. Carried forward as part of 13-55
+   Residual R1 (with paths 1 and 2). Do not re-mark it closed without a wizard POST that drives the
+   controller caller end to end.
 5. **Rule 1 over-matches by design (review R-H1).** Any identifier CONTAINING `respondents` is
    flagged, so a genuinely different table named e.g. `respondentsArchive` would red. That is the
    deliberate direction: a false red is cleared by an allowlist entry or an inline reason and someone

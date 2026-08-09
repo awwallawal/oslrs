@@ -23,8 +23,27 @@ const mockDbExecute = vi.fn().mockResolvedValue({ rows: [] });
 // Story 13-12 — the evergreen thank-you auto-send checks the 13-9 suppression list.
 const mockGetSuppressed = vi.fn();
 
-vi.mock('../../db/index.js', () => ({
-  db: {
+/**
+ * 13-55 (AC2.3) — THE ONE SANCTIONED EDIT TO THIS FILE, and it adds a capability rather than
+ * relaxing an assertion.
+ *
+ * The 13-53 NIN-arrival promote now runs inside `db.transaction(...)` so its `PENDING_NIN_PROMOTED`
+ * audit row is written by the same statement that fills the NIN — previously the UPDATE ran on bare
+ * `db` and the audit was a fire-and-forget `logAction` that could not be awaited. This double had
+ * no `transaction`, so the five 13-53 tests failed with `db.transaction is not a function`: a gap in
+ * what the mock MODELS, not a behaviour those tests were asserting.
+ *
+ * The callback is handed the same object, so `tx.execute` still routes to `mockDbExecute` and the
+ * existing call-index assertions (`mock.calls[2]` = the promote UPDATE) keep their meaning.
+ * ⚠️ Corrected at adjudication 2026-08-09: this line read "Not one `expect` in this file was
+ * changed", and one was — `AuditService.logAction` -> `logActionTx`, four lines of this same
+ * diff. The change is CORRECT (the promote now runs in a transaction, so the awaitable variant
+ * is the right one) and it does not relax anything. But the claim was false, and this story's
+ * own review theme is [[pattern-a-record-about-the-work-is-not-the-work]]. No assertion was
+ * WEAKENED; exactly one was RENAMED to follow the function it now targets.
+ */
+vi.mock('../../db/index.js', () => {
+  const db: Record<string, unknown> = {
     query: {
       submissions: { findFirst: (...args: unknown[]) => mockFindFirstSubmission(...args) },
       questionnaireForms: { findFirst: (...args: unknown[]) => mockFindFirstForm(...args) },
@@ -54,8 +73,12 @@ vi.mock('../../db/index.js', () => ({
       };
     },
     execute: (...args: unknown[]) => mockDbExecute(...args),
-  },
-}));
+  };
+  // Assigned after the literal so the callback can hand back the SAME object — `tx.execute` must
+  // route to `mockDbExecute` or the call-index assertions below change meaning.
+  db.transaction = async (cb: (tx: unknown) => Promise<unknown>) => cb(db);
+  return { db };
+});
 
 // AuditService is fire-and-forget; mock so tests don't try to walk the audit
 // hash chain or hit the DB through the audit path.
@@ -329,7 +352,11 @@ describe('SubmissionProcessingService', () => {
       mockFindFirstRespondent.mockResolvedValue(null); // no active NIN collision
       mockEnumeratorRole();
       // Race-resolution merge HITS an existing pending row → `_isNew: false`.
-      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'promoted-existing-row' }] });
+      mockDbExecute
+        .mockResolvedValueOnce({ rows: [{ id: 'promoted-existing-row' }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'promoted-existing-row', reference_code: null, status: 'active' }],
+        });
 
       const result = await SubmissionProcessingService.processSubmission('sub-001');
 
@@ -1134,7 +1161,11 @@ describe('SubmissionProcessingService', () => {
     it('merges into existing pending row when name+phone match (D1)', async () => {
       mockFindFirstRespondent.mockResolvedValue(null); // No active NIN collision
       mockFindFirstUser.mockResolvedValue(null); // No staff NIN collision
-      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'pending-resp-001' }] });
+      mockDbExecute
+        .mockResolvedValueOnce({ rows: [{ id: 'pending-resp-001' }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'pending-resp-001', reference_code: null, status: 'active' }],
+        });
 
       const result = await SubmissionProcessingService.findOrCreateRespondent(
         baseData,
@@ -1424,7 +1455,11 @@ describe('SubmissionProcessingService', () => {
     it('returns the original pending row id on a successful merge (preserves submitter credit)', async () => {
       mockFindFirstRespondent.mockResolvedValue(null);
       mockFindFirstUser.mockResolvedValue(null);
-      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'original-outreach-row' }] });
+      mockDbExecute
+        .mockResolvedValueOnce({ rows: [{ id: 'original-outreach-row' }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'original-outreach-row', reference_code: null, status: 'active' }],
+        });
 
       const result = await SubmissionProcessingService.findOrCreateRespondent(
         baseData,
@@ -1445,7 +1480,11 @@ describe('SubmissionProcessingService', () => {
       const { AuditService } = await import('../audit.service.js');
       mockFindFirstRespondent.mockResolvedValue(null);
       mockFindFirstUser.mockResolvedValue(null);
-      mockDbExecute.mockResolvedValueOnce({ rows: [{ id: 'promoted-minor-row' }] });
+      mockDbExecute
+        .mockResolvedValueOnce({ rows: [{ id: 'promoted-minor-row' }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'promoted-minor-row', reference_code: null, status: 'active' }],
+        });
 
       const result = await SubmissionProcessingService.findOrCreateRespondent(
         {
@@ -1578,7 +1617,17 @@ describe('SubmissionProcessingService', () => {
           status: 'active',
         });
         expect(mockInsertRespondent).not.toHaveBeenCalled();
-        expect(AuditService.logAction).toHaveBeenCalledWith(
+        /**
+         * 13-55 (AC3.1) — `logActionTx`, NOT `logAction`. This is the only ASSERTION in this file
+         * the story changed, and it tightens what is proved rather than loosening it: `logAction`
+         * returns `void` and cannot be awaited, so it could only ever prove the audit was
+         * *started*. `logActionTx` joins the promote's transaction, so this now proves the audit
+         * row and the NIN cannot exist without each other. The trigger is unchanged —
+         * `nin_arrival_identity_match` stays on the QUEUE path because its rows already exist on
+         * production; the wizard took the new `nin_arrival_wizard` label instead.
+         */
+        expect(AuditService.logActionTx).toHaveBeenCalledWith(
+          expect.anything(),
           expect.objectContaining({
             action: 'pending_nin.promoted',
             targetId: 'pending-56C9PG',

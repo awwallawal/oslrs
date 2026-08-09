@@ -26,7 +26,26 @@ const { mocks } = vi.hoisted(() => ({
  * rows: `AuditService.logAction` returns `void` and cannot be awaited, so the last row of the
  * batch was still in flight when the script exited. `logActionTx` is the awaitable form.)
  */
+/**
+ * 13-55 (AC2.3) — the promote moved onto the shared `promoteRespondentToActive`, which issues one
+ * raw `tx.execute(sql UPDATE … RETURNING …)` instead of the drizzle query builder. The double now
+ * models `execute`; `update` is kept so nothing else in the transaction changes shape.
+ *
+ * `mocks.updates` still records what was written — it just records the SQL now rather than the
+ * builder's value object, so the assertions below check the same facts through the new surface.
+ */
 const txLike = {
+  execute: async (q: unknown) => {
+    mocks.updates.push({ sql: JSON.stringify(q) });
+    mocks.wheres++;
+    return {
+      rows: mocks.returning.map((r) => ({
+        id: r.id,
+        reference_code: null,
+        status: 'active',
+      })),
+    };
+  },
   update: () => ({
     set: (v: Record<string, unknown>) => ({
       where: () => ({
@@ -248,8 +267,28 @@ describe('13-49 AC14 — promoteRespondentNin', () => {
   it('sets the NIN, advances the status and writes the audit row', async () => {
     const result = await run();
     expect(result.promoted).toBe(true);
-    expect(mocks.updates[0]!.nin).toBe('27287257118');
-    expect(mocks.updates[0]!.status).toBe('active');
+    /**
+     * 13-55 (AC2.3) — same two facts, read from the SQL the shared promote issues rather than
+     * from the query builder's value object. The NIN is a bound parameter and the status is a
+     * literal in the SET list; both must be present or the promotion did not do its job.
+     */
+    const issued = String(mocks.updates[0]!.sql);
+    expect(issued).toMatch(/27287257118/);
+    // Adjudication 2026-08-09 — bound to the SET clause.
+    //
+    // A bare /'active'/ also matches the WHERE's `"status" IN (…)` list, and 'active' is itself a
+    // promotable status on the NIN-arrival route — so that assertion could pass while the SET
+    // stopped writing it. `=` disambiguates SET from IN; the WHERE uses `IN (`.
+    //
+    // ⚠️ The escaped quote is not a typo. `String(mocks.updates[0]!.sql)` does NOT render SQL — it
+    // dumps Drizzle's internal SQL object as JSON (`decoder`, `shouldInlineParams`, `queryChunks`),
+    // so the statement text arrives with its double quotes backslash-escaped. Worth knowing before
+    // trusting these matchers too far: they are asserting against a LIBRARY-INTERNAL shape, and a
+    // Drizzle upgrade that renames `queryChunks` breaks them without the promote changing at all.
+    expect(issued).toMatch(/status.{0,2} = 'active'/);
+    // …and it must still be scoped to THIS caller's narrow status, not the NIN-arrival default.
+    expect(issued).toMatch(/nin_unavailable/);
+    expect(issued).not.toMatch(/pending_nin_capture/);
     expect(mocks.audits).toHaveLength(1);
     expect(mocks.audits[0]!.action).toBe('pending_nin.promoted');
     expect((mocks.audits[0]!.details as Record<string, unknown>).trigger).toBe(

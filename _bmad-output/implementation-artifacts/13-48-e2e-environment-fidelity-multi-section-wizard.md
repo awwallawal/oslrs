@@ -58,6 +58,8 @@ assertion must be on the DRAFT ROW at the final step, not on submit.**
 
 ## Acceptance Criteria
 
+⚠️ **AC1 NOW UNBLOCKS A SECOND STORY (added 2026-08-09 at 13-55's adjudication).** 13-55's residual R1 is closed for paths 1 and 2 but could not drive **path 3 — the wizard POST at `registration.controller.ts:836`** — because no real-DB precedent exists for it: it needs a published form + questionnaire binding + draft + captcha/rate-limit bypass. That is AC1's fixture, exactly. **When you build AC1, add the wizard-promote journey too** — the marginal cost is one test on a harness that already exists, and it also closes 13-54's Known limit #4. Two stories were blocked on this one fixture; the waste would be building it twice.
+
 1. **AC1 — A representative multi-section public form exists in the test/e2e environment.** The seed
    provisions and pins a native public form with **≥3 sections** (enough that `N > 5`, i.e. past the
    bound that broke), shaped like the real Public Core: identity/demographic/livelihood groupings,

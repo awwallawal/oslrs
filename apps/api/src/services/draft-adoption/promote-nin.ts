@@ -24,10 +24,10 @@
  * Effect on the numbers: the 35 residue becomes 25, so post-adoption `nin_unavailable` is
  * 25 + 20 (D3) = 45, not 55.
  */
-import { and, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { respondents } from '../../db/schema/respondents.js';
-import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../audit.service.js';
+import { promoteRespondentToActive } from '../respondent-identity.js';
 import { ADOPTION_MARKER, NIN_PATTERN, type DraftRow, resolveDraftIdentity } from './payload.js';
 
 /** What a candidate resolves to. Every outcome is reported; none is silent. */
@@ -150,47 +150,41 @@ export async function promoteRespondentNin(args: {
   // `logActionTx` returns Promise<void> and joins our transaction, so the audit row is now both
   // awaited AND atomic with the UPDATE: no promotion can exist without its trail, and a failed
   // audit write rolls the promotion back rather than leaving a silent hole.
-  const updated = await db.transaction(async (tx) => {
-    const rows = await tx
-      .update(respondents)
-      .set({
-        nin,
-        status: 'active',
-        metadata: sql`COALESCE(${respondents.metadata}, '{}'::jsonb) || ${JSON.stringify({
-          nin_promoted_by: ADOPTION_MARKER,
-          nin_promoted_at: promotedAt.toISOString(),
-          nin_promoted_from_draft_id: draftId,
-        })}::jsonb`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(respondents.id, respondentId),
-          eq(respondents.status, 'nin_unavailable'),
-          isNull(respondents.nin),
-        ),
-      )
-      .returning({ id: respondents.id });
-
-    if (rows.length === 0) return rows;
-
-    await AuditService.logActionTx(tx, {
+  /**
+   * 13-55 — routed through THE shared promote. The UPDATE and the audit row were already in one
+   * transaction here (this path is where that lesson was learned), so what changes is not the
+   * guarantee but the number of implementations: this was one of five hand-written promotes.
+   *
+   * ⚠️ `allowedStatuses: ['nin_unavailable']` — NARROWER than every other caller, and it must stay
+   * that way. This is a batch operator path reading MONTHS-OLD drafts; letting it touch
+   * `pending_nin_capture` would let a stale draft promote a row the 9-12 ladder is actively
+   * working, behind the ladder's back. The FR21 clash pre-check above stays here too, because it
+   * reports a per-row operator finding rather than throwing — that is this caller's contract with
+   * its script, not the promote's business.
+   */
+  const updated = await db.transaction(async (tx) =>
+    promoteRespondentToActive(tx, {
+      respondentId,
+      nin,
+      trigger: 'draft_adoption_ac14',
+      allowedStatuses: ['nin_unavailable'],
       actorId: args.actorId ?? null,
-      action: AUDIT_ACTIONS.PENDING_NIN_PROMOTED,
-      targetResource: AUDIT_TARGETS.RESPONDENT,
-      targetId: respondentId,
-      details: {
-        trigger: 'draft_adoption_ac14',
+      // The 13-49 rollback key. Folded by the shared promote's JSONB `||` merge, so sibling
+      // metadata (defer_reason_nin, reminder_state, adopted_by…) survives exactly as before.
+      metadata: {
+        nin_promoted_by: ADOPTION_MARKER,
+        nin_promoted_at: promotedAt.toISOString(),
+        nin_promoted_from_draft_id: draftId,
+      },
+      auditDetails: {
         marker: ADOPTION_MARKER,
         draftId,
         note: 'NIN recovered from the respondent’s own abandoned draft — no outreach required',
       },
-    });
+    }),
+  );
 
-    return rows;
-  });
-
-  if (updated.length === 0) {
+  if (!updated) {
     return {
       respondentId,
       nin,
