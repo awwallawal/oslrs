@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-08 · **Prod deployed SHA:** `077e129` (code); `main` ahead by docs-only commits · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-09 · **Prod deployed SHA:** `22b00eb` (code); `main` ahead by docs-only commits · **Health:** https://oyoskills.com/api/v1/health
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -341,6 +341,41 @@ stopped being true, or a claim written from an assumption about the artifact's s
   execute; here the RECORD of the fix drifts from it. Both are found the same way — by looking at what
   is actually there rather than what should be.
 
+### 2x. ⭐ A WRONG FILTER FAILS PERMISSIVELY — and INFERRING IMPACT FROM STRUCTURE is how I got it wrong
+*Added 2026-08-09. Two lessons from one afternoon; the second one is mine.*
+
+**(a) A filter that is not applied returns MORE, not an error.** The registry's enumerator picker
+called `/staff?roleFilter=enumerator&pageSize=500`. The controller reads
+`{ page, limit, status, roleId, lgaId, search }` — **neither param exists**, both were discarded in
+silence, and the call returned the unfiltered user table. Combined with a service that had no role
+predicate at all, a Super Admin page listed **114 citizens by name**.
+
+- **No 400, no 404, no log.** Every symptom looked like a UI bug while the endpoint behaved exactly
+  as written. Sibling of [[pattern-ship-a-fix-that-never-fires]]: the filter was written, sent, and
+  never applied.
+- **Fix the DEFAULT, not the query string.** Excluding citizens in the service means a caller that
+  forgets cannot pull them; fixing only the caller leaves the next caller exposed.
+- **Pin the general property, not the instance:** *an unknown role name returns NOTHING rather than
+  everything.* Failing CLOSED on an unrecognised filter is the lesson; `role=enumerator` working is
+  just today's symptom.
+- ⚠️ **Assert by identity, never by count.** "Returns 3 rows" passes over the hole the moment a
+  fixture changes, and turns a leak into what looks like a pagination quirk.
+
+**(b) ⛔ I INFERRED IMPACT FROM STRUCTURE, AND I WAS WRONG — twice-stated before I checked.**
+Two `orphan_submissions` (a submission with no respondent) led me to assert that **two citizens had
+registered and been silently dropped**, and to say so repeatedly, including in a story I wrote and
+pushed. **Both were already on the register** — one had retried four hours later, the other was
+registered *twelve minutes before* her orphan row was even written.
+
+- **"A submission with no respondent" is a real anomaly. "Therefore this person is not registered" is
+  a DIFFERENT CLAIM** and needed its own query — by name and phone — which it never got.
+- The structural finding cost one query to make. The impact claim cost none, and it was the one that
+  drove urgency, a story's framing, and a proposed prod recovery.
+- **Before asserting harm to a named person, query for that person.** Row-shape anomalies describe
+  rows. People are found by name and phone.
+- The story (13-57) keeps the wrong version visible at the top with the correction, rather than being
+  quietly rewritten — a reader deserves to know the severity moved.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -375,6 +410,20 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
   has no reference code at the interview (AC4.4) AND a shared-handset registrant cannot retrieve by
   phone (H2). Closes by FIELD PROCEDURE — the slip is written later from the Sync Status list — and
   by SMS. **It must be in the enumerator briefing before anyone is sent out.**
+- 🆕 **2026-08-09 — the enumerator invite dry run found FOUR defects, none in recently-changed code.**
+  `user.create` had fired **twice ever, both super-admins, four months earlier**, and a super-admin
+  activation is `backOfficeActivation: true`, which **skips the selfie step** — so the one path never
+  travelled was the one every field officer takes. (1) Activation redirected staff to `/login`, the
+  CITIZEN page, which hard-rejects them — a dead end for 100% of new staff; (2) the selfie preview
+  was 3:4 while the capture was 16:9, so what you saw was never what was saved; (3) a failed selfie
+  is swallowed → photoless ID card (**13-60**, open); (4) the staff list returned citizens
+  (**13-61**, shipped). 1 and 2 fixed in `22b00eb`.
+  ⚠️ **The camera fix is NOT RED-verified** — proving it needs a real camera producing a real frame.
+  Verify on a phone before trusting it.
+- 🧾 **13-55 CLOSED 2026-08-09** — five hand-written promotes are now one primitive + one
+  audit-writing wrapper + three callers. Its best moment: 13-54's negative control was **re-pointed**
+  from the primitive to the wrapper, or it would have mocked a function production no longer calls
+  and passed forever. R1 path 3 handed to **13-48** (its AC1 fixture is the missing harness).
 - 💾 **SWAP ADDED 2026-08-07 — the box ran on 1967MB RAM with ZERO swap until this date.** 2GB
   `/swapfile`, `dd`-created (**not** `fallocate`, which can leave unwritten extents that `swapon`
   refuses as "holes"), fstab `sw,nofail` so a missing swapfile can never block boot, and persistence

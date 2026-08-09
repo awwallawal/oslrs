@@ -65,7 +65,21 @@ export async function fetchFormList(): Promise<FormListItem[]> {
  */
 export async function fetchEnumeratorList(): Promise<EnumeratorListItem[]> {
   try {
-    const result = await apiClient('/staff?roleFilter=enumerator&pageSize=500');
+    /*
+     * ⚠️ `role` and `limit` — NOT `roleFilter` and `pageSize` (fixed 2026-08-09).
+     *
+     * Those two names did not exist on the server. `staff.controller` reads
+     * `{ page, limit, status, roleId, lgaId, search }`, so BOTH were silently
+     * discarded and this call returned the unfiltered user table at the default
+     * page size. That is why the registry's "All Enumerators" picker listed
+     * people who are not enumerators — including citizens, because the service
+     * had no role predicate either.
+     *
+     * A wrong param name fails PERMISSIVELY here: no error, no warning, just
+     * everything. `status=active` is included so a deactivated account cannot be
+     * picked as the filter for a live registry view.
+     */
+    const result = await apiClient('/staff?role=enumerator&status=active&limit=100');
     return (result.data || []).map((s: { id: string; fullName: string }) => ({
       id: s.id,
       fullName: s.fullName,
