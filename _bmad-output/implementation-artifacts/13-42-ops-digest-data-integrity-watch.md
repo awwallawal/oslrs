@@ -248,6 +248,21 @@ This is bundled here rather than raised standalone because it is the same senten
 13-42: **turn a thing we happened to look at once into a standing signal that cannot cry wolf.** The
 difference is the input — the API's own error stream instead of a COUNT query.
 
+### AC10 — Marketplace opt-in vs card, as a PAIR (added 2026-08-09)
+
+Measured on prod 2026-08-09: **273 opted in · 224 hold a card · 49 do not.** Of those 49, **48 have no
+submission at all** (nothing to extract a profession from — correct) and one is a merge survivor whose
+`raw_data` carries no profession key. So the honest reading today is **zero extraction failures** —
+but no one could have told you that from the dashboard, because only one of the two numbers is shown.
+
+1. The digest renders `opted_in` **beside** `has_card`, never alone.
+2. Yellow only when the gap **exceeds the no-submission cohort** — i.e. someone who opted in AND has
+   answers AND has no card. That is the only shape that means extraction stopped.
+3. ⚠️ **A card count alone cannot distinguish "nobody opted in" from "extraction is broken"**, which
+   is this story's whole thesis applied to the marketplace ([[pattern-monitor-measuring-something-else]]).
+4. Precedent worth not repeating: **13-27 found 124 public opt-ins → 0 profiles**, because the wizard
+   wrote `processed: true` and bypassed the enqueue entirely. Nothing alerted then either.
+
 ## Tasks / Subtasks
 - [ ] **Task 1 — snapshot section** (AC1) — `OperationsService`: add the `dataIntegrity` gather (2–3 COUNT queries), typed in `@oslsr/types` alongside the other snapshot section types; fail-open wrapper.
 - [ ] **Task 2 — formatter + recommendation** (AC2, AC3, AC4, AC5) — `formatDataIntegrityLines()` (pure, exported for test) + the conditional recommendation push in `runOpsDigest`/the recommendation builder; MarkdownV2-escaped; document the known-safe sentinel set as a shared constant (reuse 13-41's if it lands first).

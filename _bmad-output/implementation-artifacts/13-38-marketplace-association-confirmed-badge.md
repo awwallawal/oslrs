@@ -1,4 +1,22 @@
-# Story 13-38: Marketplace card redesign + "[Association] — confirmed member" badge (two-tier trust provenance)
+# Story 13-38: Marketplace card redesign (+ business name)
+
+⚖️ **SPLIT 2026-08-09 at adjudication. THIS STORY IS NOW THE REDESIGN ONLY.**
+
+**AC1–AC4 and AC6's badge cases moved to Story 13-58** and are gated on 13-2. Measured on prod the
+same day: `imported_association` has **ZERO rows** and 13-2 is still `ready-for-dev` — so the badge
+half rendered for nobody, while **AC5/AC7 improve 224 live cards today**. Most of this story's value
+was sitting behind an import that has not started.
+
+**13-38 keeps the number** because the design file is `docs/design/marketplace-card-13-38.html`; a
+mockup named after a story that no longer owns it is precisely the record-vs-artifact drift of §2w.
+
+🆕 **AC8 (business name)** added below — Awwal, 2026-08-09.
+
+⚠️ **The card stays name-less and photo-less.** Those are LOCKED decisions (scraper defence +
+`/marketplace` browse is PUBLIC and unauthenticated — only reveal is gated), and the consent 273
+people gave names exactly three fields: *"Anonymous Skills Marketplace (Your **profession, LGA, and
+experience level** will be visible)"*. A business name is a different thing: commercial, already on
+their signboard, and volunteered for exactly this purpose.
 
 Status: ready-for-dev
 
@@ -28,6 +46,21 @@ so that **I can trust an association-vouched skilled worker — and the platform
 5. **AC5 — Marketplace card REDESIGN + badge integration (UX: Sally — Awwal 2026-07-19).** The current `WorkerCard` (`apps/web/src/features/marketplace/components/WorkerCard.tsx`) is functional but **bland** — profession title + LGA + experience + truncated bio + skill chips + a text "View Profile"; no warmth, no person, no visual trust, no imagery. **Sally redesigns the card to be inviting:** stronger visual hierarchy (lead with the person/trade), warmth (avatar / initial / trade iconography within privacy limits), legible trust signals, a real CTA — AND integrates the two-tier association badge **coherently alongside the existing `GovernmentVerifiedBadge`** (`marketplace/components/GovernmentVerifiedBadge.tsx`) so they coexist without clutter (define the badge hierarchy: government-verified vs association-confirmed vs member-verified). Legible at grid density; accessible names + contrast; tiers colour-blind-safe (not colour-only). Reuse the design system; a net-new card primitive only if the redesign warrants it (Sally's call — record it).
 6. **AC6 — Tests + green.** Unit/component tests: tier-1 renders with the association name; name-missing → graceful fallback label; tier-2 renders on member-confirmed; NO badge for non-association sources; tooltip/aria present; never emits "Verified" bare for imports. Web `tsc` + lint clean; targeted web suite green; no regression to existing marketplace cards.
 7. **AC7 — Experience-as-stat + graceful degradation.** Years-at-trade renders as a prominent stat (large tabular number + unit + label) with a ★ "seasoned" marker at ≥20 years; omitted cleanly when absent. A **sparse profile** (one skill, no bio, no association, no experience) still renders a dignified, intentional card — avatar + profession + LGA + CTA — with NO empty blocks or dangling labels. Tests cover the sparse card + the ≥20-year marker + the no-experience case.
+
+### AC8 — Show the business name when the worker gave one (added 2026-08-09)
+
+**97 respondents already answered `business_name`** (199 answered `has_business`) — measured on prod.
+It is collected, unused, and it is the name they would want an employer to see.
+
+1. Where a marketplace-visible respondent has a non-empty `business_name`, the card leads with it as
+   the identity line, with the profession beneath. No business name → the card is exactly as it is
+   today, profession-led. **Sparse-card dignity (AC7) applies: no empty slot, no dangling label.**
+2. ⚠️ **A business name is not a personal name.** It does not reopen the no-name decision, and it must
+   not be reconstructed from `firstname`/`surname` if the field is blank — a fallback that quietly
+   prints a person's name would breach the anonymity promise the consent copy makes.
+3. Trim and length-cap it; a signboard string can be long and must not break grid density.
+4. Tests: renders when present · absent → unchanged profession-led card · never falls back to a
+   person's name · long value truncates without breaking layout.
 
 ## Tasks / Subtasks
 
