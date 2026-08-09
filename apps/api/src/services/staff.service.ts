@@ -15,7 +15,7 @@ import {
   normaliseNigerianPhone,
   normaliseFullName,
 } from '../lib/normalise/index.js';
-import { eq, ilike, or, count, and, SQL, notInArray } from 'drizzle-orm';
+import { eq, ilike, or, count, and, SQL, notInArray, sql } from 'drizzle-orm';
 import { queueStaffInvitationEmail } from '../queues/email.queue.js';
 import { EmailService } from './email.service.js';
 import { TokenService } from './token.service.js';
@@ -45,8 +45,20 @@ export interface ListUsersParams {
   limit?: number;
   status?: string;
   roleId?: string;
+  /**
+   * Filter by role NAME (e.g. 'enumerator'). Added 2026-08-09 alongside `roleId`
+   * because every real caller knows the name and none of them holds the UUID —
+   * the enumerator picker was passing `roleFilter=enumerator`, a parameter that
+   * did not exist, and getting the whole user table back in silence.
+   */
+  role?: string;
   lgaId?: string;
   search?: string;
+  /**
+   * Opt IN to citizens. Defaults to false: this is the STAFF list.
+   * See the exclusion note in `listUsers` before setting it true.
+   */
+  includePublicUsers?: boolean;
 }
 
 /**
@@ -89,6 +101,38 @@ export class StaffService {
 
     // Build where conditions
     const conditions: SQL[] = [];
+
+    /*
+     * ⚠️ CITIZENS ARE NOT STAFF — excluded BY DEFAULT (2026-08-09).
+     *
+     * This list had no role predicate at all, so "the staff list" meant every row
+     * in `users`: on prod that is 114 `public_user` respondents beside 3 actual
+     * staff. It surfaced two ways at once — the Staff Management page listed
+     * citizens by name, and the registry's enumerator picker showed everybody.
+     *
+     * The exclusion is a SERVICE DEFAULT, not a corrected query string, on
+     * purpose: a caller that forgets the filter must not be able to retrieve
+     * citizen records from a staff endpoint. Opt in explicitly if a genuine
+     * all-users view is ever needed.
+     */
+    if (!params.includePublicUsers) {
+      // The subquery is written with an explicit `r` alias rather than Drizzle
+      // column objects: inside `db.query.users.findMany`, `${roles.id}` renders
+      // as `"users"."id"` (the outer relation's alias), which is a column that
+      // does not exist — caught by the test below on its first run.
+      conditions.push(
+        sql`${users.roleId} NOT IN (SELECT r.id FROM roles r WHERE r.name = 'public_user')`,
+      );
+    }
+
+    // Filter by role NAME. The alternative — making every caller resolve a UUID
+    // first — is what produced the `roleFilter=enumerator` bug: the client
+    // invented a parameter, the server ignored it, and nothing errored.
+    if (params.role) {
+      conditions.push(
+        sql`${users.roleId} IN (SELECT r.id FROM roles r WHERE r.name = ${params.role})`,
+      );
+    }
 
     if (params.status) {
       conditions.push(eq(users.status, params.status as typeof users.status.enumValues[number]));

@@ -29,7 +29,7 @@ export class StaffController {
    */
   static async list(req: Request, res: Response, next: NextFunction) {
     try {
-      const { page, limit, status, roleId, lgaId, search } = req.query;
+      const { page, limit, status, roleId, role, lgaId, search } = req.query;
 
       if (status && !VALID_STATUSES.has(status as string)) {
         throw new AppError(
@@ -44,6 +44,9 @@ export class StaffController {
         limit: limit ? Math.min(Number(limit), 100) : undefined,
         status: status as string | undefined,
         roleId: roleId as string | undefined,
+        // Role by NAME — see ListUsersParams.role. Citizens are excluded by the
+        // service default; there is deliberately no query param to include them.
+        role: role as string | undefined,
         lgaId: lgaId as string | undefined,
         search: search as string | undefined,
       });
