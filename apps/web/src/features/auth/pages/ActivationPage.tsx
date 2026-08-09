@@ -109,9 +109,18 @@ export default function ActivationPage() {
 
   const handleSuccess = () => {
     setPageState('activated');
-    // Auto-redirect after 5 seconds
+    // Auto-redirect after 5 seconds.
+    //
+    // ⚠️ /staff/login, NOT /login (fixed 2026-08-09, found by the enumerator
+    // invite dry run). Activation is STAFF-ONLY — auth.service `activateAccount`
+    // is reached only from a staff invitation token. `/login` is the CITIZEN
+    // page: it posts to `/auth/public/login`, which hard-rejects a staff user
+    // (`auth.service.ts` — `if (user.role.name !== UserRole.PUBLIC_USER) throw`).
+    // So this line delivered every newly-activated enumerator, clerk, assessor
+    // and admin to a door that refuses their credentials, on their first ever
+    // login, with nothing on screen to say where to go instead.
     redirectTimerRef.current = setTimeout(() => {
-      navigate('/login');
+      navigate('/staff/login');
     }, 5000);
   };
 
@@ -147,7 +156,7 @@ export default function ActivationPage() {
           </p>
           <div className="space-y-3">
             <Link
-              to="/login"
+              to="/staff/login"
               className="block w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
             >
               Go to Login
@@ -178,7 +187,7 @@ export default function ActivationPage() {
           </p>
           <div className="space-y-3">
             <Link
-              to="/login"
+              to="/staff/login"
               className="block w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
             >
               Go to Login
@@ -240,7 +249,7 @@ export default function ActivationPage() {
           </p>
           <div className="space-y-3">
             <Link
-              to="/login"
+              to="/staff/login"
               className="block w-full px-4 py-2 bg-success-600 hover:bg-success-700 text-white rounded-lg font-medium transition-colors"
             >
               Log In Now

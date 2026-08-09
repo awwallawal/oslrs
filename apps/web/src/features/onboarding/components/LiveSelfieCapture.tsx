@@ -119,14 +119,49 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
               audio={false}
               ref={webcamRef}
               screenshotFormat="image/jpeg"
-              videoConstraints={{ facingMode: 'user', width: { min: 640, ideal: 1280 }, height: { min: 480, ideal: 720 } }}
-              width={1280}
-              height={720}
+              /*
+               * ⚠️ PORTRAIT, to match the 3:4 preview box (fixed 2026-08-09).
+               *
+               * This used to request 1280x720 — LANDSCAPE — inside an
+               * `aspect-[3/4]` PORTRAIT container with `objectFit: 'cover'`.
+               * Cover crops to fill, so the operator saw a tight portrait of
+               * their face while `getScreenshot()` returned the FULL 16:9 frame:
+               * a wide shot with the face small and centred. **What you saw was
+               * never what was saved**, and the oval guide below aligned to the
+               * preview, so following it made the framing worse, not better.
+               *
+               * Found on prod by the enumerator invite dry run: the operator
+               * reported "the camera is not really capturing the face" and gave
+               * up — and the logs show NO `activation.selfie_processed` and NO
+               * `activation.selfie_failed`, i.e. no selfie was ever submitted.
+               * The ID card would have shipped with no photo at all.
+               *
+               * 3:4 at 960x1280 matches the container, so preview == capture and
+               * the guide means something. `ideal` (not `exact`) so a device that
+               * cannot do portrait still yields a stream rather than throwing
+               * OverconstrainedError and killing activation entirely.
+               */
+              videoConstraints={{
+                facingMode: 'user',
+                aspectRatio: 3 / 4,
+                width: { min: 480, ideal: 960 },
+                height: { min: 640, ideal: 1280 },
+              }}
+              width={960}
+              height={1280}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               data-testid="webcam-mock"
             />
-            {/* Overlay Guide */}
+            {/*
+              * Framing guide. Now that the stream is 3:4 like this box, what is
+              * inside the oval is genuinely what gets captured — before the fix
+              * this circle was decorative, inset from a preview that did not
+              * correspond to the saved frame.
+              */}
             <div className="absolute inset-0 border-2 border-white/50 rounded-full m-12 pointer-events-none" />
+            <p className="absolute bottom-3 left-0 right-0 text-center text-xs text-white/80 pointer-events-none">
+              Fill the oval with your face
+            </p>
 
             {isModelLoading && (
               <div className="absolute inset-0 flex items-center justify-center">
