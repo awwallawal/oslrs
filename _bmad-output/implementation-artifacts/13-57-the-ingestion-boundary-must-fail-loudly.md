@@ -3,8 +3,10 @@
 Status: backlog
 
 <!-- EMERGENT 2026-08-09, from the enumerator-invite dry run and the teardown that followed it.
-Raised because two citizens were found five days after their registrations were dropped — and they
-were found by accident, during unrelated cleanup, not by any alert. -->
+⚠️ THIS STORY WAS RAISED ON TWO FALSE CLAIMS AND BOTH ARE CORRECTED IN PLACE BELOW — read the two
+CORRECTION blocks before the Context. Nobody was lost, and the normaliser IS called. What survives is
+an ingestion boundary that accepts input it cannot store, fails silently, and was found only by
+accident during unrelated cleanup five days later. -->
 
 ## Story
 
@@ -71,8 +73,9 @@ Still the right fix before the jingle multiplies wizard traffic — on those mer
 
 ## Context — the two orphan submissions (impact corrected above)
 
-While tearing down a test record on 2026-08-09, an `orphan_submissions: 2` count turned out to be
-two live citizens:
+While tearing down a test record on 2026-08-09, an `orphan_submissions: 2` count turned out to be two
+submissions that never became respondents. (Both people ARE on the register via other submissions —
+see the first CORRECTION block.)
 
 | submitted | name | phone as entered | outcome |
 |---|---|---|---|
@@ -86,9 +89,10 @@ was left unprocessed, and **nothing retried, alerted, or logged an actionable er
 Three separate failures compound here, and the story fixes all three because any one alone leaves the
 hole open:
 
-1. **The input was rejected instead of normalised.** `normaliseNigerianPhone` **already exists in this
-   codebase** and is simply not called on this path — [[pattern-ship-a-fix-that-never-fires]] in its
-   purest form: the fix is written, the path does not use it.
+1. ⛔ **~~The input was rejected instead of normalised; `normaliseNigerianPhone` is not called on this
+   path.~~ FALSE — see the second CORRECTION block above.** The normaliser IS called (`:235`). It
+   returns the RAW input on `wrong_length` **by design**, and the caller writes that into a
+   CHECK-constrained column: a contract collision, not a missing call.
 2. **The failure was silent.** A submission that cannot become a respondent is the most serious thing
    this system can do to a citizen, and it produced no signal at all.
 3. **A DB CHECK constraint was the first thing to notice.** By then the person has gone.
@@ -110,13 +114,13 @@ the producer is still running, and the jingle multiplies public-wizard traffic. 
 2. `0705…`, `+234 0705…`, `234705…` and spaced variants must all resolve to one E.164 value; where
    the input genuinely cannot be canonicalised, that is an AC2 failure with a reason, not a silent
    raw write.
-2. ⚠️ **Do NOT add a client-side format gate that rejects the user's input.** A Nigerian typing
+3. ⚠️ **Do NOT add a client-side format gate that rejects the user's input.** A Nigerian typing
    `0705…` is not making a mistake — that is how the number is written everywhere locally, and
    rejecting it is exactly the friction deliberately removed from the NIN field
    ([[nin-validation-mod11-invalid]]). Accept what they type; store what the column requires.
-3. Where a number genuinely cannot be normalised (too few digits, letters), the person is told **at
+4. Where a number genuinely cannot be normalised (too few digits, letters), the person is told **at
    the point of entry**, in their own step, not after submit.
-4. **RED-verify:** feed `07051286580` and `+234 08120004038` through the real submit path and assert
+5. **RED-verify:** feed `07051286580` and `+234 08120004038` through the real submit path and assert
    ONE respondent lands with `+2347051286580` / `+2348120004038`. Neuter the normaliser call and prove
    the test reds.
 
