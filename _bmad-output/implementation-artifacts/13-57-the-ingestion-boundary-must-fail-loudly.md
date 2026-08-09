@@ -32,11 +32,38 @@ query — by name and phone — which it did not get.
 **WHAT SURVIVES, and is still worth building:**
 - A submission violating the E.164 CHECK **dies silently**, leaving an unprocessable row. True.
 - **Nothing alerts on it** — found five days later during unrelated cleanup. True.
-- `normaliseNigerianPhone` **exists and is not called on that path.** True; it cost Rosemary a
-  four-hour round trip and a second attempt.
+- ⛔ **~~`normaliseNigerianPhone` exists and is not called on that path.~~ ALSO FALSE — corrected by
+  John (PM) SCP F2, verified here.** It IS imported (`submission-processing.service.ts:25`) and called
+  (`:235`). **The real mechanism is a contract collision:** on a length mismatch
+  `lib/normalise/phone.ts` returns the RAW input by design — *"Return the canonical-attempt anyway so
+  back-fill can flag the row"* — the caller assigns it to a column carrying
+  `CHECK (phone_number ~ '^\+234\d{10}$')`, and the warning it emitted **goes nowhere.** The
+  never-lose-the-row contract and the DB CHECK are in direct opposition.
 - ⚠️ **A SECOND, independent bad shape sat in the same data:** Adekemi's `lga_id` was **`saki_west`**,
   a slug, where every other row carries a UUID. The boundary accepts at least two shapes it cannot
   store — so AC5 must check value SHAPE, not merely field presence.
+
+⚠️ **SECOND CORRECTION, SAME STORY (John/PM SCP F2 + F2b, 2026-08-09).** Two independent reviewers
+found two different false claims in this one story — I found the impact error above, John found the
+root-cause error. **A dev handed the original AC1 would have found the normaliser already wired up and
+either marked it done or flailed.**
+
+- **`+234 08120004038`** → `+234` branch → NSN 11 digits → `wrong_length` → raw value returned →
+  CHECK rejects. **This one IS the phone path.**
+- **`07051286580`** (Adekemi) → `0` branch → NSN `7051286580`, prefix `70` known → `+2347051286580`,
+  which **PASSES the CHECK**. So her insert did **not** die of phone format. ⛔ **Her failure is still
+  undiagnosed** — either that path never reaches `:235`, or it threw for another reason. (My own
+  candidate, unproven: her `lga_id` was the slug `'saki_west'` where every other row carries a UUID.)
+- 🔻 **F2b SHRINKS THIS STORY FROM A BUILD TO A WIRE-UP.** `submissions.processing_error`
+  **already exists** (`schema/submissions.ts:79`) beside `processed`/`processed_at`. It is written in
+  exactly ONE place — `webhook-ingestion.worker.ts:193` — so the **webhook** channel records its
+  failures while the human channel records neither state nor reason. It is already READ in three
+  places including an operator counter (`supervisor.controller.ts:188`):
+  `COUNT(*) FILTER (WHERE processing_error IS NOT NULL AND processed = true)`.
+  **That counter therefore cannot see a `processed = false` failure at all** — a failure counter blind
+  to failures ([[pattern-monitor-measuring-something-else]]). Column, writer pattern, reader and
+  operator surface all exist and are proven on one channel; AC2/AC3 are **channel parity**, not new
+  machinery.
 
 **WHAT DOES NOT SURVIVE: the severity.** Nobody was lost, no recovery is needed. This is friction and
 an invisible failure mode, not an emergency. **Do not open this story expecting to rescue anyone.**
@@ -74,9 +101,15 @@ the producer is still running, and the jingle multiplies public-wizard traffic. 
 
 ### AC1 — Normalise, do not reject
 
-1. Phone input on **both** the public wizard and the enumerator/clerk form is passed through the
-   EXISTING `normaliseNigerianPhone` before it reaches the respondent write. `0705…`, `+234 0705…`,
-   `234705…` and spaced variants all resolve to one E.164 value.
+1. ⛔ **REWRITTEN 2026-08-09 — the original AC1 was factually wrong.** It said the normaliser was not
+   called; it is (`submission-processing.service.ts:235`). **The defect is what it returns on
+   failure:** `phone.ts` hands back the RAW input on `wrong_length` so a back-fill can flag the row,
+   and the caller writes that straight into a CHECK-constrained column. Resolve the contradiction —
+   a value the normaliser could NOT canonicalise must never reach `respondents.phone_number`, and the
+   warning it already produces must be acted on rather than dropped.
+2. `0705…`, `+234 0705…`, `234705…` and spaced variants must all resolve to one E.164 value; where
+   the input genuinely cannot be canonicalised, that is an AC2 failure with a reason, not a silent
+   raw write.
 2. ⚠️ **Do NOT add a client-side format gate that rejects the user's input.** A Nigerian typing
    `0705…` is not making a mistake — that is how the number is written everywhere locally, and
    rejecting it is exactly the friction deliberately removed from the NIN field
