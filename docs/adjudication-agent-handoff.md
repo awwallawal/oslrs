@@ -1208,6 +1208,29 @@ Neither is near its limit when not fighting for CPU. Cause was Pitfall #37 conte
 re-run: **api 3683 / web 2854 / utils 126 / testing 64, all green.** *Intermittent ≠ environmental —
 but "I proved it in isolation" is what makes it environmental, not the word "flake".*
 
+### 🐞 FOUND IN PASSING — 13-45's residual guard cannot fire locally on the commits it polices
+
+`lint-story-residuals.ts` runs inside `@oslsr/api:lint`. The root `turbo.json` declares **no `inputs`
+for `lint`**, so turbo hashes the *package* directory — and `_bmad-output/` lives at the **repo root,
+outside `apps/api`**. Editing a story therefore does not invalidate the cache.
+
+**Measured, not inferred:** two consecutive pre-commit runs, with a story file edited in between,
+replayed the **identical hash `5ee15721e9295a66`** — `FULL TURBO`, 203ms then 119ms. The guard's
+verdict was computed against a version of the story that no longer existed.
+
+- **A guard whose cache key excludes the artefact it inspects is decorative on exactly the commits it
+  exists to police** — story-only commits. It still runs truly on a cold CI runner, which is why this
+  has never been visible.
+- Same family as **Pitfall #45** (a step ordered below a broader one never executes) and **#47** (a
+  cached task replays an older result). The new instance: **the cache key omits the input.**
+- **Run it directly whenever you touch a story ledger:**
+  `pnpm --filter @oslsr/api exec tsx scripts/lint-story-residuals.ts` — 316 stories, exit 0.
+- Fix is small but has a cost worth deciding rather than assuming: give `lint` an `inputs` list
+  including `$TURBO_ROOT$/_bmad-output/**`, which correctly invalidates the guard **and** re-runs
+  eslint over `apps/api` on every story edit. **Awwal's call — raised, not taken.**
+- ⚠️ Note the compounding: the guard also cannot see R1's `RE-HOMED` state (it matches the literal
+  token `OPEN`), so this residual is currently outside the mechanism twice over.
+
 ### Housekeeping that was actually load-bearing
 
 - **ONE worktree now.** `wt-staff` (merged, clean) and `wt-ratelimit` are gone. `wt-ratelimit` looked
