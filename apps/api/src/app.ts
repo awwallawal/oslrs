@@ -189,6 +189,28 @@ export const cspDirectives = {
       ],
       connectSrc: [
         "'self'",
+        // `data:` — added 2026-08-10, PROVEN NECESSARY BY A PROD CONSOLE TRACE, not by theory.
+        //
+        // `fetch()` of a `data:` URL is governed by connect-src, not img-src. Two paths on the
+        // staff activation / profile-completion selfie step do exactly that, and BOTH were blocked:
+        //   1. @vladmandic/human's `warmup()` fetches a built-in base64 sample JPEG. It threw, the
+        //      component's catch set `modelFailed`, and the badge read "Face detection unavailable"
+        //      on every device. The model itself loaded fine (`Human: version: 3.3.6`, WebGPU
+        //      adapter initialised) — only warmup died, and it took the whole face check with it.
+        //   2. `LiveSelfieCapture.confirm()` fetched its own `getScreenshot()` data URL to build the
+        //      File. It threw with NO try/catch, so "Use Photo" did nothing at all, silently.
+        //      Result: no enumerator could submit a selfie, therefore no ID card.
+        //
+        // Low-risk directive: `data:` in connect-src permits reading self-contained inline data and
+        // enables NO network egress. It is nothing like `data:` in script-src.
+        //
+        // ⚠️ Both call sites were ALSO fixed so neither depends on this token (LiveSelfieCapture
+        // decodes its data URL directly, and warmup is disabled). This stays because Human's
+        // internals are not ours to guarantee — belt and braces, deliberately.
+        //
+        // ⚠️ CSP is `reportOnly` outside production (see below), so this class of break CANNOT
+        // reproduce in dev, test, CI or E2E. It surfaced only on prod, in an operator's browser.
+        'data:',
         ...wsUrls,
         "https://accounts.google.com",
         "https://hcaptcha.com",

@@ -18,6 +18,7 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [modelFailed, setModelFailed] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +28,26 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         const loadPromise = (async () => {
           const humanInstance = new Human({
             modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
+            /*
+             * ⚠️ `warmup: 'none'` — DO NOT re-enable, and do not call `.warmup()` (2026-08-10).
+             *
+             * Human's warmup pre-compiles the graph by running inference on a built-in sample
+             * image which it ships as a base64 `data:` URI and fetches. `fetch()` of a `data:`
+             * URL is governed by CSP **connect-src**, which did not list `data:` — so warmup
+             * threw, the catch below set `modelFailed`, and every device showed "Face detection
+             * unavailable". Proven on prod from the console, not inferred:
+             *
+             *   Human: version: 3.3.6                       ← the model loaded FINE
+             *   Human: webgpu adapter info: {vendor:'intel'} ← backend initialised FINE
+             *   Connecting to 'data:application/octet-stream;base64,…' violates the following
+             *   Content Security Policy directive: "connect-src 'self' …"   ← only warmup died
+             *
+             * `data:` HAS since been added to connect-src, so warmup would now work. It stays
+             * off anyway: warmup buys a faster FIRST inference, and this component runs
+             * detection every 500ms, so the cost is invisible — while the dependency is a
+             * third-party fetch we cannot see or guarantee. Not worth re-taking for that.
+             */
+            warmup: 'none',
             filter: { enabled: true, equalization: false },
             face: { enabled: true, detector: { rotation: false }, mesh: { enabled: false }, iris: { enabled: false }, emotion: { enabled: false } },
             body: { enabled: false },
@@ -35,7 +56,6 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
             object: { enabled: false },
           });
           await humanInstance.load();
-          await humanInstance.warmup();
           return humanInstance;
         })();
 
@@ -91,15 +111,46 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const retake = () => {
     setCapturedImage(null);
     setFaceCount(0);
+    setCaptureError(null);
   };
 
-  const confirm = async () => {
+  /**
+   * Turn the `getScreenshot()` data URL into a File — WITHOUT `fetch()`.
+   *
+   * ⚠️ This used to be `await fetch(capturedImage)`, and it is why "Use Photo" did nothing at
+   * all on prod: `fetch()` of a `data:` URL is governed by CSP **connect-src**, which did not
+   * list `data:`. It threw, the function had no try/catch, the rejection was unhandled, and the
+   * button was inert with no message, no spinner and no log. An enumerator could not submit a
+   * selfie, so could not get an ID card — found only by an operator with devtools open.
+   *
+   * Decoding in-process removes the failure mode rather than permitting it: no network layer, no
+   * CSP surface, nothing to misconfigure. `data:` has also been added to connect-src, but this
+   * function no longer depends on it — belt and braces, deliberately.
+   */
+  const dataUrlToFile = (dataUrl: string, filename: string): File => {
+    const [header, encoded] = dataUrl.split(',');
+    if (!encoded) throw new Error('Malformed image data');
+    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
+  };
+
+  const confirm = () => {
     if (!capturedImage) return;
 
-    const res = await fetch(capturedImage);
-    const blob = await res.blob();
-    const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
-    onCapture(file);
+    // A capture step that can fail without saying so is how this cost two field-day
+    // attempts. Any throw from here is now visible to the person standing in front of it.
+    try {
+      setCaptureError(null);
+      onCapture(dataUrlToFile(capturedImage, 'selfie.jpg'));
+    } catch (e) {
+      logger.error('Failed to prepare the captured selfie:', e);
+      setCaptureError(
+        'We could not prepare your photo. Please tap Retake and try again — if it keeps failing, you can continue and add your photo later.',
+      );
+    }
   };
 
   // Face detection is available only when model loaded successfully
@@ -189,6 +240,13 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
           </>
         )}
       </div>
+
+      {/* The whole point of the 2026-08-10 fix: a failure here must be SEEN. */}
+      {captureError && (
+        <p role="alert" className="max-w-md text-center text-sm text-error-700 bg-error-50 border border-error-200 rounded-md px-3 py-2">
+          {captureError}
+        </p>
+      )}
 
       <div className="flex gap-4">
         {!capturedImage ? (
