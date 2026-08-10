@@ -89,6 +89,20 @@ call succeeds" instead of "who comes back", it would have gone green over a brok
 That distinction is only legitimate because it is written down with an owner and a trigger; left as a
 prose "Known limit", it would have become one more of the 299 unchecked boxes D4 exists to catch.
 
+⚠️ **KNOWN GAP — the 13-45 guard is NOT watching R1, and its green must not be read as approval.**
+`lint-story-residuals.ts` flags a row only when the STATE cell contains the literal token `OPEN`
+without a closure marker (`src/lib/story-residual-guard.ts:61-63`). **`RE-HOMED` is a word the guard
+has never heard of**, so this row passes silently — the guard is neither approving it nor blocking it.
+Verified by running the guard directly against this tree (316 stories, exit 0) *after* the pre-commit
+lint reported `FULL TURBO` from cache, which had scanned an older version of this file — **Pitfall #47,
+a cached gate is not a passed gate.**
+
+This row is therefore tracked by **prose and by the owner named above, not by CI**. It is exactly
+[[pattern-test-that-passes-over-a-hole]] pointed at my own edit: *would this guard fail if R1 were
+genuinely abandoned?* No. **Decide at the triage** whether the honest fix is (a) a vocabulary the guard
+recognises, or (b) the date filter leaving this ledger entirely for a story of its own — which is the
+real answer, since it is a separate defect that was never in 13-61's scope.
+
 ## Notes
 
 - Sibling of the `roleFilter`/`pageSize` class: **[[pattern-ship-a-fix-that-never-fires]] applied to a
