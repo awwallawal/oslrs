@@ -1,6 +1,7 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-09 · **Prod deployed SHA:** `22b00eb` (code); `main` ahead by docs-only commits · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-10 · **Prod deployed SHA:** `189bbe2` · **`main` == `origin/main`, tree clean, ONE worktree** · **Health:** https://oyoskills.com/api/v1/health
+⚠️ **This SHA is self-staling metadata — D6 says delete it and it has now been wrong THREE times. Verify, never trust:** `ssh root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'`
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
@@ -376,6 +377,43 @@ registered *twelve minutes before* her orphan row was even written.
 - The story (13-57) keeps the wrong version visible at the top with the correction, rather than being
   quietly rewritten — a reader deserves to know the severity moved.
 
+### 2y. ⭐ COMMITTED IS NOT SHIPPED — and a destructive command needs its blast radius read first
+*Added 2026-08-10. Both cost this session hours; the second nearly cost the working tree.*
+
+**(a) Five states, and `done` requires the last two: committed → pushed → CI-green → deployed →
+verified.** 13-61 read `done` / "SHIPPED" in the story file, `sprint-status.yaml` and §3 of this doc
+for 24 hours while its commit sat unpushed — prod was unchanged and a Super Admin page was still
+enumerating 120 citizens by name. Every instance of the word "shipped" that has drifted on this
+project meant *committed*.
+
+- **The check is one command and it is not optional at close-out:** `git status -sb | head -1` must
+  read `## main...origin/main` with **no `[ahead N]`**. Then the VPS SHA. Then the behaviour.
+- **Never conclude a push succeeded from an exit code you piped.** `git push … | tail` returns
+  *tail's* status; a red pre-push gate reports exit 0. → [[feedback-never-pipe-a-push-to-tail]]
+- **Verify the deploy by BEHAVIOUR on production rows, not by the SHA.** 13-61's close-out is the
+  worked example: the deployed `staff.service.ts` grepped **on the VPS**, then the predicate run
+  against the live table (124 users → 4 returned), then the fail-closed property (unknown role → 0
+  rows) confirmed against real data rather than a fixture. A SHA proves a checkout, nothing more.
+
+**(b) ⛔ Before running anything destructive, ask what it can REACH — not what you aimed it at.**
+`robocopy <empty> <dir> /MIR` was aimed at a leftover worktree and deleted **1,574 tracked files from
+the main repo plus every `node_modules`**, because `/MIR` follows NTFS junctions by default and pnpm
+links workspace `node_modules` with junctions. It ran *while the pre-push suite was executing*, and
+surfaced as **31 test files unable to load `@aws-sdk/client-s3`** — indistinguishable from a
+dependency problem.
+
+- **Never `/MIR` without `/XJ` near this repo.** `Remove-Item -LiteralPath <p> -Recurse -Force` is the
+  tool. → [[pitfall-robocopy-mir-follows-pnpm-junctions]]
+- **A syntactically perfect command is not a safe one.** Nothing static could catch this; the danger
+  was entirely in what the filesystem linked to.
+- **Recovery is cheap IFF everything is committed** — `git restore .` + `pnpm install`. So the real
+  rule is upstream: **commit before you clean up.**
+- **Then enumerate what git CANNOT restore and check each**: `.env` (this repo has exactly one, at
+  root — `apps/web/vite.config.ts` sets `envDir: '../../'`), and the Docker DBs (named volume
+  `docker_postgres_data_dev`, outside the repo — it survived). Do not assume; look.
+- Sibling of §2a2's family: the *symptom* pointed at dependencies while the *cause* was elsewhere
+  entirely. When a failure appears in code you did not touch, suspect the environment you did.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -417,7 +455,10 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
   CITIZEN page, which hard-rejects them — a dead end for 100% of new staff; (2) the selfie preview
   was 3:4 while the capture was 16:9, so what you saw was never what was saved; (3) a failed selfie
   is swallowed → photoless ID card (**13-60**, open); (4) the staff list returned citizens
-  (**13-61**, shipped). 1 and 2 fixed in `22b00eb`.
+  (**13-61** — ✅ **DEPLOYED `189bbe2` 2026-08-10 and verified on prod: 124 users, 120 of them
+  citizens, staff list now returns 4; an unknown role name returns 0**). 1 and 2 fixed in `22b00eb`.
+  ⚠️ **13-61 read `done` / "SHIPPED" for 24 hours while its commit sat UNPUSHED on local `main`** —
+  the fix was protecting nobody. See §7m.
   ⚠️ **The camera fix is NOT RED-verified** — proving it needs a real camera producing a real frame.
   Verify on a phone before trusting it.
 - 🧾 **13-55 CLOSED 2026-08-09** — five hand-written promotes are now one primitive + one
@@ -444,14 +485,28 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
   tree means nothing is in flight (§0/§1).
 
 ### Next up
+
+⛔ **DO NOT PICK FROM THIS TABLE UNTIL THE §6 RULING IS MADE.** The ordering below is no longer the
+adjudication agent's to set: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-09-portfolio-triage.md`
+(John/PM) measured **64 open stories across 6 simultaneously-`in-progress` epics** and its **§5.0
+PRE-FIELD CHECKLIST explicitly precedes everything here**. Awwal's ruling on SCP §6 — *which structural
+track leads, and which epics are parked* — decides the rest. Read the SCP first.
+
+**⚠️ Its own §7.4 invalidation risk has FIRED:** 13-61 was added and closed after the SCP was written,
+so `done` moved 254 → 255 and **every count in SCP §2 must be re-derived before any triage verdict.**
+
 | | |
 |---|---|
-| **13-55** | ⭐ **NOW THE TOP ITEM — promoted at 13-54's close, and 13-54 is the argument for it.** Unify the three promote-to-active paths: one code path, explicit parameters, **not** one policy. 13-54's known limit #6 is why this moved up — its allowlist is PER-FILE, so it would NOT have caught R21 or 13-53 (both created inside files now allow-listed). A guard cannot fix that; **fewer sanctioned creators** can, and that is this story. |
-| ~~13-54~~ | ✅ **DONE 2026-08-08.** CI guard live (step 12, above `Lint`, seen executing on a real run) + the negative control now running on every push instead of as a sentence in Completion Notes. |
-| **13-50** | `/check-registration` mints dead-end links (244 sends/month); `wizard_resume` unaudited; phantom drafts. |
-| **13-51** | Operator contact-correction UI; validate email at capture so we stop manufacturing bounces. |
-| **13-52** | Deploy resilience shipped; its TESTS were not written. |
-| **13-42** | AC7 hotfixed; **AC8** (bounce line misdirects) + **AC9** (nobody reads the API's stderr — the IPv6 bypass sat there 4 days) + AC1-6 remain. |
+| **SCP §5.0 — 0** | ⭐ **THE ACTUAL TOP ITEM.** Hand over `admin@oyoskills.com` (MFA reset + rename) and walk the export end to end from it. **This IS the client deliverable**; the account already exists (SCP §8.4), so provisioning cost is zero. |
+| **SCP §5.0 — 1** | Run the fraud-detection count query (SCP F7) and prepare one sentence for an **empty Audit Queue**. The queue `INNER JOIN`s on `enumerator_id`, so **the whole public channel is structurally invisible to it** — and that is where the jingle sends everyone. Narrative fix, free now, expensive live. |
+| **13-57** | ⭐ Channel parity: a terminal state + `processing_error` on the `public`/`enumerator`/`clerk` failure path. **SCP F5 re-homes this as 9-26's missing half** — 9-26's invariant is directional (respondent ⇒ submission); this is the inverse. ⚠️ **Severity was CORRECTED — nobody was lost** (§2x(b)). |
+| **13-46** | Burst readiness / send caps / registration throttle. **Awwal's instinct said this was next; the SCP demotes it to §5.0 item 3** — correct, since the jingle is what makes it urgent and the jingle is not fired yet. |
+| **13-59 / 13-60** | Activation leaves something in the person's hands; a failed selfie is not swallowed. Field-day dignity items — enumerators hit these first. |
+| **Field-readiness** | 🆕 **Prod holds exactly ONE active enumerator account (`Lawal Kolade`).** No field officers provisioned. Found while verifying 13-61 on 2026-08-10. |
+| ~~13-55~~ | ✅ **DONE 2026-08-09.** Five promote implementations → one primitive + one audit-writing wrapper + three callers. *(This row read "NOW THE TOP ITEM" for a day after the story closed — §2w, caught 2026-08-10.)* |
+| ~~13-54~~ | ✅ **DONE 2026-08-08.** CI guard live (step 12, above `Lint`, seen executing on a real run) + the negative control now running on every push. |
+| ~~13-61~~ | ✅ **DONE + DEPLOYED `189bbe2` 2026-08-10.** Verified on prod data, not on a SHA. |
+| **13-50 / 13-51 / 13-52 / 13-42** | Unchanged and still real, but **all four are Pass-1 triage candidates** — do not start one before the SCP ruling. 13-42's AC9 (nobody reads the API's stderr) is the one with a proven cost: the IPv6 bypass sat in that log for 4 days. |
 | Operator | SMS list (§7g, minus Sakirat — reachable again). Confirm the Resend plan. R8 briefing. |
 
 ## 3-old2. Current state (2026-08-06) — superseded by §3 above
@@ -642,6 +697,24 @@ accept them as permanently pending. Other useful `metadata` keys on these rows: 
 - The stale `re-engagement-campaign-launch.md` was superseded by 13-24's §2; follow 13-24.
 
 ## 5. Backlog you'll likely adjudicate next
+
+> 🗂️ **THIS SECTION IS SUPERSEDED AS AN ORDERING — read the SCP first.**
+> **`_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-09-portfolio-triage.md`** (John/PM,
+> 2026-08-09) is the current authority on what to pick up. It measured **64 open stories across 6
+> simultaneously-`in-progress` epics**, and its **§5.0 pre-field checklist precedes every item below**.
+> *(This pointer is SCP §7.3 step 4, deliberately deferred until after the `fix/staff-role-filter`
+> merge to avoid a collision — the merge landed in `7e64074`, so it is discharged here.)*
+>
+> Its headline findings, because they change what these rows mean: **F5** — 13-57 is not a launch
+> story, it is 9-26's missing half (9-26's invariant is *directional*: respondent ⇒ submission; the
+> two orphans are the inverse). **F7** — the Assessor can list/open/read/export the registry, so the
+> client deliverable HOLDS; what does not hold is the Audit Queue, which `INNER JOIN`s on
+> `enumerator_id` and is therefore **structurally blind to the entire public channel**. **F4** — every
+> deferred structural epic sheds symptom stories into Epic 13, which is why Epic 13 has 59.
+>
+> ⚠️ **Its own §7.4 invalidation risk has FIRED:** 13-61 was added and closed after it was written
+> (`done` 254 → 255), so **every count in SCP §2 must be re-derived before any triage verdict.**
+> ⏳ **Blocked on Awwal's ruling at SCP §6** — which structural track leads and which epics are parked.
 
 **🔥 THE ONE THAT MATTERS — 13-49 (`ready-for-dev`, LAUNCH-SEQUENCED, do BEFORE the blast):** draft-adoption
 programme. 292 abandoned drafts hold 37 answer keys / 214 with answers / 203 consented. Cohorts **D1 adopt
@@ -1082,6 +1155,73 @@ it without a route to replace it would leave him worse off than doing nothing.
 
 ---
 
+## 7m. Session 2026-08-10 — the fix that was "shipped" and wasn't, and a command that ate the repo
+
+**One deploy, two self-inflicted incidents, and the doc caught failing its own §2w check.**
+
+### 13-61 was `done` for 24 hours while protecting nobody
+
+The staff-list hotfix was committed, merged and marked `done` / "SHIPPED" in the story file,
+`sprint-status.yaml` **and** §3 of this doc — and the commit sat **unpushed on local `main`**. Prod was
+`0ab4574`; a Super Admin page was still enumerating citizens by name the whole time. The header of this
+doc said *"`main` ahead by docs-only commits"* while `0ed20c9` was three source files and a test.
+
+**The vocabulary is the fix: committed → pushed → CI-green → deployed → verified. `done` requires the
+last two.** Both times the word "shipped" drifted, it meant *committed*. Now deployed at `189bbe2` and
+verified against production rows — 124 users, 120 of them citizens, the staff list returns **4**, an
+unknown role name returns **0**. Not a SHA; the behaviour.
+
+### ⛔ `robocopy /MIR` deleted 1,574 tracked files out of the main working tree
+
+`git worktree remove` deregistered both worktrees but could not delete their directories
+(`Directory not empty`, `Filename too long`). Reaching for `robocopy <empty> <target> /MIR` to force it
+was the mistake: **`/MIR` follows NTFS junctions by default, and pnpm links workspace `node_modules`
+with junctions.** It walked out of the worktree into `C:\Users\DELL\Desktop\oslrs` and mirror-deleted
+1,574 tracked files plus every `node_modules` — *while the pre-push suite was running against them.*
+
+The tell was misleading in the most expensive way: the suite reported **31 test files failing to load
+`@aws-sdk/client-s3`**, which reads exactly like a dependency problem. It was the deletion in progress.
+
+- **Recovery was cheap only because everything was committed:** `git restore .` returned all 1,574,
+  then `pnpm install`. **Check the un-restorable set explicitly**: root `.env` survived (this repo has
+  ONE, `vite.config.ts` sets `envDir: '../../'`), and the DBs live in the named volume
+  `docker_postgres_data_dev` **outside** the repo — dev DB still 499,305 respondents, `app_test` intact.
+- **Rule: never `/MIR` without `/XJ` anywhere near this repo.** Use `Remove-Item -LiteralPath -Recurse
+  -Force`. → [[pitfall-robocopy-mir-follows-pnpm-junctions]]
+- **Kill it the instant a build starts failing on missing packages** — damage is proportional to runtime.
+
+### A push that "succeeded" with exit 0 had actually failed
+
+`git push origin main | tail -40` returns **tail's** exit status. The harness reported *exit code 0*
+and it was relayed to Awwal as a success; the push had died on `husky - pre-push script failed`.
+**Verify a push by its effect — `git status -sb` must show no `[ahead N]` — never by its exit code.**
+→ [[feedback-never-pipe-a-push-to-tail]]. Same family as §2a2: a green that measured the wrong thing.
+
+### The one flake that was genuinely a flake — and was still chased
+
+Two web files failed the gate: `a3-eslint-policy` (timeout 30s) and `route-resolution.integration`
+(timeout 10s). Both are **timeouts, never assertion failures**, and `route-resolution` touches
+`/login`, which `9cd6a18` had deliberately changed — so it was not waved off.
+**Run in isolation: 59 tests, 18.4s — a3 took 3.9s of its 30s, route-resolution 5.6s of its 10s.**
+Neither is near its limit when not fighting for CPU. Cause was Pitfall #37 contention on a
+**cold `node_modules` I had just recreated** (`import 302s`, `environment 534s` of a 659s run). Warm
+re-run: **api 3683 / web 2854 / utils 126 / testing 64, all green.** *Intermittent ≠ environmental —
+but "I proved it in isolation" is what makes it environmental, not the word "flake".*
+
+### Housekeeping that was actually load-bearing
+
+- **ONE worktree now.** `wt-staff` (merged, clean) and `wt-ratelimit` are gone. `wt-ratelimit` looked
+  live — three *staged* files — but was at an ancestor of `main` carrying the **pre-fix** limiter with
+  the IPv6 bypass still in it. Strictly superseded; diff parked in scratch. Awwal's standing rule:
+  **main is the tree; branch only on need.**
+- **This doc failed its own §2w check.** "Next up" still read *"13-55 — NOW THE TOP ITEM"* eighteen
+  lines below §3 saying 13-55 was CLOSED. Fixed, and the row now records that it drifted.
+- **Two §8 triggers have fired and nobody noticed** — which is itself the invisible-debt failure §2a0
+  exists to catch, happening *inside* §8. **D6** (drop the self-staling prod SHA): wrong on 07-26,
+  07-30 and again today — and it was gated behind D5 for no reason, since deleting a line needs no
+  script. **D8** (cap §7 at two sessions): §7 now holds **12 entries and 135KB**, well past its ~10
+  trigger. Both marked in §8.
+
 ## 7l. Session 2026-08-08 — 13-54 shipped, and a lesson about records
 
 **13-54 closed the day it was scaffolded.** The CI guard is live and the negative control now runs on
@@ -1314,9 +1454,9 @@ this session applied to this list. Nothing here blocks the blast; §4 holds the 
 | D3 | **Story 13-45 — CI guard**: fail when a story reads `Status: done` while its ledger holds an OPEN/DISCHARGE-ON-PUSH row. | Without a guard, D1 is a convention — and conventions produced the 201. Needs a RED-failing canary, so it is real dev work. Sibling of 13-41/13-37. **⚠️ It is the THIRD consumer of the shared CI-guard toolkit 13-41 extracts** (`apps/api/src/lib/ci-guard/` — file walk, path rules, allowlist, escape hatch, hit record, message skeleton, runner factory, AST source model), so it should be built ON that toolkit, never as a fourth copy of 13-37's plumbing. It is also a named blocking step in `lint-and-build`, so it inherits **Pitfall #45**: the step must sit ABOVE `Lint`, and 13-41's AC6 ordering-assertion test must be extended to cover it. | ~~After D1+D2 exist and one story has used the ledger for real.~~ **D1 now exists and 13-37 has used it for real** — so the remaining gates are D2 (the parse) and, critically, **13-41 landing the toolkit**. Do not start 13-45 before 13-41 is `done`. |
 | D4 | **Triage the blind spot**: ⚠️ **RE-MEASURED 2026-07-31: 198 `done` stories / 299 unchecked boxes / 61 stories affected** (the 58/201 estimate came from a three-story spot-check). Most are litter — accepted-by-design notes, parked options, dead commit-hygiene reminders — which IS the problem: **real items are indistinguishable from noise.** WORKED EXAMPLE: `13-9` L1 correctly diagnosed AND prescribed the fix for the 13-47 production defect a month early, sat unchecked in a `done` story, and was only rediscovered from prod data. Original text: Start with the launch-adjacent set (13-24, 13-19, 13-34, 13-21, 13-23, 13-27, 11-2, 13-16) and mark the OSV cluster (13-31/13-32/sec-1/sec-4, ~27 hits) as **managed-elsewhere** — `osv-scanner.toml` + the blocking gate already is their ledger. | The two launch-gating items in §4 came out of a 3-story spot-check. The rest is unmeasured. | Post-blast, or immediately if anything in §4's list turns out to have siblings. |
 | D5 | **Make §0 a script** (`scripts/adjudicate-coldstart.sh`): the five checks + prod registry baseline + pinned form, one screen. | A prose command block rots invisibly — §0's `git rev-parse --short A B` silently broke on git 2.52 and cost a session four commands to diagnose. A script fails loudly. | Next time a §0 command misbehaves, or with D2. |
-| D6 | **Drop the prod SHA from this doc's header.** | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD) and again on 2026-07-30. Let D5's script report ground truth instead. | Do with D5. |
+| D6 | 🔔 **TRIGGER FIRED — 3rd time, 2026-08-10. DO THIS NEXT SESSION.** **Drop the prod SHA from this doc's header.** | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD), again on 2026-07-30, and again on 2026-08-09 — where it also asserted *"`main` ahead by docs-only commits"* while an undeployed **code** fix sat on main for 24 hours (§7m). ~~Let D5's script report ground truth instead.~~ | ~~Do with D5.~~ **UNGATED 2026-08-10 — this was wrongly blocked on D5: deleting a line needs no script.** Replace the SHA with the one-line `ssh … git rev-parse --short HEAD` (already added to the header as an interim). |
 | D7 | **§5 needs a designated next pick**, one line, pointing at `[[next-story-sequence-post-11-2]]`. | Four stories with no ordering means every cold start re-litigates the choice. | Next cold start that has to choose. |
-| D8 | **Cap §7 at the last two sessions**, archiving older arcs to a dated `docs/session-*.md`. | This doc is growing unbounded; `MEMORY.md` already blew its size budget for exactly this reason. | When §7 passes ~10 entries. |
+| D8 | 🔔 **TRIGGER FIRED — measured 2026-08-10: §7 holds 13 entries / the doc is ~140KB / 1,400+ lines.** **Cap §7 at the last two sessions**, archiving older arcs to a dated `docs/session-*.md`. | This doc is growing unbounded; `MEMORY.md` already blew its size budget for exactly this reason. **A cold-start doc nobody can read in one sitting stops being a cold-start doc** — and the trigger passing unnoticed is itself the invisible-debt failure §2a0 exists to catch, happening inside §8. | ~~When §7 passes ~10 entries.~~ **NOW.** Keep §7m + §7l; archive §7 → §7k to `docs/session-2026-07-to-08.md` and leave one pointer line. |
 | D9 | ✅ **WORKED EXAMPLE EXISTS (2026-07-30) — copy the block, don't reword it.** **§2j verdict format** — a fixed closing block (verdict / RED-verify evidence / File-List reconciliation / deploy SHA). First use: `13-37-…-ci-guard.md` → `## Closing verdict`. Note what it does when the story is NOT closed: the verdict line reads *"NOT CLOSED — `review`, closing on push"* with the reason, and **deploy SHA is left explicitly `⏳ PENDING`** with the rule written into the block itself — *until that line carries a real SHA, `Status:` must not read `done`*. A block that can only be filled in at close-out gets filled in from memory; one that is filled in at `review` and carries its own hold condition cannot silently go stale. | 13-36's close-out was hand-synced across five places (story body, Change Log, sprint-status, MEMORY, this doc) and the disproven claim survived in three of them. | ~~Do with D1 — same problem, same fix.~~ **DONE, with D1, on 13-37.** Remaining: add it to the story template, and use it at 13-37's actual push (fill the SHA + discharge R1) so the format is proven through a real close, not only a real hold. |
 | D10 | **Memory file `pattern-unexplained-rate-is-unmeasured`**, alongside `[[pattern-ship-a-fix-that-never-fires]]` and `[[pattern-flaky-test-hiding-a-prod-bug]]`. | The playbook only helps whoever opens it; memory files surface automatically in any future session. | Next memory write. |
 | D11 | ✅ **RESOLVED 2026-07-31; DIRECT PATH DIAGNOSED + HALF-FIXED 2026-08-01.** Both ends were finally MEASURED instead of argued about, and they fail for *different* reasons: **client** `tailscale netcheck` → `UDP: false`, no STUN endpoint, no DERP reply (a mobile link — and note netcheck probes Tailscale's OWN servers, so no VPS firewall rule can cause this); **VPS** → `UDP: true`, public endpoint `159.89.146.93:44949`, SFO 3.3ms, i.e. perfectly healthy. So the outage was client-side, BUT Awwal was right that the firewall independently blocked the DIRECT path: `ufw` allowed only OpenSSH/80/443 — **no UDP at all** — while `tailscaled` binds `--port=41641` (pinned in `/etc/default/tailscaled`). ✅ **Fixed the half we control:** `ufw allow 41641/udp` added (additive only; SSH verified alive immediately after). ⚠️ **STILL OPEN — only Awwal can do it:** if the DigitalOcean CLOUD firewall restricts inbound to ~22 IPs, it drops UDP 41641 *before* ufw ever sees it, so a matching inbound rule must be added in the DO control panel. Even then, direct needs a client network that permits UDP. ⚠️ **My original advice in this row — "get a direct WireGuard path up" — was never measured and was NOT achievable as stated;** same error shape as AJ-1, a plausible fix aimed at the wrong layer. | **Verification no longer depends on any of this:** the `Prod Verify (read-only)` workflow runs every mandatory pre-blast check over the GitHub→VPS SSH path. |
