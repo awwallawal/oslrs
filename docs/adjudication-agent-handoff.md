@@ -492,8 +492,10 @@ adjudication agent's to set: `_bmad-output/planning-artifacts/sprint-change-prop
 PRE-FIELD CHECKLIST explicitly precedes everything here**. Awwal's ruling on SCP §6 — *which structural
 track leads, and which epics are parked* — decides the rest. Read the SCP first.
 
-**⚠️ Its own §7.4 invalidation risk has FIRED:** 13-61 was added and closed after the SCP was written,
-so `done` moved 254 → 255 and **every count in SCP §2 must be re-derived before any triage verdict.**
+**✅ Its §7.4 invalidation risk fired and was DISCHARGED (re-measured 2026-08-10, main `2d9bc1e`):**
+13-61 was added *and* closed in the same commit, so it never entered the open set. `done` moved
+254 → 255 while **the open count held at exactly 64** (74 not-done/not-superseded − 10 `epic-*`
+roll-up rows) and **Epic 13 held at 21**. **The SCP's §2 numbers stand — triage may proceed on them.**
 
 | | |
 |---|---|
@@ -712,8 +714,9 @@ accept them as permanently pending. Other useful `metadata` keys on these rows: 
 > `enumerator_id` and is therefore **structurally blind to the entire public channel**. **F4** — every
 > deferred structural epic sheds symptom stories into Epic 13, which is why Epic 13 has 59.
 >
-> ⚠️ **Its own §7.4 invalidation risk has FIRED:** 13-61 was added and closed after it was written
-> (`done` 254 → 255), so **every count in SCP §2 must be re-derived before any triage verdict.**
+> ✅ **§7.4 fired and was DISCHARGED (re-measured 2026-08-10 at `2d9bc1e`):** 13-61 was added *and*
+> closed in one commit, so it never joined the open set — **64 open stories, Epic 13 at 21, unchanged.**
+> The SCP's §2 numbers stand.
 > ⏳ **Blocked on Awwal's ruling at SCP §6** — which structural track leads and which epics are parked.
 
 **🔥 THE ONE THAT MATTERS — 13-49 (`ready-for-dev`, LAUNCH-SEQUENCED, do BEFORE the blast):** draft-adoption
