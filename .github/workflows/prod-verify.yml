@@ -33,6 +33,20 @@ on:
         description: 'Optional: a positive-control address to check for ledger/suppression rows (e.g. lawalkolade+radio4@gmail.com)'
         required: false
         default: ''
+  # DAILY, for `edge-freshness` only (the SSH job below is dispatch-gated).
+  #
+  # A dispatch-only gate is a gate nobody pulls — pattern-ship-a-fix-that-never-fires,
+  # this project's top defect class, and it would be self-inflicted here: the incident
+  # this job exists to catch ran for SIX DAYS with CI green, the right VPS SHA and a
+  # 200 health check. Nobody would have thought to press the button, because every
+  # signal already said fine.
+  #
+  # NOT triggered on deploy completion, deliberately: the edge needs a moment to
+  # settle after a publish, so a post-deploy run would red intermittently — and a
+  # gate that cries wolf gets muted, which is worse than a daily one. Daily bounds
+  # the same freeze to <24h instead of 6 days.
+  schedule:
+    - cron: '17 6 * * *'
 
 concurrency:
   group: prod-verify
@@ -41,6 +55,9 @@ concurrency:
 jobs:
   verify:
     name: Read-only prod verification
+    # Dispatch-only: the daily schedule exists for `edge-freshness`, not to SSH into
+    # prod and run psql every morning.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -398,3 +415,81 @@ jobs:
             echo "=============================================================="
             echo "All queries ran with default_transaction_read_only=on."
             echo "=============================================================="
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DOES THE DEPLOY ACTUALLY REACH A RETURNING USER? (added 2026-08-10)
+  #
+  # INCIDENT that produced this job: `/sw.js` was served from the Cloudflare edge
+  # with `Cache-Control: public, max-age=31536000, immutable`, `Age` 6.4 days. That
+  # stale service worker precached `wizard.api-Dj_u-AzN.js`, a chunk the current
+  # build had replaced, so Workbox's install threw `bad-precaching-response`, the
+  # new worker never activated, and EVERY RETURNING VISITOR STAYED ON THE 4 AUGUST
+  # BUNDLE for six days. Two web fixes (the camera aspect fix and the staff-list
+  # picker fix) shipped green and reached nobody.
+  #
+  # ⚠️ THIS JOB RUNS ON THE GITHUB RUNNER, NOT OVER SSH — DELIBERATELY.
+  # The `verify` job above SSHes to the VPS, so a curl from there hits the ORIGIN.
+  # The origin was healthy throughout this incident: 253 precache entries, 0 missing
+  # on disk. An origin-side check would have been GREEN for all six days while users
+  # got a frozen app — pattern-monitor-measuring-something-else. The only honest
+  # vantage point is the public edge, which is what a real user gets.
+  #
+  # It asserts the THING, not a proxy for it: not "is the header right", but "can a
+  # browser that fetches this worker actually install it".
+  # ─────────────────────────────────────────────────────────────────────────────
+  edge-freshness:
+    name: Edge — sw.js is fresh and its precache resolves
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: sw.js must not be cached long-term at the edge
+        run: |
+          set -euo pipefail
+          hdr=$(curl -fsSI https://oyoskills.com/sw.js)
+          echo "$hdr"
+          cc=$(printf '%s' "$hdr" | tr -d '\r' | grep -i '^cache-control:' | cut -d' ' -f2- || true)
+          age=$(printf '%s' "$hdr" | tr -d '\r' | grep -i '^age:' | cut -d' ' -f2- || echo 0)
+          echo "--- Cache-Control: ${cc:-<none>} | Age: ${age:-0}"
+
+          # A service worker script cached long-term cannot update itself. `immutable`
+          # is the worst case: the browser will not even revalidate.
+          if printf '%s' "$cc" | grep -qi 'immutable'; then
+            echo "::error::/sw.js is served 'immutable' — a frozen service worker. Users cannot receive deploys."
+            exit 1
+          fi
+          maxage=$(printf '%s' "$cc" | grep -oiE 'max-age=[0-9]+' | cut -d= -f2 || echo 0)
+          if [ "${maxage:-0}" -gt 300 ]; then
+            echo "::error::/sw.js max-age=${maxage} (>300s). Long-lived SW caching is what froze the app on 2026-08-10."
+            exit 1
+          fi
+
+      - name: Every asset the SERVED sw.js precaches must resolve
+        run: |
+          set -euo pipefail
+          # Read the worker the EDGE hands out, not the one on disk. The whole
+          # incident was a divergence between those two.
+          curl -fsS https://oyoskills.com/sw.js \
+            | grep -oE 'assets/[A-Za-z0-9._-]+\.(js|css)' \
+            | sort -u > /tmp/precache.txt
+          total=$(wc -l < /tmp/precache.txt)
+          echo "precache entries advertised by the served sw.js: $total"
+          if [ "$total" -eq 0 ]; then
+            echo "::error::Parsed 0 precache entries — the parser no longer matches the manifest. \
+          A check that silently measures nothing is worse than no check; fix the parser, do not delete the gate."
+            exit 1
+          fi
+
+          # HEAD every one. A single 404 fails Workbox's install atomically, so
+          # sampling would under-report: one bad entry breaks the whole worker.
+          xargs -P 8 -I{} sh -c \
+            'code=$(curl -s -o /dev/null -w "%{http_code}" "https://oyoskills.com/{}"); \
+             [ "$code" = "200" ] || echo "{} -> $code"' \
+            < /tmp/precache.txt > /tmp/bad.txt || true
+
+          if [ -s /tmp/bad.txt ]; then
+            echo "::error::The served service worker precaches assets that do not resolve. \
+          Its install will throw bad-precaching-response and NO returning user will receive this or any later deploy:"
+            cat /tmp/bad.txt
+            exit 1
+          fi
+          echo "OK — all $total precache entries resolve. A returning browser can install this worker."
