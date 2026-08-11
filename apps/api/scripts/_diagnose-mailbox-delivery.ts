@@ -126,7 +126,11 @@ async function main(): Promise<number> {
       line(`  ⚠️  SUPPRESSED — reason='${r.reason}' at ${r.suppressedAt?.toISOString?.() ?? '?'}`);
     }
     line('');
-    line('  NOTE: this list gates the BLAST scripts (getSuppressedEmails). Transactional mail');
+    // ⚠️ Do not name the shared suppression-read helper in this string. `blast-dedupe-inheritance`
+    // greps script source for it and strips COMMENTS but not STRING LITERALS, so a message that
+    // mentions it reads as a call and fails the guard. (This script never calls it — it queries
+    // `emailSuppressions` directly, which is correct for a single-address diagnostic.)
+    line('  NOTE: this list gates the BLAST cohort filter. Transactional mail');
     line('  — magic-link, password reset, activation — is NOT gated by it, which is why a');
     line('  suppressed address kept receiving mail on 2026-08-09. So this send will very likely');
     line('  still go out. That is informative, not a mistake: it measures gate C.');

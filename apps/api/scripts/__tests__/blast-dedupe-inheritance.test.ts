@@ -55,7 +55,19 @@ function read(file: string): string {
   return fs.readFileSync(path.join(SCRIPTS_DIR, file), 'utf8');
 }
 
-/** Comments explaining the OLD pattern are fine; only real code counts as an offence. */
+/**
+ * Comments explaining the OLD pattern are fine; only real code counts as an offence.
+ *
+ * ⚠️ KNOWN GAP (recorded 2026-08-11, after a real false positive): this strips COMMENTS but not
+ * STRING LITERALS. A script whose operator-facing MESSAGE names the helper — without importing or
+ * calling it — is flagged as an offender. `_diagnose-mailbox-delivery.ts` tripped exactly that way
+ * and was fixed by rewording the message, NOT by an allowlist entry: allowlisting a file that does
+ * not actually violate the rule would have made this list lie about what it sanctions.
+ *
+ * The precise check would key on an IMPORT or a CALL rather than on source text — the same lesson
+ * as [[pattern-census-counts-sites-not-callers]]. Left as text-matching deliberately: the stricter
+ * version is a change to a working guard, and this note is cheaper than a wrong one.
+ */
 function code(file: string): string {
   return read(file)
     .replace(/\/\*[\s\S]*?\*\//g, '')
