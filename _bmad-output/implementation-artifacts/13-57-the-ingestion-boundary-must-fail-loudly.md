@@ -3,8 +3,12 @@
 Status: backlog
 
 <!-- EMERGENT 2026-08-09, from the enumerator-invite dry run and the teardown that followed it.
-⚠️ THIS STORY WAS RAISED ON TWO FALSE CLAIMS AND BOTH ARE CORRECTED IN PLACE BELOW — read the two
-CORRECTION blocks before the Context. Nobody was lost, and the normaliser IS called. What survives is
+⚠️ THIS STORY HAS NOW BEEN CORRECTED THREE TIMES, BY THREE DIFFERENT READERS, AND EVERY CORRECTION IS
+IN PLACE BELOW — read them before the Context. (1) the IMPACT claim: nobody was lost. (2) the ROOT
+CAUSE: the normaliser IS called. (3) 2026-08-11, SCP §10.4: the `lga_id` "slug vs UUID" premise is
+false — all 325 respondents carry a slug.
+⛔ ALL THREE ARE THE SAME CLASS: a claim about how bad it is, written without the query that would
+have sized it. A fourth reader should run the query first. Nobody was lost, and the normaliser IS called. What survives is
 an ingestion boundary that accepts input it cannot store, fails silently, and was found only by
 accident during unrelated cleanup five days later. -->
 
@@ -41,9 +45,15 @@ query — by name and phone — which it did not get.
   back-fill can flag the row"* — the caller assigns it to a column carrying
   `CHECK (phone_number ~ '^\+234\d{10}$')`, and the warning it emitted **goes nowhere.** The
   never-lose-the-row contract and the DB CHECK are in direct opposition.
-- ⚠️ **A SECOND, independent bad shape sat in the same data:** Adekemi's `lga_id` was **`saki_west`**,
+- ⛔ ~~**A SECOND, independent bad shape sat in the same data:** Adekemi's `lga_id` was **`saki_west`**,
   a slug, where every other row carries a UUID. The boundary accepts at least two shapes it cannot
-  store — so AC5 must check value SHAPE, not merely field presence.
+  store.~~ **FALSE — struck 2026-08-11 (SCP §10.4, THIRD correction to this story).** Measured:
+  `SELECT count(*) FILTER (WHERE lga_id::text !~ '^[0-9a-f]{8}-') , count(*) FROM respondents;`
+  → **325 / 325. Every respondent carries a slug `lga_id`. `saki_west` is the NORMAL format**, and
+  there is no second bad shape. **AC5's instruction survives on its own merits — check value SHAPE,
+  not field presence — but the evidence quoted for it does not.**
+  ⚠️ Three corrections, one class every time: **a claim about how bad it is, made without the query
+  that would have sized it.** Run the query before writing the sentence.
 
 ⚠️ **SECOND CORRECTION, SAME STORY (John/PM SCP F2 + F2b, 2026-08-09).** Two independent reviewers
 found two different false claims in this one story — I found the impact error above, John found the
@@ -54,8 +64,10 @@ either marked it done or flailed.**
   CHECK rejects. **This one IS the phone path.**
 - **`07051286580`** (Adekemi) → `0` branch → NSN `7051286580`, prefix `70` known → `+2347051286580`,
   which **PASSES the CHECK**. So her insert did **not** die of phone format. ⛔ **Her failure is still
-  undiagnosed** — either that path never reaches `:235`, or it threw for another reason. (My own
-  candidate, unproven: her `lga_id` was the slug `'saki_west'` where every other row carries a UUID.)
+  undiagnosed** — either that path never reaches `:235`, or it threw for another reason. (~~My own
+  candidate, unproven: her `lga_id` was the slug `'saki_west'` where every other row carries a UUID.~~
+  ⛔ **That candidate is DEAD — all 325 respondents carry a slug `lga_id`; see the strike above and
+  SCP §10.4. Her failure has no candidate cause at all now, which is the honest state.**)
 - 🔻 **F2b SHRINKS THIS STORY FROM A BUILD TO A WIRE-UP.** `submissions.processing_error`
   **already exists** (`schema/submissions.ts:79`) beside `processed`/`processed_at`. It is written in
   exactly ONE place — `webhook-ingestion.worker.ts:193` — so the **webhook** channel records its

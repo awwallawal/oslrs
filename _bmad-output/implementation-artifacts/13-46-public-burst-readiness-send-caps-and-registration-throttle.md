@@ -244,7 +244,28 @@ Story 13-1 shipped it. Nothing in this story asks for it to be added.
    a signal-manufacturing risk the moment the question is made mandatory — which is an OPEN DECISION,
    see below. Worth de-biasing regardless (AC10).
 
-## ⚖️ OPEN DECISION (Awwal's, NOT presumed by this story): make the acquisition question mandatory?
+## ⚖️ ✅ RULED 2026-08-11 (Awwal): the acquisition question stays OPTIONAL
+
+> **THE RULING — do NOT make it blocking-required.** Ship **AC10** (a real `— Select —` placeholder,
+> an explicit *"Prefer not to say"*, de-biased ordering) **plus one non-blocking prompt on submit**
+> when nothing is selected. The prompt **never blocks the submit**, so 13-1's recorded guardrail
+> (*prominence ≠ mandatory*, `Step5ReviewAndSave.tsx:211-214`, `attribution.ts:7`) survives intact and
+> this is **not** a reversal.
+>
+> **This ruling closes the item that was blocking this story's own dev.** It matches the SM
+> recommendation below, and the reasoning that carried it was the middle two rows of the table:
+> the question sits at **the most expensive point in the funnel** — the last screen before the
+> registration number, after a 10–15 minute wizard, on a phone-first radio audience — and **a forced
+> choice with Radio in first position manufactures the very signal the jingle is meant to measure.**
+> A mandatory field would have bought a 100% denominator by corrupting the numerator.
+>
+> ⚠️ **AC10 and the nudge are ONE deliverable, not two.** AC10 alone recovers the *denominator* but not
+> the *response rate*; shipping it without the nudge satisfies the letter of this ruling and misses its
+> point. Recorded as a reopen trigger in SCP §10.14.
+>
+> Full ruling set for this session, and the seven other decisions put alongside it: **SCP §10.14.**
+
+*(Original framing preserved below — it is the reasoning that produced the ruling.)*
 
 **Not an AC. Recorded so it is decided deliberately rather than drifted into.**
 
