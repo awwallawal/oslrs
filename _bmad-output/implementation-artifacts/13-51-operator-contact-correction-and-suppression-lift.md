@@ -127,3 +127,45 @@ So the CLI path is done. **What is missing is everything around it.**
   it.** That is precisely why it must be traceable.
 - Sibling of [[pattern-monitor-measuring-something-else]]: a suppression list is a monitor that
   changes system behaviour and reports to nobody.
+
+## ➕ ADDED 2026-08-11 (John/PM) — the send category vocabulary has no word for an operator reply
+
+**Found by using it.** The two individual registration-number replies sent from `admin@oyoskills.com`
+on 2026-08-11 (Jamiu §10.8, Juliet §11.4) were counted at the 9-63 chokepoint as **`category=other`**.
+They are the first sends of their kind and the vocabulary has no bucket for them, so the ops digest
+cannot tell an operator reply to a named citizen from an unclassified stray.
+
+### 1. Add the bucket — the override already exists, the word does not
+
+`NotificationMeter.recordEmailSend` already accepts an explicit `category` override
+(`notification-meter.service.ts:183`), so the caller *could* have declared itself. It could not:
+`NotificationCategory` (`notification-category.ts:15-32`) has no member for this.
+
+- Add **`operator-reply`** to `NotificationCategory`.
+- Add a rule to `classifyEmailSubject` ordered with the other specifics — the current subject is
+  `You are registered — Oyo State Livelihood and Skills Registry (OSL-…)`.
+- Have `_ops-send-registration-number-reply.ts` pass it **explicitly** rather than relying on a
+  substring match. A script that knows its own bucket should say so; matching its own subject line is
+  a coupling that breaks the first time someone edits the copy.
+
+### 2. ⚠️ THE BIGGER HALF — `other` is silent, so a MISSING bucket looks like a DELIBERATE one
+
+`classifyEmailSubject` is a substring cascade that **always returns something**: an unmatched subject
+falls to `'other'` with no error, no warning and no log. So:
+
+- **A brand-new send type is indistinguishable from a send legitimately bucketed `other`.** Nobody
+  learns that the vocabulary has fallen behind the code — which is exactly what happened here, and it
+  was noticed only because a human read one line of script output.
+- This is [[pattern-monitor-measuring-something-else]] in the counter itself: it reports a category
+  for every send, and one of the categories means *"I did not recognise this."*
+
+**What to do:** make the fallback observable, not louder-for-its-own-sake. A WARN log naming the
+unmatched subject, and/or an `other` line in the ops digest, so a *rising* `other` count is a signal
+that a send type exists with no bucket. ⚠️ Do **not** make it throw — a classifier that can fail a
+send would let a taxonomy gap block a citizen's email, which is far worse than a miscounted one.
+
+### 3. Scope note
+
+This is vocabulary + observability, **not** a change to what gets sent or to whom. It sits with 13-51
+because 13-51 already owns the operator-contact surface these replies belong to, and because the
+bounce-severity work in this story touches the same event/counting path.

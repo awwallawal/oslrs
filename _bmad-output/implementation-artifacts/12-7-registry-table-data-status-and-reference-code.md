@@ -147,3 +147,53 @@ Per-row `data_status` is **derived on the API side by consuming 9-59's `deriveDa
 |---|---|
 | 2026-06-16 | Story authored by Bob (SM) via *create-story for Epic 12 (Dashboard System Refresh, Tier 1). 7 ACs: per-row `data_status` via 9-59's `deriveDataStatus`, `reference_code` column, server-side `data_status` filter, two new table columns + filter control, migration of the registry table from the hand-rolled `<table>` to the 12-1 `DataTable` primitive (behaviour-preserving), and tests incl. a raw-SQL real-DB drift smoke. HARD deps: 12-1 (DataTable) + 9-59 (taxonomy). Status → ready-for-dev. |
 | 2026-07-19 | **13-33 harmonization (John/PM) — RULING + correctness catch.** Ruled 12-7 an intentionally-scoped consumer (the filtered/paginated table is a legitimately different query shape; NOT re-pointed wholesale onto `registryUnifiedSource`). BUT corrected prior guidance: the per-row `data_status` MUST derive `hasSubmissionData` from the latest **NON-EMPTY** submission (matching the canonical read), NOT the plain `DISTINCT ON` latest submission — else the table badge drifts from the analytics strip when a respondent's newest submission is empty. Added a required parity test (table `dataStatus` == canonical read's). No AC/scope change; found by the post-13-33 backlog sweep. |
+
+## ⏩ INHERITED 2026-08-11 — the registry DATE filter is one hour off (re-homed from 13-61 R1)
+
+**This arrived under 13-45's R3 ruling:** `RE-HOMED` is not a ledger state, so a re-homed item must
+name a receiving story or stay OPEN. 13-61 named this one — the registry table is the surface the
+filter sits on. It landed here rather than on 12-4/12-5/12-6 deliberately: **those three are on the
+blast gate (R-F) and a critical-path story must not absorb unrelated scope.**
+
+**Reported symptom (operator, 2026-08-09):** the registry date filter "does not work". 13-61 traced it
+end to end, found the backend correct, and recorded it as *needing a measurement, not a guess*.
+
+**Two hypotheses are now DEAD, both cheaply:**
+1. ⛔ *"`respondents` has no created_at/updated_at"* (Awwal, 2026-08-11) — **it has both**, `timestamp
+   with time zone`. Good hypothesis, one query to falsify.
+2. ⛔ *"the params never reach the server"* — `registry.api.ts:26-27` sends `dateFrom`/`dateTo` through
+   a typed builder; the controller's zod accepts ISO; `buildFilterConditions` uses
+   `r.created_at >= $1::timestamptz` for both the list and the count. **The wiring is complete.**
+
+**THE DEFECT IS IN THE BROWSER, and the two ends are built by DIFFERENT RULES:**
+
+```ts
+// RegistryFilters.tsx:184 — dateFrom
+new Date(e.target.value).toISOString()            // 'YYYY-MM-DD' parses as UTC midnight
+// RegistryFilters.tsx:196 — dateTo
+new Date(e.target.value + 'T23:59:59.999Z')       // explicit Z appended
+```
+
+`<input type="date">` yields `YYYY-MM-DD`, and `new Date('2026-08-09')` is **UTC midnight = 01:00
+WAT**. So selecting 9 Aug → 9 Aug queries **01:00 WAT 9 Aug → 00:59:59 WAT 10 Aug**: a full 24 hours,
+**shifted one hour off the Nigerian day.** Anyone registered between midnight and 1am WAT is missing;
+anyone registered in that hour the following day is wrongly included.
+
+⚠️ **STATED HONESTLY: this is a defect found by READING, not the operator's case reproduced.** A
+one-hour window is small and may not be all of it. **Do the two-minute Network-tab check first** —
+confirm `dateFrom` appears in the request and with what value — then fix. This story has inherited a
+row whose whole history is "do not fix it blind".
+
+### What to build
+
+1. **Construct both boundaries in WAT (UTC+1), not UTC**, and construct them **the same way**. The
+   asymmetry — one end implicit, one end with a hard-coded `Z` — is the smell that produced this.
+2. **Do not remove the filter.** It was proposed and rejected 2026-08-11: it works, an hour out, and
+   removing a capability the operator uses with "reintroduce later" is
+   [[pattern-ship-a-fix-that-never-fires]] — this backlog is the evidence that later does not come.
+3. ⚠️ **A hard-coded `+1` is a bug in waiting.** Nigeria does not observe DST today, so an offset
+   constant works — but write it as a named timezone (`Africa/Lagos`), not an integer, or the next
+   person inherits a number nobody can justify.
+4. **RED-verify on the boundary, not the middle:** seed a respondent at 00:30 WAT, filter for that
+   day, assert they appear. The current code fails that test; a test that filters mid-afternoon
+   passes over the hole.
