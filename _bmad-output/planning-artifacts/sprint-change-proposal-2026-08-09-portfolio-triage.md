@@ -66,7 +66,7 @@ grep -oE "^  [a-z0-9][a-zA-Z0-9.-]*: [a-z-]+" _bmad-output/implementation-artifa
 | epic | open | identity (confirmed from the file, not from memory) |
 |---|---|---|
 | **13** | 21 | Launch |
-| **12** | 18 | `epic-12-dashboard-system-refresh-brief.md` — **but see Finding 3** |
+| **12** | 18 | `epic-12-measurement-honesty-and-dashboard-refresh-brief.md` — **but see Finding 3** |
 | **9** | 11 | — |
 | **11** | 6 | Multi-Source Registry |
 | **10** | 5 | API Exchange (consumer auth / rate limit / admin UI / dev portal / audit dashboard; DSA legal track runs ahead of engineering) |
@@ -1766,6 +1766,84 @@ R1 (*"acceptance withdrawn"*) resolves with it, since the guard leaves the `lint
 same hole from the other side). 13-61's own note argues the real answer is that a re-homed row **leaves
 the ledger** rather than the guard learning a new word. **Not ruled — it is the PM's to fold into
 13-45.**
+
+### 10.15 🤝 HANDOVER TO JOHN (PM) — what is done, what is left, who owns it
+
+**Verified state at handover (not asserted — checked):**
+
+```bash
+git status -sb | head -1   # ## main...origin/main   (no [ahead N])
+git log --oneline -1       # d16c439
+ssh root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'   # d16c439
+```
+
+**`main` == `origin/main` == prod == `d16c439`.** The §10.13 B commit plan was followed as written —
+`174b60b` ops tools → `8a88e4b` stories → `adfefaf` SCP — plus `d16c439`. **One file remains
+uncommitted: `docs/adjudication-agent-handoff.md`** (header, §2z, §7n, written after the push; it will
+ride the next commit).
+
+#### A. DONE — do not redo these
+
+| | |
+|---|---|
+| **Six rulings** taken and recorded at source, not just here: §6 header, 13-46's `⚖️ OPEN DECISION` block, 13-45 R2 | §10.14 |
+| **13-61** closed on the deploy, verified on prod rows | §10.12, story `## Closing verdict` |
+| **13-57** — all three false premises struck **in the story**, incl. the `lga_id` slug claim (325/325) | §10.4 |
+| **13-51** — sequencing callout + AC1.2 three-bucket correction, **in the story** | §10.11 |
+| **Registry integrity + campaign funnel** measured, incl. normalised duplicate checks | §10.12 |
+| **Handoff doc** — header, §2z playbook entry, §7n session arc | uncommitted |
+
+#### B. JOHN OWNS — six loose ends
+
+1. **13-45 R3** — the guard does not know `RE-HOMED`, so 13-61's row passes silently. 13-61 argues a
+   re-homed row should **leave the ledger** rather than the guard learn a word. **Fold and rule.**
+2. **13-2 still carries the source-based rate rule in 2 places** — superseded by **R-E**; strike it.
+   ⚠️ **Strike only the RATE clause.** The marketplace-include ruling and the badge (13-38/13-58) stand.
+3. **Epic 12 rename (C2)** — R-A ruled the track leads; the rename that stops it reading as cosmetic
+   has not been done.
+4. **Park Epics 9 and 10 in `sprint-status.yaml`** — R-A's load-bearing half is the parking, and today
+   it exists only as prose. **Six `in-progress` epics is still six until the file says otherwise.**
+5. **Pass 1** — unblocked (§6 ruled, §7.4 discharged, board still 64). Its output feeds §5's Pass 2.
+6. **D8 archive** — handoff §7 is now **14 entries / 1,624 lines**. Keep §7n + §7m, archive §7→§7k to
+   `docs/session-2026-07-to-08.md`. ~20 minutes, mechanical. *A cold-start doc nobody can read in one
+   sitting has stopped being a cold-start doc.*
+
+#### C. AWWAL OWNS — operator actions, none blocked
+
+- 📮 **Send the Jamiu reply (§10.8)** — `admin@` proven healthy (`sent 05:51:09 → delivered 05:52:02`).
+- 📮 **Send the Juliet reply (§11.4)** — she has no complaint and no reason to write one.
+- 🔍 **R1** — two minutes in devtools: does `dateFrom` appear in the request? That decides client-vs-server.
+- 👥 **Provision enumerator accounts** — prod holds exactly ONE active enumerator and it is Awwal's.
+- 📄 **R8 briefing** into enumerators' hands before any field day.
+- ⚖️ **Before the client session:** show `/insights` as-is, corrected, or with `n` disclosed (R-E).
+
+#### D. What adjudication will check when work returns
+
+Stated in advance so it is a gate, not a surprise — these are the halves most likely to be dropped:
+
+- **13-51's AC3.3 must NOT arrive without the hard/soft severity work.** Half of that fix is worse than
+  none (§10.11). If only one is present, it goes back.
+- **13-46's AC10 must arrive WITH the non-blocking nudge.** AC10 alone recovers the denominator and not
+  the response rate — the letter of R-B, missing its point.
+- **R-E:** every rate denominator per-field, `n` published, and the RED-verify that a row with
+  `raw_data` but no `employment_status` does **not** move the rate.
+- **Any new `done` story** gets the §2a0 debt gate and the D1/D9 formats — 13-61 is the worked example.
+
+#### E. One shape to carry into the build — it appeared THREE times today
+
+`d16c439` is the third instance of §2z and the PM found it independently: the respondent-write guard
+**greps source TEXT** while meaning **a CALL**, so an operator note that merely *named* a helper read as
+using it. Alongside the rate denominator that filtered on **source** while meaning **answered**, and the
+suppression key **written raw** while **read canonical** — *the predicate was not the thing it meant*,
+three times, in three unrelated subsystems, in one day.
+
+> **The commit's own judgement is the part to keep:** it was fixed by **rewording the message, not by an
+> allowlist entry**, because allowlisting a file that does not actually violate the rule *makes the list
+> lie about what it sanctions*. **Silence a trip only where there is something to silence.**
+
+⚠️ **And it re-proved the push lesson in a new disguise** — the background task reported **exit 0**
+while the pre-push suite had failed and `origin/main` was unmoved. **Verify a push by asking git where
+the branches are** (`git status -sb`), never by an exit code, whatever produced it.
 
 ---
 

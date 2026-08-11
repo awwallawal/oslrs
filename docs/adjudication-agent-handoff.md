@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-10 · **Prod deployed SHA:** `189bbe2` · **`main` == `origin/main`, tree clean, ONE worktree** · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-11 · **Prod deployed SHA:** `27e1fdc` · **ONE worktree** · ⚠️ **TREE NOT CLEAN — 12 files uncommitted from TWO CLIs** (adjudication §10 of the SCP + 13-51; PM's §9/§11, five stories, two ops scripts). Commit plan: **SCP §10.13 B**. · **Health:** https://oyoskills.com/api/v1/health
 ⚠️ **This SHA is self-staling metadata — D6 says delete it and it has now been wrong THREE times. Verify, never trust:** `ssh root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'`
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
@@ -413,6 +413,53 @@ dependency problem.
   `docker_postgres_data_dev`, outside the repo — it survived). Do not assume; look.
 - Sibling of §2a2's family: the *symptom* pointed at dependencies while the *cause* was elsewhere
   entirely. When a failure appears in code you did not touch, suspect the environment you did.
+
+### 2z. ⭐ THE PREDICATE MUST BE THE THING YOU MEAN — proxies fail in BOTH directions
+*Added 2026-08-11. Two instances in one afternoon, one of them live on the public site.*
+
+**The shape:** code filters on **A** while meaning **B**, because A is usually true when B is. Then A
+and B diverge and nothing errors — the query still returns rows, the guard still writes a row, the
+chart still renders a number. **Unlike §2x's permissive filter, this one is not too loose or too
+tight; it is measuring a different thing entirely.**
+
+**(a) A RATE'S DENOMINATOR IS WHO ANSWERED THE QUESTION — never a source, never "has any data".**
+`public-insights.service.ts:80` defines `answersWhere = ru.raw_data IS NOT NULL` — *"has some
+answers"* — and two published rates divide by it. Measured on prod 2026-08-11: **282 rows have
+`raw_data`, but only 218 were asked `employment_status` and 199 `has_business`.** So **64 people who
+were never asked are counted as "not unemployed"**, and the published estimate reads **18.4%** where
+the answered set gives **23.9%**.
+
+- **"Not asked" silently becomes "answered no"** the moment an unasked row enters a denominator.
+- 13-2 tried to fix this with a **source** filter (*exclude `unverified_import` from rate charts*). A
+  source is a proxy for "was asked", and it **fails both ways**: a member who *later* completes the
+  questionnaire stays excluded forever; a field respondent who *skipped* stays included.
+- ✅ **The rule (SCP §10.14 R-E):** `FILTER (WHERE raw_data->>'<field>' IS NOT NULL)` per metric, and
+  publish `n`. Then source stops mattering — because it was never the right variable.
+- ⚠️ **Safe-by-accident is not safe.** `youth_emp_rate` survives only because association rows carry
+  `age_years` rather than `dob`. Make it uniform or the next channel breaks it.
+- **RED-verify:** insert a respondent with `raw_data` but no `employment_status`; assert the rate does
+  **not** move. It moves today.
+
+**(b) ONE FUNCTION MUST OWN THE KEY — a write path and a read path that canonicalise differently
+cannot match.** `email-events.service.ts` stores the provider's raw recipient at `:48`→`:100`, while
+`getSuppressedEmails` looks up `toCanonicalEmail(...)` — which is only `trim().toLowerCase()` and does
+**not** unwrap `Name <addr>`. So `'wahab akeem olaide <aqeemakolade@gmail.com>'` and
+`'aqeemakolade@gmail.com'` can never be equal: **a suppression that cannot suppress.** The unsubscribe
+inlet already canonicalises; only the webhook inlet does not.
+
+- **Route every write AND every read through the same canonicaliser** — the
+  [[feedback_canonical_primitive_backlog_sweep]] shape, same lesson as 13-55's five promote paths.
+- **The input is not always yours to fix.** The same `message_id` carried a bare address on
+  `sent`/`delivered` and a wrapped one on `bounced` (2 of 25 bounces; 0 of 1949 sent/delivered), so
+  normalisation must happen at OUR inlet.
+- 🚨 **AND CHECK WHETHER TWO DEFECTS ARE MASKING EACH OTHER BEFORE FIXING EITHER.** That person is
+  reachable today *only* because the broken key cancels a wrongly-permanent suppression (no hard/soft
+  severity is recorded). **Fixing the unwrap alone would activate the exclusion** — a fix that fires,
+  correctly, and makes things worse. Ship both or neither (SCP §10.11).
+
+**How to find these:** ask *"what is this predicate actually selecting, and is that what the sentence
+above it claims?"* Both were found by reading one line of SQL and one function signature — not by a
+failing test, because nothing fails.
 
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
@@ -1169,6 +1216,75 @@ then set it via the super-admin path.** His NIN is deliberately left INTACT unti
 it without a route to replace it would leave him worse off than doing nothing.
 
 ---
+
+## 7n. Session 2026-08-11 — one complaint became 92 people, and a published statistic was wrong
+
+**No code shipped by adjudication today. The output was measurement and six rulings** — which is the
+right output when the board is 64 stories and the question is what to build. Everything is in
+**SCP §10** (§10.1–§10.14); this is the arc, not the detail.
+
+### A citizen's complaint was the tip, not the problem
+
+`raheemjamiu166@gmail.com` wrote in saying he could not register. **He had been registered since
+19 May** — `OSL-2026-F91B8A`, active, NIN on file. What he could not do was *find that out*: three
+magic links in three days, two never opened.
+
+Then the measurement that mattered: **192 of 242 links issued in 30 days were never used (79%), across
+155 people, of whom 92 are ALREADY REGISTERED, and 54 asked more than once.** Asking twice is what
+someone does when the first answer never came. **13-50 stopped being a tidy-up and became 92 named
+people.** And Juliet Odiba (§11.2, PM) is the same case *without* the complaint — registered, never
+told her number, and no reason to ever write in.
+
+- **The reply was decoupled from the fix.** Drafted the same hour (SCP §10.8), not queued behind
+  13-50. *Coupling a courtesy to a release is [[pattern-ship-a-fix-that-never-fires]] pointed at a
+  person.*
+- **63 people could not be matched to a registry record. That is "unmatched", NOT "unregistered"** —
+  and §11.2 then proved the method blind by finding two registered people it had missed. Same lesson
+  as §2x(b), earned twice in one day.
+
+### A published government statistic is wrong, and nothing was red
+
+Chasing *"should association imports be included in insights rates?"* into the SQL found the live
+defect in §2z(a): the unemployment estimate reads **18.4%** where the answered set gives **23.9%**.
+**It has nothing to do with association imports** — it is broken today, and 13-2 would only worsen it.
+
+> **Awwal's framing was right and is worth keeping: the disparity (23%/29% relative) does not justify
+> a hotfix into a muddled tree — but the BLAST is when the figures acquire an audience.** Hence R-F.
+
+### Six rulings, and the one I put wrongly
+
+All open decisions were enumerated **by grep, not memory**, and put in one pass. **R-A** Epic 12 leads,
+five epics parked · **R-B** 13-46 stays optional (AC10 + non-blocking nudge) · **R-C** split the
+residual guard into its own turbo task (closes 13-45 R2) · **R-E** rate denominators are answer-based
+· **R-F** 12-4/12-5/12-6 gate the blast.
+
+⛔ **I put 13-2 forward as an open decision. It was ruled on 2026-07-20 and its status line reads
+`ready-for-dev`.** I had read the 2026-07-19 changelog entry — the *escalation* — and not the story's
+head. Worse, the option I drafted said *"exclude from marketplace"* when Awwal had ruled the
+**opposite** (include, with a `[Association] — confirmed member` badge; 13-38/13-58 depend on it), so
+accepting it would have reversed a live ruling. **Caught only because I opened the story before
+writing the acceptance.** A changelog entry is a record of a decision; the story head is the decision.
+Same family as §2w, and the reason the §2a checklist says read the artefact.
+
+### The launch picture that came out of it
+
+| gate | set |
+|---|---|
+| **FIELD DAY** | 13-57 · 13-59 · 13-60 · enumerator accounts · R8 briefing |
+| **BLAST** | 12-4 · 12-5 · 12-6 (R-F) · 13-46 · 13-51 |
+
+**13-46 gates the JINGLE, not the field day** — the largest story on the board (835 lines) moved off
+the critical path, which was the single biggest schedule win of the session. **Two independent reasons
+now gate the blast on honesty work**, reached from opposite directions: wrong published rates (R-E)
+and a **9.3% bounce rate** on `draft-invite` versus ~2% elsewhere, which is domain reputation being
+spent on the capture defect in §10.10.
+
+### Also measured, so it is not re-derived
+
+Registry **clean** — 0 duplicate NIN/phone/name/reference-code, including **normalised** phone (the
+check that actually finds duplicates). **Pending-NIN cohort 20 → 36**: 13-53's reopen condition has
+fired. Re-engagement conversion **≥15 of 75 (~20%)**, stated as a floor because it uses the method
+§11.2 disproved. **`clicked = 0` across all 987 sends** — there is no engagement funnel at all (13-44).
 
 ## 7m. Session 2026-08-10 — the fix that was "shipped" and wasn't, and a command that ate the repo
 
