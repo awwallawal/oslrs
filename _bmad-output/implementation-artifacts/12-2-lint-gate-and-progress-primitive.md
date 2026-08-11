@@ -91,7 +91,7 @@ Landing the inline-style ban as `error` now would red-CI on the existing 25 inst
 - [Source: apps/web/eslint.config.js] — current flat config; no inline-style/tailwind rule present.
 - [Source: apps/web/src/features/forms/components/ProgressBar.tsx:23] — legitimate dynamic-width bar to migrate to `Progress` (in 12-11), not ban.
 - [Source: apps/web/src/features/dashboard/pages/OfficialHome.tsx:154] — second dynamic-width example; OfficialHome is one of the 6 inline-style pages.
-- [Source: _bmad-output/planning-artifacts/epic-12-dashboard-system-refresh-brief.md §3c] — Track-B drift work-list (6 inline-style pages / 25 instances; "several are dynamic width bars → migrate to a Progress primitive, not banned outright").
+- [Source: _bmad-output/planning-artifacts/epic-12-measurement-honesty-and-dashboard-refresh-brief.md §3c] — Track-B drift work-list (6 inline-style pages / 25 instances; "several are dynamic width bars → migrate to a Progress primitive, not banned outright").
 - [Source: _bmad-output/implementation-artifacts/12-11-inline-style-migration-sweep.md] — the consumer story that migrates the pages + flips this rule to `error`.
 
 ## Dev Agent Record

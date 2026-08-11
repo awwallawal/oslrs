@@ -52,7 +52,7 @@ This is an analogue of the existing project rule **"Drizzle schema files must NO
 
 ### Dependencies, sequencing & effort
 
-- **Epic:** 12 — Dashboard System Refresh, **Track B (build-hygiene foundation)**. _[Source: epic-12-dashboard-system-refresh-brief.md]_
+- **Epic:** 12 — Dashboard System Refresh, **Track B (build-hygiene foundation)**. _[Source: epic-12-measurement-honesty-and-dashboard-refresh-brief.md]_
 - **Carved out of:** Story 9-59 "ex-Task 6" — see the 9-59 "Carved out (SM, 2026-06-16)" note [Source: _bmad-output/implementation-artifacts/9-59-unified-registry-export.md:80].
 - **Dependency spine:** `12-2 / 12-3 -> { 12-10, 12-11 }` — 12-3 (with 12-2) is the Track-B build-hygiene foundation that the later Track-B stories (12-10, 12-11) build on. 12-3 has **no upstream code dependency** and can be done independently.
 - **Reuses (do NOT fork):** the existing pnpm-workspace `exports` map already present in `packages/utils/package.json` (it already exposes five `./src/<module>` subpaths) — extend it; do not rewrite it. Reuse the web app's existing deep-import call sites (no churn needed there if the chosen exports-map shape preserves the `@oslsr/utils/src/<module>` specifiers).

@@ -1,6 +1,31 @@
-# Epic 12 — Dashboard System Refresh (Epic Brief)
+# Epic 12 — Measurement Honesty & Dashboard Refresh (Epic Brief)
 
 > **Author:** John (PM) · **Date:** 2026-06-16 · **Status:** brief (story shells, not yet authored)
+
+> ## ⚖️ RENAMED 2026-08-11 — and the old name was doing real damage
+>
+> **Was:** *"Epic 12 — Dashboard System Refresh"*. **SCP F3** measured that the open Tier-1 stories
+> are not a redesign at all: **12-4** registryTotals · **12-5** label honesty + n-per-chart ·
+> **12-6** data-health · **12-7** registry data-status · **12-8** export data-health preview. That is
+> the **measurement-honesty track** — the same defect class as `EMAIL_TIER` silently enforcing FREE
+> on a Pro account, and as the six instances found in a single session on 2026-08-11.
+>
+> **"Dashboard system refresh" reads as cosmetic and postponable. The title was doing the
+> deprioritising** — which is why the epic sat while its stories were the cure for defects being
+> hit weekly. Renamed under **C2**, carried by ruling **R-A**.
+>
+> ⚠️ **THE EPIC IS TWO TRACKS, AND THE NAME SAYS BOTH ON PURPOSE.** Renaming it to *"Measurement
+> Honesty"* alone would have mislabelled eleven stories — the identical disease pointed the other
+> way, in the very epic that exists to cure it.
+>
+> | track | stories | status |
+> |---|---|---|
+> | **Measurement honesty** | **12-4 · 12-5 · 12-6** · 12-7 · 12-8 | **12-4/5/6 are a BLAST GATE (R-F)** — the published `/insights` rates are wrong today |
+> | Dashboard refresh | 12-1 · 12-2 · 12-3 · 12-10 · 12-11 · 12-12…12-18 shells | follows the blast |
+>
+> **If this epic is ever split, that table is the split line** — it is recorded here so the decision
+> does not have to be re-derived.
+
 > **Inputs:** session handoff `docs/session-2026-06-15-9-58-and-followups.md` §5–§6; the 7 role wireframes in `_bmad-output/wireframes/`; canonical story `9-59-unified-registry-export.md`; codebase scan 2026-06-16; `project-context.md`, `architecture.md`, `epics.md`.
 > **Hand-off:** the sequenced story shells (§4) go to **Bob (SM)** to author via canonical `*create-story --yolo`. This brief is the source; it does **not** author full stories.
 
