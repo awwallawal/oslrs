@@ -486,11 +486,23 @@ submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wiz
 
 ### Next up
 
-⛔ **DO NOT PICK FROM THIS TABLE UNTIL THE §6 RULING IS MADE.** The ordering below is no longer the
-adjudication agent's to set: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-09-portfolio-triage.md`
-(John/PM) measured **64 open stories across 6 simultaneously-`in-progress` epics** and its **§5.0
-PRE-FIELD CHECKLIST explicitly precedes everything here**. Awwal's ruling on SCP §6 — *which structural
-track leads, and which epics are parked* — decides the rest. Read the SCP first.
+✅ **RULED 2026-08-11 — the table below is SUPERSEDED by the two gates in the SCP.** The ordering is not
+the adjudication agent's to set: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-09-portfolio-triage.md`
+(John/PM) measured **64 open stories across 6 simultaneously-`in-progress` epics**. **Read the SCP
+first — §10.14 carries every ruling of 2026-08-11.**
+
+| gate | set |
+|---|---|
+| **FIELD DAY** | **13-57 · 13-59 · 13-60** + **enumerator accounts** (prod holds exactly ONE active enumerator, and it is Awwal's) + the **R8 briefing** in enumerators' hands |
+| **BLAST / JINGLE** | **12-4 · 12-5 · 12-6** (R-F — the published rates are wrong TODAY, §10.14 R-E) · **13-46** (its Open Decision is RULED — optional + AC10 + non-blocking nudge) · **13-51** (a 9.3% bounce rate is domain reputation spent on a capture defect) |
+
+- **R-A:** Epic 12's honesty tier leads, 11-7 second, **Epics 9 and 10 explicitly PARKED**. The
+  load-bearing half is the parking: six `in-progress` epics means zero, and F6 names that state as the
+  *generator* of the duplication it was asked to cure.
+- **R-F:** 12-4/12-5/12-6 are a **blast gate** — Epic 12 is no longer merely "next", it has a deadline.
+- ⚠️ **13-46 gates the JINGLE, not the field day.** It is the largest story on the board (835 lines,
+  ~11 ACs); moving it behind the field day is the single biggest schedule win available.
+- **13-50** sits outside both gates but carries **92 named people and one written complaint** (§10.2).
 
 **✅ Its §7.4 invalidation risk fired and was DISCHARGED (re-measured 2026-08-10, main `2d9bc1e`):**
 13-61 was added *and* closed in the same commit, so it never entered the open set. `done` moved
