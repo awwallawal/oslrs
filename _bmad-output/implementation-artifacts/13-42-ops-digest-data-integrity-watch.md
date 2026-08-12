@@ -263,6 +263,57 @@ but no one could have told you that from the dashboard, because only one of the 
 4. Precedent worth not repeating: **13-27 found 124 public opt-ins → 0 profiles**, because the wizard
    wrote `processed: true` and bypassed the enqueue entirely. Nothing alerted then either.
 
+### AC11 — TWO DIGEST NUMBERS THAT MOVE FOR REASONS THAT ARE NOT THE THING THEY NAME (added 2026-08-12, John/PM)
+
+**One shape, two instances, both measured on prod today.** AC8 fixed what the deliverability red
+*says*; this is about what makes it *fire*, and about a second number with the same disease.
+
+#### A. The bounce red cannot be cleared by fixing the bounce
+
+`operations.service.ts:445` — `if (resend && (resend.bounced > 0 || resend.complained > 0))` → red.
+**No rate, no time bound, no acknowledgement.** One bounce anywhere in the page keeps it red.
+
+⚠️ **And the page is not a time window — it is a ROW COUNT whose duration moves with volume.**
+`resend.emails.list({ limit: RESEND_LIST_PAGE_SIZE })` with no ordering or date filter, then
+`recent.filter(e => e.last_event === 'bounced')`. Measured 2026-08-12: the 100 rows spanned
+**2026-08-12 12:42 → 2026-08-08 00:40 — 4.5 days at ~29 sends/day.** During a blast the same 100 rows
+are a few hours; in a quiet week they are a fortnight. **The lookback silently changes length, so the
+same red means something different from one day to the next.**
+
+**The behavioural failure is the important half.** Five bounces from `osegunlajide@gmail.con` on
+2026-08-09 were remediated on 08-11 — address corrected, false suppressions lifted. **Nothing we did
+could clear the red**, because the bounce *events* are history and remain in the page until they age
+out (~08-13). So the operator saw an unchanged red for three days after fixing the cause. ⛔ **An alert
+you cannot clear by solving the problem is an alert that trains people to ignore it** — and it did:
+a genuinely NEW bounce arrived underneath on 08-11 and was indistinguishable from the stale noise.
+
+**Build:** fire on a **rate over a fixed TIME window** (bounces ÷ sends, 24h and 7d), and/or on
+**bounces NEW since the last digest**. Keep AC8's naming of the addresses. A count with no
+denominator and no clock is not a signal.
+
+#### B. The Step-4 stall % rises while nothing gets worse
+
+| digest | figure |
+|---|---|
+| 2026-08-09 | 23 / 75 = **31 %** |
+| 2026-08-10 | 23 / 74 = **31 %** |
+| 2026-08-12 | 23 / 73 = **32 %** |
+
+**The numerator has not moved in four days. The denominator decays as drafts expire.** So the rate
+climbs on arithmetic alone and will keep climbing toward its own red threshold with zero new stalls.
+
+✅ **The underlying count is HONEST — verified, do not "fix" it.** `operations.service.ts:162-172`
+already excludes expired drafts and drafts whose owner is registered (the 13-49 correction). I tested
+the residual §11.2 blindness — matching people through a table that may not carry their email — on all
+23: **0 registered by phone, 0 by name, 0 by a typo-twin address.** They are 23 real people.
+
+**Build:** lead with the **absolute count and its 24-h delta** — *"23 at step 4, +0 new in 24h"* — and
+either drop the percentage or fix its denominator to something that does not decay (e.g. drafts
+created in the window, not drafts still alive). ⚠️ **This also breaks a gate elsewhere:** 9-18's
+AC#E9 is *"Step-4 stall drops below 30%"*. **That ratio can no longer satisfy it for reasons that have
+nothing to do with the wizard.** Reading the June dashboard to close 9-18 would be reading a metric
+that has since become structurally incapable of passing — say so before someone ticks the box.
+
 ## Tasks / Subtasks
 - [ ] **Task 1 — snapshot section** (AC1) — `OperationsService`: add the `dataIntegrity` gather (2–3 COUNT queries), typed in `@oslsr/types` alongside the other snapshot section types; fail-open wrapper.
 - [ ] **Task 2 — formatter + recommendation** (AC2, AC3, AC4, AC5) — `formatDataIntegrityLines()` (pure, exported for test) + the conditional recommendation push in `runOpsDigest`/the recommendation builder; MarkdownV2-escaped; document the known-safe sentinel set as a shared constant (reuse 13-41's if it lands first).

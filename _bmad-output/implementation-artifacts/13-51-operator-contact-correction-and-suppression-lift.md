@@ -169,3 +169,41 @@ send would let a taxonomy gap block a citizen's email, which is far worse than a
 This is vocabulary + observability, **not** a change to what gets sent or to whom. It sits with 13-51
 because 13-51 already owns the operator-contact surface these replies belong to, and because the
 bounce-severity work in this story touches the same event/counting path.
+
+## 🔬 LIVE EVIDENCE FOR THE RETRY WINDOW — Juliet Odiba, measured twice (added 2026-08-12, John/PM)
+
+**This story has to decide how long a `Transient` suppression is held before retry. That question now
+has data instead of a guess, from one person, measured on prod.**
+
+| | event | gap |
+|---|---|---|
+| 1st | sent 2026-08-04 09:11 → **bounced** 2026-08-04 23:11 | **14 h** — Resend: `Transient / MailboxFull`, *"message expired: unable to deliver in 840 minutes"* |
+| — | suppression **lifted** 2026-08-11 09:06 on the provider's own classification (§11.1) | 7 days later |
+| 2nd | sent 2026-08-11 16:29 → **bounced** 2026-08-12 06:29 | **14 h**, auto-re-suppressed |
+
+**Four things this settles, and one it does not:**
+
+1. ⏱️ **A transient bounce takes ~14 hours to resolve, not seconds.** Any verification that waits 90
+   seconds and reports "no event" is structurally unable to see it. `_diagnose-mailbox-delivery.ts`
+   says *"NOT a pass and NOT a fail"* for exactly this reason — **keep that wording; it was right.**
+2. 🔁 **The webhook, the re-suppression and the severity classification all worked.** This is not a
+   broken pipeline. The only thing missing is the *decision* about what to do with a `Transient`.
+3. ⛔ **A LIFT IS NOT A FIX.** Her mailbox was still full seven days on, so lifting the suppression
+   bought one more bounce and one more mark against the sending domain. **The retry must be
+   TIME-BASED and automatic, not an operator judgement** — a human lifting on the provider's
+   classification alone (which is what I did, correctly, on the evidence available) still re-sends
+   into a full mailbox. **Design the window; do not design a manual button.**
+4. 📞 **After N failed retries the answer is a different CHANNEL, not a longer wait.** Juliet is
+   `OSL-2026-51CNVZ`, active since 2026-08-04, **has never been told her registration number**, and
+   holds a working phone (`+2348130926690`). Two email attempts, two bounces, 7 days apart. **She is
+   the worked example of why the escalation path must exist** — and 13-42 AC8 already asks the digest
+   to name suppressed people *with* phone numbers so they can be moved to SMS. This story and that
+   line are the same mechanism seen from two ends.
+
+**What it does NOT settle:** whether 14 h is typical or particular to Gmail's over-quota behaviour.
+Two observations of one mailbox is a shape, not a distribution. **Pick a retry window with a stated
+margin over 14 h (e.g. 72 h) and record it as a measured assumption with a reopen trigger, not as a
+constant someone will later find unjustifiable** — the `+1` lesson from 12-7.
+
+⚠️ **Do not hand-suppress on a retry failure.** The webhook does it, and 13-51's whole job is to let
+the system tell a retry apart from a death. A manual row erases the distinction it is trying to make.

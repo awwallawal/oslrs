@@ -2034,8 +2034,8 @@ Both are **registered**, both are in **Egbeda**, and neither has ever been told 
 
 | person | reference code | phone | why phone |
 |---|---|---|---|
-| **Jumoke Fatomide** | `OSL-2026-TYZ3AH` | `+2348130237918` | **PRIMARY.** Email permanently dead; the gmail variant is a guess and must not receive her details (§11.3). |
-| **Juliet Odiba** | `OSL-2026-51CNVZ` | `+2348130926690` | **FALLBACK ONLY** — use if §11.4's email bounces again. |
+| **Jumoke Fatomide** | `OSL-2026-TYZ3AH` | `+2348130237918` | **PRIMARY.** Email permanently dead (`Permanent/550`, postmaster.mail.com). ⚠️ **The `mail.com`→`gmail.com` reading is a REASONABLE HYPOTHESIS and predates this session** — 13-42 AC8 recorded it on 2026-08-05 as *"likely meant gmail.com"*. §11.3 rules only that it must not go in the typo DICTIONARY (mail.com is a live provider) and that her name/LGA/reference code must not be sent to a guessed address. **It does not forbid TESTING it:** a no-PII existence probe to the gmail variant can kill the hypothesis at zero risk, and cannot confirm identity either way. **The phone settles identity in one call; the probe only settles whether a mailbox exists.** |
+| **Juliet Odiba** | `OSL-2026-51CNVZ` | `+2348130926690` | 🔴 **PROMOTED TO PRIMARY 2026-08-12 — THE TRIGGER FIRED.** §11.4's email was sent 08-11 16:29 and **bounced 08-12 06:29** (14 h, `Transient/MailboxFull` again, auto-re-suppressed). Her mailbox was still full seven days after the first bounce. **Two attempts, two bounces — she is reachable only by phone.** Registered since 2026-08-04 and still never told her number. Retry-window evidence → 13-51. |
 
 ⚠️ **Read the reference code out; do not ask them to read one back.** 13-4 R8's rule: never read a
 number to a respondent until the app shows one. Here the app shows one, so reading it out is correct —
