@@ -1721,6 +1721,50 @@ They are already in the denominator of a published government statistic they wer
 - The corrected figures are published without saying they changed → a silent restatement of a public
   statistic is its own integrity problem; say what moved and why.
 
+##### ⛔ CORRECTION 2026-08-12 (John/PM) — R-E's ARITHMETIC used the wrong table. The DEFECT stands; the NUMBERS do not.
+
+**The finding is unchanged and still live. Only the sizing above is wrong, and it is wrong in a way
+that would mislead whoever builds the fix.**
+
+R-E's table computed `52/282` and `91/282` **`FROM submissions`**. The service does not read
+`submissions`. It reads **`registry-unified` (`ru`)** — respondent-anchored, **one row per person**,
+carrying that person's latest NON-EMPTY submission. That is not incidental: it is **Story 13-33 AC2**,
+verbatim in the source — *"everything reads the ONE canonical respondent-anchored unified source
+(`registry-unified`), NOT `FROM submissions`"* — a decision taken to kill the 13-25-class drift.
+**So the SCP sized a defect using the exact join 13-33 exists to forbid.**
+
+**What the page actually publishes, fetched live 2026-08-12:**
+
+| field | published |
+|---|---|
+| `unemploymentEstimate` | **18.5 %** |
+| `businessOwnershipRate` | **32.1 %** |
+| `withAnswers` (the shared coarse denominator) | **271** |
+| `youthEmploymentRate` · `gpi` | 47.9 % · 0.82 |
+
+`withAnswers` is **271 respondents**, not the 282/283 submissions R-E quoted. The published values
+therefore never matched R-E's "as published" column either — close, differently derived.
+
+**➜ CONSEQUENCE FOR 12-4 / 12-5, and it is a trap:**
+
+1. ⛔ **Do NOT take `23.9%` or `45.7%` as expected values.** An AC or a test asserting them would be
+   asserting submissions-level arithmetic against a respondent-level query, and would fail — or worse,
+   pass after someone "fixed" the query to match the wrong number.
+2. **Derive the corrected figures through the SAME `ru` LATERAL the service uses.** The per-field
+   denominators must be `COUNT(*) FILTER (WHERE ru.raw_data->>'<field>' IS NOT NULL)`, respondent-level.
+3. ✅ **The structure already supports this.** The service deliberately runs TWO denominators today —
+   density/LGAs-covered count ALL respondents, the rates filter to answer-bearing. R-E adds a **third,
+   per-field** level. That extends the existing design rather than fighting it.
+4. **The direction is certain, the magnitude is not.** 64 respondents' worth of `raw_data` carries no
+   `employment_status` and 83 no `has_business` at submissions level; both published rates are
+   understated. **Publish the recomputed figures from the real query — do not inherit this document's
+   arithmetic.**
+
+> **The lesson is the session's own, turned on the session:** the predicate was not the thing it meant.
+> R-E correctly caught a denominator that filtered on *has any answers* while meaning *answered this
+> question* — and then sized it with a query that counted *submissions* while meaning *people*.
+> **Same error class, one level up, inside the finding that named it.**
+
 #### ✅ R-F — RULED 2026-08-11: **12-4, 12-5 and 12-6 are a BLAST GATE.** Do not fix the rates today.
 
 Awwal's ruling on R-E's timing, and it **changes the launch sequencing recorded in §10.13 D**:

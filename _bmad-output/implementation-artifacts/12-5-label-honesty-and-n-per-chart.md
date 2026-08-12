@@ -141,3 +141,60 @@ Each chart is counted over the people who answered THAT question, masking suppre
 |---|---|
 | 2026-06-16 | Story authored (SM, Bob) via create-story workflow. Epic 12 Tier-1 (Track A: counting/legibility). LABEL HONESTY + N-PER-CHART: re-label the "Total Respondents"=76 mislabel to the honest 139 from 12-4's `getRegistryTotals()`, distinguish "respondents (139)" from "submissions with answers (76)" everywhere counts appear, reconcile the Registry summary strip, and surface each chart's own N denominator via an additive subtitle on the shared chart-card header. CONSUMES 12-4 (aggregate) + 9-59 (taxonomy) — no new aggregate, no new charts/stats, web-only. 6 ACs. POST-LAUNCH, NON-GATING. Status → ready-for-dev. |
 | 2026-07-19 | **13-33 harmonization (John/PM).** Flagged that the standalone "With Answers" (76) must be sourced from `getRegistryTotals().withAnswers` (canonical, respondent-scoped), NOT `getRegistrySummary().totalRespondents` (submission-scoped, can double-count) — the two "76"s can drift until 12-4 repoints `getRegistrySummary` onto the `registry_unified` read. Dev Note added. No AC/scope change; found by the post-13-33 backlog sweep. |
+
+## ⛔ BEFORE YOU BUILD THE DENOMINATOR FIX — read this (added 2026-08-12, John/PM)
+
+**The defect is real and live. The numbers written down for it are not — and they are wrong in a way
+that will silently corrupt an AC or a test.**
+
+### The defect (unchanged)
+
+`public-insights.service.ts:80` defines the shared denominator as
+`answersWhere = ru.raw_data IS NOT NULL` — *"has ANY answers"* — and **two of the four published rates
+divide by it**:
+
+| metric | denominator today | |
+|---|---|---|
+| `businessOwnershipRate` (`:110`) | `COUNT(*) FILTER (WHERE ${answersWhere})` | ⛔ coarse |
+| `unemploymentEstimate` (`:117`) | same | ⛔ coarse |
+| `youthEmploymentRate` (`:124`) | per-field (`dob` band) | safe **by accident** |
+| `gpi` (`:130`) | per-field (`gender`) | per-field |
+
+A person who has answers but was **never asked** the employment question sits in its denominator, so
+*not asked* silently becomes *not employed*. **Both published rates read LOWER than the truth.**
+Ruling **R-E**: a rate's denominator is the set of people who **answered that question**. Source is
+never the variable.
+
+### ⛔ The trap — SCP §10.14 R-E sized this with the WRONG TABLE
+
+R-E's table computed `52/282` and `91/282` **`FROM submissions`**. The service reads
+**`registry-unified` (`ru`)** — respondent-anchored, **one row per person**, latest non-empty
+submission. That is **Story 13-33 AC2**, verbatim in the source: *"everything reads the ONE canonical
+respondent-anchored unified source, NOT `FROM submissions`"*.
+
+**Live values, fetched 2026-08-12:** `unemploymentEstimate` **18.5 %** · `businessOwnershipRate`
+**32.1 %** · `withAnswers` **271 respondents** — not the 282/283 submissions R-E quoted.
+
+1. ⛔ **Do NOT use `23.9%` or `45.7%` as expected values anywhere.** They are submissions-level
+   arithmetic. A test asserting them fails against the real query — or passes after somebody "fixes"
+   the query to match a wrong number, which is the worse outcome.
+2. **Recompute through the same `ru` LATERAL**, per field:
+   `COUNT(*) FILTER (WHERE ru.raw_data->>'<field>' IS NOT NULL)`.
+3. ✅ **This extends the existing design, it does not fight it.** The service already runs TWO
+   denominators on purpose — density/LGAs-covered count ALL respondents, the rates filter to
+   answer-bearing. R-E adds a **third, per-field** level.
+4. **Make it safe BY DESIGN, not by accident.** `youthEmploymentRate` is correct today only because
+   association rows carry `age_years` rather than `dob`. That is luck, and luck changes.
+
+### RED-verify
+
+Insert one respondent with `raw_data` present but **no `employment_status`**, and assert
+`unemploymentEstimate` **does not move**. It moves today — that is the failing test, and it must fail
+before it passes.
+
+### Publish `n`
+
+Every rate ships with the count it was computed from. That is what stops the next reader having to
+work out which denominator produced a number — and it is why this lands on 12-5 as well as 12-4.
+
+> **Why this story:** `n`-per-chart IS this work — a rate published without the count it came from is the same defect wearing a different hat. 12-4 defines the denominator; 12-5 makes it visible.

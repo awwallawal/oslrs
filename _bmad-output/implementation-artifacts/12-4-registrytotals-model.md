@@ -218,3 +218,60 @@ The new aggregate is raw `db.execute(sql\`...\`)` — NOT type-checked, and mock
 | 2026-07-04 | **Bob/SM (per Awwal) + John/PM validated.** Added the CRITICAL Dev Note: the 3 axes MUST be derived from RAW respondent fields (`source`/`status`/NIN/`raw_data` field-set), NOT from the flat `deriveDataStatus()` output — the flat atom is a lossy projection (no full/core distinction; precedence collapses orthogonal facts like `completed`+`pending_nin`). Sharpened AC7.1 with the pointer. Flagged the AC2↔R2 reconciliation (row-id-distinct vs identity-key-distinct via `registry-key-normalization.ts`) as an explicit John/PM decision before dev. Emerged from the 2026-07-04 dashboard-implementation deep-dive. |
 | 2026-07-19 | **13-33 hand-off (Bob/SM).** 13-33's adversarial code review shipped the canonical respondent-anchored `registry_unified` READ (`registryUnifiedSource` inline + physical view, parity-proven). **Re-pointed 12-4 AC1/Task-1 to aggregate FROM that read** instead of re-mirroring `getUnifiedExportData`'s LATERAL (a third copy re-opens the drift 13-33 closed); read exposes the RAW substrate AC7 needs, so fully compatible. **Assigned 12-4 OWNERSHIP of 13-33-review-L3** (the 8×-inline-scan perf hedge): 12-4's AC1 materialization spike decides MV-flip-on-`registryUnifiedSource` (one-line, needs REFRESH hook) vs composite index `submissions(respondent_id, submitted_at DESC)` — added as a Task-1 subtask. **Flagged coordination:** extend `registry_unified` to expose `phone_number` for the AC2 R2 identity-key dedup (or 12-4 joins `respondents`). No AC text changed; scope unchanged (~1 dev-day + optional spike). Pending John/PM validation. _(Bob, SM)_ |
 | 2026-07-19 | **13-33 hand-off VALIDATED (John/PM).** Approved Bob's re-point of 12-4 onto `registryUnifiedSource`/`registry_unified` (taxonomy-faithful — read exposes the raw substrate AC7 needs; kills drift). Added guardrail: L3 materialization is post-launch/at-scale, MUST NOT gate the R4 pre-launch minimal slice. RULED the `phone_number` coordination item: extend `REGISTRY_UNIFIED_SQL_TEXT` to expose raw `phone_number` (Option a — one read, no new PII class since `nin` already exposed), E.164 normalization stays in `registry-key-normalization.ts`, add the column when 12-4's dedup needs it (not pre-deploy on 13-33). No AC text changes; POST-LAUNCH / NON-GATING unchanged. _(John, PM)_ |
+
+## ⛔ BEFORE YOU BUILD THE DENOMINATOR FIX — read this (added 2026-08-12, John/PM)
+
+**The defect is real and live. The numbers written down for it are not — and they are wrong in a way
+that will silently corrupt an AC or a test.**
+
+### The defect (unchanged)
+
+`public-insights.service.ts:80` defines the shared denominator as
+`answersWhere = ru.raw_data IS NOT NULL` — *"has ANY answers"* — and **two of the four published rates
+divide by it**:
+
+| metric | denominator today | |
+|---|---|---|
+| `businessOwnershipRate` (`:110`) | `COUNT(*) FILTER (WHERE ${answersWhere})` | ⛔ coarse |
+| `unemploymentEstimate` (`:117`) | same | ⛔ coarse |
+| `youthEmploymentRate` (`:124`) | per-field (`dob` band) | safe **by accident** |
+| `gpi` (`:130`) | per-field (`gender`) | per-field |
+
+A person who has answers but was **never asked** the employment question sits in its denominator, so
+*not asked* silently becomes *not employed*. **Both published rates read LOWER than the truth.**
+Ruling **R-E**: a rate's denominator is the set of people who **answered that question**. Source is
+never the variable.
+
+### ⛔ The trap — SCP §10.14 R-E sized this with the WRONG TABLE
+
+R-E's table computed `52/282` and `91/282` **`FROM submissions`**. The service reads
+**`registry-unified` (`ru`)** — respondent-anchored, **one row per person**, latest non-empty
+submission. That is **Story 13-33 AC2**, verbatim in the source: *"everything reads the ONE canonical
+respondent-anchored unified source, NOT `FROM submissions`"*.
+
+**Live values, fetched 2026-08-12:** `unemploymentEstimate` **18.5 %** · `businessOwnershipRate`
+**32.1 %** · `withAnswers` **271 respondents** — not the 282/283 submissions R-E quoted.
+
+1. ⛔ **Do NOT use `23.9%` or `45.7%` as expected values anywhere.** They are submissions-level
+   arithmetic. A test asserting them fails against the real query — or passes after somebody "fixes"
+   the query to match a wrong number, which is the worse outcome.
+2. **Recompute through the same `ru` LATERAL**, per field:
+   `COUNT(*) FILTER (WHERE ru.raw_data->>'<field>' IS NOT NULL)`.
+3. ✅ **This extends the existing design, it does not fight it.** The service already runs TWO
+   denominators on purpose — density/LGAs-covered count ALL respondents, the rates filter to
+   answer-bearing. R-E adds a **third, per-field** level.
+4. **Make it safe BY DESIGN, not by accident.** `youthEmploymentRate` is correct today only because
+   association rows carry `age_years` rather than `dob`. That is luck, and luck changes.
+
+### RED-verify
+
+Insert one respondent with `raw_data` present but **no `employment_status`**, and assert
+`unemploymentEstimate` **does not move**. It moves today — that is the failing test, and it must fail
+before it passes.
+
+### Publish `n`
+
+Every rate ships with the count it was computed from. That is what stops the next reader having to
+work out which denominator produced a number — and it is why this lands on 12-5 as well as 12-4.
+
+> **Why this story:** 12-4 owns the totals/denominator MODEL, so the per-field denominator is defined here and consumed elsewhere. Define it once; do not let each chart invent its own.
