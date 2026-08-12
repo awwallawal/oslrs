@@ -700,6 +700,33 @@ a dev's day).
 4. **No respondent cleanup is owed from Test A** — the run never reached a registration, so the §2h
    child-first recipe has nothing to remove. It applies to Test B, which will.
 
+#### ✅ 9.6a CLOSURE STATE — measured 2026-08-12, one action left and it is a UI click
+
+| fact | value |
+|---|---|
+| account | `lawalkolade+testenumerator@gmail.com` · `019febf3-9853-7ae6-b900-8da60ff4fdde` |
+| status | **`active`** — the one thing still to change |
+| selfie + ID card | **present** (captured 08-11 after the CSP fix) |
+| **submissions registered by it** | **0** |
+| respondent cleanup owed | **none** — §2h's child-first recipe has nothing to remove |
+
+**➜ Deactivate it from the Staff page. Two clicks, and it is deliberately NOT scripted.**
+`staff.service.ts:338-392` does three things in one transaction — sets `status`, writes the audit row,
+and then **`SessionService.invalidateAllUserSessions()` + token revocation (AC6)**. A raw `UPDATE
+users SET status` would be a **partial deactivation that leaves a live session behind**, and writing a
+script to reproduce a button is how a second path gets built (13-55's five-promotes lesson). The UI
+also attributes the action to the human who took it, which a script cannot honestly do.
+
+**What deactivation achieves:** 13-61 shipped `status=active` on the enumerator picker, so the test
+account leaves the live picker the moment it flips — no one can assign field work to it by accident.
+
+⚠️ **Keep the account and its artefacts.** The selfie and ID card are the *evidence that the CSP fix
+worked* and the starting state for Test B (§9.7). Reactivating is one click. **Do not delete the
+row** — `audit_logs` is append-only and references it.
+
+📌 **After the flip, the enumerator count returns to ONE — and that one is still Awwal's.**
+Provisioning real field officers remains the only non-code item on the field-day gate.
+
 ### 9.7 Test B — supersedes Test A, runs after 13-59 + 13-60
 
 Same walk, **on a phone**, plus: the confirmation email arrives with **no attachments**; the

@@ -72,6 +72,16 @@ const TO = arg('to');
 const DRY_RUN = process.argv.includes('--dry-run');
 const WAIT_SECONDS = Number(arg('wait') ?? 120);
 const FROM_OVERRIDE = arg('from');
+/**
+ * `--public` — the recipient may be a MEMBER OF THE PUBLIC, not our own mailbox.
+ *
+ * The default body is written for an operator checking a forwarding address and says so
+ * ("if you are reading this at the forwarding mailbox…"). Sending that from a government
+ * registry to a citizen is a category error — the tool was built for one audience and
+ * would be pointed at another. This swaps in a body that is comprehensible to a stranger,
+ * contains NO personal data of any kind, and tells them plainly that no action is needed.
+ */
+const PUBLIC_BODY = process.argv.includes('--public');
 
 function line(s = '') {
   process.stdout.write(`${s}\n`);
@@ -136,11 +146,10 @@ async function main(): Promise<number> {
     line('  still go out. That is informative, not a mistake: it measures gate C.');
   }
 
-  if (DRY_RUN) {
-    line('');
-    line('DRY RUN — stopping before the send. Nothing was sent; nothing was written.');
-    return 0;
-  }
+  // NOTE: the dry-run check sits AFTER the body is built, deliberately. A dry run that
+  // does not show you what would be sent cannot answer the only question worth asking
+  // before mailing a member of the public: "is this a reasonable thing to receive?"
+  // Moved here 2026-08-12, after a --public run stopped short of printing its own body.
 
   // ── STAGE 2 — gate C: does the provider accept it? ──────────────────────────
   // A unique token makes the message findable in the recipient inbox by search, and makes
@@ -152,7 +161,20 @@ async function main(): Promise<number> {
   line(`  token ${token}`);
 
   const subject = `OSLRS mailbox delivery check ${token}`;
-  const text = [
+  const text = PUBLIC_BODY ? [
+    `We are checking whether this email address is able to receive mail.`,
+    ``,
+    `If you were not expecting this message, you can safely ignore it. No action is`,
+    `needed, nothing has been sent to you in error, and this message contains no`,
+    `personal information about anyone.`,
+    ``,
+    `Reference: ${token}`,
+    ``,
+    `This message was sent from an unmonitored address. If you need to contact us,`,
+    `please write to admin@oyoskills.com.`,
+    ``,
+    `Oyo State Livelihood and Skills Registry`,
+  ].join('\n') : [
     `This is a delivery diagnostic sent by scripts/_diagnose-mailbox-delivery.ts.`,
     ``,
     `Token: ${token}`,
@@ -162,6 +184,16 @@ async function main(): Promise<number> {
     `If you are reading this at the forwarding mailbox, the address receives mail and the`,
     `ImprovMX forward is working. Nothing further is required of you.`,
   ].join('\n');
+
+  if (DRY_RUN) {
+    line('');
+    line(`  Subject: ${subject}`);
+    line('  ' + '-'.repeat(66));
+    text.split('\n').forEach((l) => line(`  ${l}`));
+    line('  ' + '-'.repeat(66));
+    line('  DRY RUN — nothing sent. READ THE BODY ABOVE, especially with --public.');
+    return 0;
+  }
 
   let messageId: string | undefined;
   try {
