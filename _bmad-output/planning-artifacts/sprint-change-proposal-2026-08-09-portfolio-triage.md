@@ -1605,8 +1605,16 @@ answering any of them, and only 13-46's sat on a critical path (and only once th
 **On R-A, record the reframe, because it is the load-bearing half.** The question as posed was *"which
 of three leads"*. F6 already measured **six epics `in-progress`, i.e. zero**, and named that state as the
 **generator** of the duplication in F1-A. Ranking three while leaving six open would have described the
-disease more precisely without treating it. **The ruling is therefore "one epic in progress, five
-parked" — the pick is secondary to the parking.**
+disease more precisely without treating it. **The pick is secondary to the parking.**
+
+> ⛔ **CORRECTION 2026-08-12, by the author.** This paragraph originally read *"the ruling is therefore
+> **one epic in progress, five parked**"*. **That gloss overreached and was never what R-A said.**
+> **Epic 13 is the launch epic and cannot be parked; Epic 11 holds 11-7, which R-A itself ranked
+> SECOND.** R-A parked **9 and 10** — nothing more. The correct target is **three `in-progress`
+> (11, 12, 13)**, and `386e99e` delivered exactly that: **7 → 4 entries, 6 → 3 epics.**
+> ✅ **The board matches the ruling.** Left visible rather than rewritten, because a target stated too
+> strictly makes correct work read as incomplete — and I flagged it as an outstanding item on that
+> basis before checking the file. **A gloss is not the ruling; verify against the artefact.**
 
 **The empirical case for Epic 12, assembled the same day it was ruled on:** five separate instances of
 the measuring-something-else class inside one session — a staff list reporting **124** when the answer
@@ -1839,18 +1847,29 @@ ride the next commit).
 
 #### B. JOHN OWNS — six loose ends
 
-1. **13-45 R3** — the guard does not know `RE-HOMED`, so 13-61's row passes silently. 13-61 argues a
-   re-homed row should **leave the ledger** rather than the guard learn a word. **Fold and rule.**
-2. **13-2 still carries the source-based rate rule in 2 places** — superseded by **R-E**; strike it.
-   ⚠️ **Strike only the RATE clause.** The marketplace-include ruling and the badge (13-38/13-58) stand.
-3. **Epic 12 rename (C2)** — R-A ruled the track leads; the rename that stops it reading as cosmetic
-   has not been done.
-4. **Park Epics 9 and 10 in `sprint-status.yaml`** — R-A's load-bearing half is the parking, and today
-   it exists only as prose. **Six `in-progress` epics is still six until the file says otherwise.**
-5. **Pass 1** — unblocked (§6 ruled, §7.4 discharged, board still 64). Its output feeds §5's Pass 2.
-6. **D8 archive** — handoff §7 is now **14 entries / 1,624 lines**. Keep §7n + §7m, archive §7→§7k to
-   `docs/session-2026-07-to-08.md`. ~20 minutes, mechanical. *A cold-start doc nobody can read in one
-   sitting has stopped being a cold-start doc.*
+**Re-checked 2026-08-12 against the four commits `4fb5041`→`1f06179`. Four of six are DONE.**
+
+1. ~~**13-45 R3** — the guard does not know `RE-HOMED`~~ ✅ **DONE.** **RULED:** `RE-HOMED` is **not a
+   ledger state** — a re-homed item names a receiving story or it stays `OPEN`. 13-61's R1 now names
+   **12-7**, and the guard passes 317 stories **with the row gone rather than unrecognised**, which is
+   the distinction the ruling exists to make.
+2. ~~**13-2 still carries the source-based rate rule in 2 places**~~ ✅ **DONE — and my flag was a FALSE
+   POSITIVE.** Line 20 was **already struck** with the R-E supersession; the second match is the
+   **2026-07-19 changelog entry**, which is *history and correctly immutable*. **I counted `grep`
+   matches instead of reading them** — §2z's own failure (the predicate was "contains the string", the
+   meaning was "still asserts the rule"). ⚠️ **A count is not a read.**
+3. ~~**Epic 12 rename (C2)**~~ ✅ **DONE** — `epic-12-measurement-honesty-and-dashboard-refresh-brief.md`.
+   *The title was doing the deprioritising; it no longer does.*
+4. ~~**Park Epics 9 and 10**~~ ✅ **DONE** — `in-progress` **7 → 4 entries, 6 → 3 epics** (11, 12, 13).
+   **That is exactly what R-A ruled** — see the correction at R-A: my "one epic, five parked" gloss
+   overreached, and Epic 13 (launch) plus Epic 11 (holding 11-7, ranked second) are correctly open.
+5. ⏳ **Pass 1** — still to run. Unblocked (§6 ruled, §7.4 discharged, board re-derived). Feeds §5 Pass 2.
+6. ⏳ **D8 archive** — handoff still **14 §7 entries / 1,624 lines**. Keep §7n + §7m, archive §7→§7k to
+   a dated `docs/session-*.md` (**the precedent already exists** — five such files are on disk).
+   ~20 minutes, mechanical. *A cold-start doc nobody can read in one sitting has stopped being one.*
+7. 🆕 **`9-27-multi-channel-reengagement` is STILL `in-progress`** — F6 measured it at **ten weeks**
+   (since 2026-05-31) and C6 asked for a real status. It is the last of F6's non-states left standing,
+   and it is now the *only* story-level `in-progress` entry on the board.
 
 #### C. AWWAL OWNS — operator actions, none blocked
 
