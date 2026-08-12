@@ -1,6 +1,18 @@
 # Story 13.59: Activation ends with nothing in the person's hands
 
-Status: backlog
+Status: ready-for-dev
+
+<!-- PREPPED FOR DEV 2026-08-12 by Bob (SM) on Awwal's launch-date ruling: FULL SPEC, all 8 ACs
+including the AC5/AC6/AC7 first-login modal + permanent home, no carve. SM note on record: this is
+the largest chunk in the field-day batch and is sequenced LAST (13-60 → 13-57 → 13-59) so that if
+anything slips it is the modal, not the selfie or the ingestion boundary. Premises re-verified
+against prod 1f06179: `activation.complete` is a bare log line with no side effect (auth.service.ts
+:275-280, sole occurrence), and the prod staff count in AC3.3 was stale — the field path HAS now
+been exercised. FIELD-DAY GATE 3 of 3. -->
+
+<!-- ⛔ DO NOT REGENERATE THIS FILE WITH *create-story. It would author from epics.md and destroy
+two rounds of amendments including the AC4 no-attachments ruling. Edit in place. -->
+
 
 <!-- EMERGENT 2026-08-09 from the enumerator invite dry run (Awwal's observation). Activation
 currently ends by redirecting to a login page and issuing no artefact at all.
@@ -36,6 +48,12 @@ English — nobody says *"I have been onboarded."* Subject line: **"Your OSLRS a
 
 Sent once, on `activation.complete`, to the address the account was invited at. Role-specific body:
 
+✅ **VERIFIED 2026-08-12 (Bob/SM) — the premise holds exactly.** `activation.complete` is a **single
+occurrence in the whole API** (`auth.service.ts:275-280`), and it is a bare `logger.info` followed
+immediately by `return updatedUser`. **No email, no artefact, no side effect of any kind.** That log
+call is your insertion point, and it sits *after* the `db.transaction` commits (`:198`) — correct
+placement for AC2.2, since a send failure there cannot roll the activation back.
+
 | role | the sentence that matters |
 |---|---|
 | Enumerator | *"You are cleared for field registration in [LGA]."* + staff ID + **the read-out rule** (never read a number until the app shows one) + **"log in and download your ID card and field briefing before you go out"** (AC4) |
@@ -62,10 +80,16 @@ Sent once, on `activation.complete`, to the address the account was invited at. 
 1. **RED-verify:** neuter the send, prove a test fails.
 2. **AC-liveness:** this must be observed sending for at least an **enumerator** — the role with zero
    production activations before 2026-08-09. Assert on the send record, not on "no error".
-3. ⚠️ Two accounts have ever been activated on prod (both super-admins, 2026-04-26), and a super-admin
-   activation is `backOfficeActivation: true`, which takes a **different branch**. A test that only
-   covers the back-office path proves nothing about the field path — that asymmetry is exactly why two
-   activation defects survived to 2026-08-09.
+3. ⚠️ ~~Two accounts have ever been activated on prod (both super-admins, 2026-04-26)~~, and a
+   super-admin activation is `backOfficeActivation: true`, which takes a **different branch**. A test
+   that only covers the back-office path proves nothing about the field path — that asymmetry is
+   exactly why two activation defects survived to 2026-08-09.
+   ✅ **RE-MEASURED 2026-08-12 — the count is stale and the news is good.** Prod now holds **5 staff
+   accounts**: 2 super_admin (2026-02-23, 2026-04-26) and 3 enumerator (2026-04-20; 2026-08-09
+   *deactivated*; **2026-08-10 active, selfie + ID card, verified 08-11**). The **field path has now
+   been exercised end-to-end on prod**, so AC3.2's observed-send is achievable against a real
+   enumerator rather than blocked on one being created. The branch asymmetry
+   (`backOffice` at `auth.service.ts:171`) is unchanged and the warning still stands.
 
 ### AC4 — ⛔ NO ATTACHMENTS. The email is the prompt; the app is the delivery. (RULED 2026-08-10)
 
@@ -184,3 +208,83 @@ what it cost and what it saved, because a reader deserves to know the design mov
   authored under no longer holds, and sizing it from that line would be wrong.
 - Pairs with **13-60** on one operator screen: *who has no photo* and *who has not downloaded* answer
   the same question — **is this person ready to go out?**
+
+## Tasks / Subtasks
+
+⚠️ **Sizing:** this story has a web half as well as the email. It is sequenced LAST of the three
+field-day gates deliberately — see the header. Do not size it from the "small, self-contained" line
+in its original Notes; that line no longer holds.
+
+- [ ] **Task 1 — The completion email** (AC: #1, #2)
+  - [ ] Insertion point is `services/auth.service.ts:275-280` — `activation.complete` is the **sole
+        occurrence in the API**, a bare `logger.info` followed immediately by `return updatedUser`. It
+        sits **after** the `db.transaction` commits (`:198`), which is what makes AC2.2 safe: a send
+        failure there cannot roll the activation back.
+  - [ ] Send via `services/notification-meter.service.ts` (the counted chokepoint, 9-63) — not a bare
+        provider call.
+  - [ ] Role copy in ONE place keyed by role; a role with no copy **fails loudly**, never sends blank.
+  - [ ] Login URL is **`/staff/login`**, not `/login` (the 2026-08-09 redirect bug — do not reintroduce
+        it in copy). Avoid the word "onboarded".
+  - [ ] ⛔ **No attachments** (AC4, Awwal's standing ruling) — the shared sending domain carries the
+        blast programme and the jingle.
+- [ ] **Task 2 — First-login modal** (AC: #5)
+  - [ ] Reuse the existing authenticated `GET /users/id-card` (`routes/user.routes.ts:24`). **No new
+        download path.**
+  - [ ] Closeable per the ruling — which is exactly why Task 4 is load-bearing.
+  - [ ] 🔗 **Depends on 13-60.** When `liveSelfieIdCardUrl` is NULL the card cannot be generated
+        (`user.controller.ts:89`). The modal must say the photo is missing and link 13-60's magic-link
+        retry — a PULLED artefact can be withheld; this is why the no-attachments ruling downgraded
+        13-60 from blocker to strong dependency.
+- [ ] **Task 3 — A permanent home, one implementation** (AC: #6)
+  - [ ] `features/dashboard/pages/ProfilePage.tsx` section is **canonical**; the enumerator sidebar
+        entry (`features/dashboard/config/sidebarConfig.ts`) **links to it** rather than
+        re-implementing (13-55's five-copies lesson). Sidebar tests exist at
+        `features/dashboard/__tests__/sidebarConfig.test.ts`.
+- [ ] **Task 4 — Prove they actually have it** (AC: #7) — ⛔ **do not cut this**
+  - [ ] Audit each download: `staff.id_card_downloaded` / `staff.briefing_downloaded`, matching the
+        existing dotted vocabulary in `services/audit.service.ts` (`user.activated`,
+        `respondent.self_updated`) — **no schema change**.
+  - [ ] Operator view of **who has NOT downloaded**; modal re-appears while either artefact is
+        outstanding. Without this the story ships an offer, not a delivery
+        ([[pattern-ship-a-fix-that-never-fires]]).
+  - [ ] 🔗 Same operator surface as 13-60 Task 3.
+- [ ] **Task 5 — Briefing drift guard** (AC: #6, #8)
+  - [ ] `docs/runbooks/enumerator-field-briefing.md` (112 lines) is still Markdown. Render the PDF in
+        CI or guard that the `.md` cannot change without it. *A stale briefing in the field is worse
+        than none, because it will be believed.*
+- [ ] **Task 6 — Prove it end to end on the artefact** (AC: #3, #8)
+  - [ ] **RED-verify:** neuter the send, prove a test fails.
+  - [ ] Observe it for an **enumerator** — ✅ now possible against a real prod account (see AC3.3).
+        ⚠️ Super-admin activation is `backOfficeActivation: true` and takes a **different branch**
+        (`auth.service.ts:171`); a back-office-only test proves nothing about the field path.
+  - [ ] Assert the **artefact**: the PDF opens, the photo is present, the QR resolves, the briefing
+        matches the current `.md`. "I received the email" and "the modal appeared" both pass over the
+        hole — a card with an empty photo box downloads perfectly well.
+
+## Dev Notes
+
+### Project Structure Notes
+
+- API: `services/auth.service.ts` (activation), `services/notification-meter.service.ts` (counted
+  chokepoint), `services/audit.service.ts` (action vocabulary), `routes/user.routes.ts:24` (id-card).
+- Web: `features/dashboard/pages/ProfilePage.tsx`, `features/dashboard/config/sidebarConfig.ts`,
+  onboarding activation flow under `features/onboarding/`.
+- Web tests run from `apps/web` (`cd apps/web && pnpm vitest run`) — **never** `pnpm vitest run` from
+  the repo root for web; that picks up the wrong config.
+
+### References
+
+- Prod verification 2026-08-12 (`1f06179`): `activation.complete` sole occurrence; 5 staff accounts,
+  field path now exercised end-to-end (see AC3.3).
+- 9-63 (notification meter / counted send), 9-12 (magic-link self-update), 13-4 R8 (field briefing).
+- Pairs with 13-60 on one operator screen and one dependency (the card needs the photo).
+
+## Change Log
+
+| Date | Change | By |
+|---|---|---|
+| 2026-08-09 | Raised EMERGENT from the enumerator invite dry run | Awwal |
+| 2026-08-10 | Amended — briefing + ID card attached to the email | John (PM) |
+| 2026-08-10 | ⛔ Attachments RULED OUT same day; email becomes the prompt, app the delivery; AC5/6/7 added | Awwal |
+| 2026-08-12 | Premises re-verified on prod; AC3.3's stale activation count corrected; flipped to `ready-for-dev` (full spec, all 8 ACs) | Bob (SM) |
+| 2026-08-12 | Tasks/Subtasks + Dev Notes added | Bob (SM) |

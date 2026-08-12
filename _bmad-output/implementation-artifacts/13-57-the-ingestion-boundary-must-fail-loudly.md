@@ -1,6 +1,16 @@
 # Story 13.57: The ingestion boundary must fail loudly
 
-Status: backlog
+Status: ready-for-dev
+
+<!-- PREPPED FOR DEV 2026-08-12 by Bob (SM) on Awwal's launch-date ruling: FULL SPEC, all 5 ACs, no
+carve. Premises re-verified against prod 1f06179 before the flip — see "THE FOURTH READER RAN THE
+QUERY". Two findings: orphans still exactly 2 (unchanged in 8 days, 282 processed, producer live
+today), and `submissions.processing_error` already exists and has never been written, which removes
+the migration AC2 looked like it needed. FIELD-DAY GATE 2 of 3; sequence 13-60 → 13-57 → 13-59. -->
+
+<!-- ⛔ DO NOT REGENERATE THIS FILE WITH *create-story. It would author from epics.md and destroy
+four rounds of corrections that cost real measurement to earn. Edit in place. -->
+
 
 <!-- EMERGENT 2026-08-09, from the enumerator-invite dry run and the teardown that followed it.
 ⚠️ THIS STORY HAS NOW BEEN CORRECTED THREE TIMES, BY THREE DIFFERENT READERS, AND EVERY CORRECTION IS
@@ -113,6 +123,37 @@ hole open:
 the producer is still running, and the jingle multiplies public-wizard traffic. This is the same
 "clear the stock, leave the producer" trap as 13-50 R5.
 
+## ✅ THE FOURTH READER RAN THE QUERY (2026-08-12, Bob/SM, prod `1f06179`)
+
+The header asks for this and no prior reader did it. Results — **the story stands, one AC gets
+cheaper, and the "producer is still running" worry is now bounded by evidence rather than asserted:**
+
+| measurement | value | what it means |
+|---|---|---|
+| submissions with `respondent_id IS NULL` | **2** | Still exactly the two from 2026-08-04. No new orphan in 8 days. |
+| `processed = true` | **282** | The happy path is healthy and busy. |
+| newest `submitted_at` | **2026-08-12 05:24Z** | The producer **is** live — traffic today. |
+| rows with `processing_error IS NOT NULL` | **0 of 284** | See below. This is the finding. |
+
+**⭐ `submissions.processing_error` ALREADY EXISTS — `text`, nullable — and is NULL on all 284 prod
+rows.** AC2 needs **no migration and no new column**.
+
+⚠️ **Refined while writing the Tasks, and it makes AC2 cheaper still:** the column is not inert code,
+only inert *data*. **One path already writes it** — `workers/webhook-ingestion.worker.ts:193` — and
+**two surfaces already read it** (`controllers/form.controller.ts:382-388`, and
+`controllers/supervisor.controller.ts:188` as `failedCount`). So AC2 is *copy the sibling ingestion
+path onto this one*, not *invent a mechanism*.
+
+⛔ **And it surfaced a defect nobody had noticed.** `supervisor.controller.ts:188` counts
+`processingError IS NOT NULL AND processed = true`. **The dead rows this story exists for are
+`processed = false`** — so that metric would keep reading zero even after you start writing the
+column. A metric that cannot go non-zero is [[pattern-monitor-measuring-something-else]]; fix the
+predicate in Task 2 or AC3's signal is born broken.
+
+⚠️ **Do not read "2, unchanged" as "fixed".** Nothing was fixed — the two malformed inputs simply
+have not recurred in 8 days. The producer is live and the jingle multiplies public-wizard traffic, so
+the sample is small, not safe. This is the 13-50 R5 trap named in the Context, and it is still open.
+
 ## Acceptance Criteria
 
 ### AC1 — Normalise, do not reject
@@ -140,6 +181,11 @@ the producer is still running, and the jingle multiplies public-wizard traffic. 
 
 1. When respondent creation throws, the submission is marked with a **terminal, queryable failure
    state and the reason** — not left indistinguishable from "not processed yet".
+   ✅ **The reason field already exists: `submissions.processing_error` (`text`, nullable), NULL on
+   all 284 prod rows.** Write it; do not add a column. The **terminal state** is the part that still
+   needs designing — `processed` is a boolean and cannot carry three states, so this is a new
+   discriminator (nullable `processed_at` + a non-null `processing_error` is the cheapest honest
+   encoding, but that is the dev's call to make explicit and test).
 2. It emits an ERROR-level log with a stable event name (e.g. `submission.respondent_write_failed`)
    carrying the submission id and the constraint that rejected it.
 3. ⚠️ **`processed = false` is not a failure state.** Today it means both "queued" and "permanently
@@ -189,3 +235,75 @@ re-pinning, [[project_public_wizard_form_update]]).
   input it cannot store, fails silently, and is visible only by accident. The original framing
   ("two citizens lost") was WRONG — see the correction at the top of this file.
 - Sibling of 13-42 (which watches metrics) — this makes the *ingestion* boundary observable.
+
+## Tasks / Subtasks
+
+- [ ] **Task 1 — Resolve the normaliser/column contract collision** (AC: #1)
+  - [ ] `lib/normalise/phone.ts:31` `normaliseNigerianPhone` pushes `wrong_length:expected_10_got_N`
+        (`:62`) and **returns the raw input by design** so a back-fill can flag the row. The caller at
+        `submission-processing.service.ts:235` then writes that raw value into a CHECK-constrained
+        column. **Do not "fix" the normaliser's return contract** — a back-fill depends on it. Fix the
+        CALLER: a result carrying `wrong_length` must never reach `respondents.phone_number`.
+  - [ ] Route that case to Task 2's terminal state with the warning as the reason.
+  - [ ] Accept `0705…`, `+234 0705…`, `234705…`, spaced variants. ⚠️ **No client-side reject gate** —
+        see AC1.3; local format is not a user error.
+  - [ ] **RED-verify:** `07051286580` + `+234 08120004038` through the real submit path land ONE
+        respondent each at `+2347051286580` / `+2348120004038`. Neuter the call, prove it reds.
+- [ ] **Task 2 — Terminal failure state + the reason** (AC: #2)
+  - [ ] ⭐ **Do not design this from scratch and do not add a column.** `submissions.processing_error`
+        already exists (`db/schema/submissions.ts:79`, `text`, nullable) **and a sibling ingestion path
+        already writes it**: `workers/webhook-ingestion.worker.ts:193` sets
+        `processingError: errorMessage`. **Copy that shape onto the public/enumerator/clerk path.**
+  - [ ] ⛔ **Fix the reader while you are here.** `controllers/supervisor.controller.ts:188` computes
+        `failedCount` as `processingError IS NOT NULL AND processed = true`. The dead rows this story
+        is about are **`processed = false`**, so that metric would **still miss them after you start
+        writing the column**. Widen the predicate or the AC3 signal is born broken.
+  - [ ] `controllers/form.controller.ts:382-388` already selects and returns `processingError` — once
+        written, that surface lights up for free. Confirm it renders.
+  - [ ] ERROR log with a stable event name (`submission.respondent_write_failed`) carrying submission
+        id + the rejecting constraint.
+  - [ ] Encode the third state. `processed` is boolean and cannot carry queued/done/dead; agree the
+        discriminator explicitly and test it.
+- [ ] **Task 3 — Digest surfaces unprocessable submissions** (AC: #3)
+  - [ ] Extend `queues/ops-digest.queue.ts`: count + age of oldest. Silent when zero (13-42 AC4).
+- [ ] **Task 4 — Unparsed marketplace consent** (AC: #4)
+  - [ ] `submission-processing.service.ts:493` —
+        `String(extracted['consentMarketplace'] ?? '').toLowerCase() === 'yes'`. Log
+        `marketplace.consent_unparsed` with the raw value when the form HAS the question and the answer
+        is neither `yes` nor `no`. ⚠️ **Do not flip the default.**
+- [ ] **Task 5 — Form-contract guard at publish/pin** (AC: #5)
+  - [ ] The by-name field map is `submission-processing.service.ts:64` (`'consent_marketplace':
+        'consentMarketplace'`, etc.) — assert against **that map**, so the guard cannot drift from the
+        consumer it protects.
+  - [ ] Block the pin in `controllers/form.controller.ts` / `routes/form.routes.ts` naming the missing
+        field and its consumer.
+
+## Dev Notes
+
+### Project Structure Notes
+
+- Normaliser lives at `apps/api/src/lib/normalise/phone.ts`, re-exported via `lib/normalise/index.ts:9`;
+  existing tests at `lib/normalise/__tests__/phone.test.ts` — extend rather than start a new file.
+- The ingestion path this story fixes is `services/submission-processing.service.ts`. The **webhook**
+  path (`workers/webhook-ingestion.worker.ts`) is a separate ingest that already does the right thing.
+  ⚠️ Per `:1136-1137` the **wizard does its own in-transaction link and writes `processed: true`,
+  deliberately bypassing this worker** — so verify your fix actually executes on the wizard path
+  ([[pattern-ship-a-fix-that-never-fires]]).
+- Schema files must not import from `@oslsr/types` (no dist) — inline any new enum constant with a
+  comment naming the canonical source.
+
+### References
+
+- Prod evidence: see "THE FOURTH READER RAN THE QUERY" above (prod `1f06179`, 2026-08-12).
+- `respondents` CHECK: `phone_number ~ '^\+234\d{10}$'`.
+- Related: 13-42 (metric watch), 9-26 (respondent ⇒ submission invariant; this is the inverse — SCP F5).
+
+## Change Log
+
+| Date | Change | By |
+|---|---|---|
+| 2026-08-09 | Raised EMERGENT; severity corrected same day (nobody was lost) | Awwal / John (PM) |
+| 2026-08-09 | Correction #2 — the normaliser IS called; contract collision, not a missing call | John (PM) |
+| 2026-08-11 | Correction #3 — the `lga_id` slug-vs-UUID premise is false (SCP §10.4) | John (PM) |
+| 2026-08-12 | Fourth-reader query run on prod; `processing_error` found to exist unwritten; flipped `backlog` → `ready-for-dev` (full spec, all 5 ACs) | Bob (SM) |
+| 2026-08-12 | Tasks/Subtasks + Dev Notes added; found the existing writer and the broken `failedCount` predicate | Bob (SM) |
