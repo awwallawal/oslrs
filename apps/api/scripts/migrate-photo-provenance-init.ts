@@ -63,6 +63,21 @@ async function columnExists(column: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * ⚠️ `ADD COLUMN IF NOT EXISTS` guards the COLUMN, not the TABLE. On a fresh
+ * database `users` does not exist until `db:push` has run, and this runner is
+ * deliberately ordered BEFORE it — so every statement here must tolerate the
+ * table being absent. See the fresh-database branch in `run()`.
+ */
+async function tableExists(table: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = $1`,
+    [table],
+  );
+  return rows.length > 0;
+}
+
 async function run(): Promise<void> {
   console.log('[migrate-photo-provenance-init] Starting Story 13-60 photo-provenance migration...');
 
@@ -132,8 +147,33 @@ async function run(): Promise<void> {
         `(${scored} scored / ${carded} with an ID card); nothing to rename.`,
     );
   } else {
-    // Neither column exists — a brand-new database. db:push will create
-    // photo_sharpness_score directly from the Drizzle schema.
+    /*
+     * Neither column exists. Two very different worlds land here, and only one
+     * of them is a database this runner can touch:
+     *
+     *   - a FRESH database, where `users` does not exist at all because
+     *     `db:push` has not run yet (every CI `test-api` job, and any new
+     *     environment);
+     *   - an older database that somehow has `users` without either column.
+     *
+     * Caught by CI on this runner's FIRST real run (31737577114): the branch
+     * logged "Fresh database" and then step 2 below issued
+     * `ALTER TABLE users ADD COLUMN` against a table that did not exist —
+     * `relation "users" does not exist`, exit 1, and `deploy` skipped.
+     * `ADD COLUMN IF NOT EXISTS` guards the COLUMN, never the TABLE.
+     *
+     * On a fresh database there is nothing to migrate: `db:push` creates all
+     * four columns from the Drizzle schema, and there are no rows to backfill.
+     * So return — do not "ensure" columns on a table that is about to be
+     * created correctly anyway.
+     */
+    if (!(await tableExists('users'))) {
+      console.log(
+        '[migrate-photo-provenance-init] ✓ Fresh database — `users` does not exist yet. ' +
+          'db:push will create the table and all four columns from the schema; nothing to migrate.',
+      );
+      return;
+    }
     console.log('[migrate-photo-provenance-init] ✓ Fresh database; db:push will create photo_sharpness_score.');
   }
 
