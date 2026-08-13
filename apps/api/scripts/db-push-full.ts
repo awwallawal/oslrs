@@ -58,7 +58,43 @@ function run(cmd: string, args: string[]): Promise<void> {
   });
 }
 
+/**
+ * ⛔ Runners that MUST execute BEFORE `drizzle-kit push`, not after it.
+ *
+ * The default for a `migrate-*-init.ts` runner is to run AFTER push, because it
+ * adds objects Drizzle cannot express. A runner belongs on THIS list only when
+ * its job is to make push a no-op — i.e. it performs a change push would
+ * otherwise get catastrophically wrong.
+ *
+ * `migrate-photo-provenance-init.ts` (Story 13-60) renames
+ * `users.liveness_score` → `users.photo_sharpness_score`. `drizzle-kit push`
+ * cannot tell a rename from a drop+add: it prompts, and `db-push.ts --force`
+ * answers that prompt with "create column" and auto-confirms the follow-up
+ * data-loss prompt. Pushing first would therefore create an EMPTY
+ * `photo_sharpness_score` and DROP the populated `liveness_score`. Doing the
+ * `ALTER TABLE ... RENAME COLUMN` first leaves push nothing to ask about.
+ */
+const PRE_PUSH_RUNNERS = ['migrate-photo-provenance-init.ts'];
+
 async function main(): Promise<void> {
+  const scriptsDir = path.resolve(apiRoot, 'scripts');
+  const allRunners = readdirSync(scriptsDir)
+    .filter((f) => /^migrate-.*-init\.ts$/.test(f))
+    .sort();
+
+  // Step 0: the pre-push runners. Fail loudly if one is named but missing —
+  // silently skipping it is how the column gets dropped.
+  for (const runner of PRE_PUSH_RUNNERS) {
+    if (!allRunners.includes(runner)) {
+      throw new Error(
+        `PRE_PUSH_RUNNERS names "${runner}" but it does not exist in scripts/. ` +
+          `Either restore it or remove it from the list — running push without it can drop columns.`,
+      );
+    }
+    console.log(`\n[db:push:full] Running PRE-push runner: ${runner}`);
+    await run('pnpm', ['exec', 'tsx', path.posix.join('scripts', runner)]);
+  }
+
   // Step 1: db:push
   if (FORCE) {
     await run('pnpm', ['exec', 'tsx', 'scripts/db-push.ts', '--force']);
@@ -66,11 +102,8 @@ async function main(): Promise<void> {
     await run('pnpm', ['exec', 'drizzle-kit', 'push']);
   }
 
-  // Step 2: discover and run every migrate-*-init.ts in alphabetical order
-  const scriptsDir = path.resolve(apiRoot, 'scripts');
-  const runners = readdirSync(scriptsDir)
-    .filter((f) => /^migrate-.*-init\.ts$/.test(f))
-    .sort();
+  // Step 2: every remaining migrate-*-init.ts in alphabetical order
+  const runners = allRunners.filter((f) => !PRE_PUSH_RUNNERS.includes(f));
 
   if (runners.length === 0) {
     console.warn('[db:push:full] No migrate-*-init.ts runners found in apps/api/scripts/.');

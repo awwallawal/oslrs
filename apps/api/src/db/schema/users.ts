@@ -19,8 +19,34 @@ export const users = pgTable('users', {
   nextOfKinPhone: text('next_of_kin_phone'),
   liveSelfieOriginalUrl: text('live_selfie_original_url'),
   liveSelfieIdCardUrl: text('live_selfie_id_card_url'),
-  livenessScore: text('liveness_score'), // Stored as text to be safe with float precision or JSON
+  /*
+   * ⚠️ RENAMED FROM `liveness_score` (Story 13-60 AC6.4). It never held a
+   * liveness score. It holds `min(stdev(brightness) / 100, 0.99)` — an image
+   * SHARPNESS ratio — computed in photo-processing.service.ts. The old code
+   * carried a comment saying the value "comes from Rekognition in production";
+   * Rekognition is not wired, has never been wired, and nothing gates on this
+   * number. A column whose name asserts a property its value does not have is
+   * the sixth instance of this class found in two days.
+   *
+   * If a real liveness check is ever added, it gets its own column and does not
+   * have to fight a name already taken by something else.
+   *
+   * Stored as text to be safe with float precision or JSON.
+   */
+  photoSharpnessScore: text('photo_sharpness_score'),
   liveSelfieVerifiedAt: timestamp('live_selfie_verified_at', { withTimezone: true }),
+
+  /*
+   * Story 13-60 — photo provenance. Canonical value lists live in
+   * `@oslsr/types` (PHOTO_STATUS / PHOTO_SOURCE); inlined here because Drizzle
+   * schema files must not import from @oslsr/types (no dist/ at push time).
+   *
+   * `photoStatus` NULL = the photo step never applied (back-office activation,
+   * or an account that predates this column). NULL IS NOT A FAILURE.
+   */
+  photoStatus: text('photo_status', { enum: ['saved', 'skipped', 'failed'] }),
+  photoSource: text('photo_source', { enum: ['live_capture', 'upload'] }),
+  photoFailureReason: text('photo_failure_reason'),
   roleId: uuid('role_id').notNull().references(() => roles.id),
   lgaId: uuid('lga_id').references(() => lgas.id), // Nullable for state-wide roles
   status: text('status', { enum: ['invited', 'active', 'verified', 'suspended', 'deactivated', 'pending_verification'] }).notNull().default('invited'),

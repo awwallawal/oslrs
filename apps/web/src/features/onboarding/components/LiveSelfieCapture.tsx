@@ -8,8 +8,20 @@ import { logger } from '../../../lib/logger';
 const MODEL_LOAD_TIMEOUT_MS = 15_000;
 
 interface LiveSelfieCaptureProps {
-  onCapture: (file: File) => void;
+  /**
+   * @param file  The image.
+   * @param source WHICH path produced it (Story 13-60 AC6.2). The caller must
+   *   pass this through to the API — an uploaded passport photograph stored as
+   *   a live capture recreates, self-inflicted, the exact defect 13-60 fixes.
+   */
+  onCapture: (file: File, source: 'live_capture' | 'upload') => void;
 }
+
+/** Uploaded files are re-encoded below this pixel bound before leaving the device. */
+const UPLOAD_MAX_DIMENSION = 1600;
+
+/** Matches the API's own 5MB ceiling; we downscale rather than let it 400. */
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
 const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const webcamRef = useRef<Webcam>(null);
@@ -115,6 +127,48 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   };
 
   /**
+   * Re-encode a chosen file to a bounded JPEG before it leaves the device.
+   *
+   * A modern phone photograph is routinely 4-8MB, and the API rejects anything
+   * over 5MB — so uploading the original would fail for a large share of the
+   * people this fallback exists to serve, which is the failure mode 13-60 is
+   * about. Downscaling here keeps that off the field-day path entirely.
+   */
+  const downscaleImage = (file: File, maxDimension: number): Promise<File> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Failed to decode image'));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            const ratio = Math.min(maxDimension / width, maxDimension / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Failed to get canvas context'));
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return reject(new Error('Failed to encode image'));
+              resolve(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            0.9,
+          );
+        };
+        img.src = ev.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  /**
    * Turn the `getScreenshot()` data URL into a File — WITHOUT `fetch()`.
    *
    * ⚠️ This used to be `await fetch(capturedImage)`, and it is why "Use Photo" did nothing at
@@ -144,12 +198,51 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
     // attempts. Any throw from here is now visible to the person standing in front of it.
     try {
       setCaptureError(null);
-      onCapture(dataUrlToFile(capturedImage, 'selfie.jpg'));
+      onCapture(dataUrlToFile(capturedImage, 'selfie.jpg'), 'live_capture');
     } catch (e) {
       logger.error('Failed to prepare the captured selfie:', e);
       setCaptureError(
         'We could not prepare your photo. Please tap Retake and try again — if it keeps failing, you can continue and add your photo later.',
       );
+    }
+  };
+
+  /**
+   * Story 13-60 AC5.4 + AC6 — THE RECORDED WAY THROUGH.
+   *
+   * `canCapture` disables the button when the model is healthy and sees no
+   * face. That check cannot be satisfied by someone the detector will not
+   * detect, and it could not be overridden — so it converted a required step
+   * into a SKIPPED one, which then landed in the silent swallow on the server.
+   * A check you cannot pass and cannot bypass is worse than no check.
+   *
+   * The way through is an upload, and it is RECORDED as an upload
+   * (`source: 'upload'`) rather than quietly stored as though a camera had
+   * produced it. Live capture stays the default and preferred path; nothing
+   * here makes it easier to avoid than to use.
+   *
+   * ⚠️ This forfeits no anti-fraud property, because there is none to forfeit:
+   * the stored score is an image-sharpness ratio (not liveness), nothing gates
+   * on it, `liveSelfieVerifiedAt` is auto-set, and the only real check is
+   * "one face in frame" — which a printed photograph also satisfies.
+   */
+  const handleUploadChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Let the same file be re-chosen after a failure.
+    e.target.value = '';
+    if (!file) return;
+
+    setCaptureError(null);
+    try {
+      const prepared = await downscaleImage(file, UPLOAD_MAX_DIMENSION);
+      if (prepared.size > UPLOAD_MAX_BYTES) {
+        setCaptureError('That image is too large even after resizing. Please choose a smaller photo.');
+        return;
+      }
+      onCapture(prepared, 'upload');
+    } catch (err) {
+      logger.error('Failed to prepare the uploaded photo:', err);
+      setCaptureError('We could not read that image file. Please choose a different photo.');
     }
   };
 
@@ -229,11 +322,21 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
               </div>
             )}
 
-            {/* Model failed — camera still works */}
+            {/*
+              * Model failed — camera still works.
+              *
+              * ⚠️ Story 13-60 AC5.5. The most likely cause in the field is not a
+              * bug: the model is fetched from a THIRD-PARTY CDN
+              * (cdn.jsdelivr.net) at activation time with a 15s timeout, so a
+              * field officer on poor connectivity lands here. It used to say
+              * only "unavailable", leaving them to guess whether their photo
+              * would count. Say what it means and what to do.
+              */}
             {modelFailed && (
-              <div className="absolute top-4 left-0 right-0 text-center">
-                <span className="bg-amber-500 text-white px-2 py-1 rounded text-sm">
-                  Face detection unavailable — you can still capture
+              <div className="absolute top-4 left-2 right-2 text-center">
+                <span className="bg-warning-600 text-white px-2 py-1 rounded text-sm inline-block">
+                  Face detection unavailable (poor connection?) — capture still works. Centre your
+                  face in the oval.
                 </span>
               </div>
             )}
@@ -241,9 +344,18 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
         )}
       </div>
 
-      {/* The whole point of the 2026-08-10 fix: a failure here must be SEEN. */}
+      {/*
+        * The whole point of the 2026-08-10 fix: a failure here must be SEEN.
+        *
+        * ⚠️ Story 13-60: the palette classes were `text-error-700 bg-error-50
+        * border-error-200`, and NONE of those three tokens exist — the theme
+        * defines only `-100` and `-600` for semantic colours (index.css
+        * @theme). So the alert added specifically to make a silent failure
+        * visible was rendering as unstyled black-on-white text. Corrected to
+        * defined tokens.
+        */}
       {captureError && (
-        <p role="alert" className="max-w-md text-center text-sm text-error-700 bg-error-50 border border-error-200 rounded-md px-3 py-2">
+        <p role="alert" className="max-w-md text-center text-sm text-neutral-900 bg-error-100 border border-error-600 rounded-md px-3 py-2">
           {captureError}
         </p>
       )}
@@ -274,6 +386,41 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
           </>
         )}
       </div>
+
+      {/*
+        * Story 13-60 AC5.4 — the way out of the no-face dead-end.
+        *
+        * Shown only BEFORE a capture is confirmed, and deliberately styled as a
+        * quiet secondary action: live capture stays the default and preferred
+        * path. It becomes prominent exactly when the person is stuck — the
+        * model is working, it sees no face, and the Capture button is disabled.
+        */}
+      {!capturedImage && (
+        <div className="w-full max-w-md text-center space-y-2">
+          {faceDetectionReady && faceCount === 0 && (
+            <p className="text-sm text-neutral-700">
+              Not being detected? You can use an existing passport photograph instead.
+            </p>
+          )}
+          <label
+            className="inline-block text-sm text-primary-600 hover:text-primary-700 underline cursor-pointer"
+            data-testid="upload-photo-label"
+          >
+            Upload a photo instead
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              onChange={handleUploadChosen}
+              data-testid="upload-photo-input"
+            />
+          </label>
+          <p className="text-xs text-neutral-500">
+            A clear, front-facing passport photograph. We record that this one was uploaded
+            rather than taken here.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

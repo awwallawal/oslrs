@@ -71,6 +71,11 @@ describe('StaffController', () => {
         roleId: undefined,
         lgaId: undefined,
         search: undefined,
+        // Story 13-60 AC3.1 — explicitly FALSE, not undefined. The default for
+        // the operator's "who has no ID photo?" filter is "no filter", and
+        // stating it keeps this exact-shape assertion honest about what the
+        // controller actually sends.
+        missingPhoto: false,
       });
       expect(jsonMock).toHaveBeenCalledWith({
         ...mockData,

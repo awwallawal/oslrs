@@ -49,9 +49,10 @@ import {
   formatDigest,
   formatNotificationUsageLines,
   formatAbuseLines,
+  formatFieldStaffPhotoLines,
   runOpsDigest,
 } from '../ops-digest.worker.js';
-import type { NotificationUsage } from '@oslsr/types';
+import type { NotificationUsage, FieldStaffPhotoHealth } from '@oslsr/types';
 
 function healthySnapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboardSnapshot {
   return {
@@ -278,5 +279,69 @@ describe('formatDigest with usage + abuse (AC4/AC5)', () => {
     ]);
     expect(msg).toContain('*Abuse / anomaly alerts*');
     expect(msg).toContain('🚨');
+  });
+});
+
+/**
+ * Story 13-60 AC3.2 — the ID-card readiness line.
+ *
+ * ⚠️ The load-bearing assertion here is the SILENCE one. A digest line that
+ * renders "0 missing" every morning is a line the operator stops reading, and
+ * this one has to be legible on the day somebody is about to print twelve
+ * cards. Fire on the real shape; say nothing when there is nothing.
+ */
+describe('formatFieldStaffPhotoLines (13-60 AC3.2)', () => {
+  const health = (overrides?: Partial<FieldStaffPhotoHealth>): FieldStaffPhotoHealth => ({
+    activeFieldStaff: 12,
+    withPhoto: 12,
+    missingPhoto: 0,
+    failed: 0,
+    skipped: 0,
+    fromUpload: 0,
+    ...overrides,
+  });
+
+  it('says NOTHING when every active field officer has a photo', () => {
+    expect(formatFieldStaffPhotoLines(health())).toEqual([]);
+  });
+
+  it('says nothing when the section is unavailable — an absent count is not a finding', () => {
+    expect(formatFieldStaffPhotoLines(null)).toEqual([]);
+    expect(formatFieldStaffPhotoLines(undefined)).toEqual([]);
+  });
+
+  it('reports the shortfall against the denominator when somebody has no photo', () => {
+    const lines = formatFieldStaffPhotoLines(health({ withPhoto: 9, missingPhoto: 3, skipped: 3 }));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).toContain('3 of 12 active field staff have no photo');
+    expect(lines.join('\n')).toContain('3 skipped the step');
+  });
+
+  it('goes RED when the failure was ours, YELLOW when the person chose it', () => {
+    expect(formatFieldStaffPhotoLines(health({ missingPhoto: 1, failed: 1 }))[0]).toContain('🔴');
+    expect(formatFieldStaffPhotoLines(health({ missingPhoto: 1, skipped: 1 }))[0]).toContain('🟡');
+  });
+
+  it('names pre-13-60 accounts as "not recorded" rather than folding them into skipped', () => {
+    // 4 missing, only 1 of which has a recorded reason. Inventing a reason for
+    // the other 3 would fabricate the very distinction the story creates.
+    const lines = formatFieldStaffPhotoLines(health({ withPhoto: 8, missingPhoto: 4, skipped: 1 }));
+    expect(lines.join('\n')).toContain('3 not recorded');
+    expect(lines.join('\n')).not.toContain('4 skipped');
+  });
+
+  it('surfaces how many stored photos came from an upload (AC6.3)', () => {
+    const lines = formatFieldStaffPhotoLines(health({ withPhoto: 10, missingPhoto: 2, skipped: 2, fromUpload: 3 }));
+    expect(lines.join('\n')).toContain('3 of 10 stored photos came from an upload');
+  });
+
+  it('is wired into formatDigest — and stays out of it when there is nothing to say', () => {
+    const withFinding = formatDigest(
+      healthySnapshot({ fieldStaffPhotos: health({ withPhoto: 9, missingPhoto: 3, failed: 3 }) }),
+    );
+    expect(withFinding).toContain('ID cards');
+
+    const clean = formatDigest(healthySnapshot({ fieldStaffPhotos: health() }));
+    expect(clean).not.toContain('ID cards');
   });
 });

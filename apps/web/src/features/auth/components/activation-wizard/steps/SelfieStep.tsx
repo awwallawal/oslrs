@@ -82,13 +82,16 @@ export function SelfieStep({
   /**
    * Handle successful image capture from LiveSelfieCapture
    */
-  const handleCapture = useCallback(async (file: File) => {
+  const handleCapture = useCallback(async (file: File, source: 'live_capture' | 'upload' = 'live_capture') => {
     setProcessingImage(true);
     setCameraError(null);
 
     try {
       const base64 = await resizeImageToBase64(file);
-      updateFormData({ selfieBase64: base64 });
+      // Story 13-60 AC6.2 — the discriminator travels with the image. Storing
+      // an uploaded passport photograph as a live capture would recreate, on
+      // purpose, the defect this story fixes one column over.
+      updateFormData({ selfieBase64: base64, selfieSource: source });
       setCaptureMode('captured');
     } catch {
       setCameraError('Failed to process image. Please try again.');
@@ -101,7 +104,7 @@ export function SelfieStep({
    * Handle skipping the selfie step
    */
   const handleSkip = useCallback(() => {
-    updateFormData({ selfieBase64: undefined });
+    updateFormData({ selfieBase64: undefined, selfieSource: undefined });
     setCaptureMode('skipped');
   }, [updateFormData]);
 
@@ -109,7 +112,7 @@ export function SelfieStep({
    * Reset to capture another photo
    */
   const handleRetake = useCallback(() => {
-    updateFormData({ selfieBase64: undefined });
+    updateFormData({ selfieBase64: undefined, selfieSource: undefined });
     setCaptureMode('capturing');
     setCameraError(null);
   }, [updateFormData]);

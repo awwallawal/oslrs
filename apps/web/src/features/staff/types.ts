@@ -30,6 +30,20 @@ export interface StaffMember {
   createdAt: string;
   invitedAt: string | null;
   emailStatus?: 'pending' | 'failed' | 'not_configured';
+  /**
+   * Story 13-60 AC3.1 — can an ID card actually be printed for this person?
+   * Derived server-side from `live_selfie_id_card_url IS NOT NULL`, the exact
+   * condition the card endpoint refuses on.
+   */
+  hasPhoto?: boolean;
+  /** Why not, when not. null = the photo step never applied (back-office). */
+  photoStatus?: 'saved' | 'skipped' | 'failed' | null;
+  /**
+   * AC6.3 — live capture or upload, as REPORTED by the client; also set on a
+   * failed attempt, where it records the path that was tried.
+   */
+  photoSource?: 'live_capture' | 'upload' | null;
+  photoFailureReason?: string | null;
 }
 
 /**
@@ -60,6 +74,8 @@ export interface ListStaffParams {
   roleId?: string;
   lgaId?: string;
   search?: string;
+  /** Story 13-60 AC3.1 — narrow to staff who cannot be issued an ID card. */
+  missingPhoto?: boolean;
 }
 
 /**

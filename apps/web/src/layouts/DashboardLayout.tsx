@@ -27,6 +27,7 @@ import { SWUpdateBanner } from '../components/SWUpdateBanner';
 import { useAuth } from '../features/auth/context/AuthContext';
 import { useServiceWorker } from '../hooks/useServiceWorker';
 import { getSidebarItems } from '../features/dashboard/config/sidebarConfig';
+import { MissingPhotoBanner } from '../features/dashboard/components/MissingPhotoBanner';
 import { useUnreadCount } from '../features/dashboard/hooks/useMessages';
 import { useMfaStatus } from '../features/security/mfa/hooks/useMfaStatus';
 import { MfaGraceBanner } from '../features/security/mfa/components/MfaGraceBanner';
@@ -170,6 +171,12 @@ export function DashboardLayout() {
               tabIndex={-1}
             >
               <MfaGraceBannerSlot />
+              {/*
+                * Story 13-60 AC2.2 — a field officer with no ID-card photo
+                * needs to be told here, not at a household door. Renders null
+                * for everyone else (see the role allow-list inside).
+                */}
+              <MissingPhotoBanner />
               <Outlet />
             </main>
           </div>

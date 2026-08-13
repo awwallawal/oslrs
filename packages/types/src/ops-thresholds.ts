@@ -19,6 +19,7 @@
 
 /** Threshold tiers. Each metric has a yellow (warn) and red (critical) edge. */
 import type { MonitoredExpiry } from './monitoring.js'; // Story 9-50
+import type { FieldStaffPhotoHealth } from './staff-photo.js'; // Story 13-60
 import { getEmailTierLimits } from './email.js';
 
 export const OPS_THRESHOLDS = {
@@ -231,6 +232,12 @@ export interface OpsDashboardSnapshot {
   notificationUsage?: NotificationUsage | null;
   /** Story 9-50 — TLS cert / domain / declared expiry countdowns. */
   expiries?: MonitoredExpiry[];
+  /**
+   * Story 13-60 (AC3) — active FIELD staff who cannot be issued an ID card.
+   * Defined in `staff-photo.ts`; imported rather than redeclared so the digest,
+   * the dashboard and the staff list cannot drift.
+   */
+  fieldStaffPhotos?: FieldStaffPhotoHealth | null;
   recommendations: OpsRecommendation[];
 }
 

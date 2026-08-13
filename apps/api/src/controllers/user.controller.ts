@@ -6,7 +6,7 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
-import { updateProfileSchema } from '@oslsr/types';
+import { updateProfileSchema, PHOTO_SOURCE, PHOTO_STATUS, isPhotoSource, type PhotoSource } from '@oslsr/types';
 import { PhotoProcessingService } from '../services/photo-processing.service.js';
 import { IDCardService } from '../services/id-card.service.js';
 import { UserService } from '../services/user.service.js';
@@ -36,15 +36,37 @@ export class UserController {
         throw new AppError('AUTH_REQUIRED', 'User not authenticated', 401);
       }
 
-      const { originalUrl, idCardUrl, livenessScore } = await photoService.processLiveSelfie(req.file.buffer);
+      /*
+       * Story 13-60 AC2 + AC6.2 — this endpoint is BOTH the "way back without
+       * an admin" (a staff member whose photo failed at activation logs in and
+       * adds one) and the upload fallback's landing point. So it must record
+       * WHICH path produced the image, exactly like the activation path does.
+       *
+       * `source` arrives as a multipart text field beside the file. Anything
+       * unrecognised — including absent, which is every pre-13-60 client —
+       * reads as `live_capture`, which is what those clients were in fact doing.
+       */
+      const source: PhotoSource = isPhotoSource(req.body?.source)
+        ? req.body.source
+        : PHOTO_SOURCE.LIVE_CAPTURE;
+
+      const { originalUrl, idCardUrl, sharpnessScore } = await photoService.processLiveSelfie(
+        req.file.buffer,
+        { source },
+      );
 
       // Update user record
       const [updatedUser] = await db.update(users)
         .set({
           liveSelfieOriginalUrl: originalUrl,
           liveSelfieIdCardUrl: idCardUrl,
-          livenessScore: livenessScore?.toString(), // Store as text
+          photoSharpnessScore: sharpnessScore?.toString(), // Store as text
           liveSelfieVerifiedAt: new Date(), // Auto-verify for now, or null if manual review needed
+          // The retry succeeded — clear the failure that sent them here, or the
+          // operator screen would keep reporting a person who has since fixed it.
+          photoStatus: PHOTO_STATUS.SAVED,
+          photoSource: source,
+          photoFailureReason: null,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId))
@@ -58,7 +80,9 @@ export class UserController {
         data: {
           liveSelfieOriginalUrl: updatedUser.liveSelfieOriginalUrl,
           liveSelfieIdCardUrl: updatedUser.liveSelfieIdCardUrl,
-          livenessScore: parseFloat(updatedUser.livenessScore || '0'),
+          // Renamed from `livenessScore` (AC6.4) — it is a sharpness ratio.
+          photoSharpnessScore: parseFloat(updatedUser.photoSharpnessScore || '0'),
+          photoSource: updatedUser.photoSource,
         }
       });
     } catch (error) {

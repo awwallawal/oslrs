@@ -98,6 +98,10 @@ export class AuthController {
           email: user.email,
           fullName: user.fullName,
           status: user.status,
+          // Story 13-60 AC1.1 — the activation succeeded, but the client has to
+          // be able to tell the person whether their PHOTO did. Before this,
+          // "saved", "skipped" and "failed silently" were the same response.
+          photo: user.photo,
         },
       });
     } catch (err) {

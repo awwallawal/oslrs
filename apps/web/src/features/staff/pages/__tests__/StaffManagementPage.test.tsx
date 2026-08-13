@@ -21,7 +21,10 @@ afterEach(() => {
 const mockRefetch = vi.fn();
 const mockMutate = vi.fn();
 
-const mockUseStaffList = vi.fn((): { data: unknown; isLoading: boolean; refetch: typeof mockRefetch } => ({
+// ⚠️ The params argument is CAPTURED (Story 13-60 review H1). A mock that
+// discards it cannot tell whether a filter control reaches the server, which is
+// exactly how `missingPhoto` shipped wired to nothing.
+const mockUseStaffList = vi.fn((_params?: unknown): { data: unknown; isLoading: boolean; refetch: typeof mockRefetch } => ({
   data: {
     data: [
       {
@@ -67,7 +70,7 @@ const mockUseRoles = vi.fn(() => ({
 }));
 
 vi.mock('../../hooks/useStaff', () => ({
-  useStaffList: () => mockUseStaffList(),
+  useStaffList: (params?: unknown) => mockUseStaffList(params),
   useRoles: () => mockUseRoles(),
   useUpdateRole: () => ({
     mutate: mockMutate,
@@ -225,6 +228,32 @@ describe('StaffManagementPage', () => {
       fireEvent.change(roleSelect, { target: { value: 'role-1' } });
 
       expect(roleSelect).toHaveValue('role-1');
+    });
+
+    /**
+     * Story 13-60 AC3.1 — "who will I fail to print an ID card for?"
+     *
+     * ⛔ THE LOAD-BEARING ASSERTION IS ON THE QUERY PARAMS, not on the button's
+     * appearance. `missingPhoto` shipped fully implemented on the server, in the
+     * API client and in the types — and set by nothing, so the operator could
+     * not ask the question at all. A test that only checked the toggle looked
+     * pressed would have passed over exactly that hole.
+     */
+    it('asks the server for the ID-photo gap when the operator toggles it', () => {
+      renderWithRouter(<StaffManagementPage />);
+
+      const toggle = screen.getByRole('button', { name: /no id photo/i });
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(mockUseStaffList.mock.calls.at(-1)?.[0]).not.toHaveProperty('missingPhoto');
+
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(mockUseStaffList.mock.calls.at(-1)?.[0]).toMatchObject({ missingPhoto: true, page: 1 });
+
+      // …and it is a toggle, not a trap: the operator can get back to everyone.
+      fireEvent.click(toggle);
+      expect(mockUseStaffList.mock.calls.at(-1)?.[0]).not.toHaveProperty('missingPhoto');
     });
   });
 

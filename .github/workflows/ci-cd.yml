@@ -1085,6 +1085,19 @@ jobs:
             # the API into a single file via tsup/esbuild and drop pnpm install.
             pnpm install --frozen-lockfile
 
+            # ⛔ Story 13-60: THIS ONE RUNS *BEFORE* db:push. Every other
+            # migrate-*-init.ts below runs AFTER. Do not "tidy" it down there.
+            #
+            # It renames users.liveness_score -> users.photo_sharpness_score
+            # (AC6.4 — the column never held a liveness score, it held an image
+            # sharpness ratio). drizzle-kit push cannot tell a rename from a
+            # drop+add: it prompts, and scripts/db-push.ts --force answers that
+            # prompt with "create column" and then auto-confirms the data-loss
+            # prompt — which would create an empty column and DROP the populated
+            # one. Doing the ALTER ... RENAME ourselves first leaves push with no
+            # diff to find, so it asks nothing and drops nothing. Idempotent.
+            cd apps/api && pnpm tsx scripts/migrate-photo-provenance-init.ts && cd ~/oslrs
+
             # Push any schema changes to production DB
             pnpm --filter @oslsr/api db:push
 

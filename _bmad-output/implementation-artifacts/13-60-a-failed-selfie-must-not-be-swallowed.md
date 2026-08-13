@@ -1,6 +1,18 @@
 # Story 13.60: No selfie, no ID card — the enumerator walks in with nothing
 
-Status: ready-for-dev
+Status: review
+
+<!-- ✅ CODE-REVIEWED 2026-08-13. 2 HIGH / 4 MEDIUM / 3 LOW, all fixed in-pass — see
+"Review Follow-ups (AI)" under Tasks/Subtasks.
+✅ ADJUDICATED 2026-08-13 — see `## Residuals` + `## Closing verdict`.
+⚠️ `Status: review`, NOT `done`: D9's rule is that until the Closing verdict carries a
+real deploy SHA, `done` is not permitted. Flip it after the deploy is observed.
+⛔ THE "EVIDENCE ONLY EXISTS AFTER DEPLOY" CLAIM WAS WRONG AND IS WITHDRAWN. The
+rename ordering was proven LOCALLY against `app_test` — pre-migration state rebuilt,
+`liveness_score = 0.7777` seeded, the real pipeline run: runner at log line 2, RENAME
+at line 9, `db:push` at line 14, and the value survived. This is NOT
+[[pattern-verification-that-cannot-run-yet]]; it was a verification nobody had tried. -->
+
 
 <!-- PREPPED FOR DEV 2026-08-12 by Bob (SM) on Awwal's launch-date ruling: FULL SPEC, all 6 ACs, no
 carve. Premises re-verified against prod 1f06179 + git history before the flip. HEADLINE: AC5.1-5.3
@@ -258,38 +270,56 @@ of two field-path attempts.
 ⛔ **Read the AC5 correction block first.** AC5.1–5.3 are CLOSED (`27e1fdc`). Do not re-chase the
 capture blocker; the remaining scope is smaller than this file's length suggests.
 
-- [ ] **Task 1 — Make the three outcomes distinguishable** (AC: #1)
-  - [ ] `services/auth.service.ts:171-193` is the swallow. ⚠️ **Preserve the existing re-throw** — an
+- [x] **Task 1 — Make the three outcomes distinguishable** (AC: #1)
+  - [x] `services/auth.service.ts:171-193` is the swallow. ⚠️ **Preserve the existing re-throw** — an
         `AppError` with code `VALIDATION_ERROR` is re-thrown at `:188-190` and already fails loudly. A
         catch-all rewrite turns a currently-loud failure quiet.
-  - [ ] ⚠️ `:171` is `if (!backOffice && …)` — back-office activations never enter the block. They are
+  - [x] ⚠️ `:171` is `if (!backOffice && …)` — back-office activations never enter the block. They are
         **skipped**, not **failed**, and must not be counted as failures (both prod super_admins).
-  - [ ] Persist saved · skipped · attempted-and-failed distinctly. Today all three are NULL columns.
-  - [ ] Completion screen states the photo did not save and offers retry; activation still completes.
-- [ ] **Task 2 — A way back without an admin** (AC: #2)
-  - [ ] Reuse 9-12's magic-link self-update (`services/me.service.ts`, audit action
-        `RESPONDENT_SELF_UPDATED` = `respondent.self_updated`, `services/audit.service.ts:179`).
-        **Do not build a second self-service path** (13-55's five-copies lesson).
-  - [ ] Dashboard prompt while the photo is missing.
-- [ ] **Task 3 — Operator visibility before the field day** (AC: #3)
-  - [ ] Staff list / ID-card view flags active field staff with no photo. `user.controller.ts:89`
+  - [x] Persist saved · skipped · attempted-and-failed distinctly. Today all three are NULL columns.
+  - [x] Completion screen states the photo did not save and offers retry; activation still completes.
+- [x] **Task 2 — A way back without an admin** (AC: #2)
+  - [x] ⛔ **PREMISE CORRECTED — done, but NOT this way, and the correction is cheaper.**
+        `me.service.ts` is the **respondent** registration-status read-model (over `respondents` /
+        `wizard_drafts`); `RESPONDENT_SELF_UPDATED` is respondent-scoped. Magic links exist there
+        because **citizens have no password**. Staff who completed activation have one. The "do not
+        build a second path" answer therefore already existed and is *authenticated*:
+        `POST /users/selfie` + the `/profile-completion` page, both live since Story 1-5 — merely
+        unreachable unless you knew the URL. Building a staff magic-link flow would have **been**
+        the second path, not the avoidance of one. Met with **no new endpoint and no token flow**.
+  - [x] Dashboard prompt while the photo is missing.
+- [x] **Task 3 — Operator visibility before the field day** (AC: #3)
+  - [x] Staff list / ID-card view flags active field staff with no photo. `user.controller.ts:89`
         already refuses to generate a photoless card — surface that state *before* someone prints.
-  - [ ] Count `activation.selfie_failed` (currently WARN, read by nothing) in the digest; silent at zero.
-  - [ ] 🔗 Same operator screen as 13-59's "who has not downloaded" — build one surface, not two.
-- [ ] **Task 4 — RED-verify the branch nobody watched** (AC: #4)
-  - [ ] Force `processLiveSelfie` to throw; assert activation completes **AND** the user is told **AND**
+  - [x] Count `activation.selfie_failed` (currently WARN, read by nothing) in the digest; silent at zero.
+  - [x] 🔗 Same operator screen as 13-59's "who has not downloaded" — build one surface, not two.
+        **Surface built here: the Staff Management table's new `ID photo` column + the
+        `?missingPhoto=true` filter.** 13-59 is gate 3 of 3 and not yet written, so this is the
+        surface it must EXTEND rather than duplicate. ⚠️ **Note for 13-59:** add a column to
+        `StaffTable.tsx` and a flag to `ListUsersParams`; do not add a second operator page.
+- [x] **Task 4 — RED-verify the branch nobody watched** (AC: #4)
+  - [x] Force `processLiveSelfie` to throw; assert activation completes **AND** the user is told **AND**
         the attempt records as *failed*, not *skipped*. ⚠️ Assert **distinguishability** — "activation
         succeeded" passes today, over the hole.
-- [ ] **Task 5 — The no-face dead-end and the CDN dependency** (AC: #5.4, #5.5)
-  - [ ] `LiveSelfieCapture.tsx:160` — `canCapture = !isModelLoading && (modelFailed || faceCount === 1)`
+- [x] **Task 5 — The no-face dead-end and the CDN dependency** (AC: #5.4, #5.5)
+  - [x] `LiveSelfieCapture.tsx:160` — `canCapture = !isModelLoading && (modelFailed || faceCount === 1)`
         is **unchanged by `27e1fdc`**. With the model healthy and `faceCount === 0` there is still no
         override. Give a recorded way through (Task 6), not a silent skip.
-  - [ ] `:30` still sets `modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/'` —
+  - [x] `:30` still sets `modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/'` —
         the model is fetched from a third-party CDN at activation time. Self-host it or state the
         dependency explicitly; a launch path should not require `jsdelivr.net`.
-- [ ] **Task 6 — Passport upload as a recorded fallback** (AC: #6) — ✅ **RULED YES 2026-08-12**
-  - [ ] Live capture stays default; upload is the explicit fallback.
-  - [ ] ⚠️ **AN UPLOADED PHOTO HITS A BLUR FLOOR NOBODY HAS MENTIONED — decide this before building.**
+        **CHOSE: state it** (the AC permits either). Self-hosting means vendoring ~10MB of model
+        weights — `@vladmandic/human` ships models in a separate repo, not in the package — which is
+        not a field-day-gate-sized change. What actually hurt the field officer was not the CDN but
+        the SILENCE around it: `modelFailed` said only *"Face detection unavailable"* and left them
+        guessing whether their photo would count. The banner now names the likely cause (poor
+        connection), says capture still works, and tells them what to do; and the upload fallback
+        (Task 6) means a slow connection is no longer a dead end. **Residual, deliberately left
+        open:** the activation path still depends on `jsdelivr.net` being reachable for face
+        detection. Reopen if field reports show model-load failures are common rather than rare.
+- [x] **Task 6 — Passport upload as a recorded fallback** (AC: #6) — ✅ **RULED YES 2026-08-12**
+  - [x] Live capture stays default; upload is the explicit fallback.
+  - [x] ⚠️ **AN UPLOADED PHOTO HITS A BLUR FLOOR NOBODY HAS MENTIONED — decide this before building.**
         `photo-processing.service.ts:109-111` computes `sharpness = stats.channels[0].stdev` and
         **throws `AppError('VALIDATION_ERROR', 'Image is too blurry. Please retake.')` below 20** —
         *"threshold determined empirically"*. A phone photo **of a printed passport picture** is
@@ -298,18 +328,178 @@ capture blocker; the remaining scope is smaller than this file's length suggests
         no photo, no ID card. Route around the check for uploads, tune it separately, or accept it —
         but choose deliberately and say which, because silently inheriting it makes AC6 fail for the
         exact users it exists to serve.
-  - [ ] 🔗 **This is also the re-throw in Task 1.** That `VALIDATION_ERROR` is the one exception
+  - [x] 🔗 **This is also the re-throw in Task 1.** That `VALIDATION_ERROR` is the one exception
         `auth.service.ts:188-190` re-throws — so the blur check is currently **the only path on which
         a failed photo tells the person anything at all.** Task 1 must not flatten it.
-  - [ ] ⛔ **NON-NEGOTIABLE: a discriminator.** Never write an uploaded file into a `live_selfie_*`
+  - [x] ⛔ **NON-NEGOTIABLE: a discriminator.** Never write an uploaded file into a `live_selfie_*`
         column unlabelled — that recreates the exact defect this story names, self-inflicted.
-  - [ ] Operator sees which path produced each photo (same surface as Task 3).
-  - [ ] **Rename/re-comment `liveness_score` in the same pass** — ruled IN, deferring was declined.
+  - [x] Operator sees which path produced each photo (same surface as Task 3).
+  - [x] **Rename/re-comment `liveness_score` in the same pass** — ruled IN, deferring was declined.
         `services/photo-processing.service.ts:106-110` computes `sharpness = stats.channels[0].stdev`
         and `:133-134` comments *"In production, livenessScore comes from Rekognition"*. **Rekognition
         is not wired**; nothing gates on the value; `user.controller.ts:47` auto-sets
         `liveSelfieVerifiedAt` (*"Auto-verify for now"*). The column name asserts a property the value
         does not have.
+
+### Review Follow-ups (AI) — adversarial code review 2026-08-13
+
+⛔ **All nine were FIXED IN THE SAME PASS** (Awwal's ruling: record them *and* fix
+them). Left ticked and in place rather than deleted, because the finding is the
+useful artefact — three of these are repeats of named patterns in this repo and
+the next story should be able to read what they looked like here.
+
+- [x] **[AI-Review][HIGH] The `?missingPhoto=true` filter reached nothing.**
+      Implemented server-side (`staff.service.ts:167`), parsed
+      (`staff.controller.ts:52`), sent (`staff.api.ts:30`), typed
+      (`staff/types.ts:74`) — and **set by no caller**.
+      `StaffManagementPage.tsx:68` built `queryParams` from page/status/role/
+      search only, and the page had no control for it. Task 3 claims the filter
+      as delivered surface; on a 20-row page the `ID photo` column alone means
+      reading every row of every page. [[pattern-ship-a-fix-that-never-fires]].
+      **FIXED:** a `No ID photo` toggle in the filter row (`aria-pressed`,
+      resets to page 1), wired into `queryParams`. Test asserts the QUERY PARAMS,
+      not the button's appearance — RED-verified.
+- [x] **[AI-Review][HIGH] The failure notice pointed at a screen that does not exist.**
+      `ActivationPage.tsx:283` said *"add your photo from Profile › Photo"*.
+      `ProfilePage.tsx:67` renders an avatar and has no upload affordance; the
+      only working route is `/profile-completion`, reachable solely via the new
+      banner. The one instruction the rescue screen gives was unfollowable —
+      [[pattern-a-record-about-the-work-is-not-the-work]] pointed at a UI.
+      **FIXED:** the copy now names the dashboard prompt, and the test asserts
+      the old string is *absent* — RED-verified.
+- [x] **[AI-Review][MED] Raw exception text was persisted and handed out.**
+      `auth.service.ts` stored `err.message` in `photo_failure_reason`, which
+      travels to the activation response, `GET /users/profile` and the operator's
+      staff list. The errors on that branch are infrastructure ones — S3
+      `AccessDenied` naming the bucket, DNS failures naming the storage host.
+      **FIXED:** a single sanitised sentence (`PHOTO_FAILURE_REASON_SYSTEM`);
+      diagnostics stay in the `activation.selfie_failed` warn beside the userId.
+      The AC4 test now asserts the raw text does **not** appear on either surface.
+- [x] **[AI-Review][MED] The banner kept accusing someone who had already fixed it.**
+      `MissingPhotoBanner` reads `['users','profile']` with a 5-minute
+      `staleTime`, and `ProfileCompletionPage` uploaded via raw `fetch` and never
+      invalidated it — so the person returned to the dashboard and was told "your
+      photo did not save" about the photo they had just saved, by the banner that
+      sent them there. **FIXED:** invalidate `profileKeys.profile` on success
+      only. New `ProfileCompletionPage.test.tsx` — RED-verified.
+- [x] **[AI-Review][MED] `FIELD_ROLES` was hand-copied into the web banner.**
+      `MissingPhotoBanner.tsx:46` held a string literal while
+      `getFieldStaffPhotoHealth` counts from the canonical `FIELD_ROLES`
+      (`packages/types/src/roles.ts:27`). The comment asserted the two scopes
+      match; nothing enforced it, and a fourth field role would have been counted
+      by the digest while their own dashboard stayed quiet.
+      **FIXED:** imported. [[feedback_canonical_primitive_backlog_sweep]].
+- [x] **[AI-Review][MED] Client-asserted provenance was displayed as fact.**
+      `photo_source` is whatever the browser sent; the server cannot tell a
+      webcam frame from a file. `StaffTable` printed a bare "Live photo".
+      Stating an unverified claim in a column that looks authoritative is the
+      shape of the defect AC6.4 fixes one column over.
+      **FIXED:** labelled `(reported)` with an explanatory tooltip, and
+      `PHOTO_SOURCE`'s docblock now says REPORTED, NOT VERIFIED, and that nothing
+      may gate on it.
+- [x] **[AI-Review][LOW] `SkeletonTable columns={6}`** against 7 `<th>` after the
+      new column. **FIXED:** 7, with a note to keep them in step.
+- [x] **[AI-Review][LOW] `StaffPhotoCell` was declared between two import
+      statements** (`StaffTable.tsx:24-54`). **FIXED:** moved below the imports.
+- [x] **[AI-Review][LOW] `photo_source` on FAILED rows contradicted its own
+      docblocks** ("NULL when there is no photo" in `staff.service.ts` and
+      `staff/types.ts`). The write is right — "they tried to upload and we lost
+      it" is worth more than "no photo" — so **the three docblocks were corrected
+      to reality**, not the behaviour.
+
+**Verified independently during the review** (not read off the Dev Agent Record):
+`tsc --noEmit` clean in both apps; targeted web suites green; the deploy step
+runs under `set -eo pipefail`, so a failing pre-push runner aborts *before*
+`db:push` (the data-loss guard actually holds); `img-src data:` is already
+present in `app.ts` and all four nginx mirrors, so the new `downscaleImage`
+data-URL decode does not repeat the `27e1fdc` prod-only CSP class. **NOT run:**
+the API suite (needs the test DB) — `auth.activation.test.ts` and
+`user.selfie.test.ts` changes are typecheck-verified only.
+
+## Dev Agent Record
+
+### Implementation Plan / decisions taken
+
+**AC6 blur floor — DECIDED: tune it separately.** The story required one of
+"route around / tune separately / accept", chosen deliberately and named.
+`photo-processing.service.ts` now takes a `source` and applies
+`UPLOAD_SHARPNESS_MIN = 8` for uploads against `LIVE_SHARPNESS_MIN = 20` for
+live captures. Inheriting 20 would have failed the exact people the fallback
+exists for (a phone photo of a printed passport picture is what a blur floor
+rejects) with the same outcome as the bug — no photo, no ID card. Removing the
+floor would print an unusable card. ⚠️ **8 is reasoned, not measured** — no
+corpus of real uploads exists to tune against, and writing "determined
+empirically" about an unmeasured number is how the column next door ended up
+called `liveness_score`. Reopen trigger recorded in the constant's docblock.
+
+**AC6.4 rename — the data-loss trap, and how it is closed.** `db-push.ts
+--force` answers a rename prompt with "create column" (its own docblock, lines
+5-8) and then auto-confirms the data-loss prompt, so pushing the renamed schema
+would have created an empty `photo_sharpness_score` and **DROPPED** the
+populated `liveness_score` — on prod that is live data (0.5913, 0.8589). Closed
+by `scripts/migrate-photo-provenance-init.ts`, which does the
+`ALTER TABLE ... RENAME COLUMN` itself and **runs BEFORE `db:push`**, leaving
+push no diff to ask about. Wired into `ci-cd.yml` above the push step and into
+`db-push-full.ts` via a new `PRE_PUSH_RUNNERS` list (it was auto-discovered into
+the *after* group, which was the dangerous order). **Verified against `app_test`
+with a planted canary: `0.8589` survived the rename and the subsequent push.**
+
+**AC2 — the premise was wrong, and the correction makes it cheaper.** The story
+said to reuse 9-12's magic-link self-update (`me.service.ts`,
+`RESPONDENT_SELF_UPDATED`). That path is **respondent-only**: `me.service.ts` is
+the public-user registration-status read-model over `respondents`/`wizard_drafts`,
+and magic links exist there because citizens have **no password**. Staff who
+finished activation have one. The existing authenticated staff path —
+`POST /users/selfie` + `/profile-completion` — already was the "no second path"
+answer; it was simply unreachable unless you knew the URL. AC2 is therefore met
+by a dashboard prompt pointing at it, with **no new endpoint and no token flow**.
+Building the magic link would have *been* the second path, not the avoidance of one.
+
+### Defects found while implementing (all fixed in-pass)
+
+1. **`ActivationResponse` described a `user` wrapper the API has never sent.**
+   The controller responds `{ data: {...} }` and `authFetch` returns `data.data`.
+   Never noticed because nothing read the activation result — `onSuccess`
+   discarded it. Corrected, since the completion screen now depends on it.
+2. **`LiveSelfieCapture`'s failure alert was invisible.** The alert added by
+   `27e1fdc` specifically to make a silent failure visible used
+   `text-error-700 bg-error-50 border-error-200` — **none of those three tokens
+   exist** (the theme defines only `-100`/`-600`, `index.css @theme`). It
+   rendered unstyled. Same class as the defect it was added to fix.
+3. **The back-office invariant was incidental, not asserted.** The photo columns
+   were first written inside the `if (!backOffice)` profile-fields block, so a
+   test asserting "back-office stays NULL" stayed green under a mutation that
+   set every activation to `skipped`. Found by RED-verifying the test and
+   watching it *not* fail. The write moved outside the block so the invariant is
+   carried by the variable the test actually checks.
+4. **Multer field ordering.** `source` is appended to `FormData` **before** the
+   file: multer's docs warn `req.body` may be unpopulated depending on transmit
+   order, and a text field after a multi-megabyte file is the case that bites.
+   The failure would have been silent and permissive — `source` undefined →
+   falls back to `live_capture` → an upload recorded as a live capture, the one
+   outcome AC6.2 forbids.
+
+### RED-verify log (AC4.2 — every assertion proven to bite)
+
+| Mutation applied | Result |
+|---|---|
+| Remove the three `updateData.photo*` writes | 3 tests RED (`failed`/`skipped`/`saved` all → null) |
+| Remove the `VALIDATION_ERROR` re-throw | 1 test RED (loud 400 → silent 200) |
+| Default `photoStatus` to `SKIPPED` | back-office test RED (`'skipped'` ≠ null) |
+| `onCapture(prepared, 'live_capture')` in the upload path | AC6.2 client test RED |
+| Remove the `photo.status === 'failed'` redirect guard | no-auto-redirect test RED |
+
+Also RED-verified structurally: the migration runner was exercised against a
+real DB with a planted value rather than assumed idempotent — run twice, and the
+canary re-read after `db:push:full:force`.
+
+### Deployment note (A9 — env/ordering coordination)
+
+No new env vars. **But the deploy ORDER is load-bearing**: on any database that
+predates this story, `scripts/migrate-photo-provenance-init.ts` MUST run before
+`db:push`, or the push drops `liveness_score`. This is wired for CI and for
+`db:push:full`; a developer running bare `pnpm db:push` on an old local DB must
+run the runner first (stated in the script's docblock).
 
 ## Dev Notes
 
@@ -331,6 +521,77 @@ capture blocker; the remaining scope is smaller than this file's length suggests
   aspect-ratio hypothesis.
 - Prod verification 2026-08-12 (`1f06179`) — table in the AC5 correction block.
 
+## File List
+
+**New**
+- `packages/types/src/staff-photo.ts` — `PHOTO_STATUS` / `PHOTO_SOURCE` / `PhotoOutcome` / `FieldStaffPhotoHealth`
+- `apps/api/scripts/migrate-photo-provenance-init.ts` — ⛔ **pre-push** runner (rename + 3 columns + backfill)
+- `apps/web/src/features/dashboard/components/MissingPhotoBanner.tsx`
+- `apps/web/src/features/dashboard/components/__tests__/MissingPhotoBanner.test.tsx`
+- `apps/web/src/features/auth/pages/__tests__/ActivationPage.photo-outcome.test.tsx`
+
+**Modified — API**
+- `apps/api/src/db/schema/users.ts` — `liveness_score`→`photo_sharpness_score`; +`photo_status`/`photo_source`/`photo_failure_reason`
+- `apps/api/src/services/auth.service.ts` — outcome recorded; re-throw preserved; outcome returned
+- `apps/api/src/services/photo-processing.service.ts` — `source` option, `UPLOAD_SHARPNESS_MIN`, score renamed
+- `apps/api/src/services/staff.service.ts` — `missingPhoto` filter + per-row photo state
+- `apps/api/src/services/user.service.ts` — profile exposes ID-card photo + status
+- `apps/api/src/services/operations.service.ts` — `getFieldStaffPhotoHealth()`
+- `apps/api/src/workers/ops-digest.worker.ts` — `formatFieldStaffPhotoLines()`, silent at zero
+- `apps/api/src/controllers/auth.controller.ts`, `user.controller.ts`, `staff.controller.ts`
+- `apps/api/scripts/db-push-full.ts` — `PRE_PUSH_RUNNERS`
+- `.github/workflows/ci-cd.yml` — runner wired **above** `db:push`
+
+**Modified — Web**
+- `apps/web/src/features/staff/pages/StaffManagementPage.tsx` — **review H1**: the `No ID photo` filter control that reaches `missingPhoto`
+- `apps/web/src/features/onboarding/components/LiveSelfieCapture.tsx` — upload fallback, `source` arg, CDN guidance, alert palette fix
+- `apps/web/src/features/onboarding/pages/ProfileCompletionPage.tsx` — sends `source` (before the file)
+- `apps/web/src/features/auth/pages/ActivationPage.tsx` — photo outcome on the completion screen; no auto-redirect on failure
+- `apps/web/src/features/auth/api/auth.api.ts` — `ActivationResponse` corrected + `photo`
+- `apps/web/src/features/auth/components/activation-wizard/steps/SelfieStep.tsx`, `useActivationWizard.ts`
+- `apps/web/src/features/staff/components/StaffTable.tsx`, `types.ts`, `api/staff.api.ts`
+- `apps/web/src/features/dashboard/api/profile.api.ts`
+- `apps/web/src/layouts/DashboardLayout.tsx`
+- `apps/web/src/__tests__/known-routes.ts` — registers `/profile-completion`
+
+**Modified — shared / tests**
+- `packages/types/src/index.ts`, `ops-thresholds.ts`, `validation/profile.ts`
+- `apps/api/src/__tests__/auth.activation.test.ts`, `user.selfie.test.ts`
+- `apps/api/src/services/__tests__/staff-list-excludes-citizens.integration.test.ts`
+- `apps/api/src/controllers/__tests__/staff.controller.test.ts`
+- `apps/api/src/workers/__tests__/ops-digest.worker.test.ts`
+- `apps/web/src/features/onboarding/components/__tests__/LiveSelfieCapture.test.tsx`
+- `apps/web/src/features/onboarding/pages/__tests__/ProfileCompletionPage.test.tsx` — review M2 + AC6.2 field ordering, **added beside** the existing F-004 in-memory-token lock (9-42), which stays
+- `apps/web/src/features/staff/pages/__tests__/StaffManagementPage.test.tsx` — review H1 (params captured, not discarded)
+- `apps/web/src/features/auth/pages/__tests__/ActivationPage.photo-outcome.test.tsx` — review H2
+
+## Residuals
+
+| ID | Item | State | Evidence / trigger | Owner |
+|---|---|---|---|---|
+| **R1** | The `liveness_score` → `photo_sharpness_score` rename must run **before** `db:push`, or `--force` answers the rename prompt as drop+create and the populated column is lost. | ✅ **CLOSED — proven locally, not deferred to prod.** | **Re-runnable:** rebuild `app_test` to the pre-migration state (rename back, drop the 3 columns), seed `liveness_score`, run `NODE_ENV=test DATABASE_URL=…app_test pnpm exec tsx scripts/db-push-full.ts --force`. Observed 2026-08-13: runner at log line **2**, `RENAMED … (values preserved)` at line **9**, `db:push` at line **14**; seeded `0.7777` survived; 43 rows kept their scores. Deploy path confirmed at `ci-cd.yml:1099` (runner) above `:1102` (`db:push`). | adjudication |
+| **R2** | A **failed** ordering used to be the **silent** branch — `hasNew`-only printed *"nothing to rename"* and exited **0**, while the loud `hasOld && hasNew` branch covers a state `--force` cannot produce. | ✅ **CLOSED — fixed in this pass.** | `migrate-photo-provenance-init.ts` now throws when `photo_sharpness_score` is entirely NULL **while users hold an ID-card photo** (they completed a live capture, so a score must once have existed). **RED-verified both ways:** simulated drop+create → `RUNNER_EXIT=1` with the actionable message; healthy state → `RUNNER_EXIT=0`. | adjudication |
+| **R3** | Prod confirmation of R1 after deploy. | **DISCHARGE-ON-PUSH** | After deploy: `photo_sharpness_score` must be non-empty on prod. **Reopen trigger:** if it is empty while users hold ID-card photos, the runner did not fire first — R2's guard should now make that fail the deploy loudly rather than pass silently. | adjudication, same session |
+| **R4** | `route-resolution.integration.test.tsx > resolves '/login'` fails intermittently under load (`expected 16 to be greater than 50`). | **ACCEPTED — NOT this story's.** | Measurement: `/login` is untouched by 13-60 and `/profile-completion` (the route this story adds) passes every run; isolated it passes 57/57, and it flaked identically on 2026-08-11 **before** this work. Mechanism: a raw content-length threshold firing before a lazy chunk resolves — fails at >5s, passes at ~3s. **Trigger:** it has now cost two sessions; next occurrence, replace the threshold with a `findBy*` on a specific element. | web/test-arch |
+
+## Closing verdict
+
+**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
+**Until that line carries a real SHA, `Status:` must not read `done`** (D9's own hold condition).
+
+| Gate | Evidence (re-runnable, run by adjudication — not the dev's self-report) |
+|---|---|
+| `tsc` | API **0**, web **0** |
+| `eslint src scripts` | **0** |
+| Drift guards, run **direct** (uncached — Pitfall #47) | registry-read **372 files clean** · respondent-write **372 clean** · story-residual **317 clean** |
+| API suites (5 touched files) | **111 passed** |
+| Web suites (6 files, isolated) | **92 passed** — the single combined-run failure is R4, not this story |
+| **RED-verify #1 (error leak)** | neutered `PHOTO_FAILURE_REASON_SYSTEM` → `AssertionError: expected 'S3 upload failed: connection refused' not to contain 'S3 upload failed'`; reverted → **35/35 green** |
+| **RED-verify #2 (lost rename)** | new guard: simulated failure → **exit 1**; healthy → **exit 0** |
+| File List vs `git status` | **matches** — ⚠️ but it uses comma-continued shorthand (`auth.controller.ts, user.controller.ts, staff.controller.ts`), so a script extracting full paths **silently misses 8 files**. Commit by explicit path. |
+
+**Two flags from the PM cleared by inspection, not assurance:** `LiveSelfieCapture.test.tsx` has **0 deleted lines** (6→9 tests, the fetch regression guard intact at `:133` — extended, not replaced); the story file's only true deletion is the `Status:` line, all 21 others being `- [ ]`→`- [x]`, with the blur-floor note surviving at `:319`.
+
 ## Change Log
 
 | Date | Change | By |
@@ -341,3 +602,5 @@ capture blocker; the remaining scope is smaller than this file's length suggests
 | 2026-08-12 | Correction #4 — AC5.1–5.3 closed, AC5.3's "CSP ruled out" struck as false; prod re-verified; flipped to `ready-for-dev` | Bob (SM) |
 | 2026-08-12 | AC6 confirmed **build it**, incl. the `liveness_score` rename (deferral declined) | Awwal, flagged by John (PM) |
 | 2026-08-12 | Tasks/Subtasks + Dev Notes added | Bob (SM) |
+| 2026-08-13 | **Adversarial code review: 2 HIGH, 4 MED, 3 LOW — all fixed in-pass.** The two HIGHs were both "built but unreachable": the `missingPhoto` filter had no UI control, and the failure notice pointed at a `Profile › Photo` screen that does not exist. 3 mutations RED-verified. Raw S3/DNS error text no longer leaves the API. | Claude (code-review) |
+| 2026-08-12 | **All 6 tasks implemented.** Outcome recorded + returned; upload fallback; operator surface + digest line; `liveness_score` renamed behind a pre-push runner. 5 mutations RED-verified. 4 defects found in-pass (see Dev Agent Record). AC2 premise corrected — met with no new endpoint. | Amelia (dev-story) |

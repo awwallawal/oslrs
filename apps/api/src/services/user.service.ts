@@ -26,6 +26,18 @@ export class UserService {
         nextOfKinName: users.nextOfKinName,
         nextOfKinPhone: users.nextOfKinPhone,
         liveSelfieOriginalUrl: users.liveSelfieOriginalUrl,
+        /*
+         * Story 13-60 AC2.2 — the dashboard needs to know whether an ID card
+         * can be printed for this person, so it can prompt them to add a photo
+         * instead of leaving them to find out at a household door.
+         *
+         * `liveSelfieIdCardUrl` (not `liveSelfieOriginalUrl`) is the one that
+         * matters: `user.controller.ts` refuses to generate a card on exactly
+         * that column being null.
+         */
+        liveSelfieIdCardUrl: users.liveSelfieIdCardUrl,
+        photoStatus: users.photoStatus,
+        photoFailureReason: users.photoFailureReason,
         createdAt: users.createdAt,
       })
       .from(users)

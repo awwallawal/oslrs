@@ -113,6 +113,15 @@ const SPECIAL_ROUTES: KnownRoute[] = [
   { route: '/auth/magic' },
   { route: '/activate/:token', testPath: '/activate/test-token' },
   { route: '/unauthorized' },
+  /*
+   * Story 13-60 AC2 — the staff self-service photo page. It has been mounted in
+   * App.tsx since Story 1-5 and was simply never LINKED to from anywhere, so the
+   * drift guard had nothing to catch and the registry never listed it. The
+   * MissingPhotoBanner now links here, which is the whole point: the remedy for
+   * a missing ID-card photo already existed and was unreachable unless you knew
+   * the URL. Authenticated (ProtectedRoute), no shared dashboard layout.
+   */
+  { route: '/profile-completion' },
   // Legacy redirect target — reached via `redirectTo="/admin"` on /staff/login
   // (App.tsx) and the `<Navigate>` redirect chain (/admin -> /dashboard).
   // Not a page; mounts a <Navigate>, so it resolves (not a 404). (9-21 review M2.)

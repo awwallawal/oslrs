@@ -207,3 +207,78 @@ describe('LiveSelfieCapture', () => {
     });
   });
 });
+
+/**
+ * Story 13-60 AC5.4 + AC6 — the recorded way through the no-face dead-end.
+ *
+ * ⛔ THE LOAD-BEARING ASSERTION is the `source` argument. `canCapture` disables
+ * the Capture button when the model is healthy and sees no face, and before
+ * this story there was no override — so the person skipped the step, which
+ * landed in the server-side silent swallow. The escape hatch is only acceptable
+ * because it is RECORDED as an upload: storing it as a live capture would
+ * recreate, self-inflicted, the exact defect 13-60 fixes one column over.
+ */
+describe('LiveSelfieCapture — upload fallback (13-60 AC5.4/AC6)', () => {
+  beforeEach(() => {
+    mockDetect.mockResolvedValue({ face: [{ box: [0, 0, 100, 100], score: 0.99 }] });
+    // jsdom has no canvas encoder; stand in for the downscale step so the test
+    // exercises the SOURCE plumbing rather than image codecs.
+    (HTMLCanvasElement.prototype as any).getContext = vi.fn(() => ({ drawImage: vi.fn() }));
+    (HTMLCanvasElement.prototype as any).toBlob = vi.fn((cb: (b: Blob) => void) =>
+      cb(new Blob(['x'], { type: 'image/jpeg' })),
+    );
+  });
+
+  it('offers a way through — the escape hatch is always reachable before capture', async () => {
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
+    expect(await screen.findByTestId('upload-photo-input')).toBeInTheDocument();
+  });
+
+  it('explains the way out specifically when the detector sees no face', async () => {
+    mockDetect.mockResolvedValue({ face: [] });
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Not being detected/i)).toBeInTheDocument();
+    });
+    // …and the Capture button is still disabled, which is exactly why the
+    // alternative has to exist.
+    expect(screen.getByRole('button', { name: /capture/i })).toBeDisabled();
+  });
+
+  it('⛔ reports an uploaded photo as source "upload", NEVER as a live capture', async () => {
+    const onCapture = vi.fn();
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={onCapture} />);
+    });
+
+    const input = (await screen.findByTestId('upload-photo-input')) as HTMLInputElement;
+    const file = new File(['passport-bytes'], 'passport.jpg', { type: 'image/jpeg' });
+
+    // jsdom's FileReader + Image do not decode; drive the load handlers directly.
+    const originalImage = globalThis.Image;
+    (globalThis as any).Image = class {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width = 2000;
+      height = 3000;
+      set src(_v: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    };
+
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await waitFor(() => expect(onCapture).toHaveBeenCalled());
+    expect(onCapture.mock.calls[0][1]).toBe('upload');
+    expect(onCapture.mock.calls[0][1]).not.toBe('live_capture');
+
+    (globalThis as any).Image = originalImage;
+  });
+});

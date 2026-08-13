@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { parse } from 'csv-parse/sync';
 import { Redis } from 'ioredis';
 import pino from 'pino';
-import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type CreateStaffDto, type EmailStatus } from '@oslsr/types';
+import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type CreateStaffDto, type EmailStatus, type PhotoStatus, type PhotoSource } from '@oslsr/types';
 import { AppError, generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
@@ -59,6 +59,16 @@ export interface ListUsersParams {
    * See the exclusion note in `listUsers` before setting it true.
    */
   includePublicUsers?: boolean;
+  /**
+   * Story 13-60 AC3.1 — show only staff with NO usable ID-card photo.
+   *
+   * The operator's question is "who will I fail to print a card for?", and the
+   * answer is keyed on the artefact, not the intent: `live_selfie_id_card_url
+   * IS NULL` is exactly the condition `user.controller.ts` refuses to generate
+   * a card on. Filtering on `photo_status` instead would silently miss every
+   * account that predates the column.
+   */
+  missingPhoto?: boolean;
 }
 
 /**
@@ -77,6 +87,17 @@ export interface StaffListResponse {
     lgaName: string | null;
     createdAt: Date;
     invitedAt: Date | null;
+    /** Story 13-60 AC3.1 — can an ID card actually be printed for this person? */
+    hasPhoto: boolean;
+    /** Why not, when not. NULL = the photo step never applied (back-office). */
+    photoStatus: PhotoStatus | null;
+    /**
+     * AC6.3 — live capture or upload, as REPORTED by the client (the server
+     * cannot verify which path produced an image). Set on a FAILED attempt too:
+     * it records which path was tried. NULL only when the step never applied.
+     */
+    photoSource: PhotoSource | null;
+    photoFailureReason: string | null;
   }>;
   meta: {
     total: number;
@@ -146,6 +167,12 @@ export class StaffService {
       conditions.push(eq(users.lgaId, params.lgaId));
     }
 
+    // Story 13-60 AC3.1 — "who has no ID-card photo?", asked BEFORE someone
+    // prints twelve cards and finds out at the printer.
+    if (params.missingPhoto) {
+      conditions.push(sql`${users.liveSelfieIdCardUrl} IS NULL`);
+    }
+
     if (params.search) {
       // Escape SQL ILIKE wildcards to prevent wildcard injection
       const sanitizedSearch = params.search.replace(/[%_\\]/g, '\\$&');
@@ -190,6 +217,21 @@ export class StaffService {
         lgaName: user.lga?.name || null,
         createdAt: user.createdAt,
         invitedAt: user.invitedAt,
+        /*
+         * Story 13-60 AC3.1 + AC6.3 — the photo state, on the same row as the
+         * person, so the operator can see who cannot be printed and (for those
+         * who can) which path produced the photo.
+         *
+         * `hasPhoto` is derived from the ID-card artefact rather than from
+         * `photoStatus`, because that is the exact condition the ID-card
+         * endpoint refuses on — and because accounts older than this story have
+         * a photo but no status. `photoStatus` adds WHY it is missing, which is
+         * the part that used to be unknowable.
+         */
+        hasPhoto: user.liveSelfieIdCardUrl !== null,
+        photoStatus: user.photoStatus,
+        photoSource: user.photoSource,
+        photoFailureReason: user.photoFailureReason,
       })),
       meta: {
         total,

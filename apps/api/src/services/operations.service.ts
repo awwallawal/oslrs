@@ -36,6 +36,8 @@ import {
   type OpsRecommendation,
   type OpsDashboardSnapshot,
   type NotificationUsage,
+  type FieldStaffPhotoHealth,
+  FIELD_ROLES,
 } from '@oslsr/types';
 import { pool } from '../db/index.js';
 import { getEmailQueueStats, getEmailFailedSamples } from '../queues/email.queue.js';
@@ -132,6 +134,54 @@ export async function getSystemHealth(): Promise<OpsSystemHealth | null> {
 }
 
 // ─── Section 2: Traffic + funnel ────────────────────────────────────────────
+
+/**
+ * Story 13-60 AC3 — can the operator print an ID card for every field officer
+ * they are about to send out?
+ *
+ * Scoped to ACTIVE staff in FIELD roles, deliberately:
+ *   - back-office accounts have no photo BY DESIGN (they skip the selfie block
+ *     entirely), so counting them would put both prod super_admins on a "no
+ *     photo" list permanently and train the operator to ignore the line;
+ *   - deactivated accounts are nobody's field day.
+ *
+ * `withPhoto` is keyed on `live_selfie_id_card_url IS NOT NULL` — the exact
+ * condition `user.controller.ts` refuses to generate a card on — rather than on
+ * `photo_status`, so an account older than Story 13-60 counts correctly.
+ *
+ * Fail-open: returns null on any error rather than taking the whole snapshot
+ * down with it, matching every other section here.
+ */
+export async function getFieldStaffPhotoHealth(): Promise<FieldStaffPhotoHealth | null> {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         count(*)::int AS active_field_staff,
+         count(*) FILTER (WHERE u.live_selfie_id_card_url IS NOT NULL)::int AS with_photo,
+         count(*) FILTER (WHERE u.live_selfie_id_card_url IS NULL)::int AS missing_photo,
+         count(*) FILTER (WHERE u.photo_status = 'failed')::int AS failed,
+         count(*) FILTER (WHERE u.photo_status = 'skipped')::int AS skipped,
+         count(*) FILTER (WHERE u.live_selfie_id_card_url IS NOT NULL
+                            AND u.photo_source = 'upload')::int AS from_upload
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE u.status = 'active' AND r.name = ANY($1)`,
+      [[...FIELD_ROLES]],
+    );
+    const r = rows[0];
+    return {
+      activeFieldStaff: r?.active_field_staff ?? 0,
+      withPhoto: r?.with_photo ?? 0,
+      missingPhoto: r?.missing_photo ?? 0,
+      failed: r?.failed ?? 0,
+      skipped: r?.skipped ?? 0,
+      fromUpload: r?.from_upload ?? 0,
+    };
+  } catch (err) {
+    logger.warn({ event: 'ops.field_staff_photos_failed', error: (err as Error).message });
+    return null;
+  }
+}
 
 export async function getTraffic(): Promise<OpsTrafficSnapshot | null> {
   try {
@@ -519,13 +569,14 @@ export class OperationsService {
       return cached.snapshot;
     }
 
-    const [system, traffic, resend, queue, notificationUsage, expiries] = await Promise.all([
+    const [system, traffic, resend, queue, notificationUsage, expiries, fieldStaffPhotos] = await Promise.all([
       getSystemHealth(),
       getTraffic(),
       getResendStatus(),
       getQueueHealth(),
       getNotificationUsage(),
       getExpiries(), // Story 9-50 — fail-open, never throws
+      getFieldStaffPhotoHealth(), // Story 13-60 — fail-open, never throws
     ]);
 
     const snapshot: OpsDashboardSnapshot = {
@@ -536,6 +587,7 @@ export class OperationsService {
       queue,
       notificationUsage,
       expiries,
+      fieldStaffPhotos,
       recommendations: buildRecommendations({ system, traffic, resend, queue, notificationUsage }),
     };
 

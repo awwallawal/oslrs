@@ -2,8 +2,16 @@ import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AppError, hashPassword, comparePassword, hashInvitationToken } from '@oslsr/utils';
-import type { ActivationWithSelfiePayload, BackOfficeActivationPayload, AuthUser, LoginResponse } from '@oslsr/types';
-import { UserRole, isBackOfficeRole } from '@oslsr/types';
+import type {
+  ActivationWithSelfiePayload,
+  BackOfficeActivationPayload,
+  AuthUser,
+  LoginResponse,
+  PhotoOutcome,
+  PhotoSource,
+  PhotoStatus,
+} from '@oslsr/types';
+import { UserRole, isBackOfficeRole, PHOTO_SOURCE, PHOTO_STATUS, isPhotoSource } from '@oslsr/types';
 import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
@@ -50,6 +58,24 @@ const logger = pino({ name: 'auth-service' });
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const EXTENDED_LOCKOUT_THRESHOLD = 10;
+
+/**
+ * Story 13-60 — the reason we STORE and SHOW when the photo step fails on our
+ * side, in place of the raw exception text.
+ *
+ * ⛔ `users.photo_failure_reason` is not an internal field. It travels to the
+ * activation response, to `GET /users/profile`, and to the staff list where the
+ * operator sees it as a tooltip. The exceptions that land on that branch are
+ * infrastructure ones (S3 `AccessDenied` naming the bucket, DNS failures naming
+ * the storage host, sharp internals), so writing `err.message` there publishes
+ * infrastructure detail to whoever just activated an account.
+ *
+ * One sentence, true on every surface, addressed to the person: the system
+ * failed, not them, and the photo can still be added. The diagnostic text stays
+ * in the `activation.selfie_failed` warn log beside the userId.
+ */
+const PHOTO_FAILURE_REASON_SYSTEM =
+  'We could not store your photo during activation — a system error on our side, not a problem with your photo. You can add one from your dashboard.';
 
 /**
  * Story 13-18 AC4 (PM ruling 2026-07-06) — a successful INTERACTIVE PASSWORD
@@ -136,7 +162,7 @@ export class AuthService {
     roleName: string,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<{ id: string; email: string; fullName: string; status: string }> {
+  ): Promise<{ id: string; email: string; fullName: string; status: string; photo: PhotoOutcome }> {
     // 1. Find user by token (role already known from prior validateActivationToken call)
     //    OPS-2: hash the incoming plaintext before lookup (column holds sha256).
     const user = await db.query.users.findFirst({
@@ -167,28 +193,92 @@ export class AuthService {
     const passwordHash = await hashPassword(data.password);
 
     // 3. Process selfie if provided (field roles only)
-    let selfieData: { originalUrl: string; idCardUrl: string; livenessScore: number } | null = null;
-    if (!backOffice && 'selfieBase64' in data && data.selfieBase64) {
-      try {
-        const imageBuffer = this.decodeBase64Image(data.selfieBase64);
-        const photoService = new PhotoProcessingService();
-        selfieData = await photoService.processLiveSelfie(imageBuffer);
+    //
+    // Story 13-60 AC1 — SAVED, SKIPPED and FAILED must end up distinguishable.
+    // Before this story all three wrote the same NULL columns and said nothing,
+    // so an enumerator whose upload threw learned about it at a household door.
+    //
+    // ⚠️ `photoStatus` stays NULL for back-office activations. They never enter
+    // this block at all (the `!backOffice` guard below), so they did not skip
+    // and did not fail — the step simply does not apply to them. Both prod
+    // super_admins are in that state and must never be counted as failures.
+    let selfieData: { originalUrl: string; idCardUrl: string; sharpnessScore: number } | null = null;
+    let photoStatus: PhotoStatus | null = null;
+    let photoSource: PhotoSource | null = null;
+    let photoFailureReason: string | null = null;
 
-        logger.info({
-          event: 'activation.selfie_processed',
-          userId: user.id,
-          livenessScore: selfieData.livenessScore,
-        });
-      } catch (err: unknown) {
-        logger.warn({
-          event: 'activation.selfie_failed',
-          userId: user.id,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
-        if (err instanceof AppError && err.code === 'VALIDATION_ERROR') {
-          throw err;
+    if (!backOffice) {
+      const selfieBase64 = 'selfieBase64' in data ? data.selfieBase64 : undefined;
+      const requestedSource: PhotoSource =
+        ('selfieSource' in data && isPhotoSource(data.selfieSource)
+          ? data.selfieSource
+          : PHOTO_SOURCE.LIVE_CAPTURE);
+
+      if (!selfieBase64) {
+        // No image offered at all. That is a deliberate skip — `SkipForward`
+        // exists in SelfieStep by design and activation must not block on it.
+        photoStatus = PHOTO_STATUS.SKIPPED;
+        logger.info({ event: 'activation.selfie_skipped', userId: user.id });
+      } else {
+        try {
+          const imageBuffer = this.decodeBase64Image(selfieBase64);
+          const photoService = new PhotoProcessingService();
+          selfieData = await photoService.processLiveSelfie(imageBuffer, { source: requestedSource });
+
+          photoStatus = PHOTO_STATUS.SAVED;
+          photoSource = requestedSource;
+
+          logger.info({
+            event: 'activation.selfie_processed',
+            userId: user.id,
+            photoSource,
+            sharpnessScore: selfieData.sharpnessScore,
+          });
+        } catch (err: unknown) {
+          logger.warn({
+            event: 'activation.selfie_failed',
+            userId: user.id,
+            photoSource: requestedSource,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+
+          /*
+           * ⚠️ PRESERVED DELIBERATELY (Story 13-60 AC1.4). A VALIDATION_ERROR —
+           * "too blurry", "resolution too low", "invalid image format" — is
+           * re-thrown and FAILS the activation loudly. That is the one class of
+           * photo failure the person could already act on, and it is currently
+           * the ONLY path on which a failed photo tells them anything at all.
+           * Rewriting this block as a catch-all "record it and carry on" would
+           * turn a loud, actionable failure quiet. Do not.
+           */
+          if (err instanceof AppError && err.code === 'VALIDATION_ERROR') {
+            throw err;
+          }
+
+          // Everything else — S3 down, credentials missing, sharp blowing up —
+          // is OUR failure, not theirs. Activation still completes (locking a
+          // field officer out over a photo is the worse outcome), but the
+          // attempt is now recorded as FAILED, not as skipped, and the person
+          // is told on the completion screen.
+          selfieData = null;
+          photoStatus = PHOTO_STATUS.FAILED;
+          photoSource = requestedSource;
+          /*
+           * ⛔ NEVER `err.message` HERE. This value is persisted and then handed
+           * out on three surfaces — the activation response, `/users/profile`
+           * and the staff list — and the errors that reach this branch are
+           * infrastructure ones: `AccessDenied ... bucket oslsr-media`,
+           * `getaddrinfo ENOTFOUND <region>.digitaloceanspaces.com`, sharp
+           * internals. That is bucket names, hostnames and credential state
+           * leaving the building in a field officer's activation response.
+           *
+           * The diagnostic detail is not lost — it is in the `warn` above, with
+           * the userId, which is where an operator should be reading it from.
+           * What the person and the operator need HERE is the distinction the
+           * story exists to create: this was OUR failure, not their skip.
+           */
+          photoFailureReason = PHOTO_FAILURE_REASON_SYSTEM;
         }
-        selfieData = null;
       }
     }
 
@@ -230,9 +320,28 @@ export class AuthService {
           if (selfieData) {
             updateData.liveSelfieOriginalUrl = selfieData.originalUrl;
             updateData.liveSelfieIdCardUrl = selfieData.idCardUrl;
-            updateData.livenessScore = selfieData.livenessScore.toString();
+            updateData.photoSharpnessScore = selfieData.sharpnessScore.toString();
           }
+
         }
+
+        /*
+         * Story 13-60 AC1.3 — persist the outcome whatever it was. This is what
+         * makes saved / skipped / failed tellable apart afterwards.
+         *
+         * ⚠️ DELIBERATELY OUTSIDE the `if (!backOffice)` block above. The photo
+         * outcome is not a "profile field", and nesting it there made the
+         * back-office invariant INCIDENTAL — it held only because back-office
+         * skips that whole branch, so a test asserting "back-office stays NULL"
+         * passed no matter what value the variable held. Out here the invariant
+         * is carried by the variable itself (null for back-office, because they
+         * never enter the block that sets it), which is the thing the test
+         * actually checks. Found by RED-verifying the test and watching it stay
+         * green under a mutation it was supposed to catch.
+         */
+        updateData.photoStatus = photoStatus;
+        updateData.photoSource = photoSource;
+        updateData.photoFailureReason = photoFailureReason;
 
         const [result] = await tx.update(users)
           .set(updateData)
@@ -247,6 +356,11 @@ export class AuthService {
           details: {
             activatedAt: new Date().toISOString(),
             selfieUploaded: !!selfieData,
+            // Story 13-60 — `selfieUploaded: false` above cannot distinguish a
+            // skip from a failure; these can. Kept alongside rather than
+            // replacing it so existing audit readers do not break.
+            photoStatus,
+            photoSource,
             backOfficeActivation: backOffice,
           },
           ipAddress: ipAddress || 'unknown',
@@ -277,9 +391,27 @@ export class AuthService {
       userId: user.id,
       role: roleName,
       backOfficeActivation: backOffice,
+      photoStatus,
     });
 
-    return updatedUser;
+    /*
+     * Story 13-60 AC1.1 — the outcome travels back to the caller so the
+     * completion screen can SAY the photo did not save and offer a way to add
+     * one. Returning only `{id,email,fullName,status}` is why the person was
+     * told nothing: the information existed and was thrown away one frame
+     * before the UI that needed it.
+     */
+    return {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      fullName: updatedUser.fullName,
+      status: updatedUser.status,
+      photo: {
+        status: photoStatus,
+        source: photoSource,
+        failureReason: photoFailureReason,
+      },
+    };
   }
 
   /**

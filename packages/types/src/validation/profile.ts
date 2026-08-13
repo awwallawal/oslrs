@@ -38,9 +38,16 @@ export const selfieBase64Schema = z.string()
 /**
  * Extended activation schema with optional selfie capture
  * Maintains backward compatibility - selfieBase64 is optional
+ *
+ * Story 13-60 AC6.2 — `selfieSource` records WHICH path produced the image, so
+ * an uploaded passport photograph is never stored as though it were a live
+ * capture. Optional and defaulted at the service, so an older client that omits
+ * it still activates; absent is read as `live_capture`, which is what every
+ * pre-13-60 client was in fact doing.
  */
 export const activationWithSelfieSchema = activationSchema.extend({
   selfieBase64: selfieBase64Schema.optional(),
+  selfieSource: z.enum(['live_capture', 'upload']).optional(),
 });
 
 export type ActivationWithSelfiePayload = z.infer<typeof activationWithSelfieSchema>;

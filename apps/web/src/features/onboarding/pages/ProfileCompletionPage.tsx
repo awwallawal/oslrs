@@ -1,9 +1,13 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { SkeletonCard } from '../../../components/skeletons';
 import IDCardDownload from '../components/IDCardDownload';
 import { useAuth } from '../../auth/context/AuthContext';
+// Story 13-60 — the canonical profile cache key, imported rather than retyped:
+// the banner that sends people here reads this exact key.
+import { profileKeys } from '../../dashboard/hooks/useProfile';
 
 // Lazy load LiveSelfieCapture to split @vladmandic/human (~1.2MB) into separate chunk
 // Only loads when user clicks "Start Verification"
@@ -15,16 +19,29 @@ const ProfileCompletionPage: React.FC = () => {
   // the dead `localStorage.getItem('token')` key. As of 9-49 the token is held in
   // memory only (never web storage), so there is no XSS-at-rest exposure.
   const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<'intro' | 'selfie' | 'success'>('intro');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ originalUrl: string; idCardUrl: string } | null>(null);
+  const [result, setResult] = useState<{ originalUrl: string; idCardUrl: string; source: string } | null>(null);
 
-  const handleSelfieCapture = async (file: File) => {
+  const handleSelfieCapture = async (file: File, source: 'live_capture' | 'upload' = 'live_capture') => {
     setIsUploading(true);
     setError(null);
 
     const formData = new FormData();
+    /*
+     * Story 13-60 AC6.2 — record WHICH path produced this image.
+     *
+     * ⚠️ `source` is appended BEFORE the file, deliberately. Multer's own docs
+     * warn that `req.body` "might not have been fully populated yet — it
+     * depends on the order that the client transmits fields and files". A text
+     * field sent after a multi-megabyte file is exactly the case that bites, and
+     * the failure would be silent and permissive: `source` reads as undefined,
+     * falls back to `live_capture`, and an uploaded passport photograph gets
+     * recorded as a live capture. That is the one outcome AC6.2 forbids.
+     */
+    formData.append('source', source);
     formData.append('file', file);
 
     try {
@@ -48,8 +65,23 @@ const ProfileCompletionPage: React.FC = () => {
 
       setResult({
         originalUrl: data.data.liveSelfieOriginalUrl,
-        idCardUrl: data.data.liveSelfieIdCardUrl
+        idCardUrl: data.data.liveSelfieIdCardUrl,
+        source: data.data.photoSource ?? source,
       });
+
+      /*
+       * ⚠️ Story 13-60 — CLEAR THE ALARM THEY JUST ANSWERED.
+       *
+       * `MissingPhotoBanner` reads the same cached profile with a 5-minute
+       * staleTime, so without this the person walks back to the dashboard and
+       * is told "Your photo did not save" by the very banner that sent them
+       * here — about a photo they have just saved. A remedy screen that leaves
+       * the accusation on the wall is its own small version of this story's
+       * defect: the system knowing something and the person being told
+       * otherwise.
+       */
+      queryClient.invalidateQueries({ queryKey: profileKeys.profile });
+
       setStep('success');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed');

@@ -11,9 +11,11 @@ import {
 } from '../components/activation-wizard/steps';
 import { WIZARD_STEPS } from '../components/activation-wizard/useActivationWizard';
 import type { StepRenderProps } from '../components/activation-wizard/ActivationWizard';
-import { validateActivationToken } from '../api/auth.api';
+import { validateActivationToken, type ActivationResponse } from '../api/auth.api';
 
 type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'error' | 'activated';
+
+type PhotoOutcome = ActivationResponse['photo'];
 
 interface TokenInfo {
   fullName?: string;
@@ -51,6 +53,7 @@ export default function ActivationPage() {
   );
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [photoOutcome, setPhotoOutcome] = useState<PhotoOutcome | null>(null);
 
   // Validate token on mount
   useEffect(() => {
@@ -107,8 +110,22 @@ export default function ActivationPage() {
     };
   }, []);
 
-  const handleSuccess = () => {
+  const handleSuccess = (data: unknown) => {
+    // Story 13-60 AC1.1 — carry the photo outcome onto the completion screen.
+    // The API has always known whether the photo saved; it was discarded here,
+    // one frame before the only screen that could have said so.
+    const photo = (data as ActivationResponse | undefined)?.photo;
+    setPhotoOutcome(photo ?? null);
     setPageState('activated');
+
+    /*
+     * ⚠️ Story 13-60 — do NOT auto-redirect when the photo failed. The message
+     * telling them their ID-card photo did not save is the only notice they
+     * will ever get, and a 5-second timer pulling it off screen mid-sentence
+     * would reproduce the silence this story exists to end. They leave by
+     * choosing to.
+     */
+    if (photo?.status === 'failed') return;
     // Auto-redirect after 5 seconds.
     //
     // ⚠️ /staff/login, NOT /login (fixed 2026-08-09, found by the enumerator
@@ -247,6 +264,53 @@ export default function ActivationPage() {
           <p className="text-neutral-600 mb-6">
             Your profile has been completed successfully. You can now log in to your account.
           </p>
+
+          {/*
+            * Story 13-60 AC1.1 — the photo half of the outcome, stated plainly.
+            * Your account working and your ID CARD existing are two different
+            * things, and before this the second one failed in total silence.
+            */}
+          {photoOutcome?.status === 'failed' && (
+            <div
+              role="alert"
+              className="mb-6 text-left p-4 bg-warning-100 border border-warning-600 rounded-lg"
+            >
+              <div className="flex gap-2 items-start">
+                <AlertCircle className="w-5 h-5 text-warning-600 shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="font-medium text-neutral-900">Your photo did not save</p>
+                  <p className="text-sm text-neutral-700">
+                    Your account is active, but we could not store your photo, so your staff
+                    ID card cannot be printed yet. Nothing else is missing.
+                  </p>
+                  {/*
+                    * ⚠️ NAME THE AFFORDANCE THAT EXISTS. This line used to read
+                    * "add your photo from Profile › Photo" — there is no Photo
+                    * section on the profile page, and the only route that adds
+                    * a photo (`/profile-completion`) is reached from the
+                    * dashboard banner. Sending someone to look for a screen
+                    * that is not there is the same failure as telling them
+                    * nothing, one step later.
+                    */}
+                  <p className="text-sm text-neutral-700">
+                    <strong>You do not need a new invitation.</strong> Log in and your dashboard
+                    will show an <span className="font-medium">&ldquo;Add your photo&rdquo;</span>{' '}
+                    prompt — it takes under a minute.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {photoOutcome?.status === 'skipped' && (
+            <div className="mb-6 text-left p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+              <p className="text-sm text-neutral-600">
+                You skipped the photo step, so your staff ID card cannot be printed yet. You can
+                add a photo any time after logging in — no new invitation needed.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
             <Link
               to="/staff/login"
@@ -254,9 +318,11 @@ export default function ActivationPage() {
             >
               Log In Now
             </Link>
-            <p className="text-sm text-neutral-500">
-              Redirecting to login in 5 seconds...
-            </p>
+            {photoOutcome?.status !== 'failed' && (
+              <p className="text-sm text-neutral-500">
+                Redirecting to login in 5 seconds...
+              </p>
+            )}
           </div>
         </div>
       </div>

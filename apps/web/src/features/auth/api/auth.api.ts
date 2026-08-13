@@ -274,17 +274,38 @@ export interface ActivationWithSelfieRequest {
   nextOfKinName: string;
   nextOfKinPhone: string;
   selfieBase64?: string;
+  /**
+   * Story 13-60 AC6.2 — WHICH path produced `selfieBase64`. Omitted means live
+   * capture, which is what every client did before the upload fallback existed.
+   */
+  selfieSource?: 'live_capture' | 'upload';
 }
 
 /**
- * Activation response type
+ * Activation response type.
+ *
+ * ⚠️ CORRECTED in Story 13-60. This interface used to declare a `user` wrapper
+ * that the API has never sent: the controller responds `{ data: {...} }` and
+ * `authFetch` returns `data.data`, so the real shape is these fields at the top
+ * level. It went unnoticed because nothing ever read the activation result —
+ * `onSuccess` discarded it. The completion screen now reads `photo`, so the
+ * type has to describe what actually arrives.
  */
 export interface ActivationResponse {
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-    status: string;
+  id: string;
+  email: string;
+  fullName: string;
+  status: string;
+  /**
+   * Story 13-60 AC1.1 — did their PHOTO save? `status: null` means the step did
+   * not apply (back-office activation). This is what lets the completion screen
+   * say "your photo did not save" instead of saying nothing, which is how an
+   * enumerator used to discover it at a household door.
+   */
+  photo: {
+    status: 'saved' | 'skipped' | 'failed' | null;
+    source: 'live_capture' | 'upload' | null;
+    failureReason: string | null;
   };
 }
 

@@ -25,3 +25,4 @@ export * from './analytics.js';
 export * from './skills-taxonomy.js';
 export * from './normalised.js';
 export * from './ops-thresholds.js';
+export * from './staff-photo.js';

@@ -17,6 +17,15 @@ export interface UserProfile {
   nextOfKinName: string | null;
   nextOfKinPhone: string | null;
   liveSelfieOriginalUrl: string | null;
+  /**
+   * Story 13-60 AC2.2 — null means NO ID CARD CAN BE PRINTED. This is the exact
+   * column `user.controller.ts` refuses card generation on, which is why the
+   * banner keys on it rather than on `liveSelfieOriginalUrl` or `photoStatus`.
+   */
+  liveSelfieIdCardUrl: string | null;
+  /** Why there is no photo. null = the step never applied (back-office), or the account predates 13-60. */
+  photoStatus: 'saved' | 'skipped' | 'failed' | null;
+  photoFailureReason: string | null;
   createdAt: string;
 }
 

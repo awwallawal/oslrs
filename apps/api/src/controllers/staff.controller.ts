@@ -29,7 +29,7 @@ export class StaffController {
    */
   static async list(req: Request, res: Response, next: NextFunction) {
     try {
-      const { page, limit, status, roleId, role, lgaId, search } = req.query;
+      const { page, limit, status, roleId, role, lgaId, search, missingPhoto } = req.query;
 
       if (status && !VALID_STATUSES.has(status as string)) {
         throw new AppError(
@@ -49,6 +49,11 @@ export class StaffController {
         role: role as string | undefined,
         lgaId: lgaId as string | undefined,
         search: search as string | undefined,
+        // Story 13-60 AC3.1 — `?missingPhoto=true` narrows to staff who cannot
+        // be issued an ID card. Strict equality on the string 'true': any other
+        // value means "no filter", so a typo widens rather than silently
+        // inverting the operator's question.
+        missingPhoto: missingPhoto === 'true',
       });
 
       res.json({

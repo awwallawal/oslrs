@@ -27,6 +27,8 @@ export async function listStaff(params: ListStaffParams = {}): Promise<StaffList
   if (params.roleId) searchParams.set('roleId', params.roleId);
   if (params.lgaId) searchParams.set('lgaId', params.lgaId);
   if (params.search) searchParams.set('search', params.search);
+  // Story 13-60 AC3.1 — only sent when true; the server reads strict 'true'.
+  if (params.missingPhoto) searchParams.set('missingPhoto', 'true');
 
   const query = searchParams.toString();
   return apiClient(`/staff${query ? `?${query}` : ''}`);

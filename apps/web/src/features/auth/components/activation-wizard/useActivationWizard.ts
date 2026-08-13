@@ -75,6 +75,8 @@ export interface WizardFormData {
   nextOfKinPhone: string;
   // Step 5: Selfie
   selfieBase64?: string;
+  /** Story 13-60 AC6.2 — WHICH path produced `selfieBase64`. */
+  selfieSource?: 'live_capture' | 'upload';
 }
 
 /**
@@ -134,6 +136,7 @@ const stepSchemas = {
 
   [WIZARD_STEPS.SELFIE]: z.object({
     selfieBase64: z.string().optional(),
+    selfieSource: z.enum(['live_capture', 'upload']).optional(),
   }),
 };
 
@@ -456,6 +459,7 @@ function getStepData(formData: WizardFormData, step: WizardStep): Partial<Wizard
     case WIZARD_STEPS.SELFIE:
       return {
         selfieBase64: formData.selfieBase64,
+        selfieSource: formData.selfieSource,
       };
     default:
       return {};

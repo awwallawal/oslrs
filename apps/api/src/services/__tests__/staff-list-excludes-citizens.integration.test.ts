@@ -112,3 +112,71 @@ describe('StaffService.listUsers — citizens are not staff', () => {
     expect(all.data.map((u) => u.email)).not.toContain(citizenEmail);
   });
 });
+
+/**
+ * Story 13-60 AC3.1 + AC6.3 — the operator's pre-field-day question.
+ *
+ * "Who will I fail to print an ID card for?" — asked BEFORE somebody prints
+ * twelve and discovers it at the printer, which is the situation the story was
+ * raised from.
+ *
+ * ⚠️ Assertions name the PERSON, not a count, for the same reason as the suite
+ * above: a count passes over the hole the moment a fixture changes.
+ */
+describe('StaffService.listUsers — ID-photo visibility (13-60 AC3)', () => {
+  it('reports whether each person can actually be issued a card', async () => {
+    const result = await StaffService.listUsers({ limit: 100, search: tag });
+    const enumerator = result.data.find((u) => u.email === enumeratorEmail)!;
+
+    // The fixture has no photo, so no card can be printed for them.
+    expect(enumerator.hasPhoto).toBe(false);
+  });
+
+  it('narrows to exactly the staff who have no photo', async () => {
+    // Give the admin a photo; the enumerator keeps none.
+    await db
+      .update(users)
+      .set({
+        liveSelfieIdCardUrl: 'staff-photos/id-card/fixture.jpg',
+        photoStatus: 'saved',
+        photoSource: 'upload',
+      })
+      .where(eq(users.email, adminEmail));
+
+    const missing = await StaffService.listUsers({ limit: 100, search: tag, missingPhoto: true });
+    const emails = missing.data.map((u) => u.email);
+
+    expect(emails).toContain(enumeratorEmail);
+    expect(emails).not.toContain(adminEmail);
+
+    // AC6.3 — and for the one who HAS a photo, which path produced it is
+    // visible. An upload recorded as a live capture is the one thing AC6.2
+    // forbids, so the operator has to be able to see the difference.
+    const all = await StaffService.listUsers({ limit: 100, search: tag });
+    const admin = all.data.find((u) => u.email === adminEmail)!;
+    expect(admin.hasPhoto).toBe(true);
+    expect(admin.photoSource).toBe('upload');
+  });
+
+  it('surfaces WHY the photo is missing, so a failure is not read as a choice', async () => {
+    await db
+      .update(users)
+      .set({ photoStatus: 'failed', photoFailureReason: 'S3 upload failed' })
+      .where(eq(users.email, enumeratorEmail));
+
+    const result = await StaffService.listUsers({ limit: 100, search: tag, missingPhoto: true });
+    const enumerator = result.data.find((u) => u.email === enumeratorEmail)!;
+
+    // ⚠️ THE DISTINCTION IS THE FEATURE. "No photo" alone cannot tell the
+    // operator whether the system lost it or the person declined — and those
+    // call for different actions.
+    expect(enumerator.photoStatus).toBe('failed');
+    expect(enumerator.photoStatus).not.toBe('skipped');
+    expect(enumerator.photoFailureReason).toContain('S3 upload failed');
+  });
+
+  it('the missingPhoto total respects the filter, not just the page', async () => {
+    const missing = await StaffService.listUsers({ limit: 100, search: tag, missingPhoto: true });
+    expect(missing.meta.total).toBe(missing.data.length);
+  });
+});

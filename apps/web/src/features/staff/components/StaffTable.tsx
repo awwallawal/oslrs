@@ -10,6 +10,65 @@ import { StaffStatusBadge } from './StaffStatusBadge';
 import { StaffActionsMenu } from './StaffActionsMenu';
 import type { StaffMember, PaginationMeta } from '../types';
 
+/**
+ * Story 13-60 AC3.1 + AC6.3 — the ID-photo state for one staff row.
+ *
+ * Two facts, deliberately kept separate:
+ *   1. CAN a card be printed (`hasPhoto`)? That is the operational question.
+ *   2. WHY not, and — when there is a photo — WHICH path produced it.
+ *
+ * ⚠️ "No photo" is stated WITHOUT blame. `photoStatus === 'failed'` means the
+ * system lost it and the person was told; 'skipped' was their choice; null
+ * means either the step never applied (back-office) or the account predates
+ * this story. Presenting all three as one red "missing" would repeat the
+ * original defect — three different situations wearing one face.
+ *
+ * ⚠️ AND THE PROVENANCE IS *REPORTED*, NOT VERIFIED. `photo_source` is whatever
+ * the browser said at upload time; the server has no way to tell a webcam frame
+ * from a file. Printing a bare "Live photo" would state as established fact a
+ * thing we only have the client's word for — which is the shape of the defect
+ * this story fixes one column over (`liveness_score` holding a sharpness
+ * ratio). So the label says "reported", and the tooltip says why.
+ */
+function StaffPhotoCell({ staff }: { staff: StaffMember }) {
+  if (staff.hasPhoto) {
+    return staff.photoSource === 'upload' ? (
+      <span
+        className="text-neutral-600"
+        title="Uploaded photograph, not a live capture — as reported by the client at upload time; the server cannot verify which path produced an image."
+      >
+        Uploaded <span className="text-neutral-400">(reported)</span>
+      </span>
+    ) : (
+      <span
+        className="text-neutral-600"
+        title="Live capture — as reported by the client at upload time; the server cannot verify which path produced an image."
+      >
+        Live photo <span className="text-neutral-400">(reported)</span>
+      </span>
+    );
+  }
+
+  if (staff.photoStatus === 'failed') {
+    return (
+      <span
+        className="text-warning-600 font-medium"
+        title={staff.photoFailureReason ?? 'The photo failed to save during activation'}
+      >
+        Failed — no card
+      </span>
+    );
+  }
+
+  if (staff.photoStatus === 'skipped') {
+    return <span className="text-neutral-600">Skipped — no card</span>;
+  }
+
+  // null: back-office (never applied) or an account older than Story 13-60.
+  // We do not know which, and we do not guess.
+  return <span className="text-neutral-400 italic">None on file</span>;
+}
+
 interface StaffTableProps {
   data: StaffMember[];
   meta: PaginationMeta | undefined;
@@ -42,7 +101,9 @@ export function StaffTable({
   downloadingUserId,
 }: StaffTableProps) {
   if (isLoading) {
-    return <SkeletonTable rows={10} columns={6} />;
+    // 7 columns since Story 13-60 added `ID photo` — keep this in step with the
+    // <th> count or the loading state is visibly narrower than the table.
+    return <SkeletonTable rows={10} columns={7} />;
   }
 
   if (data.length === 0) {
@@ -79,6 +140,13 @@ export function StaffTable({
               <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">
                 Status
               </th>
+              {/*
+                * Story 13-60 AC3.1 — answer "who can I print a card for?"
+                * BEFORE somebody prints twelve and finds out at the printer.
+                */}
+              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">
+                ID photo
+              </th>
               <th className="text-right py-3 px-4 text-sm font-semibold text-neutral-700">
                 Actions
               </th>
@@ -107,6 +175,9 @@ export function StaffTable({
                 </td>
                 <td className="py-3 px-4">
                   <StaffStatusBadge status={staff.status} />
+                </td>
+                <td className="py-3 px-4 text-sm">
+                  <StaffPhotoCell staff={staff} />
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex justify-end">

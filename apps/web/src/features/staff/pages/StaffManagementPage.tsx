@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { Search, UserPlus, Upload, ChevronDown, RefreshCw } from 'lucide-react';
+import { Search, UserPlus, Upload, ChevronDown, RefreshCw, CameraOff } from 'lucide-react';
 import { getRoleDisplayName } from '@oslsr/types';
 import { Card, CardContent } from '../../../components/ui/card';
 import { StaffTable, RoleChangeDialog, DeactivateDialog, ReactivateDialog, BulkImportModal, AddStaffModal } from '../components';
@@ -46,6 +46,16 @@ export default function StaffManagementPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<UserStatus | ''>('');
   const [roleFilter, setRoleFilter] = useState<string>('');
+  /**
+   * Story 13-60 AC3.1 — "who will I fail to print an ID card for?", asked
+   * BEFORE somebody prints twelve and finds out at the printer.
+   *
+   * ⚠️ The `ID photo` column alone does not answer this. On a 20-row page the
+   * operator has to read every row of every page to find the gaps, which on the
+   * morning of a field day is the same as not knowing. The server filter has
+   * existed since this story; this is the control that reaches it.
+   */
+  const [missingPhotoOnly, setMissingPhotoOnly] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -72,8 +82,10 @@ export default function StaffManagementPage() {
       ...(statusFilter && { status: statusFilter }),
       ...(roleFilter && { roleId: roleFilter }),
       ...(debouncedSearch && { search: debouncedSearch }),
+      // Story 13-60 AC3.1 — only sent when on; the server reads strict 'true'.
+      ...(missingPhotoOnly && { missingPhoto: true }),
     }),
-    [page, statusFilter, roleFilter, debouncedSearch]
+    [page, statusFilter, roleFilter, debouncedSearch, missingPhotoOnly]
   );
 
   // Data fetching
@@ -105,6 +117,11 @@ export default function StaffManagementPage() {
 
   const handleRoleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setRoleFilter(e.target.value);
+    setPage(1);
+  };
+
+  const handleMissingPhotoToggle = () => {
+    setMissingPhotoOnly((on) => !on);
     setPage(1);
   };
 
@@ -224,6 +241,29 @@ export default function StaffManagementPage() {
               </select>
               <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+
+            {/*
+              * Story 13-60 AC3.1 — the ID-photo gap, in one click.
+              *
+              * A toggle rather than another dropdown: this is the question an
+              * operator asks on ONE morning (the day before a field day), and
+              * burying it as a third select would leave it unfound. Pressed
+              * state is carried by aria-pressed, not by colour alone.
+              */}
+            <button
+              type="button"
+              onClick={handleMissingPhotoToggle}
+              aria-pressed={missingPhotoOnly}
+              title="Show only staff with no ID-card photo — no card can be printed for them"
+              className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                missingPhotoOnly
+                  ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700'
+                  : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
+              }`}
+            >
+              <CameraOff className="w-4 h-4" />
+              No ID photo
+            </button>
 
             {/* Refresh Button */}
             <button

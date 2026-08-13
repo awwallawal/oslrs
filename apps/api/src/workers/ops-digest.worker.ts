@@ -25,6 +25,7 @@ import {
   RESEND_MONTHLY_QUOTA,
   type OpsDashboardSnapshot,
   type NotificationUsage,
+  type FieldStaffPhotoHealth,
 } from '@oslsr/types';
 import pino from 'pino';
 
@@ -88,6 +89,52 @@ export function formatAbuseLines(findings: AbuseFinding[]): string[] {
   for (const f of findings) {
     lines.push(`🚨 ${escapeMarkdownV2(f.text)}`);
   }
+  return lines;
+}
+
+/**
+ * Story 13-60 (AC3.2) — field staff who cannot be issued an ID card.
+ *
+ * ⚠️ SILENT WHEN ZERO, on purpose (13-42's discipline: fire on the real shape,
+ * say nothing when there is nothing). A permanent "0 missing" line is a line
+ * the operator learns to skip, and this one has to be readable on the morning
+ * somebody is about to print twelve cards.
+ *
+ * Also silent when the section is unavailable — an absent count is not a
+ * finding, and rendering "unavailable" here would train the same blindness.
+ *
+ * Pure; returns escaped MarkdownV2 lines.
+ */
+export function formatFieldStaffPhotoLines(health: FieldStaffPhotoHealth | null | undefined): string[] {
+  if (!health) return [];
+  if (health.missingPhoto === 0) return [];
+
+  // A system-caused failure is worse than a deliberate skip, so it drives the
+  // glyph: red when we broke it, yellow when they chose it.
+  const glyph = health.failed > 0 ? '🔴' : '🟡';
+  const lines: string[] = [
+    `${glyph} *ID cards*: ${escapeMarkdownV2(
+      `${health.missingPhoto} of ${health.activeFieldStaff} active field staff have no photo — no card can be printed for them`,
+    )}`,
+  ];
+
+  const breakdown: string[] = [];
+  if (health.failed > 0) breakdown.push(`${health.failed} failed (our fault, they were told)`);
+  if (health.skipped > 0) breakdown.push(`${health.skipped} skipped the step`);
+  const unknown = health.missingPhoto - health.failed - health.skipped;
+  // Pre-13-60 accounts carry no status. Say "not recorded" rather than folding
+  // them into skipped — inventing the distinction is the defect, not the fix.
+  if (unknown > 0) breakdown.push(`${unknown} not recorded (pre-13-60)`);
+  if (breakdown.length > 0) {
+    lines.push(`   ${escapeMarkdownV2(breakdown.join(', '))}`);
+  }
+
+  if (health.fromUpload > 0) {
+    lines.push(
+      `   ${escapeMarkdownV2(`${health.fromUpload} of ${health.withPhoto} stored photos came from an upload, not a live capture`)}`,
+    );
+  }
+
   return lines;
 }
 
@@ -191,6 +238,12 @@ export function formatDigest(
 
   // Notification usage (AC4) — internal meter, per-category.
   for (const l of formatNotificationUsageLines(snapshot.notificationUsage)) {
+    lines.push(l);
+  }
+
+  // Story 13-60 (AC3.2) — field staff with no ID-card photo. Emits nothing at
+  // all when every active field officer has one.
+  for (const l of formatFieldStaffPhotoLines(snapshot.fieldStaffPhotos)) {
     lines.push(l);
   }
 

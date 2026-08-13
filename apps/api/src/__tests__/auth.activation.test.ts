@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import supertest from 'supertest';
 import sharp from 'sharp';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
-import { generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
+import { generateInvitationToken, hashInvitationToken, AppError } from '@oslsr/utils';
+import { PhotoProcessingService } from '../services/photo-processing.service.js';
 import { StaffService } from '../services/staff.service.js';
 import { EmailService } from '../services/email.service.js';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
@@ -281,6 +282,188 @@ describe('Auth Activation Integration', () => {
       expect(res.body.code).toBe('VALIDATION_ERROR');
   });
 
+  /**
+   * Story 13-60 AC4 — RED-VERIFY THE BRANCH NOBODY WATCHED.
+   *
+   * ⚠️ READ THIS BEFORE EDITING. `auth.service.activateAccount` used to catch a
+   * selfie failure, set `selfieData = null` and complete the activation in
+   * silence. Saved, skipped and failed all produced the SAME three NULL columns
+   * and the SAME empty response, so an enumerator whose upload threw found out
+   * at a household door with no ID card to show.
+   *
+   * ⛔ EVERY ASSERTION HERE IS ON *DISTINGUISHABILITY*, NEVER ON "activation
+   * succeeded". `expect(res.status).toBe(200)` passes today, over the hole —
+   * that is [[pattern-test-that-passes-over-a-hole]] and it is precisely how
+   * this defect survived. Delete the outcome-recording in auth.service and
+   * these tests must go red.
+   */
+  describe('Selfie outcome is distinguishable (13-60 AC1/AC4)', () => {
+    /** Invite a user and run a full activation, returning the HTTP response. */
+    async function activate(
+      opts: { roleId: string; namePrefix: string; selfieBase64?: string; selfieSource?: string },
+    ) {
+      const newToken = generateInvitationToken();
+      const [user] = await db.insert(users).values({
+        email: `${opts.namePrefix}-${Date.now()}-${Math.round(performance.now())}@example.com`,
+        fullName: 'Photo Outcome Test',
+        roleId: opts.roleId,
+        status: 'invited',
+        invitationToken: hashInvitationToken(newToken),
+        invitedAt: new Date(),
+      }).returning();
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+          password: 'password123',
+          nin: generateValidNin(),
+          dateOfBirth: '1990-01-01',
+          homeAddress: '123 Test St, Ibadan',
+          bankName: 'Test Bank',
+          accountNumber: '0123456789',
+          accountName: 'Photo Outcome Test',
+          nextOfKinName: 'NOK Test',
+          nextOfKinPhone: '08012345678',
+          ...(opts.selfieBase64 ? { selfieBase64: opts.selfieBase64 } : {}),
+          ...(opts.selfieSource ? { selfieSource: opts.selfieSource } : {}),
+        });
+
+      const row = await db.query.users.findFirst({ where: eq(users.id, user.id) });
+      return { res, row };
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('records a swallowed failure as FAILED — not as skipped — and tells the person', async () => {
+      // Force the exact branch that was silent: a non-validation throw from
+      // processing (S3 down, credentials missing, sharp blowing up).
+      vi.spyOn(PhotoProcessingService.prototype, 'processLiveSelfie').mockRejectedValue(
+        new Error('S3 upload failed: connection refused'),
+      );
+
+      const selfieBase64 = await generateTestImageBase64();
+      const { res, row } = await activate({ roleId: fieldRoleId, namePrefix: 'photo-failed', selfieBase64 });
+
+      // AC1.2 — activation is NOT blocked. Locking a field officer out over a
+      // photo is the worse failure.
+      expect(res.status).toBe(200);
+      expect(row?.status).toBe('active');
+
+      // AC4.1 — the attempt is recorded as FAILED, and specifically NOT as the
+      // skip it was indistinguishable from before.
+      expect(row?.photoStatus).toBe('failed');
+      expect(row?.photoStatus).not.toBe('skipped');
+      expect(row?.photoFailureReason).toBeTruthy();
+
+      /*
+       * ⛔ AND THE RAW EXCEPTION DOES NOT TRAVEL WITH IT (review M1).
+       * `photo_failure_reason` is handed out on three surfaces — this response,
+       * `/users/profile`, and the operator's staff list. The errors that reach
+       * this branch name buckets, hosts and credential state. The reason stored
+       * must say WHOSE fault it was, not WHICH host refused the connection.
+       */
+      expect(row?.photoFailureReason).not.toContain('S3 upload failed');
+      expect(row?.photoFailureReason).not.toContain('connection refused');
+      expect(res.body.data.photo.failureReason).not.toContain('S3 upload failed');
+
+      // AC1.1 — and the person is actually TOLD, in the response the completion
+      // screen renders. This is the half that was thrown away one frame early.
+      expect(res.body.data.photo.status).toBe('failed');
+      expect(res.body.data.photo.failureReason).toBeTruthy();
+
+      // Nothing was stored, so no card can be generated — the state that must
+      // be visible rather than silent.
+      expect(row?.liveSelfieIdCardUrl).toBeNull();
+    });
+
+    it('records a deliberate skip as SKIPPED — a skip is not a failure', async () => {
+      const { res, row } = await activate({ roleId: fieldRoleId, namePrefix: 'photo-skipped' });
+
+      expect(res.status).toBe(200);
+      expect(row?.photoStatus).toBe('skipped');
+      expect(row?.photoStatus).not.toBe('failed');
+      expect(row?.photoFailureReason).toBeNull();
+      expect(res.body.data.photo.status).toBe('skipped');
+    });
+
+    it('leaves a back-office activation NULL — the step never applied to them', async () => {
+      // ⚠️ AC1.4. Back-office roles never enter the selfie block at all
+      // (`if (!backOffice …)`). They did not skip and they did not fail, and
+      // counting them as failures would put both prod super_admins on the
+      // operator's "no photo" list forever.
+      const backOfficeRoleName = BACK_OFFICE_ROLES[0];
+      expect(isBackOfficeRole(backOfficeRoleName)).toBe(true);
+      const backOfficeRole = (await db.select().from(roles)).find((r) => r.name === backOfficeRoleName)!;
+
+      const newToken = generateInvitationToken();
+      const [user] = await db.insert(users).values({
+        email: `photo-backoffice-${Date.now()}@example.com`,
+        fullName: 'Back Office Test',
+        roleId: backOfficeRole.id,
+        status: 'invited',
+        invitationToken: hashInvitationToken(newToken),
+        invitedAt: new Date(),
+      }).returning();
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({ password: 'password123' });
+
+      expect(res.status).toBe(200);
+      const row = await db.query.users.findFirst({ where: eq(users.id, user.id) });
+      expect(row?.status).toBe('active');
+      expect(row?.photoStatus).toBeNull();
+      expect(row?.photoStatus).not.toBe('failed');
+    });
+
+    it('STILL fails loudly on a VALIDATION_ERROR — the one failure that already spoke', async () => {
+      /*
+       * ⛔ REGRESSION LOCK on AC1.4. A blurry / too-small / unreadable image
+       * throws AppError('VALIDATION_ERROR'), which auth.service RE-THROWS. That
+       * is the only path on which a failed photo told the person anything
+       * before this story, and it is the one the upload fallback collides with.
+       * Rewriting the catch as a blanket "record it and carry on" would turn a
+       * loud, actionable failure quiet — a net loss dressed as a fix.
+       */
+      vi.spyOn(PhotoProcessingService.prototype, 'processLiveSelfie').mockRejectedValue(
+        new AppError('VALIDATION_ERROR', 'Image is too blurry. Please retake.', 400),
+      );
+
+      const selfieBase64 = await generateTestImageBase64();
+      const { res, row } = await activate({ roleId: fieldRoleId, namePrefix: 'photo-validation', selfieBase64 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+      // The activation did NOT complete — they can fix the photo and retry.
+      expect(row?.status).toBe('invited');
+      expect(row?.photoStatus).toBeNull();
+    });
+
+    it('records an uploaded photo as an upload, never as a live capture', async () => {
+      // ⛔ AC6.2, the non-negotiable one — see the same assertion on the
+      // /users/selfie path in user.selfie.test.ts.
+      vi.spyOn(PhotoProcessingService.prototype, 'processLiveSelfie').mockResolvedValue({
+        originalUrl: 'staff-photos/original/x.jpg',
+        idCardUrl: 'staff-photos/id-card/x.jpg',
+        sharpnessScore: 0.42,
+      });
+
+      const selfieBase64 = await generateTestImageBase64();
+      const { row } = await activate({
+        roleId: fieldRoleId,
+        namePrefix: 'photo-upload',
+        selfieBase64,
+        selfieSource: 'upload',
+      });
+
+      expect(row?.photoStatus).toBe('saved');
+      expect(row?.photoSource).toBe('upload');
+      expect(row?.photoSource).not.toBe('live_capture');
+    });
+  });
+
   describe('Activation with Selfie (S3 Integration)', () => {
     // Check if S3 credentials are available (for CI environments without S3 access)
     const hasS3Config = !!(process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY);
@@ -354,8 +537,12 @@ describe('Auth Activation Integration', () => {
         expect(String(updatedUser.liveSelfieOriginalUrl)).toMatch(/^staff-photos\/original\/.+\.jpg$/);
         expect(typeof updatedUser.liveSelfieIdCardUrl).toBe('string');
         expect(String(updatedUser.liveSelfieIdCardUrl)).toMatch(/^staff-photos\/id-card\/.+\.jpg$/);
-        // livenessScore is stored as string in DB (decimal type)
-        expect(Number(updatedUser.livenessScore)).toBeGreaterThan(0);
+        // photoSharpnessScore is stored as string in DB (decimal type).
+        // Renamed from `livenessScore` in Story 13-60 AC6.4 — it is a sharpness
+        // ratio and never was a liveness score.
+        expect(Number(updatedUser.photoSharpnessScore)).toBeGreaterThan(0);
+        expect(updatedUser.photoStatus).toBe('saved');
+        expect(updatedUser.photoSource).toBe('live_capture');
       }
     }, 60000); // 60s timeout for image generation + S3 upload over slow connections
   });
