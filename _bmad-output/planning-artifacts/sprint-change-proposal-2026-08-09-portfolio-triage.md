@@ -2075,3 +2075,168 @@ but the operator must confirm identity by name and LGA first, not by the number 
 - Any further `Transient` bounce is permanently suppressed after 13-51 ships → the fix did not fire.
 - A `mail.com`-style live-provider entry appears in `typo-dictionary.json` → §11.3 was overruled
   without being answered; re-read it before accepting.
+
+---
+
+## 12. GATE ITEM 2 IS GREEN — the enumerator path proven end to end (2026-08-12/13)
+
+**Everything below is prod, read-only verified, and re-runnable.** Baseline captured 2026-08-12
+14:20Z at prod `19b51f5`; teardown re-measured 2026-08-13. Full record with IDs:
+`docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` §F.
+
+### 12.1 Phase 1 — activation proven a SECOND time, on the field branch
+
+`lawalkolade+testenumeratornew@gmail.com`, invited and activated 2026-08-12 17:00.
+
+```
+activation.selfie_processed   livenessScore 0.3107927737952964
+activation.complete           backOfficeActivation: false      ← THE FIELD BRANCH
+```
+
+**Why a fresh invite was necessary at all:** the activation wizard is **one-time**. Once an account
+activates, the invite → email → activation → selfie path cannot be re-run on it. So the only way to
+re-test the path that failed twice and had succeeded once was a new account. **It now stands at 2 of
+3 attempts succeeding, both successes after the `27e1fdc` CSP fix.**
+
+`backOfficeActivation: false` is the point: 13-59 AC3.3 warned that both prior prod activations were
+super-admins taking a **different branch**, so nothing had ever exercised the field path. **It has now.**
+
+#### ⚠️ 12.1a THE SHARPNESS MARGIN IS SHRINKING AND NOBODY HAS ESTABLISHED WHAT IS TYPICAL
+
+| account | score | route |
+|---|---|---|
+| April 2026 | **0.8589** | activation |
+| `+testenumerator` | **0.5913** | `/profile-completion` upload |
+| `+testenumeratornew` | **0.3108** | activation, 2026-08-12 |
+
+`liveness_score = min(sharpness/100, 0.99)` and `photo-processing.service.ts:110` **throws
+`VALIDATION_ERROR('Image is too blurry. Please retake.')` below `sharpness < 20`** — a score of 0.20.
+
+**Today's capture scored 0.31 — 1.5× the rejection floor.** And because that is an `AppError` with
+code `VALIDATION_ERROR`, `auth.service.ts:188-190` **re-throws it, so the activation FAILS OUTRIGHT.**
+One dimmer room or one cheaper handset and a field officer cannot activate.
+
+Three samples is not a distribution, and the threshold was *"determined empirically"* with no record
+of on what. **It is the only data anyone has, and the working margin is 0.31 against a floor of 0.20.**
+→ recorded in **13-60**.
+
+#### ⚠️ 12.1b `live_selfie_verified_at` IS WRITTEN BY ONE OF THE TWO SELFIE PATHS
+
+`grep liveSelfieVerifiedAt` returns exactly one writer: `user.controller.ts:64` — the
+`/users/selfie` **upload** path. **`auth.service.ts` never sets it.**
+
+| account | route | `verified_at` |
+|---|---|---|
+| `+testenumerator` | `/profile-completion` upload | **set** |
+| `+testenumeratornew` | activation wizard | **NULL** |
+
+Both hold a selfie and an ID card. **The column does not mean "verified" — it means "arrived via the
+upload path".** Any query asking *"who has a verified selfie?"* silently under-counts everyone who
+activated normally, which will be **every field officer**. Third instance of a name asserting a
+property its value does not carry, on this one surface (with `liveness_score` and the old 13-60 title).
+
+### 12.2 ⛔ THE FIRST ATTEMPT AT §C TESTED NOTHING, AND IT LOOKED FINE
+
+Rows 1 and 2 were captured on **different phones** — the sheet required one shared handset. So no
+same-phone match existed, the identity guard never ran, and
+`identity_match_exempted_staff_capture` fired **0 times**.
+
+**`§A query 4` would have returned 1** — which reads as *"the fix is broken"* when the truth was
+*"the code never executed."* Those two are indistinguishable from the count alone, and from the UI.
+**This is exactly what §C's mandatory log-line step exists to separate**, and it caught it.
+
+Row 4 (`Fatima Bisi Zzsmoke`, same phone, NIN blank) was added specifically to form the pair.
+
+### 12.3 The green, with the evidence that cannot be faked
+
+| check | result |
+|---|---|
+| §A query 2 — all 6 rows | `source='enumerator'`, submission present, `processed=t`, **no processing errors** |
+| **§A query 4** — household phone | **2** |
+| **§A query 5** — the guard EXECUTED | `trigger: no_nin` · `wouldHaveMergedInto` = Fatima (`OSL-2026-TYANTY`) · `source: enumerator` |
+| §A query 6 | one shared-phone group: Fatima + Fatima Bisi. Expected for a household |
+| **Orphans** | **2 before, 2 after — nothing lost** |
+| NIN branches | 2 with sentinels → `active`; 4 blank → `pending_nin_capture` |
+| §E email branches | 3 with, 3 without — **all three OSLRS-number emails CONFIRMED RECEIVED**, not merely `sent_at = t` |
+| **R8 status-check** | shared phone → neutral, **no email**; `OSL-2026-TYANTY` → **email arrived**. Run **30 minutes apart** |
+
+**Teardown, child-first:** `fraud_detections` 6 · `marketplace_profiles` 6 · `magic_link_tokens` 1 ·
+`campaign_sends` 0 · `email_suppressions` 0 · `submissions` 6 · `respondents` 6.
+Re-measured to **327 · 1 · 285 · 2** — the +1 submission is an unrelated **public** registration that
+landed mid-smoke (`OSL-2026-A37K2A`, 11:53:59) and was correctly untouched.
+
+⚠️ **Two teardown facts worth keeping.** Every smoke submission spawned a `fraud_detections` AND a
+`marketplace_profiles` row, so **a RID-only teardown would have orphaned twelve rows**. And the
+`magic_link_tokens` **1** was the status-check token — `respondent_id = NULL`, so a delete-by-RID
+would have missed it. That is the 2026-07-30 leak, caught by the clause written after it.
+
+### 12.4 ⛔ FOUR OF SEVEN ROLES HAVE NEVER HAD AN ACCOUNT ON PROD
+
+Found while trying to satisfy §D.1's `team_assignments` precondition:
+
+```
+data_entry_clerk 0 · government_official 0 · supervisor 0 · verification_assessor 0
+super_admin 2 (both Awwal's) · enumerator 4 (all Awwal's) · public_user 123
+```
+
+`TeamAssignmentService.createAssignment` **validates the supervisor role**, so with zero supervisors
+the assignment **cannot be created by the canonical path at all** — and forcing it with a raw INSERT
+would bypass the one check that service exists to perform.
+
+✅ **The smoke ran anyway, because the submission path does NOT read `team_assignments`** (only
+analytics scope, personal stats, productivity and the assignment service do). Recorded in §F as a
+stated deviation: **supervisor team views, personal stats and productivity figures were not
+exercised.**
+
+➜ **§8.5's assessor finding was not special.** Half the role model has never run in production.
+⚠️ **Creating the first supervisor is a first-run of an unexercised role** — treat it as its own task,
+not as a prerequisite discovered mid-gate.
+
+### 12.5 ✅ `campaign_source` — NOT A DEFECT. The runbook was.
+
+Six enumerator rows returned NULL and it was briefly reported as gate item 3 failing.
+
+| path | value | why |
+|---|---|---|
+| public, answered | `{"utm": {...}, "channel":"Facebook"}` | the acquisition question is on that form |
+| public, skipped | NULL | **optional by ruling R-B** — a person exercising a choice |
+| **enumerator / clerk** | **always NULL, correctly** | no acquisition question exists there. **The enumerator IS the channel** |
+
+**25 of 291 submissions carry it.** Gate item 3 belongs with **gate item 1** (the public happy path).
+
+**Fixed where it misled:** runbook gate item 3 and `§A query 3` are now bound to `source='public'`,
+with the trap spelled out. Note in **13-46**, which owns the acquisition question, including the
+warning that AC10's success rate must be measured on **public rows only** — computing it over all
+submissions would dilute it with staff captures that were never asked, the same defect class as R-E.
+
+### 12.6 ✅ GPS — already working for enumerators; 81 legacy rows are invisible to the columns
+
+`submissions.gps_latitude` / `gps_longitude` are **first-class columns**, and **the enumerator path
+populates them**: six live captures at `7.4095707, 3.9080501` etc., accuracy 16–30 m, all within ~10 m
+(one operator, one desk). **Nothing needs building for enumerator GPS.**
+
+```
+gps_latitude column   7    ← enumerator path (writes column AND raw_data)
+raw _gpsLatitude      7    ← same rows
+raw gps_location     81    ← the LEGACY full public questionnaire
+```
+
+The 81 predate Public Core, which **does not collect GPS at all** — so **jingle traffic adds none
+either way, and this is not a launch item.** The defect is that *"how many submissions have GPS?"*
+answers **7** or **81** depending on which store you ask, and nothing labels which.
+
+➜ **12-7** (not 12-4/5/6 — those are R-F blast-gated): backfill `gps_location.latitude → gps_latitude`
+so a map sees **88 points, not 7**; keep `accuracy` (only the JSON has it); assert the invariant
+afterwards; and **RED-verify on a LEGACY row**, because a fresh enumerator capture populates both and
+would pass without the backfill running.
+
+### 12.7 Reopen triggers
+
+- A field officer reports *"Image is too blurry"* and cannot activate → 12.1a's margin closed; the
+  threshold needs measuring, not adjusting on instinct.
+- Any cohort query keyed on `live_selfie_verified_at` reports a number → check it is not silently
+  excluding every activation-path account (12.1b).
+- A coverage map or export ships reading `gps_latitude` before 12-7's backfill → it will show 7
+  points and be believed.
+- A second `identity_match_exempted_staff_capture` count of 0 on a §C run → the pair was not formed;
+  re-read 12.2 before concluding the fix regressed.

@@ -18,7 +18,7 @@
 |---|---|---|---|
 | 1 | **Prod happy-path self-serve verified** — one fresh, real end-to-end public submission | Run `pre-launch-operator-runbook.md` **Step 5b** in a real browser against the form pinned *at blast time*. PASS = summary reached once, Submit enabled on first arrival. Then confirm the row landed: `§A query 1` with `source='public'`. | ⬜ GREEN ⬜ RED |
 | 2 | **Enumerator path proven on prod** — 5–10 real submissions | This runbook, §B–§E. PASS = ≥5 verified rows, `source='enumerator'`, each with a `submissions` row, **and** the §C household pair yielding **two** respondent rows. | ⬜ GREEN ⬜ RED |
-| 3 | **Attribution capture live + verified** (Story 13-1) | A fresh submission carries `raw_data->>'campaign_source'`; `§A query 3` returns it non-null. | ⬜ GREEN ⬜ RED |
+| 3 | **Attribution capture live + verified** (Story 13-1) | ⚠️ **A fresh PUBLIC submission** carries `raw_data->>'campaign_source'`; `§A query 3` returns it non-null **on `source='public'` rows only**. ⛔ **DO NOT run this against enumerator rows.** The acquisition question exists only on the public wizard — on a staff-captured row the enumerator IS the channel, so `campaign_source` is correctly NULL. Reading a null there as a failure is what happened on 2026-08-13: six enumerator rows returned null and gate item 3 was briefly reported as not-green, on entirely correct behaviour. ⚠️ Nulls among PUBLIC rows are also expected — the question is **optional** by ruling R-B; 25 of 291 submissions carry it. Verify with **gate item 1**, not with this run. | ⬜ GREEN ⬜ RED |
 | 4 | **Capacity load-test green + static fallback deployed** (Story 13-3) | `docs/runbooks/13-3-launch-capacity-and-fallback.md` + `13-3-cutover-and-failover.md`. PASS = load test green **and** the Cloudflare Pages fallback answers with a confirmed KV round-trip. | ⬜ GREEN ⬜ RED |
 
 **Neither box ticked = NOT RUN, which is not the same as red and is definitely not green.** An empty
@@ -70,9 +70,17 @@ WHERE r.source = 'enumerator'
   AND r.created_at >= '<SMOKE_START_TS>'
 ORDER BY r.created_at;
 
--- 3. ATTRIBUTION (gate item 3) on the same window.
-SELECT s.id, s.raw_data->>'campaign_source' AS campaign_source
-FROM submissions s WHERE s.submitted_at >= '<SMOKE_START_TS>' ORDER BY s.submitted_at;
+-- 3. ATTRIBUTION (gate item 3) — PUBLIC ROWS ONLY.
+--    ⛔ The unbounded version of this query is a TRAP. It returns every submission in the
+--    window, including staff-captured ones that have no acquisition question to answer, so a
+--    perfectly healthy enumerator smoke reads as an attribution failure. Corrected 2026-08-13
+--    after exactly that happened.
+SELECT s.id, r.source, s.raw_data->>'campaign_source' AS campaign_source
+FROM submissions s JOIN respondents r ON r.id = s.respondent_id
+WHERE s.submitted_at >= '<SMOKE_START_TS>' AND r.source = 'public'
+ORDER BY s.submitted_at;
+-- Shape when it IS captured: {"utm": {"source":"referral","campaign":"..."}, "channel":"Facebook"}
+-- A NULL here is still not automatically red: the question is OPTIONAL (ruling R-B).
 
 -- 4. THE AC1b ASSERTION — the household pair must be TWO rows, not one.
 --    The failure mode is a MISSING row: one row looks exactly like success.
@@ -290,7 +298,69 @@ Fill this in as you go. **Evidence, not claims.**
 
 **Gate item 2 — "Enumerator path proven on prod"**
 
-- Verdict: ⬜ GREEN / ⬜ RED — _not yet run_
+- Verdict: ✅ **GREEN — 2026-08-13**
+- Operator: Awwal · verified by John (PM) against prod, read-only
+- Prod SHA at time of smoke: **`19b51f5`** (contains the 13-4 AC1b fix — precondition met)
+- Baseline before (2026-08-12 14:20Z): **327 respondents · 1 enumerator row · 284 submissions · 2 orphans**
+- After teardown (2026-08-13): **327 · 1 · 285 · 2** — the +1 submission is an unrelated PUBLIC
+  registration that arrived mid-smoke (`OSL-2026-A37K2A`, 11:53:59) and was correctly left alone.
+  **Re-measured, not "restored to N".**
+- Enumerator submissions completed: **6 of 5–10 required**
+- Sentinel marker: surname **`ZZSMOKE`** · NIN series **`70000000010`–`11`** · phones `0800000001x`
+- Enumerator used: `lawalkolade+testenumeratornew@gmail.com` (invited + activated 2026-08-12 for this run)
+
+| # | reference_code | person | phone | NIN | email branch | status |
+|---|---|---|---|---|---|---|
+| 1 | `OSL-2026-TYANTY` | Fatima Zzsmoke | `+2348000000010` | blank | with | `pending_nin_capture` |
+| 2 | `OSL-2026-ADTWJP` | Fatima Aisha Zzsmoke | `+2349012345678` | blank | without | `pending_nin_capture` |
+| 3 | `OSL-2026-9TT3K8` | Chinedu Zzsmoke | `+2347012345678` | blank | with | `pending_nin_capture` |
+| 4 | `OSL-2026-90CVGP` | **Fatima Bisi Zzsmoke** | **`+2348000000010`** ← shared | blank | without | `pending_nin_capture` |
+| 5 | `OSL-2026-HA2NQ8` | Yetunde Zzsmoke | `+2348000000012` | `70000000010` | with | **`active`** |
+| 6 | `OSL-2026-21DRDA` | Musa Zzsmoke | `+2348000000013` | `70000000011` | without | **`active`** |
+
+All six: `source='enumerator'`, a `submissions` row present, `processed = true`, `processing_error` NULL.
+
+**§C household pair** — rows **1 and 4** (`+2348000000010`):
+
+- Both captured with the NIN field **blank**: ✅
+- `§A query 4` returned: **2** ✅
+- `§A query 5` showed `identity_match_exempted_staff_capture`, `trigger: no_nin`,
+  `wouldHaveMergedInto` = `019ff6ff-1b0a-7183-b102-3df1c4392c63` (**Fatima**, `OSL-2026-TYANTY`) ✅
+- Status-check consequence (run **30 minutes apart** to be sure): shared phone `08000000010` →
+  neutral response, **no email**. `OSL-2026-TYANTY` → **email arrived.** ✅ R8 demonstrated end to end.
+
+⚠️ **THE FIRST ATTEMPT AT §C DID NOT TEST ANYTHING, AND IT LOOKED FINE.** Rows 1 and 2 were captured
+on *different* phones, so no same-phone match existed and the guard never ran —
+`identity_match_exempted_staff_capture` count was **0**. `§A query 4` would have returned **1**, which
+reads as *"the fix is broken"* when the truth was *"the code never executed."* **Row 4 was added
+specifically to form the pair.** This is why §C makes the log line mandatory: the count alone cannot
+tell a broken fix from an unexercised one.
+
+**Email branches (§E):** 3 with (`+zzsmoke-c1` ×2, `+zzsmoke-d2` ×1) — **all three OSLRS-number emails
+confirmed RECEIVED in the inbox**, not merely `confirmation_email_sent_at = t`. 3 without — all
+succeeded.
+
+**Orphan submissions: 2 before, 2 after.** Nothing was lost silently — the only check that would have
+caught it, since 13-57 is not built.
+
+**Teardown** (child-first, `ZZSMOKE` marker): `fraud_detections` **6** · `marketplace_profiles` **6** ·
+`magic_link_tokens` **1** · `campaign_sends` 0 · `email_suppressions` 0 · `submissions` **6** ·
+`respondents` **6**. ⚠️ The 6 + 6 child rows mean a RID-only teardown would have orphaned twelve rows;
+the `magic_link_tokens` **1** was the status-check token, which carries `respondent_id = NULL` and
+would have survived a delete-by-RID — the 2026-07-30 leak, caught by the clause written after it.
+`audit_logs` untouched (append-only).
+
+**Deviations recorded rather than hidden:**
+1. **No `team_assignments` row** — none exists on prod and none could be created: the service validates
+   the supervisor role and **there is no supervisor account**. The submission path does not read the
+   table, so capture was unaffected; **supervisor team views, personal stats and productivity figures
+   were NOT exercised.**
+2. Rows 1 and 3 share an email (`+zzsmoke-c1`) rather than one each — the sheet said distinct.
+   Harmless; both confirmations arrived.
+
+---
+
+- Verdict (superseded line kept for the record): ⬜ GREEN / ⬜ RED — _not yet run_
 - Date / operator:
 - Prod SHA at time of smoke: ___ (must include the 13-4 AC1b fix — see the precondition above)
 - Baseline before (`§A query 1` total):

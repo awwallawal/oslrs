@@ -197,3 +197,45 @@ row whose whole history is "do not fix it blind".
 4. **RED-verify on the boundary, not the middle:** seed a respondent at 00:30 WAT, filter for that
    day, assert they appear. The current code fails that test; a test that filters mid-afternoon
    passes over the hole.
+
+## ⏩ INHERITED 2026-08-13 — 81 legacy submissions hold GPS the columns cannot see
+
+**Found during the enumerator prod smoke. Not a bug in anything shipping — a migration artefact that
+will be rediscovered as "the coverage map is broken" if it is not written down.**
+
+⛔ **NOT on the blast gate**, and it lands here rather than on 12-4/12-5/12-6 for the same reason the
+date filter did: those three are R-F blast-gated and must not absorb unrelated scope.
+
+### What is true today (prod, 291 submissions)
+
+| store | populated | which rows |
+|---|---|---|
+| `submissions.gps_latitude` / `gps_longitude` (**first-class columns**) | **7** | the enumerator path — it writes the columns AND `raw_data` |
+| `raw_data->>'_gpsLatitude'` (flat) | **7** | same rows |
+| `raw_data->>'gps_location'` (structured, with `accuracy`) | **81** | the **legacy full public questionnaire**, before Public Core |
+
+**The enumerator path already does exactly what is wanted** — verified on six live captures:
+`gps_latitude 7.4095707`, `gps_longitude 3.9080501`, accuracy 16–30 m, all six within ~10 m of each
+other (one operator, one desk). **Nothing needs building for enumerator GPS.**
+
+⚠️ **The current public form (Public Core) does not collect GPS at all**, by design — so **jingle
+traffic will add none either way.** This is about making *historic* data visible, and it is why this
+is not a launch item.
+
+### The defect, stated plainly
+
+**A query on `gps_latitude` sees 7 points. A query on `gps_location` sees 81. Same question, an order
+of magnitude apart, and nothing labels which is which.** Whoever builds a coverage map will pick one
+and be confidently wrong — [[pattern-monitor-measuring-something-else]] waiting to happen.
+
+### What to build
+
+1. **Backfill** `gps_location->>'latitude'` → `gps_latitude` and `->>'longitude'` → `gps_longitude`
+   for the 81 legacy rows. A map then sees **88 points, not 7**, from one column.
+2. **Keep `accuracy`.** `gps_location` carries it (16–30 m on the smoke rows) and the flat columns do
+   not. Do not drop the JSON on the assumption the columns supersede it.
+3. **Assert the invariant afterwards**: any submission with a `gps_location.latitude` must have
+   `gps_latitude` set. Otherwise the next writer reintroduces the split silently.
+4. ⚠️ **RED-verify on a legacy row, not a fresh one.** A new enumerator capture populates both, so a
+   test written against one passes without the backfill having run at all — exactly
+   [[pattern-test-that-passes-over-a-hole]].

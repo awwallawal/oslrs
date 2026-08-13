@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-11 · **Prod deployed SHA:** `27e1fdc` · **ONE worktree** · ⚠️ **TREE NOT CLEAN — 12 files uncommitted from TWO CLIs** (adjudication §10 of the SCP + 13-51; PM's §9/§11, five stories, two ops scripts). Commit plan: **SCP §10.13 B**. · **Health:** https://oyoskills.com/api/v1/health
+**Last updated:** 2026-08-13 · **Prod deployed SHA:** `19b51f5` · **ONE worktree** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 ⚠️ **This SHA is self-staling metadata — D6 says delete it and it has now been wrong THREE times. Verify, never trust:** `ssh root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'`
 · **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
 
@@ -460,6 +460,38 @@ inlet already canonicalises; only the webhook inlet does not.
 **How to find these:** ask *"what is this predicate actually selecting, and is that what the sentence
 above it claims?"* Both were found by reading one line of SQL and one function signature — not by a
 failing test, because nothing fails.
+
+### 2aa. ⭐ A COUNT CONSISTENT WITH BOTH OUTCOMES PROVES NEITHER — assert that the code RAN (new 2026-08-13)
+
+**The rule:** when a check can return the same number whether the fix worked *or* the branch never
+executed, the number is not evidence. **Assert execution separately** — a log line, a spy, a counter —
+or you cannot tell a working guard from a dead one.
+
+**How it bit (enumerator prod smoke, §C household case).** The test requires two people on ONE
+handset with a shared surname and NO NIN, proving the identity guard creates two records instead of
+merging them. The first attempt captured the pair on **different phones**. So:
+
+- no same-phone match existed,
+- the guard never ran,
+- `§A query 4` would have returned **1**,
+- and **1 reads as "the fix is broken"** when the truth was **"the code never executed."**
+
+Both causes produce the same count and look identical in the UI. The only thing that separated them
+was the mandatory step: `grep identity_match_exempted_staff_capture`, which returned **0**. After the
+pair was formed correctly it returned the line, with `wouldHaveMergedInto` naming the first person —
+**positive evidence the branch executed**, not merely that the outcome looked right.
+
+**Generalise it.** This is the sibling of [[pattern-test-that-passes-over-a-hole]] pointed at
+operator procedure rather than at a test file:
+
+- *"Would this still pass if the fix were reverted?"* catches a test that never exercises the guard.
+- *"Would this still pass if the guard never RAN?"* catches a **setup** that never reaches it.
+- The second is harder, because the setup is usually the operator's, and a wrong setup looks like a
+  wrong result.
+
+⚠️ **Write the execution assertion into the procedure as MANDATORY, not "optionally check the logs".**
+13-4's runbook did exactly that and it is the only reason this was caught rather than filed as a
+regression.
 
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
@@ -1594,6 +1626,45 @@ guard in front of it.
   number moving between two measurements taken an hour apart.** A remediation aimed at a stock
   should always be asked "what produces these?" before it is called done — sibling of
   [[pattern-ship-a-fix-that-never-fires]], where the fix runs but the condition regenerates.
+
+## 7o. Session 2026-08-12/13 — gate item 2 green, and four things found by doing it
+
+**Detail lives in SCP §12; this is the arc.** Prod `19b51f5` throughout.
+
+**The run.** A fresh enumerator (`+testenumeratornew`) was invited and activated — necessary because
+**the activation wizard is one-time**, so the path that failed twice and succeeded once could not be
+re-tested on an existing account. It succeeded, and the log shows `backOfficeActivation: false`: **the
+FIELD branch, which nothing had ever exercised** (13-59 AC3.3's stated asymmetry, now closed). Six
+respondents were then captured through the live UI, verified, and torn down to an exact baseline.
+
+**Gate item 2 is GREEN** with the two pieces of evidence that cannot be faked: `§A query 4` = **2**,
+and `identity_match_exempted_staff_capture` **fired** naming `wouldHaveMergedInto`. The R8
+consequence was demonstrated end to end — shared phone → neutral response and **no email**; reference
+code → **email arrived** — run 30 minutes apart.
+
+**Four findings, none of which anyone was looking for:**
+
+1. ⚠️ **The sharpness margin is closing.** liveness_score 0.859 → 0.591 → **0.311**, against a hard
+   floor of 0.20 (`sharpness < 20` throws `VALIDATION_ERROR`, which activation **re-throws**). One
+   dimmer room and a field officer cannot activate. Threshold was *"determined empirically"* with no
+   record of on what. → 13-60.
+2. ⚠️ **`live_selfie_verified_at` has exactly one writer** — the `/users/selfie` upload path.
+   Activation never sets it. **The column means "arrived via upload", not "verified"**, so any
+   verified-selfie cohort query under-counts every field officer. → 13-60.
+3. ⛔ **Four of seven roles have never had an account on prod** — clerk, official, supervisor,
+   assessor all **0**. Found because `team_assignments` needs a supervisor and the service validates
+   the role, so the row **could not be created by the canonical path**. §8.5's assessor finding was
+   not special. The smoke ran anyway: the submission path does not read that table.
+4. ✅ **Two "gaps" that were not gaps.** `campaign_source` NULL on enumerator rows is **correct** —
+   there is no acquisition question on the staff form, the enumerator IS the channel; **the RUNBOOK
+   was wrong** to ask for it unbounded, and is fixed. GPS **already works** for enumerators
+   (first-class columns, populated, 16–30 m accuracy); the 81 legacy rows carrying only
+   `gps_location` JSON are a pre-Public-Core migration artefact → 12-7 backfill, **not a launch item**
+   since Public Core collects no GPS at all.
+
+**The lesson worth keeping is §2aa** — the first §C attempt put the pair on different phones, so the
+guard never ran, and the count it would have produced is the same count a broken fix produces. **A
+number consistent with both outcomes proves neither.**
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 

@@ -854,3 +854,38 @@ does not "fix" the inconsistency by tightening the questionnaire path.
 
 **Re-runnable evidence:** the four-part query is in this story's git history; the shape check is
 `gh workflow run prod-verify.yml` §2, and the form comparison is `form:diff`.
+
+## 📌 ATTRIBUTION IS PATH-SPECIFIC — recorded 2026-08-13 so nobody re-investigates it
+
+**Measured on prod during the enumerator smoke, and it cost an hour of doubt before it was
+understood. Written here because this story owns the acquisition question, so this is where the next
+person tuning it will look.**
+
+| path | `campaign_source` | why |
+|---|---|---|
+| **public wizard** | populated when answered — `{"utm": {"source":"referral","campaign":"thankyou-referral-auto"}, "channel":"Facebook"}` | the acquisition question is on this form |
+| **public wizard, skipped** | NULL | ⚠️ **the question is OPTIONAL by ruling R-B** — a null is a person exercising that choice, not a defect |
+| **enumerator / clerk capture** | **always NULL, correctly** | there is no acquisition question on the staff form. **The enumerator IS the channel** — asking "how did you hear about us?" of someone an enumerator walked up to is meaningless |
+
+**Prod figures 2026-08-13: 25 of 291 submissions carry it.** All six enumerator smoke rows returned
+NULL and that was briefly reported as gate item 3 failing. **It was correct behaviour.**
+
+➜ **The runbook has been corrected** — `enumerator-prod-smoke-and-golive-gate.md` gate item 3 and
+§A query 3 are now bound to `source='public'`, because the unbounded query reads red on a healthy
+enumerator run.
+
+### What this means for AC10 + the nudge (ruling R-B)
+
+**The gap AC10 closes is the SKIPPED-public bucket, not the enumerator NULLs** — nothing can or should
+be captured on the staff path. So when the nudge ships, measure it on **public rows only**:
+
+```sql
+SELECT count(*) FILTER (WHERE s.raw_data->>'campaign_source' IS NOT NULL)::numeric
+       / NULLIF(count(*),0) AS answered_rate
+FROM submissions s JOIN respondents r ON r.id = s.respondent_id
+WHERE r.source = 'public' AND s.submitted_at >= '<AC10 DEPLOY>';
+```
+
+⚠️ **Computing that rate over ALL submissions would dilute it with staff captures that were never
+asked** — the same defect class as ruling R-E's denominator, on a different metric. **A rate's
+denominator is the set of people who were ASKED the question.**
