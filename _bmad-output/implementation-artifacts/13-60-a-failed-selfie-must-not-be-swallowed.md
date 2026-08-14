@@ -1,12 +1,13 @@
 # Story 13.60: No selfie, no ID card — the enumerator walks in with nothing
 
-Status: review
+Status: done
 
 <!-- ✅ CODE-REVIEWED 2026-08-13. 2 HIGH / 4 MEDIUM / 3 LOW, all fixed in-pass — see
 "Review Follow-ups (AI)" under Tasks/Subtasks.
-✅ ADJUDICATED 2026-08-13 — see `## Residuals` + `## Closing verdict`.
-⚠️ `Status: review`, NOT `done`: D9's rule is that until the Closing verdict carries a
-real deploy SHA, `done` is not permitted. Flip it after the deploy is observed.
+✅ ADJUDICATED 2026-08-13 → ✅ DEPLOYED `6876b9f` + VERIFIED ON PROD 2026-08-14.
+See `## Residuals` (R1–R5) + `## Closing verdict`.
+📌 It was held at `review` through one RED CI run and one SKIPPED deploy before being
+flipped — which is the point of the hold, not a formality.
 ⛔ THE "EVIDENCE ONLY EXISTS AFTER DEPLOY" CLAIM WAS WRONG AND IS WITHDRAWN. The
 rename ordering was proven LOCALLY against `app_test` — pre-migration state rebuilt,
 `liveness_score = 0.7777` seeded, the real pipeline run: runner at log line 2, RENAME
@@ -572,13 +573,24 @@ run the runner first (stated in the script's docblock).
 | **R1** | The `liveness_score` → `photo_sharpness_score` rename must run **before** `db:push`, or `--force` answers the rename prompt as drop+create and the populated column is lost. | ✅ **CLOSED — proven locally, not deferred to prod.** | **Re-runnable:** rebuild `app_test` to the pre-migration state (rename back, drop the 3 columns), seed `liveness_score`, run `NODE_ENV=test DATABASE_URL=…app_test pnpm exec tsx scripts/db-push-full.ts --force`. Observed 2026-08-13: runner at log line **2**, `RENAMED … (values preserved)` at line **9**, `db:push` at line **14**; seeded `0.7777` survived; 43 rows kept their scores. Deploy path confirmed at `ci-cd.yml:1099` (runner) above `:1102` (`db:push`). | adjudication |
 | **R2** | A **failed** ordering used to be the **silent** branch — `hasNew`-only printed *"nothing to rename"* and exited **0**, while the loud `hasOld && hasNew` branch covers a state `--force` cannot produce. | ✅ **CLOSED — fixed in this pass.** | `migrate-photo-provenance-init.ts` now throws when `photo_sharpness_score` is entirely NULL **while users hold an ID-card photo** (they completed a live capture, so a score must once have existed). **RED-verified both ways:** simulated drop+create → `RUNNER_EXIT=1` with the actionable message; healthy state → `RUNNER_EXIT=0`. | adjudication |
 | **R5** | 🔴 **The runner crashed on every FRESH database** — `relation "users" does not exist`. Step 2's `ALTER TABLE users ADD COLUMN IF NOT EXISTS` guards the **column**, never the **table**, and this runner is deliberately ordered *before* `db:push`, so on a clean environment the table does not exist yet. | ✅ **CLOSED — found by CI, fixed 2026-08-13.** | **Caught by CI run `31737577114`**: `test-api` red, **`deploy` skipped**. Every local gate had passed — because `app_test` always had a `users` table, so **the fresh-database branch had never once been executed** ([[pattern-verification-that-cannot-run-yet]] inverted: it *could* run, nothing had run it). Fixed with a `tableExists('users')` guard that returns early. **RED-verified against CI's exact condition:** created an empty DB (0 tables), ran the runner → **exit 0**; then the full `db-push-full --force` pipeline → **exit 0**, with `db:push` creating all four columns from the schema. | adjudication |
-| **R3** | Prod confirmation of R1 after deploy. | **DISCHARGE-ON-PUSH** | After deploy: `photo_sharpness_score` must be non-empty on prod. **Reopen trigger:** if it is empty while users hold ID-card photos, the runner did not fire first — R2's guard should now make that fail the deploy loudly rather than pass silently. | adjudication, same session |
+| **R3** | Prod confirmation of R1 after deploy. | ✅ **DISCHARGED 2026-08-14 on prod `6876b9f`.** | Queried read-only after the deploy: **`liveness_score` no longer exists (0)**, all **4** `photo_*` columns present, **3 rows carry a sharpness score**, **3** users hold an ID card, **3** backfilled `photo_status='saved'`. ⭐ **`scored == carded` is the whole proof** — had `db:push` run first and answered the prompt as drop+create, `scored` would be **0** against 3 carded, and R2's guard would have failed the deploy. Stronger than the log line the story originally asked for: this is the outcome, not the intention. **Reopen:** any future deploy where `photo_sharpness_score` is empty while users hold ID-card photos. | adjudication |
 | **R4** | `route-resolution.integration.test.tsx > resolves '/login'` fails intermittently under load (`expected 16 to be greater than 50`). | **ACCEPTED — NOT this story's.** | Measurement: `/login` is untouched by 13-60 and `/profile-completion` (the route this story adds) passes every run; isolated it passes 57/57, and it flaked identically on 2026-08-11 **before** this work. Mechanism: a raw content-length threshold firing before a lazy chunk resolves — fails at >5s, passes at ~3s. **Trigger:** it has now cost two sessions; next occurrence, replace the threshold with a `findBy*` on a specific element. | web/test-arch |
 
 ## Closing verdict
 
-**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
-**Until that line carries a real SHA, `Status:` must not read `done`** (D9's own hold condition).
+**CLOSED — `done`. Deployed SHA `6876b9f`, verified on production 2026-08-14.**
+
+The hold worked as designed: this story sat at `review` through **one red CI run and one failed deploy**
+before anything was allowed to claim completion. Had it been flipped to `done` when dev handed it over,
+the board would have advertised a story CI had never once let through.
+
+| Deploy gate | Evidence |
+|---|---|
+| CI | `CI/CD Pipeline` **31745170166** success · `E2E Tests` **31745170109** success |
+| **`deploy` TAKEN, not skipped** | all **10** jobs green — the previous run (`31737577114`) is the counter-example: `test-api` red → **`deploy` skipped**, which is why reading the job list matters and the badge does not |
+| Prod | VPS `git rev-parse --short HEAD` = **`6876b9f`**, health **200** |
+| **Data (R3)** | `liveness_score` **gone**; 4 `photo_*` columns; **3 scored == 3 carded**; 3 backfilled `saved` |
+| Fresh-DB path (R5) | CI `test-api` log: *"✓ Fresh database — `users` does not exist yet…"* then the job passed — the branch that crashed the previous run now executes and continues |
 
 | Gate | Evidence (re-runnable, run by adjudication — not the dev's self-report) |
 |---|---|
