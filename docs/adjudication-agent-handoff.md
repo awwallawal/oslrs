@@ -457,9 +457,35 @@ inlet already canonicalises; only the webhook inlet does not.
   severity is recorded). **Fixing the unwrap alone would activate the exclusion** — a fix that fires,
   correctly, and makes things worse. Ship both or neither (SCP §10.11).
 
+**(c) ⛔ THE PRETTIER PREDICATE IS THE DANGEROUS ONE — PROBE IT BEFORE YOU TRUST IT.**
+*Added 2026-08-14, from nearly shipping one.*
+
+`route-resolution`'s `/login` test waits on `body.textContent.length > 50` — crude, and it had flaked
+three times. The obvious fix is semantic: wait for the Suspense fallback `<PageSkeleton>`
+(`aria-label="Loading page"`) to **disappear**. That *is* the condition the test means, it reads
+beautifully, and **it is wrong here**: under vitest the lazy import resolves within a microtask, so the
+fallback is gone before `waitFor`'s first poll.
+
+- **A predicate that is satisfied instantly waits for NOTHING.** It would have passed while the page
+  was still blank — converting a noisy-but-real check into a silent no-op, which is
+  [[pattern-test-that-passes-over-a-hole]] introduced *by the fix for a flake*.
+- ⭐ **THE PROBE THAT CAUGHT IT, AND THE ONE TO COPY: INVERT THE ASSERTION.** Change
+  `.not.toBeInTheDocument()` to `.toBeInTheDocument()` and run it. If the thing you plan to wait for
+  is never observed, your wait is decorative. It never matched once in 15 seconds.
+- **Record the rejected approach IN THE FILE, with its evidence.** A rejected-but-elegant idea comes
+  back — the next reader will "improve" the crude check into exactly the broken one unless the probe
+  and its result are sitting there.
+- **Sometimes the crude check is correct.** `KNOWN_ROUTES` carries no per-route content, and inventing
+  some for 57 entries buys brittleness, not truth. Fix the budget, make the failure message explain
+  itself, and say plainly that it is a mitigation.
+- ⚠️ **AND SAY SO WHEN IT IS ONLY A MITIGATION.** That timeout has now been raised three times
+  (1s → 5s → 15s). ~1.7s quiet versus a 15s exhaustion under load is a **10× spread — pathological,
+  not slow.** A fourth raise would be the third consecutive symptom-treatment. Open as 13-60 R6.
+
 **How to find these:** ask *"what is this predicate actually selecting, and is that what the sentence
-above it claims?"* Both were found by reading one line of SQL and one function signature — not by a
-failing test, because nothing fails.
+above it claims?"* The first two were found by reading one line of SQL and one function signature — not
+by a failing test, because nothing fails. The third was found by **running the probe rather than
+admiring the idea.**
 
 ### 2aa. ⭐ A COUNT CONSISTENT WITH BOTH OUTCOMES PROVES NEITHER — assert that the code RAN (new 2026-08-13)
 
@@ -572,7 +598,7 @@ first — §10.14 carries every ruling of 2026-08-11.**
 
 | gate | set |
 |---|---|
-| **FIELD DAY** | **13-57 · 13-59 · 13-60** + **enumerator accounts** (prod holds exactly ONE active enumerator, and it is Awwal's) + the **R8 briefing** in enumerators' hands |
+| **FIELD DAY** | **13-57 · 13-59** (both `ready-for-dev`) + **enumerator accounts** (prod holds exactly ONE active enumerator, and it is Awwal's) + the **R8 briefing** in enumerators' hands. ~~13-60~~ ✅ **DONE — deployed `6876b9f`, verified on prod data 2026-08-14** (`liveness_score` gone, 3 scored == 3 carded). |
 | **BLAST / JINGLE** | **12-4 · 12-5 · 12-6** (R-F — the published rates are wrong TODAY, §10.14 R-E) · **13-46** (its Open Decision is RULED — optional + AC10 + non-blocking nudge) · **13-51** (a 9.3% bounce rate is domain reputation spent on a capture defect) |
 
 - **R-A:** Epic 12's honesty tier leads, 11-7 second, **Epics 9 and 10 explicitly PARKED**. The
