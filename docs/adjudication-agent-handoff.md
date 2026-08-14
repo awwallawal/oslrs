@@ -519,6 +519,41 @@ operator procedure rather than at a test file:
 13-4's runbook did exactly that and it is the only reason this was caught rather than filed as a
 regression.
 
+### 2aa. ⛔ NEVER RUN TWO VITEST PROCESSES AT ONCE ON THIS MACHINE
+*Added 2026-08-14, after chasing a "flake" that turned out to be my own verification method.*
+
+**The rule: one vitest process at a time, locally.** A second concurrent run is what produced every
+observed `route-resolution '/login'` failure — twice as a timeout, once as an assertion — across
+2026-08-11 → 08-13. It cost a push and parts of three sessions, and it was self-inflicted.
+
+**The evidence that settles it is CI's silence.** Across the last 20 `CI/CD Pipeline` runs on `main`
+the only failure is `31737577114` (`test-api`, a real defect). **`test-web` has never failed.** A test
+that fails only on one Windows laptop and never on a dedicated runner is not a flaky test.
+
+**Measured on this machine (2026-08-14):**
+
+| | |
+|---|---|
+| physical cores / logical | **4 / 8** |
+| RAM total / free at rest | 15.8 GB / **3.7 GB** |
+| **free RAM during ONE single-file vitest run** | **0.95 GB** |
+| peak node RSS, all processes combined | **0.92 GB** — node is *not* the hog |
+
+**Memory pressure, not CPU.** ~1 GB of headroom while testing; a second vitest process pushes it into
+paging. That is why the spread is **1.7s → 20s** — a nonlinear cliff. CPU starvation degrades
+*linearly*; it does not produce a 10× jump.
+
+- **Before a full-suite run or a push, check nothing else is running:** `tasklist | grep -c node`.
+  Dev servers are fine; a second vitest is not.
+- **Do not raise a timeout to fix this.** `route-resolution`'s has been raised three times
+  (1s → 5s → 15s). Each raise made the *next* diagnosis harder by pushing the failure further from
+  its cause.
+- **`VITEST_MAX_THREADS=1` IS the sanctioned lever if it recurs** — Pitfall #37b permits it precisely
+  for contention/timeout flakes, which this is. It is only the *segfault* it never fixed.
+- ⚠️ **Generalise the method, not the number:** when a test fails only locally, **check CI history
+  before touching the test.** One `gh run list` answers "is this ours or the machine's" for free, and
+  it is the question that should come first.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
