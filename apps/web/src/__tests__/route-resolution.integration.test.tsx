@@ -138,18 +138,50 @@ describe('[integration] App.tsx route registration', () => {
         role: r.role,
       });
 
-      // Wait for the lazy route component to resolve (layout chrome + page).
-      // Explicit timeout (> testing-library's 1000ms default): the heaviest
-      // lazy pages (e.g. WizardPage at /register) can take >1s to resolve their
-      // chunk + first render when that chunk is cold (running this test in
-      // isolation rather than after sibling tests have warmed shared modules).
-      // The default timeout made the test pass only as a side effect of suite
-      // ordering. 5s stays well inside the 10s testTimeout. (9-21 review M3.)
+      /*
+       * WAIT FOR THE ACTUAL SIGNAL, NOT A PROXY FOR IT.
+       *
+       * This used to be `body.textContent.length > 50` with a 5s timeout, and it
+       * flaked three times across 2026-08-11 → 08-13 — twice as a timeout, once
+       * as `AssertionError: expected 16 to be greater than 50`. Both are the same
+       * event: under parallel suite load the lazy chunk needs >5s, and the
+       * assertion fires while the Suspense skeleton is still on screen.
+       *
+       * THE BUDGET WAS THE BUG. 5s was a guess (9-21 review M3) that held until
+       * the suite grew; a cold chunk under a loaded worker pool is not a defect.
+       * 15s, inside a 20s per-test timeout set below, leaves headroom without
+       * hiding a real hang.
+       *
+       * ⚠️ A SEMANTIC PREDICATE WAS TRIED FIRST AND REJECTED ON EVIDENCE — do not
+       * "improve" this back into one without repeating the probe. Waiting for the
+       * Suspense fallback to disappear reads better and is WRONG here: under
+       * vitest the lazy import resolves within a microtask, so `<PageSkeleton>`
+       * (`aria-label="Loading page"`) is already gone before waitFor's first
+       * poll. Probed by inverting the assertion to `.toBeInTheDocument()` — it
+       * never matched once in 15s. Such a predicate is satisfied instantly and
+       * waits for nothing, which is strictly worse than a crude check that works:
+       * it would have passed while the page was still blank.
+       *
+       * What actually renders first under load is the LAYOUT CHROME — the
+       * observed failure was 16 characters of nav shell — so total text length
+       * really is the only universal signal available here. KNOWN_ROUTES carries
+       * no per-route content to assert on, and inventing one for 57 entries buys
+       * brittleness, not truth. So: keep the crude check, give it an honest
+       * budget, and make the failure explain itself.
+       */
       await waitFor(
         () => {
-          expect(document.body.textContent?.length ?? 0).toBeGreaterThan(50);
+          const len = document.body.textContent?.trim().length ?? 0;
+          if (len <= 50) {
+            throw new Error(
+              `Route "${r.route}" has not finished rendering: ${len} chars of body text (want >50). ` +
+                `Under load this is the lazy chunk still resolving behind the layout chrome — a slow ` +
+                `test environment, NOT a routing defect. A genuine registration failure shows up as ` +
+                `the "page not found" assertion below, or as a thrown error from the un-wrapped tree.`,
+            );
+          }
         },
-        { timeout: 5000 },
+        { timeout: 15000 },
       );
 
       // The route resolved to a real component, NOT the catch-all 404. If a
@@ -160,6 +192,11 @@ describe('[integration] App.tsx route registration', () => {
 
       unmount();
     },
+    // Per-test timeout raised above the 15s waitFor budget so a slow cold chunk
+    // reports as a FAILED ASSERTION naming the skeleton, never as an opaque
+    // "Test timed out in 10000ms" — which is how this first presented on
+    // 2026-08-11 and cost a push before anyone knew what it was.
+    20_000,
   );
 
   it('resolves an unknown path to the NotFound component (404 fallback works)', async () => {
