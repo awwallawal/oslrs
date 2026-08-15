@@ -482,10 +482,35 @@ fallback is gone before `waitFor`'s first poll.
   (1s → 5s → 15s). ~1.7s quiet versus a 15s exhaustion under load is a **10× spread — pathological,
   not slow.** A fourth raise would be the third consecutive symptom-treatment. Open as 13-60 R6.
 
+**(d) ⛔ NAME THE TABLE AND COLUMN BEFORE YOU RUN THE QUERY — I have now sized twice in the wrong one.**
+*Added 2026-08-15, after the second.*
+
+A measurement can be **executed perfectly and answer a different question**, and it looks identical to
+a correct one: real SQL, real rows, a confident number. Both of mine did.
+
+| the claim was about | I measured | outcome |
+|---|---|---|
+| `public-insights.service` rates — which read **`registry-unified`** (respondent-anchored, one row per person) | **`submissions`** (`52/282`) | numbers wrong as a SPEC; **John caught it** (§10.14 R-E). *"The service does not read submissions"* — the exact join 13-33 exists to forbid |
+| the `lga_id` on the **submission** (`submissions.raw_data->>'lga_id'`) | **`respondents.lga_id`** (325/325) | conclusion right, proof wrong — and it *could not have seen* that Rosemary's is a UUID while Adekemi's is a slug (§10.4) |
+
+- ⭐ **The habit: write down the table and column the CLAIM concerns, then check your query names those
+  exact two.** Both failures were one substitution each, made while thinking about the finding rather
+  than the source.
+- **A near-synonym is the trap.** `submissions` vs `registry-unified`, `respondents.lga_id` vs
+  `raw_data->>'lga_id'` — both pairs sound like the same fact and are populated by different paths.
+  **When a repo has a canonical read (13-33), a query that bypasses it is wrong by construction**,
+  whatever it returns.
+- ⚠️ **Getting the right ANSWER from the wrong SOURCE is the dangerous outcome**, not the harmless one:
+  it survives review, and it retires the question so nobody looks again. §10.4's conclusion was correct
+  both times, which is precisely why the bad proof stood for four days.
+- **Sibling of (a)–(c):** there the predicate was not the thing meant; here the *source* was not.
+
 **How to find these:** ask *"what is this predicate actually selecting, and is that what the sentence
-above it claims?"* The first two were found by reading one line of SQL and one function signature — not
-by a failing test, because nothing fails. The third was found by **running the probe rather than
-admiring the idea.**
+above it claims?"* — and then *"is it selecting it FROM the thing the sentence is about?"* The first two
+were found by reading one line of SQL and one function signature, not by a failing test, because nothing
+fails. The third was found by **running the probe rather than admiring the idea.** The fourth was found
+by **reading two rows on prod for an unrelated reason** — which is the uncomfortable part: nothing in
+the process caught it.
 
 ### 2aa. ⭐ A COUNT CONSISTENT WITH BOTH OUTCOMES PROVES NEITHER — assert that the code RAN (new 2026-08-13)
 

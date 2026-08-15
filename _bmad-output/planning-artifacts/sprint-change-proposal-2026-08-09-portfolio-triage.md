@@ -1029,16 +1029,36 @@ indistinguishable from one that never fired.
 13-57 records that Adekemi's `lga_id` was `'saki_west'`, *"a SLUG where every other row carries a UUID,
 so there are at least two bad shapes, and AC5 must check value shape rather than field presence."*
 
+> ⛔ **THE EVIDENCE BELOW WAS MEASURED IN THE WRONG COLUMN — corrected 2026-08-15. The CONCLUSION
+> stands; the proof did not.** The claim concerns the value on the **submission**
+> (`submissions.raw_data->>'lga_id'`), and this section proved it against **`respondents.lga_id`** — a
+> different column, populated by a different path. Found while confirming the R1 row-to-person mapping
+> on prod: Rosemary's `raw_data.lga_id` is a **UUID** and Adekemi's is `saki_west`, which the original
+> "wrong" query could not have shown either way.
+
+**Re-measured 2026-08-15 in the column the claim is actually about:**
+
 ```sql
-SELECT count(*) FILTER (WHERE lga_id::text !~ '^[0-9a-f]{8}-') AS slugs, count(*) AS total
-FROM respondents;              -- → 325 / 325
+SELECT count(*) FILTER (WHERE raw_data->>'lga_id' ~ '^[0-9a-f]{8}-')  AS uuid_shaped,   -- 20
+       count(*) FILTER (WHERE raw_data->>'lga_id' IS NOT NULL
+                          AND raw_data->>'lga_id' !~ '^[0-9a-f]{8}-') AS slug_shaped,   -- 266
+       count(*) FILTER (WHERE raw_data->>'lga_id' IS NOT NULL)        AS total          -- 286
+FROM submissions;
 ```
 
-**Every one of the 325 respondents carries a slug `lga_id`. `'saki_west'` is the normal format, not an
-anomaly, and there is no second bad shape.** The AC5 *instruction* (check value shape, not field
-presence) survives on its own merits; the **evidence cited for it does not** and must be struck. This
-is the third correction to 13-57 — the same class each time: **a claim about how bad it is, made
-without the query that would have sized it.**
+**266 of 286 submission `lga_id`s are slugs; only 20 are UUID-shaped.** So `'saki_west'` is the
+**majority** format on submissions too — the claim is false in *both* columns, and Rosemary's row is
+one of the 20 UUID exceptions rather than the norm the story assumed.
+
+~~`SELECT … FROM respondents;` → 325 / 325 slugs~~ — *true, and about the wrong table.*
+
+**The AC5 instruction (check value SHAPE, not field presence) survives on its own merits.** The
+evidence originally cited for it does not, and neither did my first correction of it.
+
+⚠️ **This is the third correction to 13-57 and the second time I have sized something in the wrong
+table** — R-E computed `52/282` `FROM submissions` when the service reads `registry-unified` (John
+caught it, §10.14 R-E). Once is a slip; twice is a method fault, now written up as handoff **§2z(d)**:
+*name the exact table and column the claim is about before running anything.*
 
 ### 10.5 What 13-50 must implement (direction, not ACs — PM to formalise)
 

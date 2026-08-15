@@ -1,6 +1,6 @@
 # Story 13.57: The ingestion boundary must fail loudly
 
-Status: review
+Status: done
 
 <!-- PREPPED FOR DEV 2026-08-12 by Bob (SM) on Awwal's launch-date ruling: FULL SPEC, all 5 ACs, no
 carve. Premises re-verified against prod 1f06179 before the flip — see "THE FOURTH READER RAN THE
@@ -16,7 +16,9 @@ four rounds of corrections that cost real measurement to earn. Edit in place. --
 ⚠️ THIS STORY HAS NOW BEEN CORRECTED THREE TIMES, BY THREE DIFFERENT READERS, AND EVERY CORRECTION IS
 IN PLACE BELOW — read them before the Context. (1) the IMPACT claim: nobody was lost. (2) the ROOT
 CAUSE: the normaliser IS called. (3) 2026-08-11, SCP §10.4: the `lga_id` "slug vs UUID" premise is
-false — all 325 respondents carry a slug.
+false — and (3b) 2026-08-15 that correction's OWN proof was re-measured, having queried
+`respondents.lga_id` when the claim is about `submissions.raw_data->>'lga_id'`: 266 slugs of 286 there,
+so the premise is false in both columns.
 ⛔ ALL THREE ARE THE SAME CLASS: a claim about how bad it is, written without the query that would
 have sized it. A fourth reader should run the query first. Nobody was lost, and the normaliser IS called. What survives is
 an ingestion boundary that accepts input it cannot store, fails silently, and was found only by
@@ -57,11 +59,14 @@ query — by name and phone — which it did not get.
   never-lose-the-row contract and the DB CHECK are in direct opposition.
 - ⛔ ~~**A SECOND, independent bad shape sat in the same data:** Adekemi's `lga_id` was **`saki_west`**,
   a slug, where every other row carries a UUID. The boundary accepts at least two shapes it cannot
-  store.~~ **FALSE — struck 2026-08-11 (SCP §10.4, THIRD correction to this story).** Measured:
-  `SELECT count(*) FILTER (WHERE lga_id::text !~ '^[0-9a-f]{8}-') , count(*) FROM respondents;`
-  → **325 / 325. Every respondent carries a slug `lga_id`. `saki_west` is the NORMAL format**, and
-  there is no second bad shape. **AC5's instruction survives on its own merits — check value SHAPE,
-  not field presence — but the evidence quoted for it does not.**
+  store.~~ **FALSE — struck 2026-08-11 (SCP §10.4, THIRD correction to this story).**
+  ⛔ **AND THE FIRST PROOF WAS ITSELF MEASURED IN THE WRONG COLUMN — re-measured 2026-08-15.** It ran
+  `…FROM respondents` (325/325 slugs), but the claim is about the value on the **submission**. Correct
+  source: `SELECT … FROM submissions WHERE raw_data->>'lga_id' …` → **266 slugs of 286, only 20
+  UUID-shaped.** So `saki_west` is the **majority** format on submissions too — the premise is false in
+  *both* columns, and Rosemary's row is one of the 20 UUID exceptions rather than the norm assumed.
+  **AC5's instruction survives on its own merits — check value SHAPE, not field presence — but neither
+  the original evidence nor its first correction supports it.** (Handoff §2z(d).)
   ⚠️ Three corrections, one class every time: **a claim about how bad it is, made without the query
   that would have sized it.** Run the query before writing the sentence.
 
@@ -548,7 +553,7 @@ provoked here by running a 235-second API suite immediately before it.
 
 | # | Item | State | Evidence / trigger |
 |---|---|---|---|
-| **R1** | The two 2026-08-04 orphan rows still carry no reason and are counted as STUCK. | **ACCEPTED, AND NOW DISCHARGEABLE** (upgraded by code review 2026-08-14, H2). The story puts retro-fixing them out of scope, and inventing a reason would repeat the class of error this story retracted three times — so nothing invents one. What the review added is an EXIT that does not require a diagnosis: `scripts/acknowledge-unprocessable-submission.ts` writes `ACKNOWLEDGED: <note> — (no reason was ever recorded)`, which states exactly what is true. Without it the "intended nag" was permanent: ten days old against a 12h red line, the digest would have been 🔴 on its first tick and every tick after, forever, whatever Awwal did. A nag with no off switch is a nag that gets muted. | Measurement: both people ARE registered (`OSL-2026-ERX8SD`, `OSL-2026-DZNQHR`). Owner: Awwal. **Action after deploy:** run the script with a note naming those two reference codes. **Reopen trigger:** the digest still naming them after that run. |
+| **R1** | The two 2026-08-04 orphan rows still carry no reason and are counted as STUCK. | ✅ **DISCHARGED ON PROD 2026-08-15 — both acknowledged.** Run on the VPS after the deploy: `019fcb71…` (Rosemary Oko, **OSL-2026-ERX8SD**) and `019fcc10…` (Adekemi Salaudeen, **OSL-2026-DZNQHR**), each dry-run first and shown before committing. Verified two ways: the script now reports *"✓ Nothing unprocessable. The digest is silent, and correctly so."* and an independent query gives **`unprocessed submissions: 0`**. ⚠️ **Timing mattered**: the rows were **275h and 272h** old against a 12h red line, so the first digest tick after deploy would have been 🔴 and stayed there — a nag with no off switch is a nag that gets muted. ⭐ **The row-to-person mapping was confirmed by NAME from `raw_data`, not by timestamp** — writing the wrong reference code into a permanent marker would have repeated the error class this story retracted three times. Original state below. | ~~ACCEPTED, AND NOW DISCHARGEABLE~~ (upgraded by code review 2026-08-14, H2). The story puts retro-fixing them out of scope, and inventing a reason would repeat the class of error this story retracted three times — so nothing invents one. What the review added is an EXIT that does not require a diagnosis: `scripts/acknowledge-unprocessable-submission.ts` writes `ACKNOWLEDGED: <note> — (no reason was ever recorded)`, which states exactly what is true. Without it the "intended nag" was permanent: ten days old against a 12h red line, the digest would have been 🔴 on its first tick and every tick after, forever, whatever Awwal did. A nag with no off switch is a nag that gets muted. | Measurement: both people ARE registered (`OSL-2026-ERX8SD`, `OSL-2026-DZNQHR`). Owner: Awwal. **Action after deploy:** run the script with a note naming those two reference codes. **Reopen trigger:** the digest still naming them after that run. |
 | **R2** | `normalisePhone` is implemented twice — canonical in `apps/api/src/lib/normalise/phone.ts`, duplicated in `Step2ContactLga.tsx`. | **ACCEPTED, with a guard** — the API module cannot be imported by web today; sharing it means moving it into `@oslsr/utils`, which is Story 12-3's client-safe-entry work. | `Step2ContactLga.phone.test.tsx` pins the SAME input set the API's `phone.test.ts` asserts, so the duplication is checked rather than merely regretted. **Reopen trigger:** 12-3 shipping — delete the copy then. |
 | **R3** | The new `ingestion` section reaches the Telegram digest only; `pnpm dashboard` (CLI) and the Super Admin Operations page do not render it. | **ACCEPTED** — AC3 asks for the digest, and this matches 13-60's precedent (`fieldStaffPhotos` is digest-only too). The data is already on the snapshot, so adding a surface is a render-only change. | **Reopen trigger:** the first time an operator asks "where do I see this in the UI?", or 13-44 (campaign observability) touching the same page. |
 | **R4** | Prod verification of AC2/AC3 — no submission has yet died through the NEW terminal path on production, so the digest line and the `submission.respondent_write_failed` event have never fired there. | **DISCHARGE-ON-PUSH** — provable only after deploy, and only when something actually fails. Blocks `done`, not the commit. | The honest check after deploy is the NEGATIVE control: query `SELECT count(*) FILTER (WHERE processing_error IS NOT NULL), count(*) FILTER (WHERE processed = false AND processing_error IS NULL AND ingested_at < now() - interval '60 minutes') FROM submissions;` — expect `0 / 2` (the two known orphans) and the next digest to carry the Ingestion line naming 2 stuck. **That line appearing is the proof the wiring fires**; waiting for a real failure is [[pattern-verification-that-cannot-run-yet]]. |
@@ -607,9 +612,22 @@ CONCURRENT session's 13-60 R6 write-up, **not part of this story**. Do not stage
 
 ## Closing verdict
 
-**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
-**Until that line carries a real SHA, `Status:` must not read `done`** (D9's hold condition; 13-60 is
-the worked example of why — it sat at `review` through one red CI run and one skipped deploy).
+**CLOSED — `done`. Deployed SHA `4e36a92`, verified on production 2026-08-15.**
+
+| Deploy gate | Evidence |
+|---|---|
+| CI | `CI/CD Pipeline` **31898118041** success · `E2E Tests` **31898118060** success |
+| **`deploy` TAKEN, not skipped** | all **10** jobs green (the `31737577114` counter-example is why the job list is read, not the badge) |
+| Prod | VPS `git rev-parse --short HEAD` = **`4e36a92`** |
+| Full suite on the way out | api **3,769** · web **2,884** · utils 126 · testing 64 |
+| **R1 discharged on prod** | both orphan rows acknowledged — see below |
+
+⭐ **The fix verified against the real inputs, not a fixture.** Both 2026-08-04 values were put
+through the deployed normaliser: `+234 08120004038` → **`+2348120004038`** and `07051286580` →
+**`+2347051286580`**, no warnings. Rosemary's is the case this story fixes — the three-line
+`fromCountryCode && nsn.length === 11 && startsWith('0')` strip. **Adekemi's normalised cleanly both
+before and after, so her orphan was never a phone problem and remains undiagnosed** — stated rather
+than closed over.
 
 | Gate | Evidence — run by adjudication, not the dev's self-report |
 |---|---|
