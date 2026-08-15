@@ -749,6 +749,116 @@ describe('POST /registration/wizard', () => {
   });
 
   /**
+   * ⭐ STORY 13-57 AC1.1 — THE WIZARD IS THE PATH THE FIX MOST EASILY MISSES.
+   *
+   * `submitWizard` writes `respondents` and `submissions` itself, in one
+   * transaction, and DELIBERATELY bypasses `SubmissionProcessingService`
+   * (`registration.controller.ts` ~:1176). So the normalisation guard added to
+   * `findOrCreateRespondent` does not run here at all — and before this story
+   * the only normalisation on this channel lived in the browser, which means it
+   * was absent for a resumed draft, an offline sync, or any direct API call.
+   * The story's Dev Notes name this trap explicitly
+   * ([[pattern-ship-a-fix-that-never-fires]]); these two tests are what make
+   * the claim checkable.
+   *
+   * ⚠️ RED-VERIFY TARGET. Delete the `canonicalPhone` derivation (or restore
+   * `phoneNumber: data.phone` on the insert) and both must fail.
+   */
+  describe('13-57 — phone normalisation on the wizard write-site', () => {
+    /** Captures the respondents-insert payload so the assertion is on what is PERSISTED. */
+    function txCapturingRespondentInsert(captured: { values?: Record<string, unknown> }) {
+      return async (cb: (tx: unknown) => unknown) => {
+        const respondentsInsertChain = {
+          values: (v: Record<string, unknown>) => {
+            captured.values = v;
+            return { returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) };
+          },
+        };
+        const submissionsInsertChain = { values: () => Promise.resolve(undefined) };
+        const tx = {
+          query: { wizardDrafts: { findFirst: () => Promise.resolve(null) } },
+          insert: vi
+            .fn()
+            .mockReturnValueOnce(respondentsInsertChain)
+            .mockReturnValueOnce(submissionsInsertChain),
+          delete: () => ({ where: () => Promise.resolve() }),
+          execute: vi.fn(),
+        };
+        return cb(tx);
+      };
+    }
+
+    it('persists the E.164 form of `+234 08120004038` — the number that died on 2026-08-04', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+      const captured: { values?: Record<string, unknown> } = {};
+      mockTransactionImpl.mockImplementationOnce(txCapturingRespondentInsert(captured));
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678919', phone: '+234 08120004038' }));
+
+      expect(res.status).toBe(201);
+      expect(captured.values?.phoneNumber).toBe('+2348120004038');
+    });
+
+    it('refuses a number with no derivable ten digits, with a message the person can act on', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        // 10 chars, so it clears the schema's `min(10)` and reaches the
+        // normaliser — which derives a 9-digit NSN and cannot canonicalise it.
+        .send(validBody({ nin: '12345678919', phone: '0801234567' }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('PHONE_UNPROCESSABLE');
+      // The message names an example rather than a regex: this is read by a
+      // citizen mid-registration, not by a developer.
+      expect(res.body.message).toMatch(/08012345678/);
+    });
+
+    /**
+     * ⭐ CODE REVIEW 2026-08-14 (H3) — THE HOLE IN THIS STORY'S OWN GUARD.
+     *
+     * `submitWizardSchema` is `phone: z.string().min(10)`, so TEN SPACES is a
+     * well-formed request body. It normalises to `''`, and the guard used to
+     * wave that through — `isStorableNigerianPhone('')` answered TRUE on the
+     * grounds that the column is nullable — and then the insert wrote `''`,
+     * not `NULL`. Probed against the real database that returns
+     * `23514 chk_respondents_phone_number_e164`: the 2026-08-04 incident,
+     * arriving through the guard built to stop it.
+     *
+     * ⛔ RED-VERIFY TARGET. Restore `isStorableNigerianPhone`'s `value === ''`
+     * short-circuit and this test must fail with a 201 and `phoneNumber: ''`.
+     */
+    it('refuses a phone that is nothing but whitespace — `\'\'` is not NULL', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+      const captured: { values?: Record<string, unknown> } = {};
+      mockTransactionImpl.mockImplementationOnce(txCapturingRespondentInsert(captured));
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678919', phone: '          ' }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('PHONE_UNPROCESSABLE');
+      // Nothing was written at all — the refusal happens before the transaction.
+      expect(captured.values).toBeUndefined();
+    });
+
+    it('refuses punctuation-only input for the same reason', async () => {
+      mockRespondentsFindFirst.mockResolvedValueOnce(null);
+
+      const res = await request(buildApp())
+        .post('/registration/wizard')
+        .send(validBody({ nin: '12345678919', phone: '(--) .. --.' }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('PHONE_UNPROCESSABLE');
+    });
+  });
+
+  /**
    * 13-53 — THE SEAM, AT THE ROUTE LEVEL.
    *
    * Someone registers without their NIN, comes back with it, and re-enters their name the way

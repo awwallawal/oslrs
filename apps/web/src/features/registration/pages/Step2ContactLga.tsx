@@ -20,11 +20,49 @@ export interface StepProps {
   onBack?: () => void;
 }
 
+/**
+ * Story 13-57 AC1.2/AC1.3 — accept every way a Nigerian writes their number.
+ *
+ * The previous version handled `0812…` and `234812…` and nothing else, so
+ * `+234 08120004038` — the country code AND the local trunk zero, which is how
+ * you write a number you are also giving to a foreigner — fell through
+ * unchanged, failed `isValidNigerianPhone`, and the person was told to fix a
+ * number that was never wrong. That is exactly the friction AC1.3 forbids: the
+ * user is not making a mistake, the parser was.
+ *
+ * ⚠️ SECOND IMPLEMENTATION OF ONE RULE, KNOWINGLY. The canonical normaliser is
+ * `apps/api/src/lib/normalise/phone.ts`, and the server re-normalises whatever
+ * arrives — this copy exists only so the message appears at the point of entry
+ * rather than after submit. It cannot be imported today because that module
+ * lives under `apps/api`; sharing it means moving it into `@oslsr/utils`, which
+ * is Story 12-3's client-safe-entry work. The parity test beside this file
+ * (`Step2ContactLga.phone.test.tsx`) pins the two against the same input set so
+ * the duplication is checked rather than merely regretted.
+ */
 function normalisePhone(raw: string): string {
-  const cleaned = raw.replace(/\s+/g, '').replace(/-/g, '');
-  if (cleaned.startsWith('0') && cleaned.length === 11) return '+234' + cleaned.slice(1);
-  if (cleaned.startsWith('234') && cleaned.length === 13) return '+' + cleaned;
-  return cleaned;
+  // Same cosmetic set the server strips: spaces, dashes, parens, dots.
+  const cleaned = raw.trim().replace(/[\s\-().]/g, '');
+
+  let nsn: string | null = null;
+  let fromCountryCode = false;
+  if (cleaned.startsWith('+234')) {
+    nsn = cleaned.slice(4);
+    fromCountryCode = true;
+  } else if (cleaned.startsWith('234')) {
+    nsn = cleaned.slice(3);
+    fromCountryCode = true;
+  } else if (cleaned.startsWith('0')) {
+    nsn = cleaned.slice(1);
+  }
+
+  if (nsn === null || !/^\d+$/.test(nsn)) return cleaned;
+
+  // A trunk zero is redundant after the country code — but `00…` is the
+  // international dialling prefix, not a local format, so the `0` branch above
+  // never strips twice.
+  if (fromCountryCode && nsn.length === 11 && nsn.startsWith('0')) nsn = nsn.slice(1);
+
+  return nsn.length === 10 ? `+234${nsn}` : cleaned;
 }
 
 function isValidNigerianPhone(value: string | undefined): boolean {

@@ -7,6 +7,7 @@ import { AppError } from '@oslsr/utils';
 import { nativeFormSchema } from '@oslsr/types';
 import type { NativeFormSchema, Question, Choice, Calculation } from '@oslsr/types';
 import { validateFormFidelity, type FidelityFinding } from './form-fidelity-validator.js';
+import { checkIngestionContract } from './ingestion-contract.js'; // Story 13-57 (AC5)
 import { uuidv7 } from 'uuidv7';
 import pino from 'pino';
 
@@ -267,6 +268,21 @@ export class NativeFormService {
       errors.push(finding.message);
     }
     const warnings = fidelity.warnings.map((w: FidelityFinding) => w.message);
+
+    /**
+     * Story 13-57 AC5.1 — the by-name ingestion contract, at PUBLISH.
+     *
+     * ⚠️ WARNING, NOT ERROR, AND THE ASYMMETRY IS THE POINT. Not every
+     * published form is a registration form — an assessment or a survey has no
+     * business carrying a NIN question, and blocking those would make this
+     * guard something an operator learns to route around. The BLOCKING moment
+     * is the PIN (`wizard.public_form_id`), because that is the moment a form
+     * is declared to be the one feeding the register. Publish warns so the
+     * author sees it while they still have the workbook open; the pin refuses.
+     */
+    for (const finding of checkIngestionContract(schema)) {
+      warnings.push(`Ingestion contract: ${finding.message}`);
+    }
 
     return { valid: errors.length === 0, errors, warnings };
   }

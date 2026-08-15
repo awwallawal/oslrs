@@ -13,6 +13,7 @@ import type {
   OpsQueueHealth,
   NotificationUsage,
   NotificationChannelUsage,
+  IngestionHealth,
 } from '@oslsr/types';
 
 /** Minimal meter channel fixture — only `total` drives the quota maths. */
@@ -177,6 +178,101 @@ describe('buildRecommendations — metric → story binding', () => {
 
   it('returns empty array when everything is healthy', () => {
     expect(buildRecommendations({ system: baseSys, traffic: null, resend: null, queue: null, notificationUsage: null })).toEqual([]);
+  });
+
+  /**
+   * ⭐ STORY 13-57 AC3 — THE COUNT HAS TO MAKE THE PHONE BUZZ.
+   *
+   * `runOpsDigest` sends SILENTLY when `recommendations.length === 0`. A digest
+   * LINE alone would therefore report people missing from the register in
+   * exactly the way the operator has been trained to ignore — a monitor that
+   * technically reports and practically does not
+   * ([[pattern-monitor-measuring-something-else]]). These tests pin that the
+   * count produces a RECOMMENDATION, which is what makes the send audible.
+   */
+  describe('13-57 — unprocessable submissions', () => {
+    const ingestion = (overrides?: Partial<IngestionHealth>): IngestionHealth => ({
+      dead: 0,
+      stuck: 0,
+      deduplicated: 0,
+      acknowledged: 0,
+      stuckAfterMinutes: 60,
+      oldestAt: null,
+      oldestAgeHours: null,
+      ...overrides,
+    });
+
+    const recs = (i: IngestionHealth | null) =>
+      buildRecommendations({
+        system: baseSys,
+        traffic: null,
+        resend: null,
+        queue: null,
+        notificationUsage: null,
+        ingestion: i,
+      });
+
+    it('says nothing when nothing is unprocessable (silent-when-healthy, 13-42 AC4)', () => {
+      expect(recs(ingestion())).toEqual([]);
+      expect(recs(null)).toEqual([]);
+    });
+
+    it('raises a recommendation — not just a line — so the digest is not sent silently', () => {
+      const rec = recs(ingestion({ stuck: 2, oldestAgeHours: 3 })).find(
+        (r) => r.key === 'unprocessable-submissions',
+      );
+      expect(rec).toBeDefined();
+      expect(rec?.text).toContain('NOT on the register');
+      expect(rec?.text).toContain('0 with a recorded reason, 2 with none');
+    });
+
+    it('is RED once the oldest has outlived a digest cycle, YELLOW before that', () => {
+      expect(
+        recs(ingestion({ dead: 1, oldestAgeHours: 11 })).find((r) => r.key === 'unprocessable-submissions')
+          ?.severity,
+      ).toBe('yellow');
+      expect(
+        recs(ingestion({ dead: 1, oldestAgeHours: 12 })).find((r) => r.key === 'unprocessable-submissions')
+          ?.severity,
+      ).toBe('red');
+    });
+
+    /**
+     * ⭐ CODE REVIEW 2026-08-14 (H1) — THE RECOMMENDATION SAYS "these people are
+     * NOT on the register", AND IT HAS TO BE TRUE OF EVERY ROW IT COUNTS.
+     *
+     * A duplicate-NIN rejection is a terminal row with a reason whose own text
+     * reads "already registered on <date> via <source>" — the person IS on the
+     * register. Alarming on it under that sentence would state the opposite of
+     * the truth about a real citizen: inferring IMPACT from STRUCTURE, the error
+     * this story had to retract three separate times, rebuilt into its own
+     * monitor. After the jingle these would have been the BULK of the count.
+     *
+     * ⛔ THIS TEST WOULD PASS OVER A HOLE if it only asserted the count.
+     * `deduplicated` is set to a number LARGER than dead+stuck, so a regression
+     * that folds it back in cannot hide inside a plausible-looking total.
+     */
+    it('never alarms on a duplicate-NIN rejection — that person IS on the register', () => {
+      expect(recs(ingestion({ deduplicated: 9, oldestAgeHours: 400 }))).toEqual([]);
+
+      const rec = recs(
+        ingestion({ dead: 1, deduplicated: 9, oldestAgeHours: 3 }),
+      ).find((r) => r.key === 'unprocessable-submissions');
+      expect(rec?.text).toContain('1 submission(s)');
+      expect(rec?.text).not.toContain('10 submission(s)');
+    });
+
+    /**
+     * ⭐ CODE REVIEW 2026-08-14 (H2) — THE COUNT MUST BE ABLE TO GO DOWN.
+     *
+     * Without this the digest had no exit: the two known 2026-08-04 orphans are
+     * already ten days old, so the FIRST digest after deploy is red and so is
+     * every one after it, whatever the operator does. A red that can never go
+     * green stops being read — which is the failure this story exists to end.
+     */
+    it('goes silent once an operator has acknowledged everything', () => {
+      expect(recs(ingestion({ acknowledged: 4, oldestAgeHours: 400 }))).toEqual([]);
+    });
   });
 
   const traffic = (step4StallPct: number, draftsLive: number) =>

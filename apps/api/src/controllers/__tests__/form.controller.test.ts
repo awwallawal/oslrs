@@ -718,6 +718,43 @@ describe('FormController', () => {
       });
     });
 
+    /**
+     * Story 13-57 AC2 — THE SURFACE THAT LIGHTS UP FOR FREE, once the column is
+     * actually written.
+     *
+     * This endpoint is the field officer's own status poll (and what the web
+     * `sync-manager` reads to stop retrying an offline item). It has selected
+     * `processing_error` since Story 3.7 — but on the human ingestion path that
+     * column was NULL on all 284 production rows, so the surface has never once
+     * shown a reason. This pins that 13-57's reason reaches the person who
+     * submitted the form, in the terminal shape the story defines
+     * (`processed: true` + a reason), rather than sitting in a log nobody greps.
+     */
+    it('13-57 — surfaces an UNPROCESSABLE_INPUT reason to the officer who submitted it', async () => {
+      mockReq.query = { uids: 'uid-dead' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      mockFindManySubmissions.mockResolvedValue([
+        {
+          submissionUid: 'uid-dead',
+          processed: true,
+          processingError:
+            'UNPROCESSABLE_INPUT: phone_number (wrong_length:expected_10_got_11) — the value could not be canonicalised to the shape respondents requires, so it was not written',
+        },
+      ]);
+
+      await FormController.getSubmissionStatuses(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext,
+      );
+
+      const payload = jsonMock.mock.calls[0][0] as {
+        data: Record<string, { processed: boolean; processingError: string | null }>;
+      };
+      expect(payload.data['uid-dead'].processed).toBe(true);
+      expect(payload.data['uid-dead'].processingError).toMatch(/^UNPROCESSABLE_INPUT: phone_number/);
+    });
+
     it('returns 400 for empty UIDs', async () => {
       mockReq.query = { uids: '' };
       mockReq.user = { sub: 'user-123', role: 'enumerator' };

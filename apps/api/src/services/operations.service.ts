@@ -37,9 +37,18 @@ import {
   type OpsDashboardSnapshot,
   type NotificationUsage,
   type FieldStaffPhotoHealth,
+  type IngestionHealth,
+  INGESTION_STUCK_AFTER_MINUTES,
+  INGESTION_RED_AFTER_HOURS,
   FIELD_ROLES,
 } from '@oslsr/types';
 import { pool } from '../db/index.js';
+import {
+  SQL_SUBMISSION_DEAD,
+  SQL_SUBMISSION_AWAITING,
+  SQL_SUBMISSION_DEDUPLICATED,
+  SQL_SUBMISSION_ACKNOWLEDGED,
+} from './submission-terminal-state.js'; // Story 13-57 (AC3)
 import { getEmailQueueStats, getEmailFailedSamples } from '../queues/email.queue.js';
 import { NotificationMeter } from './notification-meter.service.js';
 import { getExpiries } from './expiry-monitor.service.js'; // Story 9-50
@@ -179,6 +188,90 @@ export async function getFieldStaffPhotoHealth(): Promise<FieldStaffPhotoHealth 
     };
   } catch (err) {
     logger.warn({ event: 'ops.field_staff_photos_failed', error: (err as Error).message });
+    return null;
+  }
+}
+
+/**
+ * ⭐ STORY 13-57 AC3 — THE SIGNAL THAT WOULD HAVE CAUGHT THEM ON 4 AUGUST.
+ *
+ * Two submissions failed to become respondents on 2026-08-04 and were found on
+ * 2026-08-09 by accident. This is the count that makes that a five-hour problem
+ * instead of a five-day one.
+ *
+ * ⚠️ THE PREDICATES ARE IMPORTED, NOT RETYPED. `SQL_SUBMISSION_DEAD` and
+ * `SQL_SUBMISSION_AWAITING` are the same strings the supervisor's operator
+ * counter filters on. The last time these two surfaces each wrote their own,
+ * one of them narrowed to `processed = true` and became structurally incapable
+ * of counting the failures it was named after
+ * ([[pattern-monitor-measuring-something-else]]). Binding both callers to one
+ * definition is the fix for the CLASS, not just for that counter
+ * ([[pattern-census-counts-sites-not-callers]]).
+ *
+ * `ingested_at` is the age clock, not `submitted_at`: a submission carries the
+ * CLIENT's timestamp, and an offline enumerator's device can be days behind.
+ * The question here is "how long has OUR pipeline been failing to move this",
+ * which starts when we received it.
+ *
+ * Fail-open (returns null) like every other section — a dashboard that cannot
+ * render because one query broke tells the operator less than a dashboard with
+ * one section missing.
+ */
+export async function getIngestionHealth(): Promise<IngestionHealth | null> {
+  try {
+    /**
+     * ⭐ FOUR BUCKETS, NOT TWO (code review 2026-08-14, H1 + H2).
+     *
+     * The first version asked one question — "does this row carry a reason?" —
+     * and reported every YES as a person missing from the register. Two whole
+     * populations answer YES and are not that:
+     *
+     *   DEDUPLICATED  a duplicate NIN was refused. The reason's own text says
+     *                 "already registered on <date> via <source>". The person IS
+     *                 on the register and the pipeline WORKED. Counting these as
+     *                 losses is inferring impact from structure — the error this
+     *                 story retracted three times, rebuilt into its own monitor.
+     *   ACKNOWLEDGED  an operator has read it and closed it out. Without this
+     *                 bucket the count had no way down at all: the two
+     *                 2026-08-04 orphans alone would have held the digest at 🔴
+     *                 on its first tick and every tick after it, forever.
+     *
+     * Only DEAD and STUCK are findings, and `oldest_at` is taken over those two
+     * ALONE — otherwise one ancient duplicate rejection reddens the digest for
+     * the rest of the system's life, about somebody who is fine.
+     */
+    const { rows } = await pool.query(
+      `SELECT count(*) FILTER (WHERE ${SQL_SUBMISSION_DEAD})::int          AS dead,
+              count(*) FILTER (WHERE ${SQL_SUBMISSION_DEDUPLICATED})::int  AS deduplicated,
+              count(*) FILTER (WHERE ${SQL_SUBMISSION_ACKNOWLEDGED})::int  AS acknowledged,
+              count(*) FILTER (WHERE ${SQL_SUBMISSION_AWAITING} AND stale)::int AS stuck,
+              min(ingested_at) FILTER (
+                WHERE (${SQL_SUBMISSION_DEAD})
+                   OR (${SQL_SUBMISSION_AWAITING} AND stale)
+              )                                                            AS oldest_at
+       FROM (
+         SELECT ingested_at, processed, processing_error,
+                ingested_at < now() - ($1 || ' minutes')::interval AS stale
+         FROM submissions
+         WHERE processing_error IS NOT NULL OR processed = false
+       ) s`,
+      [String(INGESTION_STUCK_AFTER_MINUTES)],
+    );
+    const r = rows[0];
+    const oldest: Date | null = r?.oldest_at ?? null;
+    return {
+      dead: r?.dead ?? 0,
+      stuck: r?.stuck ?? 0,
+      deduplicated: r?.deduplicated ?? 0,
+      acknowledged: r?.acknowledged ?? 0,
+      stuckAfterMinutes: INGESTION_STUCK_AFTER_MINUTES,
+      oldestAt: oldest ? new Date(oldest).toISOString() : null,
+      oldestAgeHours: oldest
+        ? Math.floor((Date.now() - new Date(oldest).getTime()) / 3_600_000)
+        : null,
+    };
+  } catch (err) {
+    logger.warn({ event: 'ops.ingestion_health_failed', error: (err as Error).message });
     return null;
   }
 }
@@ -392,11 +485,61 @@ export async function getQueueHealth(): Promise<OpsQueueHealth | null> {
 export function buildRecommendations(
   parts: Pick<
     OpsDashboardSnapshot,
-    'system' | 'traffic' | 'resend' | 'queue' | 'notificationUsage'
+    'system' | 'traffic' | 'resend' | 'queue' | 'notificationUsage' | 'ingestion'
   >,
 ): OpsRecommendation[] {
-  const { system: sys, traffic, resend, queue, notificationUsage: usage } = parts;
+  const { system: sys, traffic, resend, queue, notificationUsage: usage, ingestion } = parts;
   const recs: OpsRecommendation[] = [];
+
+  /**
+   * ⭐ STORY 13-57 AC3 — AND THE REASON IT IS A RECOMMENDATION, NOT JUST A LINE.
+   *
+   * The digest sends SILENTLY (`disable_notification`) when there are no
+   * recommendations and no abuse findings. A count that only ever appeared as a
+   * digest line would therefore arrive with no buzz — a signal about people
+   * missing from the register, delivered in the way the operator has been
+   * trained to ignore. That would be a monitor that technically reports and
+   * practically does not ([[pattern-monitor-measuring-something-else]]).
+   *
+   * Silent when zero (13-42 AC4): a permanent "0 unprocessable" line is a line
+   * the operator learns to skip, and this one has to be readable on the morning
+   * it is not zero.
+   */
+  /**
+   * ⚠️ `deduplicated` AND `acknowledged` ARE NOT IN THIS SUM, AND THAT IS THE
+   * WHOLE CORRECTION (code review 2026-08-14, H1 + H2).
+   *
+   * A duplicate-NIN rejection is a person who IS on the register; alarming on it
+   * under the sentence below would state the opposite of the truth. An
+   * acknowledged row is one an operator has already dealt with; alarming on it
+   * again is how a monitor becomes something people mute.
+   */
+  const unprocessable = ingestion ? ingestion.dead + ingestion.stuck : 0;
+  if (ingestion && unprocessable > 0) {
+    const age =
+      ingestion.oldestAgeHours === null
+        ? 'unknown age'
+        : ingestion.oldestAgeHours < 1
+          ? 'oldest under an hour'
+          : `oldest ${ingestion.oldestAgeHours}h`;
+    const split = `${ingestion.dead} with a recorded reason, ${ingestion.stuck} with none`;
+    // AC3.1 — surviving a full digest cycle (12h) is the red line. Stated as an
+    // AGE so the rule needs no remembered state to be right.
+    const survivedACycle =
+      ingestion.oldestAgeHours !== null && ingestion.oldestAgeHours >= INGESTION_RED_AFTER_HOURS;
+    recs.push({
+      severity: survivedACycle ? 'red' : 'yellow',
+      key: 'unprocessable-submissions',
+      text:
+        `${unprocessable} submission(s) never became a respondent (${split}; ${age}). ` +
+        'These people filled in the form and are NOT on the register. ' +
+        'Read `submissions.processing_error` for the ones that have a reason; ' +
+        'the rest predate Story 13-57 and never recorded one. ' +
+        'Close one out with `pnpm --filter @oslsr/api exec tsx ' +
+        'scripts/acknowledge-unprocessable-submission.ts` once it is dealt with — ' +
+        'otherwise this stays red forever and stops being read.',
+    });
+  }
 
   /**
    * ⚠️ THE OLD TEXT NAMED A STORY THAT HAD SHIPPED — for two months.
@@ -569,15 +712,17 @@ export class OperationsService {
       return cached.snapshot;
     }
 
-    const [system, traffic, resend, queue, notificationUsage, expiries, fieldStaffPhotos] = await Promise.all([
-      getSystemHealth(),
-      getTraffic(),
-      getResendStatus(),
-      getQueueHealth(),
-      getNotificationUsage(),
-      getExpiries(), // Story 9-50 — fail-open, never throws
-      getFieldStaffPhotoHealth(), // Story 13-60 — fail-open, never throws
-    ]);
+    const [system, traffic, resend, queue, notificationUsage, expiries, fieldStaffPhotos, ingestion] =
+      await Promise.all([
+        getSystemHealth(),
+        getTraffic(),
+        getResendStatus(),
+        getQueueHealth(),
+        getNotificationUsage(),
+        getExpiries(), // Story 9-50 — fail-open, never throws
+        getFieldStaffPhotoHealth(), // Story 13-60 — fail-open, never throws
+        getIngestionHealth(), // Story 13-57 — fail-open, never throws
+      ]);
 
     const snapshot: OpsDashboardSnapshot = {
       generatedAt: new Date().toISOString(),
@@ -588,7 +733,15 @@ export class OperationsService {
       notificationUsage,
       expiries,
       fieldStaffPhotos,
-      recommendations: buildRecommendations({ system, traffic, resend, queue, notificationUsage }),
+      ingestion,
+      recommendations: buildRecommendations({
+        system,
+        traffic,
+        resend,
+        queue,
+        notificationUsage,
+        ingestion,
+      }),
     };
 
     cached = { at: Date.now(), snapshot };

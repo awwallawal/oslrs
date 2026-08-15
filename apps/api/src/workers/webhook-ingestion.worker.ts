@@ -25,6 +25,11 @@ import {
   SubmissionProcessingService,
   PermanentProcessingError,
 } from '../services/submission-processing.service.js';
+import {
+  markSubmissionUnprocessable,
+  isNonRetryablePostgresError,
+  constraintOf,
+} from '../services/submission-terminal-state.js'; // Story 13-57 (AC2)
 
 const logger = pino({ name: 'webhook-ingestion-worker' });
 
@@ -175,9 +180,20 @@ async function runProcessing(
 
     return null;
   } catch (error: unknown) {
-    if (error instanceof PermanentProcessingError) {
-      // Permanent error — store and do NOT re-throw (prevent BullMQ retry)
-      const errorMessage = error.message;
+    /**
+     * Story 13-57 AC2 — TWO ways a submission can be permanently dead, and only
+     * one of them used to be recognised.
+     *
+     * `PermanentProcessingError` was always handled. Everything else was
+     * re-thrown as transient, retried three times, and then abandoned at
+     * `processed = false` with no reason — which is precisely how a
+     * CHECK-constraint violation on a phone number became two rows that looked
+     * like they were still queued for five days. A rejection of the DATA is not
+     * a transient condition; classify it and record it.
+     */
+    const nonRetryableDbError = isNonRetryablePostgresError(error);
+    if (error instanceof PermanentProcessingError || nonRetryableDbError) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
 
       logger.error({
         event: 'webhook_ingestion.permanent_error',
@@ -187,17 +203,22 @@ async function runProcessing(
         error: errorMessage,
       });
 
-      await db.update(submissions).set({
-        processed: true,
-        processedAt: new Date(),
-        processingError: errorMessage,
-        updatedAt: new Date(),
-      }).where(eq(submissions.id, submissionId));
+      // Shared writer — the webhook and human channels must not drift on what
+      // "dead" looks like (services/submission-terminal-state.ts).
+      await markSubmissionUnprocessable({
+        submissionId,
+        submissionUid,
+        reason: errorMessage,
+        constraint: constraintOf(error),
+        cause: nonRetryableDbError ? 'non_retryable_db_error' : 'permanent_error',
+      });
 
       return errorMessage;
     }
 
-    // Transient error — re-throw for BullMQ retry
+    // Transient error — re-throw for BullMQ retry. If the retries run out, the
+    // worker's `failed` handler below marks the row terminal; a job that has
+    // stopped being retried must never leave a submission looking queued.
     throw error;
   }
 }
@@ -240,6 +261,50 @@ webhookIngestionWorker.on('completed', (job, result) => {
   });
 });
 
+/**
+ * Story 13-57 AC2.3 — WHEN THE RETRIES RUN OUT, THE ROW MUST STOP LOOKING QUEUED.
+ *
+ * A transient error is re-thrown so BullMQ can retry it, which is right. But
+ * after the last attempt BullMQ simply gives up, and before this story the
+ * submission was left at `processed = false` with a NULL reason — visually
+ * identical to a row whose turn has not come yet. That is the state the two
+ * 2026-08-04 orphans were found in, and it is the state that made them
+ * invisible: `processed = false` meant both "waiting" and "abandoned".
+ *
+ * Exported for direct testing. Returns `true` when it marked the row, so a test
+ * can assert the branch was TAKEN rather than merely available — a green run of
+ * a handler that no-ops is indistinguishable from one that works
+ * ([[pattern-test-that-passes-over-a-hole]]).
+ */
+export async function handleExhaustedRetries(
+  job: Job<WebhookIngestionJobData> | undefined,
+  error: Error,
+): Promise<boolean> {
+  if (!job) return false;
+  const maxAttempts = job.opts?.attempts ?? 1;
+  if (job.attemptsMade < maxAttempts) return false;
+
+  const submissionUid = job.data?.submissionUid;
+  if (!submissionUid) return false;
+
+  const row = await db.query.submissions.findFirst({
+    where: eq(submissions.submissionUid, submissionUid),
+    columns: { id: true, processed: true },
+  });
+  // No row (the insert itself was what failed) or already terminal — nothing to
+  // say. A submission that never existed is not a silently-dead submission.
+  if (!row || row.processed) return false;
+
+  await markSubmissionUnprocessable({
+    submissionId: row.id,
+    submissionUid,
+    reason: `RETRIES_EXHAUSTED after ${job.attemptsMade} attempt(s): ${error.message}`,
+    constraint: constraintOf(error),
+    cause: 'retries_exhausted',
+  });
+  return true;
+}
+
 webhookIngestionWorker.on('failed', (job, error) => {
   logger.error({
     event: 'webhook_ingestion.job_failed',
@@ -247,6 +312,18 @@ webhookIngestionWorker.on('failed', (job, error) => {
     submissionUid: job?.data.submissionUid,
     error: error.message,
     attempts: job?.attemptsMade,
+  });
+
+  // Fire-and-forget with an explicit catch: this handler is an event listener,
+  // so a rejection here would be unhandled. A failure to record the failure is
+  // logged rather than swallowed.
+  void handleExhaustedRetries(job, error).catch((err: unknown) => {
+    logger.error({
+      event: 'webhook_ingestion.terminal_mark_failed',
+      jobId: job?.id,
+      submissionUid: job?.data.submissionUid,
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 });
 

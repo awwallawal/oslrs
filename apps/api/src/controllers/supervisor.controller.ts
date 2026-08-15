@@ -5,6 +5,10 @@ import { users } from '../db/schema/users.js';
 import { submissions } from '../db/schema/submissions.js';
 import { sql, inArray } from 'drizzle-orm';
 import { TeamAssignmentService } from '../services/team-assignment.service.js';
+import {
+  SQL_SUBMISSION_AWAITING,
+  SQL_SUBMISSION_HAS_REASON,
+} from '../services/submission-terminal-state.js'; // Story 13-57 (AC2.3)
 
 export class SupervisorController {
   /**
@@ -182,10 +186,39 @@ export class SupervisorController {
         });
       }
 
+      /**
+       * ⛔ STORY 13-57 — THIS COUNTER COULD NOT REACH THE FAILURES IT NAMES.
+       *
+       * `failedCount` read `processing_error IS NOT NULL AND processed = true`.
+       * The dead rows this story exists for were `processed = FALSE` — a
+       * submission whose respondent write threw was left looking queued — so a
+       * supervisor's "failed" alert was structurally incapable of counting
+       * them. It would have kept reading zero even after the column started
+       * being written ([[pattern-monitor-measuring-something-else]]).
+       *
+       * The predicate is now the discriminator itself: a submission has FAILED
+       * when it carries a reason, whatever `processed` says. That covers the
+       * terminal rows this story writes (`processed = true` + reason) AND any
+       * historical row that acquired a reason without the flag.
+       *
+       * `unprocessedCount` gains `AND processing_error IS NULL` so the two
+       * remain DISJOINT — without it a failed row would be counted twice in
+       * `totalAlerts`, and "3 alerts" for 2 problems is its own small lie.
+       *
+       * ⚠️ THIS COUNTER USES `HAS_REASON`, NOT `DEAD` — and the difference is
+       * deliberate (code review 2026-08-14, H1). The digest had to start
+       * excluding duplicate-NIN rejections, because it makes a claim about
+       * PEOPLE ("these are NOT on the register") that is false for them. A
+       * supervisor's queue makes a narrower claim: "the pipeline finished with
+       * this and it did not become a respondent here", which is true of a
+       * duplicate too, and a supervisor is exactly who should see one. Same
+       * shared vocabulary, different question — so it binds to a different
+       * predicate rather than quietly reusing the wrong one.
+       */
       const rows = await db
         .select({
-          unprocessedCount: sql<number>`COUNT(*) FILTER (WHERE ${submissions.processed} = false)`,
-          failedCount: sql<number>`COUNT(*) FILTER (WHERE ${submissions.processingError} IS NOT NULL AND ${submissions.processed} = true)`,
+          unprocessedCount: sql<number>`COUNT(*) FILTER (WHERE ${sql.raw(SQL_SUBMISSION_AWAITING)})`,
+          failedCount: sql<number>`COUNT(*) FILTER (WHERE ${sql.raw(SQL_SUBMISSION_HAS_REASON)})`,
         })
         .from(submissions)
         .where(inArray(submissions.submitterId, enumeratorIds));

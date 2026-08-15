@@ -6,12 +6,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockLibGet, mockLibGetRow, mockLibSet, mockLibList, mockLogAction } = vi.hoisted(() => ({
-  mockLibGet: vi.fn(),
-  mockLibGetRow: vi.fn(),
-  mockLibSet: vi.fn(),
-  mockLibList: vi.fn(),
-  mockLogAction: vi.fn(),
+const { mockLibGet, mockLibGetRow, mockLibSet, mockLibList, mockLogAction, mockPinGuard } =
+  vi.hoisted(() => ({
+    mockLibGet: vi.fn(),
+    mockLibGetRow: vi.fn(),
+    mockLibSet: vi.fn(),
+    mockLibList: vi.fn(),
+    mockLogAction: vi.fn(),
+    // Story 13-57 (AC5.2) — the guard's OWN logic is covered in
+    // public-form-pin-guard.test.ts; here it is mocked so these tests can assert
+    // the one thing only this layer decides: that it runs, and that it runs
+    // BEFORE the write.
+    mockPinGuard: vi.fn(),
+  }));
+
+vi.mock('../public-form-pin-guard.js', () => ({
+  assertPinnedFormHonoursIngestionContract: mockPinGuard,
 }));
 
 vi.mock('../../lib/settings.js', () => ({
@@ -34,6 +44,8 @@ beforeEach(() => {
   mockLibSet.mockReset();
   mockLibList.mockReset();
   mockLogAction.mockReset();
+  mockPinGuard.mockReset();
+  mockPinGuard.mockResolvedValue(undefined);
 });
 
 describe('SettingsService.setSetting', () => {
@@ -126,6 +138,36 @@ describe('SettingsService.setSetting', () => {
     );
 
     expect(mockLibSet).toHaveBeenCalledWith('k', 'v', 'actor-id', { description: 'a fresh setting' });
+  });
+
+  /**
+   * ⭐ STORY 13-57 AC5.2 — THE GUARD LIVES HERE, NOT ON THE ROUTE.
+   *
+   * A route-level guard protects the admin UI and nothing else, and the
+   * operator scripts in `apps/api/scripts/` write this key too. A guard that
+   * covers one caller is the failure mode this project keeps re-learning
+   * ([[pattern-ship-a-fix-that-never-fires]]).
+   */
+  describe('13-57 — the public-form pin guard runs on the write chokepoint', () => {
+    it('consults the guard on EVERY setting write, whatever the key', async () => {
+      mockLibSet.mockResolvedValue(null);
+      await SettingsService.setSetting('wizard.public_form_id', 'form-1', 'actor');
+      expect(mockPinGuard).toHaveBeenCalledWith('wizard.public_form_id', 'form-1');
+    });
+
+    it('a refused pin writes NOTHING and audits NOTHING', async () => {
+      mockLibSet.mockResolvedValue(null);
+      mockPinGuard.mockRejectedValue(new Error('FORM_INGESTION_CONTRACT_VIOLATION'));
+
+      await expect(
+        SettingsService.setSetting('wizard.public_form_id', 'form-1', 'actor'),
+      ).rejects.toThrow('FORM_INGESTION_CONTRACT_VIOLATION');
+
+      // Order matters: a half-applied pin would leave the public wizard
+      // rendering a form the register cannot read, which is worse than no pin.
+      expect(mockLibSet).not.toHaveBeenCalled();
+      expect(mockLogAction).not.toHaveBeenCalled();
+    });
   });
 });
 

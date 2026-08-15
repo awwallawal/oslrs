@@ -148,10 +148,15 @@ const mockLoggerInfo = vi.fn();
 // 13-4 R1 — `error` is captured for the same reason `info` is: the unmapped-role signal IS the
 // behaviour. Silence is what let four roles be mislabelled and exempted without anyone deciding it.
 const mockLoggerError = vi.fn();
+// 13-57 AC4 — `warn` joins them for the same reason: the `marketplace.consent_unparsed`
+// line IS the deliverable. An unreadable consent answer is silently coerced to `false`,
+// which is indistinguishable from a real decline, so the log is the only thing that
+// distinguishes "they said no" from "we could not read what they said".
+const mockLoggerWarn = vi.fn();
 vi.mock('pino', () => ({
   default: () => ({
     info: (...args: unknown[]) => mockLoggerInfo(...args),
-    warn: vi.fn(),
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
     error: (...args: unknown[]) => mockLoggerError(...args),
     debug: vi.fn(),
   }),
@@ -1139,6 +1144,69 @@ describe('SubmissionProcessingService', () => {
       expect(RESPONDENT_FIELD_MAP['lga_id']).toBe('lgaId');
       expect(RESPONDENT_FIELD_MAP['consent_marketplace']).toBe('consentMarketplace');
       expect(RESPONDENT_FIELD_MAP['consent_enriched']).toBe('consentEnriched');
+    });
+  });
+
+  /**
+   * ⭐ STORY 13-57 AC4 — THE UNPARSED CONSENT, SAME CLASS AS THE PHONE.
+   *
+   * `String(x ?? '').toLowerCase() === 'yes'` turns everything it cannot read
+   * into `false`, and a coerced `false` looks exactly like a person who
+   * declined. Nobody can tell them apart afterwards — which is the whole
+   * complaint this story makes about the ingestion boundary.
+   */
+  describe('13-57 AC4 — unparsed marketplace consent', () => {
+    const schema = makeFormSchema();
+
+    it('logs `marketplace.consent_unparsed` with the raw value it could not read', () => {
+      const result = SubmissionProcessingService.extractRespondentData(
+        {
+          nin: '61961438053',
+          first_name: 'Adewale',
+          last_name: 'Johnson',
+          consent_marketplace: 'Agreed',
+        },
+        schema,
+      );
+
+      // AC4.2 — the DEFAULT IS NOT FLIPPED. `false` is right for a privacy
+      // consent we could not read; the defect being fixed is the silence.
+      expect(result.consentMarketplace).toBe(false);
+
+      const call = mockLoggerWarn.mock.calls.find(
+        (c) => (c[0] as { event?: string })?.event === 'marketplace.consent_unparsed',
+      );
+      expect(call, 'expected a marketplace.consent_unparsed warning').toBeDefined();
+      expect(call![0]).toMatchObject({ rawValue: 'Agreed', interpretedAs: false });
+    });
+
+    it('says NOTHING for a clean yes or no — the log must mean something when it fires', () => {
+      for (const value of ['yes', 'no', 'YES', ' No ']) {
+        mockLoggerWarn.mockClear();
+        SubmissionProcessingService.extractRespondentData(
+          { nin: '61961438053', consent_marketplace: value },
+          schema,
+        );
+        expect(
+          mockLoggerWarn.mock.calls.filter(
+            (c) => (c[0] as { event?: string })?.event === 'marketplace.consent_unparsed',
+          ),
+          `'${value}' is a clean answer and must not warn`,
+        ).toHaveLength(0);
+      }
+    });
+
+    it('says nothing when the question was never answered — that is AC5\'s job, not this one', () => {
+      // A question behind a `showWhen`, or a section skipped for an under-15,
+      // has no answer to misread. Logging those would bury the real signal in
+      // noise the operator learns to skip.
+      mockLoggerWarn.mockClear();
+      SubmissionProcessingService.extractRespondentData({ nin: '61961438053' }, schema);
+      expect(
+        mockLoggerWarn.mock.calls.filter(
+          (c) => (c[0] as { event?: string })?.event === 'marketplace.consent_unparsed',
+        ),
+      ).toHaveLength(0);
     });
   });
 

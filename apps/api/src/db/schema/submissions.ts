@@ -11,6 +11,7 @@
  */
 
 import { pgTable, uuid, text, timestamp, jsonb, index, boolean, doublePrecision, integer } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { respondents } from './respondents.js';
 
@@ -103,6 +104,22 @@ export const submissions = pgTable('submissions', {
   // runner also creates it idempotently as defense-in-depth for first-deploy
   // ordering).
   enumeratorSubmittedAtIdx: index('idx_submissions_enumerator_submitted_at').on(table.enumeratorId, table.submittedAt),
+  /**
+   * Story 13-57 AC3 (added by code review 2026-08-14, L2) — the unprocessable
+   * scan, which now runs on every ops-snapshot cache miss and twice a day for
+   * the digest.
+   *
+   * PARTIAL, matching `getIngestionHealth`'s own WHERE clause exactly
+   * (`processing_error IS NOT NULL OR processed = false`), so the index holds
+   * only the handful of rows that are ever findings rather than a copy of the
+   * whole table. Ordered on `ingested_at` because that is both the age filter
+   * and the `min()` the query takes. Free today at 284 rows — declared now
+   * because this story's own premise is that the jingle multiplies the traffic
+   * this seq-scans.
+   */
+  unprocessableIdx: index('idx_submissions_unprocessable')
+    .on(table.ingestedAt)
+    .where(sql`${table.processingError} IS NOT NULL OR ${table.processed} = false`),
   // Story 9-56: expression index idx_submissions_lower_email on
   // lower(raw_data->>'email') powers the registry-search email resolution
   // (exact case-insensitive). Drizzle cannot express expression indexes inline,

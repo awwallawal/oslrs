@@ -26,6 +26,8 @@ import {
   type OpsDashboardSnapshot,
   type NotificationUsage,
   type FieldStaffPhotoHealth,
+  type IngestionHealth,
+  INGESTION_RED_AFTER_HOURS,
 } from '@oslsr/types';
 import pino from 'pino';
 
@@ -139,6 +141,89 @@ export function formatFieldStaffPhotoLines(health: FieldStaffPhotoHealth | null 
 }
 
 /**
+ * ⭐ STORY 13-57 (AC3) — submissions that never became respondents.
+ *
+ * This is the line that would have caught Rosemary and Adekemi on 4 August
+ * rather than on the 9th, and its shape is chosen from what went wrong:
+ *
+ *  - It names the PEOPLE, not the rows. "2 unprocessable submissions" is a
+ *    database fact; "2 people filled in the form and are not on the register"
+ *    is the thing an operator will act on before lunch.
+ *  - It splits DEAD (a reason was recorded) from STUCK (none ever was),
+ *    because the two need different actions: read the reason, versus go and
+ *    look. Merging them is how the dead hid among the busy for five days.
+ *  - It carries the AGE of the oldest, which is the only part that answers
+ *    "is this new, or has it been sitting here?"
+ *
+ * ⚠️ SILENT WHEN ZERO, on purpose (13-42 AC4, and 13-60's line does the same).
+ * A permanent "0 unprocessable" trains the operator to skip the line, and this
+ * one has to be readable on the morning it is not zero. Silent when the section
+ * is unavailable too — an absent count is not a finding.
+ *
+ * Pure; returns escaped MarkdownV2 lines.
+ */
+export function formatIngestionHealthLines(health: IngestionHealth | null | undefined): string[] {
+  if (!health) return [];
+  /**
+   * ⚠️ `deduplicated` AND `acknowledged` ARE EXCLUDED FROM THE TOTAL (code
+   * review 2026-08-14, H1 + H2). A duplicate-NIN rejection means the person IS
+   * on the register — putting it under the sentence below would print the
+   * opposite of the truth about a real citizen, which is the error this story
+   * had to retract three times. An acknowledged row has already been dealt
+   * with. They are shown as context ONLY when the section is already speaking,
+   * so the operator can see why `processing_error` holds more rows than the
+   * count claims — never as a standing line of their own.
+   */
+  const total = health.dead + health.stuck;
+  if (total === 0) return [];
+
+  // Red once the oldest has survived a full digest cycle — the same rule the
+  // recommendation uses, from the same constant, so the glyph and the
+  // recommendation can never disagree with each other.
+  const glyph =
+    health.oldestAgeHours !== null && health.oldestAgeHours >= INGESTION_RED_AFTER_HOURS
+      ? '🔴'
+      : '🟡';
+
+  const age =
+    health.oldestAgeHours === null
+      ? 'age unknown'
+      : health.oldestAgeHours < 1
+        ? 'oldest under 1h'
+        : `oldest ${health.oldestAgeHours}h`;
+
+  const lines: string[] = [
+    `${glyph} *Ingestion*: ${escapeMarkdownV2(
+      `${total} submission(s) never became a respondent — those people are NOT on the register (${age})`,
+    )}`,
+  ];
+
+  const breakdown: string[] = [];
+  if (health.dead > 0) breakdown.push(`${health.dead} with a recorded reason (processing_error)`);
+  if (health.stuck > 0) {
+    breakdown.push(
+      `${health.stuck} stuck >${health.stuckAfterMinutes}m with no reason recorded`,
+    );
+  }
+  lines.push(`   ${escapeMarkdownV2(breakdown.join(', '))}`);
+
+  // Context, not findings — and each says plainly why it is NOT in the count
+  // above, so nobody re-derives "the numbers don't add up" as a bug.
+  const context: string[] = [];
+  if (health.deduplicated > 0) {
+    context.push(
+      `${health.deduplicated} refused as a duplicate NIN (those people ARE on the register — not counted)`,
+    );
+  }
+  if (health.acknowledged > 0) {
+    context.push(`${health.acknowledged} already acknowledged by an operator (not counted)`);
+  }
+  if (context.length > 0) lines.push(`   ${escapeMarkdownV2(context.join(', '))}`);
+
+  return lines;
+}
+
+/**
  * Build the digest message body (MarkdownV2). Exported for unit tests (AC#D4).
  * Pure — takes a snapshot (+ optional notification usage & abuse findings),
  * returns a string ≤ TELEGRAM_MAX_CHARS.
@@ -244,6 +329,12 @@ export function formatDigest(
   // Story 13-60 (AC3.2) — field staff with no ID-card photo. Emits nothing at
   // all when every active field officer has one.
   for (const l of formatFieldStaffPhotoLines(snapshot.fieldStaffPhotos)) {
+    lines.push(l);
+  }
+
+  // Story 13-57 (AC3) — submissions that never became respondents. Silent when
+  // there are none; the paired recommendation is what makes the phone buzz.
+  for (const l of formatIngestionHealthLines(snapshot.ingestion)) {
     lines.push(l);
   }
 

@@ -20,6 +20,7 @@
 /** Threshold tiers. Each metric has a yellow (warn) and red (critical) edge. */
 import type { MonitoredExpiry } from './monitoring.js'; // Story 9-50
 import type { FieldStaffPhotoHealth } from './staff-photo.js'; // Story 13-60
+import type { IngestionHealth } from './ingestion-health.js'; // Story 13-57
 import { getEmailTierLimits } from './email.js';
 
 export const OPS_THRESHOLDS = {
@@ -238,6 +239,13 @@ export interface OpsDashboardSnapshot {
    * the dashboard and the staff list cannot drift.
    */
   fieldStaffPhotos?: FieldStaffPhotoHealth | null;
+  /**
+   * Story 13-57 (AC3) — submissions that could not become respondents: the
+   * people who filled in the form and are not on the register. Split dead
+   * (a reason was recorded) from stuck (none ever was) because before 13-57
+   * the two were indistinguishable, and that is why nobody noticed for 5 days.
+   */
+  ingestion?: IngestionHealth | null;
   recommendations: OpsRecommendation[];
 }
 

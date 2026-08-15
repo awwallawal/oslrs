@@ -50,9 +50,10 @@ import {
   formatNotificationUsageLines,
   formatAbuseLines,
   formatFieldStaffPhotoLines,
+  formatIngestionHealthLines,
   runOpsDigest,
 } from '../ops-digest.worker.js';
-import type { NotificationUsage, FieldStaffPhotoHealth } from '@oslsr/types';
+import type { NotificationUsage, FieldStaffPhotoHealth, IngestionHealth } from '@oslsr/types';
 
 function healthySnapshot(overrides?: Partial<OpsDashboardSnapshot>): OpsDashboardSnapshot {
   return {
@@ -343,5 +344,119 @@ describe('formatFieldStaffPhotoLines (13-60 AC3.2)', () => {
 
     const clean = formatDigest(healthySnapshot({ fieldStaffPhotos: health() }));
     expect(clean).not.toContain('ID cards');
+  });
+});
+
+/**
+ * ⭐ STORY 13-57 AC3 — THE LINE THAT WOULD HAVE CAUGHT THEM ON 4 AUGUST.
+ *
+ * Two submissions failed to become respondents on 2026-08-04 and were found on
+ * the 9th, by accident, during unrelated cleanup. What was missing was not a
+ * query — the rows were right there — it was anything that looked.
+ */
+describe('formatIngestionHealthLines (13-57 AC3)', () => {
+  const ingestion = (overrides?: Partial<IngestionHealth>): IngestionHealth => ({
+    dead: 0,
+    stuck: 0,
+    deduplicated: 0,
+    acknowledged: 0,
+    stuckAfterMinutes: 60,
+    oldestAt: null,
+    oldestAgeHours: null,
+    ...overrides,
+  });
+
+  it('says NOTHING when every submission became a respondent (AC3.2)', () => {
+    // Silent-when-healthy is not politeness — a permanent "0 unprocessable"
+    // line is a line the operator learns to skip, and this one has to be
+    // readable on the morning it is not zero.
+    expect(formatIngestionHealthLines(ingestion())).toEqual([]);
+  });
+
+  it('says nothing when the section is unavailable — an absent count is not a finding', () => {
+    expect(formatIngestionHealthLines(null)).toEqual([]);
+    expect(formatIngestionHealthLines(undefined)).toEqual([]);
+  });
+
+  it('names the PEOPLE, not the rows — a database fact nobody acts on', () => {
+    const lines = formatIngestionHealthLines(
+      ingestion({ dead: 1, stuck: 2, oldestAt: '2026-08-04T06:24:00.000Z', oldestAgeHours: 3 }),
+    );
+    // Asserted in ESCAPED form: Telegram MarkdownV2 backslash-escapes `(`/`)`,
+    // and an unescaped expectation here would pass over a line Telegram would
+    // reject with a 400 — i.e. a digest that is never delivered at all.
+    expect(lines[0]).toContain('3 submission\\(s\\) never became a respondent');
+    expect(lines[0]).toContain('NOT on the register');
+    expect(lines[0]).toContain('oldest 3h');
+  });
+
+  it('splits DEAD from STUCK, because the two need different actions', () => {
+    // "read the reason" vs "go and look" — merging them is how the dead hid
+    // among the busy for five days.
+    const body = formatIngestionHealthLines(
+      ingestion({ dead: 1, stuck: 2, oldestAgeHours: 2 }),
+    ).join('\n');
+    expect(body).toContain('1 with a recorded reason');
+    expect(body).toContain('2 stuck \\>60m with no reason recorded');
+  });
+
+  it('goes RED only once the oldest has survived a full digest cycle (AC3.1)', () => {
+    // The digest runs twice daily, so 12h is one cycle. Below it, yellow.
+    expect(formatIngestionHealthLines(ingestion({ stuck: 1, oldestAgeHours: 11 }))[0]).toContain('🟡');
+    expect(formatIngestionHealthLines(ingestion({ stuck: 1, oldestAgeHours: 12 }))[0]).toContain('🔴');
+  });
+
+  it('is wired into formatDigest — and stays out of it when there is nothing to say', () => {
+    const withFinding = formatDigest(
+      healthySnapshot({ ingestion: ingestion({ stuck: 2, oldestAgeHours: 120 }) }),
+    );
+    expect(withFinding).toContain('Ingestion');
+
+    const clean = formatDigest(healthySnapshot({ ingestion: ingestion() }));
+    expect(clean).not.toContain('Ingestion');
+  });
+
+  /**
+   * ⭐ CODE REVIEW 2026-08-14 (H1) — THE LINE MAKES A CLAIM ABOUT PEOPLE.
+   *
+   * "N submission(s) never became a respondent — those people are NOT on the
+   * register" has to be true of every row N counts. A duplicate-NIN rejection
+   * is a terminal row with a reason whose own text reads "already registered on
+   * <date> via <source>": the person IS on the register, and the pipeline
+   * refusing them a second record is the pipeline WORKING. Printing them under
+   * that sentence would be the story's own retracted error — impact inferred
+   * from structure — arriving through the monitor built to prevent it.
+   */
+  it('never counts a duplicate-NIN rejection as a person missing from the register', () => {
+    expect(formatIngestionHealthLines(ingestion({ deduplicated: 9, oldestAgeHours: 400 })))
+      .toEqual([]);
+
+    const lines = formatIngestionHealthLines(
+      ingestion({ dead: 1, deduplicated: 9, oldestAgeHours: 2 }),
+    );
+    expect(lines[0]).toContain('1 submission\\(s\\) never became a respondent');
+    expect(lines[0]).not.toContain('10 submission');
+    // Shown as CONTEXT so the operator is not left wondering why the column has
+    // more rows than the count — and told, in the line, why it is excluded.
+    expect(lines.join('\n')).toContain('9 refused as a duplicate NIN');
+    expect(lines.join('\n')).toContain('ARE on the register');
+  });
+
+  /**
+   * ⭐ CODE REVIEW 2026-08-14 (H2) — SILENCE HAS TO BE REACHABLE.
+   *
+   * The two known 2026-08-04 orphans are ten days old, so without an
+   * acknowledgement path the first digest after deploy is 🔴 and so is every one
+   * after it, no matter what the operator does. An alert that cannot be
+   * discharged is an alert that gets muted.
+   */
+  it('falls silent once an operator has acknowledged everything', () => {
+    expect(formatIngestionHealthLines(ingestion({ acknowledged: 4, oldestAgeHours: 400 })))
+      .toEqual([]);
+
+    const lines = formatIngestionHealthLines(
+      ingestion({ stuck: 1, acknowledged: 4, oldestAgeHours: 2 }),
+    );
+    expect(lines.join('\n')).toContain('4 already acknowledged by an operator');
   });
 });

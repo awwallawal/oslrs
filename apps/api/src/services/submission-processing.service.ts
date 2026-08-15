@@ -24,6 +24,8 @@ import {
   normaliseFullName,
   normaliseNigerianPhone,
   normaliseDate,
+  isStorableNigerianPhone,
+  RESPONDENT_PHONE_CONSTRAINT,
 } from '../lib/normalise/index.js';
 import { evaluateMinorGuardianConsent, isValidReferenceCode, type GuardianData } from '@oslsr/utils';
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
@@ -39,31 +41,16 @@ const logger = pino({ name: 'submission-processing-service' });
 
 /**
  * Convention-based field mapping from rawData question names to respondent fields.
- * Supports both snake_case (XLSForm convention) and camelCase variants.
+ *
+ * ⚠️ MOVED to `respondent-field-map.ts` by Story 13-57 and re-exported here, so
+ * every existing importer keeps working. It moved because AC5's publish/pin
+ * guard has to assert against THIS map — that is what stops the guard drifting
+ * from the consumer it protects — and importing it from here would have dragged
+ * the whole ingestion service (db, queues, email, audit) into the form-publish
+ * and settings-write paths.
  */
-export const RESPONDENT_FIELD_MAP: Record<string, string> = {
-  // NIN (REQUIRED)
-  'nin': 'nin',
-  'national_id': 'nin',
-  // Name (supports XLSForm, camelCase, and snake_case conventions)
-  'first_name': 'firstName',
-  'firstName': 'firstName',
-  'firstname': 'firstName',
-  'last_name': 'lastName',
-  'lastName': 'lastName',
-  'surname': 'lastName',
-  // Personal
-  'date_of_birth': 'dateOfBirth',
-  'dob': 'dateOfBirth',
-  'phone': 'phoneNumber',
-  'phone_number': 'phoneNumber',
-  // Location
-  'lga': 'lgaId',
-  'lga_id': 'lgaId',
-  // Consent
-  'consent_marketplace': 'consentMarketplace',
-  'consent_enriched': 'consentEnriched',
-};
+import { RESPONDENT_FIELD_MAP } from './respondent-field-map.js';
+export { RESPONDENT_FIELD_MAP };
 
 /**
  * Maps user role names to respondent source types. **EVERY role in the `roles` table must appear
@@ -132,11 +119,24 @@ const STAFF_CAPTURED_SOURCES: ReadonlySet<RespondentSource> = new Set<Respondent
 
 /**
  * Permanent processing error — should NOT be retried by BullMQ.
+ *
+ * ⭐ `constraint` (Story 13-57 AC2.2, added by code review 2026-08-14 M1).
+ * AC2.2 asks the ERROR log to carry "the constraint that rejected it", and
+ * `constraintOf()` reads that off the Postgres error object. But the AC1 guard
+ * deliberately throws BEFORE the insert — which is the whole point, a value the
+ * column would refuse never reaches it — so Postgres never gets to name the
+ * constraint, and the field the AC asked for was `null` for exactly the failure
+ * class the AC was written about. The thrower names it instead: it is the same
+ * fact, and it is the one an operator needs to act without opening the code.
  */
 export class PermanentProcessingError extends Error {
-  constructor(message: string) {
+  /** Read by `constraintOf()`; matches the shape of a `pg` error. */
+  readonly constraint?: string;
+
+  constructor(message: string, constraint?: string) {
     super(message);
     this.name = 'PermanentProcessingError';
+    if (constraint) this.constraint = constraint;
   }
 }
 
@@ -187,14 +187,52 @@ interface ExtractedRespondentData {
 }
 
 /**
+ * Story 13-57 (AC1/AC2) — a normalised field the destination column cannot
+ * accept. Carries enough to be the `processing_error` reason verbatim.
+ */
+export interface PiiRejection {
+  /** Destination column, snake_case, as it appears in the CHECK constraint. */
+  field: string;
+  /** The normaliser's own warnings, so the reason names the mechanism. */
+  warnings: string[];
+  /** The value as submitted — never the canonicalised attempt. */
+  rawValue: string;
+  /**
+   * The CHECK constraint that WOULD have refused this value (AC2.2). Named by
+   * the guard rather than by Postgres, because the guard fires first — see
+   * `PermanentProcessingError`.
+   */
+  constraint: string;
+}
+
+/**
  * Normalise the PII fields on extracted respondent data prior to insert.
  *
- * Returns the canonical values plus a metadata object containing any
- * normalisation warnings (or `null` if no warnings fired). Exported for
- * direct unit testing; consumed by `findOrCreateRespondent`.
+ * Returns the canonical values, a metadata object containing any normalisation
+ * warnings (or `null` if no warnings fired), and — Story 13-57 — the list of
+ * fields whose canonical value the destination column would REJECT. Exported
+ * for direct unit testing; consumed by `findOrCreateRespondent`.
  *
  * Warning codes are field-prefixed (`first_name:all_caps`, `phone_number:...`)
  * so the audit-log viewer (Story 9-11) can filter by `(field, code)` tuple.
+ *
+ * ⭐ STORY 13-57 AC1 — THE CONTRACT COLLISION, AND WHICH SIDE GIVES WAY.
+ *
+ * `normaliseNigerianPhone` returns the RAW input when it cannot canonicalise
+ * ("Return the canonical-attempt anyway so back-fill can flag the row"), and
+ * that contract is deliberate and depended upon — it is NOT changed here. What
+ * was wrong is that this function then handed the raw value to a caller which
+ * writes it into a column carrying `CHECK (phone_number ~ '^\+234\d{10}$')`.
+ * The insert threw, the submission was left `processed = false`, and nothing
+ * retried, alerted or logged an actionable error. Two rows sat like that for
+ * five days in August 2026 and were found by accident.
+ *
+ * So the never-lose-the-row contract keeps its return value, and the CALLER
+ * learns that the value is unstorable — via `rejections` — before it can write
+ * it. The rejected field is reported, not silently blanked: a phone number is
+ * how the register reaches a citizen and how the identity guard recognises
+ * them, so NULL-filling it would turn a loud failure into a quiet
+ * data-loss (and this story exists because quiet is the defect).
  */
 export function normaliseRespondentPii(data: ExtractedRespondentData): {
   canonical: {
@@ -204,8 +242,10 @@ export function normaliseRespondentPii(data: ExtractedRespondentData): {
     phoneNumber: string | null;
   };
   metadata: RespondentMetadata | null;
+  rejections: PiiRejection[];
 } {
   const warnings: string[] = [];
+  const rejections: PiiRejection[] = [];
   const canonical = {
     firstName: data.firstName ?? null,
     lastName: data.lastName ?? null,
@@ -235,6 +275,17 @@ export function normaliseRespondentPii(data: ExtractedRespondentData): {
     const r = normaliseNigerianPhone(data.phoneNumber);
     canonical.phoneNumber = r.value || null;
     for (const w of r.warnings) warnings.push(`phone_number:${w}`);
+    // Test the OUTPUT SHAPE against the column's CHECK, not the warning list —
+    // `unknown_mobile_prefix` warns about a perfectly storable value, and a
+    // future warning code would otherwise silently escape this guard.
+    if (!isStorableNigerianPhone(canonical.phoneNumber)) {
+      rejections.push({
+        field: 'phone_number',
+        warnings: r.warnings,
+        rawValue: data.phoneNumber,
+        constraint: RESPONDENT_PHONE_CONSTRAINT,
+      });
+    }
   }
   if (data.dateOfBirth) {
     const r = normaliseDate(data.dateOfBirth, 'DMY');
@@ -249,7 +300,32 @@ export function normaliseRespondentPii(data: ExtractedRespondentData): {
   const metadata: RespondentMetadata | null =
     warnings.length > 0 ? { normalisation_warnings: warnings } : null;
 
-  return { canonical, metadata };
+  return { canonical, metadata, rejections };
+}
+
+/**
+ * Story 13-57 AC1.2/AC2.2 — the stable reason string written to
+ * `submissions.processing_error` and carried on the ERROR log.
+ *
+ * Prefixed `UNPROCESSABLE_INPUT` so it is greppable next to the pre-existing
+ * `NIN_DUPLICATE*` reasons, and it names the column that refused the value so
+ * an operator can act without opening the code.
+ */
+export function describePiiRejections(rejections: PiiRejection[]): string {
+  const parts = rejections.map(
+    (r) => `${r.field} (${r.warnings.join(', ') || 'not canonicalisable'})`,
+  );
+  return `UNPROCESSABLE_INPUT: ${parts.join('; ')} — the value could not be canonicalised to the shape respondents requires, so it was not written`;
+}
+
+/**
+ * The constraint to report for a rejection set (AC2.2). One rejection, one
+ * constraint; more than one and the log names them together rather than
+ * silently picking a winner.
+ */
+export function constraintForRejections(rejections: PiiRejection[]): string | undefined {
+  const names = [...new Set(rejections.map((r) => r.constraint))];
+  return names.length > 0 ? names.join(', ') : undefined;
 }
 
 /**
@@ -493,6 +569,49 @@ export class SubmissionProcessingService {
     const consentMarketplace = String(extracted['consentMarketplace'] ?? '').toLowerCase() === 'yes';
     const consentEnriched = String(extracted['consentEnriched'] ?? '').toLowerCase() === 'yes';
 
+    /**
+     * ⭐ STORY 13-57 AC4 — THE SILENT `false`, WHICH IS THE SAME DEFECT ONE
+     * FIELD OVER.
+     *
+     * `=== 'yes'` means anything that is not exactly `yes` becomes `false`, and
+     * a coerced `false` is INDISTINGUISHABLE from a person who actually
+     * declined. A renamed choice value, a `Yes ` with a trailing space, a
+     * localised label — each silently removes someone from the marketplace they
+     * agreed to join, and nothing anywhere says so. Exactly the shape of the
+     * phone failure this story exists for: input the boundary cannot interpret,
+     * absorbed without a word.
+     *
+     * ⚠️ THE DEFAULT IS NOT FLIPPED, DELIBERATELY (AC4.2). `false` is the right
+     * answer for a privacy consent we could not read — the harm of wrongly
+     * publishing someone's details is not symmetric with the harm of wrongly
+     * withholding them. (Contrast `EMAIL_TIER`, where the safe default WAS the
+     * permissive one; what differs is who is hurt by a wrong guess.) The defect
+     * is the SILENCE, and only the silence is fixed here.
+     *
+     * ⚠️ AN ABSENT ANSWER IS NOT LOGGED, ALSO DELIBERATELY. AC4.1 is scoped to
+     * "the answer parses to neither yes nor no" — a question that was never
+     * shown (a `showWhen` branch, a section skipped for an under-15) has no
+     * answer to misread, and logging those would bury the real signal in noise
+     * the operator learns to skip. A field that is missing when it should be
+     * present is AC5's job, at publish/pin time, where it can still be fixed.
+     */
+    const rawConsentMarketplace = extracted['consentMarketplace'];
+    if (rawConsentMarketplace != null && rawConsentMarketplace !== '') {
+      const normalised = String(rawConsentMarketplace).toLowerCase().trim();
+      if (normalised !== 'yes' && normalised !== 'no') {
+        logger.warn(
+          {
+            event: 'marketplace.consent_unparsed',
+            rawValue: String(rawConsentMarketplace),
+            interpretedAs: consentMarketplace,
+          },
+          'A marketplace-consent answer parsed to neither yes nor no and was therefore ' +
+            'treated as a decline. That is the safe direction, but it is a GUESS — the ' +
+            'person may have opted in. Check the form\'s choice list (Story 13-57 AC4).',
+        );
+      }
+    }
+
     // Story 9-55 — extract guardian consent for under-15 registrants. The age
     // here is the server-recomputed value the submit controller stamped into
     // rawData (`...computed`), so a client cannot forge it to dodge the gate.
@@ -552,7 +671,31 @@ export class SubmissionProcessingService {
     // Normalise incoming PII once up front. Race-resolution merge (Story 9-12 Task 3.5)
     // queries against pending rows using the SAME canonical values the DB stores, so
     // normalisation must run BEFORE the merge attempt — not just before insert.
-    const { canonical, metadata } = normaliseRespondentPii(data);
+    const { canonical, metadata, rejections } = normaliseRespondentPii(data);
+
+    /**
+     * Story 13-57 AC1.1 — a value the normaliser could NOT canonicalise never
+     * reaches `respondents`.
+     *
+     * This throws BEFORE the identity lookups as well as before the insert, and
+     * that ordering is deliberate: `findRespondentByIdentity` matches on
+     * `phone_number`, so a raw un-normalised phone would also be a lookup that
+     * cannot match — it would fall through to a fresh insert and mint a
+     * duplicate on the way to failing. Rejecting first makes the failure one
+     * event with one reason.
+     *
+     * `PermanentProcessingError` (not a bare throw) is what routes this to
+     * AC2's terminal state: the queue worker records the reason on the
+     * submission and stops retrying, because no number of retries will make
+     * `+234 0812…` fit a column that requires ten digits after the country code.
+     */
+    if (rejections.length > 0) {
+      throw new PermanentProcessingError(
+        describePiiRejections(rejections),
+        // AC2.2 — name the constraint ourselves; we threw before Postgres could.
+        constraintForRejections(rejections),
+      );
+    }
 
     // Story 9-55 — fold captured guardian consent (under-15 only) into the row
     // metadata. Merged with the normalisation-warnings metadata so neither

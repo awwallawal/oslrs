@@ -22,6 +22,7 @@ import {
   promoteRespondentToActive,
 } from '../services/respondent-identity.js';
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
+import { normaliseNigerianPhone, isStorableNigerianPhone } from '../lib/normalise/index.js'; // Story 13-57 (AC1)
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
 import { sendTelegramMessage } from '../services/alerting/telegram-channel.js'; // Story 13-27 (review M1)
@@ -598,6 +599,72 @@ export class RegistrationController {
       }
 
       const normalisedEmail = data.email.toLowerCase().trim();
+
+      /**
+       * ⭐ STORY 13-57 AC1.1 — THE WIZARD IS A WRITE-SITE TO `respondents.phone_number`,
+       * AND IT WAS NORMALISING NOTHING.
+       *
+       * `data.phone` arrived as `z.string().max(32).optional()` and went straight into
+       * the column (`:963`) and the submission's `raw_data` (`:999`). The only
+       * normalisation on this channel lived in the BROWSER (Step2ContactLga), which
+       * means it was absent for every caller that is not that browser: a resumed draft
+       * saved before the client normalisation existed, an offline sync, a direct API
+       * call. Story 13-57's Dev Notes name this exact trap — the wizard does its own
+       * in-transaction write and deliberately bypasses `processSubmission`, so a fix
+       * applied only there is a fix that never fires here
+       * ([[pattern-ship-a-fix-that-never-fires]]).
+       *
+       * TWO effects, both wanted:
+       *   1. `+234 0812…` / `0812…` / `234 0812…` now all persist as ONE E.164 value,
+       *      so `findRespondentByIdentity` (which matches on `phone_number`) can
+       *      actually recognise a returning person however they typed it.
+       *   2. A number that genuinely cannot be canonicalised is refused HERE, with a
+       *      400 the person sees while they are still on the form — which is AC1.4's
+       *      "told at the point of entry" for every client, not just the one that
+       *      happens to validate. This path is synchronous and transactional, so there
+       *      is no orphan submission to mark; AC2's terminal state is for the async
+       *      queue path, where nobody is left holding the connection.
+       *
+       * ⚠️ NOT a format gate on what the citizen may TYPE (AC1.3). `0812…` is how the
+       * number is written locally and is accepted verbatim — only a string with no
+       * derivable Nigerian number at all is refused.
+       */
+      /**
+       * ⚠️ THE GUARD IS TESTED ON THE NORMALISER'S OWN OUTPUT, AND `''` IS NOT A
+       * PASS (code review 2026-08-14, H3).
+       *
+       * `submitWizardSchema` accepts `phone: z.string().min(10)`, so ten spaces
+       * is a well-formed request body. It normalises to `''`, and the previous
+       * version of this block asked `isStorableNigerianPhone('')` — which
+       * answered TRUE, on the grounds that the column is nullable — and then
+       * wrote `''`, not `null`, into it. Probed against the real database that
+       * insert returns `23514 chk_respondents_phone_number_e164`: this story's
+       * own incident, walking straight through this story's own guard.
+       *
+       * So the check runs on `phoneNormalised.value` (where `''` now fails) and
+       * the null-coercion happens AFTER it. Order matters: coercing first would
+       * turn "we could not read what they typed" into "they left it blank" and
+       * write a silent NULL — the quiet data-loss this story exists to refuse.
+       */
+      const phoneNormalised = data.phone ? normaliseNigerianPhone(data.phone) : null;
+      if (phoneNormalised && !isStorableNigerianPhone(phoneNormalised.value)) {
+        logger.warn({
+          event: 'registration.phone_unprocessable',
+          warnings: phoneNormalised.warnings,
+          // Length only — never the number itself (the 9-56 H1 PII-redaction rule).
+          rawLength: data.phone?.length ?? 0,
+        });
+        throw new AppError(
+          'PHONE_UNPROCESSABLE',
+          'That phone number could not be read. Enter your Nigerian mobile number, for example 08012345678 or +2348012345678.',
+          400,
+          { field: 'phone' },
+        );
+      }
+      // Only now: an absent phone becomes NULL (the column is nullable). Nothing
+      // un-canonicalisable can reach this line — it 400'd above.
+      const canonicalPhone: string | null = phoneNormalised?.value || null;
+
       const pendingNin = data.pendingNin === true || !data.nin;
       const ninValue = pendingNin ? null : data.nin ?? null;
       // Story 13-16 (AC1) — respondents.lga_id is canonically the SLUG
@@ -840,12 +907,14 @@ export class RegistrationController {
             identityMatch = await findRespondentByIdentity(tx, {
               firstName,
               lastName,
-              phoneNumber: data.phone,
+              // 13-57 — the CANONICAL value, because that is what the column stores.
+              // Looking up on the raw input could never match a stored `+234…`.
+              phoneNumber: canonicalPhone,
             });
           } else {
             const ninlessSelf = await findRespondentByIdentity(
               tx,
-              { firstName, lastName, phoneNumber: data.phone },
+              { firstName, lastName, phoneNumber: canonicalPhone },
               { requireNoNin: true },
             );
             if (ninlessSelf) {
@@ -960,7 +1029,7 @@ export class RegistrationController {
             firstName,
             lastName,
             dateOfBirth: data.dateOfBirth ?? null,
-            phoneNumber: data.phone,
+            phoneNumber: canonicalPhone, // 13-57 AC1.1 — canonical or the request already 400'd
             lgaId: lgaSlug,
             consentMarketplace: data.consentMarketplace,
             consentEnriched: data.consentEnriched ?? false,
@@ -996,7 +1065,10 @@ export class RegistrationController {
             first_name: firstName,
             last_name: lastName,
             date_of_birth: data.dateOfBirth ?? null,
-            phone_number: data.phone,
+            // 13-57 — raw_data mirrors what respondents holds, so it carries the
+            // canonical number too; analytics reading `raw_data->>'phone_number'`
+            // must not see a second, different spelling of the same phone.
+            phone_number: canonicalPhone,
             nin: ninValue,
             consent_marketplace: data.consentMarketplace,
             consent_enriched: data.consentEnriched ?? false,
