@@ -554,6 +554,39 @@ paging. That is why the spread is **1.7s → 20s** — a nonlinear cliff. CPU st
   before touching the test.** One `gh run list` answers "is this ours or the machine's" for free, and
   it is the question that should come first.
 
+#### 2aa.1 ⛔ THE SAME RULE FOR CONCURRENT EDITS — `git status` BEFORE EVERY COMMIT *AND* PUSH
+*Added 2026-08-14, immediately after doing it — then corrected within three minutes by doing it again.*
+
+**Both hooks read the WORKING TREE, not what you staged.** `pre-push` runs the full suite over it;
+**`pre-commit` runs `turbo lint` + `tsc` over the whole package** — so even a docs-only commit is
+gated on someone else's half-finished source.
+
+> ⛔ **CORRECTION, same hour.** This section first said *"before every PUSH"*. The very next commit —
+> one markdown file — **failed at `pre-commit`**: `submission-processing.service.ts:634`,
+> `no-constant-condition` + `no-constant-binary-expression`, from Awwal's in-flight 13-57 work. The
+> rule was right and its scope was wrong, which is the §2w shape applied to a rule I had just written.
+> **It is commit AND push, not push alone.**
+>
+> And the follow-on is its own lesson: by the time the file was opened to report the error, **the line
+> numbers had moved and eslint exited 0** — he had already fixed it. **A dirty shared tree is a moving
+> target; do not report line numbers from it, report the symptom and re-check.**
+
+Observed the same afternoon: a docs-only push ran its gate over five uncommitted 13-57 files —
+`normalise/phone.ts`, its index, and `phone.test.ts` — visible only as the API count moving
+**3,711 → 3,715** between two runs of "my" suite. It passed, so it cost nothing. **It was luck.**
+
+- ⛔ **A half-written import in someone else's tree reds MY push**, and I would then debug a failure
+  that is neither mine nor real — burning the time on exactly the mistake §2aa is about: *measuring
+  while something else disturbs the thing measured.*
+- ✅ **The check, before every push:** `git status --short` — if **source files** (`apps/`,
+  `packages/`) are modified and they are not mine, **hold and say so.** Docs-only dirt is harmless.
+- ✅ **It cuts the other way too, and that half is the gift:** a green gate over his tree means his
+  in-progress work has already had a full-suite run. **Tell him** — it is free information he paid
+  nothing for, and it retires the gate he would otherwise hit later.
+- **Two CLIs share one working tree here** (§1). Every "is anything else running?" rule therefore has
+  an edits twin. `tasklist | grep -c node` answers the *process* question; only `git status` answers
+  the *tree* question, and I had been asking only the first.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
