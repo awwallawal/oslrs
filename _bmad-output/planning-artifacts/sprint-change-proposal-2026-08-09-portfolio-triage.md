@@ -1955,6 +1955,65 @@ three times, in three unrelated subsystems, in one day.
 while the pre-push suite had failed and `origin/main` was unmoved. **Verify a push by asking git where
 the branches are** (`git status -sb`), never by an exit code, whatever produced it.
 
+### 10.16 ✅ ADEKEMI'S ORPHAN WAS NEVER UNDIAGNOSABLE — it was a DUPLICATE NIN (2026-08-16)
+
+**Recorded here as well as in the story deliberately, on Awwal's instruction: multiple reference points,
+so that if one is missed the others are not.** 13-57 §CORRECTION carries the same finding; this is the
+planning-side copy and the two must be corrected together if either is ever found wrong.
+
+**The fourth correction to 13-57, and the first that makes the story STRONGER rather than smaller.**
+Three readers wrote "undiagnosed"; the answer was two columns and a timestamp apart the whole time.
+
+| evidence (prod, read-only) | value |
+|---|---|
+| her registered NIN | `54761471802` — respondent created **09:04:59** |
+| the orphan's `raw_data.nin` | **`54761471802`** — identical |
+| constraint | `respondents_nin_unique_when_present` — UNIQUE on `nin` WHERE NOT NULL |
+| the orphan | ingested **09:17:10** — **twelve minutes later** |
+
+She submitted **twice**. The second insert tripped the partial unique index → **`23505`** → threw.
+**Never a phone problem** — `07051286580` normalises cleanly before *and* after 13-57.
+
+#### ⭐ The system computed the correct reason at the time and threw it away
+
+`submission-processing.service.ts:1101-1109` has produced
+`NIN_DUPLICATE: This individual was already registered on <date> via <source>` since **Story 3.7**, and
+`PermanentProcessingError` since **Story 3.4** (`git log -S`). Both were live on 2026-08-04. Her
+`processing_error` was **`NULL`** regardless — observed directly in the R1 dry-run
+(`before: processed=false error=NULL`).
+
+> **This is F2b in the flesh and the strongest argument 13-57 ever had.** The diagnosis was not missing;
+> it had **nowhere to go**. `processing_error` was written in exactly ONE place
+> (`webhook-ingestion.worker.ts:193`), so the **webhook** channel recorded its failures while the
+> **human** channel recorded neither state nor reason. **13-57 gives it somewhere to go — so her case
+> is covered by AC2's terminal state, not by the AC1 phone fix that got all the attention.** The story
+> shipped fixing both orphans while believing it fixed one.
+
+#### Why four readers missed it — the transferable part
+
+Every earlier pass looked at the **phone**, because Rosemary's failure *was* a phone failure and the two
+orphans **arrived in the same query**. Nobody compared Adekemi's NIN to the register.
+
+> ⭐ **TWO DEFECTS FOUND TOGETHER INVITE ONE EXPLANATION. Adjacency is not causation, and "surfaced by
+> the same query" is not evidence of a shared cause.** The twelve-minute gap sat in the story's own
+> table from day one, unread, because the phone hypothesis was already satisfying.
+>
+> It was found by accident: checking the row-to-person mapping before writing R1's permanent marker put
+> the two `raw_data` blobs side by side. **Nothing in the process would have caught it** — which is the
+> uncomfortable half, and the reason "undiagnosed" should carry a re-check trigger rather than closing
+> a question.
+
+#### The production note stays as written — RULED by Awwal 2026-08-16
+
+R1's acknowledge marker for her reads *"the ingestion failure itself was never diagnosed"* — true when
+written on 2026-08-15, false a day later. **Awwal accepted the recommendation to leave it**, and the
+redundancy he asked for is what makes that safe: the marker's job is to tell a future operator the row
+was deliberately dismissed and by whom, which it still does, while **the diagnosis now lives in 13-57,
+here in §10.16, and in the commit message of `7b9cec7`** — three independent places.
+**Hand-editing a permanent audit marker to improve its prose is the worse trade.**
+⚠️ **Reopen trigger:** if a third orphan appears, read this section *before* re-deriving anything — the
+`23505`/`NIN_DUPLICATE` path is now a known cause and should be excluded first.
+
 ---
 
 ## 11. CONTACT REMEDIATION — executed 2026-08-11, and two citizens found by it
