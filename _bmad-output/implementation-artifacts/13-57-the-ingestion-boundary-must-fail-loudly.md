@@ -13,13 +13,14 @@ four rounds of corrections that cost real measurement to earn. Edit in place. --
 
 
 <!-- EMERGENT 2026-08-09, from the enumerator-invite dry run and the teardown that followed it.
-⚠️ THIS STORY HAS NOW BEEN CORRECTED THREE TIMES, BY THREE DIFFERENT READERS, AND EVERY CORRECTION IS
+⚠️ THIS STORY HAS NOW BEEN CORRECTED FOUR TIMES, BY FOUR DIFFERENT READERS, AND EVERY CORRECTION IS
 IN PLACE BELOW — read them before the Context. (1) the IMPACT claim: nobody was lost. (2) the ROOT
 CAUSE: the normaliser IS called. (3) 2026-08-11, SCP §10.4: the `lga_id` "slug vs UUID" premise is
 false — and (3b) 2026-08-15 that correction's OWN proof was re-measured, having queried
 `respondents.lga_id` when the claim is about `submissions.raw_data->>'lga_id'`: 266 slugs of 286 there,
 so the premise is false in both columns.
-⛔ ALL THREE ARE THE SAME CLASS: a claim about how bad it is, written without the query that would
+⛔ FOUR CORRECTIONS NOW — the fourth (2026-08-16) DIAGNOSED Adekemi: a duplicate NIN, twelve minutes
+apart, which every earlier pass missed by looking at the phone. ALL ARE THE SAME CLASS: a claim written without the query that would
 have sized it. A fourth reader should run the query first. Nobody was lost, and the normaliser IS called. What survives is
 an ingestion boundary that accepts input it cannot store, fails silently, and was found only by
 accident during unrelated cleanup five days later. -->
@@ -78,11 +79,38 @@ either marked it done or flailed.**
 - **`+234 08120004038`** → `+234` branch → NSN 11 digits → `wrong_length` → raw value returned →
   CHECK rejects. **This one IS the phone path.**
 - **`07051286580`** (Adekemi) → `0` branch → NSN `7051286580`, prefix `70` known → `+2347051286580`,
-  which **PASSES the CHECK**. So her insert did **not** die of phone format. ⛔ **Her failure is still
-  undiagnosed** — either that path never reaches `:235`, or it threw for another reason. (~~My own
-  candidate, unproven: her `lga_id` was the slug `'saki_west'` where every other row carries a UUID.~~
-  ⛔ **That candidate is DEAD — all 325 respondents carry a slug `lga_id`; see the strike above and
-  SCP §10.4. Her failure has no candidate cause at all now, which is the honest state.**)
+  which **PASSES the CHECK**. So her insert did **not** die of phone format. ~~⛔ Her failure is still
+  undiagnosed.~~ (~~My own candidate, unproven: her `lga_id` was the slug `'saki_west'`.~~ ⛔ **That
+  candidate is DEAD** — SCP §10.4.)
+
+  ✅ **DIAGNOSED 2026-08-16 — FOURTH CORRECTION, and it was never undiagnosable. It was a DUPLICATE
+  NIN.** Measured on prod:
+
+  | | |
+  |---|---|
+  | her registered NIN | `54761471802`, respondent created **09:04:59** |
+  | the orphan's `raw_data.nin` | **`54761471802`** — identical |
+  | the constraint | `respondents_nin_unique_when_present` — UNIQUE on `nin` WHERE NOT NULL |
+  | the orphan | ingested **09:17:10** — twelve minutes later |
+
+  She submitted **twice**. The second insert tripped the partial unique index → **`23505`** → threw.
+
+  ⭐ **AND THE SYSTEM COMPUTED THE CORRECT REASON AT THE TIME AND DISCARDED IT.**
+  `submission-processing.service.ts:1101-1109` has produced
+  `NIN_DUPLICATE: This individual was already registered on <date> via <source>` since **Story 3.7**,
+  and `PermanentProcessingError` since **Story 3.4** (`git log -S`). Both were live on 2026-08-04. Her
+  `processing_error` was nonetheless **`NULL`** — observed directly in the R1 dry-run
+  (`before: processed=false error=NULL`).
+
+  **That is F2b in the flesh, and it is the strongest argument this story has.** The diagnosis was not
+  missing; it had **nowhere to go** — `processing_error` was written in exactly one place
+  (`webhook-ingestion.worker.ts:193`), so the webhook channel recorded failures while the human channel
+  recorded neither state nor reason. **13-57 is what gives it somewhere to go**, and her case is
+  therefore covered — by AC2's terminal state, not by the phone fix that got the attention.
+
+  ⚠️ **Why it took four readers:** every earlier pass looked at the *phone*, because Rosemary's failure
+  was a phone failure and the two orphans arrived together. **Nobody compared her NIN to the register.**
+  The timestamps were twelve minutes apart in the story's own table from the first day.
 - 🔻 **F2b SHRINKS THIS STORY FROM A BUILD TO A WIRE-UP.** `submissions.processing_error`
   **already exists** (`schema/submissions.ts:79`) beside `processed`/`processed_at`. It is written in
   exactly ONE place — `webhook-ingestion.worker.ts:193` — so the **webhook** channel records its
@@ -626,8 +654,18 @@ CONCURRENT session's 13-60 R6 write-up, **not part of this story**. Do not stage
 through the deployed normaliser: `+234 08120004038` → **`+2348120004038`** and `07051286580` →
 **`+2347051286580`**, no warnings. Rosemary's is the case this story fixes — the three-line
 `fromCountryCode && nsn.length === 11 && startsWith('0')` strip. **Adekemi's normalised cleanly both
-before and after, so her orphan was never a phone problem and remains undiagnosed** — stated rather
-than closed over.
+before and after, so her orphan was never a phone problem** — and on **2026-08-16 it was diagnosed**:
+a **duplicate NIN** (`54761471802`, already registered twelve minutes earlier) tripping
+`respondents_nin_unique_when_present` → `23505`. See the FOURTH CORRECTION in the block above.
+
+⭐ **This makes the story's case stronger, not weaker.** The system had produced the exact right
+message — `NIN_DUPLICATE: This individual was already registered on …` — since Story 3.7, and threw it
+away because the human channel had nowhere to record it. **AC2 is what catches her case**, not AC1.
+
+⚠️ **A record about the work drifted, on PRODUCTION, and it is mine.** R1's acknowledge note for her
+reads *"the ingestion failure itself was never diagnosed"* — true when written on 2026-08-15, false
+within a day. The marker is idempotent so the script will not overwrite it. **Awwal's call whether to
+correct the note by hand; this story is the canonical record either way** ([[pattern-a-record-about-the-work-is-not-the-work]]).
 
 | Gate | Evidence — run by adjudication, not the dev's self-report |
 |---|---|
