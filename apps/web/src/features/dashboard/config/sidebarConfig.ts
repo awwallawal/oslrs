@@ -42,6 +42,7 @@ import {
   ScrollText,
   Settings,
   Gauge,
+  CreditCard,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -97,6 +98,19 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     { label: 'My Stats', href: '/dashboard/enumerator/stats', icon: BarChart },
     { label: 'Messages', href: '/dashboard/enumerator/messages', icon: MessageSquare },
     { label: 'Payments', href: '/dashboard/enumerator/payments', icon: Wallet },
+    /*
+     * Story 13-59 AC6.2/AC6.3 — the SECOND DOOR, not a second implementation.
+     *
+     * It links to the `#id-and-briefing` section of the canonical ProfilePage
+     * (AC6.1); it does not render its own copy of the panel. 13-55's lesson was
+     * five hand-written copies of one operation, and the cheapest moment to not
+     * make the sixth is before the first line of it exists.
+     *
+     * ⚠️ ENUMERATOR ONLY (AC6.3). The briefing is written for someone knocking
+     * on doors; the entry is added for that role, not globally. Every staff role
+     * still reaches the same section through My Profile.
+     */
+    { label: 'My ID & Briefing', href: '/dashboard/enumerator/profile#id-and-briefing', icon: CreditCard },
   ],
 
   // Story 9-40 (AC#6) — the standalone "Survey Status" → PublicSurveysPage entry

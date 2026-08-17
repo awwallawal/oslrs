@@ -187,6 +187,22 @@ export const AUDIT_ACTIONS = {
   RESPONDENT_SELF_NIN_COMPLETED: 'respondent.self_nin_completed',
   /** Two records for one person collapsed into one (duplicate merge, 2026-08). */
   RESPONDENT_MERGED: 'respondent.merged',
+  /*
+   * Story 13-59 (AC7.2) — a staff member actually TOOK their artefacts.
+   *
+   * ⚠️ These two are not decoration. The 2026-08-10 ruling replaced a pushed
+   * email attachment (which lands whether or not the person acts) with a
+   * closeable in-app modal, and AC7 is what buys back the property that was
+   * lost: guaranteed possession. Without a record of the download, "we offered
+   * it" is indistinguishable from "they have it" —
+   * [[pattern-ship-a-fix-that-never-fires]] in its purest form.
+   *
+   * No schema change: the audit chain already carries exactly this shape, and
+   * the dotted vocabulary already has the `user.activated` / `invitation.resend`
+   * precedent.
+   */
+  STAFF_ID_CARD_DOWNLOADED: 'staff.id_card_downloaded',
+  STAFF_BRIEFING_DOWNLOADED: 'staff.briefing_downloaded',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

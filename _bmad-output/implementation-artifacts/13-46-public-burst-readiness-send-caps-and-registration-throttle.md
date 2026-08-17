@@ -2,6 +2,21 @@
 
 Status: ready-for-dev
 
+<!-- ✅ PREP CONFIRMED 2026-08-16 (adjudication) — NO PREP PASS WAS NEEDED, and this marker exists so
+nobody concludes otherwise from the file's shape. It already carries 11 fully-specified ACs with
+`file:line` citations, a `## Tasks / Subtasks` section mapping every task to AC numbers, ~200 lines of
+Dev Notes, and a Change Log. Its one blocking decision — the acquisition question — was RULED on
+2026-08-11 (see the ⚖️ block below), so nothing gates dev.
+
+⚠️ WHY THE MARKER: this story was briefly mis-reported as un-prepped ("0 ACs") because a grep counted
+`^### AC` HEADINGS while 13-46 writes its ACs as a NUMBERED LIST under `## Acceptance Criteria` —
+`grep -cE '^[0-9]+\. \*\*AC'` returns 11. A count is not a read. Acting on that would have sent a
+regeneration pass at a file holding Awwal's ruling, the load-bearing AC ordering note, AC11's
+discharge and the attribution finding.
+
+⛔ DO NOT REGENERATE THIS FILE WITH *create-story — same reason as 13-57's header: it would author from
+epics.md and destroy decisions that cost real measurement to earn. Edit in place. -->
+
 <!-- Authored 2026-07-30 by Bob (SM), EMERGENT from Awwal's decision to run a radio jingle driving the
 public straight at the registration wizard BEFORE the email blasts. Nothing in the code blocks the
 jingle; the CONTROLS are wrong for it in both directions at once. (1) An auth-endpoint rate limit
@@ -133,7 +148,7 @@ comment reads *"Fail open — the send is more important than the count"* (`:161
 
 **Structurally, the meter cannot cap where it currently sits.** `EmailService.dispatch` calls it
 *after* the provider returns — `if (result.success) { await NotificationMeter.recordEmailSend(…) }`
-(`email.service.ts:116-122`) — and discards its return value (`:143`). A cap is therefore a **new
+(the `NotificationMeter.recordEmailSend(...)` call in `dispatch`, currently `email.service.ts:144`) — and discards its return value. ⚠️ Line numbers re-anchored 2026-08-17: `:116-122` had drifted to a comment block. A cap is therefore a **new
 pre-send check**, not a new constant.
 
 ⚠️ **And fail-open is the RIGHT default for most of what flows through `dispatch`** — a magic link, a
@@ -317,9 +332,17 @@ rate without taxing the funnel at its most expensive moment.
 1. **AC1 — The meter ENFORCES a ceiling for MARKETING categories (cap the send).**
    `NotificationMeter` gains explicit cap constants beside its TTLs
    (`notification-meter.service.ts:60,62`) and a **pre-send** check consulted by `EmailService.dispatch`
-   *before* the provider call at `email.service.ts:115` — not after it at `:116`.
+   ***before* the `await this.getProvider().send(...)` call** — not after it, where
+   `NotificationMeter.recordEmailSend(...)` already sits.
+   > ⚠️ **ANCHORED ON THE SYMBOLS, NOT THE LINE NUMBERS — corrected 2026-08-17 (adjudication sweep).**
+   > This AC previously read *"the provider call at `:115` … not after it at `:116`"*. **Both had
+   > drifted ~26 lines**: `:115` is now a List-Unsubscribe comment, the provider call is at **`:141`**
+   > and `recordEmailSend` at **`:144`** — moved by 13-13, and `email.service.ts` changed again in
+   > 13-59. A dev opening `:115` would have found no provider call at all, at exactly the moment they
+   > were siting the cap that protects the sending domain. **The requirement was always the
+   > BEFORE/AFTER RELATIONSHIP; the numbers were convenience, and convenience is what rotted.**
    - **Category-aware, per Context §5.** The cap applies to `MARKETING_CATEGORIES`
-     (`list-unsubscribe.ts:16-20`) only. Transactional mail (magic link, password reset, activation,
+     (`services/list-unsubscribe.ts:16-20`) only. Transactional mail (magic link, password reset, activation,
      ops/alert) keeps today's fail-open behaviour **unchanged**, and a test must pin that: a magic link
      must still send with the marketing cap fully exhausted, and with Redis unavailable.
    - **Fail-open on infrastructure, fail-closed on the limit.** If Redis is unreachable the cap cannot
@@ -551,7 +574,7 @@ that tests all three at once**: a traffic burst, into a throttle, on a box with 
 - [ ] **Task 1 — Cap the send** (AC: #1, #8)
   - [ ] Add cap constants + a pure `checkCap(category, …)` to `notification-meter.service.ts` beside the
         TTLs (`:60,62`); keep it read-only and side-effect-free so it is unit-testable.
-  - [ ] Consult it in `EmailService.dispatch` **before** the provider call (`email.service.ts:115`),
+  - [ ] Consult it in `EmailService.dispatch` **before** the `await this.getProvider().send(...)` call (currently `email.service.ts:141`; anchor on the SYMBOL — the line has drifted twice),
         branching on `isMarketingCategory` exactly as `:133-141` already does. Preserve the fail-open
         contract for everything else and pin it with a test.
   - [ ] Loud refusal: structured result + `notification.cap_exceeded` log + Telegram via
@@ -658,7 +681,7 @@ buys. The cheaper instruments are operational and cost no code:
   cannot type a query string.** `oyoskills.com/?ref=fresh_fm` is unsayable on radio and unmemorable
   in a car. That constraint dissolves with a **radio-sayable vanity path per station** —
   `oyoskills.com/fresh` → 302 → `/?ref=fresh` — which `parseUtm` already consumes, because it reads a
-  bare `?ref` as a first-class signal (`attribution.ts:47`), not only `utm_*`. That redirect is a
+  bare `?ref` as a first-class signal (`attribution.ts:131` — ⚠️ corrected 2026-08-17; `:47` was a type declaration, the bare `?ref` read is `params.get('ref')` at `:131`), not only `utm_*`. That redirect is a
   **Cloudflare Redirect Rule: no code, no deploy, no story** — one rule per station, added beside the
   parked rule in `13-3-cutover-and-failover.md`. With **11 stations** on the buy
   (`docs/roadmap-to-launch.md:107`) this is the difference between knowing *"radio worked"* and
@@ -808,7 +831,7 @@ launch-adjacent item parked without a trigger becomes invisible debt.
 
 | Date | Change | By |
 |------|--------|-----|
-| 2026-07-30 | **Station-attribution note completed + one citation corrected.** The per-station UTM bullet had closed on the wrong constraint — *"whether a station will read a URL on air"*. The real blocker is that **a listener cannot type a query string**: `oyoskills.com/?ref=fresh_fm` is unsayable on radio. Added the instrument that dissolves it — a **radio-sayable vanity path per station** (`oyoskills.com/fresh` → 302 → `/?ref=fresh`), which `parseUtm` already consumes because it treats a bare `?ref` as first-class (`attribution.ts:47`). It is a **Cloudflare Redirect Rule — no code, no deploy, no story**. With **11 stations** on the buy (`roadmap-to-launch.md:107`) this is the difference between *"radio worked"* and *which of 11 stations* earned the naira, and it is the only station-level instrument that survives a listener who skips the question. Flagged as decide-BEFORE-the-buy: a URL read on air cannot be retrofitted. Also corrected `MagicLinkLandingPage.tsx:293` to its real path (`features/auth/pages/`, not `features/registration/pages/`) — the bare filename pointed readers at the wrong feature directory. | Claude (code-review/adjudication pass) |
+| 2026-07-30 | **Station-attribution note completed + one citation corrected.** The per-station UTM bullet had closed on the wrong constraint — *"whether a station will read a URL on air"*. The real blocker is that **a listener cannot type a query string**: `oyoskills.com/?ref=fresh_fm` is unsayable on radio. Added the instrument that dissolves it — a **radio-sayable vanity path per station** (`oyoskills.com/fresh` → 302 → `/?ref=fresh`), which `parseUtm` already consumes because it treats a bare `?ref` as first-class (`attribution.ts:131` — ⚠️ corrected 2026-08-17; `:47` was a type declaration, the bare `?ref` read is `params.get('ref')` at `:131`). It is a **Cloudflare Redirect Rule — no code, no deploy, no story**. With **11 stations** on the buy (`roadmap-to-launch.md:107`) this is the difference between *"radio worked"* and *which of 11 stations* earned the naira, and it is the only station-level instrument that survives a listener who skips the question. Flagged as decide-BEFORE-the-buy: a URL read on air cannot be retrofitted. Also corrected `MagicLinkLandingPage.tsx:293` to its real path (`features/auth/pages/`, not `features/registration/pages/`) — the bare filename pointed readers at the wrong feature directory. | Claude (code-review/adjudication pass) |
 | 2026-07-30 | **Attribution addendum — +Context §9, +AC9, +AC10, +an OPEN DECISION block, +a station-attribution Dev Note, +2 non-goals.** ⚠️ **Corrects a wrong position held earlier in drafting: the "How did you hear about us?" question is NOT missing.** It is live on the Review step (`Step5ReviewAndSave.tsx:229`), the flag is ON (`attribution.ts:12`), **Radio is the first option** (`attribution.ts:15-25`), and the chain is complete end to end — web `extras.acquisition` (`Step5ReviewAndSave.tsx:240-245`) → `buildCampaignSource` (`registration.controller.ts:103-115`) → spread last into `raw_data` (`:735-738`) → `ReportService.getCampaignBreakdown` (`report.service.ts:86-95`). Story 13-1 shipped it. **The real gaps are narrower and different:** (1) the path has **executed zero times on prod** — `campaign_source` present on **0 of 82** submissions — so the pre-jingle gate is a **LIVENESS DRY RUN, not a form change** (new **AC9**, with teardown BY ID because "restore to baseline" is a data-deletion hazard, and with the read side asserted too so it cannot become another built-but-unconsumed `getCampaignFunnel`); (2) `<option value="">Prefer not to say</option>` is the pre-selected FIRST option (`:239,247`), so **"declined" and "ignored" are the same stored value** and the denominator for every channel conclusion is unrecoverable (new **AC10a**, incl. the consequence that an explicit decline moves decliners inside `getCampaignBreakdown`'s `IS NOT NULL` filter at `report.service.ts:93` — a decision to record, not discover); (3) **first-position bias sits on Radio**, the channel we most want to measure (new **AC10b**). Station-level attribution is deliberately absent (`attribution.ts:14`, 13-1 AC2.4) — recorded as a **media-buy** decision with three no-code alternatives, incl. per-station UTM links, which are already wired (`WizardPage.tsx:171`) and attribute **even when the listener never answers the question** (`registration.controller.ts:113`). **Making the question mandatory is an explicit OPEN DECISION for Awwal, NOT an AC** — it reverses a prior review ruling recorded in both files (`Step5ReviewAndSave.tsx:214` "prominence ≠ mandatory"; `attribution.ts:7` "NEITHER ever blocks a submit"), it sits at the most expensive point in the funnel, and forced choice with Radio first manufactures the very signal we are trying to detect. SM recommendation: keep it optional, ship AC10, add one **non-blocking** submit nudge. | Bob (SM) |
 | 2026-07-30 | **Story drafted**, EMERGENT from Awwal's decision to run a radio jingle at the public wizard before the email blasts. Framing: the code does not block the jingle, the CONTROLS are wrong in both directions — an auth-shaped 5/IP/15min limit on an accountless public survey endpoint (harmful under carrier NAT), and NO ceiling at all on the outbound email every registration fires synchronously in-request. 8 ACs / 7 Tasks, ordered by leverage per Awwal's accepted recommendation: cap the send → throttle the address → alert on burst → THEN loosen signup → publish registered-vs-verified → operator WAF gate → measure the turn-away. Status `ready-for-dev`, classified LAUNCH-ADJACENT (not post-launch). **Corrections made against the drafting brief, each verified:** (i) `respondents` has NO email column at all — the address lives in `submissions.raw_data` + `users.email`, and `users.email` IS unique but the wizard inserts `onConflictDoNothing`, so an email unique index is not merely missing but not expressible on the respondent side; (ii) the auto thank-you is **synchronous in-process**, never queued, so a burst is N provider calls on the API event loop; (iii) `NotificationMeter` cannot cap where it sits — `dispatch` calls it AFTER the provider and discards the result — and its fail-open contract is *correct* for transactional mail, so the cap must be category-aware; (iv) `wizardDraftRateLimit` (120/IP/15min) fails FIRST under CGNAT and its own comment states the "~5 wizards per shared NAT" assumption the jingle breaks; (v) a radio-jingle runbook **already exists** (`13-3-cutover-and-failover.md`) alongside `pre-viral-push-checklist.md` and roadmap-to-launch's paid-spend pre-flight gate — this story edits all three and creates none; (vi) 13-3's load test measured a READ endpoint, so its green verdict says nothing about the write path. **Preserved, not reopened:** no wizard captcha (magic link + captcha-gated login is the real gate), Bot Fight Mode OFF (9-20). | Bob (SM) |
 

@@ -28,6 +28,7 @@ import { useAuth } from '../features/auth/context/AuthContext';
 import { useServiceWorker } from '../hooks/useServiceWorker';
 import { getSidebarItems } from '../features/dashboard/config/sidebarConfig';
 import { MissingPhotoBanner } from '../features/dashboard/components/MissingPhotoBanner';
+import { StaffArtefactsModal } from '../features/dashboard/components/StaffArtefactsModal'; // Story 13-59
 import { useUnreadCount } from '../features/dashboard/hooks/useMessages';
 import { useMfaStatus } from '../features/security/mfa/hooks/useMfaStatus';
 import { MfaGraceBanner } from '../features/security/mfa/components/MfaGraceBanner';
@@ -177,6 +178,14 @@ export function DashboardLayout() {
                 * for everyone else (see the role allow-list inside).
                 */}
               <MissingPhotoBanner />
+              {/*
+                * Story 13-59 (AC5, AC7.4) — the first-login prompt for the ID
+                * card and field briefing. Mounted at the LAYOUT, not on a page,
+                * because "first authenticated session" is not a page event:
+                * whichever screen the person lands on, this is where they are.
+                * Renders null unless the server says something is outstanding.
+                */}
+              <StaffArtefactsModal />
               <Outlet />
             </main>
           </div>

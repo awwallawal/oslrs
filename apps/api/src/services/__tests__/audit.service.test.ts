@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 58 total action types across all categories', () => {
+    it('should have 60 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -210,8 +210,16 @@ describe('AuditService', () => {
       //   An operator fixed a MISTYPED contact address and lifted the bounce suppression it
       //   caused. Deliberately distinct from RESPONDENT_SELF_UPDATED: the respondent did not ask
       //   for it and could not be reached to confirm it, which is exactly why it must be traced.
+      // Story 13-59 (2026-08-16) added 2:
+      //   STAFF_ID_CARD_DOWNLOADED ('staff.id_card_downloaded'),
+      //   STAFF_BRIEFING_DOWNLOADED ('staff.briefing_downloaded') → 60.
+      //   The 2026-08-10 ruling replaced a pushed email attachment with a pulled,
+      //   closeable modal. These two rows are the ONLY thing that distinguishes
+      //   "we offered it" from "they have it", which is the property the ruling
+      //   traded away and AC7 exists to buy back. No schema change — the chain
+      //   already carries this shape.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(58);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(60);
     });
 
     /**

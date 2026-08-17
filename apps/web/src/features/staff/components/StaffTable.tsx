@@ -69,6 +69,55 @@ function StaffPhotoCell({ staff }: { staff: StaffMember }) {
   return <span className="text-neutral-400 italic">None on file</span>;
 }
 
+/** Story 13-59 — the operator's words for each artefact, in one place. */
+const ARTEFACT_LABEL: Record<string, string> = {
+  id_card: 'ID card',
+  briefing: 'briefing',
+};
+
+/**
+ * Story 13-59 AC7.3 — has this person actually TAKEN their artefacts?
+ *
+ * ⚠️ THIS COMPONENT HOLDS NO OPINION ABOUT WHO OWES WHAT (review H3). It used
+ * to: it re-derived the entitlement rules from
+ * `['enumerator','supervisor','data_entry_clerk']` written out here, under a
+ * comment admitting the array was mirrored from the API. That was the third
+ * hand-written copy of a rule that already existed twice, in a story whose own
+ * module docblock cites 13-55's five copies.
+ *
+ * The server now sends the verdict (`artefactsOutstanding`) computed by the
+ * same `isOutstanding()` the first-login modal uses, so this cell renders an
+ * answer instead of recomputing one. That also fixed a disagreement nobody
+ * would have noticed for months (review M2): a person whose photo never saved
+ * was told "Not taken: ID card" here forever, while the app had correctly
+ * stopped prompting them because they cannot download a card they have no photo
+ * for. They belong in 13-60's "No ID photo" column, and only there.
+ *
+ * ⚠️ Says "Not taken", never "Missing". The person has done nothing wrong — the
+ * platform has not yet got the file into their hands, which is the platform's
+ * problem to solve, and 13-60's column next door sets the same tone.
+ */
+function StaffArtefactsCell({ staff }: { staff: StaffMember }) {
+  if (!staff.artefactsApplicable) {
+    return <span className="text-neutral-400 italic">n/a</span>;
+  }
+
+  const outstanding = (staff.artefactsOutstanding ?? []).map((k) => ARTEFACT_LABEL[k] ?? k);
+
+  if (outstanding.length === 0) {
+    return <span className="text-success-600">Taken</span>;
+  }
+
+  return (
+    <span
+      className="text-warning-600 font-medium"
+      title="This person has not yet downloaded everything they need. They can get it from My Profile → My ID & Field Briefing."
+    >
+      Not taken: {outstanding.join(', ')}
+    </span>
+  );
+}
+
 interface StaffTableProps {
   data: StaffMember[];
   meta: PaginationMeta | undefined;
@@ -101,9 +150,10 @@ export function StaffTable({
   downloadingUserId,
 }: StaffTableProps) {
   if (isLoading) {
-    // 7 columns since Story 13-60 added `ID photo` — keep this in step with the
-    // <th> count or the loading state is visibly narrower than the table.
-    return <SkeletonTable rows={10} columns={7} />;
+    // 8 columns since Story 13-59 added `Artefacts` beside 13-60's `ID photo` —
+    // keep this in step with the <th> count or the loading state is visibly
+    // narrower than the table.
+    return <SkeletonTable rows={10} columns={8} />;
   }
 
   if (data.length === 0) {
@@ -147,6 +197,16 @@ export function StaffTable({
               <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">
                 ID photo
               </th>
+              {/*
+                * Story 13-59 AC7.3 — the other half of "is this person ready to
+                * go out?". 13-60's column answers "can I print a card for
+                * them?"; this one answers "did they actually take it?", which
+                * is the question the no-attachments ruling created and which
+                * nothing else on this screen can answer.
+                */}
+              <th className="text-left py-3 px-4 text-sm font-semibold text-neutral-700">
+                Artefacts
+              </th>
               <th className="text-right py-3 px-4 text-sm font-semibold text-neutral-700">
                 Actions
               </th>
@@ -178,6 +238,9 @@ export function StaffTable({
                 </td>
                 <td className="py-3 px-4 text-sm">
                   <StaffPhotoCell staff={staff} />
+                </td>
+                <td className="py-3 px-4 text-sm">
+                  <StaffArtefactsCell staff={staff} />
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex justify-end">

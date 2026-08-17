@@ -76,6 +76,10 @@ describe('StaffController', () => {
         // stating it keeps this exact-shape assertion honest about what the
         // controller actually sends.
         missingPhoto: false,
+        // Story 13-59 AC7.3 — same contract as missingPhoto, and stated for the
+        // same reason: this exact-shape assertion is what would catch a filter
+        // the client sends and the controller silently drops (13-61/13-62).
+        missingArtefacts: false,
       });
       expect(jsonMock).toHaveBeenCalledWith({
         ...mockData,

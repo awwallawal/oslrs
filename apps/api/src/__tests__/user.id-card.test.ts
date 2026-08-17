@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
 import { eq, inArray } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
+import { purgeUsersWithAuditDrain } from './helpers/audit-safe-teardown.js'; // Story 13-59
 
 const request = supertest(app);
 
@@ -71,17 +72,42 @@ describe('User ID Card & Verification', () => {
 
     userId = user.id;
     createdUserIds.push(user.id);
+    /*
+     * ⛔ Story 13-59 — THIS TOKEN USED TO SAY `{ userId: user.id }`, AND THAT IS
+     * WHY THE DEAD ENDPOINT STAYED GREEN.
+     *
+     * `TokenService.generateAccessToken` keys the principal under `sub`
+     * (`packages/types/src/auth.ts`); no token production ever issues has a
+     * `userId` claim. The controller read `.userId`, this fixture minted
+     * `.userId`, and the two agreed with each other while disagreeing with
+     * every real request — so `GET /users/id-card` returned 401 to every
+     * authenticated caller in production and the suite reported success.
+     *
+     * [[pattern-test-that-passes-over-a-hole]] in its exact form: the test
+     * constructed a world in which the wrong code was right. The fixture now
+     * mirrors the real payload, which is the only version of this test that can
+     * fail when the endpoint is broken.
+     */
     authToken = jwt.sign(
-        { userId: user.id, role: 'TEST_STAFF', email: user.email },
+        { sub: user.id, jti: `test-jti-${Date.now()}`, role: 'TEST_STAFF', email: user.email },
         process.env.JWT_SECRET || 'test-secret',
         { expiresIn: '1h' }
     );
   });
 
+  /*
+   * Story 13-59 — the ID-card download now writes a `staff.id_card_downloaded`
+   * audit row (AC7.2), so this teardown's bare `delete from users` started
+   * hitting `audit_logs_actor_id_users_id_fk` (23503): the very row that proves
+   * the download happened is a child of the user being deleted.
+   *
+   * `purgeUsersWithAuditDrain` is 13-30's shared helper for exactly this — it
+   * takes the parent lock FIRST, which closes the window against a concurrent
+   * fire-and-forget audit insert, rather than racing it with a delete-order
+   * guess. Reused rather than re-solved.
+   */
   afterAll(async () => {
-    if (createdUserIds.length > 0) {
-      await db.delete(users).where(inArray(users.id, createdUserIds));
-    }
+    await purgeUsersWithAuditDrain(createdUserIds);
   });
 
   describe('GET /api/v1/users/id-card', () => {
@@ -119,14 +145,24 @@ describe('User ID Card & Verification', () => {
         }).returning();
         createdUserIds.push(userNoPhoto.id);
 
-        const token = jwt.sign({ userId: userNoPhoto.id, role: 'TEST_STAFF' }, process.env.JWT_SECRET || 'test-secret');
+        // Production payload shape — see the note in beforeAll.
+        const token = jwt.sign(
+          { sub: userNoPhoto.id, jti: `test-jti-nophoto-${Date.now()}`, role: 'TEST_STAFF' },
+          process.env.JWT_SECRET || 'test-secret',
+        );
 
         const res = await request
             .get('/api/v1/users/id-card')
             .set('Authorization', `Bearer ${token}`);
 
-        expect(res.status).toBe(400); // Or 404
-        expect(res.body.code).toBe('VALIDATION_ERROR');
+        expect(res.status).toBe(400);
+        /*
+         * Story 13-59 AC5.3 — was `VALIDATION_ERROR`, now a specific code so the
+         * first-login modal can distinguish "you have no photo yet" (offer
+         * 13-60's retry) from "your request was malformed" (offer nothing)
+         * without string-matching a human-readable message.
+         */
+        expect(res.body.code).toBe('ID_CARD_PHOTO_MISSING');
     });
   });
 

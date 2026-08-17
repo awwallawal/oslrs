@@ -44,6 +44,21 @@ export interface StaffMember {
    */
   photoSource?: 'live_capture' | 'upload' | null;
   photoFailureReason?: string | null;
+  /**
+   * Story 13-59 AC7.3 — when they last took each artefact, or null if never.
+   * Null is the operational signal: the offer was made and not acted on.
+   */
+  idCardDownloadedAt?: string | null;
+  briefingDownloadedAt?: string | null;
+  /**
+   * Story 13-59 (review H3) — the server's VERDICT on what this person still
+   * owes, rather than the ingredients for the browser to re-derive one. The
+   * table used to hold its own copy of the role rules; sending the answer
+   * removes the second opinion instead of trying to keep two in step.
+   */
+  artefactsOutstanding?: Array<'id_card' | 'briefing'>;
+  /** False for back-office roles, who are entitled to neither artefact. */
+  artefactsApplicable?: boolean;
 }
 
 /**
@@ -76,6 +91,8 @@ export interface ListStaffParams {
   search?: string;
   /** Story 13-60 AC3.1 — narrow to staff who cannot be issued an ID card. */
   missingPhoto?: boolean;
+  /** Story 13-59 AC7.3 — narrow to staff who have not taken their artefacts. */
+  missingArtefacts?: boolean;
 }
 
 /**

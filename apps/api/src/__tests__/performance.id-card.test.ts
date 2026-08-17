@@ -49,7 +49,10 @@ describe('Performance: ID Card Generation', () => {
     }).returning();
 
     authToken = jwt.sign(
-      { userId: user.id, email: user.email, role: 'PERF_USER' },
+      // Story 13-59 — production payload shape (`sub`, not `userId`). The old
+      // form matched a controller bug rather than any real token; see the note
+      // in `user.id-card.test.ts`.
+      { sub: user.id, jti: `perf-jti-${Date.now()}`, email: user.email, role: 'PERF_USER' },
       process.env.JWT_SECRET || 'test-secret'
     );
 

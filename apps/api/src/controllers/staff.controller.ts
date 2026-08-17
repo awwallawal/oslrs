@@ -29,7 +29,8 @@ export class StaffController {
    */
   static async list(req: Request, res: Response, next: NextFunction) {
     try {
-      const { page, limit, status, roleId, role, lgaId, search, missingPhoto } = req.query;
+      const { page, limit, status, roleId, role, lgaId, search, missingPhoto, missingArtefacts } =
+        req.query;
 
       if (status && !VALID_STATUSES.has(status as string)) {
         throw new AppError(
@@ -54,6 +55,17 @@ export class StaffController {
         // value means "no filter", so a typo widens rather than silently
         // inverting the operator's question.
         missingPhoto: missingPhoto === 'true',
+        /*
+         * Story 13-59 AC7.3 — `?missingArtefacts=true` narrows to staff who
+         * have not taken an artefact they are entitled to.
+         *
+         * ⚠️ DESTRUCTURED ABOVE AND READ HERE. 13-61/13-62 is the whole class:
+         * the client invented `roleFilter`, the server never read it, and
+         * nothing errored — the list just quietly returned everybody. A filter
+         * that is sent and ignored is worse than no filter, because the
+         * operator believes the screen answered their question.
+         */
+        missingArtefacts: missingArtefacts === 'true',
       });
 
       res.json({

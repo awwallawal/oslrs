@@ -1,1 +1,12 @@
-{"name":"@oslsr/config","version":"1.0.0","private":true,"type":"module","dependencies":{"zod":"^3.25.76"}}
+{
+  "name": "@oslsr/config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "scripts": {
+    "lint": "eslint --config ../../eslint.config.packages.js src"
+  }
+}

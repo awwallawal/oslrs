@@ -15,7 +15,8 @@
     "./src/reference-code": "./src/reference-code.ts"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint --config ../../eslint.config.packages.js src"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

@@ -20,6 +20,8 @@ export type NotificationCategory =
   | 'duplicate-registration'
   | 'password-reset'
   | 'staff-invitation'
+  /** Story 13-59 — the activation COMPLETION email (distinct from the invitation). */
+  | 'staff-activation-complete'
   | 'payment-notification'
   | 'dispute'
   | 'backup-success'
@@ -50,6 +52,12 @@ export function classifyEmailSubject(subjectRaw: string): NotificationCategory {
   if (s.includes('registration attempt detected')) return 'duplicate-registration';
   if (s.includes('your oyo state skills registry status')) return 'registration-status';
   if (s.includes('password reset')) return 'password-reset';
+  // Story 13-59 — ordered ABOVE the invitation rule. Both are staff-lifecycle
+  // mail and the invitation rule is the looser of the two; a completion subject
+  // that fell through to it would make the two indistinguishable in the meter,
+  // which is precisely the question "did activation actually tell anyone?" that
+  // this category exists to answer.
+  if (s.includes('account is active')) return 'staff-activation-complete';
   if (s.includes("you've been invited") || s.includes('invited to join')) return 'staff-invitation';
   if (s.includes('payment recorded')) return 'payment-notification';
   if (s.includes('dispute')) return 'dispute';

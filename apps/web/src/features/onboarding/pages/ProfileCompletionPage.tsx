@@ -8,6 +8,9 @@ import { useAuth } from '../../auth/context/AuthContext';
 // Story 13-60 — the canonical profile cache key, imported rather than retyped:
 // the banner that sends people here reads this exact key.
 import { profileKeys } from '../../dashboard/hooks/useProfile';
+// Story 13-59 (review L4) — this page IS the "add your photo" link the artefact
+// panel offers, so it owns clearing that panel's cache on success.
+import { ARTEFACTS_QUERY_KEY } from '../../dashboard/hooks/useStaffArtefacts';
 
 // Lazy load LiveSelfieCapture to split @vladmandic/human (~1.2MB) into separate chunk
 // Only loads when user clicks "Start Verification"
@@ -81,6 +84,19 @@ const ProfileCompletionPage: React.FC = () => {
        * otherwise.
        */
       queryClient.invalidateQueries({ queryKey: profileKeys.profile });
+
+      /*
+       * ⚠️ Story 13-59 (review L4) — and clear the OTHER stale accusation.
+       *
+       * The artefact state is cached for five minutes too, and it is what makes
+       * the ID card row say "Your card has no photo yet… Add your photo" with a
+       * link to THIS page. Without this line the person follows that link, adds
+       * the photo, returns, and reads the same sentence for another five
+       * minutes — the exact shape of the banner problem above, one screen over.
+       * The two invalidations belong together because the two caches answer the
+       * same question about the same photo.
+       */
+      queryClient.invalidateQueries({ queryKey: ARTEFACTS_QUERY_KEY });
 
       setStep('success');
     } catch (err: unknown) {

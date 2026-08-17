@@ -33,4 +33,35 @@ export const auditLogs = pgTable('audit_logs', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   createdAtIdx: index('idx_audit_logs_created_at').on(table.createdAt),
+  /*
+   * Story 13-59 (review H2) — "has this person taken their artefacts?", asked
+   * on the dashboard's hot path.
+   *
+   * Until this index, `audit_logs` was indexed on `created_at` ALONE, and every
+   * read of it was either a whole-table report or the chain verifier. 13-59 is
+   * the first code to query it by PRINCIPAL at request time: the first-login
+   * modal is mounted on `DashboardLayout` (the only dashboard layout, which
+   * hosts the citizen routes as well), and the operator's `?missingArtefacts`
+   * filter runs two correlated NOT EXISTS against these same two columns per
+   * candidate row. Unindexed, both are sequential scans of an append-only table
+   * that grows for the life of the platform — on a 2GB box, days before a
+   * public blast.
+   *
+   * Column order is (actor_id, action, created_at DESC) so it serves all three
+   * shapes: the equality on both keys, the `MAX(created_at) GROUP BY action`
+   * aggregate, and the `IN (…)` over the two download actions.
+   *
+   * ⚠️ DEPLOY NOTE: `db:push` creates this NON-concurrently, which takes a
+   * SHARE lock on `audit_logs` for the duration of the build — blocking audit
+   * WRITES, and every audited action with them. Sized for the current table it
+   * is seconds, but if the table has grown, build it by hand first:
+   *   CREATE INDEX CONCURRENTLY idx_audit_logs_actor_action
+   *     ON audit_logs (actor_id, action, created_at DESC);
+   * then let `db:push` find it already present and do nothing.
+   */
+  actorActionIdx: index('idx_audit_logs_actor_action').on(
+    table.actorId,
+    table.action,
+    table.createdAt.desc(),
+  ),
 }));

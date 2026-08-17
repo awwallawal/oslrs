@@ -44,9 +44,9 @@ describe('sidebarConfig', () => {
   });
 
   describe('AC5: Sidebar item counts per role', () => {
-    it('enumerator has 7 sidebar items (mobile-first + messages + payments + stats)', () => {
+    it('enumerator has 8 sidebar items (+ My ID & Briefing, Story 13-59)', () => {
       const items = sidebarConfig.enumerator;
-      expect(items.length).toBe(7);
+      expect(items.length).toBe(8);
     });
 
     it('public_user has 3-4 sidebar items (mobile-first)', () => {
@@ -152,6 +152,29 @@ describe('sidebarConfig', () => {
       const item = sidebarConfig.supervisor.find(i => i.label === 'Team Analytics');
       expect(item).toBeDefined();
       expect(item?.href).toBe('/dashboard/supervisor/analytics');
+    });
+
+    /**
+     * Story 13-59 AC6.2/AC6.3 — the second DOOR, not a second implementation.
+     */
+    it('enumerator has a "My ID & Briefing" entry that LINKS to the profile section', () => {
+      const item = sidebarConfig.enumerator.find((i) => i.label === 'My ID & Briefing');
+
+      expect(item).toBeDefined();
+      // It must point at the canonical ProfilePage section (AC6.1), NOT at a
+      // page of its own — a separate page would be the sixth hand-written copy
+      // that 13-55 exists to prevent.
+      expect(item!.href).toBe('/dashboard/enumerator/profile#id-and-briefing');
+    });
+
+    it('AC6.3 — no other role carries the briefing entry', () => {
+      const rolesWithEntry = Object.entries(sidebarConfig)
+        .filter(([, items]) => items.some((i) => i.label === 'My ID & Briefing'))
+        .map(([role]) => role);
+
+      // Enumerator only. The briefing is written for someone knocking on doors;
+      // every other staff role still reaches the same section via My Profile.
+      expect(rolesWithEntry).toEqual(['enumerator']);
     });
 
     it('enumerator has My Stats sidebar item', () => {

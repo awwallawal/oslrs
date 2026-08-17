@@ -40,6 +40,24 @@ vi.mock('@oslsr/types', () => ({
   getRoleDisplayName: (role: string) => role === 'super_admin' ? 'Super Admin' : role,
 }));
 
+/*
+ * Story 13-59 (review M5) — the artefact panel is real here, its network is not.
+ *
+ * AC6.1 makes this page the CANONICAL home for both artefacts, and AC6.2 has the
+ * enumerator sidebar link at `#id-and-briefing` rather than re-implementing the
+ * panel. Before this review the sidebar test pinned the href pointing AT that
+ * anchor and nothing asserted anything answered to it — a link verified at the
+ * source and never at the target, which is the exact shape of the dead
+ * `/users/id-card` this story found.
+ */
+const { mockFetchArtefactState } = vi.hoisted(() => ({
+  mockFetchArtefactState: vi.fn(),
+}));
+vi.mock('../../api/artefacts.api', () => ({
+  fetchArtefactState: mockFetchArtefactState,
+  downloadArtefact: vi.fn(),
+}));
+
 // Mock react-hook-form for the edit form tests
 vi.mock('../../components/ProfileEditForm', () => ({
   default: ({ onCancel, onSave, isSaving }: any) => (
@@ -50,7 +68,15 @@ vi.mock('../../components/ProfileEditForm', () => ({
   ),
 }));
 
-import { renderWithQueryClient } from '../../../../test-utils';
+/*
+ * Story 13-59 — router-aware from here on. ProfilePage now hosts the canonical
+ * "My ID & Field Briefing" section (AC6.1), which renders a `<Link>` to 13-60's
+ * photo retry and reads `useLocation()` so the sidebar's `#id-and-briefing`
+ * link actually scrolls somewhere. Both need router context, so the harness
+ * moves from `renderWithQueryClient` to `renderWithRouter` (same QueryClient
+ * setup, plus a MemoryRouter with the v7 future flags).
+ */
+import { renderWithRouter as renderWithQueryClient } from '../../../../test-utils';
 import ProfilePage from '../ProfilePage';
 
 // ── Mock data ───────────────────────────────────────────────────────
@@ -202,6 +228,72 @@ describe('ProfilePage', () => {
         { fullName: 'New Name' },
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       );
+    });
+  });
+
+  /**
+   * Story 13-59 AC6.1/AC6.2 (review M5) — the canonical home, asserted at the
+   * TARGET end of the link for the first time.
+   */
+  describe('My ID & Field Briefing section (Story 13-59)', () => {
+    const entitled = {
+      idCard: { applicable: true, available: true, unavailableReason: null, downloadedAt: null },
+      briefing: { applicable: true, available: true, unavailableReason: null, downloadedAt: null },
+      promptRequired: true,
+    };
+    const entitledToNothing = {
+      idCard: { applicable: false, available: false, unavailableReason: null, downloadedAt: null },
+      briefing: { applicable: false, available: false, unavailableReason: null, downloadedAt: null },
+      promptRequired: false,
+    };
+
+    it('AC6.2 — carries the #id-and-briefing anchor the sidebar entry links to', async () => {
+      mockFetchArtefactState.mockResolvedValue(entitled);
+      renderPage();
+
+      // `sidebarConfig.test.ts` pins the href as
+      // '/dashboard/enumerator/profile#id-and-briefing'. This is the other half:
+      // something on this page actually answers to that fragment.
+      //
+      // ⚠️ Reached by test id, then asserted on the `id` ATTRIBUTE — Team
+      // Agreement A3 forbids querying by CSS id, and it is right to: the anchor
+      // is what the link needs, not what the test needs to find the element.
+      expect(screen.getByTestId('id-and-briefing-section')).toHaveAttribute(
+        'id',
+        'id-and-briefing',
+      );
+    });
+
+    it('AC6.1 — renders both artefacts for a field role', async () => {
+      mockFetchArtefactState.mockResolvedValue(entitled);
+      renderPage();
+
+      expect(await screen.findByText(/My ID & Field Briefing/i)).toBeInTheDocument();
+      expect(screen.getByText(/Staff ID card/i)).toBeInTheDocument();
+      expect(screen.getByText(/Enumerator field briefing/i)).toBeInTheDocument();
+    });
+
+    /**
+     * ⭐ Review M1 — the regression this exists to prevent.
+     *
+     * The heading used to live on this page, above the panel, and render
+     * unconditionally. For every back-office role and every citizen the panel
+     * returns null, so they were shown "My ID & Field Briefing / Save these to
+     * your phone" with nothing underneath — an instruction to save files that do
+     * not exist for them. The anchor stays (the link must still land); the
+     * heading leaves with its content.
+     */
+    it('M1 — shows NO heading for a role entitled to neither artefact', async () => {
+      mockFetchArtefactState.mockResolvedValue(entitledToNothing);
+      renderPage();
+
+      await waitFor(() => expect(mockFetchArtefactState).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(screen.queryByText(/My ID & Field Briefing/i)).not.toBeInTheDocument(),
+      );
+      // The anchor survives — an empty section is invisible, a heading without
+      // its content is not.
+      expect(screen.getByTestId('id-and-briefing-section')).toBeInTheDocument();
     });
   });
 });

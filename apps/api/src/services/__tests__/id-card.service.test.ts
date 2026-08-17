@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { formatStaffId } from '@oslsr/types'; // Story 13-59 (review H1)
 import { IDCardService } from '../id-card.service.js';
 
 // Hoisted mocks for PDFKit
@@ -135,7 +136,24 @@ describe('IDCardService', () => {
     expect(mocks.text).toHaveBeenCalledWith('Adewale Johnson', expect.any(Number), expect.any(Number), expect.anything());
     expect(mocks.text).toHaveBeenCalledWith('Enumerator', expect.any(Number), expect.any(Number), expect.anything());
     expect(mocks.text).toHaveBeenCalledWith('Ibadan North', expect.any(Number), expect.any(Number), expect.anything());
-    expect(mocks.text).toHaveBeenCalledWith('OSLSR-A1B2C3D4', expect.any(Number), expect.any(Number), expect.anything());
+    /*
+     * Story 13-59 (review H1) — THE assertion that keeps the card and the
+     * activation email on one identity.
+     *
+     * It reads `formatStaffId(mockData.staffId)` rather than the literal
+     * 'OSLSR-A1B2C3D4' on purpose. The literal pinned the FORMAT but not the
+     * AGREEMENT: while the card had its own inline derivation, this test and
+     * the two 13-59 tests each asserted a different independent copy of the
+     * same string, so the card could be diverged from the email with only this
+     * one going red — and the two tests that CLAIMED to guard the agreement
+     * stayed green (RED-verified 2026-08-16). Deriving the expectation from the
+     * shared formatter makes this test fail on exactly the thing that matters:
+     * the card rendering something the email would not quote.
+     *
+     * The format ITSELF is still pinned against a literal, once, in
+     * `staff-activation-complete-email.test.ts` and `id-card.artefact.test.ts`.
+     */
+    expect(mocks.text).toHaveBeenCalledWith(formatStaffId(mockData.staffId), expect.any(Number), expect.any(Number), expect.anything());
     expect(mocks.text).toHaveBeenCalledWith(expect.stringMatching(/\d{2}\/\d{2}\/\d{4}/), expect.any(Number), expect.any(Number), expect.anything());
 
     // Property text

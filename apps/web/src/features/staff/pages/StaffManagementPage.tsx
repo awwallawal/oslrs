@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { Search, UserPlus, Upload, ChevronDown, RefreshCw, CameraOff } from 'lucide-react';
+import { Search, UserPlus, Upload, ChevronDown, RefreshCw, CameraOff, DownloadCloud } from 'lucide-react';
 import { getRoleDisplayName } from '@oslsr/types';
 import { Card, CardContent } from '../../../components/ui/card';
 import { StaffTable, RoleChangeDialog, DeactivateDialog, ReactivateDialog, BulkImportModal, AddStaffModal } from '../components';
@@ -56,6 +56,12 @@ export default function StaffManagementPage() {
    * existed since this story; this is the control that reaches it.
    */
   const [missingPhotoOnly, setMissingPhotoOnly] = useState(false);
+  /**
+   * Story 13-59 AC7.3 — who has not taken their ID card / field briefing.
+   * The sibling of `missingPhotoOnly`: one asks whether we CAN equip them, the
+   * other whether we HAVE.
+   */
+  const [missingArtefactsOnly, setMissingArtefactsOnly] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -84,8 +90,10 @@ export default function StaffManagementPage() {
       ...(debouncedSearch && { search: debouncedSearch }),
       // Story 13-60 AC3.1 — only sent when on; the server reads strict 'true'.
       ...(missingPhotoOnly && { missingPhoto: true }),
+      // Story 13-59 AC7.3 — same contract: only sent when on, server reads 'true'.
+      ...(missingArtefactsOnly && { missingArtefacts: true }),
     }),
-    [page, statusFilter, roleFilter, debouncedSearch, missingPhotoOnly]
+    [page, statusFilter, roleFilter, debouncedSearch, missingPhotoOnly, missingArtefactsOnly]
   );
 
   // Data fetching
@@ -122,6 +130,12 @@ export default function StaffManagementPage() {
 
   const handleMissingPhotoToggle = () => {
     setMissingPhotoOnly((on) => !on);
+    setPage(1);
+  };
+
+  // Story 13-59 AC7.3 — the second half of "is this person ready to go out?".
+  const handleMissingArtefactsToggle = () => {
+    setMissingArtefactsOnly((on) => !on);
     setPage(1);
   };
 
@@ -263,6 +277,27 @@ export default function StaffManagementPage() {
             >
               <CameraOff className="w-4 h-4" />
               No ID photo
+            </button>
+
+            {/*
+              * Story 13-59 AC7.3 — sits beside "No ID photo" deliberately. The
+              * two answer one question between them — is this person ready to go
+              * out? — and an operator who has to visit two screens to ask it
+              * will ask it once and then stop.
+              */}
+            <button
+              type="button"
+              onClick={handleMissingArtefactsToggle}
+              aria-pressed={missingArtefactsOnly}
+              title="Show only staff who have not yet downloaded their ID card or field briefing"
+              className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                missingArtefactsOnly
+                  ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700'
+                  : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
+              }`}
+            >
+              <DownloadCloud className="w-4 h-4" />
+              Not downloaded
             </button>
 
             {/* Refresh Button */}

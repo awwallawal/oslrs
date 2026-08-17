@@ -22,6 +22,11 @@ const upload = multer({
 
 router.post('/selfie', authenticate, upload.single('file'), UserController.uploadSelfie);
 router.get('/id-card', authenticate, UserController.downloadIDCard);
+// Story 13-59 (AC5) — the two artefacts activation now leaves in the person's
+// hands, plus the state read that tells the modal whether either is still owed.
+// Authenticated-self only; no role gate (see the controller note on why).
+router.get('/field-briefing', authenticate, UserController.downloadFieldBriefing);
+router.get('/artefacts', authenticate, UserController.getArtefacts);
 router.get('/profile', authenticate, UserController.getProfile);
 // Story 13-18 — profile mutation (includes bank fields) requires step-up
 // re-auth; passwordless magic-link accounts are exempt (cannot re-auth).

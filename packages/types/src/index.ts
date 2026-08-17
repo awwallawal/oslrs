@@ -26,4 +26,6 @@ export * from './skills-taxonomy.js';
 export * from './normalised.js';
 export * from './ops-thresholds.js';
 export * from './staff-photo.js';
+export * from './staff-id.js'; // Story 13-59
+export * from './staff-artefacts.js'; // Story 13-59 (review H3 — one entitlement list)
 export * from './ingestion-health.js'; // Story 13-57

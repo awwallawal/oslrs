@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import pino from 'pino';
 import { AppError } from '@oslsr/utils';
-import { getRoleDisplayName } from '@oslsr/types';
+import { getRoleDisplayName, formatStaffId } from '@oslsr/types';
 
 const logger = pino({ name: 'id-card-service' });
 
@@ -63,9 +63,24 @@ export class IDCardService {
           reject(new AppError('PDF_GENERATION_ERROR', 'Failed to generate ID card PDF', 500));
         });
 
-        // Format staff ID: OSLSR-XXXXXXXX
-        const shortId = data.staffId.substring(0, 8).toUpperCase();
-        const staffIdFormatted = `OSLSR-${shortId}`;
+        /*
+         * Story 13-59 (review H1) — the SHARED formatter, not a local copy.
+         *
+         * This line used to be `OSLSR-${data.staffId.substring(0, 8).toUpperCase()}`,
+         * written out here, while the activation email derived the same string
+         * from `formatStaffId` in `@oslsr/types`. Two derivations of one
+         * identity: an email that disagrees with the printed card is two
+         * identities for one person, and the officer cannot win the argument at
+         * the LGA office door.
+         *
+         * The review RED-verified how quiet that would have been — diverging
+         * this line to `OSLRS-` + 6 chars left BOTH tests that claimed to pin
+         * the agreement green, because each asserted `formatStaffId` against a
+         * string literal and neither ever read the card. `id-card.service.test.ts`
+         * now asserts against `formatStaffId(...)` itself, so a divergence is
+         * impossible to introduce here without a red test.
+         */
+        const staffIdFormatted = formatStaffId(data.staffId);
 
         // Format issue date: DD/MM/YYYY
         const now = new Date();

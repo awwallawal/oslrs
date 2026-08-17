@@ -11,7 +11,10 @@ import type {
   PaymentNotificationEmailData,
   DisputeNotificationEmailData,
   DisputeResolutionEmailData,
+  StaffActivationCompleteEmailData, // Story 13-59
 } from '@oslsr/types';
+import { getRoleDisplayName } from '@oslsr/types';
+import { getStaffActivationCopy } from './staff-activation-copy.js'; // Story 13-59
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 import { NotificationMeter } from './notification-meter.service.js';
 import type { NotificationCategory } from './notification-category.js';
@@ -282,6 +285,158 @@ Click the link below to activate your account and complete your profile setup:
 ${data.activationUrl}
 
 This invitation link will expire in ${data.expiresInHours} hours.
+
+Need help? Contact support at ${this.SUPPORT_URL}
+
+---
+Oyo State Labour & Skills Registry
+Government of Oyo State
+    `.trim();
+  }
+
+  // ==========================================================================
+  // Staff Activation COMPLETION Email (Story 13-59, AC1/AC2/AC4)
+  // ==========================================================================
+
+  /**
+   * Sends the email that closes the activation journey.
+   *
+   * Before this story the wizard finished, waited five seconds and redirected to
+   * a login screen — that was the entire close of the flow, and the person was
+   * left holding nothing.
+   *
+   * ⛔ **NO ATTACHMENTS** (AC4, standing ruling 2026-08-10). This domain also
+   * carries the re-engagement blasts and the radio jingle's traffic; seven
+   * months of sender reputation is not spent on a delivery convenience the
+   * in-app modal provides for free. The body is self-sufficient (staff ID, LGA,
+   * the read-out rule, the staff login URL) and instructs the person to log in
+   * and download — which AC7's persistent modal then makes true.
+   *
+   * ⚠️ Throws nothing on a bad role: `getStaffActivationCopy` DOES throw, and
+   * the caller in `auth.service.ts` catches it, because a failed courtesy email
+   * must never fail an activation that has already committed (AC2.2).
+   */
+  static async sendStaffActivationCompleteEmail(
+    data: StaffActivationCompleteEmailData,
+  ): Promise<EmailResult> {
+    if (!this.isEnabled()) {
+      logger.warn({
+        event: 'email.staff_activation_complete.disabled',
+        to: data.email,
+        note: 'Email service is disabled',
+      });
+      return { success: false, error: 'Email service is disabled' };
+    }
+
+    // Rendered BEFORE dispatch so a missing-copy role fails before any send.
+    const html = this.getStaffActivationCompleteHtml(data);
+    const text = this.getStaffActivationCompleteText(data);
+
+    return this.dispatch({
+      to: data.email,
+      subject: this.getStaffActivationCompleteSubject(data.roleName),
+      html,
+      text,
+    }, 'staff-activation-complete');
+  }
+
+  /**
+   * "Your OSLRS account is active — [Role]".
+   *
+   * ⚠️ The word "onboarded" is banned from this whole surface: it is SaaS/HR
+   * jargon that reads oddly in Nigerian government English — nobody says "I have
+   * been onboarded."
+   */
+  static getStaffActivationCompleteSubject(roleName: string): string {
+    return `Your OSLRS account is active — ${getRoleDisplayName(roleName)}`;
+  }
+
+  static getStaffActivationCompleteHtml(data: StaffActivationCompleteEmailData): string {
+    const copy = getStaffActivationCopy(data.roleName, { lgaName: data.lgaName });
+    const roleLabel = getRoleDisplayName(data.roleName);
+
+    const detailBlocks = copy.details
+      .map(
+        (line) =>
+          `<p style="margin: 12px 0; color: #333;">${line}</p>`,
+      )
+      .join('\n    ');
+
+    const lgaRow = data.lgaName
+      ? `<p style="margin: 5px 0;"><strong>LGA:</strong> ${data.lgaName}</p>`
+      : '';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your OSLRS account is active - OSLSR</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: ${this.BRAND_COLOR}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0;">OSLSR</h1>
+    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour &amp; Skills Registry</p>
+  </div>
+
+  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <h2 style="color: #333; margin-top: 0;">Your account is active</h2>
+
+    <p>Hello ${data.fullName},</p>
+
+    <p style="font-size: 16px;"><strong>${copy.headline}</strong></p>
+
+    <div style="background-color: #fff; padding: 15px; border-radius: 5px; border-left: 4px solid ${this.BRAND_COLOR}; margin: 20px 0;">
+      <p style="margin: 5px 0;"><strong>Name:</strong> ${data.fullName}</p>
+      <p style="margin: 5px 0;"><strong>Role:</strong> ${roleLabel}</p>
+      ${lgaRow}
+      <p style="margin: 5px 0;"><strong>Staff ID:</strong> ${data.staffId}</p>
+    </div>
+
+    ${detailBlocks}
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${data.loginUrl}" style="background-color: ${this.BRAND_COLOR}; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Sign in to OSLRS</a>
+    </div>
+
+    <p style="color: #666; font-size: 14px;">Staff sign-in page:</p>
+    <p style="word-break: break-all; color: ${this.BRAND_COLOR}; font-size: 14px;">${data.loginUrl}</p>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+    <p style="color: #999; font-size: 12px;">
+      <strong>Need help?</strong> Contact support at <a href="${this.SUPPORT_URL}" style="color: ${this.BRAND_COLOR};">${this.SUPPORT_URL}</a>
+    </p>
+
+    <p style="color: #999; font-size: 12px; text-align: center;">
+      This email was sent by the Oyo State Labour &amp; Skills Registry.<br>
+      &copy; ${new Date().getFullYear()} Government of Oyo State. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  static getStaffActivationCompleteText(data: StaffActivationCompleteEmailData): string {
+    const copy = getStaffActivationCopy(data.roleName, { lgaName: data.lgaName });
+    const roleLabel = getRoleDisplayName(data.roleName);
+    const lgaLine = data.lgaName ? `LGA: ${data.lgaName}\n` : '';
+    const detailLines = copy.details.length ? `\n${copy.details.join('\n\n')}\n` : '';
+
+    return `
+Your OSLRS account is active - ${roleLabel}
+
+Hello ${data.fullName},
+
+${copy.headline}
+
+Name: ${data.fullName}
+Role: ${roleLabel}
+${lgaLine}Staff ID: ${data.staffId}
+${detailLines}
+Sign in here: ${data.loginUrl}
 
 Need help? Contact support at ${this.SUPPORT_URL}
 

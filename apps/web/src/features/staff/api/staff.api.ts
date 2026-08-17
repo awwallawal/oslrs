@@ -29,6 +29,11 @@ export async function listStaff(params: ListStaffParams = {}): Promise<StaffList
   if (params.search) searchParams.set('search', params.search);
   // Story 13-60 AC3.1 — only sent when true; the server reads strict 'true'.
   if (params.missingPhoto) searchParams.set('missingPhoto', 'true');
+  // Story 13-59 AC7.3. ⚠️ The server destructures `missingArtefacts` by this
+  // exact name — 13-61/13-62's class is a param the client invents and the
+  // server never reads, which fails PERMISSIVELY (the list just returns
+  // everybody) and so looks like a UI bug for as long as nobody checks.
+  if (params.missingArtefacts) searchParams.set('missingArtefacts', 'true');
 
   const query = searchParams.toString();
   return apiClient(`/staff${query ? `?${query}` : ''}`);

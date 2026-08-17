@@ -646,6 +646,125 @@ describe('Auth Activation Integration', () => {
     });
   });
 
+  /**
+   * Story 13-59 (AC2.2, AC3.1, AC3.2) — activation must END WITH SOMETHING.
+   *
+   * ⚠️ These run against the real `app` and the real activation path on
+   * purpose. AC3.3's warning is the reason: a super_admin activation is
+   * `backOfficeActivation: true` and takes a DIFFERENT BRANCH, so a test that
+   * only covers the back-office path proves nothing about the field path — that
+   * asymmetry is exactly why two activation defects survived to 2026-08-09.
+   * The first test below is deliberately an ENUMERATOR.
+   *
+   * ⚠️ They assert on the SEND RECORD, never on "the request returned 200".
+   * A 200 is equally consistent with the email having fired and with it having
+   * been deleted — a count consistent with both outcomes proves neither.
+   */
+  describe('Story 13-59 — the completion email (AC1/AC2/AC3)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    async function inviteAndActivate(roleName: string, email: string) {
+      const allRoles = await db.select().from(roles);
+      const role = allRoles.find((r) => r.name === roleName)!;
+      const token = generateInvitationToken();
+
+      await db.insert(users).values({
+        email,
+        fullName: 'Completion Email Test',
+        roleId: role.id,
+        status: 'invited',
+        invitationToken: hashInvitationToken(token),
+        invitedAt: new Date(),
+      });
+
+      const payload = isBackOfficeRole(roleName)
+        ? { password: 'password123' }
+        : {
+            password: 'password123',
+            nin: generateValidNin(),
+            dateOfBirth: '1990-01-01',
+            homeAddress: '1 Test Street, Ibadan',
+            bankName: 'Test Bank',
+            accountNumber: '0123456789',
+            accountName: 'Completion Email Test',
+            nextOfKinName: 'Next Of Kin',
+            nextOfKinPhone: '+2348012345678',
+          };
+
+      return request.post(`/api/v1/auth/activate/${token}`).send(payload);
+    }
+
+    it('AC3.2 — an ENUMERATOR activation sends the completion email (the FIELD branch)', async () => {
+      const sendSpy = vi.spyOn(EmailService, 'sendStaffActivationCompleteEmail');
+      const email = `completion-enum-${Date.now()}@example.com`;
+
+      const res = await inviteAndActivate('enumerator', email);
+      expect(res.status).toBe(200);
+
+      // The send record, not the absence of an error.
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      const sent = sendSpy.mock.calls[0][0];
+      expect(sent.email).toBe(email);
+      expect(sent.roleName).toBe('enumerator');
+      // AC1.1 — the staff door, never the citizen one.
+      expect(sent.loginUrl).toContain('/staff/login');
+      // The card and the email must agree on who this person is.
+      expect(sent.staffId).toMatch(/^OSLSR-[0-9A-F]{8}$/);
+      await expect(sendSpy.mock.results[0].value).resolves.toMatchObject({ success: true });
+    });
+
+    it('a BACK-OFFICE activation sends it too — different branch, same close', async () => {
+      const sendSpy = vi.spyOn(EmailService, 'sendStaffActivationCompleteEmail');
+      const email = `completion-admin-${Date.now()}@example.com`;
+
+      const res = await inviteAndActivate('super_admin', email);
+      expect(res.status).toBe(200);
+
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      expect(sendSpy.mock.calls[0][0].roleName).toBe('super_admin');
+    });
+
+    /**
+     * AC2.2 — THE one that matters most. By the time the email is attempted the
+     * transaction has committed and the account IS live. If a provider outage
+     * could fail the request, a field officer would see an error on a screen
+     * belonging to an account that already works, retry, hit
+     * AUTH_ALREADY_ACTIVATED, and conclude the platform is broken.
+     */
+    it('AC2.2 — a THROWN email failure does not fail the activation', async () => {
+      vi.spyOn(EmailService, 'sendStaffActivationCompleteEmail').mockRejectedValue(
+        new Error('Resend is down'),
+      );
+      const email = `completion-throws-${Date.now()}@example.com`;
+
+      const res = await inviteAndActivate('enumerator', email);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+
+      // And the account really is active in the database, not merely reported so.
+      const row = await db.query.users.findFirst({ where: eq(users.email, email) });
+      expect(row?.status).toBe('active');
+      expect(row?.invitationToken).toBeNull();
+    });
+
+    it('AC2.2 — a soft send failure (success:false) also does not fail activation', async () => {
+      vi.spyOn(EmailService, 'sendStaffActivationCompleteEmail').mockResolvedValue({
+        success: false,
+        error: 'Email service is disabled',
+      });
+      const email = `completion-soft-${Date.now()}@example.com`;
+
+      const res = await inviteAndActivate('enumerator', email);
+
+      expect(res.status).toBe(200);
+      const row = await db.query.users.findFirst({ where: eq(users.email, email) });
+      expect(row?.status).toBe('active');
+    });
+  });
+
   describe('Role-based activation (prep-8)', () => {
     it('should activate back-office role with password only', async () => {
       const allRoles = await db.select().from(roles);

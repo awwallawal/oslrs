@@ -6,12 +6,14 @@
  * Edit mode: inline form for editable fields with Zod validation.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useProfile, useUpdateProfile } from '../hooks/useProfile';
 import { useAuth } from '../../auth/context/AuthContext';
 import { getRoleDisplayName } from '@oslsr/types';
 import { SkeletonForm } from '../../../components/skeletons';
 import ProfileEditForm from '../components/ProfileEditForm';
+import { StaffArtefactsPanel } from '../components/StaffArtefactsPanel'; // Story 13-59 AC6.1
 import type { UserProfile } from '../api/profile.api';
 
 function getStatusBadge(status: string) {
@@ -141,6 +143,26 @@ export default function ProfilePage() {
   const { data: profile, isLoading: profileLoading, error } = useProfile();
   const updateProfileMutation = useUpdateProfile();
   const [isEditing, setIsEditing] = useState(false);
+  const { hash } = useLocation();
+
+  /*
+   * Story 13-59 AC6.2 — make the sidebar's `#id-and-briefing` link actually
+   * arrive somewhere.
+   *
+   * React Router does not scroll to a hash on navigation, and the browser's own
+   * hash handling runs before this page has rendered its content. Without this
+   * the "My ID & Briefing" entry would land the person at the top of My Profile
+   * and leave them to find it — a link that technically works and practically
+   * does not, which is the same shape as a fix on a path nothing travels.
+   *
+   * Depends on `profileLoading` too: the section does not exist in the DOM while
+   * the skeleton is up, so scrolling before then finds nothing.
+   */
+  useEffect(() => {
+    if (!hash || profileLoading) return;
+    const target = document.getElementById(hash.slice(1));
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, profileLoading]);
 
   if (authLoading || profileLoading) {
     return (
@@ -181,6 +203,52 @@ export default function ProfilePage() {
           <ProfileViewMode profile={profile} onEdit={() => setIsEditing(true)} />
         )}
       </div>
+
+      {/*
+        * Story 13-59 AC6.1 — THE CANONICAL HOME for both artefacts.
+        *
+        * Here, and not on a page of its own, for three reasons the AC states:
+        * this is where a person looks for their own credentials; it already
+        * exists for every staff role; and the card is not enumerator-specific.
+        *
+        * AC6.4 — reachable FOREVER, not only at first login. A lost phone, a
+        * re-issued card and a briefing revision must all be self-serve, and the
+        * first-login modal is explicitly not the only door.
+        *
+        * The anchor id is what the enumerator sidebar entry links to (AC6.2):
+        * the entry points HERE rather than re-implementing the panel.
+        */}
+      {/*
+        * ⚠️ Review M1 — the heading is PASSED IN, not rendered here.
+        *
+        * It used to sit in this file, above the panel. The panel returns null
+        * for anyone entitled to neither artefact — every back-office role, and
+        * every citizen on this same shared page — so those people were shown
+        * "My ID & Field Briefing / Save these to your phone" with nothing
+        * underneath it: an instruction to save files that do not exist for them.
+        *
+        * The `<section>` itself stays unconditional because it is the anchor the
+        * sidebar links to (AC6.2); an empty section is invisible, a heading
+        * without its content is not.
+        */}
+      <section
+        id="id-and-briefing"
+        data-testid="id-and-briefing-section"
+        className="mt-6 scroll-mt-24"
+      >
+        <StaffArtefactsPanel
+          heading={
+            <>
+              <h2 className="text-lg font-brand font-semibold text-neutral-900 mb-1">
+                My ID &amp; Field Briefing
+              </h2>
+              <p className="text-neutral-600 text-sm mb-3">
+                Save these to your phone. They open without network once downloaded.
+              </p>
+            </>
+          }
+        />
+      </section>
     </div>
   );
 }

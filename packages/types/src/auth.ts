@@ -51,9 +51,19 @@ export interface AuthUser {
 }
 
 // Token refresh
-export interface RefreshTokenRequest {
-  // Refresh token is read from httpOnly cookie
-}
+/**
+ * The refresh endpoint takes NO body — the refresh token is read from the
+ * httpOnly cookie.
+ *
+ * ⚠️ `Record<string, never>`, not an empty `interface` (2026-08-16, first lint
+ * of `packages/*`). An empty interface declaration accepts any non-nullish
+ * value — `0` and `""` included — so the shape that was meant to say "nothing
+ * goes here" in fact said "anything at all goes here", which is the opposite.
+ * Nothing consumed either of these two marker types, so this is a correction to
+ * documentation rather than to behaviour; it is written out because the next
+ * empty-body request type will be copied from one of them.
+ */
+export type RefreshTokenRequest = Record<string, never>;
 
 export interface RefreshTokenResponse {
   accessToken: string;
@@ -61,9 +71,9 @@ export interface RefreshTokenResponse {
 }
 
 // Logout
-export interface LogoutRequest {
-  // Token is read from Authorization header
-}
+/** No body — the token is read from the Authorization header. See the note on
+ *  `RefreshTokenRequest` for why this is a `Record<string, never>`. */
+export type LogoutRequest = Record<string, never>;
 
 // Password reset
 // Note: captchaToken is optional here because the verifyCaptcha middleware

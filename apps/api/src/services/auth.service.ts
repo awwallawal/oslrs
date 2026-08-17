@@ -18,6 +18,7 @@ import { PhotoProcessingService } from './photo-processing.service.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 import { MfaService } from './mfa.service.js';
 import { MagicLinkService } from './magic-link.service.js';
+import { sendActivationComplete } from './staff-activation-notification.js'; // Story 13-59
 import { setReAuthValid, clearReAuth } from '../lib/reauth-grace.js';
 import pino from 'pino';
 
@@ -392,6 +393,31 @@ export class AuthService {
       role: roleName,
       backOfficeActivation: backOffice,
       photoStatus,
+    });
+
+    /*
+     * Story 13-59 (AC1/AC2) — until this line existed, `activation.complete`
+     * was a bare log followed immediately by `return`: the ENTIRE close of the
+     * flow was a five-second wait and a redirect, and the person walked away
+     * with nothing to show for it.
+     *
+     * ⚠️ Placement is deliberate and load-bearing. This sits AFTER the
+     * `db.transaction` above has committed, which is what makes AC2.2 safe: a
+     * send failure here cannot roll the activation back. `sendActivationComplete`
+     * additionally swallows every failure of its own, so this `await` cannot
+     * reject — the account is already live and a courtesy email must never be
+     * able to take it away.
+     *
+     * Awaited rather than floated so the send is ordered before the response
+     * and can therefore be ASSERTED ON (AC3.2 asks for the send record, not for
+     * "no error"). Runs once per account, ever.
+     */
+    await sendActivationComplete({
+      userId: updatedUser.id,
+      email: updatedUser.email,
+      fullName: updatedUser.fullName,
+      roleName,
+      lgaId: updatedUser.lgaId ?? null,
     });
 
     /*

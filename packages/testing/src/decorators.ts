@@ -24,25 +24,30 @@ export function taggedTest(
   return vitestTest(fullName, async (context) => {
     const start = performance.now();
 
-    try {
-      // Attach metadata to the test context for reporters
-      // Use type assertion since Vitest's meta is extensible at runtime
-      (context.task as any).meta = {
-        ...(context.task.meta || {}),
-        category,
-        sla,
-        blocking,
-      };
+    /*
+     * ⚠️ There is deliberately NO try/catch here (2026-08-16, first lint of
+     * `packages/*`). It used to wrap this whole body in
+     * `try { … } catch (error) { throw error; }` — a rethrow that changes
+     * nothing except to suggest, to anyone reading, that a failure is being
+     * handled. It is not, and it must not be: a thrown assertion IS the test
+     * result, and the SLA violation below is raised the same way on purpose.
+     * If real handling is ever needed, the catch has to DO something.
+     */
+    // Attach metadata to the test context for reporters.
+    // Type assertion because Vitest's `meta` is extensible at runtime.
+    (context.task as any).meta = {
+      ...(context.task.meta || {}),
+      category,
+      sla,
+      blocking,
+    };
 
-      await fn(context);
-      
-      const duration = (performance.now() - start) / 1000;
-      
-      if (sla && duration > sla) {
-        throw new Error(`SLA Violation: Test took ${duration.toFixed(3)}s (allowed ${sla}s)`);
-      }
-    } catch (error) {
-      throw error;
+    await fn(context);
+
+    const duration = (performance.now() - start) / 1000;
+
+    if (sla && duration > sla) {
+      throw new Error(`SLA Violation: Test took ${duration.toFixed(3)}s (allowed ${sla}s)`);
     }
   });
 }

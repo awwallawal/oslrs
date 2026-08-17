@@ -88,6 +88,33 @@ export const staffInvitationEmailDataSchema = z.object({
 });
 
 // ============================================================================
+// Staff Activation COMPLETION Email Types (Story 13-59)
+// ============================================================================
+
+/**
+ * Data required to send the activation-completion email.
+ *
+ * ⛔ There is deliberately NO `attachments` field, here or on `EmailContent`.
+ * Ruled out 2026-08-10: this sending domain is shared with the re-engagement
+ * blasts and whatever the radio jingle generates, and plain attachment-free
+ * transactional mail is the highest-deliverability shape there is. The email is
+ * the PROMPT; the app is the delivery (AC5/AC6/AC7). This is a standing
+ * constraint, not a scope cut.
+ */
+export interface StaffActivationCompleteEmailData {
+  email: string;
+  fullName: string;
+  /** Canonical role slug (e.g. `enumerator`) — the copy map is keyed on it. */
+  roleName: string;
+  /** Field roles only; null/undefined for back-office. */
+  lgaName?: string | null;
+  /** Already formatted by `formatStaffId` — the same string the card prints. */
+  staffId: string;
+  /** MUST be the staff door. `/login` is the citizen page and rejects staff. */
+  loginUrl: string;
+}
+
+// ============================================================================
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — Verification Email Types
 // (ADR-015 Hybrid: Magic Link + OTP) RETIRED.
 //

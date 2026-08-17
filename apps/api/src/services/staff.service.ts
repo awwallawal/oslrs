@@ -9,7 +9,16 @@ import { AppError, generateInvitationToken, hashInvitationToken } from '@oslsr/u
 import { db } from '../db/index.js';
 import { users, roles, lgas } from '../db/schema/index.js';
 import { assertCanAssignRole } from '../constants/role-rank.js';
-import { AuditService } from './audit.service.js';
+import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
+// Story 13-59 — the artefact rules are IMPORTED, never re-listed (review H3).
+import {
+  ID_CARD_ROLES,
+  BRIEFING_ROLES,
+  isIdCardRole,
+  isBriefingRole,
+  type ArtefactKind,
+} from '@oslsr/types';
+import { getDownloadTimestampsForUsers, outstandingFor } from './staff-artefacts.service.js';
 import {
   normaliseEmail,
   normaliseNigerianPhone,
@@ -69,6 +78,16 @@ export interface ListUsersParams {
    * account that predates the column.
    */
   missingPhoto?: boolean;
+  /**
+   * Story 13-59 AC7.3 — show only staff who have NOT taken both artefacts they
+   * are entitled to.
+   *
+   * Pairs with `missingPhoto` on purpose: "who has no photo" and "who has not
+   * downloaded" are the same operator question asked twice — **is this person
+   * ready to go out?** — and the answer belongs on one screen, before twelve
+   * people are dispatched, not after.
+   */
+  missingArtefacts?: boolean;
 }
 
 /**
@@ -98,6 +117,34 @@ export interface StaffListResponse {
      */
     photoSource: PhotoSource | null;
     photoFailureReason: string | null;
+    /**
+     * Story 13-59 AC7.3 — when this person last took each artefact, or null if
+     * they never have.
+     *
+     * ⚠️ Null here is the whole point. The 2026-08-10 ruling replaced a pushed
+     * email attachment with a pulled, closeable modal, and AC7.1 names the risk
+     * it created: *a closeable modal that everyone dismisses has delivered
+     * nothing.* These two columns are what turns "we offered it" back into "they
+     * have it" — without them the offer and the delivery look identical.
+     */
+    idCardDownloadedAt: Date | null;
+    briefingDownloadedAt: Date | null;
+    /**
+     * Story 13-59 (review H3) — the VERDICT, computed once, on the server.
+     *
+     * The first cut returned only the two timestamps above and left the browser
+     * to work out who owed what, which meant `StaffTable.tsx` carried its own
+     * copy of the role rules — a copy whose comment openly admitted it was
+     * mirrored from the API. Sending the answer instead of the ingredients
+     * removes the second opinion entirely: there is nothing left for the client
+     * to get wrong.
+     *
+     * Empty array = nothing outstanding. Roles that owe nothing also return
+     * empty, so the column distinguishes them by `artefactsApplicable`.
+     */
+    artefactsOutstanding: ArtefactKind[];
+    /** False for back-office roles, who are entitled to neither artefact. */
+    artefactsApplicable: boolean;
   }>;
   meta: {
     total: number;
@@ -173,6 +220,67 @@ export class StaffService {
       conditions.push(sql`${users.liveSelfieIdCardUrl} IS NULL`);
     }
 
+    /*
+     * Story 13-59 AC7.3 — "who has not taken their artefacts?", asked BEFORE
+     * anyone is dispatched.
+     *
+     * ⚠️ The predicate is per-ARTEFACT-ENTITLEMENT, not a flat "has any audit
+     * row". An enumerator owes themselves both; a clerk owes only the card; a
+     * back-office role owes neither and must never appear in this filter, or
+     * the operator learns to ignore it. §2z: the predicate has to be the thing
+     * you mean, because a proxy fails in both directions.
+     */
+    if (params.missingArtefacts) {
+      /*
+       * ⚠️ EVERY LITERAL IN HERE IS NOW A PARAMETER (review H3). The first cut
+       * wrote `r.name IN ('enumerator', 'supervisor', 'data_entry_clerk')` and
+       * `al.action = 'staff.id_card_downloaded'` as SQL text — a third and
+       * fourth hand-written copy of rules that already existed in two other
+       * places. Renaming an audit action or adding a field role would have left
+       * this filter compiling, running, and quietly answering a different
+       * question than the screen claims to ask.
+       *
+       * ⚠️ `available`, not merely `applicable` (review M2). Someone whose
+       * photo never saved CANNOT download a card, so listing them here — where
+       * an operator reads "not ready to go out" — duplicates 13-60's "No ID
+       * photo" column and, worse, disagrees with the app, which correctly stops
+       * prompting them. `isOutstanding()` in `staff-artefacts.service.ts` is the
+       * definition; this predicate is that definition in SQL, and the
+       * integration test pins the two against the same person.
+       *
+       * ⚠️ ACTIVE ONLY (review M4). Without the status gate every `invited`
+       * account that has never activated, and every `deactivated` one, appeared
+       * on a screen whose entire purpose is deciding who to dispatch tomorrow.
+       */
+      const idCardRoles = [...ID_CARD_ROLES] as string[];
+      const briefingRoles = [...BRIEFING_ROLES] as string[];
+
+      conditions.push(sql`${users.status} = 'active' AND ((
+        EXISTS (
+          SELECT 1 FROM roles r
+          WHERE r.id = ${users.roleId}
+            AND r.name IN (${sql.join(idCardRoles.map((r) => sql`${r}`), sql`, `)})
+        )
+        AND ${users.liveSelfieIdCardUrl} IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM audit_logs al
+          WHERE al.actor_id = ${users.id}
+            AND al.action = ${AUDIT_ACTIONS.STAFF_ID_CARD_DOWNLOADED}
+        )
+      ) OR (
+        EXISTS (
+          SELECT 1 FROM roles r
+          WHERE r.id = ${users.roleId}
+            AND r.name IN (${sql.join(briefingRoles.map((r) => sql`${r}`), sql`, `)})
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM audit_logs al
+          WHERE al.actor_id = ${users.id}
+            AND al.action = ${AUDIT_ACTIONS.STAFF_BRIEFING_DOWNLOADED}
+        )
+      ))`);
+    }
+
     if (params.search) {
       // Escape SQL ILIKE wildcards to prevent wildcard injection
       const sanitizedSearch = params.search.replace(/[%_\\]/g, '\\$&');
@@ -204,6 +312,13 @@ export class StaffService {
 
     const total = countResult[0]?.count ?? 0;
 
+    /*
+     * Story 13-59 AC7.3 — ONE extra query for the whole page, not one per row.
+     * The list already runs two queries for twenty rows; making it forty-two
+     * would be a real cost on a 2GB box for a column an operator glances at.
+     */
+    const downloads = await getDownloadTimestampsForUsers(staffList.map((u) => u.id));
+
     return {
       data: staffList.map((user) => ({
         id: user.id,
@@ -232,6 +347,24 @@ export class StaffService {
         photoStatus: user.photoStatus,
         photoSource: user.photoSource,
         photoFailureReason: user.photoFailureReason,
+        // Story 13-59 AC7.3 — did they actually take it?
+        idCardDownloadedAt: downloads.get(user.id)?.id_card ?? null,
+        briefingDownloadedAt: downloads.get(user.id)?.briefing ?? null,
+        /*
+         * Story 13-59 (review H3/M2) — the verdict, decided here rather than in
+         * the browser, and decided by the SAME rule the modal uses: a person
+         * owes an artefact only if it applies to them, can actually be served,
+         * and has not been taken. `isOutstanding()` is that rule; this is it
+         * applied per row.
+         */
+        artefactsOutstanding: outstandingFor({
+          roleName: user.role?.name || '',
+          hasIdCardPhoto: user.liveSelfieIdCardUrl !== null,
+          idCardDownloadedAt: downloads.get(user.id)?.id_card ?? null,
+          briefingDownloadedAt: downloads.get(user.id)?.briefing ?? null,
+        }),
+        artefactsApplicable:
+          isIdCardRole(user.role?.name || '') || isBriefingRole(user.role?.name || ''),
       })),
       meta: {
         total,
