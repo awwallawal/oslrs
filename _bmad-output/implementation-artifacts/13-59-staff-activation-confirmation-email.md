@@ -1,6 +1,6 @@
 # Story 13.59: Activation ends with nothing in the person's hands
 
-Status: review
+Status: done
 
 <!-- PREPPED FOR DEV 2026-08-12 by Bob (SM) on Awwal's launch-date ruling: FULL SPEC, all 8 ACs
 including the AC5/AC6/AC7 first-login modal + permanent home, no carve. SM note on record: this is
@@ -611,7 +611,7 @@ Per the §2a0 three states. **`done` is not permitted while any row is OPEN or D
 
 ## Closing verdict
 
-**NOT CLOSED — `review`.** Dev complete, all 8 ACs implemented, adversarial code review run and all
+**CLOSED — `done`. Deployed `63088f8`, verified on production 2026-08-17.** Dev complete, all 8 ACs implemented, adversarial code review run and all
 thirteen findings fixed (12 in-scope + L5, the lint gate, ruled in by Awwal), suites green, six
 RED-verifies on record (three of which exposed a false-green test — one of them the reviewer's own).
 
@@ -628,8 +628,43 @@ are fixed and every AC is implemented, which is its stated condition. **Overrule
 forbids `done` while any residual is OPEN or DISCHARGE-ON-DEPLOY. The workflow's rule is about the
 review; §2a0's is about production, and production has not run a line of this yet.
 
-- **Deploy SHA:** ⏳ **PENDING** — *until this line carries a real SHA and R1 + R6 are discharged,
-  `Status:` must not read `done`.*
+- **Deploy SHA:** ✅ **`63088f8`** — deployed and verified on production 2026-08-17. CI/CD
+  **32020476075** + E2E **32020476014** both success, **`deploy` TAKEN with all 10 jobs green**,
+  prod `git rev-parse` = `63088f8`, health 200.
+
+#### ✅ R1 DISCHARGED — production sent it, and Resend delivered it
+
+A **real enumerator activation** was run end to end on prod (`lawalkolade+testfour@gmail.com`,
+2026-08-17 11:09:09), and `email_events` carries the proof:
+
+```
+sent      @ 11:17:21   campaign=staff-activation-complete
+delivered @ 11:17:22   campaign=staff-activation-complete
+```
+
+The account came out `active` with `photo_status=saved`, `photo_source=live_capture`,
+`photo_sharpness_score=0.49`. **The same run also exercised R2 and R3** — the ID card and the field
+briefing were both downloaded from the modal, and the Super-Admin panel rendered its
+Taken / Not Taken column.
+
+> ⚠️ **The evidence was in `email_events`, NOT `campaign_sends` — and adjudication looked in the wrong
+> table first.** `campaign_sends` holds only `reengagement-blast` and `thankyou-referral`: it is a
+> **marketing** ledger, and a transactional email correctly never enters it. The first query returned a
+> clean, convincing **`0`**. **It was Awwal saying "I received the confirmation email" that contradicted
+> it.** Fourth wrong-table lookup this month (handoff §2z(d)) — and the one that shows the failure mode
+> plainly: *a right-looking zero from the wrong source would have reported a working feature as broken.*
+
+#### ✅ R6 DISCHARGED — the index built cleanly
+
+`idx_audit_logs_actor_action` is **present and `indisvalid = yes`** on prod — a completed build, not a
+failed one leaving an invalid index behind. `audit_logs` held **2,641 rows**, small enough that the
+non-concurrent SHARE lock was momentary. ⚠️ **That window narrows as the table grows** — the next
+non-concurrent index on this table deserves the same check rather than the same assumption.
+
+⚠️ **A CPU Warning (75%) fired ~11:00**, in the deploy window: `pnpm install` + build + `db:push` + the
+index build on a 2-vCPU box. Cleared on its own — load average `0.22 / 0.05 / 0.02` afterwards. **A
+warning during a deploy is the monitor working, not a fault.** Swap in use at 65 MB of 2047; per
+[[infra-vps-operational-state]], swap in *steady* use is the signal to resize, not to add more.
 - **RED-verify evidence:** see the ledger above — **6 runs: 3 red as designed, 3 false-greens found
   and fixed** (one from the dev pass, two from the review, one of those the reviewer's own test).
 - **File-List reconciliation:** re-run after the review fixes — the File List below matches

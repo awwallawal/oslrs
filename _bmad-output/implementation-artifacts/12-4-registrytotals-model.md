@@ -37,7 +37,15 @@ Prod reality (2026-06-15): **139 distinct respondents = 76 completed + 55 data_l
 
 **This story OWNS THE AGGREGATE.** 9-59 (MERGED on main) defines the canonical row-level atom in `apps/api/src/services/registry-data-status.ts`: `deriveDataStatus(input)` returns ONE `RegistryDataStatus` per respondent, and `hasNonEmptyRawData(rawData)` is the shared emptiness test. 12-4 calls `deriveDataStatus(...)` **per respondent** over ALL respondents (not over the submissions-with-answers subset) and tallies the results into distinct-respondent counts. **There is NO new taxonomy here** — 12-4 consumes `REGISTRY_DATA_STATUSES` and `deriveDataStatus`/`hasNonEmptyRawData` unmodified; it adds only the aggregation layer 9-59 deliberately left out (9-59 Dev Notes: "the aggregate … belongs to 12-4").
 
-**POST-LAUNCH, NON-GATING — no FRC item depends on it; must not block the field survey or re-engagement blasts.** The operational counts are already obtainable from the unified export (9-59); this makes the correct aggregate first-class so the dashboard and every analytics surface agree.
+⛔ **SUPERSEDED 2026-08-11 BY RULING R-F — THIS STORY NOW GATES THE BLAST.** ~~POST-LAUNCH, NON-GATING — no FRC item depends on it; must not block the field survey or re-engagement blasts.~~
+
+> **R-F (Awwal, SCP §10.14):** 12-4, 12-5 and 12-6 **MUST SHIP BEFORE THE BLAST**, so the published figures are genuine when volume and attention arrive. The line struck above was written 2026-06-16, three months before the defect that changed the ruling was found.
+>
+> **What changed:** ruling **R-E** established that two published rates on the PUBLIC /insights page are wrong TODAY — `answersWhere = ru.raw_data IS NOT NULL` means "has ANY answers", not "answered THIS question", so people never asked a question sit in its denominator and *not asked* silently becomes *not employed*. The unemployment estimate reads ~18.4% where the answered set gives ~23.9%.
+>
+> ⭐ **The disparity is not what makes it urgent — the AUDIENCE is.** A number that is wrong in a quiet week is a defect; the same number in front of a radio audience, an assessor and a Ministry is a *published* error that must later be *restated*. Fixing before the blast costs a sprint; fixing after costs a correction notice.
+>
+> ⚠️ **Reading the struck line and deprioritising this story is the exact failure F3 named** — *"the title was doing the deprioritising"*, here done by the header. The operational counts are already obtainable from the unified export (9-59); this makes the correct aggregate first-class so the dashboard and every analytics surface agree.
 
 ### Dependencies, sequencing & effort (SM, 2026-06-16)
 
