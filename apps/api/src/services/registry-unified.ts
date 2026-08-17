@@ -47,6 +47,8 @@ export interface RegistryUnifiedRow {
   source: string;
   status: string;
   nin: string | null;
+  /** Raw as stored (E.164 by CHECK constraint, but historic rows may vary) — Story 12-4 AC2 identity key. */
+  phone_number: string | null;
   metadata: Record<string, unknown> | null;
   consent_marketplace: boolean;
   consent_enriched: boolean;

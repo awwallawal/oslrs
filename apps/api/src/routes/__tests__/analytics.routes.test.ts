@@ -16,6 +16,7 @@ vi.mock('../../controllers/analytics.controller.js', () => ({
   AnalyticsController: {
     getDemographics: vi.fn(), getEmployment: vi.fn(), getHousehold: vi.fn(),
     getSkillsFrequency: vi.fn(), getTrends: vi.fn(), getRegistrySummary: vi.fn(),
+    getRegistryTotals: vi.fn(),
     getPipelineSummary: vi.fn(), getCrossTab: vi.fn(), getSkillsInventory: vi.fn(),
     getInsights: vi.fn(), getEquity: vi.fn(), getActivationStatus: vi.fn(),
     getPolicyBrief: vi.fn(), getEnumeratorReliability: vi.fn(),
@@ -134,5 +135,36 @@ describe('Analytics Routes', () => {
     );
     expect(siAuthorizeCall).toBeDefined();
     expect(siAuthorizeCall).toHaveLength(3);
+  });
+
+  // ── Story 12-4 (AC5/AC6.3) ────────────────────────────────────────────────
+  describe('registry-totals (Story 12-4)', () => {
+    it('registers GET /registry-totals route', () => {
+      const rtRoute = routes.find((r: { path: string }) => r.path === '/registry-totals');
+      expect(rtRoute).toBeDefined();
+      expect(rtRoute!.methods).toContain('get');
+    });
+
+    it('inherits the router-level RBAC chain — NO per-route authorize (AC5.2)', () => {
+      // The registry total is a public figure (it is already published
+      // unauthenticated on /insights), so it stays open to all dashboard roles
+      // exactly like /registry-summary. A per-route authorize here would be a
+      // silent narrowing of AC5.2.
+      const rtLayer = router.stack.find(
+        (layer: { route?: { path: string } }) => layer.route?.path === '/registry-totals',
+      );
+      const rsLayer = router.stack.find(
+        (layer: { route?: { path: string } }) => layer.route?.path === '/registry-summary',
+      );
+      expect(rtLayer?.route?.stack?.length).toBe(rsLayer?.route?.stack?.length);
+    });
+
+    it('sits beside /registry-summary rather than replacing it', () => {
+      // 12-5 renders BOTH (the 139 and the 76) to make the distinction legible,
+      // so removing the old endpoint would break the very comparison Epic 12
+      // exists to show.
+      expect(routes.find((r: { path: string }) => r.path === '/registry-summary')).toBeDefined();
+      expect(routes.find((r: { path: string }) => r.path === '/registry-totals')).toBeDefined();
+    });
   });
 });

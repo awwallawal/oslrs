@@ -53,6 +53,14 @@ const fullData: PublicInsightsData = {
   totalRegistered: 5000,
   withAnswers: 4200,
   lgasCovered: 33,
+  // Story 12-4 / R-E: each rate carries the n it was computed from, and they
+  // legitimately differ from each other and from withAnswers.
+  rateDenominators: {
+    businessOwnership: 3900,
+    unemployment: 3600,
+    youthEmployment: 2100,
+    gpi: 4100,
+  },
   genderSplit: [],
   ageDistribution: [],
   allSkills: [

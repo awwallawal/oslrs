@@ -8,6 +8,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { SurveyAnalyticsService } from '../services/survey-analytics.service.js';
+import { getRegistryTotals } from '../services/registry-totals.service.js';
 import { PolicyBriefService } from '../services/policy-brief.service.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
 import type { AnalyticsQueryParams } from '@oslsr/types';
@@ -121,6 +122,24 @@ export class AnalyticsController {
     try {
       const parsed = analyticsQuerySchema.parse(req.query);
       const data = await SurveyAnalyticsService.getRegistrySummary(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Story 12-4 — the authoritative registry aggregate.
+   *
+   * ⚠️ NOT interchangeable with `getRegistrySummary` above. That one counts
+   * SUBMISSIONS carrying answers and labels the result "Total Respondents"
+   * (the 76-for-139 mislabel this story exists to end). This counts PEOPLE.
+   * New analytics surfaces read THIS one.
+   */
+  static async getRegistryTotals(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = analyticsQuerySchema.parse(req.query);
+      const data = await getRegistryTotals(getScope(req), getParams(parsed));
       res.json({ data });
     } catch (error) {
       next(error);

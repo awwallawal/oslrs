@@ -11,11 +11,22 @@ vi.mock('../../db/index.js', () => ({
 // keeps the 8-query `db.execute` sequence below untouched AND lets each test
 // prove the headline (`totalRegistered`) is decoupled from the submission-scoped
 // breakdown denominator (`summary.total`).
-vi.mock('../registry-totals.service.js', () => ({
-  getRegistryCountCore: () => mockCountCore(),
-}));
+//
+// ⚠️ `answeredFieldDenominator` is imported from the REAL module (Story 12-4,
+// ruling R-E). Stubbing it would let this suite stay green while the published
+// rates divided by the wrong denominator — the binding is exactly what needs
+// proving, so the real SQL builder runs.
+vi.mock('../registry-totals.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../registry-totals.service.js')>();
+  return {
+    ...actual,
+    getRegistryCountCore: () => mockCountCore(),
+  };
+});
 
 import { PublicInsightsService } from '../public-insights.service.js';
+import { answeredFieldDenominator } from '../registry-totals.service.js';
+import { sqlShape } from './sql-text.test-helpers.js';
 
 function mockRows(rows: Record<string, unknown>[]) {
   return { rows };
@@ -381,5 +392,125 @@ describe('PublicInsightsService.getTrends', () => {
     expect(week1.temporarilyAbsent).toBeNull(); // suppressed (3 < 10)
     expect(week1.other).toBeNull(); // suppressed (5 < 10)
     expect(result.employmentByWeek[1].employed).toBe(25);
+  });
+
+  /**
+   * ⭐ Story 12-4 / RULING R-E — THE PUBLISHED RATES' DENOMINATOR.
+   *
+   * `answersWhere` (`ru.raw_data IS NOT NULL`) means "has ANY answers". Two
+   * published rates on the PUBLIC /insights page divided by it, so a person who
+   * was never ASKED the employment question sat in its denominator and *not
+   * asked* silently became *not employed*. Both rates read LOWER than the truth,
+   * on the page the launch blast points a radio audience at.
+   *
+   * These assert the BINDING, not the helper — 13-55's lesson: a census that
+   * counts sites while production calls something else stays green forever.
+   */
+  describe('R-E — every rate divides by the people who answered ITS question', () => {
+    /**
+     * Whitespace-stripped so the assertion binds the STRUCTURE of the
+     * denominator, not the formatting. `toContain('employment_status')` would
+     * NOT do — the unemployment NUMERATOR names that field too, so a coarse
+     * denominator passes it. (Established by RED-verify: the first version of
+     * these tests stayed green with the fix reverted.)
+     */
+    async function captureSummarySql(): Promise<string> {
+      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
+      for (let i = 0; i < 8; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
+      await PublicInsightsService.getPublicInsights();
+      return sqlShape(mockExecute.mock.calls[0]?.[0]);
+    }
+
+    /**
+     * Serialised from the REAL shared helper, not hand-typed. A hand-typed
+     * expected string is a second definition of the denominator: change the
+     * helper and the test goes red for a formatting reason, or worse, keeps
+     * passing against a shape production no longer emits.
+     */
+    const perField = (field: string) => sqlShape(answeredFieldDenominator(field));
+    const dividedBy = (field: string) => `NULLIF(${perField(field)},0)`;
+
+    /** The retired coarse denominator: "has ANY answers". */
+    const COARSE = `NULLIF(COUNT(*)FILTER(WHEREru.raw_dataISNOTNULL),0)`;
+
+    it('divides the unemployment estimate by the people who answered employment_status', async () => {
+      expect(await captureSummarySql()).toContain(dividedBy('employment_status'));
+    });
+
+    it('divides business ownership by the people who answered has_business', async () => {
+      expect(await captureSummarySql()).toContain(dividedBy('has_business'));
+    });
+
+    it('no longer divides ANY rate by the bare has-any-answers filter', async () => {
+      // Absence of the retired shape is what proves the fix reached PRODUCTION
+      // code rather than sitting in an unused helper — the 13-55 lesson.
+      expect(await captureSummarySql()).not.toContain(COARSE);
+    });
+
+    /**
+     * ⭐ THE RATE AND ITS PUBLISHED `n` MUST COME FROM THE SAME EXPRESSION.
+     *
+     * This is the guard that was missing. Story 12-4 shipped
+     * `unemployment_est` still dividing by the coarse filter while
+     * `unemployment_n` published the per-field count — a wrong rate carrying a
+     * correct-looking sample size, which is worse than a wrong rate alone,
+     * because the `n` is what tells a reader the figure was audited.
+     * [[pattern-monitor-measuring-something-else]]
+     */
+    it.each([
+      ['has_business', 'biz_n'],
+      ['employment_status', 'unemployment_n'],
+    ])('publishes for %s the same denominator it divides by (as %s)', async (field, alias) => {
+      const text = await captureSummarySql();
+      expect(text).toContain(dividedBy(field));
+      expect(text).toContain(`${perField(field)}AS${alias}`);
+    });
+
+    it('publishes the youth n from the SAME dob band the youth rate divides by', async () => {
+      const text = await captureSummarySql();
+      const band = `EXTRACT(YEARFROMAGE(NOW(),(ru.raw_data->>'dob')::date))BETWEEN15AND35`;
+      expect(text).toContain(`NULLIF(COUNT(*)FILTER(WHERE${band}),0)`);
+      expect(text).toContain(`COUNT(*)FILTER(WHERE${band})ASyouth_emp_n`);
+    });
+
+    it('publishes the n each rate was computed from (they are not all the same number)', async () => {
+      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
+      mockExecute.mockResolvedValueOnce(mockRows([{
+        lgas_covered: '15',
+        biz_rate: '32.1', biz_n: '215',
+        unemployment_est: '23.9', unemployment_n: '188',
+        youth_emp_rate: '65.2', youth_emp_n: '140',
+        gpi: '0.85', gpi_n: '265',
+      }]));
+      for (let i = 0; i < 7; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
+
+      const result = await PublicInsightsService.getPublicInsights();
+
+      expect(result.rateDenominators).toEqual({
+        businessOwnership: 215,
+        unemployment: 188,
+        youthEmployment: 140,
+        gpi: 265,
+      });
+      // The whole point: these differ from each other AND from withAnswers.
+      expect(result.rateDenominators.unemployment).not.toBe(result.withAnswers);
+    });
+
+    it('reports a zero denominator rather than omitting it when nobody answered', async () => {
+      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
+      mockExecute.mockResolvedValueOnce(mockRows([{
+        lgas_covered: '15',
+        biz_rate: null, biz_n: '0',
+        unemployment_est: null, unemployment_n: '0',
+        youth_emp_rate: null, youth_emp_n: '0',
+        gpi: null, gpi_n: '0',
+      }]));
+      for (let i = 0; i < 7; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
+
+      const result = await PublicInsightsService.getPublicInsights();
+
+      expect(result.unemploymentEstimate).toBeNull();
+      expect(result.rateDenominators.unemployment).toBe(0);
+    });
   });
 });

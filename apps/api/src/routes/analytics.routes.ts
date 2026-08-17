@@ -90,6 +90,9 @@ router.get('/household', AnalyticsController.getHousehold);
 router.get('/skills', AnalyticsController.getSkillsFrequency);
 router.get('/trends', AnalyticsController.getTrends);
 router.get('/registry-summary', AnalyticsController.getRegistrySummary);
+// Story 12-4: the authoritative registry aggregate — counts PEOPLE, not
+// answer-bearing submissions. Inherits the router-level RBAC + scope chain.
+router.get('/registry-totals', AnalyticsController.getRegistryTotals);
 router.get('/pipeline-summary', AnalyticsController.getPipelineSummary);
 
 // Story 8.3: Team quality (Supervisor + Super Admin)

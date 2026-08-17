@@ -21,6 +21,7 @@ vi.mock('../../controllers/analytics.controller.js', () => ({
   AnalyticsController: {
     getDemographics: vi.fn(), getEmployment: vi.fn(), getHousehold: vi.fn(),
     getSkillsFrequency: vi.fn(), getTrends: vi.fn(), getRegistrySummary: vi.fn(),
+    getRegistryTotals: vi.fn(), // Story 12-4
     getPipelineSummary: vi.fn(), getCrossTab: vi.fn(), getSkillsInventory: vi.fn(),
     getInsights: vi.fn(), getEquity: vi.fn(), getActivationStatus: vi.fn(),
     getPolicyBrief: vi.fn(), getEnumeratorReliability: vi.fn(),

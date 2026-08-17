@@ -12,13 +12,26 @@ import { sql } from 'drizzle-orm';
 import type { PublicInsightsData, PublicTrendsData, SkillsFrequency, EmploymentTrendPoint } from '@oslsr/types';
 import { suppressSmallBuckets, bandSmallBuckets, toBuckets } from '../utils/analytics-suppression.js';
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
-import { getRegistryCountCore } from './registry-totals.service.js';
+import { getRegistryCountCore, answeredFieldDenominator } from './registry-totals.service.js';
 import { registryUnifiedSource } from './registry-unified.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
 
-const CACHE_KEY = 'analytics:public:insights';
+/**
+ * ⚠️ BUMP THE `:vN` SUFFIX WHENEVER THE PAYLOAD SHAPE CHANGES.
+ *
+ * The cached JSON outlives the deploy by up to `CACHE_TTL`. A field that the
+ * TYPE declares as always-present but a cached pre-deploy payload lacks is a
+ * `undefined is not an object` on the PUBLIC page for that hour — and the hour
+ * after a deploy is exactly when someone is looking. Equally, a corrected
+ * FIGURE (ruling R-E moved two published rates) would otherwise stay hidden
+ * behind the stale entry while the correction is announced.
+ *
+ * v2 (Story 12-4, 2026-08-17): added the required `rateDenominators`, and the
+ * business-ownership + unemployment rates changed value.
+ */
+const CACHE_KEY = 'analytics:public:insights:v2';
 const TRENDS_CACHE_KEY = 'analytics:public:trends';
 const CACHE_TTL = 3600; // 1 hour
 const PUBLIC_MIN_N = 10; // Stricter suppression for public data
@@ -77,7 +90,23 @@ export class PublicInsightsService {
     // ALL respondents (so the map agrees with the headline count by construction
     // and kills the 13-25-class drift). `answersWhere` on `ru` == "has answers"
     // because the LATERAL already keeps only the latest NON-EMPTY submission.
+    //
+    // ⭐ STORY 12-4 / RULING R-E — `answersWhere` IS NOT A RATE DENOMINATOR.
+    // It means "has ANY answers". Two published rates used to divide by it, so
+    // a person who was never ASKED about employment sat in the unemployment
+    // denominator and *not asked* silently became *not employed* — both rates
+    // read LOWER than the truth, on the page the launch blast drives traffic to.
+    // A rate's denominator is now the set of people who answered THAT question
+    // (`answeredFieldDenominator`, defined once in the 12-4 totals model).
+    // `answersWhere` survives ONLY for the breakdown/suppression subset, which
+    // legitimately means "has answers at all".
     const answersWhere = sql`ru.raw_data IS NOT NULL`;
+
+    // The youth band, written ONCE. It is the youth rate's numerator filter, its
+    // denominator, AND its published `n`, so three copies of the same EXTRACT
+    // was three places to fix when the band or the source field moves. The
+    // comment below on `youth_emp_n` explains why that move is a live risk.
+    const youthBand = sql`EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 35`;
 
     // Run all queries in parallel.
     // `countCore` (13-25) is respondent-scoped — registered PEOPLE (headline) +
@@ -107,28 +136,34 @@ export class PublicInsightsService {
           COUNT(DISTINCT ru.lga_id) FILTER (WHERE ru.lga_id IS NOT NULL) AS lgas_covered,
           ROUND(
             COUNT(*) FILTER (WHERE ru.raw_data->>'has_business' = 'yes')::numeric * 100.0 /
-            NULLIF(COUNT(*) FILTER (WHERE ${answersWhere}), 0)
+            NULLIF(${answeredFieldDenominator('has_business')}, 0)
           , 1) AS biz_rate,
+          ${answeredFieldDenominator('has_business')} AS biz_n,
           ROUND(
             COUNT(*) FILTER (WHERE
               ru.raw_data->>'employment_status' = 'no'
               AND COALESCE(ru.raw_data->>'temp_absent', 'no') = 'no'
               AND ru.raw_data->>'looking_for_work' = 'yes'
-            )::numeric * 100.0 / NULLIF(COUNT(*) FILTER (WHERE ${answersWhere}), 0)
+            )::numeric * 100.0 / NULLIF(${answeredFieldDenominator('employment_status')}, 0)
           , 1) AS unemployment_est,
+          ${answeredFieldDenominator('employment_status')} AS unemployment_n,
           ROUND(
             COUNT(*) FILTER (WHERE
               ru.raw_data->>'employment_status' = 'yes'
-              AND EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 35
+              AND ${youthBand}
             )::numeric * 100.0 /
-            NULLIF(COUNT(*) FILTER (WHERE
-              EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 35
-            ), 0)
+            NULLIF(COUNT(*) FILTER (WHERE ${youthBand}), 0)
           , 1) AS youth_emp_rate,
+          -- Already per-field (the dob band IS its denominator) — but that was
+          -- true BY ACCIDENT, not by design: association rows happen to carry
+          -- age_years rather than dob, so they fell out of it. Luck changes;
+          -- the n is published so a shift is visible instead of silent.
+          COUNT(*) FILTER (WHERE ${youthBand}) AS youth_emp_n,
           ROUND(
             COUNT(*) FILTER (WHERE ru.raw_data->>'gender' = 'female')::numeric /
             NULLIF(COUNT(*) FILTER (WHERE ru.raw_data->>'gender' = 'male'), 0)
-          , 2) AS gpi
+          , 2) AS gpi,
+          ${answeredFieldDenominator('gender')} AS gpi_n
         FROM ${registryUnifiedSource('ru')}
       `),
 
@@ -230,9 +265,13 @@ export class PublicInsightsService {
     interface SummaryRow {
       lgas_covered: string;
       biz_rate: string | null;
+      biz_n: string | number | null;
       unemployment_est: string | null;
+      unemployment_n: string | number | null;
       youth_emp_rate: string | null;
+      youth_emp_n: string | number | null;
       gpi: string | null;
+      gpi_n: string | number | null;
     }
 
     interface LabelCountRow {
@@ -299,6 +338,14 @@ export class PublicInsightsService {
       unemploymentEstimate: meetsThreshold && summary?.unemployment_est != null ? Number(summary.unemployment_est) : null,
       youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
+      // R-E: each rate ships with the n it was computed from. These differ from
+      // each other and from `withAnswers` — that difference IS the information.
+      rateDenominators: {
+        businessOwnership: Number(summary?.biz_n ?? 0),
+        unemployment: Number(summary?.unemployment_n ?? 0),
+        youthEmployment: Number(summary?.youth_emp_n ?? 0),
+        gpi: Number(summary?.gpi_n ?? 0),
+      },
       // Density is respondent-scoped over ALL registered people (share of the
       // headline total, not the with-answers subset) and BANDED, not blank-
       // suppressed (13-33 AC3): ≥10 → exact graduated count; 1–9 → present-but-

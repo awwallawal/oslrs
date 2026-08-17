@@ -269,6 +269,22 @@ export interface PublicInsightsData {
   unemploymentEstimate: number | null;
   youthEmploymentRate: number | null;
   gpi: number | null;
+  /**
+   * Story 12-4 (ruling R-E) — the n EACH rate was actually computed from.
+   *
+   * These are NOT all the same number and must never be collapsed into one.
+   * Every rate above divides by the people who answered ITS OWN question, so a
+   * question fewer people were asked has a smaller n. Publishing the n beside
+   * the rate is what stops the next reader having to work out which denominator
+   * produced it — and what stops a rate over 40 people being read with the
+   * authority of one over 300.
+   */
+  rateDenominators: {
+    businessOwnership: number;
+    unemployment: number;
+    youthEmployment: number;
+    gpi: number;
+  };
   lgaDensity: FrequencyBucket[];
   lastUpdated: string;
   keyFindings?: string[];

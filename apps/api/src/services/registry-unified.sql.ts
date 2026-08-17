@@ -49,10 +49,20 @@
  *      the latest-non-empty submission; never anything that fans out the grain).
  *   4. After editing, re-run the parity smoke (view ≡ inline ≡ count-core ≡
  *      export) — a column change alters the view's column set (DROP+CREATE path).
- * KNOWN PENDING CANDIDATE: `phone_number` (raw) — for 12-4 AC2's R2 identity-key
- * dedup (NIN → E.164 phone → id). Ruled (John/PM 2026-07-19): add it WHEN 12-4's
- * dedup needs it, not speculatively; E.164 normalization stays in
- * `registry-key-normalization.ts`. See 12-4 "🔗 13-33 hand-off" Dev Note.
+ * ✅ ADDED 2026-08-17 (Story 12-4): `phone_number` (raw) — the second rung of the
+ * R2 identity key (NIN → E.164 phone → respondent.id) that `getRegistryTotals`
+ * dedups on. Ruled by John/PM 2026-07-19: add it WHEN 12-4's dedup needs it, not
+ * speculatively — that condition is now met. Exposed RAW per rule 1; E.164
+ * normalization happens in TS (`lib/normalise/phone.ts`) so the dedup key is
+ * derived by the SAME function the writers use, not re-expressed in SQL.
+ *
+ * ⚠️ The 12-4 story's AC2 names `registry-key-normalization.ts` as the source of
+ * that normalization. It is NOT — that module maps raw_data KEY SPELLINGS
+ * (`dob`↔`date_of_birth`), not phone formats. The real normaliser is
+ * `normaliseNigerianPhone` in `lib/normalise/phone.ts`, which is what the
+ * respondent writers themselves use and what the `chk_respondents_phone_number_e164`
+ * CHECK constraint enforces. Using anything else would key the dedup on a
+ * different shape than the column stores.
  */
 
 /** The physical view name (single source of truth for the identifier). */
@@ -73,6 +83,7 @@ export const REGISTRY_UNIFIED_SQL_TEXT = `
     r.source               AS source,
     r.status               AS status,
     r.nin                  AS nin,
+    r.phone_number         AS phone_number,
     r.metadata             AS metadata,
     r.consent_marketplace  AS consent_marketplace,
     r.consent_enriched     AS consent_enriched,
