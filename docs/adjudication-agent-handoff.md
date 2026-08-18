@@ -670,8 +670,10 @@ Observed the same afternoon: a docs-only push ran its gate over five uncommitted
 
 ## 3. Current state (2026-08-18) — READ THIS ONE
 
-**Prod `88a2b74`, health 200. Register 327** (`withAnswers` 272). Verify the SHA, don't trust this line
-— see the header.
+**Register 327** (`withAnswers` 272), health 200. **No prod SHA here — that is D6's whole point, and I
+wrote one into this line minutes after deleting it from the header.** Prod moves on every docs push;
+it had already moved to `143956f` before this paragraph was finished. Run the two header commands.
+*(12-4's own deploy SHA is `88a2b74` — that one is static and belongs in the story file, where it is.)*
 
 - ✅ **12-4 CLOSED ON PROD 2026-08-18.** The blast gate's first of three is shipped. **The published
   rates changed materially: `businessOwnershipRate` 32 → 45.5, `unemploymentEstimate` 18.4 → 23.8**,
