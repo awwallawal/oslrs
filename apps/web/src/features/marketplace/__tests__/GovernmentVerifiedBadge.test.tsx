@@ -52,9 +52,23 @@ describe('GovernmentVerifiedBadge', () => {
     fireEvent.click(screen.getByText('Government Verified'));
 
     expect(screen.getByText('This badge means:')).toBeInTheDocument();
-    expect(screen.getByText('NIN validated and identity confirmed')).toBeInTheDocument();
-    expect(screen.getByText('Skills registration reviewed')).toBeInTheDocument();
-    expect(screen.getByText('Real person in Oyo State')).toBeInTheDocument();
+    expect(screen.getByText('A State Assessor reviewed this registration and approved it')).toBeInTheDocument();
+    expect(screen.getByText('It was checked for duplicate and fraudulent entries')).toBeInTheDocument();
+    expect(screen.getByText('An 11-digit NIN is on file')).toBeInTheDocument();
+  });
+
+  // [AI-Review][Low] 2026-08-18 — R1 honesty discipline, asserted rather than
+  // trusted to a comment. There is no NIMC path in this system and NIN validation
+  // is format-only, so no surface may claim the identity itself was verified.
+  it('NEVER claims the identity was validated — there is no NIMC path (R1)', () => {
+    render(<GovernmentVerifiedBadge />);
+    fireEvent.click(screen.getByText('Government Verified'));
+
+    const panel = screen.getByTestId('verification-info');
+    expect(panel.textContent).not.toMatch(/identity confirmed/i);
+    expect(panel.textContent).not.toMatch(/NIN validated/i);
+    // ...and it says so out loud, in the NOT-mean list.
+    expect(panel.textContent).toMatch(/not confirmed this identity with NIMC/i);
   });
 
   it('info section explains what verification does NOT mean', () => {

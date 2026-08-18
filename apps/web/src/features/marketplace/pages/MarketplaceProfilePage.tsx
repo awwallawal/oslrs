@@ -11,7 +11,7 @@ import { useAuth } from '../../auth/context/AuthContext';
 import { HCaptcha } from '../../auth/components/HCaptcha';
 import { ApiError } from '../../../lib/api-client';
 import { useQueryClient } from '@tanstack/react-query';
-import { skillLabelForSlug, type ContactRevealResponse } from '@oslsr/types';
+import { experienceLabelFor, skillLabelForSlug, type ContactRevealResponse } from '@oslsr/types';
 
 function InfoRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -204,8 +204,25 @@ export default function MarketplaceProfilePage() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Search
         </Button>
+        {/*
+          Story 13-38 AC8 / [AI-Review][Medium] 2026-08-18 — the card leads with the
+          trading name, so this page must too, or clicking "Bola Motors & Sons"
+          lands on a page that never mentions it. Same rule as the card: the
+          profession drops to a subline when a business name exists, and the page is
+          exactly as it was (profession as the h1) when there is none. NEVER a
+          person's name — the field is the only identity string on this surface.
+        */}
         <div className="flex items-start gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-neutral-900">{profile.profession || 'Unknown Profession'}</h1>
+          <div className="min-w-0">
+            <h1 data-testid="profile-identity" className="text-2xl font-bold text-neutral-900">
+              {profile.businessName || profile.profession || 'Unknown Profession'}
+            </h1>
+            {profile.businessName && (
+              <p data-testid="profile-profession-subline" className="text-base text-neutral-500">
+                {profile.profession || 'Unknown Profession'}
+              </p>
+            )}
+          </div>
           {profile.verifiedBadge && <GovernmentVerifiedBadge />}
         </div>
       </div>
@@ -220,9 +237,15 @@ export default function MarketplaceProfilePage() {
             label="Location"
             value={profile.lgaName}
           />
+          {/*
+            Story 13-38 AC7 — the stored value is a BUCKET SLUG (`4_6`, `over_10`),
+            so this row must go through the shared label map or it prints the slug
+            at the user. Same table the card's hero stat reads; null (absent or
+            unrecognised) renders the row's own em-dash rather than a raw value.
+          */}
           <InfoRow
             label="Experience Level"
-            value={profile.experienceLevel}
+            value={experienceLabelFor(profile.experienceLevel)}
           />
           <div className="flex justify-between py-2 border-b border-neutral-100 last:border-0">
             <span className="text-sm text-neutral-500">Member Since</span>

@@ -101,6 +101,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     experience_level: '5-10 years',
     verified_badge: true,
     bio: 'Experienced electrician.',
+    business_name: null,
     relevance_score: 0.0607,
     updated_at: '2026-03-01T12:00:00.000Z',
     ...overrides,
@@ -134,6 +135,24 @@ describe('MarketplaceService', () => {
       expect(result.data[0].profession).toBe('Electrician');
       expect(result.data[0].relevanceScore).toBe(0.0607);
       expect(result.meta.pagination.totalItems).toBe(1);
+    });
+
+    // Story 13-38 AC8 — the card's identity line needs the trading name to
+    // actually arrive from the read; a card-only change would render for nobody.
+    it('should surface business_name as businessName when the row has one', async () => {
+      setupDbMock([makeProfile({ business_name: 'Bola Motors & Sons' })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].businessName).toBe('Bola Motors & Sons');
+    });
+
+    it('should map an absent business_name to null (AC8.1 profession-led card)', async () => {
+      setupDbMock([makeProfile({ business_name: null })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].businessName).toBeNull();
     });
 
     it('should execute two queries (data + count) for search', async () => {

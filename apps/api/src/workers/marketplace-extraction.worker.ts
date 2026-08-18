@@ -20,6 +20,11 @@ import type { MarketplaceExtractionJobData } from '../queues/marketplace-extract
 import { sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { extractSelectMultipleValues } from '../lib/skills-extraction.js';
+import {
+  normaliseBusinessName,
+  normaliseMarketplaceExperienceLevel,
+  type MarketplaceExperienceLevel,
+} from '@oslsr/types';
 
 const logger = pino({ name: 'marketplace-extraction-worker' });
 
@@ -29,41 +34,24 @@ const connection = createRedisConnection();
 // Field Extraction Helpers
 // ============================================================================
 
-/** Canonical experience levels for consistent filtering */
-const EXPERIENCE_LEVELS = ['entry', '1-3', '4-7', '8-15', '15+'] as const;
-type ExperienceLevel = typeof EXPERIENCE_LEVELS[number];
-
-/** Maps raw form values to canonical experience levels */
-function normalizeExperienceLevel(raw: string | undefined | null): ExperienceLevel | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase().trim();
-
-  // Direct canonical match
-  if ((EXPERIENCE_LEVELS as readonly string[]).includes(lower)) return lower as ExperienceLevel;
-
-  // Numeric extraction fallback
-  const years = parseInt(lower, 10);
-  if (!isNaN(years)) {
-    if (years < 1) return 'entry';
-    if (years <= 3) return '1-3';
-    if (years <= 7) return '4-7';
-    if (years <= 15) return '8-15';
-    return '15+';
-  }
-
-  // Common label variants
-  const labelMap: Record<string, ExperienceLevel> = {
-    'none': 'entry', 'no experience': 'entry', 'beginner': 'entry', 'fresher': 'entry',
-    '1-3 years': '1-3', '1 to 3': '1-3', 'junior': '1-3',
-    '4-7 years': '4-7', '4 to 7': '4-7', 'mid': '4-7', 'intermediate': '4-7',
-    '8-15 years': '8-15', '8 to 15': '8-15', 'senior': '8-15',
-    '15+ years': '15+', 'over 15': '15+', 'expert': '15+',
-  };
-  const mapped = labelMap[lower];
-  if (!mapped) {
+/**
+ * Maps a raw `years_experience` answer to a canonical bucket (Story 13-38 AC7).
+ *
+ * The bucket vocabulary and the mapping itself live in `@oslsr/types`
+ * (`normaliseMarketplaceExperienceLevel`) so this worker, the 13-38 backfill and
+ * the card's label map can never drift apart. This wrapper only adds the log.
+ *
+ * ⚠️ It replaced a local table whose canon (`entry`/`1-3`/`4-7`/`8-15`/`15+`) no
+ * form ever emitted: the questionnaire's real values are `less_1`, `1_3`, `4_6`,
+ * `7_10`, `over_10` (`docs/questionnaire_schema.md:134-141`), of which `less_1`
+ * and `over_10` fell through to NULL and `7_10` collapsed into `4-7`.
+ */
+function normalizeExperienceLevel(raw: string | undefined | null): MarketplaceExperienceLevel | null {
+  const normalised = normaliseMarketplaceExperienceLevel(raw);
+  if (raw && !normalised) {
     logger.warn({ event: 'marketplace_extraction.unrecognized_experience', raw });
   }
-  return mapped ?? null;
+  return normalised;
 }
 
 /**
@@ -240,6 +228,10 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     const experienceLevel = normalizeExperienceLevel(getExperienceRaw(rawData));
     const bio = rawData['bio_short'] ? String(rawData['bio_short']).slice(0, 150) : null;
     const portfolioUrl = rawData['portfolio_url'] ? String(rawData['portfolio_url']) : null;
+    // Story 13-38 AC8 — the trading name the worker volunteered, trimmed + capped.
+    // ONE source key, deliberately: AC8.2 forbids any firstname/surname fallback,
+    // which would print a person's name on an anonymous-by-consent card.
+    const businessName = normaliseBusinessName(rawData['business_name']);
 
     // 5. Resolve LGA name
     const { lgaId: resolvedLgaId, lgaName } = await resolveLgaName(respondent.lgaId);
@@ -265,6 +257,7 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
         consentEnriched: respondent.consentEnriched,
         bio,
         portfolioUrl,
+        businessName,
       })
       .onConflictDoUpdate({
         target: marketplaceProfiles.respondentId,
@@ -273,11 +266,31 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
           skills: skills || null,
           lgaId: resolvedLgaId,
           lgaName,
-          experienceLevel,
           consentEnriched: respondent.consentEnriched,
           verifiedBadge,
           bio,
           portfolioUrl,
+          businessName,
+          // ⚠️ [AI-Review][Medium] 2026-08-18 (re-review) — never blank a stored
+          // bucket. This upsert re-runs whenever a respondent submits again
+          // (submission-processing.service.ts:1344 is the only caller), and a
+          // supplemental/self-edit submission need not carry `years_experience`
+          // at all — `getExperienceRaw` then yields undefined and the normaliser
+          // yields null. Writing that null would delete a hero stat the card was
+          // rendering correctly. Story 13-38 also NARROWED what normalises: the
+          // old local table accepted `senior`/`expert`/`junior`/`mid`/
+          // `intermediate`/`over 15`/`1 to 3`/`4 to 7`/`8 to 15`, and the shared
+          // canon deliberately does not, so strictly MORE raw answers reach null
+          // now than before this story. Same rule the 13-38 backfill already
+          // applies (marketplace-card-backfill.service.ts): ADD or CORRECT, never
+          // subtract.
+          //
+          // This deliberately DIFFERS from `businessName` just above, which is
+          // still written unconditionally: the live path sees a whole submission,
+          // so a resubmission that drops the trading name legitimately retracts
+          // it. An experience bucket is not retractable by omission — the
+          // questionnaire simply may not have asked.
+          experienceLevel: experienceLevel ?? sql`${marketplaceProfiles.experienceLevel}`,
           updatedAt: sql`now()`,
         },
       });

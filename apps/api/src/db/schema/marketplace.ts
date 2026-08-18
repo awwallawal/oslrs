@@ -40,6 +40,17 @@ export const marketplaceProfiles = pgTable('marketplace_profiles', {
   lgaName: text('lga_name'),
   experienceLevel: text('experience_level'),
 
+  /**
+   * Story 13-38 AC8 — the worker's own trading name from `raw_data.business_name`,
+   * trimmed + capped to MARKETPLACE_BUSINESS_NAME_MAX_LEN (80) by the extraction
+   * worker. Nullable: most rows have none, and the card is profession-led then.
+   *
+   * ⚠️ NOT PII in the sense the rest of this table avoids: it is commercial, on the
+   * person's signboard already, and volunteered for public display. It must NEVER
+   * be populated from firstname/surname — see `normaliseBusinessName`.
+   */
+  businessName: text('business_name'),
+
   // Government verification badge
   verifiedBadge: boolean('verified_badge').notNull().default(false),
 

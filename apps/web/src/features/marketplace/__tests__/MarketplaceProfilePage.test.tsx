@@ -112,10 +112,13 @@ const sampleProfile = {
   profession: 'Electrician',
   skills: ['electrical', 'solar', 'custom_realtor'],
   lgaName: 'Ibadan North',
-  experienceLevel: '5-10 years',
+  // Story 13-38 AC7 — the stored value is the questionnaire's bucket slug, never
+  // a pre-formatted label. '5-10 years' was never a value any form produced.
+  experienceLevel: '7_10',
   verifiedBadge: true,
   bio: 'Experienced electrician specializing in residential wiring.',
   portfolioUrl: 'https://example.com/portfolio',
+  businessName: null,
   createdAt: '2026-03-01T12:00:00.000Z',
 };
 
@@ -193,7 +196,10 @@ describe('MarketplaceProfilePage', () => {
 
     expect(screen.getByText('Electrician')).toBeInTheDocument();
     expect(screen.getByText('Ibadan North')).toBeInTheDocument();
-    expect(screen.getByText('5-10 years')).toBeInTheDocument();
+    // Story 13-38 AC7 — the bucket slug is rendered through the shared label map.
+    // A regression here means the page prints "7_10" at the user.
+    expect(screen.getByText('7–10 yrs')).toBeInTheDocument();
+    expect(screen.queryByText('7_10')).not.toBeInTheDocument();
     expect(screen.getByText('March 2026')).toBeInTheDocument();
   });
 
@@ -405,6 +411,47 @@ describe('MarketplaceProfilePage', () => {
     renderProfilePage();
 
     expect(screen.getByText('Unknown Profession')).toBeInTheDocument();
+  });
+
+  // [AI-Review][Medium] 2026-08-18 — Story 13-38 AC8. The card leads with the
+  // trading name; landing on a page that never mentions it breaks the one flow this
+  // story built. Same rules as the card, including the no-person-name guarantee.
+  describe('business name (AC8)', () => {
+    it('leads with the business name and drops the profession to a subline', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, businessName: 'Bola Motors & Sons', profession: 'Auto Mechanic' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('profile-identity')).toHaveTextContent('Bola Motors & Sons');
+      expect(screen.getByTestId('profile-profession-subline')).toHaveTextContent('Auto Mechanic');
+    });
+
+    it('stays exactly profession-led when there is no business name', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, businessName: null, profession: 'Auto Mechanic' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('profile-identity')).toHaveTextContent('Auto Mechanic');
+      expect(screen.queryByTestId('profile-profession-subline')).not.toBeInTheDocument();
+    });
+
+    it('never falls back to a person name when the business name is absent', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, businessName: null, profession: 'Tailoring/Sewing' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('profile-identity')).toHaveTextContent('Tailoring/Sewing');
+      expect(document.body.textContent).not.toMatch(/Adekemi|Ogunlade/);
+    });
   });
 
   it('does not render portfolio link for javascript: protocol URLs (XSS prevention)', () => {

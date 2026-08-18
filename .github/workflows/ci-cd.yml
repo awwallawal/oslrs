@@ -1104,6 +1104,20 @@ jobs:
             # Run idempotent migration scripts (safe to re-run on every deploy)
             cd apps/api && pnpm tsx scripts/migrate-audit-immutable.ts && cd ~/oslrs
 
+            # Story 13-38 [AI-Review][High]: apply src/db/custom-sql/*.sql (the
+            # marketplace FTS trigger + its GIN index). These were reachable ONLY
+            # via the manual `db:custom`, which was in NO workflow and NO deploy
+            # step — so since Story 7-1 the prod trigger kept whatever definition
+            # someone last applied BY HAND, and 13-38's business_name-at-weight-A
+            # change would never have entered the tsvector. Search matches on
+            # `search_vector @@ plainto_tsquery` as a hard WHERE filter, so the
+            # card's headline line would have been the one string search cannot
+            # find. Idempotent (CREATE OR REPLACE / DROP IF EXISTS). Runs BEFORE
+            # any operator-gated backfill: the trigger only recomputes on
+            # INSERT/UPDATE and the 13-38 backfill is idempotent, so rows written
+            # under a stale trigger would keep a stale vector permanently.
+            cd apps/api && pnpm tsx scripts/migrate-custom-sql-init.ts && cd ~/oslrs
+
             # Story 9-13 MFA init: partial index + grace_until seed for super_admins
             cd apps/api && pnpm tsx scripts/migrate-mfa-init.ts && cd ~/oslrs
 

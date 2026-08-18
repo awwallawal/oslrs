@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
+import { MARKETPLACE_EXPERIENCE_LEVELS, experienceLabelFor } from '@oslsr/types';
 import type { LgaItem } from '../../dashboard/api/export.api';
 
 interface MarketplaceFiltersProps {
@@ -91,14 +92,34 @@ export function MarketplaceFilters({
         />
       </div>
 
+      {/*
+        Story 13-38 R4 (Awwal's ruling 2026-08-18). This was a FREE-TEXT input
+        matched with `=` against the stored slug, so it could only ever match by
+        the user typing a slug exactly — and after the AC7 re-bucketing (`4-7` →
+        `4_6`) any bookmarked or remembered old value matched NOTHING, silently.
+        Bound to the canon instead: the VALUE is the slug the column stores, the
+        LABEL comes from `experienceLabelFor` — the SAME table that renders the
+        card's hero stat, never a second vocabulary (the drift that sent 90/150
+        skill slugs to 'Other' pre-13-22). Adding or renaming a bucket now moves
+        the filter, the card and the backfill together.
+      */}
       <div className="w-40">
-        <Input
-          placeholder="Experience level"
-          value={expInput}
-          onChange={(e) => setExpInput(e.target.value)}
-          maxLength={50}
-          data-testid="experience-filter"
-        />
+        <Select
+          value={expInput || 'all'}
+          onValueChange={(v) => setExpInput(v === 'all' ? '' : v)}
+        >
+          <SelectTrigger data-testid="experience-filter">
+            <SelectValue placeholder="Experience level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All experience levels</SelectItem>
+            {MARKETPLACE_EXPERIENCE_LEVELS.map((level) => (
+              <SelectItem key={level} value={level}>
+                {experienceLabelFor(level) ?? level}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {hasFilters && (

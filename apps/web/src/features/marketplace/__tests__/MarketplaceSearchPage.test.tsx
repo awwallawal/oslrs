@@ -342,7 +342,9 @@ describe('MarketplaceSearchPage', () => {
     expect(input).toHaveValue('plumber');
   });
 
-  it('has "View Profile" link on worker cards that navigates to profile page', () => {
+  // Story 13-38 AC5 renamed the CTA to "View profile & contact" (a real filled
+  // button, not a bare text link) — the navigation contract is unchanged.
+  it('has a profile CTA on worker cards that navigates to profile page', () => {
     mockSearchReturn = {
       data: {
         data: [sampleProfile],
@@ -352,8 +354,7 @@ describe('MarketplaceSearchPage', () => {
       isFetching: false,
     };
     renderPage();
-    const viewLink = screen.getByText('View Profile');
-    expect(viewLink).toBeInTheDocument();
+    expect(screen.getByTestId('worker-card-cta')).toHaveTextContent('View profile & contact');
     // Card is wrapped in a Link to profile page
     const card = screen.getByTestId('worker-card');
     const link = card.closest('a');

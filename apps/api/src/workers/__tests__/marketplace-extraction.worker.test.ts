@@ -135,7 +135,8 @@ describe('marketplace-extraction worker', () => {
         skills: 'carpentry, plumbing',
         lgaId: 'ibadan-north',
         lgaName: 'Ibadan North',
-        experienceLevel: '4-7',
+        // Story 13-38 AC7 — buckets are the questionnaire's own values now.
+        experienceLevel: '4_6',
         verifiedBadge: false,
         consentEnriched: false,
       }));
@@ -166,6 +167,49 @@ describe('marketplace-extraction worker', () => {
   });
 
   describe('UPSERT idempotency', () => {
+    /**
+     * [AI-Review][Medium] 2026-08-18 (re-review). The conflict SET used to write
+     * `experienceLevel` unconditionally, so a RE-extraction whose answers cannot
+     * be bucketed blanked a bucket the card was already rendering. This upsert
+     * re-runs on every resubmission (submission-processing.service.ts:1344), and a
+     * supplemental/self-edit submission need not carry `years_experience` at all.
+     * Story 13-38 also NARROWED the accepted set (`senior`/`expert`/`mid`/… all
+     * now normalise to null), so strictly MORE answers reach null than before.
+     *
+     * The INSERT half may still be null — a brand-new row has no stored bucket to
+     * protect. It is only the UPDATE half that must never subtract.
+     */
+    it('never blanks a stored experience_level when the new answer is unbucketable', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-003',
+          // 'senior' was accepted by the PRE-13-38 local table and is deliberately
+          // rejected by the shared canon — the exact widened case.
+          rawData: { skills_possessed: 'plumbing', years_experience: 'senior' },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-003', respondentId: 'resp-001' }));
+
+      // A fresh row legitimately gets null...
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        experienceLevel: null,
+      }));
+
+      // ...but the conflict path must NOT write null over what is already stored.
+      const setArg = mocks.onConflictFn.mock.calls[0][0].set as Record<string, unknown>;
+      expect(setArg.experienceLevel).not.toBeNull();
+      expect(setArg.experienceLevel).toBeDefined();
+      // It is a SQL fragment referencing the existing column, not a literal.
+      expect(typeof setArg.experienceLevel).toBe('object');
+
+      // business_name deliberately KEEPS the unconditional write: the live path
+      // sees a whole submission, so dropping a trading name is a real retraction.
+      expect(setArg.businessName).toBeNull();
+    });
+
     it('should call onConflictDoUpdate for same respondent', async () => {
       const mocks = setupDbMocks({
         submission: {
@@ -193,7 +237,7 @@ describe('marketplace-extraction worker', () => {
           skills: 'plumbing',
           lgaId: 'ibadan-south',
           lgaName: 'Ibadan South',
-          experienceLevel: '8-15',
+          experienceLevel: '7_10',
           consentEnriched: true,
         }),
       }));
@@ -377,19 +421,30 @@ describe('marketplace-extraction worker', () => {
     });
   });
 
-  describe('experience level normalization', () => {
+  describe('experience level normalization (Story 13-38 AC7)', () => {
     it.each([
-      ['3', '1-3'],
-      ['5', '4-7'],
-      ['10', '8-15'],
-      ['20', '15+'],
-      ['0', 'entry'],
-      ['entry', 'entry'],
-      ['1-3', '1-3'],
-      ['4-7 years', '4-7'],
-      ['senior', '8-15'],
-      ['expert', '15+'],
-      ['beginner', 'entry'],
+      // The questionnaire's OWN five choice values (docs/questionnaire_schema.md:134-141).
+      // Before 13-38, `less_1` and `over_10` normalised to NULL and `7_10`
+      // collapsed into `4-7` — two of five real answers lost their hero stat.
+      ['less_1', 'less_1'],
+      ['1_3', '1_3'],
+      ['4_6', '4_6'],
+      ['7_10', '7_10'],
+      ['over_10', 'over_10'],
+      // Their labels, in case a channel submits the label instead of the value.
+      ['Less than 1 year', 'less_1'],
+      ['1-3 years', '1_3'],
+      ['4-6 years', '4_6'],
+      ['7-10 years', '7_10'],
+      ['Over 10 years', 'over_10'],
+      // A bare year count, placed on the questionnaire's own bucket edges.
+      ['0', 'less_1'],
+      ['3', '1_3'],
+      ['5', '4_6'],
+      ['10', '7_10'],
+      ['20', 'over_10'],
+      // Unambiguous "not started yet" synonyms.
+      ['beginner', 'less_1'],
     ])('should normalize "%s" to "%s"', async (raw, expected) => {
       const mocks = setupDbMocks({
         submission: {
@@ -406,6 +461,91 @@ describe('marketplace-extraction worker', () => {
         experienceLevel: expected,
       }));
     });
+
+    it('stores NULL rather than guessing when the answer cannot be bucketed', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: 'test', years_experience: 'quite a while' },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        experienceLevel: null,
+      }));
+    });
+  });
+
+  describe('business name extraction (Story 13-38 AC8)', () => {
+    it('stores a volunteered business_name, trimmed', async () => {
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: 'tailoring', business_name: '  Ade Tailoring Ventures  ' },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        businessName: 'Ade Tailoring Ventures',
+      }));
+    });
+
+    it('caps a signboard-length business_name at 80 chars (AC8.3)', async () => {
+      const long = 'A'.repeat(200);
+      const mocks = setupDbMocks({
+        submission: {
+          id: 'sub-001',
+          rawData: { skills_possessed: 'tailoring', business_name: long },
+        },
+        respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      const values = mocks.valuesFn.mock.calls[0][0] as { businessName: string };
+      expect(values.businessName).toHaveLength(80);
+    });
+
+    it.each([
+      ['absent', {}],
+      ['blank', { business_name: '   ' }],
+      ['non-string', { business_name: 42 }],
+    ])(
+      'stores NULL and NEVER a person\'s name when business_name is %s (AC8.2)',
+      async (_case, businessFields) => {
+        const mocks = setupDbMocks({
+          submission: {
+            id: 'sub-001',
+            rawData: {
+              skills_possessed: 'tailoring',
+              // The person's identity IS in raw_data. A fallback chain that reached
+              // for it would print a real name on a card the consent copy promises
+              // is anonymous — this asserts no such chain exists.
+              firstname: 'Adekemi',
+              surname: 'Ogunlade',
+              full_name: 'Adekemi Ogunlade',
+              ...businessFields,
+            },
+          },
+          respondent: { id: 'resp-001', consentMarketplace: true, consentEnriched: false, lgaId: null },
+          fraudDetections: [],
+        });
+
+        await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+        const values = mocks.valuesFn.mock.calls[0][0] as { businessName: string | null };
+        expect(values.businessName).toBeNull();
+      },
+    );
   });
 
   describe('verified badge derivation', () => {

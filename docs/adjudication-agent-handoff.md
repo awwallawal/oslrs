@@ -1913,6 +1913,96 @@ be wrong is evidence; an observation that something changed is not.**
 **Left for whoever picks up 12-5:** it is the story that makes `rateDenominators` load-bearing, and
 R4's window becomes relevant the moment anything runtime reads the physical view.
 
+## 7q. Session 2026-08-18 — 13-38 re-review: a trigger that reached no database, and a warning finally killed at the root
+
+> ⚖️ **RENUMBERED 7p → 7q at adjudication.** Main's §7p (the 12-4 close-out) was written the same day
+> on a different branch, so two different sections carried the same number. Caught at the rebase, not
+> after it. **Rulings since taken (Awwal, 2026-08-18): R7 PUBLISH · R4 bind-to-canon · R10 inversion
+> confirmed · R1 accepted · R3 closed by prod measurement.** The "R7 is an open ruling" language below
+> is preserved as it was written; the ledger in the story file is the current state.
+
+**Worktree `C:\Users\DELL\wt-13-38`, branch `story/13-38-marketplace-card`. NOTHING IS COMMITTED.**
+Status stays `review` (§2a0 — R1/R2/R3/R4 open, plus a new R7 that needs Awwal). Re-review of the
+dev's fix pass found **9 findings (2 High / 4 Medium / 3 Low), all fixed + RED-verified**. Detail is
+in the story file's `## Senior Developer Review (AI) — RE-REVIEW` + `## Residuals ledger`.
+
+### 🚩 THE FLAG — the working tree carries ONE file that is NOT 13-38. Commit it separately.
+
+`apps/web/src/features/onboarding/components/__tests__/LiveSelfieCapture.test.tsx`
+
+It is an **onboarding** test file with no relation to the marketplace card. It is dirty because Awwal
+asked, mid-session, for the long-standing lint warnings to be cleared "once and for all". Do **not**
+fold it into the 13-38 commit — it belongs in its own `chore(lint):` commit. It is declared in
+13-38's `## File List` flagged `⚠️ NOT 13-38 — commit separately` rather than left undeclared,
+which is R12's lesson applied to the reviewer's own edit.
+
+**Everything else in that tree IS 13-38**, except this doc itself. `git status --porcelain` is the
+authority — deliberately no count is recorded here, because the whole reason two of this re-review's
+findings exist is that a written-down list had drifted from what git actually said (and D6 is the
+same lesson about self-staling numbers).
+
+### The warning resolution — root-caused, not silenced
+
+`pnpm lint` had emitted the same two warnings for months, and every report (mine included, four
+times) described them as *"2 pre-existing warnings in an untouched file"* — accurate, and exactly how
+a thing survives forever:
+
+```
+LiveSelfieCapture.test.tsx
+  140:7  warning  Unused eslint-disable directive (no problems reported from '@typescript-eslint/no-explicit-any')
+  186:7  warning  Unused eslint-disable directive
+```
+
+**Root cause:** `apps/web/eslint.config.js:148` sets `@typescript-eslint/no-explicit-any` to `'off'`
+for test files (`// Allow any in tests`). Both `// eslint-disable-next-line` comments were therefore
+suppressing a rule that **could never fire there** — dead annotations, not needed suppressions.
+
+**Fix:** both directives deleted. This is permanent rather than a workaround: the config deliberately
+permits `any` in tests, so they cannot come back unless that policy changes — at which point eslint
+would ask for them again, correctly. File still passes **9/9**; web `tsc` clean.
+
+**Result: `lint` is now 0 errors AND 0 warnings across `@oslsr/types`, `@oslsr/api`, `@oslsr/web`.**
+Worth protecting — a clean lint is a signal; a lint with two permanent warnings trains everyone to
+skim past the output, which is how a *third* warning would arrive unnoticed.
+
+### ⚠️ Do not confuse the three drift guards with warnings
+
+Awwal asked whether "the 3 drift guards" needed resolving too. **They do not — they are passing
+checks, not warnings.** `apps/api`'s lint script runs them and they print green every time:
+
+```
+✅ registry-read drift guard: 384 files scanned, no drift.
+✅ respondent-write drift guard: 384 files scanned, no un-sanctioned respondent CREATION.
+✅ story-residual guard: 317 stories scanned, no done-with-open-residuals.
+```
+
+Green is the desired state; they exist to fail loudly if drift appears. Keep them noisy.
+
+### The two findings worth carrying into the playbook
+
+1. **A trigger that reached no database.** The 2026-08-18 round correctly added `business_name` to the
+   marketplace FTS tsvector — and **`db:custom` is in no workflow and no deploy step**. So CI's DB
+   never had the trigger at all and prod's had been frozen since a human last ran it in Story 7-1
+   (March). Proven by dropping the trigger locally to reproduce a CI-fresh DB: the story's own AC8
+   search test **failed**. Fixed with `apps/api/scripts/migrate-custom-sql-init.ts` (auto-discovered
+   by `db-push-full.ts` for CI; explicit step added to the prod deploy chain in `ci-cd.yml`). The
+   accompanying "full suite green" had been a locally-cached gate standing in for the real one —
+   **Pitfall #47, found in the deploy pipeline rather than the logic.**
+2. **The record stopped a day before the code did.** The tree carried 7+ `[AI-Review] 2026-08-18`
+   annotations with **no 2026-08-18 entry anywhere in the story**, stale counts (14/14 → really 21;
+   6/6 → really 9), two undeclared files, and a code comment citing an "R7" the ledger did not
+   contain. Both High findings were reached **by diffing git against the File List, not by reading
+   the story** — the undeclared trigger file was the thread that led to the CI break.
+
+**⚠️ Before any operator runs the 13-38 backfill `--apply`:** the FTS trigger must already carry
+`business_name` (else repaired rows are permanently unsearchable — the backfill is idempotent and
+will never revisit them), and **R7 is a ruling only Awwal can give** — the preview counts cards whose
+`business_name` contains the person's own name ("Adekemi Fashion House"), and the consent copy names
+only profession, LGA and experience level. That decision is only actionable while it is still a
+preview.
+
+> ✅ **R7 RULED 2026-08-18: PUBLISH** — measured first (8 of 235), then decided. See the story ledger.
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list

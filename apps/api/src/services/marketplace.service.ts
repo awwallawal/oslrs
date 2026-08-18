@@ -167,6 +167,7 @@ export class MarketplaceService {
         mp.experience_level,
         mp.verified_badge,
         mp.bio,
+        mp.business_name,
         ${rankSelect} as relevance_score,
         mp.updated_at
       FROM marketplace_profiles mp
@@ -192,6 +193,8 @@ export class MarketplaceService {
       verifiedBadge: Boolean(row.verified_badge),
       bio: row.bio ? String(row.bio) : null,
       relevanceScore: row.relevance_score != null ? parseFloat(String(row.relevance_score)) : null,
+      // Story 13-38 AC8 — additive read on the same row; no new registry read.
+      businessName: row.business_name ? String(row.business_name) : null,
     }));
 
     // Build next cursor
@@ -244,6 +247,9 @@ export class MarketplaceService {
         mp.verified_badge,
         mp.bio,
         mp.portfolio_url,
+        -- Story 13-38 AC8 / [AI-Review][Medium] 2026-08-18 — the card leads with the
+        -- trading name, so the page it links to must not silently drop it.
+        mp.business_name,
         mp.created_at
       FROM marketplace_profiles mp
       LEFT JOIN lgas l ON mp.lga_id = l.code
@@ -264,6 +270,7 @@ export class MarketplaceService {
       verifiedBadge: Boolean(row.verified_badge),
       bio: row.bio ? String(row.bio) : null,
       portfolioUrl: row.portfolio_url ? String(row.portfolio_url) : null,
+      businessName: row.business_name ? String(row.business_name) : null,
       createdAt: new Date(row.created_at as string).toISOString(),
     };
   }
