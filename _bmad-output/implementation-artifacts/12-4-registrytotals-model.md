@@ -1,9 +1,21 @@
 # Story 12.4: registryTotals aggregate model
 
-Status: done
+Status: review
 
-> ⛔ **`done` = code-complete + reviewed + verified locally. It does NOT mean the blast gate is open.**
-> The corrected public rates are not on prod. See "Senior Developer Review (AI) → DEPLOY GATE".
+> ⛔ **Code-complete, reviewed, and verified LOCALLY. The corrected public rates are NOT on prod.**
+> See `## Residuals` (R1) and `## Closing verdict` below, and the "Senior Developer Review (AI) →
+> DEPLOY GATE".
+>
+> ⚖️ **CHANGED FROM `done` → `review` AT ADJUDICATION, 2026-08-18.** The review's caveat was correct
+> and carefully written in three places — but it redefined the STATUS rather than using the one that
+> already means exactly this. `review` *is* "code-complete, not yet on prod"; §2a0 and D9 reserve
+> `done` for a real deploy SHA with every residual resolved, and 13-59's reviewer applied that same
+> rule 24 hours earlier, overruling the same workflow step.
+>
+> **The harm is that the board stops being readable.** Anyone scanning for what remains before the
+> blast sees `done` and moves on — which is precisely what the caveat was written to prevent. **A
+> status that needs a paragraph to interpret has stopped being a status.** The caveat's content is
+> kept in full; only the word it was compensating for has changed.
 
 > ⚠️ **RE-MEASURE BEFORE BUILDING (added 2026-08-01).** This story's headline split — *"139 = 76 completed
 > + 55 data_lost + 7 no_submission + 1 pending_nin"* — is **STALE**. The registry is now **145 = 82 with a
@@ -561,6 +573,52 @@ public rates have moved → only then the blast.
 3. **The 13-33-L3 materialisation hedge stays deferred** — trigger not hit (~315 rows vs 5 000).
 4. **`inProgressDrafts` reconciles on PHONE only.** A draft whose owner registered under a different
    phone still counts as in progress. Better than counting all of them; not exact.
+
+## Residuals
+
+Per the §2a0 three states. **`done` is not permitted while any row is OPEN or DISCHARGE-ON-DEPLOY.**
+
+| ID | Sev | Item | State | Evidence / trigger | Owner |
+|---|---|---|---|---|---|
+| **R1** | **High** | **The corrected public rates are not on prod.** R-E's defect — `answersWhere` used as a rate denominator — is **still live on the page the blast drives traffic to.** | **DISCHARGE-ON-DEPLOY** | **Measured 2026-08-18, prod `9490449`:** `unemploymentEstimate: 18.4`, `businessOwnershipRate: 32`, `rateDenominators` **absent**. **Discharge by:** deploy, then `curl https://oyoskills.com/api/v1/public/insights` and confirm **both rates MOVE** and `rateDenominators` is **present**. ⚠️ The cache key is `:v2`, so a stale `:v1` entry cannot mask the change — but confirm the figures, not the deploy SHA. **Reopen:** either rate reading its old value an hour after deploy. | adjudication, same session |
+| **R2** | Med | `ci-cd.yml:1184` recreates the `registry_unified` view for the new `phone_number` column, **non-idempotently on deploy**. | **DISCHARGE-ON-DEPLOY** | The runner is auto-discovered and runs on deploy. **Discharge by:** confirming the deploy log shows it executing, and that `registry_unified` exposes `phone_number` afterwards. **Reopen:** any query against the view erroring on a missing column post-deploy — the signature of the recreate not firing. | adjudication, same session |
+| **R3** | Low | `done` had been used to mean "code-complete", with the real meaning carried in prose. | ✅ **CLOSED at adjudication 2026-08-18** | Status moved to `review` on the story **and** the board; the caveat's content is retained in full. `done` returns to its §2a0/D9 meaning: a real deploy SHA with every residual resolved. | adjudication |
+
+## Closing verdict
+
+**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
+**Until that line carries a real SHA and R1 + R2 are discharged, `Status:` must not read `done`** —
+D9's own hold condition, and the precedent 13-57/13-59/13-60 each set this month.
+
+| Gate | Evidence — run by adjudication, not the dev's or reviewer's self-report |
+|---|---|
+| `tsc` | API **0**, web **0** |
+| `eslint src scripts` | **0** |
+| Drift guards, run **DIRECT** (uncached — Pitfall #47) | registry-read **381 clean** · respondent-write **381 clean** · story-residual **317 clean** |
+| 12-4 suites (4 files) | **94 passed, 0 failed** |
+| Commit hygiene | `a90d64e` staged **17 files by explicit path** on a story branch, unpushed — it did **not** sweep up the 7 unrelated files sitting in the shared tree |
+
+### ⭐ RED-verify by adjudication — the denominator, not a proxy for it
+
+`answeredFieldDenominator('employment_status')` was reverted to the old
+`COUNT(*) FILTER (WHERE answersWhere)`. **Three tests went red, and they are the right three:**
+
+```
+× divides the unemployment estimate by the people who answered employment_status
+× no longer divides ANY rate by the bare has-any-answers filter
+× publishes for employment_status the same denominator it divides by (as unemployment_n)
+```
+
+Reverted → **23/23 green**. The third assertion is the one worth keeping: it pins the **published `n`
+to the denominator actually used**, so R-E's "publish n beside every rate" is checkable rather than
+asserted. A future edit that changes one without the other fails.
+
+### The best thing in this commit is not the fix
+
+**The cache key was bumped to `:v2`, and the reason is written down.** A corrected figure would
+otherwise sit behind a stale entry for up to `CACHE_TTL` — *exactly* the hour in which someone looks
+after a correction is announced — and the newly-required `rateDenominators` would have thrown
+`undefined is not an object` on the PUBLIC page for that hour. **Most reviews never reach the cache.**
 
 ## Change Log
 
