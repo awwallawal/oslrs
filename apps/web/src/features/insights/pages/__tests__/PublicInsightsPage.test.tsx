@@ -191,17 +191,29 @@ describe('PublicInsightsPage', () => {
     expect(screen.getByText(/data refreshed hourly/i)).toBeInTheDocument();
   });
 
-  it('methodology note funnels registered vs completed-survey subset (13-25)', () => {
+  it('methodology note states the breakdown base and does NOT narrate the answer-less remainder', () => {
     mockInsights.isLoading = false;
     mockInsights.data = fullData; // 5,000 registered · 4,200 with complete responses
     mockInsights.error = null;
     renderPage();
-    // The 800 answer-less registrants (5,000 − 4,200) are counted in the total
-    // but excluded from the breakdowns — surfaced transparently, not hidden.
-    // (The number sits in its own <span>, so assert the count and the
-    // explanatory clause separately.)
-    expect(screen.getByText('800')).toBeInTheDocument();
-    expect(screen.getByText(/identity captured during the soft-launch/i)).toBeInTheDocument();
+    const note = screen.getByRole('region', { name: /methodology/i });
+
+    // The base the breakdowns are computed on is still published — that is the
+    // 13-25 funnel intent and 12-4's "publish the n you divided by".
+    expect(note.textContent).toMatch(
+      /breakdowns above are based on the\s*4,200\s*registrants with complete survey responses/i,
+    );
+
+    // ⛔ REGRESSION GUARD (2026-08-18, operator ruling). The prose narrating the
+    // 800 answer-less registrants was removed from the PUBLIC page. It named the
+    // soft-launch window and framed the gap as answers "not on file", which reads
+    // as an admission of data loss to a general audience. The two counts remain
+    // published side by side in the tiles above, so the base is still legible.
+    // Do NOT reintroduce this copy without an operator ruling.
+    expect(note.textContent).not.toMatch(/soft-launch/i);
+    expect(note.textContent).not.toMatch(/not on file/i);
+    expect(note.textContent).not.toMatch(/counted in the total/i);
+    expect(note.textContent).not.toMatch(/\b800\b/);
   });
 
   it('hero "Total Registered" shows the completed-survey funnel subtitle (13-25)', () => {

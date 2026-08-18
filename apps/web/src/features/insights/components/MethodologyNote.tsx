@@ -22,11 +22,6 @@ export function MethodologyNote({ totalRegistered, withAnswers = 0, lastUpdated 
       })
     : null;
 
-  // Registered people whose survey answers are not on file (soft-launch salvage
-  // + no-submission + pending-NIN). Counted in the register, excluded from the
-  // breakdowns below — surfaced transparently as data completeness, not error.
-  const withoutAnswers = Math.max(0, totalRegistered - withAnswers);
-
   return (
     <section aria-labelledby="methodology-heading" className="bg-neutral-50 rounded-lg p-6 mt-8">
       <h2 id="methodology-heading" className="text-lg font-semibold text-neutral-900 mb-4">
@@ -53,16 +48,7 @@ export function MethodologyNote({ totalRegistered, withAnswers = 0, lastUpdated 
       <p className="mt-4 text-sm text-neutral-600">
         The demographic, employment, and skills breakdowns above are based on the{' '}
         <span className="font-medium text-neutral-700">{withAnswers.toLocaleString()}</span> registrants with
-        complete survey responses.
-        {withoutAnswers > 0 && (
-          <>
-            {' '}The remaining{' '}
-            <span className="font-medium text-neutral-700">{withoutAnswers.toLocaleString()}</span> registered people
-            (identity captured during the soft-launch; survey answers not on file) are counted in the total but not in the
-            breakdowns.
-          </>
-        )}{' '}
-        Data collected via field enumeration &amp; self-registration.
+        complete survey responses. Data collected via field enumeration &amp; self-registration.
       </p>
       {formattedDate && (
         <div className="mt-4 pt-3 border-t border-neutral-200">
