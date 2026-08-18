@@ -18,7 +18,19 @@ people gave names exactly three fields: *"Anonymous Skills Marketplace (Your **p
 experience level** will be visible)"*. A business name is a different thing: commercial, already on
 their signboard, and volunteered for exactly this purpose.
 
-Status: review
+Status: done
+
+> ✅ **CLOSED ON PROD 2026-08-18 — deploy SHA `f6b449d`.** Every residual resolved: R1 (column live,
+> `/marketplace/search` 200 carrying `businessName`), R2 (backfill run — **182 rows written**,
+> idempotence proven by a re-run reporting `needsUpdate=0`, FTS proven end-to-end through the public
+> API), R3 (distribution measured before *and* after), R4 (filter bound to the canon + RED-verified),
+> R7 / R10 (ruled by Awwal), and R5/R6/R8/R9/R11/R14 closed earlier. §2a0's bar is met: a real deploy
+> SHA and no OPEN or DISCHARGE-ON-DEPLOY row.
+>
+> **What it changed for real people:** **29 workers now show "Over 10 yrs"** with the ★ seasoned cue —
+> 28 of them displayed *nothing* before. **26 more** were being shown as less experienced than they
+> are. **87 trading names** now appear and are searchable. **Every number was predicted from prod
+> before the run and matched after it.**
 
 <!-- Authored 2026-07-19 by Bob (SM) via *create-story (draft), emergent from the 13-2 verification-reframe decision (Awwal, 2026-07-19). POST-LAUNCH, NON-GATING. Awwal's ruling: association-imported members ARE marketplace-visible, WITH a provenance badge that discloses exactly what we know — "[Association] — confirmed member" — turning accountable-source provenance into an honest, marketable trust signal instead of hiding them behind an over-blunt `unverified_import` gate. Two tiers: association-confirmed on import → Member-verified once a member-side SMS check promotes them. Honesty discipline (R1): NEVER a bare "✓ Verified" (no NIMC path; a present NIN is nin_on_file, and for imports it was proxy-transcribed). This is the RENDER story; 13-2 owns the WRITE (source + association name + the member-confirmed flag). See 13-2 top DECISION block + registry-data-status-taxonomy.md Axis-3. -->
 
@@ -425,8 +437,8 @@ rather than by reading the story.
 
 | # | Residual | State | Re-runnable evidence | Owner | Reopen trigger |
 |---|----------|-------|----------------------|-------|-----------------|
-| R1 (carried) | `business_name` new column needs `db:push` on prod with/before deploy | **OPEN — DISCHARGE-ON-DEPLOY, accepted by Awwal 2026-08-18.** ✅ **Confirmed genuinely open at adjudication: `business_name` does NOT exist on prod today** (`information_schema.columns` on `marketplace_profiles` returns only `experience_level` + `search_vector`), so this is a real gate, not a formality — the search SQL 500s on every marketplace request without it. `db:push` already runs in the deploy chain (`ci-cd.yml:1102`), ahead of the custom-SQL runner R8 added | `\d marketplace_profiles` shows `business_name`; `/api/v1/marketplace/profiles` returns 200 | Ops/dev at deploy | Deploy proceeds without this step |
-| R2 (carried) | Backfill has not run outside the local test DB | **OPEN — fully unblocked 2026-08-18.** Follow-up #1 fixed + RED-verified (both halves, re-verified independently at adjudication); **R7 RULED (publish)**; expected outcome now MEASURED on prod (table below) rather than assumed. ⚠️ **ONE precondition survives: the FTS trigger must already carry `business_name` (R9) before `--apply`,** or repaired rows are permanently unsearchable — and that is satisfied by the deploy, since R8's runner is now in the deploy chain. **Order: deploy (R1 + trigger) → `--dry-run` → `--apply`** | `_backfill-marketplace-card-fields.ts --dry-run`, then `--apply --confirm-i-am-not-dry-running`, then re-run showing `needsUpdate=0`. Expected dry-run shape from the prod measurement: **161 needing update, 74 untouched, 8 self-named** | Ops/dev | `--apply` run before the R9 trigger query is confirmed on prod |
+| R1 (carried) | `business_name` new column needs `db:push` on prod with/before deploy | ✅ **CLOSED ON PROD 2026-08-18, deploy `f6b449d`.** Confirmed genuinely open beforehand (`information_schema.columns` returned only `experience_level` + `search_vector`), then created by the deploy | `information_schema.columns` now returns **`business_name text`**; **`GET /api/v1/marketplace/search` → 200** with `businessName` present in the payload. ⚠️ **THE EVIDENCE LINE IN THIS ROW WAS WRONG:** it named `/api/v1/marketplace/profiles`, which **does not exist** — the router defines only `/profiles/:id` and `/search` (`marketplace.routes.ts:25-26`). That path 404s by design; a future reader would have read the 404 as a broken deploy. `/search` is the endpoint whose SQL actually selects the column | adjudication | Any marketplace request 500ing on a missing column |
+| R2 (carried) | Backfill has not run outside the local test DB | ✅ **RUN ON PROD 2026-08-18, deploy `f6b449d`.** Sequence executed in order: R9 trigger confirmed → `--dry-run` → `--apply --confirm-i-am-not-dry-running` → re-run. **182 rows written.** ⚠️ **`experience unresolvable = 0`** — the tool's own count of the R5 hazard (a stored value whose raw answer maps to nothing), independently confirming the zero measured beforehand | **Idempotence proven: the re-run reports `rows needing update ... 0`.** Preview and live agreed exactly — scanned 235, experience 161, business_name 87, self-named 8, written 0 → 182. **FTS proven end-to-end**, not assumed: searching a trading-name token through the PUBLIC API returns the card, so the trigger refired and `search_vector` carries `business_name` | adjudication | `needsUpdate` non-zero on a later re-run with no new submissions |
 | R3 (carried) | Prod experience-level distribution never measured (ssh blocked in sandbox) | ✅ **CLOSED at adjudication 2026-08-18 — MEASURED ON PROD.** The inherited **"224 live cards" was wrong: there are 235.** Stored: **111 NULL (47%)**, `4-7` 76, `1-3` 48. Joined to the RAW answers (the number that actually matters) — see the outcome table below the ledger | `SELECT COALESCE(experience_level,'(NULL)'), COUNT(*) FROM marketplace_profiles GROUP BY 1 ORDER BY 2 DESC;` re-run after R2 | adjudication | Post-R2 distribution not matching the predicted table |
 | R4 (carried) | Free-text experience filter now matches new slugs only | ✅ **RULED + IMPLEMENTED 2026-08-18 (Awwal: bind it, and make it a real slug so it has a proper home as it grows).** `MarketplaceFilters` now renders a `Select` over `MARKETPLACE_EXPERIENCE_LEVELS`: **value = the slug the column stores, label = `experienceLabelFor`** — the SAME table that renders the card's hero stat, never a second vocabulary. ⚠️ **The change was UNGUARDED when made** — the only existing assertion was `getByTestId('experience-filter')).toBeInTheDocument()`, which passes for an input, a select or a div, so swapping the control broke nothing. New `MarketplaceFilters.test.tsx` (4 tests) closes that hole | `apps/web/src/features/marketplace/__tests__/MarketplaceFilters.test.tsx`. **RED-verified at adjudication:** emitting the label instead of the slug (`value={experienceLabelFor(level)}`) reds *"emits the stored SLUG, never the human label"* and **only** that test — the options-list assertion passes either way, so the slug test is the load-bearing one | adjudication | A bucket added to the canon that does not appear in the filter |
 | R5 (new, this review) | Backfill can blank a valid legacy `experience_level` to NULL (Finding 1) | ✅ **CLOSED 2026-08-17** — fixed in BOTH places (the `experienceDiffers` guard AND the `UPDATE … SET` clause; the review's one-liner covered only the first). Regression tests: 4 mocked cases + 1 real-DB end-to-end, all RED-verified | Re-run the RED-verify in this review's Senior Developer Review section (seed `experience_level='8-15'`, `raw_data.years_experience='senior'` → should NOT update once fixed) | dev (next pass) | Any attempt to run `--apply` on prod before this lands |
@@ -457,6 +469,25 @@ counted. Joining `marketplace_profiles` to each respondent's latest non-empty su
 the marketplace currently display no experience at all**, and **26 more are shown as less experienced
 than they are.** This is the story's AC7 diagnosis — the old normaliser stored NULL for
 `less_1`/`over_10` and collapsed `7_10`→`4-7` — **confirmed against real rows rather than inferred.**
+
+### ✅ RUN, AND EVERY PREDICTED NUMBER MATCHED (2026-08-18, deploy `f6b449d`)
+
+| bucket | predicted before the run | measured after |
+|---|---|---|
+| `over_10` | 29 (28 from NULL + 1 from `4-7`) | **29** |
+| `4_6` | 50 | **50** |
+| `1_3` | 48 | **48** |
+| `7_10` | 25 | **25** |
+| `less_1` | 9 | **9** |
+| `(NULL)` | 74 | **74** |
+| **old-canon values left** | 0 | **0** |
+| business names written | 87 | **87** |
+
+⚠️ **One label in the prediction was wrong and is corrected here.** Adjudication told the operator to
+expect *"161 needing update"*; the tool reports **182**. 161 was the *experience* count — `rows needing
+update` is the **union** of both fields: 161 + 87 − 66 overlapping = 182, leaving 21 rows that gain only
+a business name and 53 genuinely untouched (182 + 53 = 235). Every measured quantity was right; the
+name put on one of them was not. **182 is the number to compare against on any future run.**
 
 ⚠️ **And R5's blast radius, sized honestly rather than dramatically: ZERO rows.** Every prod row that
 carries a stored value also carries a raw answer that maps cleanly under the new canon, so the

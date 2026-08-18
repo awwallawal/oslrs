@@ -699,6 +699,15 @@ it had already moved to `143956f` before this paragraph was finished. Run the tw
 - ⚠️ **Both R2's recorded mechanism and the `:v2` cache praise were WRONG in the prior record**, and
   both were corrected in place rather than deleted (§2w). The outcome was right either way — which is
   precisely why a wrong mechanism survives.
+- ✅ **13-38 CLOSED ON PROD 2026-08-18 — deploy `f6b449d`. The marketplace cards are honest now.**
+  **29 workers show "Over 10 yrs" with the ★ seasoned cue — 28 of them displayed NOTHING before**, and
+  **26 more were being shown as less experienced than they are.** 87 trading names published and
+  searchable; 0 old-canon values left; 74 correctly still NULL (no raw answer exists to derive from).
+  **Every number was predicted from prod before the run and matched after it** — the shape to copy.
+  Rulings: R7 publish (8 of 235, measured *before* the ruling), R4 bind-to-canon, R10 inversion kept.
+- ⚠️ **13-38's own R1 evidence line named a route that does not exist** (`/marketplace/profiles`; the
+  router has only `/profiles/:id` and `/search`). Its 404 is by design. Corrected in the ledger —
+  otherwise the next reader reads a correct 404 as a broken deploy. §2w, again.
 - 🔻 **Next on the blast gate: 12-5, then 12-6.** Both `ready-for-dev`, both consume 12-4, and 12-5 is
   the one that puts the `n` on the page beside each chart. **R4's note matters to whoever builds
   them**, and so does this: `rateDenominators` is required on the shared type but **read by no
