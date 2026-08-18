@@ -137,7 +137,6 @@ describe('LiveSelfieCapture', () => {
         'HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA' +
         'AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
       const { default: Webcam } = await import('react-webcam');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Webcam as any).__screenshot = `data:image/jpeg;base64,${realJpegB64}`;
 
       // ⚠️ THE REGRESSION GUARD. Not decoration: if anyone reintroduces
@@ -183,7 +182,6 @@ describe('LiveSelfieCapture', () => {
 
     it('SHOWS an error instead of doing nothing when the image cannot be decoded', async () => {
       const { default: Webcam } = await import('react-webcam');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Webcam as any).__screenshot = 'data:image/jpeg;base64'; // no comma → undecodable
 
       const onCapture = vi.fn();
