@@ -1,21 +1,23 @@
 # Story 12.4: registryTotals aggregate model
 
-Status: review
+Status: done
 
-> ⛔ **Code-complete, reviewed, and verified LOCALLY. The corrected public rates are NOT on prod.**
-> See `## Residuals` (R1) and `## Closing verdict` below, and the "Senior Developer Review (AI) →
-> DEPLOY GATE".
+> ✅ **CLOSED ON PROD 2026-08-18 — deploy SHA `88a2b74`.** The corrected public rates are live and
+> were verified **against a prediction computed independently from prod data**, not merely observed to
+> move: `businessOwnershipRate` **32 → 45.5**, `unemploymentEstimate` **18.4 → 23.8**,
+> `rateDenominators` present as `{businessOwnership 191, unemployment 210, youthEmployment 189,
+> gpi 270}`. `youthEmploymentRate` held at 47.6, which is the correct outcome — its formula was
+> untouched and only its `n` is newly published. R1 + R2 discharged; see `## Residuals` and
+> `## Closing verdict`.
 >
-> ⚖️ **CHANGED FROM `done` → `review` AT ADJUDICATION, 2026-08-18.** The review's caveat was correct
-> and carefully written in three places — but it redefined the STATUS rather than using the one that
-> already means exactly this. `review` *is* "code-complete, not yet on prod"; §2a0 and D9 reserve
-> `done` for a real deploy SHA with every residual resolved, and 13-59's reviewer applied that same
-> rule 24 hours earlier, overruling the same workflow step.
->
-> **The harm is that the board stops being readable.** Anyone scanning for what remains before the
-> blast sees `done` and moves on — which is precisely what the caveat was written to prevent. **A
-> status that needs a paragraph to interpret has stopped being a status.** The caveat's content is
-> kept in full; only the word it was compensating for has changed.
+> ⚖️ **STATUS HISTORY — `done` → `review` (2026-08-18 adjudication) → `done` (2026-08-18 deploy).**
+> The review's caveat was correct and carefully written in three places, but it redefined the STATUS
+> rather than using the one that already means exactly this. `review` *is* "code-complete, not yet on
+> prod"; §2a0 and D9 reserve `done` for a real deploy SHA with every residual resolved, and 13-59's
+> reviewer applied that same rule 24 hours earlier while overruling the same workflow step. **The harm
+> was that the board stopped being readable** — anyone scanning for what remained before the blast saw
+> `done` and moved on, which is precisely what the caveat existed to prevent. **A status that needs a
+> paragraph to interpret has stopped being a status.** The word now means what it says: this shipped.
 
 > ⚠️ **RE-MEASURE BEFORE BUILDING (added 2026-08-01).** This story's headline split — *"139 = 76 completed
 > + 55 data_lost + 7 no_submission + 1 pending_nin"* — is **STALE**. The registry is now **145 = 82 with a
@@ -557,6 +559,12 @@ review. Sequence: commit (excluding the seven 13-59 files) → CI green → depl
 the new `phone_number` column) → confirm `/api/v1/analytics/registry-totals` responds and the two
 public rates have moved → only then the blast.
 
+> ⚠️ **CORRECTED AT CLOSE-OUT (2026-08-18): it did NOT take the DROP+CREATE path.** The deploy log
+> shows no `column set changed` warning — `CREATE OR REPLACE` succeeded outright, in 47 ms, which is
+> impossible against the 10-column view measured on prod an hour earlier. The view had already been
+> dropped upstream. See **R4**. The *outcome* was correct either way, which is exactly why the wrong
+> mechanism would have survived unchallenged.
+
 ### Residuals (not defects — recorded so they are not rediscovered)
 
 1. ~~**AC2's wording still overstates the identity key.**~~ **RESOLVED 2026-08-17 — AC2 AMENDED** on
@@ -580,15 +588,35 @@ Per the §2a0 three states. **`done` is not permitted while any row is OPEN or D
 
 | ID | Sev | Item | State | Evidence / trigger | Owner |
 |---|---|---|---|---|---|
-| **R1** | **High** | **The corrected public rates are not on prod.** R-E's defect — `answersWhere` used as a rate denominator — is **still live on the page the blast drives traffic to.** | **DISCHARGE-ON-DEPLOY** | **Measured 2026-08-18, prod `9490449`:** `unemploymentEstimate: 18.4`, `businessOwnershipRate: 32`, `rateDenominators` **absent**. **Discharge by:** deploy, then `curl https://oyoskills.com/api/v1/public/insights` and confirm **both rates MOVE** and `rateDenominators` is **present**. ⚠️ The cache key is `:v2`, so a stale `:v1` entry cannot mask the change — but confirm the figures, not the deploy SHA. **Reopen:** either rate reading its old value an hour after deploy. | adjudication, same session |
-| **R2** | Med | `ci-cd.yml:1184` recreates the `registry_unified` view for the new `phone_number` column, **non-idempotently on deploy**. | **DISCHARGE-ON-DEPLOY** | The runner is auto-discovered and runs on deploy. **Discharge by:** confirming the deploy log shows it executing, and that `registry_unified` exposes `phone_number` afterwards. **Reopen:** any query against the view erroring on a missing column post-deploy — the signature of the recreate not firing. | adjudication, same session |
+| **R1** | **High** | **The corrected public rates are not on prod.** R-E's defect — `answersWhere` used as a rate denominator — was **live on the page the blast drives traffic to.** | ✅ **CLOSED on prod 2026-08-18, deploy `88a2b74`** | **Baseline, prod `9490449`:** `unemploymentEstimate 18.4`, `businessOwnershipRate 32`, `rateDenominators` absent. **Discharged by PREDICTION, not by movement** — the service's own SQL was reproduced read-only against prod through the INLINE canonical read (13-33), *not* `submissions` (§2z(d)); the control reproduced the then-live 32.0 / 18.4 / n=272 / 47.6 **exactly**, proving the source faithful, and predicted 45.5 / 23.8. **Published after deploy: 45.5 and 23.8, denominators `{191, 210, 189, 270}` — every figure matched.** Two independent methods, one answer. **Re-run:** `scripts`-free — `curl https://oyoskills.com/api/v1/public/insights` vs the prediction query (kept in the session scratchpad; regenerate from `answeredFieldDenominator` + `REGISTRY_UNIFIED_SQL_TEXT`). **Reopen:** either rate reverting to 32 / 18.4, or `rateDenominators` going absent. | adjudication |
+| **R2** | Med | `ci-cd.yml:1184` recreates the `registry_unified` view for the new `phone_number` column on deploy. | ✅ **CLOSED on prod 2026-08-18** | **Deploy log** `08:45:54`: `Starting … → ✓ registry_unified view ensured → ✓ registry_unified rows: 327 → Done`. **Prod view verified by `pg_attribute`: 11 columns, `phone_number` at attnum 6** (was 10 columns, `metadata` at attnum 6, measured pre-deploy). **Re-run:** the `pg_attribute` query in the close-out below. **Reopen:** any query against the view erroring on a missing column. ⚠️ **The MECHANISM recorded in this row was wrong** — it did not take the DROP+CREATE fallback. See **R4**. | adjudication |
+| **R4** | Low | **The runner's `CREATE OR REPLACE`-first optimisation (13-33 review L4) is defeated by an upstream drop, and its DROP+CREATE fallback has still never executed.** L4 exists so a redeploy has "no window where the view is absent". There IS such a window — created earlier in the same deploy, and wider than the one L4 removed. | **ACCEPTED** | **Measurement:** pre-deploy the view had 10 columns with `metadata` at attnum 6; a mid-list insert of `phone_number` *must* make `CREATE OR REPLACE` throw `cannot change name of view column`. The deploy log shows **no `column set changed` warning** and only **47 ms** between `Starting` and `✓ ensured`, so the fallback never ran — yet the view came back with 11 columns and attnums restarted. The view was therefore **absent** when the runner ran. The only DDL agent in the window is `db:push` (`ci-cd.yml:1102`, 27 s earlier, logged `[✓] Changes applied`); no `pgView` is declared anywhere in the Drizzle schema and drizzle-kit `0.31.x` manages views, so an undeclared view is a drop candidate. ⚠️ **Strongly evidenced, NOT directly observed** — the decisive observation is a `to_regclass('registry_unified')` returning NULL inside the ~27 s gap, which nothing currently watches. **Impact today: none.** No production runtime path reads the physical view (`registryUnifiedSource()` composes the SQL inline; only `getRegistryUnifiedViewRows`/`registryUnifiedViewExists`, both test/diagnostic, read it) — and `registry-unified.ts:15` states that belt-and-suspenders intent explicitly. **Owner:** unassigned — carry into 12-6 or the 13-33-L3 materialisation spike, whichever touches the view first. **Reopen trigger:** any runtime code reading the physical view or a materialised view built on it; an analyst reporting `relation "registry_unified" does not exist` during a deploy; or L4's no-window guarantee being cited as true. | — |
 | **R3** | Low | `done` had been used to mean "code-complete", with the real meaning carried in prose. | ✅ **CLOSED at adjudication 2026-08-18** | Status moved to `review` on the story **and** the board; the caveat's content is retained in full. `done` returns to its §2a0/D9 meaning: a real deploy SHA with every residual resolved. | adjudication |
 
 ## Closing verdict
 
-**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
-**Until that line carries a real SHA and R1 + R2 are discharged, `Status:` must not read `done`** —
-D9's own hold condition, and the precedent 13-57/13-59/13-60 each set this month.
+**✅ CLOSED. Deploy SHA: `88a2b74`.** Pushed 2026-08-18, CI run **`32117341918`** — all 10 jobs green
+including `deploy` — prod VPS `git rev-parse HEAD` = `88a2b74`, health **200**. R1 and R2 discharged
+on prod evidence below; R3 closed at adjudication; **R4 recorded as ACCEPTED with a reopen trigger**,
+which §2a0 permits alongside `done`. The hold condition this block carried is satisfied: the SHA is
+real and no residual is OPEN or DISCHARGE-ON-DEPLOY.
+
+### Prod verification (the evidence, not the SHA)
+
+| check | result |
+|---|---|
+| `curl /api/v1/public/insights` | `businessOwnershipRate` **45.5** (was 32) · `unemploymentEstimate` **23.8** (was 18.4) · `youthEmploymentRate` **47.6** (unchanged — correct) · `rateDenominators` **`{191, 210, 189, 270}`** · `withAnswers` 272 · `totalRegistered` 327 |
+| independent prediction | computed read-only from prod through the **inline** 13-33 read; control reproduced the pre-deploy figures exactly; **predicted 45.5 / 23.8 and every denominator — all matched** |
+| `registry_unified` (`pg_attribute`) | **11 columns, `phone_number` at attnum 6** (pre-deploy: 10 columns, `metadata` at 6) |
+| view grants / dependents, checked **before** the recreate | `relacl` empty, owner `oslsr_user`, **0 dependent objects** — so the DROP path discarded nothing |
+| pre-push full suite (uncached) | **277 files, 3894 passed**, 12m55s |
+
+⚠️ **Two exit codes lied during this close-out and `git status -sb` / `gh run view` caught both.** The
+first push **failed** (`curl 28`, RPC timeout) while the background task reported **exit 0** — the
+command ended in an `echo`, so the harness reported the echo's status. The retry's pre-push gate then
+replayed **`FULL TURBO`, 4 cached, 298 ms** (Pitfall #47), discharged only because the first attempt
+had run it uncached on this identical tree. And `gh run watch --exit-status` exited **1** on a TLS
+handshake timeout while the run itself was **green**. **Verify the ref and the jobs, never the code.**
 
 | Gate | Evidence — run by adjudication, not the dev's or reviewer's self-report |
 |---|---|
@@ -617,8 +645,16 @@ asserted. A future edit that changes one without the other fails.
 
 **The cache key was bumped to `:v2`, and the reason is written down.** A corrected figure would
 otherwise sit behind a stale entry for up to `CACHE_TTL` — *exactly* the hour in which someone looks
-after a correction is announced — and the newly-required `rateDenominators` would have thrown
-`undefined is not an object` on the PUBLIC page for that hour. **Most reviews never reach the cache.**
+after a correction is announced. **Most reviews never reach the cache.**
+
+> ⚠️ **CORRECTED 2026-08-18.** This paragraph also claimed the stale entry would have thrown
+> `undefined is not an object` on the PUBLIC page. **It would not have, today.** `rateDenominators` is
+> a required field on the shared `PublicInsightsData` type, but **no web component reads it** — the
+> only consumers are two test fixtures, which had to add it to satisfy the type. A `:v1` payload
+> lacking the field would have rendered fine. The bump is still correct and the *stale-number* half of
+> its rationale is entirely real; the crash becomes real only once 12-5/12-6 render the `n` beside each
+> chart. Recorded rather than deleted, per §2w — the praise was written from an assumption about the
+> artifact, and the artifact is what settles it.
 
 ## Change Log
 
@@ -633,6 +669,7 @@ after a correction is announced — and the newly-required `rateDenominators` wo
 | 2026-08-17 | **ADVERSARIAL CODE REVIEW — 10 findings, all fixed + RED-verified.** ⭐ **R1 (CRITICAL): Task 6 was marked `[x]` and the R-E fix was never applied** — `unemployment_est` still divided by the coarse `raw_data IS NOT NULL`, only `has_business` had been converted, and the story's own two tests for it were failing (`2 \| 18`) under a Completion-Notes claim of "3881 passed / 0 failed". **R2:** the published `n` therefore certified a number it did not produce; added an `it.each` guard binding every rate to its own denominator. **R3:** the identity key returned on the first rung, so a NIN row and its no-NIN twin on one handset — the duplicate class Story 13-49 actually produced — was neither merged nor flagged; the phone rung now evaluates for every row. **R4:** "view re-created on `app_test`" was untrue; the AC6.2 drift guard caught it (`column "phone_number" does not exist`) and it did exactly the job it was written for. **R5:** `inProgressDrafts` counted ~174 already-adopted drafts as in progress (13-49 does not delete what it adopts). **R6:** two definitions of "answered" (`[]` renders as the text `'[]'`) — unified as `EMPTY_ANSWER_TEXTS`. **R7:** insights cache key versioned (`:v2`) for the now-required `rateDenominators`. **R8/R9/R10:** narrowed projection, `bySource` zero-filled per AC7.1, youth dob band written once. Re-run gates: API **3892 pass / 2 fail** (both in untouched 13-55 census, a 5 s timeout under parallel I/O; **12/12 in isolation**), 12-4 units **71 pass**, smokes **16 pass**, tsc + eslint clean, **5/5 mutations reddened**. ⛔ **DEPLOY GATE recorded: the corrected public rates are not on prod — the blast gate closes on deploy, not on this review.** Status → done. |
 | 2026-08-17 | **AC2 AMENDED on measured prod evidence (Awwal's instruction: measure before amending).** Read-only prod query (327 respondents, cross-checked by a second independent query): **`identityAmbiguous` = 0**, 327/327 carry a usable E.164 phone, 293 carry an 11-digit NIN, **no phone is shared by any two rows**, nothing merges. AC2 now states the true grain (**row-distinct**), names the R2 key as a **DETECTOR not a merger** (NIN rung pre-empted by `respondents_nin_unique_when_present`; phone rung forbidden from merging by AC2's own household rule), defines `identityAmbiguous` as the band reported beside the headline, and records that **row-distinct EQUALS person-distinct today as a verified measurement** — a stronger claim than the unevidenced "distinct PEOPLE" it replaces. Also corrects the normaliser mis-citation (`registry-key-normalization.ts` → `lib/normalise/phone.ts`, per the dev's Completion Note #6). Consequence for 12-5: `identityAmbiguous` needs no defensive footnote; the fixture's 5-of-6 was an artefact of phone-less fixtures. |
 | 2026-08-17 | **Sprint-status record fix (Awwal's ruling).** Twelve story rows under the R-A-parked `epic-9`/`epic-10` still read `ready-for-dev`, which is why story discovery pointed at 10-1 instead of the blast gate; flipped to `backlog` with a WHY comment in the existing vocabulary. Residual recorded: file ORDER still cannot express "Epic 12 leads", so discovery now lands on Epic 11's `11-3`. |
+| 2026-08-18 | **ADJUDICATED + SHIPPED. Status `done` → `review` → `done`; deploy SHA `88a2b74`, CI `32117341918` (10/10 jobs green).** Adjudication gates re-run independently: tsc API 0 / web 0, eslint 0, the three drift guards **DIRECT and uncached** (Pitfall #47) at 381/381/317, 94 tests across the four 12-4 suites, pre-push full suite **277 files / 3894 passed** uncached. **RED-verify by adjudication:** reverting `answeredFieldDenominator('employment_status')` to the bare `answersWhere` reds exactly three tests — including the one pinning the published `n` to the denominator actually used — and 23/23 on restore. ⭐ **R1 was discharged by PREDICTION rather than by movement:** the service's SQL was reproduced read-only against prod through the **inline** 13-33 read (not `submissions` — §2z(d)); the control reproduced the live 32.0 / 18.4 / n=272 / 47.6 exactly, then predicted 45.5 / 23.8, and the deployed page published **45.5 / 23.8 with `rateDenominators {191, 210, 189, 270}`** — every figure matched. `youthEmploymentRate` correctly held at 47.6. **R2 closed** (view 11 columns, `phone_number` at attnum 6; grants and dependents checked *before* the recreate — `relacl` empty, 0 dependents, so the drop discarded nothing). 🆕 **R4 RAISED (ACCEPTED):** the runner's `CREATE OR REPLACE`-first path succeeded in 47 ms with **no `column set changed` warning**, which is impossible against the 10-column view measured an hour earlier — so the view was already absent, its DROP+CREATE fallback has **still never executed**, and 13-33-L4's "no window where the view is absent" guarantee is defeated by an upstream `db:push` drop. No runtime reader today, so impact is nil; trigger recorded. **Two corrections to the prior record (§2w):** the DROP+CREATE prediction in the deploy note was wrong, and the `:v2` praise overstated a crash that no web component could actually suffer yet. |
 | 2026-07-19 | **13-33 hand-off VALIDATED (John/PM).** Approved Bob's re-point of 12-4 onto `registryUnifiedSource`/`registry_unified` (taxonomy-faithful — read exposes the raw substrate AC7 needs; kills drift). Added guardrail: L3 materialization is post-launch/at-scale, MUST NOT gate the R4 pre-launch minimal slice. RULED the `phone_number` coordination item: extend `REGISTRY_UNIFIED_SQL_TEXT` to expose raw `phone_number` (Option a — one read, no new PII class since `nin` already exposed), E.164 normalization stays in `registry-key-normalization.ts`, add the column when 12-4's dedup needs it (not pre-deploy on 13-33). No AC text changes; POST-LAUNCH / NON-GATING unchanged. _(John, PM)_ |
 
 ## ⛔ BEFORE YOU BUILD THE DENOMINATOR FIX — read this (added 2026-08-12, John/PM)

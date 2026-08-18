@@ -1,8 +1,12 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-13 · **Prod deployed SHA:** `19b51f5` · **ONE worktree** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
-⚠️ **This SHA is self-staling metadata — D6 says delete it and it has now been wrong THREE times. Verify, never trust:** `ssh root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'`
-· **Start at §2** (the playbook) — and run the §2a0 debt gate before anything else.
+**Last updated:** 2026-08-18 · **ONE worktree** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+
+✅ **D6 DONE 2026-08-18 — the prod SHA is no longer recorded here.** It had been wrong FOUR times (2026-07-26, 07-30, 08-09, and again today: the header read `19b51f5` while prod was on `9490449`). A number that is wrong more often than right is worse than no number, because it is read as fact. **There is exactly one way to know, and it takes three seconds:**
+```bash
+ssh -o ConnectTimeout=25 root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'
+curl -s -o /dev/null -w '%{http_code}\n' https://oyoskills.com/api/v1/health   # want 200
+```
 
 > **You are the OSLRS adjudication agent.** The human (Awwal) develops + code-reviews each story in a SEPARATE CLI, then brings the uncommitted work to THIS session for *final adjudication*. This doc is your cold-start brain: read it + `MEMORY.md` + `git log --oneline -30`, and you are oriented. **This is a LIVING doc — update the header + the relevant sections at the end of every session.** It complements, not duplicates, `MEMORY.md` (atomic facts) and the dated `docs/session-*.md` snapshots (per-session narrative).
 
@@ -395,6 +399,32 @@ project meant *committed*.
   against the live table (124 users → 4 returned), then the fail-closed property (unknown role → 0
   rows) confirmed against real data rather than a fixture. A SHA proves a checkout, nothing more.
 
+**(c) ⛔ AN EXIT CODE BELONGS TO THE LAST COMMAND IN THE CHAIN — and it lied in BOTH directions today.**
+*Added 2026-08-18, during 12-4's close-out. Two instances in one hour; the ref and the job list caught both.*
+
+`feedback-never-pipe-a-push-to-tail` says don't read *tail's* status. The general rule is bigger: **any
+wrapper — a pipe, a `;`-chain, a trailing `echo`, a watcher process — reports ITS OWN status, not the
+status of the thing you care about.**
+
+| what I ran | reported | actually |
+|---|---|---|
+| `git push … > log 2>&1; echo "EXIT=$?" >> log` | background task: **exit 0** | push **FAILED** — `curl 28`, RPC timed out at 300 s, `[ahead 2]` unchanged. The `echo` succeeded, so the chain did. |
+| `gh run watch <id> --exit-status` | **exit 1** | run was **green, 10/10 jobs, deploy success**. The watcher hit a TLS handshake timeout *fetching* the run. |
+
+- ⭐ **A false GREEN and a false RED are the same bug.** The second one is the more insidious of the
+  two here: had I trusted it I would have "fixed" a CI failure that never happened, on a deploy that
+  had already succeeded.
+- ✅ **The checks that are actually authoritative, and they are cheap:** for a push,
+  `git status -sb | head -1` (**no `[ahead N]`**) and `git ls-remote origin main`. For CI,
+  `gh run view <id> --json jobs` — **every job**, per §2d, never the watcher's verdict.
+- **Put the thing you care about LAST**, or capture its status directly. `exec <cmd>` is the cheap fix
+  when a wrapper is unavoidable.
+- **This machine's link to GitHub is currently unreliable** (one 300 s RPC timeout, one TLS handshake
+  timeout, ~20 min apart). When a push dies mid-transfer the pre-push suite has *already run* — the
+  retry replays it as `FULL TURBO` in ~300 ms, which is **Pitfall #47**. That cache is only acceptable
+  because the first attempt ran it uncached **on the identical tree**; say so out loud, or the next
+  reader inherits a 298 ms "full suite" as evidence.
+
 **(b) ⛔ Before running anything destructive, ask what it can REACH — not what you aimed it at.**
 `robocopy <empty> <dir> /MIR` was aimed at a leftover worktree and deleted **1,574 tracked files from
 the main repo plus every `node_modules`**, because `/MIR` follows NTFS junctions by default and pnpm
@@ -617,7 +647,44 @@ Observed the same afternoon: a docs-only push ran its gate over five uncommitted
 
 ---
 
-## 3. Current state (2026-08-07) — READ THIS ONE
+## 3. Current state (2026-08-18) — READ THIS ONE
+
+**Prod `88a2b74`, health 200. Register 327** (`withAnswers` 272). Verify the SHA, don't trust this line
+— see the header.
+
+- ✅ **12-4 CLOSED ON PROD 2026-08-18.** The blast gate's first of three is shipped. **The published
+  rates changed materially: `businessOwnershipRate` 32 → 45.5, `unemploymentEstimate` 18.4 → 23.8**,
+  and every rate now ships the `n` it was computed from (`{biz 191, unemployment 210, youth 189,
+  gpi 270}`). `youthEmploymentRate` correctly held at 47.6. **A published government statistic was
+  wrong and is now right** — 81 people who were never asked about business ownership had been sitting
+  in its denominator.
+- ⭐ **The shape to copy: R1 was discharged by PREDICTION, not by movement.** "Confirm both rates
+  move" passes for any change, including a wrong one. Instead the service's own SQL was reproduced
+  read-only against prod **through the inline 13-33 read** (§2z(d) — not `submissions`), the control
+  reproduced the then-live 32.0 / 18.4 / n=272 / 47.6 **exactly** (proving the source faithful), and it
+  predicted 45.5 / 23.8. The deployed page published exactly that. **Two independent methods, one
+  answer** — which is §2a2's shape check, applied to a number instead of a log.
+- 🆕 **R4 raised, ACCEPTED, no owner.** `migrate-registry-unified-view-init.ts`'s `CREATE OR REPLACE`
+  succeeded in **47 ms with no `column set changed` warning** — impossible against the 10-column view
+  measured an hour earlier. So **the view was already gone**, its DROP+CREATE fallback has *still*
+  never executed, and **13-33-L4's "no window where the view is absent" guarantee is defeated** by an
+  upstream `db:push` drop (~27 s window, `ci-cd.yml:1102` → `:1184`). Nothing runtime reads the
+  physical view — `registryUnifiedSource()` composes inline, which is the belt that was designed for
+  exactly this — so **impact today is nil**. It becomes real the moment anything runtime reads the
+  view. ⚠️ Strongly evidenced, **not directly observed**: the decisive check is `to_regclass` returning
+  NULL inside that gap, and nothing watches it.
+- ⚠️ **Both R2's recorded mechanism and the `:v2` cache praise were WRONG in the prior record**, and
+  both were corrected in place rather than deleted (§2w). The outcome was right either way — which is
+  precisely why a wrong mechanism survives.
+- 🔻 **Next on the blast gate: 12-5, then 12-6.** Both `ready-for-dev`, both consume 12-4, and 12-5 is
+  the one that puts the `n` on the page beside each chart. **R4's note matters to whoever builds
+  them**, and so does this: `rateDenominators` is required on the shared type but **read by no
+  component yet** — 12-5 is what makes it load-bearing.
+- **Field-day gate is unchanged** and is not blocked by any of this: 13-57/13-59/13-60 are closed;
+  what remains is **enumerator accounts** (prod still holds exactly ONE, and it is Awwal's) and the R8
+  briefing in hands.
+
+## 3-old3. Current state (2026-08-07) — superseded by §3 above
 
 **Prod `077e129`, health 200. Register 315.** 🆕 **The VPS finally has SWAP (2026-08-07) — it had NONE.** Integrity clean: 0 duplicate NINs, 0 orphaned
 submissions, 0 missing reference codes, 0 duplicate-phone pairs, 0 dead-end `wizard_resume` tokens.
@@ -1785,6 +1852,44 @@ code → **email arrived** — run 30 minutes apart.
 guard never ran, and the count it would have produced is the same count a broken fix produces. **A
 number consistent with both outcomes proves neither.**
 
+## 7p. Session 2026-08-18 — the close-out that was left open, and a number that was wrong in public
+
+**Nothing was in flight.** The tree was clean; what was "in flight" was **my own previous
+adjudication's unfinished close-out** — 12-4 correctly at `review`, with two DISCHARGE-ON-DEPLOY
+residuals whose stated owner was *"adjudication, same session"*, and the session had ended before the
+push. **Two commits sat on local `main` protecting nobody.** That is §2y(a) verbatim, and it is worth
+noticing that the failure mode repeated *despite* the doc having a section about it: the ledger was
+written correctly and then not executed.
+
+**The work was one chain — push → CI → deploy → verify — and the verification is the part worth
+copying.** R1's discharge condition as written was *"confirm both rates MOVE"*, which is satisfied by
+any change including a wrong one. It was replaced with a prediction computed independently from prod
+data before the deploy, through the inline canonical read rather than `submissions` (§2z(d), the
+substitution that has now burned this project twice). The control reproduced the live figures exactly;
+the prediction said 45.5 and 23.8; the deployed page published 45.5 and 23.8. **A prediction that can
+be wrong is evidence; an observation that something changed is not.**
+
+**Three findings, none of them the story's subject:**
+
+1. ⭐ **R4 — a guarantee that was quietly false.** 13-33-L4 added a `CREATE OR REPLACE`-first path so a
+   redeploy never leaves the view absent. It succeeded in **47 ms with no fallback warning**, against a
+   view whose column set had definitely changed — so the view was already dropped upstream by
+   `db:push`, the fallback branch has **still never run**, and there is a ~27 s no-view window on
+   *every* deploy, wider than the one L4 removed. **Found only because the log's SHAPE was wrong**
+   (§2a2), not because anything failed. Both possible causes produce an identical, correct-looking
+   11-column view — §2aa, a result consistent with both outcomes.
+2. ⛔ **Exit codes lied in both directions within one hour** — a failed push reported 0 (trailing
+   `echo`), a green CI run reported 1 (watcher's TLS timeout). Written up as §2y(c). The false RED is
+   the more dangerous: trusting it means debugging a failure that never happened on a deploy that
+   already succeeded.
+3. ⚠️ **Two claims in the prior record were wrong and the outcomes hid it** — the predicted
+   DROP+CREATE path, and the `:v2` cache bump's claimed crash prevention (`rateDenominators` is
+   required on the type but **no component reads it**, so a stale `:v1` payload would have rendered
+   fine). Both corrected in place, not deleted (§2w).
+
+**Left for whoever picks up 12-5:** it is the story that makes `rateDenominators` load-bearing, and
+R4's window becomes relevant the moment anything runtime reads the physical view.
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
@@ -1798,7 +1903,7 @@ this session applied to this list. Nothing here blocks the blast; §4 holds the 
 | D3 | **Story 13-45 — CI guard**: fail when a story reads `Status: done` while its ledger holds an OPEN/DISCHARGE-ON-PUSH row. | Without a guard, D1 is a convention — and conventions produced the 201. Needs a RED-failing canary, so it is real dev work. Sibling of 13-41/13-37. **⚠️ It is the THIRD consumer of the shared CI-guard toolkit 13-41 extracts** (`apps/api/src/lib/ci-guard/` — file walk, path rules, allowlist, escape hatch, hit record, message skeleton, runner factory, AST source model), so it should be built ON that toolkit, never as a fourth copy of 13-37's plumbing. It is also a named blocking step in `lint-and-build`, so it inherits **Pitfall #45**: the step must sit ABOVE `Lint`, and 13-41's AC6 ordering-assertion test must be extended to cover it. | ~~After D1+D2 exist and one story has used the ledger for real.~~ **D1 now exists and 13-37 has used it for real** — so the remaining gates are D2 (the parse) and, critically, **13-41 landing the toolkit**. Do not start 13-45 before 13-41 is `done`. |
 | D4 | **Triage the blind spot**: ⚠️ **RE-MEASURED 2026-07-31: 198 `done` stories / 299 unchecked boxes / 61 stories affected** (the 58/201 estimate came from a three-story spot-check). Most are litter — accepted-by-design notes, parked options, dead commit-hygiene reminders — which IS the problem: **real items are indistinguishable from noise.** WORKED EXAMPLE: `13-9` L1 correctly diagnosed AND prescribed the fix for the 13-47 production defect a month early, sat unchecked in a `done` story, and was only rediscovered from prod data. Original text: Start with the launch-adjacent set (13-24, 13-19, 13-34, 13-21, 13-23, 13-27, 11-2, 13-16) and mark the OSV cluster (13-31/13-32/sec-1/sec-4, ~27 hits) as **managed-elsewhere** — `osv-scanner.toml` + the blocking gate already is their ledger. | The two launch-gating items in §4 came out of a 3-story spot-check. The rest is unmeasured. | Post-blast, or immediately if anything in §4's list turns out to have siblings. |
 | D5 | **Make §0 a script** (`scripts/adjudicate-coldstart.sh`): the five checks + prod registry baseline + pinned form, one screen. | A prose command block rots invisibly — §0's `git rev-parse --short A B` silently broke on git 2.52 and cost a session four commands to diagnose. A script fails loudly. | Next time a §0 command misbehaves, or with D2. |
-| D6 | 🔔 **TRIGGER FIRED — 3rd time, 2026-08-10. DO THIS NEXT SESSION.** **Drop the prod SHA from this doc's header.** | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD), again on 2026-07-30, and again on 2026-08-09 — where it also asserted *"`main` ahead by docs-only commits"* while an undeployed **code** fix sat on main for 24 hours (§7m). ~~Let D5's script report ground truth instead.~~ | ~~Do with D5.~~ **UNGATED 2026-08-10 — this was wrongly blocked on D5: deleting a line needs no script.** Replace the SHA with the one-line `ssh … git rev-parse --short HEAD` (already added to the header as an interim). |
+| D6 | ✅ **DONE 2026-08-18 — the SHA is gone from the header**, replaced by the two commands that produce ground truth. It had been wrong a **FOURTH** time when this session opened (header `19b51f5`, prod `9490449`), which is the whole argument: self-staling metadata is read as fact. ~~🔔 **TRIGGER FIRED — 3rd time, 2026-08-10. DO THIS NEXT SESSION.** **Drop the prod SHA from this doc's header.**~~ | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD), again on 2026-07-30, and again on 2026-08-09 — where it also asserted *"`main` ahead by docs-only commits"* while an undeployed **code** fix sat on main for 24 hours (§7m). ~~Let D5's script report ground truth instead.~~ | ~~Do with D5.~~ **UNGATED 2026-08-10 — this was wrongly blocked on D5: deleting a line needs no script.** Replace the SHA with the one-line `ssh … git rev-parse --short HEAD` (already added to the header as an interim). |
 | D7 | **§5 needs a designated next pick**, one line, pointing at `[[next-story-sequence-post-11-2]]`. | Four stories with no ordering means every cold start re-litigates the choice. | Next cold start that has to choose. |
 | D8 | 🔔 **TRIGGER FIRED — measured 2026-08-10: §7 holds 13 entries / the doc is ~140KB / 1,400+ lines.** **Cap §7 at the last two sessions**, archiving older arcs to a dated `docs/session-*.md`. | This doc is growing unbounded; `MEMORY.md` already blew its size budget for exactly this reason. **A cold-start doc nobody can read in one sitting stops being a cold-start doc** — and the trigger passing unnoticed is itself the invisible-debt failure §2a0 exists to catch, happening inside §8. | ~~When §7 passes ~10 entries.~~ **NOW.** Keep §7m + §7l; archive §7 → §7k to `docs/session-2026-07-to-08.md` and leave one pointer line. |
 | D9 | ✅ **WORKED EXAMPLE EXISTS (2026-07-30) — copy the block, don't reword it.** **§2j verdict format** — a fixed closing block (verdict / RED-verify evidence / File-List reconciliation / deploy SHA). First use: `13-37-…-ci-guard.md` → `## Closing verdict`. Note what it does when the story is NOT closed: the verdict line reads *"NOT CLOSED — `review`, closing on push"* with the reason, and **deploy SHA is left explicitly `⏳ PENDING`** with the rule written into the block itself — *until that line carries a real SHA, `Status:` must not read `done`*. A block that can only be filled in at close-out gets filled in from memory; one that is filled in at `review` and carries its own hold condition cannot silently go stale. | 13-36's close-out was hand-synced across five places (story body, Change Log, sprint-status, MEMORY, this doc) and the disproven claim survived in three of them. | ~~Do with D1 — same problem, same fix.~~ **DONE, with D1, on 13-37.** Remaining: add it to the story template, and use it at 13-37's actual push (fill the SHA + discharge R1) so the format is proven through a real close, not only a real hold. |
