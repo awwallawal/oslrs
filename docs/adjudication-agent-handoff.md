@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-18 · **ONE worktree** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-08-19 · ⚠️ **TWO WORKTREES — parallel streams, read §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 ✅ **D6 DONE 2026-08-18 — the prod SHA is no longer recorded here.** It had been wrong FOUR times (2026-07-26, 07-30, 08-09, and again today: the header read `19b51f5` while prod was on `9490449`). A number that is wrong more often than right is worse than no number, because it is read as fact. **There is exactly one way to know, and it takes three seconds:**
 ```bash
@@ -35,6 +35,41 @@ Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitte
 - Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` (was Opus 4.8 through `d687cf4`; the history intentionally shows both). Branch = `main` (push directly; that's the convention here).
 
 ---
+
+## 1a. ⚠️ PARALLEL STREAMS — two worktrees, one machine (2026-08-19)
+
+**The jingle gate has four stories left and they split into two independent streams.** The split is by
+*subsystem*, not by convenience:
+
+| stream | stories | tree | why grouped |
+|---|---|---|---|
+| **A — analytics honesty** | **12-5** → 12-6 | `C:\Users\DELL\Desktop\oslrs` (main) | Both touch SurveyAnalytics surfaces; 12-6 adds a tab to the page 12-5 relabels. **Sequential, not parallel.** |
+| **B — send readiness** | **13-51** → 13-46 | `C:\Users\DELL\wt-13-51` (`story/13-51-contact-correction`) | Notifications/limiter. Zero file overlap with A. 13-51 first — smaller, and its defect is live. |
+
+Both worktrees were created from `dc105cc`, so neither starts with a rebase debt. `wt-13-38` was
+**removed** at 13-38's close (clean, merged, nothing unpushed) — a leftover worktree is what the
+`robocopy /MIR` command was aimed at when it deleted 1,574 tracked files. Before deleting, 4,750
+reparse points were enumerated and **zero pointed outside the worktree**; removal used `rmdir /S /Q`,
+which deletes junctions rather than following them. An empty husk survives a locked handle — harmless.
+
+### ⛔ The rule that decides whether this helps or hurts
+
+**Worktrees do not create contention. Running two SUITES at once does** — and §2aa is unambiguous that
+this machine punishes it (~1 GB headroom, a nonlinear 1.7 s → 20 s cliff, every observed
+`route-resolution` failure).
+
+- **A `pre-push` hook runs the FULL suite in its own tree.** Two pushes at once = two full suites =
+  a failure in whichever loses, looking exactly like a real defect. **One suite at a time across BOTH
+  trees.** `tasklist | grep -c node` first.
+- **Sanctioned lever if it bites: `VITEST_MAX_THREADS=1`** (worked 2026-08-19). **Never raise a timeout.**
+- 🆕 **turbo reports `using shared worktree cache` — the trees SHARE a cache.** Mostly a gift (a
+  worktree `pnpm install` took 39 s). But combined with the `lint`-task input gap in §2y(c), **a guard
+  result computed in one tree can replay in the other.** After any status flip, run the residual guard
+  **DIRECT**, never through turbo.
+- **A new worktree needs `.env` copied by hand** — it is untracked, so `git worktree add` cannot bring
+  it, and `apps/web/vite.config.ts` sets `envDir: '../../'` so there is exactly one, at root. Then
+  `pnpm install`. **Prove it runs (`tsc`), don't assume it does because files are present.**
+- §2aa.1's `git status` rule applies **per tree**, and the hooks read the WORKING TREE, not the index.
 
 ## 2. THE ADJUDICATION PLAYBOOK (reusable every time)
 
