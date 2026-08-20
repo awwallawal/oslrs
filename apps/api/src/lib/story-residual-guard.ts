@@ -22,8 +22,16 @@
  * "CLOSED for the 7 affected · the CLASS is mitigated". Struck-through IDs (`~~R9~~`) are the
  * repo's convention for a resolved row and are skipped.
  *
- * DELIBERATELY NOT A LINT ON PROSE. It reads the ledger table only. A story that discusses an
- * open question in its Dev Notes is not blocked — the ledger is the contract.
+ * ⚠️ THAT LAST PARAGRAPH USED TO READ "DELIBERATELY NOT A LINT ON PROSE … the ledger is the
+ * contract." It was true as written and it was the hole (fixed 2026-08-20). Reading the table ONLY
+ * means the guard polices exactly the stories that opted into the format — a story with no ledger
+ * has no rows to match and passes whatever it admits in prose. 12-5 was the live repro: `Status:
+ * done`, no ledger, an explicit "⛔ PRE-DEPLOY RESIDUAL" in the body, guard green.
+ *
+ * So it now ALSO flags explicit unresolved-residual language when there is no ledger to carry it —
+ * narrowly, because requiring a ledger of every `done` story would flag 204 of 213 and this runs in
+ * `pre-commit`. A story that merely DISCUSSES an open question is still not blocked; only the
+ * explicit markers are.
  */
 
 export interface ResidualHit {
@@ -54,13 +62,43 @@ function cells(row: string): string[] {
  * Is this state cell OPEN?
  *
  * Compound states are the norm here, so "contains OPEN" alone would flag rows that are actually
- * resolved ("CLOSED ... was: OPEN"). Require OPEN and the absence of a closure marker.
+ * resolved ("CLOSED ... was: OPEN"). Require an open marker and the absence of a closure marker.
+ *
+ * ⛔ `DISCHARGE-ON-PUSH` / `DISCHARGE-ON-DEPLOY` COUNT AS OPEN — fixed 2026-08-20 at adjudication.
+ * This predicate previously required the literal word OPEN, so the two discharge states slipped
+ * through silently, even though §2a0 defines them in exactly the terms this guard exists to
+ * enforce: *"provable only after deploy. **Blocks `done`**, not the commit."* Live proof at the
+ * time of the fix: 13-57 R4 and 13-59 R1/R6 all sat `DISCHARGE-ON-*` inside `Status: done` stories
+ * and the guard reported 317 scanned, none open. **The guard did not enforce the one state the
+ * standard singles out as blocking.**
  */
+const OPEN_MARKER = /\bOPEN\b|\bDISCHARGE-ON-(?:PUSH|DEPLOY)\b/;
+
 export function isOpenState(state: string): boolean {
   const s = state.toUpperCase();
-  if (!/\bOPEN\b/.test(s)) return false;
+  if (!OPEN_MARKER.test(s)) return false;
   if (s.includes('REOPEN TRIGGER')) return false; // a monitoring note, not a state
-  return !(s.includes('CLOSED') || s.includes('✅') || s.includes('RESOLVED'));
+  return !(s.includes('CLOSED') || s.includes('✅') || s.includes('RESOLVED') || s.includes('DISCHARGED'));
+}
+
+/**
+ * Residual language used OUTSIDE any table — the second hole, same session.
+ *
+ * The row scan can only police stories that opted into the ledger FORMAT: a story with no residual
+ * table has no rows to match, so it passes whatever it admits in prose. 12-5 was the live repro —
+ * `Status: done`, no ledger, and an explicit "⛔ PRE-DEPLOY RESIDUAL" in its own body, with the
+ * guard green. A check that cannot fail for the case it exists to catch is decoration.
+ *
+ * Deliberately NARROW. Requiring a ledger of every `done` story would flag 204 of 213 and block
+ * every commit (the guard runs in `pre-commit`), so this matches only the explicit *unresolved*
+ * markers and only when the story has no ledger at all to carry them.
+ */
+const PROSE_RESIDUAL = /(?:PRE-DEPLOY|UNDISCHARGED|OUTSTANDING)\s+RESIDUAL|DISCHARGE-ON-(?:PUSH|DEPLOY)/i;
+const HAS_LEDGER = /^\s*#{2,4}\s+Residuals\b/im;
+
+export function hasProseResidualWithoutLedger(content: string): boolean {
+  if (HAS_LEDGER.test(content)) return false;
+  return PROSE_RESIDUAL.test(content);
 }
 
 /**
@@ -74,6 +112,16 @@ export function findDoneStoriesWithOpenResiduals(files: StoryFile[]): ResidualHi
 
   for (const file of files) {
     if (!STATUS_DONE.test(file.content)) continue;
+
+    // Hole 2 (2026-08-20): a story with no ledger has no rows to scan, so prose debt walked
+    // straight past. Reported as a synthetic `prose` id so the message can say what to do.
+    if (hasProseResidualWithoutLedger(file.content)) {
+      hits.push({
+        storyFile: file.path,
+        residualId: 'prose',
+        state: 'residual language in prose, with no ## Residuals ledger to resolve it against',
+      });
+    }
 
     for (const match of file.content.matchAll(TABLE_ROW)) {
       const row = match[1] ?? '';

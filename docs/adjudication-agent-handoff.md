@@ -698,6 +698,47 @@ Observed the same afternoon: a docs-only push ran its gate over five uncommitted
   an edits twin. `tasklist | grep -c node` answers the *process* question; only `git status` answers
   the *tree* question, and I had been asking only the first.
 
+### 2ab. ⭐ A GUARD ONLY POLICES WHO OPTED IN — and mine missed the state the standard calls blocking
+*Added 2026-08-20, from adjudicating 12-5. Two holes in ONE guard, each with a live repro sitting in front of it.*
+
+`lint-story-residuals` (13-45) reported **"317 stories scanned, no done-with-open-residuals"** while
+two stories violated §2a0 in plain sight.
+
+| hole | mechanism | live repro |
+|---|---|---|
+| **1** | `isOpenState` required the literal word **OPEN**, so **`DISCHARGE-ON-PUSH` / `DISCHARGE-ON-DEPLOY` never matched** — even though §2a0 defines them verbatim as *"provable only after deploy. **Blocks `done`**, not the commit."* | 13-57 R4, 13-59 R1+R6 — all `DISCHARGE-ON-*` inside `Status: done` |
+| **2** | The scan reads **table rows only**, so a story with **no ledger has no rows** and passes whatever it admits in prose | 12-5 — `Status: done`, no ledger, an explicit `⛔ PRE-DEPLOY RESIDUAL` in its body |
+
+- ⭐ **The general shape: a format-based check polices exactly the people who adopted the format.**
+  The diligent get audited; the ones who skipped the ledger are invisible. That is backwards, and it
+  is [[pattern-test-that-passes-over-a-hole]] pointed at a CI guard.
+- ⚠️ **MEASURE THE BLAST RADIUS BEFORE TIGHTENING A PRE-COMMIT GUARD.** "Require a ledger on every
+  `done` story" sounds right and would have flagged **204 of 213** — blocking every commit in the
+  repo. The narrow rule (explicit unresolved markers, only when no ledger exists) flagged **2**.
+  Count first; a guard that reds everything gets disabled, and then it protects nothing.
+- ✅ **Fixing it reds real work, and that is the point** — three rows had to be resolved in the same
+  change or `pre-commit` would block. Two were §2w drift (13-59 R6's index WAS built — verified in
+  `pg_indexes`); two were genuinely undischargeable and took the **13-53 stated-gap close** with a
+  reopen trigger.
+- **The guard caught ME within minutes:** my first fix to 13-57 edited the *Item* cell instead of the
+  *State* cell, and it failed immediately. A guard you cannot trip is not a guard.
+
+### 2ac. ⛔ WHEN I CLOSE A SHARED-DERIVATION FIX, I MUST GREP FOR ITS SIBLINGS — I did not, and it cost a week of divergence
+*Added 2026-08-20. This one is mine.*
+
+I adjudicated **12-4** closed on 2026-08-18 after verifying ruling R-E's denominator fix on the
+public page. **I never asked where else the defect lived.** It lived in
+`survey-analytics.service.ts`'s `getHousehold`, feeding the internal dashboard — so from 12-4's
+deploy until 12-5, **the dashboard and the public page published different values for the same
+statistic** (31.8% vs 45.5%). §2o already says it: *fix the class, not the cohort in front of you;
+when you fix a guard, immediately grep for its siblings.* I verified the instance and closed.
+
+- **The check is one command** and belongs in §2a's verify-myself list: when a fix corrects a
+  derivation, `grep` the repo for the ORIGINAL wrong expression, not for the fix. Here:
+  `grep -rn "raw_data IS NOT NULL" apps/api/src/services` would have shown `buildWhereFragments`.
+- **A second surface is not a second bug — it is the same bug, unfixed.** Closing on one instance
+  makes the record say "fixed" while the class is live.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
