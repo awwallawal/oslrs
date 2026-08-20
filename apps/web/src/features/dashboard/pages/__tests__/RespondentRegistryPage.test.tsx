@@ -100,13 +100,24 @@ let mockRegistrySummaryReturn = {
   error: null as Error | null,
 };
 
+// Story 12-5: the honest registry total the strip now reconciles to.
+let mockRegistryTotalsReturn = {
+  data: undefined as any,
+  isLoading: false,
+  error: null as Error | null,
+};
+
 vi.mock('../../hooks/useAnalytics', () => ({
   useRegistrySummary: () => mockRegistrySummaryReturn,
+  useRegistryTotals: () => mockRegistryTotalsReturn,
 }));
 
 vi.mock('../../components/charts/RegistrySummaryStrip', () => ({
-  RegistrySummaryStrip: ({ data, isLoading }: { data: any; isLoading: boolean }) => (
-    <div data-testid="registry-summary-strip">{isLoading ? 'loading' : data ? 'summary' : 'empty'}</div>
+  RegistrySummaryStrip: ({ data, totals, isLoading }: { data: any; totals: any; isLoading: boolean }) => (
+    <div data-testid="registry-summary-strip">
+      {isLoading ? 'loading' : data ? 'summary' : 'empty'}
+      <span data-testid="strip-totals-prop">{totals ? String(totals.totalRespondents) : 'none'}</span>
+    </div>
   ),
 }));
 
@@ -126,6 +137,11 @@ beforeEach(() => {
     dataUpdatedAt: Date.now(),
   };
   mockRegistrySummaryReturn = {
+    data: undefined,
+    isLoading: false,
+    error: null,
+  };
+  mockRegistryTotalsReturn = {
     data: undefined,
     isLoading: false,
     error: null,
@@ -194,6 +210,40 @@ describe('RespondentRegistryPage', () => {
     render(<RespondentRegistryPage />);
     const strip = screen.getByTestId('registry-summary-strip');
     expect(strip.textContent).toContain('summary');
+  });
+
+  // ── Story 12-5 AC3: the strip reconciles with the header record count ──
+
+  it('feeds the strip the honest registry total, under the same active filters', () => {
+    mockRegistryTotalsReturn = {
+      data: { totalRespondents: 139, withAnswers: 76 },
+      isLoading: false,
+      error: null,
+    };
+    render(<RespondentRegistryPage />);
+    // 139 registered people — the same population the header's "{n} records"
+    // counts, so the two numbers on this page no longer disagree in silence.
+    expect(screen.getByTestId('strip-totals-prop')).toHaveTextContent('139');
+  });
+
+  it('holds the strip in loading while the honest total is still in flight', () => {
+    mockRegistrySummaryReturn = { data: { totalRespondents: 76 } as any, isLoading: false, error: null };
+    mockRegistryTotalsReturn = { data: undefined, isLoading: true, error: null };
+    render(<RespondentRegistryPage />);
+    // Rendering the summary alone would flash the old mislabelled total.
+    expect(screen.getByTestId('registry-summary-strip').textContent).toContain('loading');
+  });
+
+  it('keeps the strip alive when only the honest total fails', () => {
+    // Review R9. An unavailable total renders as an em-dash inside the strip —
+    // that is the designed signal. Folding a totals-only error into the strip's
+    // `error` threw away five working stats to report the absence of one.
+    mockRegistrySummaryReturn = { data: { totalRespondents: 76 } as any, isLoading: false, error: null };
+    mockRegistryTotalsReturn = { data: undefined, isLoading: false, error: new Error('registry-totals 500') };
+    render(<RespondentRegistryPage />);
+    const strip = screen.getByTestId('registry-summary-strip');
+    expect(strip.textContent).toContain('summary');
+    expect(screen.getByTestId('strip-totals-prop')).toHaveTextContent('none');
   });
 
   it('registry summary strip appears before collapsible filters', () => {

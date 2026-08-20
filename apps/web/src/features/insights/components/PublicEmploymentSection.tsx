@@ -2,17 +2,26 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 import { Card, CardContent } from '../../../components/ui/card';
 import type { FrequencyBucket } from '@oslsr/types';
 import { CHART_COLORS, formatLabel } from '../utils/chart-utils';
+import { basedOnCaptionIfKnown } from '../../dashboard/utils/registry-copy';
 
 interface PublicEmploymentSectionProps {
   employmentBreakdown: FrequencyBucket[];
   formalInformalRatio: FrequencyBucket[];
   unemploymentEstimate: number | null;
+  /**
+   * Story 12-5 / ruling R-E — the people who answered the EMPLOYMENT question,
+   * which is what this rate divides by. Not the registry total, and not
+   * everyone with any answers: someone never ASKED about employment used to sit
+   * in this denominator, which quietly turned *not asked* into *not employed*.
+   */
+  unemploymentN?: number;
 }
 
 export function PublicEmploymentSection({
   employmentBreakdown,
   formalInformalRatio,
   unemploymentEstimate,
+  unemploymentN,
 }: PublicEmploymentSectionProps) {
   const visibleEmp = employmentBreakdown.filter(b => !b.suppressed);
   const visibleFormal = formalInformalRatio.filter(b => !b.suppressed);
@@ -79,6 +88,11 @@ export function PublicEmploymentSection({
               <div className="text-3xl font-bold text-red-700">
                 {unemploymentEstimate != null ? `${unemploymentEstimate}%` : 'N/A'}
               </div>
+              {unemploymentEstimate != null && basedOnCaptionIfKnown(unemploymentN) && (
+                <div className="text-xs text-neutral-500 mt-1" data-testid="unemployment-n">
+                  {basedOnCaptionIfKnown(unemploymentN)}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

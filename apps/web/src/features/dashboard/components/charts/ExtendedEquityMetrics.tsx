@@ -1,5 +1,6 @@
 import type { ExtendedEquityData } from '@oslsr/types';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 
 interface ExtendedEquityMetricsProps {
   data?: ExtendedEquityData;
@@ -52,6 +53,9 @@ export function ExtendedEquityMetrics({ data, isLoading, error, onRetry }: Exten
                 <div className="mt-2 space-y-1 text-xs text-gray-600">
                   <p>Disabled: {(data.disabilityGap.disabledEmployedRate * 100).toFixed(1)}% employed</p>
                   <p>Non-disabled: {(data.disabilityGap.nonDisabledEmployedRate * 100).toFixed(1)}% employed</p>
+                  <p className="text-gray-400" data-testid="chart-n">
+                    {formatN(data.thresholds.disabilityGap.currentN)}
+                  </p>
                 </div>
               </>
             ) : (
@@ -72,7 +76,10 @@ export function ExtendedEquityMetrics({ data, isLoading, error, onRetry }: Exten
                 <div className="mt-2 space-y-1 text-xs text-gray-600">
                   <p>Over-qualified: {data.educationAlignment.overQualifiedPct.toFixed(1)}%</p>
                   <p>Under-qualified: {data.educationAlignment.underQualifiedPct.toFixed(1)}%</p>
-                  <p className="text-gray-400">n = {data.educationAlignment.n}</p>
+                  {/* AC5: one N format everywhere — this card had its own. */}
+                  <p className="text-gray-400" data-testid="chart-n">
+                    {formatN(data.educationAlignment.n)}
+                  </p>
                 </div>
               </>
             ) : (
@@ -95,6 +102,11 @@ export function ExtendedEquityMetrics({ data, isLoading, error, onRetry }: Exten
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   Across {data.giniCoefficient.lgaCount} LGAs
+                </p>
+                {/* The people the LGA distribution was computed over — distinct
+                    from the LGA count above, which is a count of places. */}
+                <p className="text-xs text-gray-400" data-testid="chart-n">
+                  {formatN(data.thresholds.giniCoefficient.currentN)}
                 </p>
               </>
             ) : (

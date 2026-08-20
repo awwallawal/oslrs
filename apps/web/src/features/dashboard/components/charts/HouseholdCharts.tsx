@@ -20,15 +20,17 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
+import { Card, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import {
   SUPPRESSED_LABEL,
   SUPPRESSED_TOOLTIP,
   safeCount,
   bucketColor,
+  bucketTotal,
   formatLabel,
 } from './chart-utils';
+import { ChartCard } from './ChartCard';
 import type { HouseholdStats, FrequencyBucket } from '@oslsr/types';
 
 // ---------------------------------------------------------------------------
@@ -57,48 +59,27 @@ function fmtPct(value: number | null): string {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-80">
-          {children}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function StatCard({
   title,
   value,
   subtitle,
+  n,
 }: {
   title: string;
   value: string;
   subtitle?: string;
+  /** Story 12-5 AC4 \u2014 the denominator this statistic was computed over. */
+  n?: number;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center justify-center py-6">
-          <span className="text-4xl font-bold text-[#9C1E23]">{value}</span>
-          {subtitle && (
-            <span className="mt-1 text-sm text-muted-foreground">{subtitle}</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <ChartCard title={title} n={n} bodyClassName="">
+      <div className="flex flex-col items-center justify-center py-6">
+        <span className="text-4xl font-bold text-[#9C1E23]">{value}</span>
+        {subtitle && (
+          <span className="mt-1 text-sm text-muted-foreground">{subtitle}</span>
+        )}
+      </div>
+    </ChartCard>
   );
 }
 
@@ -124,7 +105,7 @@ function HouseholdSizeChart({ data }: { data: FrequencyBucket[] }) {
   }));
 
   return (
-    <ChartCard title="Household Size Distribution">
+    <ChartCard title="Household Size Distribution" n={bucketTotal(data)}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} barCategoryGap="20%">
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -189,7 +170,7 @@ function DonutCard({
   const total = chartData.reduce((sum, d) => sum + d.displayCount, 0);
 
   return (
-    <ChartCard title={title}>
+    <ChartCard title={title} n={bucketTotal(buckets)}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -307,6 +288,7 @@ export function HouseholdCharts({ data, isLoading, error, onRetry, className }: 
         <StatCard
           title="Dependency Ratio"
           value={data.dependencyRatio.toFixed(2)}
+          n={data.denominators?.dependencyRatio ?? undefined}
           subtitle="Dependents per working-age adult"
         />
       ) : (
@@ -324,7 +306,8 @@ export function HouseholdCharts({ data, isLoading, error, onRetry, className }: 
         <StatCard
           title="Business Ownership Rate"
           value={fmtPct(data.businessOwnershipRate)}
-          subtitle="Of surveyed households"
+          n={data.denominators?.businessOwnership ?? undefined}
+          subtitle="Of households asked about a business"
         />
       ) : (
         <NullStatCard title="Business Ownership Rate" />
@@ -335,6 +318,7 @@ export function HouseholdCharts({ data, isLoading, error, onRetry, className }: 
         <StatCard
           title="Business Registration Rate"
           value={fmtPct(data.businessRegistrationRate)}
+          n={data.denominators?.businessRegistration ?? undefined}
           subtitle="Of business-owning households"
         />
       ) : (
@@ -346,6 +330,7 @@ export function HouseholdCharts({ data, isLoading, error, onRetry, className }: 
         <StatCard
           title="Apprentice Total"
           value={data.apprenticeTotal.toLocaleString()}
+          n={data.denominators?.apprenticeTotal ?? undefined}
           subtitle="Registered apprentices"
         />
       ) : (

@@ -10,6 +10,7 @@ import { PublicLgaTable } from '../components/PublicLgaTable';
 import { LgaChoroplethMap } from '../../dashboard/components/charts/LgaChoroplethMap';
 import { lgaDistributionToMapData } from '../../dashboard/utils/analytics-transforms';
 import { MethodologyNote } from '../components/MethodologyNote';
+import { basedOnCaptionIfKnown } from '../../dashboard/utils/registry-copy';
 
 function HeroSkeleton() {
   return (
@@ -89,18 +90,38 @@ export default function PublicInsightsPage() {
               label="LGAs Covered"
               value={data.lgasCovered}
             />
+            {/*
+              Story 12-5 / ruling R-E: every published rate ships with the n it
+              was computed from. These denominators are NOT the same number —
+              each rate divides by the people who answered ITS OWN question — so
+              a rate over 40 people can no longer be read with the authority of
+              one over 300. `rateDenominators` has been on the payload since
+              12-4 and, until now, no component read it.
+
+              Read defensively (`?.` + `basedOnCaptionIfKnown`): the service
+              defaults every entry to `Number(… ?? 0)`, so an absent denominator
+              arrives as 0, not as null. "based on 0 responses" printed under a
+              real percentage would be worse than printing nothing — and this is
+              the page the campaign points at.
+            */}
             <StatCard
               icon={Scale}
               label="Gender Parity Index"
               value={data.gpi != null ? Math.round(data.gpi * 100) : null}
               suffix="%"
-              subtitle={data.gpi != null ? `GPI: ${data.gpi.toFixed(2)}` : undefined}
+              subtitle={data.gpi != null
+                ? [`GPI: ${data.gpi.toFixed(2)}`, basedOnCaptionIfKnown(data.rateDenominators?.gpi)]
+                    .filter(Boolean).join(' · ')
+                : undefined}
             />
             <StatCard
               icon={Briefcase}
               label="Youth Employment Rate"
               value={data.youthEmploymentRate != null ? Math.round(data.youthEmploymentRate) : null}
               suffix="%"
+              subtitle={data.youthEmploymentRate != null
+                ? basedOnCaptionIfKnown(data.rateDenominators?.youthEmployment) ?? undefined
+                : undefined}
             />
           </div>
         </div>
@@ -117,6 +138,7 @@ export default function PublicInsightsPage() {
           employmentBreakdown={data.employmentBreakdown}
           formalInformalRatio={data.formalInformalRatio}
           unemploymentEstimate={data.unemploymentEstimate}
+          unemploymentN={data.rateDenominators?.unemployment}
         />
 
         <PublicSkillsChart allSkills={data.allSkills} />

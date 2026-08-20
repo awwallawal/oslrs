@@ -61,7 +61,15 @@ import {
 import { normaliseNigerianPhone, RESPONDENT_PHONE_E164 } from '../lib/normalise/phone.js';
 import { respondentSourceTypes } from '../db/schema/respondents.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
-import type { AnalyticsQueryParams } from '@oslsr/types';
+import type {
+  AnalyticsQueryParams,
+  RegistryTotals,
+  RegistryCompleteness as SharedRegistryCompleteness,
+  RegistryDataStatus as SharedRegistryDataStatus,
+  RegistryVerification as SharedRegistryVerification,
+} from '@oslsr/types';
+
+export type { RegistryTotals };
 
 const logger = pino({ name: 'registry-totals' });
 
@@ -162,53 +170,40 @@ export const REGISTRY_VERIFICATION_TIERS = [
 ] as const;
 export type RegistryVerification = typeof REGISTRY_VERIFICATION_TIERS[number];
 
-export interface RegistryTotals {
-  /** Distinct PEOPLE (R2 identity key: NIN → E.164 phone → respondent.id). */
-  totalRespondents: number;
-  /** Funnel head for 12-6 — equals `byDataStatus.completed`. */
-  withAnswers: number;
-  byDataStatus: Record<RegistryDataStatus, number>;
-  /**
-   * Axis-1 — `respondents.source`.
-   *
-   * Zero-filled from the schema's own `respondentSourceTypes` so AC7.1's "each
-   * axis is a zero-filled count map" holds and a channel with no registrations
-   * renders as 0 rather than vanishing from the breakdown. Still open-ended: a
-   * source the enum does not yet know is added dynamically, so a new channel
-   * needs no edit here.
-   */
-  bySource: Record<string, number>;
-  /** Axis-2 — derived from the FIELDS PRESENT, never from which form was used. */
-  byCompleteness: Record<RegistryCompleteness, number>;
-  /** Axis-3 — `nin_on_file` is the top tier; `verified` does not exist. */
-  byVerification: Record<RegistryVerification, number>;
-  /**
-   * People whose identity could NOT be resolved (no NIN, and no phone or a
-   * SHARED phone). They ARE counted in `totalRespondents` — one per row, never
-   * merged, because a household sharing one handset is several people (AC2).
-   * This number is the honest uncertainty band on the headline, not a bucket
-   * subtracted from it.
-   */
-  identityAmbiguous: number;
-  /**
-   * AC8 — wizard drafts STILL IN PROGRESS. A FUNNEL metric, NEVER folded into
-   * the total.
-   *
-   * Non-expired AND not since registered: a draft whose phone now belongs to a
-   * respondent has completed the funnel and is excluded, because Story 13-49's
-   * adoption turned drafts into registry records WITHOUT deleting them. A draft
-   * with no usable phone is counted as in progress — we cannot show it finished,
-   * and dropping it would understate the funnel on a guess.
-   *
-   * ⚠️ ALWAYS GLOBAL, even when the rest of this object is filtered. A draft is
-   * PRE-registry: its LGA is unverified user input that may hold a slug or a
-   * legacy UUID depending on vintage (pre/post 13-16), so filtering it would
-   * produce a number whose accuracy I cannot state. Consumers rendering a
-   * filtered view must either label this "(all LGAs)" or omit it — do not print
-   * it beside a filtered total as though the two share a denominator.
-   */
-  inProgressDrafts: number;
-}
+/* ── Shared-type drift guard (Story 12-5) ──────────────────────────────────
+ *
+ * `RegistryTotals` now lives in `@oslsr/types` so the web layer can read the
+ * aggregate it was always meant to render. The three axis unions are declared
+ * in BOTH places — here as `typeof CONST[number]` (the runtime arrays this
+ * module actually tallies into) and there as hand-written unions (the web has
+ * no access to these arrays). Two declarations of one taxonomy is exactly the
+ * drift 13-33/13-37 exist to kill, so they are pinned to each other at COMPILE
+ * TIME: adding a status/tier/level to a runtime array above without adding it
+ * to `@oslsr/types` fails `tsc`, and vice versa.
+ *
+ * `Mutual<A, B>` resolves to `A` only when A and B are mutually assignable, so
+ * a mismatch surfaces as a type error on the alias itself rather than silently
+ * widening.
+ */
+/**
+ * `true` only when A and B are MUTUALLY assignable. One-directional `extends`
+ * is not enough: it would accept the shared union quietly gaining a member the
+ * runtime array never produces, which is half the drift.
+ */
+type Pinned<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * Each guard fires INDEPENDENTLY — a divergence in any one axis is a `tsc`
+ * error on its own line (`Type 'true' is not assignable to type 'false'`),
+ * naming which taxonomy drifted. Do NOT delete these to make a build pass; fix
+ * the mismatch in `@oslsr/types`.
+ */
+const _dataStatusPinned: Pinned<RegistryDataStatus, SharedRegistryDataStatus> = true;
+const _completenessPinned: Pinned<RegistryCompleteness, SharedRegistryCompleteness> = true;
+const _verificationPinned: Pinned<RegistryVerification, SharedRegistryVerification> = true;
+void _dataStatusPinned;
+void _completenessPinned;
+void _verificationPinned;
 
 /**
  * THE emptiness contract — the single definition of "this person answered this

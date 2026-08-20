@@ -6,7 +6,6 @@
  */
 
 import {
-  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
@@ -18,13 +17,15 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
+import { Card, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import {
   CHART_COLORS,
   SUPPRESSED_COLOR,
   bucketColor,
+  bucketTotal,
 } from './chart-utils';
+import { ChartCard } from './ChartCard';
 import type { DemographicStats, FrequencyBucket } from '@oslsr/types';
 
 // --- Props ---
@@ -63,11 +64,6 @@ function prepareBuckets(buckets: FrequencyBucket[]) {
   return buckets.map(toBucketDisplay);
 }
 
-/** Compute total from non-suppressed buckets for percentage display. */
-function bucketTotal(buckets: FrequencyBucket[]): number {
-  return buckets.reduce((sum, b) => sum + (b.suppressed ? 0 : (b.count ?? 0)), 0);
-}
-
 // --- Tooltip components ---
 
 function BucketTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ReturnType<typeof toBucketDisplay> }> }) {
@@ -92,35 +88,18 @@ function BucketTooltip({ active, payload }: { active?: boolean; payload?: Array<
   );
 }
 
-// --- Chart section header ---
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            {children as React.ReactElement}
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // --- Individual chart renderers ---
+//
+// Story 12-5 AC4: each card passes the denominator IT was counted over into the
+// shared ChartCard header. These Ns legitimately differ from one another and
+// from the registry total — that difference is the information, not a bug.
 
 function GenderPieChart({ buckets }: { buckets: FrequencyBucket[] }) {
   const data = prepareBuckets(buckets);
   const total = bucketTotal(buckets);
 
   return (
-    <ChartCard title="Gender Distribution">
+    <ChartCard title="Gender Distribution" n={total} responsive>
       <PieChart>
         <Pie
           data={data}
@@ -179,7 +158,7 @@ function AgeBarChart({ buckets }: { buckets: FrequencyBucket[] }) {
   const data = prepareBuckets(buckets);
 
   return (
-    <ChartCard title="Age Distribution">
+    <ChartCard title="Age Distribution" n={bucketTotal(buckets)} responsive>
       <BarChart data={data} barGap={2}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis
@@ -213,7 +192,7 @@ function EducationBarChart({ buckets }: { buckets: FrequencyBucket[] }) {
   const data = prepareBuckets(buckets);
 
   return (
-    <ChartCard title="Education Distribution">
+    <ChartCard title="Education Distribution" n={bucketTotal(buckets)} responsive>
       <BarChart data={data} barGap={2}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis
@@ -251,7 +230,7 @@ function MaritalBarChart({ buckets }: { buckets: FrequencyBucket[] }) {
   const data = prepareBuckets(buckets);
 
   return (
-    <ChartCard title="Marital Status">
+    <ChartCard title="Marital Status" n={bucketTotal(buckets)} responsive>
       <BarChart data={data} layout="vertical" barGap={2}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
         <XAxis
@@ -289,47 +268,42 @@ function LgaBarChart({ buckets }: { buckets: FrequencyBucket[] }) {
   const chartHeight = Math.max(320, data.length * 24);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">LGA Distribution</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div style={{ height: chartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                allowDecimals={false}
-              />
-              <YAxis
-                type="category"
-                dataKey="label"
-                tick={{ fontSize: 11 }}
-                width={140}
-                axisLine={false}
-                tickLine={false}
-              />
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Tooltip content={BucketTooltip as any} />
-              <Bar dataKey="count" radius={[0, 4, 4, 0]} name="Respondents">
-                {data.map((entry, index) => (
-                  <Cell
-                    key={entry.label || index}
-                    fill={entry.suppressed ? SUPPRESSED_COLOR : CHART_COLORS[index % CHART_COLORS.length]}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+    <ChartCard
+      title="LGA Distribution"
+      n={bucketTotal(buckets)}
+      bodyClassName=""
+      bodyStyle={{ height: chartHeight }}
+      responsive
+    >
+      <BarChart data={data} layout="vertical" barGap={2}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+        <XAxis
+          type="number"
+          tick={{ fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          allowDecimals={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="label"
+          tick={{ fontSize: 11 }}
+          width={140}
+          axisLine={false}
+          tickLine={false}
+        />
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <Tooltip content={BucketTooltip as any} />
+        <Bar dataKey="count" radius={[0, 4, 4, 0]} name="Respondents">
+          {data.map((entry, index) => (
+            <Cell
+              key={entry.label || index}
+              fill={entry.suppressed ? SUPPRESSED_COLOR : CHART_COLORS[index % CHART_COLORS.length]}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ChartCard>
   );
 }
 
@@ -352,21 +326,14 @@ function ConsentStatCard({ label, buckets }: { label: string; buckets: Frequency
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{label}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center justify-center py-8">
-          <span className="text-4xl font-bold text-[#9C1E23]">{displayValue}</span>
-          {subtitle && (
-            <span className="text-sm text-neutral-500 mt-2">{subtitle}</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <ChartCard title={label} n={bucketTotal(buckets)} bodyClassName="">
+      <div className="flex flex-col items-center justify-center py-8">
+        <span className="text-4xl font-bold text-[#9C1E23]">{displayValue}</span>
+        {subtitle && (
+          <span className="text-sm text-neutral-500 mt-2">{subtitle}</span>
+        )}
+      </div>
+    </ChartCard>
   );
 }
 
@@ -376,14 +343,8 @@ function DisabilityStatCard({ buckets }: { buckets: FrequencyBucket[] }) {
   const hasSuppressed = buckets.some((b) => b.suppressed);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">Disability Prevalence</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center justify-center py-6">
+    <ChartCard title="Disability Prevalence" n={bucketTotal(buckets)} bodyClassName="">
+      <div className="flex flex-col items-center justify-center py-6">
           {hasSuppressed ? (
             <>
               <span className="text-4xl font-bold text-[#9C1E23]">{'\u2014'}</span>
@@ -411,9 +372,8 @@ function DisabilityStatCard({ buckets }: { buckets: FrequencyBucket[] }) {
               })}
             </div>
           )}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </ChartCard>
   );
 }
 

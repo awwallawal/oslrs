@@ -11,9 +11,10 @@ import type {
   DemographicStats,
   EmploymentStats,
   HouseholdStats,
-  SkillsFrequency,
+  SkillsFrequencyResult,
   TrendDataPoint,
   RegistrySummary,
+  RegistryTotals,
   PipelineSummary,
   TeamQualityData,
   PersonalStatsData,
@@ -54,7 +55,7 @@ export async function fetchHousehold(params?: AnalyticsQueryParams): Promise<Hou
   return result.data;
 }
 
-export async function fetchSkillsFrequency(params?: AnalyticsQueryParams): Promise<SkillsFrequency[]> {
+export async function fetchSkillsFrequency(params?: AnalyticsQueryParams): Promise<SkillsFrequencyResult> {
   const result = await apiClient(`/analytics/skills${buildQueryString(params)}`);
   return result.data;
 }
@@ -66,6 +67,18 @@ export async function fetchTrends(params?: AnalyticsQueryParams): Promise<TrendD
 
 export async function fetchRegistrySummary(params?: AnalyticsQueryParams): Promise<RegistrySummary> {
   const result = await apiClient(`/analytics/registry-summary${buildQueryString(params)}`);
+  return result.data;
+}
+
+/**
+ * Story 12-4's authoritative registry aggregate — counts PEOPLE.
+ *
+ * ⚠️ NOT interchangeable with {@link fetchRegistrySummary}, whose
+ * `totalRespondents` is the answer-bearing SUBMISSION count (the "with answers"
+ * numerator). Any surface showing a registry TOTAL reads this one.
+ */
+export async function fetchRegistryTotals(params?: AnalyticsQueryParams): Promise<RegistryTotals> {
+  const result = await apiClient(`/analytics/registry-totals${buildQueryString(params)}`);
   return result.data;
 }
 

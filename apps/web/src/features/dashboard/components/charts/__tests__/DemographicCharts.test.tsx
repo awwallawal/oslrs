@@ -70,4 +70,34 @@ describe('DemographicCharts', () => {
     const suppressedElements = screen.getAllByText('Insufficient data');
     expect(suppressedElements.length).toBeGreaterThanOrEqual(1);
   });
+
+  // ── Story 12-5 AC4/AC6.3 — per-chart denominators ─────────────────────
+  describe('N per chart', () => {
+    it('gives every chart its own N, not one shared house number', () => {
+      render(<DemographicCharts data={mockData} isLoading={false} error={null} />);
+      const ns = screen.getAllByTestId('chart-n').map((el) => el.textContent);
+
+      // Gender 60+40=100, age 30, education 50, marital 60, LGA 40,
+      // disability 90, and the two consent cards 70 / 55.
+      expect(ns).toContain('N = 100');
+      expect(ns).toContain('N = 30');
+      expect(ns).toContain('N = 50');
+      // The point of AC4.2: these differ from each other on purpose.
+      expect(new Set(ns).size).toBeGreaterThan(1);
+    });
+
+    it('excludes suppressed buckets from the N it prints', () => {
+      const withSuppressed: DemographicStats = {
+        ...mockData,
+        ageDistribution: [
+          { label: '20-24', count: 30, percentage: 30 },
+          // Withheld (<5): its count is not shown, so it cannot be counted.
+          { label: '25-29', count: null, percentage: null, suppressed: true },
+        ],
+      };
+      render(<DemographicCharts data={withSuppressed} isLoading={false} error={null} />);
+      const ns = screen.getAllByTestId('chart-n').map((el) => el.textContent);
+      expect(ns).toContain('N = 30');
+    });
+  });
 });

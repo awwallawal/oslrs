@@ -238,6 +238,50 @@ describe('PublicInsightsPage', () => {
     expect(screen.getByText('Complete Survey Responses')).toBeInTheDocument();
   });
 
+  // ── Review R3/R4 — every published rate ships the n it came from ──
+
+  it('publishes each rate denominator beside its rate', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData;
+    mockInsights.error = null;
+    renderPage();
+    // Three DIFFERENT bases — that difference is the information, and until now
+    // `rateDenominators` was required on the payload and read by nobody.
+    expect(screen.getByText(/GPI: 0\.85 · based on 4,100 responses/)).toBeInTheDocument();
+    expect(screen.getByText('based on 2,100 responses')).toBeInTheDocument();
+    expect(screen.getByTestId('unemployment-n')).toHaveTextContent('based on 3,600 responses');
+  });
+
+  it('prints no denominator at all rather than "based on 0 responses"', () => {
+    // The service defaults an absent denominator to 0. A rate that clears the
+    // threshold while its own n is missing must stay bare — publishing "based
+    // on 0 responses" under a live percentage is worse than publishing nothing.
+    mockInsights.isLoading = false;
+    mockInsights.error = null;
+    mockInsights.data = {
+      ...fullData,
+      rateDenominators: { businessOwnership: 0, unemployment: 0, youthEmployment: 0, gpi: 0 },
+    };
+    renderPage();
+    expect(screen.queryByText(/based on 0 responses/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('unemployment-n')).not.toBeInTheDocument();
+    // The rates themselves still render — only their absent bases are withheld.
+    expect(screen.getByText(/GPI: 0\.85/)).toBeInTheDocument();
+  });
+
+  it('renders when a payload omits rateDenominators entirely', () => {
+    // Defensive: a cached payload predating the field must not blank the page.
+    const { rateDenominators: _omitted, ...withoutDenominators } = fullData;
+    mockInsights.isLoading = false;
+    mockInsights.error = null;
+    mockInsights.data = withoutDenominators as PublicInsightsData;
+    expect(() => renderPage()).not.toThrow();
+    // Scoped to the RATE caption's shape. A bare /based on/ also matches the
+    // methodology note ("based on the 4,200 registrants..."), which is separate
+    // prose and stays put.
+    expect(screen.queryByText(/based on [\d,]+ responses/)).not.toBeInTheDocument();
+  });
+
   it('renders last-updated badge in methodology section', () => {
     mockInsights.isLoading = false;
     mockInsights.data = fullData;

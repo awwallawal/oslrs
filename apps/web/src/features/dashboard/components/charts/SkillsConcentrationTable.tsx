@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 
 interface LgaSkillConcentration {
   lgaId: string;
@@ -20,6 +21,10 @@ export function SkillsConcentrationTable({ data, threshold }: SkillsConcentratio
       <Card data-testid="skills-concentration-table">
         <CardHeader>
           <CardTitle className="text-lg">Skills Concentration by LGA</CardTitle>
+          {/* AC4: the threshold's `currentN` IS this chart's denominator. */}
+          <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+            {formatN(threshold.currentN)}
+          </p>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

@@ -23,6 +23,7 @@ import {
   useSkillsFrequency,
   useTrends,
   useRegistrySummary,
+  useRegistryTotals,
   usePipelineSummary,
   useSkillsInventory,
   useInferentialInsights,
@@ -41,10 +42,29 @@ import { SkillsGapChart } from '../components/charts/SkillsGapChart';
 import { SkillsConcentrationTable } from '../components/charts/SkillsConcentrationTable';
 import { SkillsDiversityCards } from '../components/charts/SkillsDiversityCards';
 import { lgaDistributionToMapData } from '../utils/analytics-transforms';
+import { ChartCard } from '../components/charts/ChartCard';
+import { bucketTotal } from '../components/charts/chart-utils';
+import {
+  TOTAL_RESPONDENTS_LABEL,
+  WITH_ANSWERS_LABEL,
+  WITH_ANSWERS_CAPTION,
+  ofAnswersCaption,
+  pctOfAnswersCaption,
+} from '../utils/registry-copy';
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  testId,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  testId?: string;
+}) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardContent className="pt-4 pb-3 px-4">
         <p className="text-xs text-neutral-500 mb-0.5">{label}</p>
         <p className="text-lg font-bold text-gray-800">{value}</p>
@@ -60,7 +80,19 @@ export default function SurveyAnalyticsPage() {
 
   // Always enabled — shown above tabs
   const { data: registry, isLoading: regLoading } = useRegistrySummary(params);
+  // Story 12-5 AC1: the HONEST registry total. `registry.totalRespondents` is
+  // the answer-bearing subset, NOT the total — never bind a total to it.
+  const { data: totals, isLoading: totalsLoading } = useRegistryTotals(params);
   const { data: pipeline, isLoading: pipeLoading } = usePipelineSummary(params);
+
+  // AC1.2 / 13-33 harmonization: the "with answers" figure is sourced from
+  // `getRegistryTotals().withAnswers` (respondent-scoped), NOT from
+  // `getRegistrySummary().totalRespondents` (submission-scoped, so it can
+  // double-count a respondent with more than one answer-bearing submission).
+  // The % cards below are computed inside getRegistrySummary over ITS count, so
+  // their caption names that denominator rather than assuming the two agree.
+  const withAnswers = totals?.withAnswers;
+  const pctDenominator = registry?.totalRespondents;
 
   // Gated by active tab — only fire when the corresponding tab is selected
   const { data: demographics, isLoading: demoLoading, error: demoError, refetch: refetchDemo } = useDemographics(params, activeTab === 'demographics' || activeTab === 'equity' || activeTab === 'geographic');
@@ -106,21 +138,74 @@ export default function SurveyAnalyticsPage() {
         )}
       </div>
 
-      {/* Registry Stat Cards (Row B) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
-        {regLoading ? (
+      {/*
+        Registry Stat Cards (Row B) — Story 12-5 AC1/AC2.
+
+        Two cards carry the distinction the whole story rests on: "Total
+        Respondents" is registered PEOPLE (12-4's aggregate) and "With Answers"
+        is the subset whose questionnaire answers are on file. They used to be
+        one card showing the second number under the first label, which made 63
+        of 139 registered people invisible on the Ministry's own dashboard.
+
+        Every percentage below is computed over the answers subset, so each
+        states that denominator inline — a reader who divides by the 139 gets a
+        different, wrong number, and nothing on the old card said so.
+      */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
+        {regLoading || totalsLoading ? (
           <>
-            <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+            <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
           </>
         ) : (
           <>
-            <StatCard label="Total Respondents" value={registry?.totalRespondents.toLocaleString() ?? '—'} />
-            <StatCard label="Employed" value={registry?.employedCount.toLocaleString() ?? '—'} sub={registry ? `${registry.employedPct}%` : undefined} />
-            <StatCard label="Female" value={registry?.femaleCount.toLocaleString() ?? '—'} sub={registry ? `${registry.femalePct}%` : undefined} />
-            <StatCard label="Avg Age" value={registry?.avgAge ?? '—'} />
-            <StatCard label="Business Owners" value={registry?.businessOwners.toLocaleString() ?? '—'} sub={registry ? `${registry.businessOwnersPct}%` : undefined} />
-            <StatCard label="Consent Opt-In" value={registry?.consentMarketplacePct != null ? `${registry.consentMarketplacePct}%` : '—'} />
-            <StatCard label="Enriched Consent" value={registry?.consentEnrichedPct != null ? `${registry.consentEnrichedPct}%` : '—'} />
+            <StatCard
+              testId="stat-total-respondents"
+              label={TOTAL_RESPONDENTS_LABEL}
+              value={totals?.totalRespondents.toLocaleString() ?? '—'}
+              sub="registered people"
+            />
+            <StatCard
+              testId="stat-with-answers"
+              label={WITH_ANSWERS_LABEL}
+              value={withAnswers?.toLocaleString() ?? '—'}
+              sub={WITH_ANSWERS_CAPTION}
+            />
+            <StatCard
+              testId="stat-employed"
+              label="Employed"
+              value={registry?.employedCount.toLocaleString() ?? '—'}
+              sub={registry && pctDenominator != null ? pctOfAnswersCaption(registry.employedPct, pctDenominator) : undefined}
+            />
+            <StatCard
+              testId="stat-female"
+              label="Female"
+              value={registry?.femaleCount.toLocaleString() ?? '—'}
+              sub={registry && pctDenominator != null ? pctOfAnswersCaption(registry.femalePct, pctDenominator) : undefined}
+            />
+            <StatCard
+              testId="stat-avg-age"
+              label="Avg Age"
+              value={registry?.avgAge ?? '—'}
+              sub={pctDenominator != null ? ofAnswersCaption(pctDenominator) : undefined}
+            />
+            <StatCard
+              testId="stat-business-owners"
+              label="Business Owners"
+              value={registry?.businessOwners.toLocaleString() ?? '—'}
+              sub={registry && pctDenominator != null ? pctOfAnswersCaption(registry.businessOwnersPct, pctDenominator) : undefined}
+            />
+            <StatCard
+              testId="stat-consent-optin"
+              label="Consent Opt-In"
+              value={registry?.consentMarketplacePct != null ? `${registry.consentMarketplacePct}%` : '—'}
+              sub={pctDenominator != null ? ofAnswersCaption(pctDenominator) : undefined}
+            />
+            <StatCard
+              testId="stat-consent-enriched"
+              label="Enriched Consent"
+              value={registry?.consentEnrichedPct != null ? `${registry.consentEnrichedPct}%` : '—'}
+              sub={pctDenominator != null ? ofAnswersCaption(pctDenominator) : undefined}
+            />
           </>
         )}
       </div>
@@ -181,11 +266,23 @@ export default function SurveyAnalyticsPage() {
           >
             <div className="flex justify-end mb-2">
               <ChartExportButton
-                data={skills ?? []}
+                data={skills?.skills ?? []}
                 filename="skills-frequency"
               />
             </div>
-            <SkillsCharts data={skills ?? []} isLoading={skillsLoading} error={skillsError} onRetry={refetchSkills} />
+            {/*
+              Story 12-5 AC4: the skills denominator is `respondentsAnswering` —
+              the people who answered the skills question — NOT the sum of the
+              counts. One respondent selecting five skills is one person here
+              and five there, so summing would overstate the base badly.
+            */}
+            <SkillsCharts
+              data={skills?.skills ?? []}
+              n={skills?.respondentsAnswering}
+              isLoading={skillsLoading}
+              error={skillsError}
+              onRetry={refetchSkills}
+            />
           </ErrorBoundary>
         </TabsContent>
 
@@ -204,10 +301,21 @@ export default function SurveyAnalyticsPage() {
               <Card className="p-6 text-center text-red-600">Failed to load geographic data.</Card>
             )}
             {demographics && (
-              <LgaChoroplethMap
-                data={lgaDistributionToMapData(demographics.lgaDistribution)}
-                onLgaClick={(lgaCode) => setParams({ ...params, lgaId: lgaCode })}
-              />
+              // AC4: the map's N is carried on the card rather than inside
+              // LgaChoroplethMap, because the same map also renders on the
+              // PUBLIC insights page over banded data whose small counts are
+              // deliberately withheld — summing those would understate the base.
+              // This N is the dashboard's own unbanded LGA distribution.
+              <ChartCard
+                title="Registration Density by LGA"
+                n={bucketTotal(demographics.lgaDistribution)}
+                bodyClassName=""
+              >
+                <LgaChoroplethMap
+                  data={lgaDistributionToMapData(demographics.lgaDistribution)}
+                  onLgaClick={(lgaCode) => setParams({ ...params, lgaId: lgaCode })}
+                />
+              </ChartCard>
             )}
           </ErrorBoundary>
         </TabsContent>

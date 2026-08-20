@@ -18,6 +18,7 @@ const mockHousehold = vi.hoisted(() => ({ data: null as any, isLoading: true, er
 const mockSkills = vi.hoisted(() => ({ data: [] as any, isLoading: true, error: null as any, refetch: mockRefetch }));
 const mockTrends = vi.hoisted(() => ({ data: [] as any, isLoading: true, error: null as any, refetch: mockRefetch }));
 const mockRegistry = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
+const mockRegistryTotals = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
 const mockPipeline = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
 
 vi.mock('../../hooks/useAnalytics', () => ({
@@ -27,6 +28,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useSkillsFrequency: () => mockSkills,
   useTrends: () => mockTrends,
   useRegistrySummary: () => mockRegistry,
+  useRegistryTotals: () => mockRegistryTotals,
   usePipelineSummary: () => mockPipeline,
   useSkillsInventory: () => ({ data: null, isLoading: false }),
   useInferentialInsights: () => ({ data: null, isLoading: false, error: null }),
@@ -82,8 +84,26 @@ function resetMocks() {
   mockSkills.data = []; mockSkills.isLoading = true; mockSkills.error = null;
   mockTrends.data = []; mockTrends.isLoading = true; mockTrends.error = null;
   mockRegistry.data = null; mockRegistry.isLoading = true; mockRegistry.error = null;
+  mockRegistryTotals.data = null; mockRegistryTotals.isLoading = true; mockRegistryTotals.error = null;
   mockPipeline.data = null; mockPipeline.isLoading = true; mockPipeline.error = null;
 }
+
+/** The prod split this story exists to make legible: 139 people, 76 with answers. */
+const TOTALS_139 = {
+  totalRespondents: 139,
+  withAnswers: 76,
+  byDataStatus: { completed: 76, data_lost: 55, pending_nin: 1, nin_unavailable: 0, imported: 0, no_submission: 7 },
+  bySource: {}, byCompleteness: { full: 76, core: 0, partial: 63 },
+  byVerification: { nin_on_file: 130, self_declared: 8, pending_nin: 1, unverified_import: 0 },
+  identityAmbiguous: 0, inProgressDrafts: 0,
+};
+
+/** `getRegistrySummary` — the 76, plus percentages computed OVER the 76. */
+const SUMMARY_76 = {
+  totalRespondents: 76, employedCount: 34, employedPct: 44.7, femaleCount: 38, femalePct: 50,
+  avgAge: 30, businessOwners: 20, businessOwnersPct: 26.3,
+  consentMarketplacePct: 70, consentEnrichedPct: 55,
+};
 
 beforeEach(() => resetMocks());
 
@@ -115,11 +135,13 @@ describe('SurveyAnalyticsPage', () => {
     mockPipeline.isLoading = false;
     mockRegistry.data = { totalRespondents: 100, employedCount: 60, employedPct: 60, femaleCount: 50, femalePct: 50, avgAge: 30, businessOwners: 20, businessOwnersPct: 20, consentMarketplacePct: 70, consentEnrichedPct: 55 };
     mockRegistry.isLoading = false;
+    mockRegistryTotals.data = TOTALS_139; mockRegistryTotals.isLoading = false;
 
     render(<SurveyAnalyticsPage />, { wrapper });
     expect(screen.getByText('Total Submissions')).toBeInTheDocument();
     expect(screen.getByText('Completion Rate')).toBeInTheDocument();
     expect(screen.getByText('Total Respondents')).toBeInTheDocument();
+    expect(screen.getByText('With Answers')).toBeInTheDocument();
     expect(screen.getByText('Employed')).toBeInTheDocument();
     expect(screen.getByText('Female')).toBeInTheDocument();
     expect(screen.getByText('Avg Age')).toBeInTheDocument();
@@ -130,12 +152,16 @@ describe('SurveyAnalyticsPage', () => {
     mockDemographics.isLoading = false;
     mockRegistry.data = { totalRespondents: 100, employedCount: 60, employedPct: 60, femaleCount: 50, femalePct: 50, avgAge: 30, businessOwners: 20, businessOwnersPct: 20, consentMarketplacePct: 70, consentEnrichedPct: 55 };
     mockRegistry.isLoading = false;
+    mockRegistryTotals.data = { ...TOTALS_139, totalRespondents: 163, withAnswers: 100 };
+    mockRegistryTotals.isLoading = false;
     mockPipeline.data = { totalSubmissions: 500, completionRate: 85, avgCompletionTimeSecs: 1200, activeEnumerators: 12 };
     mockPipeline.isLoading = false;
 
     render(<SurveyAnalyticsPage />, { wrapper });
     expect(screen.getByText('500')).toBeInTheDocument();
-    expect(screen.getByText('100')).toBeInTheDocument();
+    // The total comes from the totals aggregate; the 100 is the answers subset.
+    expect(screen.getByTestId('stat-total-respondents')).toHaveTextContent('163');
+    expect(screen.getByTestId('stat-with-answers')).toHaveTextContent('100');
   });
 
   it('tab switching works', () => {
@@ -161,6 +187,77 @@ describe('SurveyAnalyticsPage', () => {
   it('renders page header description', () => {
     render(<SurveyAnalyticsPage />, { wrapper });
     expect(screen.getByText('State-wide labour market intelligence')).toBeInTheDocument();
+  });
+
+  // ── Story 12-5 AC6.1 — label honesty ─────────────────────────────────
+  describe('honest headline (Story 12-5 AC1)', () => {
+    function renderWithTotals() {
+      mockRegistry.data = SUMMARY_76; mockRegistry.isLoading = false;
+      mockRegistryTotals.data = TOTALS_139; mockRegistryTotals.isLoading = false;
+      mockPipeline.data = { totalSubmissions: 500, completionRate: 85, avgCompletionTimeSecs: 1200, activeEnumerators: 12 };
+      mockPipeline.isLoading = false;
+      render(<SurveyAnalyticsPage />, { wrapper });
+    }
+
+    it('binds "Total Respondents" to the honest 139, not the 76', () => {
+      renderWithTotals();
+      const card = screen.getByTestId('stat-total-respondents');
+      expect(card).toHaveTextContent('Total Respondents');
+      expect(card).toHaveTextContent('139');
+    });
+
+    it('never labels the 76 as "Total Respondents"', () => {
+      renderWithTotals();
+      // The regression that mattered: the answers subset wearing the total's label.
+      expect(screen.getByTestId('stat-total-respondents')).not.toHaveTextContent('76');
+    });
+
+    it('shows the 76 as a distinct, labelled "With Answers" figure', () => {
+      renderWithTotals();
+      const card = screen.getByTestId('stat-with-answers');
+      expect(card).toHaveTextContent('With Answers');
+      expect(card).toHaveTextContent('76');
+    });
+
+    it('sub-captions the percentage cards with the denominator they divide by', () => {
+      renderWithTotals();
+      // AC2.1 — so a reader cannot divide the 34 employed by 139.
+      expect(screen.getByTestId('stat-employed')).toHaveTextContent('44.7% of 76 submissions with answers');
+      expect(screen.getByTestId('stat-business-owners')).toHaveTextContent('26.3% of 76 submissions with answers');
+    });
+
+    it('keeps the two "with answers" populations apart when they disagree', () => {
+      // Review R1. getRegistrySummary counts FROM submissions; getRegistryTotals
+      // counts people. 12-4 measured 271 people against ~282 submissions on
+      // prod, so these DO differ — and the page must not print both under the
+      // one phrase "with answers" and leave the reader to reconcile them.
+      mockRegistry.data = { ...SUMMARY_76, totalRespondents: 282, employedPct: 44.7 };
+      mockRegistry.isLoading = false;
+      mockRegistryTotals.data = { ...TOTALS_139, totalRespondents: 300, withAnswers: 271 };
+      mockRegistryTotals.isLoading = false;
+      mockPipeline.data = { totalSubmissions: 500, completionRate: 85, avgCompletionTimeSecs: 1200, activeEnumerators: 12 };
+      mockPipeline.isLoading = false;
+      render(<SurveyAnalyticsPage />, { wrapper });
+
+      // The card counts PEOPLE and says so.
+      const withAnswers = screen.getByTestId('stat-with-answers');
+      expect(withAnswers).toHaveTextContent('271');
+      expect(withAnswers).toHaveTextContent('respondents whose answers we hold');
+
+      // The percentage names the SUBMISSION count it actually divided by, so
+      // the 282 is never mistaken for a second, contradictory value of the 271.
+      expect(screen.getByTestId('stat-employed'))
+        .toHaveTextContent('44.7% of 282 submissions with answers');
+    });
+
+    it('falls back to an em-dash rather than a wrong number when totals are unavailable', () => {
+      mockRegistry.data = SUMMARY_76; mockRegistry.isLoading = false;
+      mockRegistryTotals.data = undefined; mockRegistryTotals.isLoading = false;
+      render(<SurveyAnalyticsPage />, { wrapper });
+      // Never silently substitute the 76 for the total it is not.
+      expect(screen.getByTestId('stat-total-respondents')).not.toHaveTextContent('76');
+      expect(screen.getByTestId('stat-total-respondents')).toHaveTextContent('—');
+    });
   });
 
   it('disables PDF export button when submissions < 100', async () => {

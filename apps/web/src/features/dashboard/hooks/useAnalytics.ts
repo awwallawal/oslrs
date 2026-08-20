@@ -15,6 +15,7 @@ import {
   fetchSkillsFrequency,
   fetchTrends,
   fetchRegistrySummary,
+  fetchRegistryTotals,
   fetchPipelineSummary,
   fetchTeamQuality,
   fetchPersonalStats,
@@ -36,6 +37,7 @@ export const analyticsKeys = {
   skills: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'skills', params] as const,
   trends: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'trends', params] as const,
   registrySummary: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'registrySummary', params] as const,
+  registryTotals: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'registry-totals', params] as const,
   pipelineSummary: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'pipelineSummary', params] as const,
 };
 
@@ -88,6 +90,26 @@ export function useRegistrySummary(params?: AnalyticsQueryParams, enabled = true
   return useQuery({
     queryKey: analyticsKeys.registrySummary(params),
     queryFn: () => fetchRegistrySummary(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+/**
+ * Story 12-5 — the HONEST registry total (12-4's `getRegistryTotals`).
+ *
+ * ⚠️ `useRegistrySummary().totalRespondents` is NOT the registry total. It is
+ * the count of answer-bearing submissions — the number that used to be rendered
+ * under the label "Total Respondents" while ~45% of registered people were
+ * missing from it. Read `totalRespondents` from HERE for any total, and
+ * `withAnswers` from here (not from registry-summary) for the answers subset:
+ * registry-summary's is submission-scoped and can double-count a respondent
+ * with more than one answer-bearing submission, so the two can drift.
+ */
+export function useRegistryTotals(params?: AnalyticsQueryParams, enabled = true) {
+  return useQuery({
+    queryKey: analyticsKeys.registryTotals(params),
+    queryFn: () => fetchRegistryTotals(params),
     staleTime: 60_000,
     enabled,
   });

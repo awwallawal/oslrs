@@ -15,15 +15,37 @@ import {
   UserCheck,
   Clock,
   Building2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
-import type { RegistrySummary } from '@oslsr/types';
+import type { RegistrySummary, RegistryTotals } from '@oslsr/types';
+import {
+  TOTAL_RESPONDENTS_LABEL,
+  WITH_ANSWERS_LABEL,
+  WITH_ANSWERS_CAPTION,
+  ofAnswersCaption,
+  pctOfAnswersCaption,
+} from '../../utils/registry-copy';
 
 // --- Props ---
 
 interface RegistrySummaryStripProps {
   data?: RegistrySummary;
+  /**
+   * Story 12-5 AC3 — the honest registry total (12-4's aggregate).
+   *
+   * The strip used to render `data.totalRespondents` under the label "Total
+   * Respondents", which sat directly below the page header's "{n} records" and
+   * disagreed with it: the header counted registered people, the strip counted
+   * answer-bearing submissions. Two numbers that should reconcile, silently
+   * differing. The total now comes from here so they agree, and `data`'s count
+   * is shown as its own "With Answers" item.
+   *
+   * When absent, the total renders as an em-dash rather than falling back to
+   * `data.totalRespondents` — reinstating that fallback would reinstate the bug.
+   */
+  totals?: RegistryTotals;
   isLoading: boolean;
   error: Error | null;
   onRetry?: () => void;
@@ -49,11 +71,12 @@ interface StatItemProps {
   label: string;
   value: string;
   secondary?: string;
+  testId?: string;
 }
 
-function StatItem({ icon, label, value, secondary }: StatItemProps) {
+function StatItem({ icon, label, value, secondary, testId }: StatItemProps) {
   return (
-    <div className="flex items-center gap-3 min-w-0">
+    <div className="flex items-center gap-3 min-w-0" data-testid={testId}>
       <div className="rounded-lg bg-neutral-100 p-2 shrink-0">
         {icon}
       </div>
@@ -72,6 +95,7 @@ function StatItem({ icon, label, value, secondary }: StatItemProps) {
 
 export function RegistrySummaryStrip({
   data,
+  totals,
   isLoading,
   error,
   onRetry,
@@ -125,6 +149,12 @@ export function RegistrySummaryStrip({
   const iconSize = 18;
   const iconColor = '#9C1E23';
 
+  // The percentages below are computed inside `getRegistrySummary` over ITS own
+  // count, so the caption names that denominator rather than `totals.withAnswers`
+  // — the two are the same number today but are scoped differently (submission
+  // vs respondent) and can drift until 12-4 repoints the summary read.
+  const pctDenominator = data?.totalRespondents;
+
   return (
     <div data-testid="registry-summary-strip" className={className}>
       <Card>
@@ -152,57 +182,71 @@ export function RegistrySummaryStrip({
           {/* Stat cards row */}
           {!collapsed && (
             <div className="flex flex-wrap gap-4">
-              {/* 1. Total Respondents */}
+              {/* 1. Total Respondents \u2014 registered PEOPLE (12-4 aggregate) */}
               <StatItem
                 icon={<Users size={iconSize} color={iconColor} />}
-                label="Total Respondents"
-                value={data?.totalRespondents != null
-                  ? data.totalRespondents.toLocaleString()
+                label={TOTAL_RESPONDENTS_LABEL}
+                value={totals?.totalRespondents != null
+                  ? totals.totalRespondents.toLocaleString()
                   : '\u2014'}
+                secondary="registered people"
+                testId="strip-total-respondents"
               />
 
-              {/* 2. Employed */}
+              {/* 2. With Answers \u2014 the subset whose answers are on file */}
+              <StatItem
+                icon={<ClipboardCheck size={iconSize} color={iconColor} />}
+                label={WITH_ANSWERS_LABEL}
+                value={totals?.withAnswers != null
+                  ? totals.withAnswers.toLocaleString()
+                  : '\u2014'}
+                secondary={WITH_ANSWERS_CAPTION}
+                testId="strip-with-answers"
+              />
+
+              {/* 3. Employed */}
               <StatItem
                 icon={<Briefcase size={iconSize} color={iconColor} />}
                 label="Employed"
                 value={data?.employedCount != null
                   ? data.employedCount.toLocaleString()
                   : '\u2014'}
-                secondary={data?.employedPct != null
-                  ? `${data.employedPct.toFixed(1)}%`
+                secondary={data?.employedPct != null && pctDenominator != null
+                  ? pctOfAnswersCaption(data.employedPct, pctDenominator)
                   : undefined}
               />
 
-              {/* 3. Female */}
+              {/* 4. Female */}
               <StatItem
                 icon={<UserCheck size={iconSize} color={iconColor} />}
                 label="Female"
                 value={data?.femaleCount != null
                   ? data.femaleCount.toLocaleString()
                   : '\u2014'}
-                secondary={data?.femalePct != null
-                  ? `${data.femalePct.toFixed(1)}%`
+                secondary={data?.femalePct != null && pctDenominator != null
+                  ? pctOfAnswersCaption(data.femalePct, pctDenominator)
                   : undefined}
               />
 
-              {/* 4. Avg Age */}
+              {/* 5. Avg Age */}
               <StatItem
                 icon={<Clock size={iconSize} color={iconColor} />}
                 label="Avg Age"
                 value={data?.avgAge != null
                   ? String(data.avgAge)
                   : '\u2014'}
+                secondary={pctDenominator != null ? ofAnswersCaption(pctDenominator) : undefined}
               />
 
-              {/* 5. Business Owners */}
+              {/* 6. Business Owners */}
               <StatItem
                 icon={<Building2 size={iconSize} color={iconColor} />}
                 label="Business Owners"
                 value={data?.businessOwners != null
                   ? data.businessOwners.toLocaleString()
                   : '\u2014'}
-                secondary={data?.businessOwnersPct != null
-                  ? `${data.businessOwnersPct.toFixed(1)}%`
+                secondary={data?.businessOwnersPct != null && pctDenominator != null
+                  ? pctOfAnswersCaption(data.businessOwnersPct, pctDenominator)
                   : undefined}
               />
             </div>

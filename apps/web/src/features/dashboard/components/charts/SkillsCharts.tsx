@@ -23,10 +23,20 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import { CHART_COLORS } from './chart-utils';
+import { ChartCard } from './ChartCard';
 import type { SkillsFrequency } from '@oslsr/types';
 
 interface SkillsChartsProps {
   data: SkillsFrequency[];
+  /**
+   * Story 12-5 AC4 — respondents who ANSWERED the skills question, which is the
+   * denominator each `percentage` divides by.
+   *
+   * It cannot be derived here: percentages arrive rounded to 1dp, and the sum
+   * of the counts is a count of selections, not of people. So the API publishes
+   * it (`respondentsAnswering`) rather than the chart guessing at it.
+   */
+  n?: number;
   isLoading: boolean;
   error: Error | null;
   onRetry?: () => void;
@@ -38,7 +48,7 @@ type ViewMode = 'bar' | 'donut';
 const DEFAULT_VISIBLE = 20;
 const DONUT_MAX = 10;
 
-export function SkillsCharts({ data, isLoading, error, onRetry, className }: SkillsChartsProps) {
+export function SkillsCharts({ data, n, isLoading, error, onRetry, className }: SkillsChartsProps) {
   const [expanded, setExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('bar');
 
@@ -94,13 +104,14 @@ export function SkillsCharts({ data, isLoading, error, onRetry, className }: Ski
   const chartHeight = Math.max(400, displayData.length * 28);
 
   return (
-    <Card data-testid="skills-charts" className={className}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="border-l-4 border-[#9C1E23] pl-3">
-            <CardTitle className="text-base">Top Skills</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
+    <ChartCard
+      title="Top Skills"
+      n={n}
+      className={className}
+      data-testid="skills-charts"
+      bodyClassName=""
+      actions={
+        <div className="flex items-center gap-2">
             {/* View mode toggle */}
             <div className="flex rounded-lg border border-neutral-200 overflow-hidden" role="group" aria-label="View mode">
               <button
@@ -136,10 +147,10 @@ export function SkillsCharts({ data, isLoading, error, onRetry, className }: Ski
                 {expanded ? 'Show Less' : 'Show More'}
               </button>
             )}
-          </div>
         </div>
-      </CardHeader>
-      <CardContent>
+      }
+    >
+      <>
         {viewMode === 'bar' ? (
           <div style={{ height: chartHeight }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -232,7 +243,7 @@ export function SkillsCharts({ data, isLoading, error, onRetry, className }: Ski
             </ResponsiveContainer>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </>
+    </ChartCard>
   );
 }

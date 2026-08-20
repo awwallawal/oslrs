@@ -100,7 +100,12 @@ describe('useAnalytics hooks', () => {
   });
 
   it('useSkillsFrequency returns data and forwards params', async () => {
-    const mockData = [{ skill: 'welding', count: 30, percentage: 30 }];
+    // Story 12-5: the skills response carries the denominator its percentages
+    // divide by — 30 of 100 respondents who answered, not 30 of anything else.
+    const mockData = {
+      skills: [{ skill: 'welding', count: 30, percentage: 30 }],
+      respondentsAnswering: 100,
+    };
     vi.mocked(fetchSkillsFrequency).mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useSkillsFrequency(), { wrapper: createWrapper() });

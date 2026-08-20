@@ -22,15 +22,17 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { EmploymentStats, FrequencyBucket } from '@oslsr/types';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
+import { Card, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import {
   SUPPRESSED_LABEL,
   SUPPRESSED_TOOLTIP,
   safeCount,
   bucketColor,
+  bucketTotal,
   formatLabel,
 } from './chart-utils';
+import { ChartCard } from './ChartCard';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,16 +97,9 @@ function VerticalBarCard({
   }));
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 40, left: 10 }}>
+    <ChartCard title={title} n={bucketTotal(buckets)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 40, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="displayLabel"
@@ -120,11 +115,9 @@ function VerticalBarCard({
                   <Cell key={entry.label || idx} fill={bucketColor(entry, idx)} />
                 ))}
               </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }
 
@@ -146,39 +139,30 @@ function HorizontalBarCard({
   }));
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 5, right: 20, bottom: 5, left: 80 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-              <YAxis
-                type="category"
-                dataKey="displayLabel"
-                tick={{ fontSize: 12 }}
-                width={75}
-              />
-              <Tooltip content={(props) => <BucketTooltip {...(props as unknown as BucketTooltipPayload)} />} />
-              <Bar dataKey="displayCount" name="Count" radius={[0, 4, 4, 0]}>
-                {chartData.map((entry, idx) => (
-                  <Cell key={entry.label || idx} fill={bucketColor(entry, idx)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+    <ChartCard title={title} n={bucketTotal(buckets)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 5, right: 20, bottom: 5, left: 80 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+          <YAxis
+            type="category"
+            dataKey="displayLabel"
+            tick={{ fontSize: 12 }}
+            width={75}
+          />
+          <Tooltip content={(props) => <BucketTooltip {...(props as unknown as BucketTooltipPayload)} />} />
+          <Bar dataKey="displayCount" name="Count" radius={[0, 4, 4, 0]}>
+            {chartData.map((entry, idx) => (
+              <Cell key={entry.label || idx} fill={bucketColor(entry, idx)} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }
 
@@ -201,16 +185,9 @@ function DonutCard({
   const total = chartData.reduce((sum, d) => sum + d.displayCount, 0);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+    <ChartCard title={title} n={bucketTotal(buckets)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
               <Pie
                 data={chartData}
                 dataKey="displayCount"
@@ -250,11 +227,9 @@ function DonutCard({
               <Legend
                 formatter={(value: string) => <span className="text-sm">{value}</span>}
               />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+        </PieChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }
 
@@ -279,26 +254,21 @@ function FormalInformalCard({ buckets }: { buckets: FrequencyBucket[] }) {
       : '--';
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="border-l-4 border-[#9C1E23] pl-3">
-          <CardTitle className="text-base">Formal / Informal Ratio</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex h-80 items-center justify-center gap-12">
-          <div className="text-center">
-            <p className="text-sm font-medium text-neutral-500">Formal</p>
-            <p className="mt-1 text-4xl font-bold text-[#9C1E23]">{formalPct}</p>
-          </div>
-          <div className="h-16 w-px bg-neutral-200" />
-          <div className="text-center">
-            <p className="text-sm font-medium text-neutral-500">Informal</p>
-            <p className="mt-1 text-4xl font-bold text-[#4A5568]">{informalPct}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <ChartCard
+      title="Formal / Informal Ratio"
+      n={bucketTotal(buckets)}
+      bodyClassName="flex h-80 items-center justify-center gap-12"
+    >
+      <div className="text-center">
+        <p className="text-sm font-medium text-neutral-500">Formal</p>
+        <p className="mt-1 text-4xl font-bold text-[#9C1E23]">{formalPct}</p>
+      </div>
+      <div className="h-16 w-px bg-neutral-200" />
+      <div className="text-center">
+        <p className="text-sm font-medium text-neutral-500">Informal</p>
+        <p className="mt-1 text-4xl font-bold text-[#4A5568]">{informalPct}</p>
+      </div>
+    </ChartCard>
   );
 }
 

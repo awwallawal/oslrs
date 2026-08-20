@@ -20,6 +20,7 @@ import type {
   EmploymentStats,
   HouseholdStats,
   SkillsFrequency,
+  SkillsFrequencyResult,
   TrendDataPoint,
   RegistrySummary,
   PipelineSummary,
@@ -66,6 +67,17 @@ interface HouseholdAggRow {
   biz_registered: string | number;
   apprentice_total: string | number;
   total_count: string | number;
+  /**
+   * Story 12-5 AC4 — the PER-FIELD bases, one per household statistic.
+   *
+   * `total_count` is not any of these. It counts everyone with ANY answers,
+   * which is ruling R-E's coarse denominator: a respondent never ASKED about
+   * business ownership used to sit in that rate's divisor, turning *not asked*
+   * into *does not own a business*.
+   */
+  household_size_n: string | number;
+  has_business_n: string | number;
+  apprentice_n: string | number;
 }
 
 /** Row shape for registry summary query */
@@ -529,9 +541,14 @@ export class SurveyAnalyticsService {
       // Aggregate scalars
       db.execute(sql`
         SELECT
+          -- Both sums are restricted to households that gave a household_size:
+          -- the divisor already was, so summing dependents over rows OUTSIDE
+          -- that set put people in the numerator who were absent from the
+          -- denominator, inflating the ratio by an amount nobody could state.
           CASE WHEN COUNT(*) > 0
             THEN ROUND(
               SUM(CASE WHEN s.raw_data->>'dependents_count' ~ '^[0-9]+$'
+                       AND s.raw_data->>'household_size' ~ '^[0-9]+$'
                   THEN (s.raw_data->>'dependents_count')::numeric ELSE 0 END)::numeric /
               NULLIF(SUM(CASE WHEN s.raw_data->>'household_size' ~ '^[0-9]+$'
                   THEN (s.raw_data->>'household_size')::numeric ELSE 0 END), 0)
@@ -542,7 +559,12 @@ export class SurveyAnalyticsService {
           COUNT(*) FILTER (WHERE s.raw_data->>'business_reg' = 'registered') AS biz_registered,
           SUM(CASE WHEN s.raw_data->>'apprentice_count' ~ '^[0-9]+$'
               THEN (s.raw_data->>'apprentice_count')::int ELSE 0 END) AS apprentice_total,
-          COUNT(*) AS total_count
+          COUNT(*) AS total_count,
+          -- Story 12-5 AC4 / ruling R-E: each statistic's OWN base — the people
+          -- who answered ITS question, counted through the same WHERE.
+          COUNT(*) FILTER (WHERE s.raw_data->>'household_size' ~ '^[0-9]+$') AS household_size_n,
+          COUNT(*) FILTER (WHERE s.raw_data->>'has_business' IS NOT NULL) AS has_business_n,
+          COUNT(*) FILTER (WHERE s.raw_data->>'apprentice_count' ~ '^[0-9]+$') AS apprentice_n
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id
         WHERE ${where}
@@ -550,9 +572,16 @@ export class SurveyAnalyticsService {
     ]);
 
     const agg = aggregates.rows[0] as unknown as HouseholdAggRow;
-    const totalCount = Number(agg?.total_count ?? 0);
     const bizOwners = Number(agg?.biz_owners ?? 0);
     const bizRegistered = Number(agg?.biz_registered ?? 0);
+    const apprenticeTotal = suppressIfTooFew(Number(agg?.apprentice_total ?? 0));
+
+    // Per-field bases (Story 12-5 AC4). `total_count` is deliberately unused as
+    // a divisor now: it counts everyone with ANY answers, which is ruling R-E's
+    // coarse denominator. See the businessOwnershipRate note below.
+    const householdSizeN = Number(agg?.household_size_n ?? 0);
+    const hasBusinessN = Number(agg?.has_business_n ?? 0);
+    const apprenticeN = Number(agg?.apprentice_n ?? 0);
 
     const headTotal = (headRows.rows as unknown as LabelCountRow[]).reduce((sum: number, r: LabelCountRow) => sum + Number(r.count), 0);
 
@@ -561,24 +590,56 @@ export class SurveyAnalyticsService {
       dependencyRatio: agg?.dependency_ratio != null ? Number(agg.dependency_ratio) : null,
       headOfHouseholdByGender: suppressSmallBuckets(toBuckets(headRows.rows as unknown as LabelCountRow[], headTotal)),
       housingDistribution: suppressSmallBuckets(toBuckets(housingRows.rows as unknown as LabelCountRow[], total)),
-      businessOwnershipRate: suppressIfTooFew(bizOwners) !== null && totalCount > 0
-        ? Math.round((bizOwners / totalCount) * 1000) / 10
+      /**
+       * ⚠️ Ruling R-E, applied here too. This divided by `total_count` —
+       * everyone with ANY answers — so a respondent never ASKED about business
+       * ownership sat in the divisor and *not asked* silently became *does not
+       * own a business*. 12-4 fixed this exact defect in
+       * `public-insights.service.ts`; THIS second code path was never touched,
+       * so the dashboard and the public page have been publishing different
+       * values for the same statistic. It now divides by the people who
+       * answered the question, which is what the public page already does.
+       */
+      businessOwnershipRate: suppressIfTooFew(bizOwners) !== null && hasBusinessN > 0
+        ? Math.round((bizOwners / hasBusinessN) * 1000) / 10
         : null,
       businessRegistrationRate: suppressIfTooFew(bizRegistered) !== null && bizOwners > 0
         ? Math.round((bizRegistered / bizOwners) * 1000) / 10
         : null,
-      apprenticeTotal: suppressIfTooFew(Number(agg?.apprentice_total ?? 0)),
+      apprenticeTotal,
+      /**
+       * Story 12-5 AC4 — the base each statistic above was computed over.
+       *
+       * Four different numbers, and that difference is the information: the
+       * dependency ratio divides by households that gave a size, the ownership
+       * rate by those asked about a business, the registration rate by the
+       * business owners among them, and the apprentice total is a sum over
+       * those who gave a count. `null` where the statistic itself is null — a
+       * base for a figure that is not on screen is noise.
+       */
+      denominators: {
+        dependencyRatio: agg?.dependency_ratio != null ? householdSizeN : null,
+        businessOwnership: suppressIfTooFew(bizOwners) !== null && hasBusinessN > 0 ? hasBusinessN : null,
+        businessRegistration: suppressIfTooFew(bizRegistered) !== null && bizOwners > 0 ? bizOwners : null,
+        apprenticeTotal: apprenticeTotal !== null ? apprenticeN : null,
+      },
     };
   }
 
   /**
-   * Top N skills by frequency, unnesting space-separated skill codes
+   * Top N skills by frequency, unnesting space-separated skill codes.
+   *
+   * Story 12-5 (AC4): returns the DENOMINATOR alongside the rates it produced.
+   * `total` below was already computed here and then discarded, so the chart
+   * published shares with no way to say what they were shares OF — and it could
+   * not be recovered downstream, because `percentage` is rounded to 1dp. A rate
+   * without the count it came from is the same defect as a mislabelled total.
    */
   static async getSkillsFrequency(
     scope: AnalyticsScope,
     params: AnalyticsQueryParams = {},
     limit: number = 20,
-  ): Promise<SkillsFrequency[]> {
+  ): Promise<SkillsFrequencyResult> {
     const where = buildWhereFragments(scope, params);
 
     // Total submissions with skills for percentage
@@ -607,13 +668,17 @@ export class SurveyAnalyticsService {
       LIMIT ${safeLimit}
     `);
 
-    return (rows.rows as Array<{ skill: string; count: string | number }>)
+    const skills = (rows.rows as Array<{ skill: string; count: string | number }>)
       .map((r) => ({
         skill: String(r.skill),
         count: Number(r.count),
         percentage: total > 0 ? Math.round((Number(r.count) / total) * 1000) / 10 : 0,
       }))
       .filter((s) => s.count >= SUPPRESSION_MIN_N);
+
+    // `total`, not the sum of `count`: one respondent selecting five skills is
+    // one person in the denominator and five in the counts.
+    return { skills, respondentsAnswering: total };
   }
 
   /**

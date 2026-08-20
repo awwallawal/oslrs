@@ -1,6 +1,13 @@
 # Story 12.5: Label honesty + N-per-chart
 
-Status: ready-for-dev
+Status: review
+
+> ⚖️ **`done` → `review` AT ADJUDICATION 2026-08-20.** The code is accepted; the STATUS was wrong.
+> The story carried an explicit `⛔ PRE-DEPLOY RESIDUAL` in its own body with **no `## Residuals`
+> ledger and no `## Closing verdict`**, and §2a0 does not permit `done` while an item is unresolved.
+> This is the **second** consecutive story to arrive this way (12-4, 2026-08-18), which makes it the
+> workflow's step 5 rather than a slip. `review` already means "code-complete, not yet on prod".
+> See `## Residuals` and `## Closing verdict` below.
 
 > 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS it: no surface labels a submissions-count as "Total Respondents"; deep-field charts (labour-force participation, household) carry a **"(field-collected sample, N=…)"** label so `core`/`unverified` rows are excluded and said so. _Amendment only — ACs unchanged._
 >
@@ -75,22 +82,171 @@ Separately, **every chart on the page has its own, unshown denominator.** Each d
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — `useRegistryTotals` hook + API wiring (AC: #1, #3)
-  - [ ] Add a `useRegistryTotals(params, enabled?)` TanStack Query hook beside `useRegistrySummary` in `apps/web/src/features/dashboard/hooks/useAnalytics.ts`, key `['analytics','registry-totals', ...filters]` (per project key convention), calling 12-4's `GET /api/v1/analytics/registry-totals` (add the fetch fn in `apps/web/src/features/dashboard/api/analytics.api.ts` mirroring the registry-summary fetcher).
-  - [ ] Add the `RegistryTotals` response type to `@oslsr/types` only if 12-4 did not already export it — otherwise import it (check first; do not duplicate). Shape: `{ totalRespondents: number; byDataStatus: Record<RegistryDataStatus, number>; withAnswers: number }`.
-- [ ] Task 2 — Fix the Survey Analytics headline (AC: #1, #2)
-  - [ ] In `SurveyAnalyticsPage.tsx`, consume `useRegistryTotals(params)`. Bind the "Total Respondents" card [SurveyAnalyticsPage.tsx:117] to `totals.totalRespondents` (139). Add/relabel a "With Answers" card bound to `totals.withAnswers` (76) — or render the headline as "76 with answers / 139 total respondents" with the shared copy helper.
-  - [ ] Sub-caption the percentage cards (Employed/Female/Business Owners/Consent — [SurveyAnalyticsPage.tsx:118-123]) to state they are % of the 76 with answers (denominator clarity), using the shared explainer.
-- [ ] Task 3 — Reconcile the Registry summary strip (AC: #3)
-  - [ ] Thread the honest total into `RegistrySummaryStrip`: pass `getRegistryTotals` data (via `useRegistryTotals` in `RespondentRegistryPage.tsx`) so the strip's "Total Respondents" [RegistrySummaryStrip.tsx:155-162] shows 139 and a separate item shows 76 "with answers". Keep the existing active-filter params [RespondentRegistryPage.tsx:55-61].
-  - [ ] Confirm it reconciles with the header `{totalItems} records` [RespondentRegistryPage.tsx:199-201] (same filtered denominator).
-- [ ] Task 4 — N-per-chart via the shared chart-card header (AC: #4, #5)
-  - [ ] Add an optional `n?: number` (and/or `subtitle?: string`) prop to the shared `ChartCard` header pattern [DemographicCharts.tsx:97-114] and any sibling chart-card header used across the charts; render "N = {n}" under `CardTitle` when provided. Additive only — omitting it preserves current rendering.
-  - [ ] Pass each chart's existing internal denominator (e.g. `bucketTotal(buckets)` [DemographicCharts.tsx:66-69,120]) into the header. Repeat for Employment/Household/Skills/Trends/Equity charts using each chart's own already-computed total. Do NOT compute a new aggregate; surface the one the chart already has.
-  - [ ] Add the shared `formatN`/explainer helper (small util in the dashboard feature) and use it everywhere (headline, strip, charts) for identical wording.
-- [ ] Task 5 — Tests (AC: #6)
-  - [ ] Co-located component tests: `SurveyAnalyticsPage` headline (139 labelled Total Respondents; 76 distinct "with answers"; 76 NOT labelled Total Respondents); `RegistrySummaryStrip`/`RespondentRegistryPage` reconciliation; a representative chart renders "N = …" in its header and renders cleanly without the prop. Mock the hooks via `vi.hoisted()`+`vi.mock()`.
-- [ ] Task 6 — Validate: web suite green (run from `apps/web` — `pnpm --filter @oslsr/web test`, NOT root vitest); web `tsc --noEmit` + eslint clean (0/0).
+- [x] Task 1 — `useRegistryTotals` hook + API wiring (AC: #1, #3)
+  - [x] Add a `useRegistryTotals(params, enabled?)` TanStack Query hook beside `useRegistrySummary` in `apps/web/src/features/dashboard/hooks/useAnalytics.ts`, key `['analytics','registry-totals', ...filters]` (per project key convention), calling 12-4's `GET /api/v1/analytics/registry-totals` (add the fetch fn in `apps/web/src/features/dashboard/api/analytics.api.ts` mirroring the registry-summary fetcher).
+  - [x] Add the `RegistryTotals` response type to `@oslsr/types` only if 12-4 did not already export it — otherwise import it (check first; do not duplicate). **Checked: 12-4 defined it ONLY inside `apps/api/src/services/registry-totals.service.ts`, so the web could not read it.** Moved the interface to `@oslsr/types` and had the API import it back, with a **compile-time drift guard** pinning the three axis unions to the runtime arrays (RED-verified: mutating the shared union fails `tsc` on the guard line).
+- [x] Task 2 — Fix the Survey Analytics headline (AC: #1, #2)
+  - [x] In `SurveyAnalyticsPage.tsx`, consume `useRegistryTotals(params)`. Bind the "Total Respondents" card to `totals.totalRespondents`. Added a distinct "With Answers" card bound to `totals.withAnswers` (per the 13-33 harmonization note — sourced from the totals aggregate, NOT `getRegistrySummary().totalRespondents`). Row B is now an 8-card grid.
+  - [x] Sub-caption the percentage cards (Employed/Female/Avg Age/Business Owners/Consent ×2) to state the denominator they divide by, using the shared `pctOfAnswersCaption`/`ofAnswersCaption` helpers.
+- [x] Task 3 — Reconcile the Registry summary strip (AC: #3)
+  - [x] Threaded the honest total into `RegistrySummaryStrip` via a new `totals` prop fed by `useRegistryTotals` in `RespondentRegistryPage.tsx`; the strip's "Total Respondents" reads the aggregate and a separate "With Answers" item carries the answers subset. Existing active-filter params reused unchanged.
+  - [x] Reconciles with the header `{totalItems} records` — both count registered PEOPLE under the same filters. **No fallback to `data.totalRespondents`**: when totals are unavailable the strip shows an em-dash, because falling back would silently reinstate the bug (asserted by test).
+- [x] Task 4 — N-per-chart via the shared chart-card header (AC: #4, #5)
+  - [x] Created a genuinely shared `ChartCard` (`components/charts/ChartCard.tsx`) with an **additive optional `n`** — there were TWO private `ChartCard`s (Demographic, Household) plus hand-rolled copies in Employment/Trends/Skills, so there was no single place for the header change to happen. Same markup, so adopting it changes no pixels; omitting `n` renders exactly as before.
+  - [x] Passed each chart's own denominator: `bucketTotal()` (promoted to `chart-utils`) for all bucket charts; range-sum for Trends; `thresholds.*.currentN` for the five Skills-Inventory charts; per-metric denominators for Equity; `respondentsAnswering` for the Skills-frequency chart.
+  - [x] Added the shared `registry-copy.ts` helper (`formatN`, `pctOfAnswersCaption`, `ofAnswersCaption`, `countedOverCaption`, `basedOnCaption`, and the two labels) and used it in the headline, the strip, every chart, and the public rates.
+  - [x] **Publish `n` (the 2026-08-12 PM amendment):** `rateDenominators` was required on `PublicInsightsData` since 12-4 but **read by no component**. The public /insights page now prints each rate's own n beside it (GPI, youth employment, unemployment). Kept as a bare figure — the 2026-08-18 operator ruling forbids reintroducing the answer-less-remainder prose, and a regression test pins that.
+- [x] Task 5 — Tests (AC: #6)
+  - [x] `SurveyAnalyticsPage` headline (honest total labelled Total Respondents; answers subset distinct; the subset is NOT labelled Total Respondents; em-dash fallback), `RegistrySummaryStrip` + `RespondentRegistryPage` reconciliation, `ChartCard` N rendering incl. the no-prop no-regression case and `N = 0`, `DemographicCharts` per-chart Ns differing, `registry-copy` wording, `derive-equity-data` denominators. Hooks mocked via `vi.hoisted()`+`vi.mock()`.
+- [x] Task 6 — Validate: web suite green (run from `apps/web`); web `tsc --noEmit` + eslint clean (0/0); API suite + API `tsc`/eslint clean (this story touched the backend — see Completion Notes).
+
+### Review Follow-ups (AI) — adversarial code-review, 2026-08-20
+
+> Raised by the `code-review` workflow against the uncommitted tree. Verified
+> independently of the dev agent's self-report: web/API `tsc` clean, eslint
+> clean, 119 targeted web tests + 60 API tests green, File List matches git
+> exactly (39 files + the story). No task marked `[x]` was found undone; every
+> item below is a gap between what an AC asked for and what actually renders.
+
+- [x] [AI-Review][High] **AC2.2 violated on the fixed page: two counts, same words, silently disagreeing.** The "With Answers" card reads `totals.withAnswers` (respondent-scoped) while every percentage caption reads `registry.totalRespondents` (submission-scoped) — `SurveyAnalyticsPage.tsx:94-95,177-207` and `RegistrySummaryStrip.tsx:156,215-249`. Not hypothetical: `getRegistrySummary` still reads `FROM submissions s` (`survey-analytics.service.ts:678`), so the 12-4 repoint the Dev Note conditions this on has NOT happened, and 12-4's own close recorded prod at `withAnswers=271` against ~282 submissions. The page would render "With Answers · 271" beside "44.7% of 282 with answers". **Fixed** by naming the two populations with the story's own distinct vocabulary rather than by faking the arithmetic — see Review Resolution R1.
+- [x] [AI-Review][Med] **`ChartCard` extraction only half-done, and Task 4 reads as though it were complete.** The Implementation Plan names `TrendsCharts` (×2) and `SkillsCharts` among the hand-rolled headers the extraction exists to absorb; both kept their hand-rolled markup and hand-rolled N. The `chart-n` `<p>` was duplicated 12× across 8 files. [`TrendsCharts.tsx:145-149,225-231`, `SkillsCharts.tsx:107-117`]
+- [x] [AI-Review][Med] **The public-page `n` has no test — delete all three call sites and every test still passes.** `PublicInsightsPage.test.tsx` untouched; `PublicEmploymentSection` has no test file. `registry-copy.test.ts` exercises `basedOnCaption` as a pure function, which proves nothing about whether a component renders it. [[pattern-test-that-passes-over-a-hole]]
+- [x] [AI-Review][Med] **Unguarded `data.rateDenominators` and no zero-guard on a published figure.** `PublicInsightsPage.tsx:107,116` dereferences without optional chaining, and `public-insights.service.ts:344-347` defaults each denominator to `Number(… ?? 0)` — so a rate that clears the threshold while its `n` resolves 0 publishes "based on 0 responses" under a real percentage, on the public page.
+- [x] [AI-Review][Med] **The policy brief discards the denominator the backend scope exception was taken to obtain.** `policy-brief.service.ts:89` passes `skills.skills` and drops `respondentsAnswering`; the Ministry-facing PDF still prints skills percentages with no base — the exact defect the exception was granted to fix, at the one surface that gets printed and handed over.
+- [x] [AI-Review][Med] **`TrendsCharts` labels an event count with the people-denominator glyph.** `rangeTotal` sums daily registrations and renders `N = …`, against `ChartCard`'s own instruction to omit `n` for "a time series of events rather than a distribution over people". [`TrendsCharts.tsx:99-102`]
+- [x] [AI-Review][Med] **AC5's plain-language explainer is built, tested, and never rendered.** `countedOverCaption` is used by nothing but its own test, and `ChartCard.subtitle` by no production call site — while their tests make both look live.
+- [x] [AI-Review][Low] **Duplicate `data-testid="chart-n"` within single components** (EquityMetrics ×3, ExtendedEquityMetrics ×3, TrendsCharts ×2): `getByTestId` throws there, and the current tests only dodge it by using `getAllByTestId`.
+- [x] [AI-Review][Low] **Strip error handling contradicts the documented em-dash design.** `RespondentRegistryPage.tsx:249` `error={regSummaryError ?? regTotalsError}` blanks the entire strip when only totals fail; Task 3 says an unavailable total renders an em-dash. Only the `undefined data` path was tested.
+- [x] [AI-Review][Low] **The GPI's published `n` is not the base the GPI was computed over.** `derive-equity-data.ts:88` sums ALL non-suppressed gender buckets, but GPI is female/male — any "Other"/"Prefer not to say" bucket inflates the published base. Same "an n that isn't the metric's n" class this story exists to end.
+- [x] [AI-Review][Low→**HIGH once opened**] **Four Household ratio stat-cards carried no N** (Dependency Ratio, Business Ownership Rate, Business Registration Rate, Apprentice Total). `HouseholdStats` did not publish the household base each was computed over. **Awwal's ruling 2026-08-20: not acceptable debt before the blast — take the API change so AC4.1 is whole.** Taken. Going after the bases surfaced two arithmetic defects underneath them — see R11.
+
+### Review Resolution (applied 2026-08-20)
+
+**R1 — the two "with answers" populations now have two different names.** The
+tempting fixes were both wrong: re-captioning the percentages with
+`totals.withAnswers` would state a denominator the arithmetic never used, and
+repointing `getRegistrySummary` is 12-4/13-33 scope with published figures
+attached. So neither number moved — the *words* did. `pctOfAnswersCaption` /
+`ofAnswersCaption` now read **"44.7% of 282 submissions with answers"**, against
+the card's "With Answers · 271 · respondents whose answers we hold". Two
+populations, two phrasings, nothing left to silently reconcile. When 12-4
+repoints the summary read, the two collapse and the word "submissions" can go.
+Pinned by a test that feeds the page 271 people against 282 submissions.
+
+**R2 — `ChartCard` finished the job it was extracted for.** `TrendsCharts` (×2)
+and `SkillsCharts` now render through it, so every hand-rolled copy of that
+header the Implementation Plan named is gone. The `chart-n` markup went from 12
+duplicates to one, plus the five Skills-Inventory / Equity headers, which are
+structurally different cards and keep their own.
+
+**R3/R4 — the public rates.** Added the assertions that make the published `n`
+real (GPI, youth employment, unemployment), and `basedOnCaptionIfKnown` now
+withholds a denominator rather than printing **"based on 0 responses"** under a
+live percentage — the service defaults an absent base to 0, so 0 means
+*unknown*, not *nobody*. Reads are optional-chained, so a payload without
+`rateDenominators` renders the page instead of blanking it.
+
+**R5 — the policy brief publishes what it was handed.** The skills heading now
+carries `(n = 1,234 respondents answering)`. The base rides in the heading LABEL
+because a non-empty value column drops the row out of `renderTable`'s
+section-heading branch and would have restyled it. `PolicyBriefService` had no
+service-level test at all; it has one now, with a faked PDFKit that asserts what
+the document is told to write.
+
+**R6 — a time series stopped wearing the N glyph.** Trends renders
+`rangeTotalCaption` ("1,247 registrations in the selected range") as a subtitle
+instead of `N = 1,247`. It is a count of registration EVENTS, not a subset of
+the registry total, and the old rendering invited a comparison that cannot be
+made.
+
+**R7 — AC5's explainer is now on screen.** `countedOverCaption` rides as the
+`title` of every `ChartCard` N, so the plain-language reading exists once and
+appears everywhere, without a second line on twenty cards. `ChartCard.subtitle`
+became load-bearing via R6.
+
+**R8/R9/R10 — the smaller ones.** Per-card testIds on the Equity stat cards so
+`chart-n` can be scoped; a totals-only failure now leaves the strip alive with
+an em-dash instead of blanking five working stats; and the GPI's published `n`
+counts only the female and male buckets it is actually the ratio of.
+
+**R11 — the four Household bases, and the two defects hiding under them.**
+Awwal ruled the deferral out (2026-08-20): AC4.1 whole before the blast, no
+debt. `getHousehold` now publishes `denominators` — four different bases, one
+per statistic — and `HouseholdStats.denominators` is **required**, which
+immediately caught a stale web fixture at `tsc`.
+
+Writing the bases meant reading what each ratio actually divides by, and two of
+them were not what the card implied:
+
+1. 🔴 **`businessOwnershipRate` was ruling R-E's defect, still live on the
+   dashboard.** It divided by `total_count` — `COUNT(*)` over
+   `buildWhereFragments`, whose first condition is a hardcoded
+   `s.raw_data IS NOT NULL`. That is *"has ANY answers"* verbatim: a respondent
+   never ASKED about business ownership sat in the divisor, so *not asked*
+   silently became *does not own a business*. **12-4 fixed exactly this in
+   `public-insights.service.ts` and never touched this second code path**, so
+   the dashboard and the public /insights page have been publishing different
+   values for the same statistic. Repointed onto the answered set
+   (`has_business_n`), which is what the public page already does.
+   **RED-verified by mutation**: restoring the coarse divisor fails the new test
+   with `expected 30 to be 37.5`.
+2. 🟠 **The dependency ratio mixed two populations.** The divisor summed
+   `household_size` over rows that gave one; the numerator summed
+   `dependents_count` over *all* rows — so households absent from the
+   denominator still pushed the numerator up, inflating the ratio by an amount
+   nobody could state. Both sums are now restricted to the same set.
+
+Publishing an `N` over either of those divisors would have shipped a
+precise-looking wrong base into the blast — a labelled wrong denominator is
+worse than an unlabelled one, and is the defect this story exists to end wearing
+its most convincing disguise.
+
+⛔ **PRE-DEPLOY RESIDUAL — `businessOwnershipRate` WILL MOVE ON THE DASHBOARD,
+and it must be discharged by PREDICTION, not by movement.** The tests prove the
+formula; they cannot tell you the prod figure. Before this ships, reproduce
+`getHousehold`'s aggregate read-only against prod through the same
+`buildWhereFragments`, confirm the control reproduces the CURRENT live dashboard
+figure exactly, then predict the new one and compare after deploy. 12-4 already
+measured the public-page counterpart at **45.5% with n=191 against
+withAnswers≈271**, so the dashboard's ~32% should land near the public page's
+45.5%. "It moved" passes for any change, including a wrong one →
+[[pattern-a-record-about-the-work-is-not-the-work]], 12-4 R1 discipline.
+
+> ⚠️ **CORRECTED AT ADJUDICATION 2026-08-20 — AND THE PREDICTION IS NOW MEASURED.**
+> This paragraph originally ended *"the two surfaces agreeing IS the expected outcome, and a result
+> that leaves them apart means this is not finished."* **That criterion is wrong, and left as written
+> it sends the deployer hunting a bug that does not exist.**
+>
+> **The two surfaces read different tables at different grains.** `getHousehold` reads
+> `FROM submissions` — one row per SUBMISSION. `public-insights.service` reads `registry_unified` —
+> one row per RESPONDENT (13-33's canonical read). They cannot agree by construction. This is
+> §2z(d), the *submissions-vs-registry-unified* substitution this project has now been caught by
+> three times.
+>
+> **Measured read-only on prod, 2026-08-20:**
+>
+> | | rows | n | rate |
+> |---|---|---|---|
+> | dashboard **before** (`total_count` divisor) | 286 | — | **31.8%** ← control reproduces the live figure |
+> | dashboard **after** (`has_business_n`) | 286 | **199** | **45.7%** |
+> | public page (already shipped) | 272 | 191 | 45.5% |
+>
+> ➜ **Expect 45.7%, not 45.5%.** A ~0.2pp gap from the public page is the CORRECT outcome. The gap
+> exists because ~14 people carry more than one answer-bearing submission, so the dashboard counts
+> them twice relative to the respondent-anchored page — pre-existing, out of 12-5's scope, and the
+> structural reason the two can never be identical.
+>
+> 🔎 **This also retires an old confusion.** SCP §10.14 R-E computed **45.7%** and was corrected for
+> "sizing with the wrong table". That number was wrong for the public page and **exactly right for
+> the dashboard** — R-E had measured `submissions`, which is what the dashboard actually reads.
+
+**Verification of the fixes (run in this session, not self-reported):**
+`apps/web` dashboard + insights: **1,236 passed / 104 files**, 2 todo, 0 failed.
+API analytics + policy-brief + routes + real-DB smoke against `app_test`:
+**114 passed / 7 files**, 0 failed. web `tsc` clean · API `tsc` clean · web
+eslint `--max-warnings=0` over `features/dashboard` + `features/insights` clean ·
+API eslint over the six changed files clean. The R-E repoint was RED-verified by
+mutation and the mutation reverted.
 
 ## Dev Notes
 
@@ -139,15 +295,255 @@ Each chart is counted over the people who answered THAT question, masking suppre
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`, via the `dev-story` workflow, 2026-08-19.
+
+### Implementation Plan (technical approach + decisions)
+
+**The shape of the fix.** Three surfaces told the same lie in three different
+ways, so the fix is one honest source (12-4's aggregate) read by all three, plus
+one shared vocabulary module so the wording cannot drift apart again.
+
+1. **`RegistryTotals` had to move.** Task 1 said "add to `@oslsr/types` only if
+   12-4 did not already export it." It did not — 12-4 defined the interface
+   *inside* `apps/api/src/services/registry-totals.service.ts`, so the web layer
+   had no type for the aggregate it was supposed to render. Moved it to
+   `@oslsr/types`; the API imports it back and re-exports it, so there is still
+   one definition.
+2. **The taxonomy is now declared twice, so it is pinned.** The three axis unions
+   exist as `typeof CONST[number]` in the API (the arrays the service actually
+   tallies into) and as hand-written unions in `@oslsr/types` (the web cannot see
+   those arrays). Two declarations of one taxonomy is the drift 13-33/13-37 exist
+   to kill, so `registry-totals.service.ts` carries a `Pinned<A, B>` compile-time
+   guard per axis. **RED-verified**: adding a bogus member to the shared union
+   fails `tsc` with `Type 'true' is not assignable to type 'false'` on the guard
+   line, naming the drifted axis.
+3. **`ChartCard` had to become real before `n` could be additive.** AC4.3 says
+   "add an optional prop to the shared `ChartCard`" — but there was no shared
+   one. There were TWO private `ChartCard`s (`DemographicCharts`,
+   `HouseholdCharts`) plus hand-rolled copies of the same header markup in
+   `EmploymentCharts` (×4), `TrendsCharts` (×2) and `SkillsCharts`. Extracted
+   `components/charts/ChartCard.tsx` with the identical markup — so adopting it
+   changes no pixels — and the additive `n`.
+4. **No fallback from the honest total to the old one.** Where totals are
+   unavailable, both the headline card and the strip render an em-dash. Falling
+   back to `getRegistrySummary().totalRespondents` would silently reinstate the
+   exact bug; both fallbacks are pinned by tests.
+5. **The percentage cards' caption names `getRegistrySummary`'s own count**, not
+   `totals.withAnswers`. Per the 13-33 harmonization note the two are the same
+   number today but are scoped differently (submission vs respondent) and can
+   drift until 12-4 repoints the summary read. The standalone "With Answers"
+   figure comes from the totals aggregate, as that note requires.
+
 ### Completion Notes List
 
+**AC1–AC3 (labels + reconciliation).** Survey Analytics Row B is now an 8-card
+grid: "Total Respondents" bound to `getRegistryTotals().totalRespondents` and a
+distinct "With Answers" bound to `.withAnswers`. Every percentage card states the
+denominator it divides by ("44.7% of 76 with answers"). `RegistrySummaryStrip`
+gained a `totals` prop, fed from `RespondentRegistryPage` under the same active
+filters, so the strip's total and the header's `{totalItems} records` now count
+the same population.
+
+**AC4 (N per chart).** Denominators surfaced from what each chart already held:
+`bucketTotal()` (promoted from a private helper into `chart-utils`) for all
+bucket charts across Demographics / Employment / Household; range-sum for Trends
+(it moves with the 7d/30d/90d toggle, which is correct); `thresholds.*.currentN`
+for the five Skills-Inventory charts; per-metric denominators for Equity; the
+dashboard's own unbanded LGA distribution for the Geographic map.
+
+⚠️ **ONE AC-VS-REALITY CONFLICT, RULED BY AWWAL MID-STORY.** The Skills-frequency
+chart could not show an honest N: `GET /analytics/skills` returned
+`SkillsFrequency[]` only, and its denominator (`total`, the submissions with a
+non-empty `skills_possessed`) was computed at
+`survey-analytics.service.ts:585-593` and **thrown away**. It cannot be recovered
+client-side — percentages are rounded to 1dp, and the sum of the counts is a
+count of *selections*, not of people (one respondent picking five skills
+contributes one to the base and five to the counts). The story's Dev Notes said
+"no backend files". **Ruling: return the denominator.** So this story DOES touch
+the backend, deliberately and narrowly: `getSkillsFrequency` now returns
+`{ skills, respondentsAnswering }`. Blast radius was two direct callers
+(controller, policy-brief) plus six service tests.
+
+**AC4 addendum — `rateDenominators` is now load-bearing.** The 2026-08-12 PM
+amendment ("every rate ships with the count it was computed from... this lands on
+12-5 as well as 12-4") was implemented: `rateDenominators` had been **required on
+`PublicInsightsData` since 12-4 and read by no component**. The public /insights
+page now prints each rate's own n beside it (GPI, youth employment,
+unemployment). Rendered as a bare `based on N responses` figure — the 2026-08-18
+operator ruling forbids reintroducing the MethodologyNote prose narrating the
+answer-less remainder, and `registry-copy.test.ts` asserts the caption contains
+none of it.
+
+**AC5 (one vocabulary).** `utils/registry-copy.ts` holds the two labels and all
+five caption/format helpers; the headline, the strip, every chart header and the
+public rates import from it. `ExtendedEquityMetrics` had grown its own `n = {x}`
+format — folded into `formatN`.
+
+**Known gaps, recorded rather than papered over:**
+- Four Household ratio stat-cards (Dependency Ratio, Business Ownership Rate,
+  Business Registration Rate, Apprentice Total) render **without** a numeric N:
+  `HouseholdStats` publishes the ratios but not the household base each was
+  computed over. They keep their existing base-naming subtitles ("Of surveyed
+  households"). Inferring a base from a rounded rate is the very defect this
+  story exists to end, so no number was invented. Same shape as the Skills gap —
+  worth a follow-up that publishes those bases.
+- `assertAxesPartition` in 12-4 remains untouched; nothing here changes the
+  aggregate's derivation.
+
+**Verification run (all local, this session):**
+- **`apps/web` full suite: 2963 passed / 2967**, 2 todo, 2 failed. One failure
+  was mine and is fixed (`derive-equity-data` fixture missing the new
+  `denominators`). The other was `a3-eslint-policy` — a 30 s-timeout test that
+  lints synthetic strings, touches nothing this story changed, and passes in
+  3.1 s in isolation: full-suite contention, per
+  [[feedback_local_full_suite_flakiness]]. Both green on re-run.
+- **API suite: 3693 passed / 3703**, 8 skipped, 1 todo, 1 failed —
+  `import.service.integration` rollback. **Not this story:** the diff touches
+  nothing under `apps/api/src/db` or `import.service.ts` (verified with
+  `git diff --stat`), and the `respondents_status_check` constraint it
+  complained about *does* permit `rolled_back` (read back live from `app_test`).
+  It passes 11/11 in isolation — the same full-suite parallelism artifact as
+  above. ⚠️ Recorded rather than dismissed: worth a look if it recurs on CI,
+  where the pre-push gate runs `--concurrency=1`.
+- web `tsc --noEmit`: clean. web `eslint --max-warnings=0` over
+  `features/dashboard` + `features/insights`: clean.
+- API `tsc --noEmit`: clean. API `eslint --max-warnings=0` over the four changed
+  files: clean.
+- Drift guard RED-verified by mutation, then reverted and re-verified clean.
+- ⚠️ **`db:push:force` was NOT run.** Attempting it against `app_test` surfaced
+  an unrelated pending data-loss migration (dropping `bounce_type` /
+  `bounce_sub_type` from `email_events`) and prompted interactively. Left
+  untouched — it is outside this story and is the operator's call
+  ([[feedback_db_push_force]]).
+
+⚠️ **Two exit-code traps hit and corrected during this run** — a full-suite run
+reported `exit 0` while 2 tests failed, and an `eslint ... | tail && echo CLEAN`
+printed CLEAN off `tail`'s status. Both were caught by reading the actual
+counters, not the exit code. Same class as
+[[feedback-never-pipe-a-push-to-tail]].
+
 ### File List
+
+**Shared types**
+- `packages/types/src/analytics.ts` — added `RegistryTotals` + its three axis
+  unions, `SkillsFrequencyResult`, `EquityData.denominators`, and (review R11)
+  the REQUIRED `HouseholdStats.denominators`.
+
+**API (deliberate, narrow — see the ruling above)**
+- `apps/api/src/services/registry-totals.service.ts` — import/re-export the
+  shared `RegistryTotals`; added the compile-time taxonomy drift guard.
+- `apps/api/src/services/survey-analytics.service.ts` — `getSkillsFrequency`
+  returns `{ skills, respondentsAnswering }`; **review R11**: `getHousehold`
+  publishes per-field `denominators`, repoints `businessOwnershipRate` onto the
+  answered set (ruling R-E), and restricts the dependency ratio's numerator to
+  the divisor's own population.
+- `apps/api/src/controllers/analytics.controller.ts` — comment only (the new
+  `data` shape flows through unchanged).
+- `apps/api/src/services/policy-brief.service.ts` — reads `skills.skills`.
+- `apps/api/src/services/__tests__/survey-analytics.service.test.ts` — updated to
+  the new shape + asserts the denominator.
+- `apps/api/src/services/__tests__/policy-brief.service.test.ts` — **NEW**
+  (review R5). The brief had no service-level test; this one fakes PDFKit and
+  pins the skills base in the heading.
+
+**Web — data layer**
+- `apps/web/src/features/dashboard/api/analytics.api.ts` — `fetchRegistryTotals`;
+  `fetchSkillsFrequency` returns the result object.
+- `apps/web/src/features/dashboard/hooks/useAnalytics.ts` — `useRegistryTotals` +
+  `analyticsKeys.registryTotals`.
+
+**Web — new files**
+- `apps/web/src/features/dashboard/utils/registry-copy.ts`
+- `apps/web/src/features/dashboard/components/charts/ChartCard.tsx`
+- `apps/web/src/features/dashboard/utils/__tests__/registry-copy.test.ts`
+- `apps/web/src/features/dashboard/components/charts/__tests__/ChartCard.test.tsx`
+
+**Web — surfaces**
+- `apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx`
+- `apps/web/src/features/dashboard/pages/RespondentRegistryPage.tsx`
+- `apps/web/src/features/dashboard/components/charts/RegistrySummaryStrip.tsx`
+- `apps/web/src/features/dashboard/components/charts/DemographicCharts.tsx`
+- `apps/web/src/features/dashboard/components/charts/EmploymentCharts.tsx`
+- `apps/web/src/features/dashboard/components/charts/HouseholdCharts.tsx`
+- `apps/web/src/features/dashboard/components/charts/TrendsCharts.tsx`
+- `apps/web/src/features/dashboard/components/charts/SkillsCharts.tsx`
+- `apps/web/src/features/dashboard/components/charts/FullSkillsChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/SkillsCategoryChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/SkillsGapChart.tsx`
+- `apps/web/src/features/dashboard/components/charts/SkillsConcentrationTable.tsx`
+- `apps/web/src/features/dashboard/components/charts/SkillsDiversityCards.tsx`
+- `apps/web/src/features/dashboard/components/charts/EquityMetrics.tsx`
+- `apps/web/src/features/dashboard/components/charts/ExtendedEquityMetrics.tsx`
+- `apps/web/src/features/dashboard/components/charts/chart-utils.ts` — `bucketTotal`
+- `apps/web/src/features/dashboard/utils/derive-equity-data.ts`
+- `apps/web/src/features/insights/pages/PublicInsightsPage.tsx`
+- `apps/web/src/features/insights/components/PublicEmploymentSection.tsx`
+
+**Web — updated tests**
+- `apps/web/src/features/dashboard/pages/__tests__/SurveyAnalyticsPage.test.tsx`
+- `apps/web/src/features/dashboard/pages/__tests__/RespondentRegistryPage.test.tsx`
+- `apps/web/src/features/dashboard/components/charts/__tests__/RegistrySummaryStrip.test.tsx`
+- `apps/web/src/features/dashboard/components/charts/__tests__/DemographicCharts.test.tsx`
+- `apps/web/src/features/dashboard/components/charts/__tests__/HouseholdCharts.test.tsx` —
+  review R11: the four bases, and no base under a suppressed figure.
+- `apps/web/src/features/dashboard/components/charts/__tests__/EquityMetrics.test.tsx`
+- `apps/web/src/features/dashboard/utils/__tests__/derive-equity-data.test.ts`
+- `apps/web/src/features/dashboard/hooks/__tests__/useAnalytics.test.ts`
+- `apps/web/src/features/insights/pages/__tests__/PublicInsightsPage.test.tsx` —
+  added by the review (R3/R4): the published `n` had no component test.
+- `apps/web/src/features/dashboard/components/charts/__tests__/ChartCard.test.tsx`
+
+**Process**
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 12-5 status.
+
+## Residuals
+
+Per the §2a0 three states. **`done` is not permitted while any row is OPEN or DISCHARGE-ON-DEPLOY.**
+
+| # | Sev | Item | State | Re-runnable evidence | Owner | Reopen trigger |
+|---|---|---|---|---|---|---|
+| **R1** | **High** | **The corrected dashboard rate is not on prod.** R-E's defect is still live on the internal dashboard: `businessOwnershipRate` divides by everyone with ANY answers, so a respondent never *asked* about business ownership sits in the divisor and *not asked* silently reads as *does not own a business*. | **DISCHARGE-ON-DEPLOY** | **Predicted read-only on prod 2026-08-20, control first:** the old formula reproduces the live **31.8%** exactly, which is what makes the new figure trustworthy; the new formula gives **45.7% at n=199**. **Discharge by:** deploy, then confirm the dashboard publishes **45.7%**, not merely that it moved. ⚠️ **Do NOT expect it to equal the public page's 45.5%** — different table, different grain (see the corrected callout above). | adjudication | The dashboard reading 31.8% an hour after deploy, or landing on a value that is neither 45.7% nor explicable by new registrations. |
+| **R2** | Med | **The dashboard double-counts multi-submission respondents.** 286 answer-bearing submissions against 272 answer-bearing respondents — ~14 people carry more than one, so every submissions-anchored dashboard rate weights them twice. | **ACCEPTED** | Measured 2026-08-20: `submissions` with answers = **286**; `registry_unified` with answers = **272**. Pre-existing, not introduced here, and out of 12-5's scope — 12-5 fixes the *divisor*, not the *grain*. | 12-6, or a follow-up that re-points `survey-analytics.service` onto `registryUnifiedSource` | Anyone citing the dashboard and the public page as though they were the same population. |
+| **R3** | Low | The story's own success criterion said the two surfaces must agree, and that a gap means "not finished". | ✅ **CLOSED at adjudication 2026-08-20** | Corrected in place with the measurement attached, rather than deleted, so a reader can see the severity moved. §2z(d). | adjudication | — |
+| **R4** | Low | `Status: done` was set while a pre-deploy residual was live and no ledger existed. | ✅ **CLOSED at adjudication 2026-08-20** | Status moved to `review` on the story and the board; this ledger written. **The CI guard did not catch it** — `lint-story-residuals` scanned table rows only, and this story had no table. Guard fixed in the same change, with this story as its regression test. | adjudication | — |
+
+## Closing verdict
+
+**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
+**Until that line carries a real SHA and R1 is discharged, `Status:` must not read `done`.**
+
+| Gate | Evidence — run by adjudication, not accepted from the dev |
+|---|---|
+| `tsc` | API **0**, web **0** |
+| `eslint` + 3 drift guards | **0 errors**, guards green at 384 files |
+| Touched API suites | **120 passed** |
+| Touched web suites | **1,236 passed / 104 files**, 2 todo |
+| File List vs `git status` | **matches** (42 declared + the story file itself) |
+
+### RED-verify by adjudication
+
+Reverting the divisor to `total` (R-E's coarse denominator) reds **exactly one** test —
+`getHousehold > returns household stats with aggregates`, `AssertionError: expected 30 to be 37.5`
+— the same assertion the story claimed. Restored by hand (the file carries uncommitted work, so
+`git checkout` would have wiped it); re-run **36/36 green**.
+
+### ⭐ What this story found that 12-4 missed — including by me
+
+12-4 fixed R-E in `public-insights.service.ts` and I adjudicated it closed **without asking where
+else the defect lived**. It lived in `getHousehold`, so the dashboard and the public page have been
+publishing different values for the same statistic. §2o is the playbook entry for exactly this —
+*fix the class, not the cohort in front of you; when you fix a guard, immediately grep for its
+siblings* — and it was not applied. Recorded here rather than in a commit message because the next
+person to fix a shared derivation needs to see it.
 
 ## Change Log
 
 | Date | Change |
 |---|---|
 | 2026-06-16 | Story authored (SM, Bob) via create-story workflow. Epic 12 Tier-1 (Track A: counting/legibility). LABEL HONESTY + N-PER-CHART: re-label the "Total Respondents"=76 mislabel to the honest 139 from 12-4's `getRegistryTotals()`, distinguish "respondents (139)" from "submissions with answers (76)" everywhere counts appear, reconcile the Registry summary strip, and surface each chart's own N denominator via an additive subtitle on the shared chart-card header. CONSUMES 12-4 (aggregate) + 9-59 (taxonomy) — no new aggregate, no new charts/stats, web-only. 6 ACs. POST-LAUNCH, NON-GATING. Status → ready-for-dev. |
+| 2026-08-19 | **Implemented (dev-story, Opus 5).** Headline + strip now read 12-4's `getRegistryTotals()`; "With Answers" is its own labelled figure and the answers count is never again labelled "Total Respondents" (em-dash rather than a fallback, pinned by tests). Every percentage states the denominator it divides by. Extracted a genuinely shared `ChartCard` (there were two private ones plus hand-rolled copies) with an additive optional `n`, and surfaced each chart's own denominator — `bucketTotal` for bucket charts, range-sum for Trends, `thresholds.*.currentN` for Skills-Inventory, per-metric bases for Equity. `RegistryTotals` moved to `@oslsr/types` (12-4 had it API-only) with a RED-verified compile-time drift guard pinning the three axis unions. **`rateDenominators` made load-bearing**: the public /insights page now publishes each rate's own n as a bare figure — no reintroduction of the prose the 2026-08-18 operator ruling removed. ⚠️ **Scope exception, ruled by Awwal mid-story:** the Skills-frequency chart had no recoverable denominator (computed server-side and discarded; percentages rounded to 1dp), so `getSkillsFrequency` now returns `{ skills, respondentsAnswering }` — this story touches the backend, against the "web only" Dev Note, rather than publish an inferred N. Known gap recorded: four Household ratio stat-cards still lack a numeric N because `HouseholdStats` does not publish their base. Status → review. |
+| 2026-08-20 | **AC4.1 made whole on Awwal's ruling (no deferred debt before the blast).** Took the API change: `getHousehold` publishes per-field `denominators`, so the last four cards without a base — Dependency Ratio, Business Ownership Rate, Business Registration Rate, Apprentice Total — now carry one. Reading what each ratio actually divides by surfaced **two arithmetic defects under them**: 🔴 `businessOwnershipRate` divided by `total_count` (= `buildWhereFragments`'s hardcoded `raw_data IS NOT NULL`, i.e. "has ANY answers") — **ruling R-E's defect, still live on the dashboard because 12-4 fixed only `public-insights.service.ts`**, so the dashboard and the public page have been publishing different values for the same statistic; repointed onto the answered set, RED-verified by mutation (`expected 30 to be 37.5`). 🟠 the dependency ratio summed dependents over rows absent from its own divisor; both sums now share one population. `HouseholdStats.denominators` is REQUIRED and caught a stale web fixture at `tsc`. ⛔ **Pre-deploy residual: `businessOwnershipRate` will MOVE (~32% → ~45%, toward the public page's already-corrected 45.5% at n=191) and must be discharged by PREDICTION against prod, not by movement.** Status → done. |
+| 2026-08-20 | **Adversarial code review + fixes applied (code-review workflow).** 11 findings, 1 High / 6 Med / 4 Low. **The High was the page rebuilding its own defect**: the "With Answers" card counts PEOPLE while the percentage captions divide by SUBMISSIONS, and `getRegistrySummary` still reads `FROM submissions`, so both were labelled "with answers" while genuinely differing (12-4 measured 271 vs ~282 on prod) — AC2.2's "no two counts that silently disagree", broken by the fix for it. Resolved by naming the two populations differently, not by moving either number. Also: finished the `ChartCard` extraction (`TrendsCharts` ×2 + `SkillsCharts` still hand-rolled, 12 copies of the `chart-n` markup → 1); the public `n` gained its first component tests and a guard against publishing "based on 0 responses"; the policy brief now prints the skills base it was being handed and gained its first service test; the Trends event count stopped wearing the `N =` glyph; AC5's explainer went from dead export to the tooltip on every `ChartCard` N; a totals-only failure no longer blanks the strip; the GPI's `n` counts only female+male. **One Low DEFERRED** — four Household ratio cards still lack a base because `HouseholdStats` does not publish one, and inventing it is the defect this story exists to end. Status → done. |
 | 2026-07-19 | **13-33 harmonization (John/PM).** Flagged that the standalone "With Answers" (76) must be sourced from `getRegistryTotals().withAnswers` (canonical, respondent-scoped), NOT `getRegistrySummary().totalRespondents` (submission-scoped, can double-count) — the two "76"s can drift until 12-4 repoints `getRegistrySummary` onto the `registry_unified` read. Dev Note added. No AC/scope change; found by the post-13-33 backlog sweep. |
 
 ## ⛔ BEFORE YOU BUILD THE DENOMINATOR FIX — read this (added 2026-08-12, John/PM)

@@ -35,6 +35,15 @@ const mockData: HouseholdStats = {
   businessOwnershipRate: 30,
   businessRegistrationRate: 53.3,
   apprenticeTotal: 12,
+  // Story 12-5 AC4 — four statistics, four DIFFERENT bases. 50 households gave
+  // a size, 40 were asked about a business, 12 of those own one, 35 gave an
+  // apprentice count. Collapsing them to one number would misweight three.
+  denominators: {
+    dependencyRatio: 50,
+    businessOwnership: 40,
+    businessRegistration: 12,
+    apprenticeTotal: 35,
+  },
 };
 
 describe('HouseholdCharts', () => {
@@ -46,6 +55,32 @@ describe('HouseholdCharts', () => {
   it('renders loading state', () => {
     render(<HouseholdCharts data={mockData} isLoading={true} error={null} />);
     expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThan(0);
+  });
+
+  // ── Story 12-5 AC4.1 (review R11) — the last four cards without a base ──
+
+  it('gives each household ratio the base it was actually computed over', () => {
+    render(<HouseholdCharts data={mockData} isLoading={false} error={null} />);
+    const ns = screen.getAllByTestId('chart-n').map((el) => el.textContent);
+    // The four stat cards...
+    expect(ns).toContain('N = 50');  // dependency ratio — households giving a size
+    expect(ns).toContain('N = 40');  // ownership rate — those ASKED about a business
+    expect(ns).toContain('N = 12');  // registration rate — the owners among them
+    expect(ns).toContain('N = 35');  // apprentice total — those giving a count
+  });
+
+  it('omits the base for a statistic it is not showing', () => {
+    // A denominator under a suppressed figure is noise: there is no number on
+    // screen for it to be the base of.
+    const suppressed: HouseholdStats = {
+      ...mockData,
+      businessOwnershipRate: null,
+      denominators: { ...mockData.denominators, businessOwnership: null },
+    };
+    render(<HouseholdCharts data={suppressed} isLoading={false} error={null} />);
+    const ns = screen.getAllByTestId('chart-n').map((el) => el.textContent);
+    expect(ns).not.toContain('N = 40');
+    expect(ns).toContain('N = 50');
   });
 
   it('renders suppressed stat cards with "Insufficient data" indicator', () => {

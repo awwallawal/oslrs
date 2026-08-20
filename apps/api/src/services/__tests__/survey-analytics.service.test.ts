@@ -155,13 +155,68 @@ describe('SurveyAnalyticsService', () => {
           biz_registered: '8',
           apprentice_total: '12',
           total_count: '50',
+          // Story 12-5: the per-field bases. 40 people were ASKED about a
+          // business; the other 10 of the 50 never were.
+          household_size_n: '48',
+          has_business_n: '40',
+          apprentice_n: '35',
         }]));
 
       const result = await SurveyAnalyticsService.getHousehold(systemScope);
       expect(result.dependencyRatio).toBe(0.45);
-      expect(result.businessOwnershipRate).toBe(30);
       expect(result.businessRegistrationRate).toBe(53.3);
       expect(result.apprenticeTotal).toBe(12);
+
+      // Ruling R-E: 15 owners over the 40 ASKED, not over all 50 with answers.
+      // 30% was the old, coarse figure — it counted the 10 never asked as
+      // "does not own a business". This assertion fails if that regresses.
+      expect(result.businessOwnershipRate).toBe(37.5);
+      expect(result.businessOwnershipRate).not.toBe(30);
+    });
+
+    it('publishes the base each household statistic was computed over (AC4)', async () => {
+      mockExecute
+        .mockResolvedValueOnce(mockRows([{ total: '50' }]))
+        .mockResolvedValueOnce(mockRows([{ label: '4-6', count: '25' }]))
+        .mockResolvedValueOnce(mockRows([{ label: 'male', count: '30' }]))
+        .mockResolvedValueOnce(mockRows([{ label: 'rented', count: '20' }]))
+        .mockResolvedValueOnce(mockRows([{
+          dependency_ratio: '0.45', biz_owners: '15', biz_registered: '8',
+          apprentice_total: '12', total_count: '50',
+          household_size_n: '48', has_business_n: '40', apprentice_n: '35',
+        }]));
+
+      const result = await SurveyAnalyticsService.getHousehold(systemScope);
+      // Four statistics, four DIFFERENT bases — that difference is the
+      // information, and inferring any of them from a rounded ratio was the
+      // defect Story 12-5 exists to end.
+      expect(result.denominators).toEqual({
+        dependencyRatio: 48,
+        businessOwnership: 40,
+        businessRegistration: 15,
+        apprenticeTotal: 35,
+      });
+    });
+
+    it('publishes no base for a statistic it suppressed', async () => {
+      mockExecute
+        .mockResolvedValueOnce(mockRows([{ total: '30' }]))
+        .mockResolvedValueOnce(mockRows([{ label: '4-6', count: '25' }]))
+        .mockResolvedValueOnce(mockRows([{ label: 'male', count: '30' }]))
+        .mockResolvedValueOnce(mockRows([{ label: 'rented', count: '20' }]))
+        .mockResolvedValueOnce(mockRows([{
+          dependency_ratio: null, biz_owners: '2', biz_registered: '1',
+          apprentice_total: '2', total_count: '30',
+          household_size_n: '28', has_business_n: '25', apprentice_n: '20',
+        }]));
+
+      const result = await SurveyAnalyticsService.getHousehold(systemScope);
+      // A base under a figure we are not showing is noise.
+      expect(result.businessOwnershipRate).toBeNull();
+      expect(result.denominators.businessOwnership).toBeNull();
+      expect(result.dependencyRatio).toBeNull();
+      expect(result.denominators.dependencyRatio).toBeNull();
+      expect(result.denominators.apprenticeTotal).toBeNull();
     });
 
     it('returns null for suppressed scalar values', async () => {
@@ -173,6 +228,9 @@ describe('SurveyAnalyticsService', () => {
           biz_registered: '1',
           apprentice_total: '2', // below threshold
           total_count: '3',
+          household_size_n: '3',
+          has_business_n: '3',
+          apprentice_n: '3',
         }]));
 
       const result = await SurveyAnalyticsService.getHousehold(systemScope);
@@ -192,9 +250,11 @@ describe('SurveyAnalyticsService', () => {
         ]));
 
       const result = await SurveyAnalyticsService.getSkillsFrequency(systemScope);
-      expect(result).toHaveLength(3);
-      expect(result[0]).toEqual({ skill: 'welding', count: 30, percentage: 30 });
-      expect(result[1]).toEqual({ skill: 'carpentry', count: 20, percentage: 20 });
+      expect(result.skills).toHaveLength(3);
+      expect(result.skills[0]).toEqual({ skill: 'welding', count: 30, percentage: 30 });
+      expect(result.skills[1]).toEqual({ skill: 'carpentry', count: 20, percentage: 20 });
+      // Story 12-5: the denominator the percentages divide by ships with them.
+      expect(result.respondentsAnswering).toBe(100);
     });
 
     it('respects custom limit', async () => {
@@ -203,7 +263,8 @@ describe('SurveyAnalyticsService', () => {
         .mockResolvedValueOnce(mockRows([{ skill: 'plumbing', count: '10' }]));
 
       const result = await SurveyAnalyticsService.getSkillsFrequency(systemScope, {}, 5);
-      expect(result).toHaveLength(1);
+      expect(result.skills).toHaveLength(1);
+      expect(result.respondentsAnswering).toBe(50);
     });
 
     it('clamps limit to valid range', async () => {
@@ -222,7 +283,8 @@ describe('SurveyAnalyticsService', () => {
         .mockResolvedValueOnce(mockRows([]));
 
       const result = await SurveyAnalyticsService.getSkillsFrequency(systemScope);
-      expect(result).toEqual([]);
+      expect(result.skills).toEqual([]);
+      expect(result.respondentsAnswering).toBe(0);
     });
 
     it('filters out skills below suppression threshold (count < 5)', async () => {
@@ -235,8 +297,11 @@ describe('SurveyAnalyticsService', () => {
         ]));
 
       const result = await SurveyAnalyticsService.getSkillsFrequency(systemScope);
-      expect(result).toHaveLength(1);
-      expect(result[0].skill).toBe('welding');
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0].skill).toBe('welding');
+      // The denominator counts PEOPLE who answered, so suppressing rare skills
+      // from the display must not shrink it.
+      expect(result.respondentsAnswering).toBe(100);
     });
   });
 

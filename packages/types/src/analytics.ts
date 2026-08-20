@@ -37,6 +37,26 @@ export interface SkillsFrequency {
   percentage: number;
 }
 
+/**
+ * The skills-frequency response, WITH the denominator its percentages divide by.
+ *
+ * Story 12-5 (AC4). `percentage` is `count / respondentsAnswering`, and that
+ * denominator used to be computed server-side and thrown away — so the chart
+ * published shares with no way to say what they were shares OF, and the number
+ * could not be recovered client-side (percentages are rounded to 1dp). A rate
+ * published without the count it came from is the defect this story exists to
+ * end, so the denominator now ships with the rates it produced.
+ */
+export interface SkillsFrequencyResult {
+  skills: SkillsFrequency[];
+  /**
+   * Respondents who ANSWERED the skills question — not respondents overall, and
+   * not the number of skill selections (a multi-select respondent contributes
+   * one to this and several to the counts).
+   */
+  respondentsAnswering: number;
+}
+
 export interface TrendDataPoint {
   date: string;
   count: number;
@@ -74,9 +94,33 @@ export interface HouseholdStats {
   dependencyRatio: number | null;
   headOfHouseholdByGender: FrequencyBucket[];
   housingDistribution: FrequencyBucket[];
+  /**
+   * Share of households that own a business, over THOSE ASKED — not over
+   * everyone with any answers (ruling R-E). Story 12-5 repointed this; before
+   * that it read lower than the truth, and disagreed with the public page,
+   * which 12-4 had already corrected.
+   */
   businessOwnershipRate: number | null;
   businessRegistrationRate: number | null;
   apprenticeTotal: number | null;
+  /**
+   * Story 12-5 (AC4) — the base EACH statistic above was computed over.
+   *
+   * Four different numbers on purpose. Publishing a ratio without the count it
+   * came from is the same defect as a mislabelled total, and these four cards
+   * were the last surface on the dashboard still doing it. `null` where the
+   * statistic itself is null or suppressed.
+   */
+  denominators: {
+    /** Households that gave a numeric `household_size` — the divisor's own set. */
+    dependencyRatio: number | null;
+    /** Respondents who ANSWERED the business-ownership question. */
+    businessOwnership: number | null;
+    /** Business owners — the set the registration rate is a share of. */
+    businessRegistration: number | null;
+    /** Respondents who gave a numeric apprentice count. */
+    apprenticeTotal: number | null;
+  };
 }
 
 // --- Registry Summary (5 Stat Cards) ---
@@ -112,9 +156,92 @@ export interface EquityData {
   employmentRatePct: number | null;
   /** Informal sector percentage from formalInformalRatio. Null if missing/suppressed. */
   informalSectorPct: number | null;
+  /**
+   * Story 12-5 (AC4) — the n EACH metric above was computed from.
+   *
+   * They are three DIFFERENT numbers and must not be collapsed into one: the
+   * GPI divides by the people who gave a gender, the informal share by those
+   * who gave a sector, and the employment rate by the answers subset. A reader
+   * shown one figure for all three would mis-weight two of them.
+   *
+   * `null` where the source metric is itself null (missing or suppressed) —
+   * a denominator for a number we are not showing would be noise.
+   */
+  denominators: {
+    gpi: number | null;
+    employmentRate: number | null;
+    informalSector: number | null;
+  };
 }
 
 // --- Public Insights ---
+
+// --- Registry Totals (Story 12-4 model — rendered by Story 12-5) ---
+
+/**
+ * The canonical data-completeness states a respondent can be in.
+ *
+ * ⚠️ MIRROR of `REGISTRY_DATA_STATUSES` in
+ * `apps/api/src/services/registry-data-status.ts`, which is the canonical
+ * source (9-59 owns the taxonomy atom; it cannot import from here because the
+ * derivation is pure API-side logic). The API asserts at COMPILE TIME that the
+ * two agree — see the drift guard in `registry-totals.service.ts` — so adding a
+ * status there without adding it here fails `tsc`, not prod.
+ */
+export type RegistryDataStatus =
+  | 'completed'
+  | 'data_lost'
+  | 'pending_nin'
+  | 'nin_unavailable'
+  | 'imported'
+  | 'no_submission';
+
+/** Axis-2 — derived from the FIELDS PRESENT, never from which form was used. */
+export type RegistryCompleteness = 'full' | 'core' | 'partial';
+
+/**
+ * Axis-3 verification tiers. **There is no `verified`** (12-4 AC9 / R1): a NIN
+ * is CAPTURED, never validated — no NIMC path exists and NINs carry no check
+ * digit. `nin_on_file` is the top tier and must never be rendered as "verified".
+ */
+export type RegistryVerification =
+  | 'nin_on_file'
+  | 'self_declared'
+  | 'pending_nin'
+  | 'unverified_import';
+
+/**
+ * The authoritative registry aggregate (Story 12-4), counting PEOPLE.
+ *
+ * ⚠️ NOT interchangeable with {@link RegistrySummary}. That one counts
+ * answer-bearing SUBMISSIONS and its `totalRespondents` is the "with answers"
+ * numerator — the 76-labelled-as-139 mislabel Story 12-5 exists to end. Any
+ * surface showing a registry TOTAL reads `totalRespondents` from here.
+ */
+export interface RegistryTotals {
+  /** Distinct PEOPLE (identity key: NIN → E.164 phone → respondent id). */
+  totalRespondents: number;
+  /** The subset whose answers we hold — equals `byDataStatus.completed`. */
+  withAnswers: number;
+  byDataStatus: Record<RegistryDataStatus, number>;
+  /** Axis-1 — registration channel. Open-ended: unknown sources appear dynamically. */
+  bySource: Record<string, number>;
+  byCompleteness: Record<RegistryCompleteness, number>;
+  byVerification: Record<RegistryVerification, number>;
+  /**
+   * People whose identity could not be resolved. They ARE counted in
+   * `totalRespondents` — this is the honest uncertainty band on the headline,
+   * not a bucket subtracted from it.
+   */
+  identityAmbiguous: number;
+  /**
+   * Wizard drafts STILL IN PROGRESS — a funnel metric, NEVER folded into the
+   * total. Always GLOBAL even when the rest of this object is filtered, so a
+   * filtered view must label it "(all LGAs)" or omit it rather than print it
+   * beside a filtered total as though the two shared a denominator.
+   */
+  inProgressDrafts: number;
+}
 
 // --- Team Quality (Story 8.3: Supervisor view) ---
 

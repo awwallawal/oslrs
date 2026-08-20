@@ -75,6 +75,52 @@ describe('deriveEquityData', () => {
       gpiRatio: 0.95,
       employmentRatePct: 60,
       informalSectorPct: 60,
+      // Story 12-5 AC4: each metric carries the base IT was computed over.
+      denominators: {
+        gpi: 195,             // the gender-answered buckets (100 + 95)
+        employmentRate: 200,  // the answers subset the summary counts
+        informalSector: 100,  // the formal/informal-answered buckets
+      },
+    });
+  });
+
+  // ── Story 12-5 AC4 — denominators ──────────────────────────────────────
+  describe('denominators', () => {
+    it('reports three different bases, never one collapsed number', () => {
+      const result = deriveEquityData(mockDemographics, mockEmployment, mockSummary);
+      const { gpi, employmentRate, informalSector } = result!.denominators;
+      // If these ever collapse to one value, two of the three rates are being
+      // presented with a weight they did not earn.
+      expect(new Set([gpi, employmentRate, informalSector]).size).toBe(3);
+    });
+
+    it('leaves a denominator null when its metric is null', () => {
+      const zeroDemographics: DemographicStats = {
+        ...mockDemographics,
+        genderDistribution: [
+          { label: 'male', count: 0, percentage: 0 },
+          { label: 'female', count: 95, percentage: 100 },
+        ],
+      };
+      const result = deriveEquityData(zeroDemographics, undefined, undefined);
+      expect(result!.gpiRatio).toBeNull();
+      // No figure on screen, so no base for it either.
+      expect(result!.denominators.gpi).toBeNull();
+      expect(result!.denominators.informalSector).toBeNull();
+    });
+
+    it('excludes suppressed buckets from a denominator', () => {
+      const suppressed: DemographicStats = {
+        ...mockDemographics,
+        genderDistribution: [
+          { label: 'male', count: 100, percentage: 51.3 },
+          { label: 'female', count: 95, percentage: 48.7 },
+          { label: 'other', count: null, percentage: null, suppressed: true },
+        ],
+      };
+      const result = deriveEquityData(suppressed, undefined, undefined);
+      // The withheld bucket cannot be added to a base we publish.
+      expect(result!.denominators.gpi).toBe(195);
     });
   });
 
@@ -113,4 +159,24 @@ describe('deriveEquityData', () => {
     const result = deriveEquityData(undefined, suppressedEmployment, undefined);
     expect(result!.informalSectorPct).toBeNull();
   });
+
+  it('counts only the buckets the GPI is actually computed from', () => {
+    // Review R10. GPI is female ÷ male. An "Other" bucket belongs to the
+    // distribution but not to the ratio, so folding it into the published n
+    // would state a base the metric never used — an n that is not the metric's
+    // n, which is the defect this story exists to end.
+    const result = deriveEquityData(
+      {
+        genderDistribution: [
+          { label: 'female', count: 60, percentage: 40 },
+          { label: 'male', count: 80, percentage: 53.3 },
+          { label: 'other', count: 10, percentage: 6.7 },
+        ],
+      } as never,
+      undefined,
+      undefined,
+    );
+    expect(result?.denominators.gpi).toBe(140);
+  });
+
 });

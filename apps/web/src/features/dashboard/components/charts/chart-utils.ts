@@ -34,6 +34,23 @@ export function safeCount(bucket: FrequencyBucket): number {
   return bucket.suppressed ? 0 : (bucket.count ?? 0);
 }
 
+/**
+ * The denominator a bucket chart was actually counted over — Story 12-5 (AC4).
+ *
+ * Sums the NON-SUPPRESSED buckets, which is precisely the population the chart
+ * draws and its percentages divide by. Suppressed buckets contribute 0 because
+ * their counts are withheld (<5), so including them would state a total the
+ * chart cannot show the parts of.
+ *
+ * ⚠️ Each chart's N is its own. Gender-answered, age-answered and
+ * employment-answered are different populations, and all three differ from the
+ * registry total — a chart over a question only 70 people answered shows 70.
+ * Do not normalise these to a single house number.
+ */
+export function bucketTotal(buckets: FrequencyBucket[]): number {
+  return buckets.reduce((sum, b) => sum + safeCount(b), 0);
+}
+
 /** Return the fill color for a bucket, respecting suppression. */
 export function bucketColor(bucket: FrequencyBucket, index: number): string {
   return bucket.suppressed ? SUPPRESSED_COLOR : CHART_COLORS[index % CHART_COLORS.length];

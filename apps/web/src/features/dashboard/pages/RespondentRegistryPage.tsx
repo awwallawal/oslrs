@@ -19,7 +19,7 @@ import { RespondentRegistryTable } from '../components/RespondentRegistryTable';
 import { ExportButton } from '../components/ExportButton';
 import type { RespondentFilterParams } from '@oslsr/types';
 import type { ExportFilters } from '../api/export.api';
-import { useRegistrySummary } from '../hooks/useAnalytics';
+import { useRegistrySummary, useRegistryTotals } from '../hooks/useAnalytics';
 import { RegistrySummaryStrip } from '../components/charts/RegistrySummaryStrip';
 
 export default function RespondentRegistryPage() {
@@ -59,6 +59,13 @@ export default function RespondentRegistryPage() {
     dateTo: filters.dateTo,
   }), [filters.lgaId, filters.source, filters.dateFrom, filters.dateTo]);
   const { data: registrySummary, isLoading: regSummaryLoading, error: regSummaryError } = useRegistrySummary(registryParams);
+  // Story 12-5 AC3: the strip's total must reconcile with the header's
+  // "{totalItems} records" — both count registered PEOPLE, under the same
+  // active filters, so the two numbers on this page finally agree.
+  // Its `error` is deliberately not destructured: a totals failure leaves
+  // `data` undefined, and the strip renders that as an em-dash — the designed
+  // "we do not have the honest total" signal. See the `error` prop below.
+  const { data: registryTotals, isLoading: regTotalsLoading } = useRegistryTotals(registryParams);
 
   // Track new submissions in live mode
   const prevTotalRef = useRef<number>(0);
@@ -240,7 +247,13 @@ export default function RespondentRegistryPage() {
       {/* Registry Summary Strip (Story 8.2 AC#3) */}
       <RegistrySummaryStrip
         data={registrySummary}
-        isLoading={regSummaryLoading}
+        totals={registryTotals}
+        isLoading={regSummaryLoading || regTotalsLoading}
+        // Only a SUMMARY failure blanks the strip. A totals-only failure leaves
+        // `totals` undefined, which the strip already renders as an em-dash —
+        // the designed signal for "we do not have the honest total" (Task 3).
+        // Folding it into `error` threw away five working stats to report the
+        // absence of one, and gave the same unavailability two different faces.
         error={regSummaryError}
         className="mb-2"
       />

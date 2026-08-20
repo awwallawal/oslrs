@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 
 interface DiversityEntry {
   lgaId: string;
@@ -33,6 +34,10 @@ export function SkillsDiversityCards({ data, threshold }: SkillsDiversityCardsPr
       <Card data-testid="skills-diversity-cards">
         <CardHeader>
           <CardTitle className="text-lg">Skill Diversity Index (Shannon)</CardTitle>
+          {/* AC4: the threshold's `currentN` IS this chart's denominator. */}
+          <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+            {formatN(threshold.currentN)}
+          </p>
         </CardHeader>
         <CardContent>
           {data.length === 0 ? (

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 
 interface GapItem {
   skill: string;
@@ -19,6 +20,10 @@ export function SkillsGapChart({ gapAnalysis, threshold }: SkillsGapChartProps) 
       <Card data-testid="skills-gap-chart">
         <CardHeader>
           <CardTitle className="text-lg">Skills Gap: Current vs Desired</CardTitle>
+          {/* AC4: the threshold's `currentN` IS this chart's denominator. */}
+          <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+            {formatN(threshold.currentN)}
+          </p>
         </CardHeader>
         <CardContent>
           {!gapAnalysis || gapAnalysis.length === 0 ? (

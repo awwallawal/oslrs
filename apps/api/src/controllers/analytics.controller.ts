@@ -92,6 +92,8 @@ export class AnalyticsController {
   static async getSkillsFrequency(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = skillsQuerySchema.parse(req.query);
+      // Story 12-5: `data` is now `{ skills, respondentsAnswering }` — the rates
+      // and the denominator they divide by, published together.
       const data = await SurveyAnalyticsService.getSkillsFrequency(
         getScope(req),
         getParams(parsed),

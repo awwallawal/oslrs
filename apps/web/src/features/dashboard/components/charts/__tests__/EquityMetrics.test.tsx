@@ -17,6 +17,8 @@ const mockEquityData: EquityData = {
   gpiRatio: 0.95,
   employmentRatePct: 60,
   informalSectorPct: 45.3,
+  // Story 12-5: three metrics, three different bases — never one shared number.
+  denominators: { gpi: 120, employmentRate: 76, informalSector: 64 },
 };
 
 describe('EquityMetrics', () => {
@@ -79,6 +81,8 @@ describe('EquityMetrics', () => {
       gpiRatio: null,
       employmentRatePct: null,
       informalSectorPct: null,
+      // No metric on screen, so no denominator either.
+      denominators: { gpi: null, employmentRate: null, informalSector: null },
     };
     render(
       <EquityMetrics

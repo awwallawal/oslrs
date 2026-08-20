@@ -84,7 +84,18 @@ export class PolicyBriefService {
       // === PAGE 3: Employment & Skills ===
       doc.addPage();
       PolicyBriefService.renderFooter(doc, 3);
-      PolicyBriefService.renderEmploymentSkills(doc, pageWidth, employment, skills, equity);
+      // Story 12-5: `getSkillsFrequency` returns the denominator alongside the
+      // rates, and the brief prints BOTH. This PDF is handed to the Ministry —
+      // it is the last surface that should carry a percentage without saying
+      // what it is a percentage of.
+      PolicyBriefService.renderEmploymentSkills(
+        doc,
+        pageWidth,
+        employment,
+        skills.skills,
+        skills.respondentsAnswering,
+        equity,
+      );
 
       // === PAGE 4: Inferential Findings ===
       doc.addPage();
@@ -219,6 +230,8 @@ export class PolicyBriefService {
     pageWidth: number,
     employment: EmploymentStats,
     skills: SkillsFrequency[],
+    /** Respondents who ANSWERED the skills question — what the shares below divide by. */
+    skillsRespondentsAnswering: number,
     equity: ExtendedEquityData,
   ) {
     doc.font('Helvetica-Bold').fontSize(14).fillColor(BRAND_MAROON);
@@ -238,8 +251,18 @@ export class PolicyBriefService {
 
     rows.push(['', '']);
 
-    // Top skills
-    rows.push(['Top Skills', '']);
+    // Top skills. The heading carries the base the percentages divide by: it is
+    // respondents who answered the skills question, NOT the sum of the counts —
+    // one respondent picking five skills is one here and five there.
+    // The base rides in the HEADING label, not in the value column: a row with
+    // a non-empty value falls out of renderTable's section-heading branch and
+    // would render as an ordinary striped row in regular weight.
+    rows.push([
+      skillsRespondentsAnswering > 0
+        ? `Top Skills (n = ${skillsRespondentsAnswering.toLocaleString()} respondents answering)`
+        : 'Top Skills',
+      '',
+    ]);
     if (skills) {
       for (const s of skills.slice(0, 10)) {
         rows.push([`  ${s.skill}`, `${s.count} (${s.percentage.toFixed(1)}%)`]);

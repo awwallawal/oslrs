@@ -11,6 +11,7 @@
 import { Card, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import type { EquityData } from '@oslsr/types';
+import { formatN } from '../../utils/registry-copy';
 
 // --- Props (standard chart pattern) ---
 
@@ -29,11 +30,18 @@ interface StatCardProps {
   label: string;
   value: string;
   subtitle?: string;
+  /** Story 12-5 AC4 — the denominator THIS metric was computed over. */
+  n?: number | null;
+  /**
+   * Per-card hook. The three cards each render a `chart-n`, so a bare
+   * `getByTestId('chart-n')` throws here; scope to the card instead.
+   */
+  testId?: string;
 }
 
-function StatCard({ icon, label, value, subtitle }: StatCardProps) {
+function StatCard({ icon, label, value, subtitle, n, testId }: StatCardProps) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardContent className="flex items-start gap-4 py-5">
         <div className="rounded-lg bg-neutral-100 p-2 shrink-0">
           {icon}
@@ -41,6 +49,11 @@ function StatCard({ icon, label, value, subtitle }: StatCardProps) {
         <div className="min-w-0">
           <p className="text-sm text-neutral-500">{label}</p>
           <p className="text-2xl font-bold">{value}</p>
+          {n != null && (
+            <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+              {formatN(n)}
+            </p>
+          )}
           {subtitle && (
             <p className="text-xs text-neutral-400 mt-0.5">{subtitle}</p>
           )}
@@ -168,7 +181,9 @@ export function EquityMetrics({
         <StatCard
           icon={<GpiIcon />}
           label="Gender Parity Index"
+          testId="equity-gpi"
           value={gpi != null ? gpi.toFixed(2) : '\u2014'}
+          n={data?.denominators.gpi}
           subtitle="Female / Male ratio"
         />
 
@@ -176,7 +191,9 @@ export function EquityMetrics({
         <StatCard
           icon={<EmploymentIcon />}
           label="Employment Rate (proxy)"
+          testId="equity-employment-rate"
           value={employedPct != null ? `${employedPct.toFixed(1)}%` : '\u2014'}
+          n={data?.denominators.employmentRate}
           subtitle="Cross-tabulation not available from marginals"
         />
 
@@ -184,7 +201,9 @@ export function EquityMetrics({
         <StatCard
           icon={<InformalIcon />}
           label="Informal Sector"
+          testId="equity-informal-sector"
           value={informalPct != null ? `${informalPct.toFixed(1)}%` : '\u2014'}
+          n={data?.denominators.informalSector}
           subtitle="Share of employed respondents"
         />
       </div>

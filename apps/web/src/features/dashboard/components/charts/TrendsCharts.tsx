@@ -8,7 +8,6 @@
 
 import { useState, useId, useMemo } from 'react';
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
@@ -19,6 +18,8 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/card';
 import { SkeletonCard } from '../../../../components/skeletons';
 import { CHART_COLORS } from './chart-utils';
+import { ChartCard } from './ChartCard';
+import { rangeTotalCaption } from '../../utils/registry-copy';
 import type { TrendDataPoint } from '@oslsr/types';
 
 // NOTE: TrendDataPoint in analytics.ts only has { date, count }.
@@ -89,6 +90,22 @@ export function TrendsCharts({ data, isLoading, error, onRetry, className }: Tre
     [filteredData],
   );
 
+  /**
+   * Story 12-5 AC4 — registrations in the SELECTED range. It moves with the
+   * 7d/30d/90d toggle, which is the point: a reader comparing two ranges can
+   * see the base changed underneath them.
+   *
+   * ⚠️ Rendered as a `subtitle`, NOT as `n`. This is a count of registration
+   * EVENTS over time, not a denominator over people — it is not a subset of the
+   * registry total, and printing it under the same "N = …" glyph the
+   * distribution charts use would invite exactly the comparison that cannot be
+   * made. `ChartCard`'s own contract says to omit `n` for a time series.
+   */
+  const rangeTotal = useMemo(
+    () => filteredData.reduce((sum, d) => sum + d.count, 0),
+    [filteredData],
+  );
+
   if (isLoading) return <SkeletonCard className={className} />;
 
   if (error) {
@@ -128,144 +145,132 @@ export function TrendsCharts({ data, isLoading, error, onRetry, className }: Tre
   return (
     <div data-testid="trends-charts" className={`space-y-6 ${className ?? ''}`}>
       {/* Daily Registrations */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="border-l-4 border-[#9C1E23] pl-3">
-              <CardTitle className="text-base">Daily Registrations</CardTitle>
-            </div>
-            {/* Date range toggle */}
-            <div className="flex rounded-lg border border-neutral-200 overflow-hidden" role="group" aria-label="Date range">
-              {DATE_RANGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setDateRange(opt.value)}
-                  className={`px-3 py-1 text-sm transition-colors ${
-                    dateRange === opt.value
-                      ? 'bg-[#9C1E23] text-white'
-                      : 'bg-white text-neutral-600 hover:bg-neutral-100'
-                  }`}
-                  data-testid={`range-${opt.value}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+      <ChartCard
+        title="Daily Registrations"
+        subtitle={rangeTotalCaption(rangeTotal)}
+        bodyClassName="h-72"
+        responsive
+        actions={
+          /* Date range toggle */
+          <div className="flex rounded-lg border border-neutral-200 overflow-hidden" role="group" aria-label="Date range">
+            {DATE_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setDateRange(opt.value)}
+                className={`px-3 py-1 text-sm transition-colors ${
+                  dateRange === opt.value
+                    ? 'bg-[#9C1E23] text-white'
+                    : 'bg-white text-neutral-600 hover:bg-neutral-100'
+                }`}
+                data-testid={`range-${opt.value}`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyChartData}>
-                <defs>
-                  <linearGradient id={dailyGradient} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={CHART_COLORS[0]} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={CHART_COLORS[0]} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null;
-                    const item = payload[0].payload as TrendDataPoint & { label: string };
-                    return (
-                      <div className="bg-white p-2 rounded shadow border text-sm">
-                        <p className="font-medium">{item.date}</p>
-                        <p>
-                          Registrations: <strong>{item.count.toLocaleString()}</strong>
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  stroke={CHART_COLORS[0]}
-                  strokeWidth={2}
-                  fill={`url(#${dailyGradient})`}
-                  dot={false}
-                  activeDot={{ r: 4, fill: CHART_COLORS[0] }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+        }
+      >
+        <AreaChart data={dailyChartData}>
+          <defs>
+            <linearGradient id={dailyGradient} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={CHART_COLORS[0]} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={CHART_COLORS[0]} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+            allowDecimals={false}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const item = payload[0].payload as TrendDataPoint & { label: string };
+              return (
+                <div className="bg-white p-2 rounded shadow border text-sm">
+                  <p className="font-medium">{item.date}</p>
+                  <p>
+                    Registrations: <strong>{item.count.toLocaleString()}</strong>
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="count"
+            stroke={CHART_COLORS[0]}
+            strokeWidth={2}
+            fill={`url(#${dailyGradient})`}
+            dot={false}
+            activeDot={{ r: 4, fill: CHART_COLORS[0] }}
+          />
+        </AreaChart>
+      </ChartCard>
 
       {/* Cumulative Registrations */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="border-l-4 border-[#9C1E23] pl-3">
-            <CardTitle className="text-base">Cumulative Registrations</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cumulativeChartData}>
-                <defs>
-                  <linearGradient id={cumulGradient} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={CHART_COLORS[7]} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={CHART_COLORS[7]} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null;
-                    const item = payload[0].payload as TrendDataPoint & { cumulative: number; label: string };
-                    return (
-                      <div className="bg-white p-2 rounded shadow border text-sm">
-                        <p className="font-medium">{item.date}</p>
-                        <p>
-                          Daily: <strong>{item.count.toLocaleString()}</strong>
-                        </p>
-                        <p>
-                          Cumulative: <strong>{item.cumulative.toLocaleString()}</strong>
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="cumulative"
-                  stroke={CHART_COLORS[7]}
-                  strokeWidth={2}
-                  fill={`url(#${cumulGradient})`}
-                  dot={false}
-                  activeDot={{ r: 4, fill: CHART_COLORS[7] }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <ChartCard
+        title="Cumulative Registrations"
+        subtitle={rangeTotalCaption(rangeTotal)}
+        bodyClassName="h-72"
+        responsive
+      >
+        <AreaChart data={cumulativeChartData}>
+          <defs>
+            <linearGradient id={cumulGradient} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={CHART_COLORS[7]} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={CHART_COLORS[7]} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+            allowDecimals={false}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const item = payload[0].payload as TrendDataPoint & { cumulative: number; label: string };
+              return (
+                <div className="bg-white p-2 rounded shadow border text-sm">
+                  <p className="font-medium">{item.date}</p>
+                  <p>
+                    Daily: <strong>{item.count.toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Cumulative: <strong>{item.cumulative.toLocaleString()}</strong>
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="cumulative"
+            stroke={CHART_COLORS[7]}
+            strokeWidth={2}
+            fill={`url(#${cumulGradient})`}
+            dot={false}
+            activeDot={{ r: 4, fill: CHART_COLORS[7] }}
+          />
+        </AreaChart>
+      </ChartCard>
     </div>
   );
 }

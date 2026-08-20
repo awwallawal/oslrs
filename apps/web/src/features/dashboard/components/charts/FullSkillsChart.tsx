@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import type { SkillsFrequency } from '@oslsr/types';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 
 interface FullSkillsChartProps {
   skills: SkillsFrequency[];
@@ -14,6 +15,10 @@ export function FullSkillsChart({ skills, threshold }: FullSkillsChartProps) {
       <Card data-testid="full-skills-chart">
         <CardHeader>
           <CardTitle className="text-lg">All Skills Frequency</CardTitle>
+          {/* AC4: the threshold's `currentN` IS this chart's denominator. */}
+          <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+            {formatN(threshold.currentN)}
+          </p>
         </CardHeader>
         <CardContent>
           <div

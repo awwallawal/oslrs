@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { ThresholdGuard } from '../ThresholdGuard';
+import { formatN } from '../../utils/registry-copy';
 import type { SkillsFrequency } from '@oslsr/types';
 
 interface CategoryData {
@@ -31,6 +32,10 @@ export function SkillsCategoryChart({ categories, threshold }: SkillsCategoryCha
       <Card data-testid="skills-category-chart">
         <CardHeader>
           <CardTitle className="text-lg">Skills by ISCO-08 Sector</CardTitle>
+          {/* AC4: the threshold's `currentN` IS this chart's denominator. */}
+          <p className="text-xs text-neutral-500 mt-0.5" data-testid="chart-n">
+            {formatN(threshold.currentN)}
+          </p>
         </CardHeader>
         <CardContent className="space-y-1">
           {categories.map((cat) => (
